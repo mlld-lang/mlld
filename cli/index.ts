@@ -772,7 +772,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
         
         // Write the file
         await fs.writeFile(finalPath, result, 'utf8');
-        console.log(`Output written to ${finalPath}`);
+        console.log(`\nOutput written to ${finalPath}`);
       } else {
         console.log('Operation cancelled by user.');
       }

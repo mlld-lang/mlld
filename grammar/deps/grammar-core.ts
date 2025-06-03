@@ -27,6 +27,7 @@ export const DirectiveKind = {
   path: 'path',
   import: 'import',
   output: 'output',
+  when: 'when',
 } as const;
 export type DirectiveKindKey = keyof typeof DirectiveKind;
 

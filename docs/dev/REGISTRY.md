@@ -6,8 +6,8 @@ This guide explains how the mlld registry system works from a developer perspect
 
 The mlld registry is a decentralized system where each GitHub user maintains their own registry of modules. This provides:
 
-- **DNS for Gists**: Maps friendly names like `mlld://adamavenir/json-utils` to gist IDs
-- **Versioning**: Lock files pin specific gist revisions
+- **Module Resolution**: Maps friendly names like `@adamavenir/json-utils` to GitHub URLs
+- **Versioning**: Lock files pin specific content hashes
 - **Caching**: Local cache for offline usage
 - **Security**: Advisory system for known vulnerabilities
 - **Analytics**: Optional anonymous usage statistics

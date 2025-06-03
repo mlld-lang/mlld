@@ -292,8 +292,8 @@ async function evaluateForeachCommand(
     throw new Error(`Command not found: ${command.identifier}`);
   }
   
-  if (!isCommandVariable(cmdVariable)) {
-    throw new Error(`Variable ${command.identifier} is not a command. Got type: ${cmdVariable.type}`);
+  if (!isCommandVariable(cmdVariable) && cmdVariable.type !== 'textTemplate') {
+    throw new Error(`Variable ${command.identifier} is not a command or text template. Got type: ${cmdVariable.type}`);
   }
   
   // 2. Evaluate all array arguments
@@ -318,7 +318,7 @@ async function evaluateForeachCommand(
   }
   
   // 4. Check parameter count matches array count
-  const paramCount = cmdVariable.value.paramNames?.length || 0;
+  const paramCount = cmdVariable.value.paramNames?.length || cmdVariable.value.params?.length || 0;
   if (evaluatedArrays.length !== paramCount) {
     throw new Error(`Command ${command.identifier} expects ${paramCount} parameters, got ${evaluatedArrays.length} arrays`);
   }
@@ -334,7 +334,8 @@ async function evaluateForeachCommand(
     try {
       // Create argument map for parameter substitution
       const argMap: Record<string, any> = {};
-      cmdVariable.value.paramNames.forEach((param: string, index: number) => {
+      const params = cmdVariable.value.paramNames || cmdVariable.value.params || [];
+      params.forEach((param: string, index: number) => {
         argMap[param] = tuple[index];
       });
       
@@ -343,7 +344,8 @@ async function evaluateForeachCommand(
       results.push(result);
     } catch (error) {
       // Include iteration context in error message
-      const iterationContext = cmdVariable.value.paramNames.map((param: string, index: number) => 
+      const params = cmdVariable.value.paramNames || cmdVariable.value.params || [];
+      const iterationContext = params.map((param: string, index: number) => 
         `${param}: ${JSON.stringify(tuple[index])}`
       ).join(', ');
       
@@ -403,7 +405,45 @@ async function invokeParameterizedCommand(
     // Execute code template with bound parameters
     const code = await interpolate(commandDef.codeTemplate, childEnv);
     return await env.executeCode(code, commandDef.language);
+  } else if (commandDef.type === 'textTemplate') {
+    // Execute text template with bound parameters
+    const text = await interpolate(commandDef.content, childEnv);
+    return text;
   } else {
     throw new Error(`Unsupported command type: ${commandDef.type}`);
   }
+}
+
+/**
+ * Validates a foreach expression without executing it.
+ * This is called during data directive evaluation to provide early error feedback.
+ * 
+ * @param foreachExpr - The foreach expression to validate
+ * @param env - The evaluation environment
+ * @throws Error if validation fails
+ */
+export async function validateForeachExpression(
+  foreachExpr: any,
+  env: Environment
+): Promise<void> {
+  const { command, arrays } = foreachExpr.value || foreachExpr;
+  
+  // 1. Check if command exists
+  const cmdVariable = env.getVariable(command.identifier);
+  if (!cmdVariable) {
+    throw new Error(`Command not found: ${command.identifier}`);
+  }
+  
+  if (!isCommandVariable(cmdVariable) && cmdVariable.type !== 'textTemplate') {
+    throw new Error(`Variable ${command.identifier} is not a command or text template. Got type: ${cmdVariable.type}`);
+  }
+  
+  // 2. Validate array count matches parameter count
+  const paramCount = cmdVariable.value.paramNames?.length || cmdVariable.value.params?.length || 0;
+  if (arrays.length !== paramCount) {
+    throw new Error(`Command ${command.identifier} expects ${paramCount} parameters, got ${arrays.length} arrays`);
+  }
+  
+  // Note: We don't evaluate the arrays here as they might contain variables
+  // that aren't defined yet. Full validation happens during lazy evaluation.
 }

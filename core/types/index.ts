@@ -27,6 +27,7 @@ export * from './path';
 export * from './data';
 export * from './run';
 export * from './output';
+export * from './when';
 
 // Import node types for the MlldNode union
 import {

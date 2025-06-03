@@ -115,7 +115,8 @@ export type DirectiveKind =
   | 'text'
   | 'path'
   | 'data'
-  | 'output';
+  | 'output'
+  | 'when';
 
 export type DirectiveSubtype = 
   | 'importAll' | 'importSelected'
@@ -125,7 +126,8 @@ export type DirectiveSubtype =
   | 'pathAssignment'
   | 'runCommand' | 'runExec' | 'runCode'
   | 'execCode' | 'execCommand'
-  | 'outputResolver' | 'outputFile' | 'outputCommand';
+  | 'outputResolver' | 'outputFile' | 'outputCommand'
+  | 'whenSimple' | 'whenBlock';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

@@ -169,6 +169,7 @@ Directive
     / AtData         // Data directives (structured data)
     / AtPath         // Path directives (path variables)
     / AtOutput       // Output directives (output routing)
+    / AtWhen         // When directives (conditional execution)
     ) { return dir; }
 
 // -------------------------------------------------------------------------
@@ -211,3 +212,4 @@ CodeFenceLangID
 // - AtData from directives/data.peggy
 // - AtPath from directives/path.peggy
 // - AtOutput from directives/output.peggy
+// - AtWhen from directives/when.peggy

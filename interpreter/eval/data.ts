@@ -3,6 +3,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { parseDataValue, needsEvaluation, extractPlainValue } from './data-value-parser';
 import { createDataVariable, createComplexDataVariable, astLocationToSourceLocation } from '@core/types';
+import { validateForeachExpression } from './data-value-evaluator';
 
 /**
  * Evaluate @data directives.
@@ -32,6 +33,11 @@ export async function evaluateData(
   
   // Parse the value into our DataValue structure
   const dataValue = parseDataValue(rawValue);
+  
+  // Validate foreach expressions early to provide immediate feedback
+  if (dataValue && typeof dataValue === 'object' && dataValue.type === 'foreach-command') {
+    await validateForeachExpression(dataValue, env);
+  }
   
   // Check if this data contains any complex values that need evaluation
   const isComplex = needsEvaluation(dataValue);

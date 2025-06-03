@@ -18,3 +18,4 @@ export * from './run';
 export * from './security';
 export * from './text';
 export * from './with';
+export * from './when';

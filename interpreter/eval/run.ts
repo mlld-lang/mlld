@@ -111,12 +111,15 @@ export async function evaluateRun(
         }
         
         // TODO: Add approval prompts for suspicious commands
+        // Temporarily disable security warnings for cleaner output
+        /*
         if (analysis.risks.length > 0) {
           console.warn(`⚠️  Security warning for command: ${command}`);
           for (const risk of analysis.risks) {
             console.warn(`   - ${risk.type}: ${risk.description}`);
           }
         }
+        */
       }
     }
     

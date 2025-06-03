@@ -126,17 +126,15 @@ export class RegistryResolver implements Resolver {
       
       logger.debug(`Resolved ${ref} to source: ${sourceUrl}`);
 
-      // Fetch the module content
-      const moduleContent = await this.fetchModuleContent(sourceUrl, config?.token);
-
+      // Return the URL as content - the actual fetching will be done by HTTPResolver/GitHubResolver
       return {
-        content: moduleContent,
+        content: sourceUrl,
         metadata: {
           source: `registry://${ref}`,
           timestamp: new Date(),
           taintLevel: TaintLevel.PUBLIC,
           author: user,
-          mimeType: 'text/x-mlld',
+          mimeType: 'text/plain', // URL is plain text
           description: moduleEntry.description,
           sourceUrl: sourceUrl,
           sourceHash: moduleEntry.source.hash
@@ -257,28 +255,6 @@ export class RegistryResolver implements Resolver {
     return registryData;
   }
 
-  /**
-   * Fetch module content from source URL
-   */
-  private async fetchModuleContent(sourceUrl: string, token?: string): Promise<string> {
-    logger.debug(`Fetching module content from: ${sourceUrl}`);
-
-    const headers: HeadersInit = {
-      'User-Agent': 'mlld-registry-resolver'
-    };
-
-    if (token) {
-      headers['Authorization'] = `token ${token}`;
-    }
-
-    const response = await fetch(sourceUrl, { headers });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch module: ${response.status} ${response.statusText}`);
-    }
-
-    return response.text();
-  }
 
   /**
    * Get cached registry if available and not expired
