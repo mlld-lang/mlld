@@ -9,23 +9,23 @@ The `@run` directive executes shell commands or code blocks and includes their o
 
 ## Syntax
 
-### Unified Syntax
+### Core Syntax
 ```mlld
 @run [(command_text)]
-@run [(language code_block)]
+@run language [(code_block)]
 @run @command(@param1, @param2)
 ```
 
 Where:
 - Commands are executed in the shell: `@run [(echo "Hello")]`
-- Code execution requires a language keyword: `@run [(js console.log("Hello"))]`
+- Code execution specifies language before brackets: `@run js [(console.log("Hello"))]`
 - Command references use `@`: `@run @myCommand(arg1, arg2)`
 
 Key points:
 - `command_text` is any shell command with variable interpolation support
 - `language` must be one of: `javascript`/`js`, `python`/`py`, or `bash`/`sh`
-- `code_block` is the code to execute after the language keyword
-- The `[(...)]` syntax unifies command and code execution
+- `code_block` is the code to execute in the specified language
+- Language is specified **outside** the brackets for code execution
 - Variables in commands use `@var` syntax
 - Command references defined with `@exec` use `@command` syntax
 
@@ -62,7 +62,7 @@ The implementation handles these error scenarios:
 
 ## Code Execution
 
-The `@run` directive can execute code in different languages:
+The `@run` directive can execute code in different languages by specifying the language before the brackets:
 
 ### JavaScript/Node.js
 - Parameters become function arguments
@@ -70,8 +70,8 @@ The `@run` directive can execute code in different languages:
 - The code runs in a sandboxed environment
 
 ```mlld
-@run [(js console.log("Hello from JS"))]
-@run [(js console.log("Hello, world!"))]
+@run js [(console.log("Hello from JS"))]
+@run javascript [(console.log("Hello, world!"))]
 ```
 
 ### Python
@@ -80,8 +80,8 @@ The `@run` directive can execute code in different languages:
 - Requires `python3` to be available
 
 ```mlld
-@run [(python print("Hello from Python"))]
-@run [(py print("Hello from Python!"))]
+@run python [(print("Hello from Python"))]
+@run py [(print("Hello from Python!"))]
 ```
 
 ### Bash/Shell
@@ -90,8 +90,8 @@ The `@run` directive can execute code in different languages:
 - Environment variables from the parent process are available
 
 ```mlld
-@run [(bash echo "Hello from Bash")]
-@run [(sh echo "Hello from Shell")]
+@run bash [(echo "Hello from Bash")]
+@run sh [(echo "Hello from Shell")]
 ```
 
 ## Examples
@@ -127,7 +127,7 @@ Using defined commands:
 
 Using code execution with `@exec`:
 ```mlld
-@exec greet(name) = @run [(bash echo "Hello, @name!")]
+@exec greet(name) = @run bash [(echo "Hello, @name!")]
 @run @greet("Developer")
 ```
 

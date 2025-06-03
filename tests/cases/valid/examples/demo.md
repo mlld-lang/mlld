@@ -132,7 +132,7 @@ Still in outer fence
   { name: "Item 3", value: 300 }
 ]
 
-@exec calculateTotal = @run [(javascript [
+@exec calculateTotal = @run javascript [([
   const values = [100, 200, 300)];
   return values.reduce((a, b) => a + b, 0);
 ]]

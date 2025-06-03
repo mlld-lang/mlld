@@ -18,10 +18,11 @@ by the @run directive. It can be used in these forms:
 // TOP-LEVEL EXEC DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @exec directive - using new unified syntax
+// Primary @exec directive - supporting both command and code syntax
 AtExec
-  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:UnifiedRunContent withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      helpers.debug('AtExec matched with unified content', { id, params, content, trust });
+  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      // Language + code syntax: @exec fn() = @run language [(code)]
+      helpers.debug('AtExec matched with language + code', { id, params, lang, code, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -29,52 +30,35 @@ AtExec
       // Process parameters
       const processedParams = params || [];
       
-      // Build values and raw objects based on content type
+      // Build values and raw objects
+      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
+      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
+      
       const values = {
         identifier: [identifierNode],
-        params: processedParams
+        params: processedParams,
+        lang: [langNode],
+        args: args || [],
+        code: [codeNode]
       };
       
       const raw = {
         identifier: id,
-        params: processedParams
+        params: processedParams,
+        lang: lang,
+        args: args ? args.map(arg => arg.identifier || '') : [],
+        code: code.content
       };
       
-      // Add content-specific fields and determine subtype
-      let subtype, source, metaObj;
-      
-      if (content.type === 'command') {
-        // Command content with variable interpolation
-        values.command = content.values.command;
-        values.commandBases = content.values.commandBases;
-        raw.command = content.raw.command;
-        raw.commandBases = content.raw.commandBases;
-        subtype = 'execCommand';
-        source = 'command';
-        metaObj = {
-          parameterCount: processedParams.length,
-          commandType: 'command',
-          ...content.meta,
-          ...helpers.createSecurityMeta({ trust })
-        };
-      } else if (content.type === 'code') {
-        // Code content (language + code blob, no interpolation)
-        values.lang = content.values.lang;
-        values.args = content.values.args || [];
-        values.code = content.values.code;
-        raw.lang = content.raw.lang;
-        raw.args = content.raw.args || [];
-        raw.code = content.raw.code;
-        subtype = 'execCode';
-        source = 'code';
-        metaObj = {
-          parameterCount: processedParams.length,
-          ...content.meta,
-          ...helpers.createSecurityMeta({ trust })
-        };
-      } else {
-        throw new Error(`Unknown exec content type: ${content.type}`);
-      }
+      // Metadata
+      const metaObj = {
+        isMultiLine: code.content.includes('\n'),
+        language: lang,
+        hasVariables: false, // Code blocks don't support variable interpolation
+        parameterCount: processedParams.length,
+        ...helpers.createSecurityMeta({ trust }),
+        ...(meta ? { riskLevel: meta } : {})
+      };
       
       // Add metadata if present
       if (meta) {
@@ -92,12 +76,69 @@ AtExec
       
       return helpers.createStructuredDirective(
         'exec',
-        subtype,
+        'execCode',
         values,
         raw,
         metaObj,
         location(),
-        source
+        'code'
+      );
+    }
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      // Command syntax: @exec cmd() = @run [(command)]
+      helpers.debug('AtExec matched with command', { id, params, content, trust });
+      
+      // Create identifier node
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      
+      // Process parameters
+      const processedParams = params || [];
+      
+      // Build values and raw objects
+      const values = {
+        identifier: [identifierNode],
+        params: processedParams,
+        command: content.values.command,
+        commandBases: content.values.commandBases
+      };
+      
+      const raw = {
+        identifier: id,
+        params: processedParams,
+        command: content.raw.command,
+        commandBases: content.raw.commandBases
+      };
+      
+      // Metadata
+      const metaObj = {
+        ...content.meta,
+        parameterCount: processedParams.length,
+        ...helpers.createSecurityMeta({ trust }),
+        ...(meta ? { riskLevel: meta } : {})
+      };
+      
+      // Add metadata if present
+      if (meta) {
+        values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
+        raw.metadata = meta;
+        metaObj.metadata = { type: meta };
+      }
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        metaObj.withClause = withClause;
+      }
+      
+      return helpers.createStructuredDirective(
+        'exec',
+        'execCommand',
+        values,
+        raw,
+        metaObj,
+        location(),
+        'command'
       );
     }
   / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference withClause:WithClause? trust:(_ t:TrustOption { return t; })? {

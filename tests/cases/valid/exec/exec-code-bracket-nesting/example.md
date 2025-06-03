@@ -2,8 +2,7 @@
 
 Test exec commands with complex bracket nesting scenarios.
 
-@exec process_data(items) = @run [(python 
-data = [
+@exec process_data(items) = @run python [(data = [
   {"name": "item1", "values": [1, 2, 3)]},
   {"name": "item2", "values": [4, 5, 6]}
 ]

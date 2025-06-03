@@ -18,13 +18,58 @@ It can be used in three main forms:
 // TOP-LEVEL RUN DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @run directive - Using new unified [(...))] syntax
+// Primary @run directive - Supporting both command and code syntax
 // Order matters: most specific patterns first
 AtRun
-  = DirectiveContext "@run" _ security:(SecurityOptions _)? content:UnifiedRunContent withClause:WithClause? comment:InlineComment? {
-      // Unified [(...))] syntax - content type already determined
+  = DirectiveContext "@run" _ security:(SecurityOptions _)? lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets withClause:WithClause? comment:InlineComment? {
+      // Language + code syntax: @run language [(code)]
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched unified content', { content, securityOptions, withClause });
+      helpers.debug('AtRun matched language + code', { lang, code, securityOptions, withClause });
+      
+      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
+      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
+      
+      const values = {
+        lang: [langNode],
+        args: args || [],
+        code: [codeNode]
+      };
+      
+      const raw = {
+        lang: lang,
+        args: args ? args.map(arg => arg.identifier || '') : [],
+        code: code.content
+      };
+      
+      const meta = {
+        isMultiLine: code.content.includes('\n'),
+        language: lang,
+        hasVariables: false, // Code blocks don't support variable interpolation
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
+      
+      return helpers.createStructuredDirective(
+        'run',
+        'runCode',
+        values,
+        raw,
+        meta,
+        location(),
+        'code'
+      );
+    }
+  / DirectiveContext "@run" _ security:(SecurityOptions _)? content:UnifiedCommandBrackets withClause:WithClause? comment:InlineComment? {
+      // Command syntax: @run [(command)]
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtRun matched command', { content, securityOptions, withClause });
       
       const meta = {
         ...content.meta,
@@ -97,8 +142,37 @@ AtRun
 
 // Run directive reference in RHS contexts (nested in other directives)
 RunDirectiveRef
-  = content:UnifiedRunContent {
-      helpers.debug('RunDirectiveRef matched unified content in RHS', { content });
+  = lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets {
+      // Language + code syntax in RHS: language [(code)]
+      helpers.debug('RunDirectiveRef matched language + code in RHS', { lang, code });
+      
+      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
+      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
+      
+      return helpers.createStructuredDirective(
+        'run',
+        'runCode',
+        {
+          lang: [langNode],
+          args: args || [],
+          code: [codeNode]
+        },
+        {
+          lang: lang,
+          args: args ? args.map(arg => arg.identifier || '') : [],
+          code: code.content
+        },
+        { 
+          isMultiLine: code.content.includes('\n'),
+          language: lang,
+          hasVariables: false,
+          isRHSRef: true
+        },
+        location()
+      );
+    }
+  / content:UnifiedCommandBrackets {
+      helpers.debug('RunDirectiveRef matched command in RHS', { content });
       
       return helpers.createStructuredDirective(
         'run',

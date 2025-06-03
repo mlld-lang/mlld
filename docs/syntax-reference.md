@@ -146,7 +146,7 @@ def hello():
 ```mlld
 @exec identifier = @run [(content)]
 @exec command(param1, param2) = @run [(content @param1 @param2)]
-@exec command = @run [(javascript code)]
+@exec command = @run js [(code)]
 ```
 
 ### @text

@@ -17,7 +17,7 @@ Variables have a VariableType of `text`, `data`, `path`, and `command`.
 @run [(echo "hello world")] <-- runCommand
 @run [(echo {{variable}})] <-- runCommand (but using variables)
 @run $mycommand ({{param}}, {{variable}}) <-- runDefined
-@run [(python  print("Hello world" )] <-- runCode
+@run python [(print("Hello world")] <-- runCode
 @run python ({{variable}}) [ print(variable} ] <-- runCodeParams
 ```
 `@import` subtypes are `importAll`, `importStandard`, `importNamed`:
@@ -109,7 +109,7 @@ Used to execute shell commands, predefined commands, or code blocks.
     ```
 *   **`@run language [ code block ]`**: Executes a block of code in the specified language (e.g., `python`, `bash`).
     ```mlld
-    @run [(python  print("Hello from Python!") )]
+    @run python [(print("Hello from Python!"))]
     ```
 *   **`@run language ({{var1}}, param2) [ code block using var1, param2 ]`**: Executes a code block, passing variables/parameters into the code's scope.
     ```mlld
