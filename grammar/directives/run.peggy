@@ -163,7 +163,7 @@ RunDirectiveRef
           code: code.content
         },
         { 
-          isMultiLine: code.content.includes('\n'),
+          isMultiLine: code.isMultiLine || code.content.includes('\n'),
           language: lang,
           hasVariables: false,
           isRHSRef: true
