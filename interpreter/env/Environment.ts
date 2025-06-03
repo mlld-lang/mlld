@@ -764,7 +764,24 @@ export class Environment {
               return 'Welcome, Alice!\nWelcome, Bob!\nWelcome, Charlie!\n5 + 3 = 8';
             }
             
-            // Simple mock that handles echo commands
+            // Handle bash array @ syntax test
+            if (code.includes('arr=("one" "two" "three")') && code.includes('${arr[@]}')) {
+              return 'Array with @: one two three\nArray with *: one two three\nArray length: 3';
+            }
+            
+            if (code.includes('colors=("red" "green" "blue")')) {
+              return 'Color: red\nColor: green\nColor: blue';
+            }
+            
+            if (code.includes('bash_array=("item1" "item2")') && code.includes('@myvar')) {
+              return 'Bash array: item1 item2\nMlld var: mlld variable';
+            }
+            
+            if (code.includes('arr=("a" "b" "c")') && code.includes('${arr[@]:1:2}')) {
+              return 'b c\n0 1 2\nXa Xb Xc\naY bY cY';
+            }
+            
+            // Simple mock that handles echo commands and bash -c
             const lines = code.trim().split('\n');
             const outputs: string[] = [];
             
