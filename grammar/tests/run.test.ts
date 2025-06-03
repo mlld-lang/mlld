@@ -98,7 +98,7 @@ describe('Run directive', () => {
     });
     
     test('Code with arguments', async () => {
-      const content = '@run python (data, format) [\nimport json\ndata_obj = json.loads(data)\nprint(json.dumps(data_obj, indent=4 if format == "pretty" else None))\n]';
+      const content = '@run python (data, format) [(\nimport json\ndata_obj = json.loads(data)\nprint(json.dumps(data_obj, indent=4 if format == "pretty" else None))\n)]';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);

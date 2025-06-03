@@ -22,7 +22,8 @@ UnifiedCodeBrackets "Code brackets [(...))]"
   = "[(" _ content:$(UnifiedCodeContent) _ ")]" {
       helpers.debug('UnifiedCodeBrackets matched', { content });
       return {
-        content: content.trim()
+        content: content.trim(),
+        isMultiLine: content.includes('\n')
       };
     }
 

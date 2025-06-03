@@ -42,7 +42,7 @@ AtRun
       };
       
       const meta = {
-        isMultiLine: code.content.includes('\n'),
+        isMultiLine: code.isMultiLine || code.content.includes('\n'),
         language: lang,
         hasVariables: false, // Code blocks don't support variable interpolation
         ...helpers.createSecurityMeta(securityOptions),
