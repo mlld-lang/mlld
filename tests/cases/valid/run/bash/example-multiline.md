@@ -1,6 +1,6 @@
 # Multiline Bash Code
 
-@run bash [[
+@run bash [
 #!/bin/bash
 # A more complex bash script
 names=("Alice" "Bob" "Charlie")
@@ -11,4 +11,4 @@ done
 # Math operations
 result=$((5 + 3))
 echo "5 + 3 = $result"
-]]
+]
