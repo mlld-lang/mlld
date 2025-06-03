@@ -312,28 +312,28 @@ AtRun
 
 ```
 @run ...
-├─ Language + "[" detected?
-│  ├─ YES: "@run python [...]"
-│  │  └─ [CodeContent] - Semantic choice
-│  │     └─ Content is literal code
-│  │        ├─ No @ variable processing
-│  │        ├─ Preserve all [brackets]
-│  │        └─ Preserve all quotes
-│  │
-├─ "[" detected (no language)?
-│  ├─ YES: "@run [...]"
-│  │  └─ [CommandContent] - Semantic choice
-│  │     └─ CommandParts with @var interpolation
-│  │        ├─ @var → Variable reference
-│  │        └─ text → Command text segments
+├─ "[(" detected?
+│  ├─ YES: "@run [(...)]"
+│  │  └─ Unified command/code content
+│  │     └─ Parse content to determine type:
+│  │        ├─ Language keyword at start (js, python, bash, etc.)?
+│  │        │  ├─ YES: Code execution
+│  │        │  │  └─ Language + remaining content as code
+│  │        │  │     ├─ No @ variable processing in code
+│  │        │  │     ├─ Preserve all [brackets]
+│  │        │  │     └─ Preserve all quotes
+│  │        │  │
+│  │        │  └─ NO: Command execution
+│  │        │     └─ CommandParts with @var interpolation
+│  │        │        ├─ @var → Variable reference
+│  │        │        └─ text → Command text segments
 │  │
 ├─ "@" detected?
 │  ├─ YES: "@run @command"
 │  │  └─ Command reference (exec)
 │  │
 └─ Other patterns
-   └─ Delegate to RunLanguageCodeCore
-      └─ Handles language (args) patterns
+   └─ Parse error (invalid syntax)
 ```
 
 ### @text Directive
@@ -390,18 +390,11 @@ AtRun
 ### @exec Directive
 
 ```
-@exec name(params) = ...
-├─ "@run" detected?
-│  ├─ YES: RunReference
-│  │  └─ @run directive (see tree above)
-│  │
-├─ [Language] detected?
-│  ├─ YES: Code execution
-│  │  └─ Same as @run language branch
-│  │
-└─ "[" detected?
-   └─ CommandExecution
-      └─ Same as @run command branch
+@exec name(params) = @run ...
+└─ Must use @run with [(...)]:
+   ├─ @exec cmd(p) = @run [(echo @p)]    - Command
+   ├─ @exec fn(x) = @run [(js return x)] - Code
+   └─ @exec alias() = @run @other        - Reference
 ```
 
 ### @path Directive

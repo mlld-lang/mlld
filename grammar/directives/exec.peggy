@@ -18,10 +18,10 @@ by the @run directive. It can be used in these forms:
 // TOP-LEVEL EXEC DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @exec directive - unified approach with RHS delegation
+// Primary @exec directive - using new unified syntax
 AtExec
-  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:ExecRHS withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      helpers.debug('AtExec matched with unified RHS delegation', { id, params, content, trust });
+  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:UnifiedRunContent withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      helpers.debug('AtExec matched with unified content', { id, params, content, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -45,30 +45,31 @@ AtExec
       
       if (content.type === 'command') {
         // Command content with variable interpolation
-        values.command = content.command;
-        raw.command = content.raw;
+        values.command = content.values.command;
+        values.commandBases = content.values.commandBases;
+        raw.command = content.raw.command;
+        raw.commandBases = content.raw.commandBases;
         subtype = 'execCommand';
         source = 'command';
         metaObj = {
           parameterCount: processedParams.length,
           commandType: 'command',
+          ...content.meta,
           ...helpers.createSecurityMeta({ trust })
         };
       } else if (content.type === 'code') {
         // Code content (language + code blob, no interpolation)
-        values.lang = content.lang;
-        values.args = content.args || [];
-        values.code = content.code;
-        raw.lang = content.rawLang;
-        raw.args = content.rawArgs || [];
-        raw.code = content.raw;
+        values.lang = content.values.lang;
+        values.args = content.values.args || [];
+        values.code = content.values.code;
+        raw.lang = content.raw.lang;
+        raw.args = content.raw.args || [];
+        raw.code = content.raw.code;
         subtype = 'execCode';
         source = 'code';
         metaObj = {
           parameterCount: processedParams.length,
-          language: content.rawLang,
-          isMultiLine: content.raw.includes('\n'),
-          hasVariables: false,  // Code blocks don't support variable interpolation
+          ...content.meta,
           ...helpers.createSecurityMeta({ trust })
         };
       } else {
