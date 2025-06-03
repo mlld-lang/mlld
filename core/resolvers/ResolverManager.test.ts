@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ResolverManager } from './ResolverManager';
-import { DNSResolver } from './DNSResolver';
 import { LocalResolver } from './LocalResolver';
+import { RegistryResolver } from './RegistryResolver';
 import { Resolver, ResolverContent, RegistryConfig } from './types';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 
@@ -57,14 +57,14 @@ describe('ResolverManager', () => {
       const secureManager = new ResolverManager({
         allowCustom: false,
         pathOnlyMode: false,
-        allowedResolvers: ['dns', 'local']
+        allowedResolvers: ['registry', 'local']
       });
       
-      const dnsResolver = new DNSResolver();
+      const registryResolver = new RegistryResolver();
       const mockResolver = new MockResolver();
       
-      // DNS is allowed
-      expect(() => secureManager.registerResolver(dnsResolver)).not.toThrow();
+      // Registry is allowed
+      expect(() => secureManager.registerResolver(registryResolver)).not.toThrow();
       
       // Mock is not allowed
       expect(() => secureManager.registerResolver(mockResolver)).toThrow('not in the allowed list');
@@ -119,7 +119,7 @@ describe('ResolverManager', () => {
   describe('resolution', () => {
     beforeEach(() => {
       manager.registerResolver(new MockResolver());
-      manager.registerResolver(new DNSResolver());
+      manager.registerResolver(new RegistryResolver());
     });
     
     it('should resolve using configured prefix', async () => {

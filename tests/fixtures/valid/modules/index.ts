@@ -3,3 +3,4 @@
 
 export { default as modulesHash } from './modules-hash.generated-fixture.json';
 export { default as modulesMixed } from './modules-mixed.generated-fixture.json';
+export { default as modulesStdlibBasic } from './modules-stdlib-basic.generated-fixture.json';

@@ -234,109 +234,16 @@ export async function evaluateImport(
     if (resolverManager) {
       try {
         // ResolverManager will handle all @prefix/ patterns including @user/module
-        const content = await env.resolveModule(importPath);
-        
-        // For module imports, we need to write the content to a temporary location
-        // or handle it directly. For now, let's process it directly.
-        // Create a unique identifier for this module import
-        const moduleId = `module:${importPath}`;
-        
-        // Mark that we're importing this module
-        env.beginImport(moduleId);
-        
-        try {
-          // Parse the module content
-          const parseResult = await parse(content);
-          const ast = parseResult.ast;
-          
-          // Create a child environment for the module
-          const childEnv = env.createChild(env.getBasePath());
-          childEnv.setCurrentFilePath(moduleId);
-          
-          // Evaluate the module
-          const result = await evaluate(ast, childEnv);
-          
-          // Handle variable merging (same as file imports)
-          const childVars = childEnv.getCurrentVariables();
-          
-          if (directive.subtype === 'importAll') {
-            for (const [name, variable] of childVars) {
-              const importedVariable = {
-                ...variable,
-                metadata: {
-                  ...variable.metadata,
-                  isImported: true,
-                  importPath: moduleId
-                }
-              };
-              env.setVariable(name, importedVariable);
-            }
-          } else if (directive.subtype === 'importNamespace') {
-            const imports = directive.values?.imports || [];
-            const importNode = imports[0];
-            const alias = importNode?.alias;
-            
-            if (!alias) {
-              throw new Error('Namespace import missing alias');
-            }
-            
-            const namespaceObject: Record<string, any> = {};
-            for (const [name, variable] of childVars) {
-              namespaceObject[name] = variable.value;
-            }
-            
-            const namespaceVariable = {
-              type: 'data' as const,
-              value: namespaceObject,
-              nodeId: '',
-              location: { line: 0, column: 0 },
-              metadata: {
-                isImported: true,
-                importPath: moduleId
-              }
-            };
-            env.setVariable(alias, namespaceVariable);
-          } else if (directive.subtype === 'importSelected') {
-            const imports = directive.values?.imports || [];
-            for (const importNode of imports) {
-              const sourceName = importNode.identifier || importNode.name;
-              const targetName = importNode.alias || sourceName;
-              
-              const variable = childVars.get(sourceName);
-              if (!variable) {
-                throw new Error(`Variable '${sourceName}' not found in module: ${importPath}`);
-              }
-              
-              const importedVariable = {
-                ...variable,
-                metadata: {
-                  ...variable.metadata,
-                  isImported: true,
-                  importPath: moduleId
-                }
-              };
-              env.setVariable(targetName, importedVariable);
-            }
-          }
-          
-          return { value: result.value, shouldOutput: false };
-        } finally {
-          env.endImport(moduleId);
-        }
+        // This returns a URL that we can then fetch
+        const resolvedUrl = await env.resolveModule(importPath);
+        resolvedPath = resolvedUrl;
       } catch (error) {
-        // If resolver fails, fall back to legacy behavior
-        console.warn(`ResolverManager failed for ${importPath}, falling back to legacy:`, error);
-        resolvedPath = importPath;
+        // If resolver fails, let it bubble up with a clear error
+        throw new Error(`Failed to resolve module '${importPath}': ${error instanceof Error ? error.message : String(error)}`);
       }
     } else {
-      // No ResolverManager available, use legacy mlld:// handling
-      if (importPath.startsWith('mlld://')) {
-        // For legacy mlld:// URLs, just use them as-is
-        // The actual resolution will happen when fetching
-        resolvedPath = importPath;
-      } else {
-        resolvedPath = importPath;
-      }
+      // No ResolverManager available
+      throw new Error(`Cannot resolve module '${importPath}': Module resolution not configured`);
     }
   } else if (isURL || env.isURL(importPath)) {
     // For URLs, use the URL as-is (no path resolution needed)
