@@ -577,8 +577,9 @@ export class Environment {
     
     const startTime = Date.now();
     
+    // Simple progress message without emoji
     if (showProgress) {
-      console.log(`⚡ Running: ${command}`);
+      console.log(`Running: ${command}`);
     }
     
     try {
@@ -594,18 +595,26 @@ export class Environment {
       const duration = Date.now() - startTime;
       const { processed } = this.processOutput(result, maxOutputLines);
       
+      // Temporarily disable timing messages for cleaner output
+      // TODO: Revisit progress display design
+      /*
       if (showProgress) {
         console.log(`✅ Completed in ${duration}ms`);
       }
+      */
       
       return processed;
       
     } catch (error: any) {
       const duration = Date.now() - startTime;
       
+      // Temporarily disable timing messages for cleaner output
+      // TODO: Revisit progress display design
+      /*
       if (showProgress) {
         console.log(`❌ Failed in ${duration}ms`);
       }
+      */
       
       // Create rich MlldCommandExecutionError with source context
       const commandError = MlldCommandExecutionError.create(
@@ -1137,6 +1146,11 @@ export class Environment {
     truncated: boolean; 
     originalLineCount: number 
   } {
+    // Temporarily disable output limiting to fix truncation issue
+    // TODO: Revisit terminal output controls in the future
+    return { processed: output.trimEnd(), truncated: false, originalLineCount: 0 };
+    
+    /*
     if (!maxLines || maxLines <= 0) {
       return { processed: output.trimEnd(), truncated: false, originalLineCount: 0 };
     }
@@ -1157,6 +1171,7 @@ export class Environment {
       truncated: true,
       originalLineCount: lines.length
     };
+    */
   }
   
   async displayCollectedErrors(): Promise<void> {
