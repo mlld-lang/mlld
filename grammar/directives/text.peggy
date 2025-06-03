@@ -470,8 +470,9 @@ AtText
       );
     }
   // Code execution - @text id = @run language [code]
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ runCode:RunLanguageCodeCore {
-      helpers.debug('AtText matched @run using RunLanguageCodeCore abstraction', { id, runCode });
+  // Check for language BEFORE bracket to avoid consuming non-language commands
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ lang:RunCodeLanguage _ "[" content:$(CodeLiteralContent) "]" {
+      helpers.debug('AtText matched @run with language code', { id, lang, content });
       
       // Use the proper subtype and sourceType
       const subtype = 'textAssignment';
@@ -483,23 +484,20 @@ AtText
         directive: 'run',
         hasVariables: false,
         run: {
-          language: runCode.meta.language,
-          isMultiLine: runCode.meta.isMultiLine
+          language: lang,
+          isMultiLine: content.includes('\n')
         }
       };
       
       // Create raw content string
-      const rawContent = `@run ${runCode.meta.language}${
-        runCode.raw.args && runCode.raw.args.length > 0 ? 
-        `(${runCode.raw.args.join(', ')})` : ''
-      } [${runCode.raw.code}]`;
+      const rawContent = `@run ${lang} [${content}]`;
       
       return helpers.createStructuredDirective(
         'text',
         subtype,
         {
           identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          content: runCode.values.code // Use the code array from RunLanguageCodeCore
+          content: [helpers.createNode(NodeType.Text, { content, location: location() })]
         },
         {
           identifier: id,
