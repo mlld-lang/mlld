@@ -1,32 +1,50 @@
-# Meld: Modular Prompt Scripting
+# Mlld: Orchestrating Intelligence
 
-## What is Meld?
+## What is Mlld?
 
-Meld (`.mld`) is a prompt scripting language embedded in Markdown that enables dynamic content generation, modular prompt engineering, and seamless integration with command-line tools. Think of it as "executable documentation" - your markdown files can now fetch data, run commands, build dynamic prompts, and compose content from multiple sources.
+Mlld (`.mld`) is an orchestration language for working with Large Language Models (LLMs). Rather than programming machines, mlld helps you collaborate with AI systems - treating them as intelligent partners rather than deterministic functions. It's designed to be learnable in 10 minutes yet powerful enough to build sophisticated AI workflows.
 
-## Why Meld?
+## The Core Insight
 
-We need better ways to:
-- Build complex, reusable prompts from modular components
-- Combine static documentation with dynamic data
-- Chain multiple LLM calls together
-- Version control and share prompt engineering workflows
-- Structure content in LLM-friendly formats
+LLMs aren't traditional software - they're probabilistic reasoning engines that work best when:
+- Given clear context and specific asks
+- Allowed to work in their natural medium (language)
+- Guided through well-defined transformation pipelines
+- Treated as collaborative partners, not tools
 
-Meld solves these problems by treating markdown files as programmable modules.
+Mlld embraces this reality by providing just enough structure to orchestrate LLM interactions while keeping complexity in composable modules.
+
+## Why Mlld?
+
+Traditional programming languages force you to think in terms of loops, exceptions, and types. But working with LLMs is different - it's more like:
+- Consulting multiple experts for different perspectives
+- Refining outputs through stages of review
+- Building institutional knowledge into reusable workflows
+- Creating "pipeline of thought" rather than just "chain of thought"
+
+Mlld provides exactly the primitives you need for this new paradigm, and nothing more.
+
+## Core Philosophy: Simple Core, Powerful Modules
+
+Mlld keeps its core language minimal - just enough to orchestrate work - while enabling unlimited power through modules. This means:
+
+- **Learn in 10 minutes**: The entire language fits in your head
+- **Extend infinitely**: JavaScript/TypeScript modules handle complexity
+- **Read like recipes**: Scripts describe what to do, not how
+- **Think naturally**: Work with LLMs like collaborators, not functions
 
 ## Core Concepts
 
 ### 1. Everything is Markdown
 
-Meld enhances regular markdown - anything that isn't a directive (starting with `@`) is treated as normal markdown:
+Mlld enhances regular markdown - anything that isn't a directive (starting with `@`) is treated as normal markdown:
 
-```meld
+```mld
 # My Document
 
 This is regular markdown.
 
-@text greeting = "Hello from Meld!"
+@text greeting = "Hello from mlld!"
 
 The greeting is still markdown, but now we can make it dynamic.
 
@@ -56,13 +74,29 @@ You are helping {{name}}, a {{role}}, working on {{context.project}} using {{con
 
 This is crucial - most directives just set up state. Only `@add` and `@run` actually contribute to the final document:
 
-```meld
+```mld
 @text hidden = "This won't appear in output"
 @data config = { "debug": true }
 
 @add [[This WILL appear in output]]
 @run [(echo "This command output WILL appear")]
 ```
+
+### 4. Complexity Lives in Modules
+
+Mlld deliberately lacks traditional programming constructs (loops, error handling, complex logic). Instead, modules provide these capabilities:
+
+```mld
+# Instead of language features, use modules:
+@import { forEach, parallel, retry } from @mlld/core
+@import { validateResponse, improveAnswer } from @company/ai-tools
+
+# Orchestrate with simple, readable syntax:
+@data results = @run @parallel(@llmCalls, { concurrency: 3 })
+@text refined = @run @validateResponse(@results) 
+```
+
+This separation keeps mlld scripts clean and focused on orchestration while modules handle implementation details.
 
 ## Modular Prompt Engineering
 
@@ -114,124 +148,147 @@ Recent changes:
 @run [(claude --message @full_prompt)]
 ```
 
-## Flow Control Through External Tools
+## The Power of Modules
 
-Meld doesn't have built-in conditionals or loops - instead, it leverages the full power of your system's tools:
+Mlld's true power comes from modules that encapsulate complex operations while keeping your scripts simple:
 
-### Using Shell Scripts
+### Example: Document Generation Module
 
-```meld
-@text files = @run [(find . -name "*.test.js" | head -5)]
-@text test_results = @run [(npm test 2>&1)]
-
-@text status = @run bash [(-c '
-  if echo "@test_results" | grep -q "FAILED"; then
-    echo "❌ Tests failing"
-  else
-    echo "✅ All tests passing"
-  fi
-')]
-
-## Test Report
-{{status}}
-
-### Test Files Checked:
-{{files}}
+```javascript
+// @mlld/docgen module
+export async function generateDocs(config) {
+  const { dirs, template, format } = config;
+  const results = [];
+  
+  for (const dir of dirs) {
+    const files = await scanDirectory(dir);
+    const analysis = await analyzeCode(files);
+    const doc = await template({ dir, files, analysis });
+    results.push({ dir, doc });
+  }
+  
+  return format === 'summary' ? summarize(results) : results;
+}
 ```
 
-### Using Python for Data Processing
+Used in mlld:
+```mld
+@import { generateDocs } from @mlld/docgen
 
-```meld
-@data users = [
-  {"name": "Alice", "score": 85},
-  {"name": "Bob", "score": 92},
-  {"name": "Charlie", "score": 78}
-]
+@text docs = @run @generateDocs({
+  dirs: ["src", "lib", "api"],
+  template: @techWriterPrompt,
+  format: "summary"
+})
 
-@text analysis = @run python -c '
-import json
-users = json.loads("""@users""")
-avg_score = sum(u["score"] for u in users) / len(users)
-top_user = max(users, key=lambda u: u["score"])
-print(f"Average score: {avg_score:.1f}")
-print(f"Top performer: {top_user["name"]} ({top_user["score"]})")
-'
-
-@add @analysis
+@add @docs
 ```
 
-### Using JavaScript for Complex Logic
+### Example: Multi-Model Consensus Module
 
-```meld
-@text markdown_content = @run [(cat README.md)]
-
-@text toc = @run [(node -e '
-const content = `@markdown_content`;
-const headers = content.match(/^#{1,3} .+$/gm) || [)];
-const toc = headers.map(h => {
-  const level = h.match(/^#+/)[0].length;
-  const text = h.replace(/^#+\s+/, "");
-  const indent = "  ".repeat(level - 1);
-  return `${indent}- ${text}`;
-}).join("\n");
-console.log(toc);
-']
-
-## Table of Contents
-@add @toc
+```javascript
+// @company/ai-consensus module  
+export async function getConsensus(question, options = {}) {
+  const { models = ['claude', 'gpt-4'], synthesizer = 'claude' } = options;
+  
+  // Get responses in parallel
+  const responses = await Promise.all(
+    models.map(model => callModel(model, question))
+  );
+  
+  // Synthesize into consensus
+  const synthesis = await callModel(synthesizer, {
+    task: "Synthesize these responses into a unified answer",
+    responses
+  });
+  
+  return { synthesis, individual: responses };
+}
 ```
+
+Used in mlld:
+```mld
+@import { getConsensus } from @company/ai-consensus
+
+@text answer = @run @getConsensus("What are the risks of this approach?", {
+  models: ["claude-3", "gpt-4", "gemini-pro"],
+  synthesizer: "claude-3"
+})
+
+@add @answer.synthesis
+```
+
+### The Module Advantage
+
+1. **Testable** - Modules have proper test suites
+2. **Reusable** - Share across projects and teams
+3. **Typed** - Full TypeScript support
+4. **Documented** - JSDoc and examples
+5. **Versioned** - Semantic versioning via npm
 
 ## LLM Integration Patterns
 
-### Sequential Prompt Chaining
+### Pipeline of Thought > Chain of Thought
 
-```meld
-@text code = @run [(cat src/main.py)]
+Instead of asking LLMs to "think step by step", mlld lets you **enforce** those steps through transformation pipelines:
 
->> First, get a code review
-@text review = @run [(claude --message "Review this Python code for issues:\n\n@code")]
+```mld
+# Define transformation stages
+@exec checkAccuracy(response) = @run @claude([[Review this response for factual accuracy: {{response}}]])
 
->> Then, get specific fixes
-@text fixes = @run [(claude --message "Based on this review:\n@review\n\nProvide specific code fixes.")]
+@exec improveClarity(response) = @run @claude([[Rewrite this for clarity, preserving all facts: {{response}}]])
 
->> Finally, get a summary
-@text summary = @run [(claude --message "Summarize these fixes in 3 bullet points:\n@fixes")]
+@exec addExamples(response) = @run @claude([[Add concrete examples to illustrate points: {{response}}]])
 
-## Code Review Summary
-@add @summary
+# Apply pipeline to ensure quality
+@text answer = @run @claude("Explain how DNS works") with {
+  pipeline: [@checkAccuracy, @improveClarity, @addExamples]
+}
 
-### Detailed Review
-@add @review
-
-### Suggested Fixes
-@add @fixes
+@add @answer
 ```
 
-### Parallel Analysis
+### Institutional Knowledge as Code
 
-```meld
-@text content = @run [(cat proposal.md)]
+Encode your organization's standards and values into reusable pipelines:
 
->> Get multiple perspectives simultaneously
-@text tech_review = @run [(claude --system "You are a technical architect" \
-  --message "Review this proposal:\n@content")]
+```mld
+@import { 
+  ensureInclusiveLanguage,
+  checkBrandVoice,
+  validateCompliance,
+  addContextLinks 
+} from @company/content-standards
 
-@text business_review = @run [(claude --system "You are a business analyst" \
-  --message "Review this proposal:\n@content")]
+@text response = @run @claude(@customerQuery) with {
+  pipeline: [
+    @ensureInclusiveLanguage,
+    @checkBrandVoice,
+    @validateCompliance,
+    @addContextLinks
+  ]
+}
+```
 
-@text security_review = @run [(claude --system "You are a security expert" \
-  --message "Review this proposal:\n@content")]
+### Multi-Perspective Analysis
 
-## Proposal Reviews
+Use `@map` to gather diverse viewpoints efficiently:
 
-### Technical Perspective
-@add @tech_review
+```mld
+@data perspectives = [
+  { role: "security expert", focus: "vulnerabilities and risks" },
+  { role: "performance engineer", focus: "scalability and efficiency" },
+  { role: "user advocate", focus: "usability and accessibility" }
+]
 
-### Business Perspective
-@add @business_review
+@exec analyze(perspective) = @run [(claude --system "You are a {{perspective.role}}" --message "Review this design focusing on {{perspective.focus}}: {{design}}")]
 
-### Security Perspective
-@add @security_review
+@data reviews = @map @analyze(@perspectives)
+
+# Synthesize all perspectives
+@text synthesis = @run @claude([[Synthesize these reviews into actionable recommendations: {{reviews}}]])
+
+@add @synthesis
 ```
 
 ## LLM-Friendly XML Output
@@ -535,11 +592,13 @@ Create a consensus view that incorporates the best insights from each.
 
 ## Best Practices
 
-1. **Keep Prompts Modular** - Store reusable components in separate `.mld` files
-2. **Version Control Everything** - Meld files are plain text, perfect for git
-3. **Use Templates for Complex Prompts** - The `[[...]]` syntax keeps things readable
-4. **Leverage System Tools** - Don't reinvent the wheel, use grep, jq, python, etc.
-5. **Document Your Modules** - Remember, it's still markdown!
+1. **Think Orchestration, Not Programming** - Mlld scripts should describe what to do, not how
+2. **Build Institutional Knowledge** - Encode standards and values into pipeline modules
+3. **Embrace Probabilistic Outputs** - Use pipelines to guide, not control
+4. **Keep Core Scripts Simple** - Complex logic belongs in modules
+5. **Test at the Right Level** - Test modules with unit tests, test orchestration with examples
+6. **Version Everything** - Both scripts and modules should be in version control
+7. **Document Intent** - Your .mld files should read like clear instructions to a colleague
 
 ## Getting Started
 
@@ -557,4 +616,6 @@ Create a consensus view that incorporates the best insights from each.
 
 ## Conclusion
 
-Meld bridges the gap between static documentation and dynamic content generation. By embedding a simple scripting language in markdown, it enables powerful workflows for prompt engineering, documentation automation, and AI-assisted content creation - all while keeping your files readable, versioned, and modular.
+Mlld represents a new paradigm for working with AI systems. By treating LLMs as collaborative partners rather than deterministic functions, and by keeping the orchestration language simple while enabling unlimited extension through modules, mlld makes it possible to build sophisticated AI workflows that are still understandable, maintainable, and shareable.
+
+The future of software isn't about programming machines - it's about orchestrating intelligence. Mlld gives you exactly the tools you need for this new world, and nothing more.

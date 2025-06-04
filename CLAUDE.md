@@ -2,7 +2,7 @@
 
 repo: github.com/mlld-lang/mlld
 
-## Module System
+## Module System (JavaScript/TypeScript)
 - **Package Type**: ESM-first (`"type": "module"`) - all `.js` files are ES modules
 - **Dual Build**: tsup creates both `.mjs` and `.cjs` outputs for compatibility
 - **Parser Generation**: Peggy generates both `parser.js` (ESM) and `parser.ts` (with types)
@@ -85,7 +85,9 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 ### Import Syntax
 - File imports: `@import { var1, var2 } from "path/to/file.mld"`
 - Import all: `@import { * } from "path/to/file.mld"`
+- Module imports: `@import { func1, func2 } from @author/module`
 - Paths are relative to the importing file's directory
+- Modules use @ prefix for registry modules and private resolvers (no quotes)
 
 ### Common Mistakes to Avoid
 - trying to treat mlld like a template langauge -- it's not; it's a programming language embedded in markdown, so it only works for lines starting with a @ directive
@@ -95,12 +97,48 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 - ❌ `{{@variable}}` → ✅ `{{variable}}`
 - ❌ `@path config = env.paths.dev` → ✅ `@path config = @env.paths.dev`
 
+### Conditional Logic (@when)
+- `@when @condition => @action` - Simple one-line conditional
+- `@when @var first: [...]` - Execute first matching condition only
+- `@when @var any: [...]` - Execute all matching conditions
+- `@when @var all: [...]` - Execute action only if all conditions match
+- Conditions can be variables, expressions, or command results
+- Truthiness: empty strings, null, false, 0 are falsy; everything else is truthy
+
+### Iteration (foreach)
+- `@data result = foreach @command(@array)` - Apply command to each element
+- `@data result = foreach @template(@array)` - Apply template to each element
+- Multiple arrays create cartesian product: `foreach @cmd(@arr1, @arr2)`
+- Works with parameterized `@exec` commands or `@text` templates
+- Results are always arrays matching the iteration count
+
+### Module System (Mlld Modules)
+- Install: `mlld install @author/module` or `mlld install` (from lock file)
+- List: `mlld ls` shows installed modules with metadata
+- Import: `@import { funcName } from @author/module` (no quotes!)
+- Modules are cached locally in `.mlld-cache/`
+- Lock file: `mlld.lock.json` ensures reproducible installs
+- Publishing: See `docs/registering-modules.md`
+
+### With Clauses (when merged from feature branch)
+- Transform output: `@run [cmd] with { pipeline: [@transform1, @transform2] }`
+- Validate dependencies: `@run [cmd] with { needs: { file: "config.json" } }`
+- Each pipeline stage receives previous output as `@input`
+- Can combine pipeline and needs in same with clause
+- Works with both `@run` and `@exec` directives
+
 ## Key File Locations
 - **Grammar**: `grammar/mlld.peggy` (main), `grammar/directives/` (modular patterns)
-- **Interpreter**: `interpreter/core/interpreter.ts` (main), `interpreter/eval/` (directive evaluators)  
+- **Interpreter**: `interpreter/core/interpreter.ts` (main), `interpreter/eval/` (directive evaluators)
+  - `interpreter/eval/when.ts` - Conditional logic implementation
+  - `interpreter/eval/data.ts` - Handles foreach operations
+  - `interpreter/eval/lazy-eval.ts` - Lazy evaluation for foreach/when
+- **Registry**: `core/registry/` - Module system implementation
 - **Error Classes**: `core/errors/` (definitions), see `docs/dev/ERRORS.md` for system overview
 - **Tests**: `tests/cases/` (markdown examples), `tests/fixtures/` (generated), `interpreter/interpreter.fixture.test.ts` (runner)
 - **CLI**: `cli/index.ts` (entry point), `api/index.ts` (programmatic interface)
+  - `cli/commands/install.ts` - Module installation
+  - `cli/commands/ls.ts` - Module listing
 - **Examples**: `examples/` (real-world usage patterns and integration tests)
 
 ## Compacting
