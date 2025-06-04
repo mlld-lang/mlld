@@ -10,4 +10,4 @@ done
 # Math operations
 result=$((5 + 3))
 echo "5 + 3 = $result"
-]
+)]

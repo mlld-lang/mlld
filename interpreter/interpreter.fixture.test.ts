@@ -221,6 +221,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       } else if (fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
         // Enable bash mocking for bash tests and bracket nesting tests that use bash
         process.env.MOCK_BASH = 'true';
+      } else if (fixture.name === 'with-combined') {
+        // Enable command mocking for npm/sed test
+        process.env.MLLD_TEST_MODE = 'true';
       } else if (fixture.name === 'reserved-time-variable') {
         // Mock time for the TIME reserved variable test
         process.env.MLLD_MOCK_TIME = '1234567890';
@@ -503,6 +506,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // Clean up other environment variables
         if (fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
           delete process.env.MOCK_BASH;
+        }
+        if (fixture.name === 'with-combined') {
+          delete process.env.MLLD_TEST_MODE;
         }
         if (fixture.name === 'reserved-time-variable' || fixture.name === 'reserved-time-variable-lowercase') {
           delete process.env.MLLD_MOCK_TIME;
