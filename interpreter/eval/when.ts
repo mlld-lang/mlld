@@ -90,8 +90,14 @@ async function evaluateWhenBlock(
         break;
         
       case 'default':
-        // Bare @when executes all matching conditions (like 'all' with individual actions)
-        result = await evaluateAllMatches(conditions, childEnv, variableName);
+        // Bare @when behavior depends on whether there's a block action
+        if (node.values.action) {
+          // With block action: behave like 'all:' - execute action if ALL conditions are true
+          result = await evaluateAllMatches(conditions, childEnv, variableName, node.values.action);
+        } else {
+          // Without block action: execute all matching individual actions
+          result = await evaluateAllMatches(conditions, childEnv, variableName);
+        }
         break;
         
       default:
