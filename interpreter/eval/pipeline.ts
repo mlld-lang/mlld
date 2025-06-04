@@ -65,7 +65,7 @@ export async function executePipeline(
         }
       }
       
-      const result = await executeCommandVariable(commandVar, args, pipelineEnv);
+      const result = await executeCommandVariable(commandVar, args, pipelineEnv, currentOutput);
       
       // Check for empty output (pipeline termination)
       if (!result || result.trim() === '') {
@@ -147,7 +147,8 @@ async function resolveCommandReference(
 async function executeCommandVariable(
   commandVar: any,
   args: any[],
-  env: Environment
+  env: Environment,
+  stdinInput?: string
 ): Promise<string> {
   // Handle both wrapped command variables and direct command/code definitions
   let execDef: any;
@@ -187,19 +188,9 @@ async function executeCommandVariable(
     
     const command = await interpolate(execDef.commandTemplate, execEnv, InterpolationContext.ShellCommand);
     
-    // For pipeline execution:
-    // - If the command has parameters and we have arguments, the input is passed as a parameter
-    // - If the command has no parameters but we have arguments (pipeline input), pass as stdin
-    let input: string | undefined;
-    if (!execDef.paramNames || execDef.paramNames.length === 0) {
-      // No parameters - if we have args, it's pipeline input to pass via stdin
-      if (args.length > 0) {
-        const arg = args[0];
-        input = typeof arg === 'string' ? arg : arg.content || String(arg);
-      }
-    }
-    
-    const result = await env.executeCommand(command, { input } as any);
+    // Always pass pipeline input as stdin when available
+    // This allows Unix utilities to work naturally while preserving @INPUT variable access
+    const result = await env.executeCommand(command, { input: stdinInput } as any);
     return result;
   } else if (execDef.type === 'code' && execDef.codeTemplate) {
     // Interpolate code template
