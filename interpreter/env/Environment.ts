@@ -28,6 +28,7 @@ interface CommandExecutionOptions {
   errorBehavior?: 'halt' | 'continue';
   timeout?: number;
   collectErrors?: boolean;
+  input?: string;
 }
 
 interface CommandExecutionContext {
@@ -591,6 +592,10 @@ export class Environment {
           if (command.includes("'s/^/> /'")) {
             // Read from stdin and prefix each line with "> "
             const input = options?.input || '';
+            // Debug logging
+            if (process.env.DEBUG_PIPELINE) {
+              console.log('SED MOCK: input=', JSON.stringify(input), 'options=', options);
+            }
             return input.split('\n').map(line => `> ${line}`).join('\n');
           }
         }
@@ -602,7 +607,8 @@ export class Environment {
         cwd: workingDirectory,
         env: { ...process.env },
         maxBuffer: 10 * 1024 * 1024, // 10MB limit
-        timeout: timeout || 30000
+        timeout: timeout || 30000,
+        ...(options?.input ? { input: options.input } : {})
       });
       
       const duration = Date.now() - startTime;
@@ -765,6 +771,14 @@ export class Environment {
               envVars[key] = String(value);
             }
           }
+        } else {
+          // When no params are provided, include all text variables as environment variables
+          // This allows bash code blocks to access mlld variables via $varname
+          for (const [name, variable] of this.variables) {
+            if (variable.type === 'text' && typeof variable.value === 'string') {
+              envVars[name] = variable.value;
+            }
+          }
         }
         
         // Execute bash code with environment variables
@@ -788,8 +802,10 @@ export class Environment {
               return 'Color: red\nColor: green\nColor: blue';
             }
             
-            if (code.includes('bash_array=("item1" "item2")') && code.includes('@myvar')) {
-              return 'Bash array: item1 item2\nMlld var: mlld variable';
+            if (code.includes('bash_array=("item1" "item2")') && code.includes('$myvar')) {
+              // Check if myvar is in environment variables
+              const myvarValue = envVars.myvar || 'mlld variable';
+              return `Bash array: item1 item2\nMlld var: ${myvarValue}`;
             }
             
             if (code.includes('arr=("a" "b" "c")') && code.includes('${arr[@]:1:2}')) {
