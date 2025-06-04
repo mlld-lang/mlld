@@ -36,6 +36,7 @@ SpecialVariableName
   = id:CaseInsensitiveTime { return { original: id, normalized: 'TIME' }; }
   / id:CaseInsensitiveProjectPath { return { original: id, normalized: 'PROJECTPATH' }; }
   / id:CaseInsensitiveInput { return { original: id, normalized: 'INPUT' }; }
+  / id:CaseInsensitiveDebug { return { original: id, normalized: 'DEBUG' }; }
   / id:CaseInsensitiveStdin { return { original: id, normalized: 'INPUT', deprecated: true }; }
 
 // Case insensitive matchers for special variables
@@ -47,6 +48,9 @@ CaseInsensitiveProjectPath
 
 CaseInsensitiveInput
   = chars:([Ii] [Nn] [Pp] [Uu] [Tt]) { return chars.join(''); }
+
+CaseInsensitiveDebug
+  = chars:([Dd] [Ee] [Bb] [Uu] [Gg]) { return chars.join(''); }
 
 CaseInsensitiveStdin
   = chars:([Ss] [Tt] [Dd] [Ii] [Nn]) { return chars.join(''); }

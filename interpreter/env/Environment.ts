@@ -66,7 +66,7 @@ export class Environment {
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
   private urlCacheManager?: URLCache; // URL cache manager
-  private reservedNames: Set<string> = new Set(['INPUT', 'TIME', 'PROJECTPATH']); // Reserved variable names
+  private reservedNames: Set<string> = new Set(['INPUT', 'TIME', 'PROJECTPATH', 'DEBUG']); // Reserved variable names
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -248,6 +248,60 @@ export class Environment {
     // Direct assignment for reserved variables during initialization
     this.variables.set('TIME', timeVar);
     // Note: lowercase 'time' is handled in getVariable() to avoid conflicts
+    
+    // Initialize @DEBUG with environment information
+    // This is a lazy variable that generates its value when accessed
+    const debugVar: MlldVariable = {
+      type: 'data',
+      value: null, // Will be computed dynamically
+      nodeId: '',
+      location: { line: 0, column: 0 },
+      metadata: {
+        isReserved: true,
+        isLazy: true, // Indicates value should be computed on access
+        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+      }
+    };
+    // Direct assignment for reserved variables during initialization
+    this.variables.set('DEBUG', debugVar);
+    // Note: lowercase 'debug' is handled in getVariable() to avoid conflicts
+  }
+  
+  /**
+   * Create the debug object with environment information
+   * Version 1: Full environment as pretty-printed JSON
+   */
+  private createDebugObject(): any {
+    // TODO: Add security toggle from mlld.lock.json when available
+    // For now, assume debug is enabled
+    
+    // Collect all variables (including from parent scopes)
+    const allVars = this.getAllVariables();
+    const variablesObj: Record<string, any> = {};
+    
+    for (const [name, variable] of allVars) {
+      variablesObj[name] = {
+        type: variable.type,
+        value: variable.value,
+        metadata: variable.metadata
+      };
+    }
+    
+    // Collect environment information
+    const debugInfo = {
+      basePath: this.basePath,
+      currentFile: this.getCurrentFilePath() || null,
+      variables: variablesObj,
+      reservedVariables: Array.from(this.reservedNames),
+      nodes: this.nodes.length,
+      urlConfig: this.urlConfig || null,
+      outputOptions: this.outputOptions,
+      errors: this.collectedErrors.length,
+      importStack: Array.from(this.importStack),
+      hasParent: this.parent !== undefined
+    };
+    
+    return debugInfo;
   }
   
   // --- Property Accessors ---
@@ -358,7 +412,21 @@ export class Environment {
   getVariable(name: string): MlldVariable | undefined {
     // Check this scope first
     const variable = this.variables.get(name);
-    if (variable) return variable;
+    if (variable) {
+      // Handle lazy DEBUG variable
+      if (name === 'DEBUG' && variable.metadata?.isLazy && variable.value === null) {
+        // Compute debug value on first access
+        const debugData = this.createDebugObject();
+        // Pretty print JSON with 2-space indentation
+        const jsonString = JSON.stringify(debugData, null, 2);
+        
+        // Update the variable with computed value
+        variable.type = 'text'; // Return as text for v1
+        variable.value = jsonString;
+        variable.metadata!.isLazy = false; // No longer lazy
+      }
+      return variable;
+    }
     
     // Handle lowercase aliases for reserved variables
     if (!this.parent) { // Only in root environment
@@ -366,6 +434,8 @@ export class Environment {
         return this.variables.get('INPUT');
       } else if (name === 'time' && this.variables.has('TIME')) {
         return this.variables.get('TIME');
+      } else if (name === 'debug' && this.variables.has('DEBUG')) {
+        return this.getVariable('DEBUG'); // Recursive call to handle lazy computation
       }
     }
     
