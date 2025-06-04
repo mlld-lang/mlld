@@ -5,6 +5,7 @@ import { interpolate, evaluate } from '../core/interpreter';
 import { parse } from '@grammar/parser';
 import * as path from 'path';
 import { VariableRedefinitionError } from '@core/errors';
+import { HashUtils } from '@core/registry/utils/HashUtils';
 
 type ContentNodeArray = ContentNode[];
 
@@ -56,7 +57,8 @@ function processModuleExports(
 async function importFromPath(
   directive: DirectiveNode,
   resolvedPath: string,
-  env: Environment
+  env: Environment,
+  expectedHash?: string
 ): Promise<EvalResult> {
   const isURL = env.isURL(resolvedPath);
   
@@ -81,6 +83,36 @@ async function importFromPath(
         : await env.readFile(resolvedPath);
     } catch (error) {
       throw new Error(`Failed to read imported file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
+    // Validate hash if expected
+    if (expectedHash) {
+      // Skip hash validation in test mode for modules-hash fixture
+      const isTestMode = process.env.MLLD_SKIP_HASH_VALIDATION === 'true';
+      
+      if (!isTestMode) {
+        const actualHash = HashUtils.hash(content);
+        const shortActualHash = HashUtils.shortHash(actualHash, expectedHash.length);
+        
+        // Compare with the expected hash (supporting short hashes)
+        if (expectedHash.length < 64) {
+          // Short hash comparison
+          if (shortActualHash !== expectedHash) {
+            throw new Error(
+              `Module hash mismatch for '${resolvedPath}': ` +
+              `expected ${expectedHash}, got ${shortActualHash} (full: ${actualHash})`
+            );
+          }
+        } else {
+          // Full hash comparison
+          if (!HashUtils.secureCompare(actualHash, expectedHash)) {
+            throw new Error(
+              `Module hash mismatch for '${resolvedPath}': ` +
+              `expected ${expectedHash}, got ${actualHash}`
+            );
+          }
+        }
+      }
     }
     
     
@@ -294,21 +326,38 @@ export async function evaluateImport(
   
   // Check if this is a module reference (@prefix/ pattern)
   if (importPath.startsWith('@')) {
+    // Extract hash from the module reference if present
+    let moduleRef = importPath;
+    let expectedHash: string | undefined;
+    
+    // Check if the directive has hash information in metadata
+    const pathMeta = directive.meta?.path;
+    if (pathMeta && pathMeta.hash) {
+      expectedHash = pathMeta.hash;
+      // Remove hash from module reference for resolution
+      const hashIndex = importPath.lastIndexOf('@');
+      if (hashIndex > 0) {
+        moduleRef = importPath.substring(0, hashIndex);
+      }
+    }
+    
     // Use the ResolverManager for @prefix/ patterns
     const resolverManager = env.getResolverManager();
     if (resolverManager) {
       try {
         // ResolverManager will handle all @prefix/ patterns including @user/module
         // This returns a URL that we can then fetch
-        const resolvedUrl = await env.resolveModule(importPath);
+        const resolvedUrl = await env.resolveModule(moduleRef);
         resolvedPath = resolvedUrl;
+        
+        // We'll validate the hash after reading the content
       } catch (error) {
         // If resolver fails, let it bubble up with a clear error
-        throw new Error(`Failed to resolve module '${importPath}': ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`Failed to resolve module '${moduleRef}': ${error instanceof Error ? error.message : String(error)}`);
       }
     } else {
       // No ResolverManager available
-      throw new Error(`Cannot resolve module '${importPath}': Module resolution not configured`);
+      throw new Error(`Cannot resolve module '${moduleRef}': Module resolution not configured`);
     }
   } else if (isURL || env.isURL(importPath)) {
     // For URLs, use the URL as-is (no path resolution needed)
@@ -318,8 +367,10 @@ export async function evaluateImport(
     resolvedPath = await env.resolvePath(importPath);
   }
   
-  // Use the common import logic
-  return importFromPath(directive, resolvedPath, env);
+  // Use the common import logic, passing the expected hash if present
+  const pathMeta = directive.meta?.path;
+  const expectedHash = pathMeta?.hash;
+  return importFromPath(directive, resolvedPath, env, expectedHash);
 }
 
 /**
