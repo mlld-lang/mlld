@@ -4,15 +4,17 @@ This plugin provides syntax highlighting and filetype support for mlld files in 
 
 ## Features
 
-- Syntax highlighting for all mlld directives (`@text`, `@data`, `@path`, `@run`, `@exec`, `@add`, `@import`)
+- Syntax highlighting for all mlld directives (`@text`, `@data`, `@path`, `@run`, `@exec`, `@add`, `@import`, `@when`, `@output`)
 - Variable highlighting and references
 - Template interpolation with `{{variable}}` syntax
 - Code block highlighting with language detection
 - JSON syntax in `@data` directives
-- Comment highlighting with `>>` prefix
+- Comment highlighting with both `>>` and `<<` styles
+- Reserved variable highlighting (`@INPUT`, `@TIME`, `@PROJECTPATH`, `@.`)
 - Smart indentation
 - Folding support for code blocks and data structures
 - Markdown syntax for regular content
+- Only applies mlld syntax to lines starting with directives
 
 ## Installation
 
@@ -57,20 +59,27 @@ use {
 
 ### Manual Installation
 
-1. Copy the contents of this directory to your Vim configuration:
+1. Use the provided install script:
+
+```bash
+cd editors/vim
+./install.sh
+```
+
+Or manually copy the files:
 
 ```bash
 # For Vim
 cp -r syntax ~/.vim/
 cp -r ftdetect ~/.vim/
 cp -r ftplugin ~/.vim/
-cp -r indent ~/.vim/
+cp -r after ~/.vim/
 
 # For Neovim
 cp -r syntax ~/.config/nvim/
 cp -r ftdetect ~/.config/nvim/
 cp -r ftplugin ~/.config/nvim/
-cp -r indent ~/.config/nvim/
+cp -r after ~/.config/nvim/
 ```
 
 ## Usage

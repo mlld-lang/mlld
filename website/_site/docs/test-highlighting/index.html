@@ -92,7 +92,37 @@
           
         
           
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
             <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
           
         
           
@@ -103,6 +133,10 @@
             <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
           
         
         
@@ -189,6 +223,29 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
             
               
             
@@ -205,6 +262,8 @@
                 </a></li>
               
             
+              
+            
           </ul>
         </li>
       </ul>
@@ -216,8 +275,8 @@
 <p>This page tests the new Prism.js syntax highlighting for Mlld.</p>
 <h2 id="basic-example" tabindex="-1">Basic Example</h2>
 <pre class="language-mlld"><code class="language-mlld">>> This is a comment
-<span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> <span class="token string">"Hello, World!"</span>
-<span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span>
+<span class="token directive keyword">@text</span> greeting = <span class="token string">"Hello, World!"</span>
+<span class="token directive keyword">@data</span> config = <span class="token punctuation">{</span>
   name: <span class="token string">"Test"</span><span class="token punctuation">,</span>
   count: <span class="token number">42</span><span class="token punctuation">,</span>
   enabled: <span class="token boolean">true</span>
@@ -226,26 +285,26 @@
 <span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span>Welcome <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">greeting</span><span class="token punctuation">}}</span></span>!<span class="token punctuation">]]</span></span>
 </code></pre>
 <h2 id="all-directives" tabindex="-1">All Directives</h2>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> message <span class="token operator">=</span> <span class="token string">"Test"</span>
-<span class="token directive keyword">@data</span> settings <span class="token operator">=</span> <span class="token punctuation">{</span> debug: <span class="token boolean">true</span> <span class="token punctuation">}</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> message = <span class="token string">"Test"</span>
+<span class="token directive keyword">@data</span> settings = <span class="token punctuation">{</span> debug: <span class="token boolean">true</span> <span class="token punctuation">}</span>
 <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hello"<span class="token punctuation">]</span></span>
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>./docs<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@path</span> docs = <span class="token path"><span class="token punctuation">[</span>./docs<span class="token punctuation">]</span></span>
 <span class="token directive keyword">@import</span> <span class="token punctuation">{</span>config<span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>settings.mld<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@exec</span> greet<span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hi @name"<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@exec</span> template <span class="token operator">=</span> <span class="token template-block"><span class="token punctuation">[[</span>Custom <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">message</span><span class="token punctuation">}}</span></span><span class="token punctuation">]]</span></span>
+<span class="token directive keyword">@exec</span> greet<span class="token punctuation">(</span>name<span class="token punctuation">)</span> = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hi @name"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> template = <span class="token template-block"><span class="token punctuation">[[</span>Custom <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">message</span><span class="token punctuation">}}</span></span><span class="token punctuation">]]</span></span>
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>docs/guide.md # Section<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@url</span> api <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span><span class="token url string">https://api.example.com</span><span class="token punctuation">]</span></span>
+<span class="token variable variable">@url</span> api = <span class="token path"><span class="token punctuation">[</span><span class="token url string">https://api.example.com</span><span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="complex-example" tabindex="-1">Complex Example</h2>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> projectName <span class="token operator">=</span> <span class="token string">"MlldProject"</span>
-<span class="token directive keyword">@data</span> buildInfo <span class="token operator">=</span> <span class="token punctuation">{</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> projectName = <span class="token string">"MlldProject"</span>
+<span class="token directive keyword">@data</span> buildInfo = <span class="token punctuation">{</span>
   version: <span class="token string">"1.0.0"</span><span class="token punctuation">,</span>
   status: <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "SUCCESS"<span class="token punctuation">]</span></span><span class="token punctuation">,</span>
   timestamp: <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date +%s<span class="token punctuation">]</span></span>
 <span class="token punctuation">}</span>
 
-<span class="token directive keyword">@exec</span> build<span class="token punctuation">(</span>env<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>
+<span class="token directive keyword">@exec</span> build<span class="token punctuation">(</span>env<span class="token punctuation">)</span> = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>
   npm run build -- --env=@env
 <span class="token punctuation">]</span></span>
 

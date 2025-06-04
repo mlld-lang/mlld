@@ -92,7 +92,37 @@
           
         
           
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
             <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
           
         
           
@@ -103,6 +133,10 @@
             <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
           
         
         
@@ -189,6 +223,29 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
             
               
             
@@ -205,6 +262,8 @@
                 </a></li>
               
             
+              
+            
           </ul>
         </li>
       </ul>
@@ -212,50 +271,52 @@
   </aside>
   
   <div class="docs-content">
-    <hr>
-<h2 id="layout%3A-docs.njktitle%3A-%22%40run-directive%22" tabindex="-1">layout: docs.njk<br>
-title: &quot;@run Directive&quot;</h2>
-<h1 id="%40run-directive" tabindex="-1">@run Directive</h1>
-<p>The <code>@run</code> directive executes shell commands and includes their output in your Mlld document.</p>
+    <h1 id="%40run-directive" tabindex="-1">@run Directive</h1>
+<p>The <code>@run</code> directive executes shell commands or code blocks and includes their output in your Mlld document.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command_text<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>command_text<span class="token punctuation">]</span></span> under header_text
-<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$command(@textvar1, @textvar2)<span class="token punctuation">]</span></span>
+<h3 id="core-syntax" tabindex="-1">Core Syntax</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(command_text)<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> language <span class="token path"><span class="token punctuation">[</span>(code_block)<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token variable variable">@command</span><span class="token punctuation">(</span><span class="token variable variable">@param1</span><span class="token punctuation">,</span> <span class="token variable variable">@param2</span><span class="token punctuation">)</span>
 </code></pre>
 <p>Where:</p>
 <ul>
-<li><code>command_text</code> is the shell command to execute</li>
-<li><code>header_text</code> is optional text to use as a header for the command output</li>
-<li><code>$command</code> refers to a command defined with <code>@exec</code></li>
+<li>Commands are executed in the shell: <code>@run [(echo &quot;Hello&quot;)]</code></li>
+<li>Code execution specifies language before brackets: <code>@run js [(console.log(&quot;Hello&quot;))]</code></li>
+<li>Command references use <code>@</code>: <code>@run @myCommand(arg1, arg2)</code></li>
+</ul>
+<p>Key points:</p>
+<ul>
+<li><code>command_text</code> is any shell command with variable interpolation support</li>
+<li><code>language</code> must be one of: <code>javascript</code>/<code>js</code>, <code>python</code>/<code>py</code>, or <code>bash</code>/<code>sh</code></li>
+<li><code>code_block</code> is the code to execute in the specified language</li>
+<li>Language is specified <strong>outside</strong> the brackets for code execution</li>
+<li>Variables in commands use <code>@var</code> syntax</li>
+<li>Command references defined with <code>@exec</code> use <code>@command</code> syntax</li>
 </ul>
 <h2 id="command-specification" tabindex="-1">Command Specification</h2>
 <p>The command can be:</p>
 <ul>
-<li>A literal command: <code>@run [ls -la]</code></li>
-<li>A command with variables: <code>@run [echo &quot;Hello, {{name}}&quot;]</code></li>
-<li>A command with path variables: <code>@run [cat $docs/guide.md]</code></li>
-<li>A defined command: <code>@run [$listFiles($path)]</code></li>
+<li>A literal command: <code>@run [(ls -la)]</code></li>
+<li>A command with variables: <code>@run [(echo &quot;Hello, @name&quot;)]</code></li>
+<li>A command with path variables: <code>@run [(cat @docs/guide.md)]</code></li>
+<li>A defined command: <code>@run @listFiles(@path)</code></li>
 </ul>
 <h2 id="variables-in-commands" tabindex="-1">Variables in Commands</h2>
 <p>You can use different types of variables in commands:</p>
 <ul>
-<li>Text variables: <code>{{textvar}}</code></li>
-<li>Path variables: <code>$path</code></li>
-<li>Special path variables: <code>$HOMEPATH</code>, <code>$~</code>, <code>$PROJECTPATH</code>, <code>$.</code></li>
-<li>Command references: <code>$command(@param1, @param2)</code></li>
+<li>All variables use <code>@</code> syntax: <code>@textvar</code>, <code>@path</code></li>
+<li>Special variables: <code>@HOMEPATH</code>, <code>@PROJECTPATH</code>, <code>@.</code></li>
+<li>Field access: <code>@object.field</code>, <code>@array.0</code></li>
+<li>Command references: <code>@command(@param1, @param2)</code></li>
 </ul>
 <h2 id="output-handling" tabindex="-1">Output Handling</h2>
 <p>By default, the command's standard output (stdout) is captured and included in your document. Additionally:</p>
 <ul>
 <li>Standard error (stderr) is also captured and can be included</li>
 <li>In transformation mode, the stdout (and sometimes stderr) replaces the directive node</li>
-<li>The output can be assigned to a variable: <code>@text result = @run [command]</code></li>
+<li>The output can be assigned to a variable: <code>@text result = @run [(command)]</code></li>
 </ul>
-<h2 id="adding-headers" tabindex="-1">Adding Headers</h2>
-<p>You can add a header to command output using the <code>under</code> keyword:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date<span class="token punctuation">]</span></span> under Current Date
-</code></pre>
-<p>This will add a header &quot;Current Date&quot; above the command output.</p>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The implementation handles these error scenarios:</p>
 <ul>
@@ -263,28 +324,58 @@ title: &quot;@run Directive&quot;</h2>
 <li>Command execution failures</li>
 <li>Commands that exit with non-zero status codes</li>
 </ul>
+<h2 id="code-execution" tabindex="-1">Code Execution</h2>
+<p>The <code>@run</code> directive can execute code in different languages by specifying the language before the brackets:</p>
+<h3 id="javascript%2Fnode.js" tabindex="-1">JavaScript/Node.js</h3>
+<ul>
+<li>Parameters become function arguments</li>
+<li>Console output is captured</li>
+<li>The code runs in a sandboxed environment</li>
+</ul>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> js <span class="token path"><span class="token punctuation">[</span>(console.log("Hello from JS"))<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> javascript <span class="token path"><span class="token punctuation">[</span>(console.log("Hello, world!"))<span class="token punctuation">]</span></span>
+</code></pre>
+<h3 id="python" tabindex="-1">Python</h3>
+<ul>
+<li>Parameters are injected as variables</li>
+<li>Code is written to a temporary file and executed</li>
+<li>Requires <code>python3</code> to be available</li>
+</ul>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> python <span class="token path"><span class="token punctuation">[</span>(print("Hello from Python"))<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> py <span class="token path"><span class="token punctuation">[</span>(print("Hello from Python!"))<span class="token punctuation">]</span></span>
+</code></pre>
+<h3 id="bash%2Fshell" tabindex="-1">Bash/Shell</h3>
+<ul>
+<li>Parameters are passed as environment variables</li>
+<li>Code is executed with <code>bash -c</code></li>
+<li>Environment variables from the parent process are available</li>
+</ul>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> bash <span class="token path"><span class="token punctuation">[</span>(echo "Hello from Bash")<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> sh <span class="token path"><span class="token punctuation">[</span>(echo "Hello from Shell")<span class="token punctuation">]</span></span>
+</code></pre>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic command execution:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hello, World!"<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(echo "Hello, World!")<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using variables in commands:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"Alice"</span>
-<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>echo "Hello, {{name}}!"<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name = <span class="token string">"Alice"</span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(echo "Hello, @name!")<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using path variables:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
-<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la $src<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> src = <span class="token path"><span class="token punctuation">[</span>@PROJECTPATH/src<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(ls -la @src)<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using command output in variables:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> date <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>date +"%Y-%m-%d"<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@data</span> files <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la | jq -R -s -c 'split("\n")<span class="token punctuation">[</span>:-1<span class="token punctuation">]</span></span>']
-</code></pre>
-<p>Adding headers to output:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>git status<span class="token punctuation">]</span></span> under Repository Status
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> date = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(date +"%Y-%m-%d")<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@data</span> files = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(ls -la | jq -R -s -c 'split("\n")<span class="token punctuation">[</span>:-1<span class="token punctuation">]</span></span>'<span class="token punctuation">)</span>]
 </code></pre>
 <p>Using defined commands:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@exec</span> listFiles<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la @dir<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$listFiles($PROJECTPATH)<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@exec</span> listFiles<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(ls -la @dir)<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token variable variable">@listFiles</span><span class="token punctuation">(</span><span class="token reserved-variable builtin">@PROJECTPATH</span><span class="token punctuation">)</span>
+</code></pre>
+<p>Using code execution with <code>@exec</code>:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@exec</span> greet<span class="token punctuation">(</span>name<span class="token punctuation">)</span> = <span class="token directive keyword">@run</span> bash <span class="token path"><span class="token punctuation">[</span>(echo "Hello, @name!")<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span><span class="token string">"Developer"</span><span class="token punctuation">)</span>
 </code></pre>
 <h2 id="environment-%26-working-directory" tabindex="-1">Environment &amp; Working Directory</h2>
 <ul>

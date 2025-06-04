@@ -92,7 +92,37 @@
           
         
           
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
             <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
           
         
           
@@ -103,6 +133,10 @@
             <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
           
         
         
@@ -189,6 +223,29 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
             
               
             
@@ -203,6 +260,8 @@
                     @url
                   
                 </a></li>
+              
+            
               
             
           </ul>
@@ -281,7 +340,7 @@ npx mlld <span class="token operator">&lt;</span>options<span class="token opera
 </code></pre>
 <h2 id="environment-variables" tabindex="-1">Environment Variables</h2>
 <p>Mlld scripts can access environment variables using the <code>{{ENV_NAME}}</code> syntax:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> token <span class="token operator">=</span> <span class="token string">"{{ENV_TOKEN}}"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> token = <span class="token string">"{{ENV_TOKEN}}"</span>
 </code></pre>
 <p>You can set these when running the CLI:</p>
 <pre class="language-bash"><code class="language-bash"><span class="token assign-left variable">ENV_TOKEN</span><span class="token operator">=</span><span class="token number">12345</span> mlld script.mld

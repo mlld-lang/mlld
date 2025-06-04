@@ -92,7 +92,37 @@
           
         
           
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
             <li><a href="/docs/formatting-options/" aria-current=&quot;page&quot;>Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
           
         
           
@@ -103,6 +133,10 @@
             <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
           
         
         
@@ -189,6 +223,29 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
             
               
             
@@ -205,6 +262,8 @@
                 </a></li>
               
             
+              
+            
           </ul>
         </li>
       </ul>
@@ -212,10 +271,7 @@
   </aside>
   
   <div class="docs-content">
-    <hr>
-<h2 id="layout%3A-docs.njktitle%3A-%22mlld-output-formatting-guide%22" tabindex="-1">layout: docs.njk<br>
-title: &quot;Mlld Output Formatting Guide&quot;</h2>
-<h1 id="mlld-output-formatting-guide" tabindex="-1">Mlld Output Formatting Guide</h1>
+    <h1 id="mlld-output-formatting-guide" tabindex="-1">Mlld Output Formatting Guide</h1>
 <p>This guide explains how output formatting works in Mlld and how to control it using the available options.</p>
 <h2 id="default-output-behavior" tabindex="-1">Default Output Behavior</h2>
 <p>By default, Mlld preserves the exact formatting of your document, including:</p>
@@ -228,8 +284,8 @@ title: &quot;Mlld Output Formatting Guide&quot;</h2>
 <p>When directives are processed, they are replaced with their output while maintaining the surrounding document structure.</p>
 <pre class="language-mlld"><code class="language-mlld">This is a paragraph.
 
-<span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> <span class="token string">"Hello"</span>
-<span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"World"</span>
+<span class="token directive keyword">@text</span> greeting = <span class="token string">"Hello"</span>
+<span class="token directive keyword">@text</span> name = <span class="token string">"World"</span>
 
 <span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span><span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">greeting</span><span class="token punctuation">}}</span></span>, <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">name</span><span class="token punctuation">}}</span></span>!<span class="token punctuation">]]</span></span>
 
@@ -299,7 +355,7 @@ mlld <span class="token parameter variable">-f</span> xml input.mlld
 <h3 id="within-text-content" tabindex="-1">Within Text Content</h3>
 <p>Mlld preserves newlines exactly as they appear in the source content:</p>
 <pre class="language-mlld"><code class="language-mlld">This is a paragraph
-with a line break.
+<span class="token operator">with</span> a line break.
 
 This is another paragraph.
 </code></pre>
@@ -322,7 +378,7 @@ After directive.
 </code></pre>
 <h3 id="with-variables" tabindex="-1">With Variables</h3>
 <p>Variables maintain their format when substituted:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> multiline <span class="token operator">=</span> <span class="token string">"Line 1
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> multiline = <span class="token string">"Line 1
 Line 2
 Line 3"</span>
 
@@ -355,7 +411,7 @@ End of text.
 <p><strong>For JSON or code</strong>, use code fences to ensure proper formatting is preserved:</p>
 </li>
 </ol>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span> <span class="token string">"key"</span>: <span class="token string">"value"</span><span class="token punctuation">,</span> <span class="token string">"nested"</span>: <span class="token punctuation">{</span> <span class="token string">"prop"</span>: <span class="token number">1</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config = <span class="token punctuation">{</span> <span class="token string">"key"</span>: <span class="token string">"value"</span><span class="token punctuation">,</span> <span class="token string">"nested"</span>: <span class="token punctuation">{</span> <span class="token string">"prop"</span>: <span class="token number">1</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
 
 My configuration is:
 \`\`\`json

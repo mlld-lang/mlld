@@ -3,11 +3,6 @@ layout: docs.njk
 title: "@add Directive"
 ---
 
----
-layout: docs.njk
-title: "@add Directive"
----
-
 # @add Directive
 
 The `@add` directive includes content from external files, variables, or templates into your Mlld document.

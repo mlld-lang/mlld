@@ -92,7 +92,37 @@
           
         
           
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
             <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
           
         
           
@@ -103,6 +133,10 @@
             <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
           
         
         
@@ -189,6 +223,29 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
             
               
             
@@ -205,6 +262,8 @@
                 </a></li>
               
             
+              
+            
           </ul>
         </li>
       </ul>
@@ -212,10 +271,7 @@
   </aside>
   
   <div class="docs-content">
-    <hr>
-<h2 id="layout%3A-docs.njktitle%3A-%22error-handling%22" tabindex="-1">layout: docs.njk<br>
-title: &quot;Error Handling&quot;</h2>
-<h1 id="error-handling" tabindex="-1">Error Handling</h1>
+    <h1 id="error-handling" tabindex="-1">Error Handling</h1>
 <p>Mlld has a structured approach to error handling, categorizing errors into different severity levels.</p>
 <h2 id="error-categories" tabindex="-1">Error Categories</h2>
 <h3 id="fatal-errors-(halt-execution)" tabindex="-1">Fatal Errors (Halt Execution)</h3>
@@ -264,12 +320,68 @@ title: &quot;Error Handling&quot;</h2>
 <li><strong>Circular Imports</strong>: When Mlld detects circular file imports</li>
 <li><strong>Type Mismatches</strong>: Using the wrong variable type in a context</li>
 </ul>
+<h2 id="enhanced-error-display" tabindex="-1">Enhanced Error Display</h2>
+<p>Mlld provides rich, contextual error messages with visual source code context:</p>
+<h3 id="cli-error-display" tabindex="-1">CLI Error Display</h3>
+<p>When using Mlld from the command line, errors show:</p>
+<ul>
+<li><strong>Colorized output</strong> with syntax highlighting</li>
+<li><strong>Source code context</strong> with line numbers</li>
+<li><strong>Visual indicators</strong> pointing to exact error locations</li>
+<li><strong>Smart file paths</strong> (relative when within project, absolute otherwise)</li>
+<li><strong>Structured details</strong> with error-specific information</li>
+<li><strong>Helpful suggestions</strong> for resolving common issues</li>
+</ul>
+<p>Example error output:</p>
+<pre><code>VariableRedefinition: Variable 'author' is already defined and cannot be redefined
+
+  ./test.mlld:2:1
+  1 | @text author = &quot;First Author&quot;
+  2 | @text author = &quot;Second Author&quot;
+      ^
+  3 | @add @author
+
+Details:
+  variableName: author
+  existingLocation: ./test.mlld:1:1
+  newLocation: ./test.mlld:2:1
+
+💡 Variables in mlld are immutable by design. Use a different variable name or remove one of the definitions.
+</code></pre>
+<h3 id="api-error-handling" tabindex="-1">API Error Handling</h3>
+<p>For programmatic usage, Mlld provides structured error information:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> formatError <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">try</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">interpret</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> options<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span>error<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> formatted <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">formatError</span><span class="token punctuation">(</span>error<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+    useSourceContext<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    useSmartPaths<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    basePath<span class="token operator">:</span> projectRoot
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>formatted<span class="token punctuation">.</span>formatted<span class="token punctuation">)</span><span class="token punctuation">;</span>  <span class="token comment">// Human-readable text</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>formatted<span class="token punctuation">.</span>json<span class="token punctuation">)</span><span class="token punctuation">;</span>       <span class="token comment">// Structured error data</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>formatted<span class="token punctuation">.</span>sourceContext<span class="token punctuation">)</span><span class="token punctuation">;</span> <span class="token comment">// Source code context</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="error-format-options" tabindex="-1">Error Format Options</h3>
+<p>You can control error formatting with these options:</p>
+<ul>
+<li><code>useColors</code>: Enable/disable color output (auto-detected for TTY)</li>
+<li><code>useSourceContext</code>: Show source code context around errors</li>
+<li><code>useSmartPaths</code>: Use relative paths when within project</li>
+<li><code>basePath</code>: Project root for relative path resolution</li>
+<li><code>contextLines</code>: Number of context lines around error (default: 2)</li>
+</ul>
 <h2 id="error-recovery" tabindex="-1">Error Recovery</h2>
 <p>Mlld attempts to recover from non-fatal errors by:</p>
 <ul>
 <li>Substituting empty strings for missing data fields</li>
 <li>Continuing past warnings when possible</li>
 <li>Providing detailed error messages with line numbers and context</li>
+<li>Offering specific suggestions for common error patterns</li>
 </ul>
 <h2 id="best-practices" tabindex="-1">Best Practices</h2>
 <ul>

@@ -3,11 +3,6 @@ layout: docs.njk
 title: "@data Directive"
 ---
 
----
-layout: docs.njk
-title: "@data Directive"
----
-
 # @data Directive
 
 The `@data` directive defines a structured data variable that can store objects, arrays, or other complex data types.
@@ -143,7 +138,7 @@ Using variables in data:
 
 Using command output as data:
 ```mlld
-@data gitInfo = @run [git log -1 --format="%H,%an,%ae,%s"]
+@data gitInfo = @run [(git log -1 --format="%H,%an,%ae,%s")]
 ```
 
 ## Error Handling

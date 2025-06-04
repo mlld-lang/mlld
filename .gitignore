@@ -10,6 +10,9 @@ coverage/
 dist/
 build/
 
+# Website built files
+website/_site/
+
 # Dev docs
 /_dev
 
@@ -18,6 +21,10 @@ build/
 
 # Generated files
 core/version.ts
+
+# IDE-generated JavaScript files in core/types
+core/types/*.js
+core/types/*.js.map
 
 # Grammar generated files
 grammar/parser/parser.js

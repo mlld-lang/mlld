@@ -3,11 +3,6 @@ layout: docs.njk
 title: "Variables"
 ---
 
----
-layout: docs.njk
-title: "Variables"
----
-
 # Variables
 
 Mlld has three distinct types of variables, each with its own syntax and usage patterns.

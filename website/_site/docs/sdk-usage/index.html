@@ -92,7 +92,37 @@
           
         
           
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
             <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
           
         
           
@@ -103,6 +133,10 @@
             <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
           
         
         
@@ -189,6 +223,29 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
             
               
             
@@ -203,6 +260,8 @@
                     @url
                   
                 </a></li>
+              
+            
               
             
           </ul>
@@ -285,6 +344,91 @@ state<span class="token punctuation">.</span><span class="token function">setPat
 <span class="token keyword">const</span> variables <span class="token operator">=</span> state<span class="token punctuation">.</span><span class="token function">getVariables</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
+<p>The SDK provides comprehensive error handling with enhanced formatting:</p>
+<h3 id="basic-error-handling" tabindex="-1">Basic Error Handling</h3>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> interpret<span class="token punctuation">,</span> MlldError <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">try</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">interpret</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> options<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span>result<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span>error<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span>error <span class="token keyword">instanceof</span> <span class="token class-name">MlldError</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Mlld Error:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>message<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Error Code:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>code<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Severity:'</span><span class="token punctuation">,</span> error<span class="token punctuation">.</span>severity<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span><span class="token string">'Unexpected error:'</span><span class="token punctuation">,</span> error<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="enhanced-error-formatting" tabindex="-1">Enhanced Error Formatting</h3>
+<p>Use the <code>formatError</code> function for rich error display:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> interpret<span class="token punctuation">,</span> formatError <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
+<span class="token keyword">import</span> <span class="token punctuation">{</span> NodeFileSystem <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">try</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">interpret</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> options<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span>error<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> fileSystem <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">NodeFileSystem</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token comment">// Format error with enhanced display</span>
+  <span class="token keyword">const</span> formatted <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">formatError</span><span class="token punctuation">(</span>error<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+    fileSystem<span class="token punctuation">,</span>
+    useSourceContext<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    useSmartPaths<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    useColors<span class="token operator">:</span> process<span class="token punctuation">.</span>stdout<span class="token punctuation">.</span>isTTY<span class="token punctuation">,</span>
+    basePath<span class="token operator">:</span> process<span class="token punctuation">.</span><span class="token function">cwd</span><span class="token punctuation">(</span><span class="token punctuation">)</span><span class="token punctuation">,</span>
+    contextLines<span class="token operator">:</span> <span class="token number">2</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token comment">// Display formatted error</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span>formatted<span class="token punctuation">.</span>formatted<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token comment">// Access structured error data</span>
+  <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token string">'Error details:'</span><span class="token punctuation">,</span> formatted<span class="token punctuation">.</span>json<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token comment">// Access source context if available</span>
+  <span class="token keyword">if</span> <span class="token punctuation">(</span>formatted<span class="token punctuation">.</span>sourceContext<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token string">'Error in file:'</span><span class="token punctuation">,</span> formatted<span class="token punctuation">.</span>sourceContext<span class="token punctuation">.</span>file<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">log</span><span class="token punctuation">(</span><span class="token string">'At line:'</span><span class="token punctuation">,</span> formatted<span class="token punctuation">.</span>sourceContext<span class="token punctuation">.</span>errorLine<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="error-format-options" tabindex="-1">Error Format Options</h3>
+<ul>
+<li><strong><code>useSourceContext</code></strong>: Show source code around the error location</li>
+<li><strong><code>useSmartPaths</code></strong>: Display relative paths when within a project</li>
+<li><strong><code>useColors</code></strong>: Enable colorized output (auto-detected for terminals)</li>
+<li><strong><code>basePath</code></strong>: Project root for relative path calculation</li>
+<li><strong><code>contextLines</code></strong>: Number of context lines to show (default: 2)</li>
+</ul>
+<h3 id="auto-detecting-error-format" tabindex="-1">Auto-Detecting Error Format</h3>
+<p>The SDK can automatically choose the best error format:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> interpret<span class="token punctuation">,</span> ErrorFormatSelector <span class="token punctuation">}</span> <span class="token keyword">from</span> <span class="token string">'mlld'</span><span class="token punctuation">;</span>
+
+<span class="token keyword">try</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">interpret</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> options<span class="token punctuation">)</span><span class="token punctuation">;</span>
+<span class="token punctuation">}</span> <span class="token keyword">catch</span> <span class="token punctuation">(</span>error<span class="token punctuation">)</span> <span class="token punctuation">{</span>
+  <span class="token keyword">const</span> formatter <span class="token operator">=</span> <span class="token keyword">new</span> <span class="token class-name">ErrorFormatSelector</span><span class="token punctuation">(</span>fileSystem<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token comment">// Auto-detects CLI vs API format based on environment</span>
+  <span class="token keyword">const</span> formatted <span class="token operator">=</span> <span class="token keyword">await</span> formatter<span class="token punctuation">.</span><span class="token function">formatAuto</span><span class="token punctuation">(</span>error<span class="token punctuation">,</span> <span class="token punctuation">{</span>
+    useSourceContext<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    useSmartPaths<span class="token operator">:</span> <span class="token boolean">true</span><span class="token punctuation">,</span>
+    basePath<span class="token operator">:</span> process<span class="token punctuation">.</span><span class="token function">cwd</span><span class="token punctuation">(</span><span class="token punctuation">)</span>
+  <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+  
+  <span class="token keyword">if</span> <span class="token punctuation">(</span><span class="token keyword">typeof</span> formatted <span class="token operator">===</span> <span class="token string">'string'</span><span class="token punctuation">)</span> <span class="token punctuation">{</span>
+    <span class="token comment">// CLI format (when running in terminal)</span>
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span>formatted<span class="token punctuation">)</span><span class="token punctuation">;</span>
+  <span class="token punctuation">}</span> <span class="token keyword">else</span> <span class="token punctuation">{</span>
+    <span class="token comment">// API format (when running programmatically)</span>
+    <span class="token builtin">console</span><span class="token punctuation">.</span><span class="token function">error</span><span class="token punctuation">(</span>formatted<span class="token punctuation">.</span>formatted<span class="token punctuation">)</span><span class="token punctuation">;</span>
+    <span class="token comment">// Access structured data: formatted.json, formatted.sourceContext</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h3 id="error-types" tabindex="-1">Error Types</h3>
 <p>The SDK provides specialized error types for robust error handling:</p>
 <pre class="language-typescript"><code class="language-typescript"><span class="token keyword">import</span> <span class="token punctuation">{</span> 
   parseMlld<span class="token punctuation">,</span> 

@@ -92,7 +92,37 @@
           
         
           
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
             <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
           
         
           
@@ -103,6 +133,10 @@
             <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
           
         
         
@@ -189,6 +223,29 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
             
               
             
@@ -205,6 +262,8 @@
                 </a></li>
               
             
+              
+            
           </ul>
         </li>
       </ul>
@@ -212,26 +271,31 @@
   </aside>
   
   <div class="docs-content">
-    <hr>
-<h2 id="layout%3A-docs.njktitle%3A-%22%40path-directive%22" tabindex="-1">layout: docs.njk<br>
-title: &quot;@path Directive&quot;</h2>
-<h1 id="%40path-directive" tabindex="-1">@path Directive</h1>
-<p>The <code>@path</code> directive defines filesystem path variables that can be used in <code>@add</code> and <code>@run</code> commands.</p>
+    <h1 id="%40path-directive" tabindex="-1">@path Directive</h1>
+<p>The <code>@path</code> directive defines filesystem path and URL variables that can be used in <code>@add</code> and <code>@run</code> commands. It supports both local file paths and remote URLs with intelligent caching and security controls.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$HOMEPATH/path"</span>
-<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$~/path"</span>
-<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/path"</span>
-<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"$./path"</span>
-<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"/absolute/path"</span>
-<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"relative/path"</span>
-<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"../parent/path"</span>
-<span class="token directive keyword">@path</span> identifier <span class="token operator">=</span> <span class="token string">"./current/path"</span>
+<h3 id="basic-paths" tabindex="-1">Basic Paths</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> identifier = <span class="token string">"$HOMEPATH/path"</span>
+<span class="token directive keyword">@path</span> identifier = <span class="token string">"$~/path"</span>
+<span class="token directive keyword">@path</span> identifier = <span class="token string">"$PROJECTPATH/path"</span>
+<span class="token directive keyword">@path</span> identifier = <span class="token string">"$./path"</span>
+<span class="token directive keyword">@path</span> identifier = <span class="token string">"/absolute/path"</span>
+<span class="token directive keyword">@path</span> identifier = <span class="token string">"relative/path"</span>
+<span class="token directive keyword">@path</span> identifier = <span class="token string">"../parent/path"</span>
+<span class="token directive keyword">@path</span> identifier = <span class="token string">"./current/path"</span>
+</code></pre>
+<h3 id="urls-with-caching-and-security" tabindex="-1">URLs with Caching and Security</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> identifier = <span class="token string">"https://example.com/file.md"</span>
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>TTL<span class="token punctuation">)</span> identifier = <span class="token string">"https://example.com/file.md"</span>
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>TTL<span class="token punctuation">)</span> trust LEVEL identifier = <span class="token string">"https://example.com/file.md"</span>
 </code></pre>
 <p>Where:</p>
 <ul>
 <li><code>identifier</code> is the variable name (must be a valid identifier)</li>
+<li><code>TTL</code> is the cache time-to-live (optional, see <a href="#url-caching">URL Caching</a>)</li>
+<li><code>LEVEL</code> is the security trust level (optional, see <a href="#security-options">Security Options</a>)</li>
 <li>Path segments are separated by forward slashes</li>
-<li>Path must be quoted (single, double, or backtick quotes)</li>
+<li>Path/URL must be quoted (single, double, or backtick quotes)</li>
 </ul>
 <h2 id="identifier-requirements" tabindex="-1">Identifier Requirements</h2>
 <ul>
@@ -262,7 +326,7 @@ title: &quot;@path Directive&quot;</h2>
 <p>Using special path variables is recommended (but not required) for best cross-platform portability.</p>
 <h2 id="referencing-path-variables" tabindex="-1">Referencing Path Variables</h2>
 <p>Path variables are referenced using the <code>$identifier</code> syntax:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> docs = <span class="token string">"$PROJECTPATH/docs"</span>
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>$docs/guide.md<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Path variables can be used:</p>
@@ -273,20 +337,20 @@ title: &quot;@path Directive&quot;</h2>
 </ul>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic path variables:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
-<span class="token directive keyword">@path</span> configs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/configs"</span>
-<span class="token directive keyword">@path</span> home <span class="token operator">=</span> <span class="token string">"$HOMEPATH/mlld"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> docs = <span class="token string">"$PROJECTPATH/docs"</span>
+<span class="token directive keyword">@path</span> configs = <span class="token string">"$PROJECTPATH/configs"</span>
+<span class="token directive keyword">@path</span> home = <span class="token string">"$HOMEPATH/mlld"</span>
 </code></pre>
 <p>Using path variables in commands:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
-<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>ls -la $src<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> src = <span class="token string">"$PROJECTPATH/src"</span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(ls -la $src)<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Embedding files with path variables:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> templates <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/templates"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> templates = <span class="token string">"$PROJECTPATH/templates"</span>
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>$templates/header.md<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using path segments:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> src <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/src"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> src = <span class="token string">"$PROJECTPATH/src"</span>
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>$src/components/button.js<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
@@ -297,8 +361,8 @@ title: &quot;@path Directive&quot;</h2>
 </ul>
 <h2 id="variables-in-paths" tabindex="-1">Variables in Paths</h2>
 <p>Paths can include variables, which are resolved during execution:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> dir <span class="token operator">=</span> <span class="token string">"docs"</span>
-<span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/{{dir}}"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> dir = <span class="token string">"docs"</span>
+<span class="token directive keyword">@path</span> docs = <span class="token string">"$PROJECTPATH/{{dir}}"</span>
 </code></pre>
 <h2 id="path-best-practices" tabindex="-1">Path Best Practices</h2>
 <ul>
@@ -307,11 +371,172 @@ title: &quot;@path Directive&quot;</h2>
 <li>Be cautious when using absolute paths or parent directory references (<code>..</code>), as they may make your Mlld files less portable</li>
 <li>Consider using path variables to encapsulate filesystem paths for better maintainability</li>
 </ul>
+<h2 id="url-caching" tabindex="-1">URL Caching</h2>
+<p>The <code>@path</code> directive supports intelligent URL caching to improve performance and reduce network requests.</p>
+<h3 id="ttl-(time-to-live)-options" tabindex="-1">TTL (Time-To-Live) Options</h3>
+<p>Control how long URL content is cached:</p>
+<pre class="language-mlld"><code class="language-mlld"># Duration-based TTL
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>30s<span class="token punctuation">)</span> api = <span class="token string">"https://api.example.com/data.json"</span>    # <span class="token number">30</span> seconds
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>5m<span class="token punctuation">)</span> template = <span class="token string">"https://example.com/template.md"</span>  # <span class="token number">5</span> minutes  
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>2h<span class="token punctuation">)</span> config = <span class="token string">"https://example.com/config.yaml"</span>   # <span class="token number">2</span> hours
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>1d<span class="token punctuation">)</span> docs = <span class="token string">"https://example.com/docs.md"</span>         # <span class="token number">1</span> day
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>1w<span class="token punctuation">)</span> archive = <span class="token string">"https://example.com/archive.zip"</span>  # <span class="token number">1</span> week
+</code></pre>
+<pre class="language-mlld"><code class="language-mlld"># Special TTL values
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>live<span class="token punctuation">)</span> feed = <span class="token string">"https://api.example.com/live-feed.json"</span>  # Always fetch fresh
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>static<span class="token punctuation">)</span> logo = <span class="token string">"https://example.com/logo.png"</span>         # Cache indefinitely
+</code></pre>
+<p><strong>TTL Units:</strong></p>
+<ul>
+<li><code>s</code>, <code>sec</code>, <code>second</code>, <code>seconds</code> - seconds</li>
+<li><code>m</code>, <code>min</code>, <code>minute</code>, <code>minutes</code> - minutes</li>
+<li><code>h</code>, <code>hr</code>, <code>hour</code>, <code>hours</code> - hours</li>
+<li><code>d</code>, <code>day</code>, <code>days</code> - days</li>
+<li><code>w</code>, <code>week</code>, <code>weeks</code> - weeks</li>
+</ul>
+<p><strong>Special Values:</strong></p>
+<ul>
+<li><code>live</code> - Always fetch fresh content (no caching)</li>
+<li><code>static</code> - Cache indefinitely (until manual cache clear)</li>
+</ul>
+<h3 id="default-ttl" tabindex="-1">Default TTL</h3>
+<p>If no TTL is specified, URLs are cached for <strong>24 hours</strong> by default.</p>
+<h2 id="security-options" tabindex="-1">Security Options</h2>
+<p>URL access can be controlled with trust levels:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> <span class="token punctuation">(</span>30m<span class="token punctuation">)</span> trust always api = <span class="token string">"http://internal.company.com/api"</span>
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>1h<span class="token punctuation">)</span> trust verify docs = <span class="token string">"https://public-docs.example.com"</span>  
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>1d<span class="token punctuation">)</span> trust never unsafe = <span class="token string">"http://suspicious-site.com"</span>
+</code></pre>
+<h3 id="trust-levels" tabindex="-1">Trust Levels</h3>
+<ul>
+<li><strong><code>trust always</code></strong>: Allow any URL (HTTP or HTTPS)</li>
+<li><strong><code>trust verify</code></strong>: Only allow secure HTTPS URLs (default for security)</li>
+<li><strong><code>trust never</code></strong>: Block URL access completely</li>
+</ul>
+<h3 id="security-best-practices" tabindex="-1">Security Best Practices</h3>
+<ul>
+<li>Use <code>trust verify</code> for external URLs to ensure HTTPS</li>
+<li>Use <code>trust always</code> only for trusted internal URLs</li>
+<li>Use <code>trust never</code> to explicitly block dangerous URLs</li>
+<li>Default trust level is <code>verify</code> if not specified</li>
+</ul>
+<h2 id="combining-ttl-and-security" tabindex="-1">Combining TTL and Security</h2>
+<p>Both options can be used together:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> <span class="token punctuation">(</span>30m<span class="token punctuation">)</span> trust verify template = <span class="token string">"https://example.com/template.md"</span>
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>live<span class="token punctuation">)</span> trust always internal = <span class="token string">"http://internal.api/live-data"</span>
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>static<span class="token punctuation">)</span> trust verify cdn = <span class="token string">"https://cdn.example.com/assets.zip"</span>
+</code></pre>
+<h2 id="cache-storage" tabindex="-1">Cache Storage</h2>
+<p>URL cache is stored in your project's <code>.mlld/</code> directory:</p>
+<pre><code>.mlld/
+├── cache/           # Content cache (shared with modules)
+└── mlld.lock.json   # Cache metadata and TTL settings
+</code></pre>
+<p><strong>Lock File Format:</strong></p>
+<pre class="language-json"><code class="language-json"><span class="token punctuation">{</span>
+  <span class="token property">"cache"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+    <span class="token property">"urls"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+      <span class="token property">"https://example.com/template.md"</span><span class="token operator">:</span> <span class="token punctuation">{</span>
+        <span class="token property">"hash"</span><span class="token operator">:</span> <span class="token string">"sha256-abc123..."</span><span class="token punctuation">,</span>
+        <span class="token property">"cachedAt"</span><span class="token operator">:</span> <span class="token string">"2024-05-30T12:00:00Z"</span><span class="token punctuation">,</span> 
+        <span class="token property">"ttl"</span><span class="token operator">:</span> <span class="token string">"30m"</span><span class="token punctuation">,</span>
+        <span class="token property">"trust"</span><span class="token operator">:</span> <span class="token string">"verify"</span><span class="token punctuation">,</span>
+        <span class="token property">"configuredBy"</span><span class="token operator">:</span> <span class="token string">"@template"</span><span class="token punctuation">,</span>
+        <span class="token property">"expiresAt"</span><span class="token operator">:</span> <span class="token string">"2024-05-30T12:30:00Z"</span>
+      <span class="token punctuation">}</span>
+    <span class="token punctuation">}</span>
+  <span class="token punctuation">}</span>
+<span class="token punctuation">}</span>
+</code></pre>
+<h2 id="cache-management" tabindex="-1">Cache Management</h2>
+<h3 id="automatic-cleanup" tabindex="-1">Automatic Cleanup</h3>
+<ul>
+<li>Expired cache entries are automatically removed when accessed</li>
+<li>Cache integrity is verified using SHA-256 hashes</li>
+<li>Corrupted cache entries are automatically regenerated</li>
+</ul>
+<h3 id="manual-cache-control" tabindex="-1">Manual Cache Control</h3>
+<pre class="language-bash"><code class="language-bash"><span class="token comment"># Clear all URL cache</span>
+<span class="token function">rm</span> <span class="token parameter variable">-rf</span> .mlld/cache/
+
+<span class="token comment"># Clear specific URL from lock file</span>
+<span class="token comment"># Edit .mlld/mlld.lock.json and remove the URL entry</span>
+</code></pre>
+<h2 id="url-examples" tabindex="-1">URL Examples</h2>
+<h3 id="api-data-caching" tabindex="-1">API Data Caching</h3>
+<pre class="language-mlld"><code class="language-mlld"># Cache API responses for <span class="token number">5</span> minutes
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>5m<span class="token punctuation">)</span> trust verify weather = <span class="token string">"https://api.weather.com/current"</span>
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>1h<span class="token punctuation">)</span> trust verify rates = <span class="token string">"https://api.exchange.com/rates"</span>
+
+# Use the cached data
+<span class="token directive keyword">@add</span> <span class="token variable variable">@weather</span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@rates</span>
+</code></pre>
+<h3 id="template-management" tabindex="-1">Template Management</h3>
+<pre class="language-mlld"><code class="language-mlld"># Static templates <span class="token punctuation">(</span>cache indefinitely<span class="token punctuation">)</span>
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>static<span class="token punctuation">)</span> trust verify header = <span class="token string">"https://cdn.company.com/header.md"</span>
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>static<span class="token punctuation">)</span> trust verify footer = <span class="token string">"https://cdn.company.com/footer.md"</span>
+
+# Live content <span class="token punctuation">(</span>always fresh<span class="token punctuation">)</span>
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>live<span class="token punctuation">)</span> trust verify news = <span class="token string">"https://api.news.com/latest"</span>
+
+<span class="token directive keyword">@add</span> <span class="token variable variable">@header</span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@news</span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@footer</span>
+</code></pre>
+<h3 id="development-vs-production" tabindex="-1">Development vs Production</h3>
+<pre class="language-mlld"><code class="language-mlld"># Development - always fetch fresh
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>live<span class="token punctuation">)</span> trust always dev_config = <span class="token string">"http://localhost:3000/config.json"</span>
+
+# Production - cache for <span class="token number">1</span> hour
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>1h<span class="token punctuation">)</span> trust verify prod_config = <span class="token string">"https://api.prod.com/config.json"</span>
+</code></pre>
+<h3 id="content-distribution" tabindex="-1">Content Distribution</h3>
+<pre class="language-mlld"><code class="language-mlld"># Long-term cacheable assets
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>1w<span class="token punctuation">)</span> trust verify docs = <span class="token string">"https://docs.example.com/guide.md"</span>
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>1d<span class="token punctuation">)</span> trust verify images = <span class="token string">"https://cdn.example.com/images.zip"</span>
+
+# Frequently updated content  
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>15m<span class="token punctuation">)</span> trust verify blog = <span class="token string">"https://blog.example.com/latest.md"</span>
+<span class="token directive keyword">@path</span> <span class="token punctuation">(</span>5m<span class="token punctuation">)</span> trust verify status = <span class="token string">"https://status.example.com/current.json"</span>
+</code></pre>
+<h2 id="error-handling-1" tabindex="-1">Error Handling</h2>
+<h3 id="network-errors" tabindex="-1">Network Errors</h3>
+<p>If URL fetching fails, the path variable will fall back to the URL string itself:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> <span class="token punctuation">(</span>30m<span class="token punctuation">)</span> trust verify unreachable = <span class="token string">"https://down.example.com/file.md"</span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@unreachable</span>  # Outputs: https://down<span class="token field-access property">.example</span><span class="token field-access property">.com</span>/file<span class="token field-access property">.md</span>
+</code></pre>
+<h3 id="trust-violations" tabindex="-1">Trust Violations</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> <span class="token punctuation">(</span>30m<span class="token punctuation">)</span> trust verify insecure = <span class="token string">"http://insecure.example.com/file.md"</span>
+# Error: Insecure URL not allowed <span class="token operator">with</span> trust verify
+</code></pre>
+<h3 id="cache-corruption" tabindex="-1">Cache Corruption</h3>
+<p>Corrupted cache entries are automatically detected and re-fetched:</p>
+<ul>
+<li>SHA-256 hash mismatches trigger fresh downloads</li>
+<li>Missing cache files are transparently re-fetched</li>
+<li>Lock file inconsistencies are automatically resolved</li>
+</ul>
+<h2 id="performance-benefits" tabindex="-1">Performance Benefits</h2>
+<p>URL caching provides significant performance improvements:</p>
+<ul>
+<li><strong>Faster builds</strong>: Cached content loads instantly</li>
+<li><strong>Reduced bandwidth</strong>: No repeated downloads within TTL</li>
+<li><strong>Offline capability</strong>: Cached content works without internet</li>
+<li><strong>Reliability</strong>: Protection against temporary network issues</li>
+</ul>
+<p>Example performance comparison:</p>
+<pre><code>Without caching: 2.3s per build (5 network requests)
+With caching:     0.1s per build (0 network requests)
+</code></pre>
 <h2 id="notes" tabindex="-1">Notes</h2>
 <ul>
 <li>Path variables cannot use field access or formatting</li>
 <li>Path variables are distinct from text and data variables</li>
 <li>In test mode, existence checks can be bypassed</li>
+<li>URL caching works with both <code>@path</code> variables and direct URLs in <code>@add</code></li>
+<li>Cache is persistent across mlld runs and shared between projects</li>
+<li>HTTPS URLs are preferred for security; HTTP requires <code>trust always</code></li>
 </ul>
 
   </div>

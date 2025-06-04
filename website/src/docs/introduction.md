@@ -3,11 +3,6 @@ layout: docs.njk
 title: "Introduction to Mlld"
 ---
 
----
-layout: docs.njk
-title: "Introduction to Mlld"
----
-
 # Introduction to Mlld
 
 Mlld is a simple and constrained scripting language designed for use within markdown-like documents. It allows you to create dynamic content by interpreting special directive lines while preserving all other content as-is.
@@ -41,7 +36,7 @@ This will remain a codefence.
 
 @add [$docs/example.md]
 
-@run [echo "Current time: $(date)"]
+@run [(echo "Current time: $(date)")]
 ```
 
 This example:

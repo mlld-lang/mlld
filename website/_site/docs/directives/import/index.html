@@ -92,7 +92,37 @@
           
         
           
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
             <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
           
         
           
@@ -103,6 +133,10 @@
             <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
           
         
         
@@ -189,6 +223,29 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
             
               
             
@@ -205,6 +262,8 @@
                 </a></li>
               
             
+              
+            
           </ul>
         </li>
       </ul>
@@ -219,11 +278,11 @@
 <pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span>                           # Import all variables
 <span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>*<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span>                  # Import all variables <span class="token punctuation">(</span>equivalent<span class="token punctuation">)</span>
 <span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>var1, var2<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span>        # Import specific variables
-<span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>var1 as alias1, var2<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span> # Import with ali<span class="token operator">as</span>es
+<span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>var1 as alias1, var2<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span> # Import <span class="token operator">with</span> aliases
 </code></pre>
 <p>Legacy syntax (also supported):</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> path<span class="token operator">=</span><span class="token string">"path.mld"</span>                     # Import all variables
-<span class="token directive keyword">@import</span> path<span class="token operator">=</span><span class="token string">"path.mld"</span> imports<span class="token operator">=</span><span class="token path"><span class="token punctuation">[</span>var1, var2<span class="token punctuation">]</span></span> # Import specific variables
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> path=<span class="token string">"path.mld"</span>                     # Import all variables
+<span class="token directive keyword">@import</span> path=<span class="token string">"path.mld"</span> imports=<span class="token path"><span class="token punctuation">[</span>var1, var2<span class="token punctuation">]</span></span> # Import specific variables
 </code></pre>
 <p>Where:</p>
 <ul>
@@ -269,7 +328,7 @@
 <pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>"$PROJECTPATH/utils.mld"<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Import with path variables:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> lib <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/lib"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> lib = <span class="token string">"$PROJECTPATH/lib"</span>
 <span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>$lib/utils.mld<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Selective import:</p>
@@ -281,8 +340,8 @@
 <p>Using imported variables:</p>
 <pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>"$PROJECTPATH/utils.mld"<span class="token punctuation">]</span></span>
 
-<span class="token directive keyword">@text</span> message <span class="token operator">=</span> `Hello<span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>importedName<span class="token punctuation">}</span><span class="token punctuation">}</span>!`
-<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>$importedCommand({{param}})<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> message = `Hello<span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>importedName<span class="token punctuation">}</span><span class="token punctuation">}</span>!`
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>($importedCommand({{param}}))<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The implementation handles various error scenarios:</p>

@@ -52,6 +52,11 @@
         "language": "mlld",
         "scopeName": "source.mlld",
         "path": "./syntaxes/mlld.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.mlld.injection",
+        "path": "./syntaxes/mlld-markdown.injection.json",
+        "injectTo": ["text.html.markdown"]
       }
     ],
     "snippets": [

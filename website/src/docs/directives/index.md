@@ -3,11 +3,6 @@ layout: docs.njk
 title: "Mlld Directives"
 ---
 
----
-layout: docs.njk
-title: "Mlld Directives"
----
-
 # Mlld Directives
 
 Directives are the core building blocks of Mlld. They always start with an `@` symbol and must appear at the beginning of a line (no indentation). Each directive has a specific purpose and syntax.

@@ -145,6 +145,11 @@ Prism.languages.mld = Prism.languages.mlld;
       scopeName: 'source.mlld',
       fileTypes: ['mlld', 'mld'],
       patterns: [
+        // Full-line comments
+        {
+          name: 'comment.line.mlld',
+          match: '^\\s*(>>|<<).*$'
+        },
         // Match lines that start with valid mlld directives
         {
           name: 'meta.embedded.mlld',
@@ -363,7 +368,7 @@ Prism.languages.mld = Prism.languages.mlld;
 
   generateVim() {
     const vim = `" Vim syntax file for Mlld
-" Language: Mlld (Markdown with mlld directives)
+" Language: Mlld
 " Maintainer: Auto-generated
 " Latest Revision: ${new Date().toISOString()}
 
@@ -371,90 +376,63 @@ if exists("b:current_syntax")
   finish
 endif
 
-" Load Markdown syntax as the base
+" Include Markdown syntax as base
 runtime! syntax/markdown.vim
-unlet! b:current_syntax
 
-" Only apply mlld syntax to lines starting with directives
-" This preserves all Markdown formatting for non-directive lines
+" Define mlld-specific patterns
+" Comments
+syn match mlldComment "\\(>>\\|<<\\).*$"
 
-" Mlld directive lines - only match at start of line
-syn match mlldDirectiveLine "^@\\(${this.directives.join('\\|')}\\)\\>.*$" contains=mlldDirective,mlldComment,mlldReservedVar,mlldProjectPath,mlldVariable,mlldFieldAccess,mlldTemplate,mlldCommand,mlldPath,mlldString,mlldOperator,mlldAssignment,mlldNumber,mlldBoolean,mlldNull,mlldLanguage,mlldImportBlock
+" Directives - must be at start of line
+syn match mlldDirective "^@\\(${this.directives.join('\\|')}\\)\\>"
 
-" Comments (only within directive lines)
-syn match mlldComment "\\(>>\\|<<\\).*$" contained
+" Reserved variables
+syn match mlldReservedVar "@\\(INPUT\\|TIME\\|PROJECTPATH\\|STDIN\\|input\\|time\\|projectpath\\|stdin\\)\\>"
+syn match mlldReservedVar "@\\."
 
-" Reserved variables and special syntax
-syn match mlldReservedVar "@\\c\\(INPUT\\|TIME\\|PROJECTPATH\\|STDIN\\)\\>" contained
-syn match mlldProjectPath "@\\." contained
+" Regular variables (lower priority than directives and reserved)
+syn match mlldVariable "@\\w\\+"
 
-" Directives
-syn match mlldDirective "@\\(${this.directives.join('\\|')}\\)\\>" contained
+" Template blocks
+syn region mlldTemplate start="\\[\\[" end="\\]\\]" contains=mlldTemplateVar
+syn region mlldTemplateVar start="{{" end="}}" contained
 
-" Language keywords
-syn keyword mlldLanguage javascript js python py bash sh contained
+" Command blocks
+syn region mlldCommand start="\\[(" end=")\\]" contains=mlldVariable,mlldReservedVar
 
-" Field access
-syn match mlldFieldAccess "\\.\\(\\w\\+\\|\\d\\+\\)" contained
+" Paths
+syn region mlldPath start="\\[" end="\\]" contains=mlldURL,mlldVariable,mlldReservedVar
 
-" Variables
-syn match mlldVariable "@\\w\\+" contained
-
-" Template blocks with proper bracket matching
-syn region mlldTemplate start="\\[\\[" end="\\]\\]" contains=mlldTemplateInterpolation keepend contained
-syn region mlldTemplateInterpolation start="{{" end="}}" contained contains=mlldTemplateVariable
-syn match mlldTemplateVariable "\\w\\+" contained
-
-" Command brackets
-syn region mlldCommand start="\\[(" end=")\\]" contains=mlldVariable,mlldReservedVar,mlldProjectPath keepend contained
-
-" Import blocks
-syn region mlldImportBlock start="{" end="}" contains=mlldImportVar,mlldImportStar,mlldImportComma contained
-syn match mlldImportVar "\\w\\+" contained
-syn match mlldImportStar "\\*" contained
-syn match mlldImportComma "," contained
-
-" Paths/URLs
-syn region mlldPath start="\\[" end="\\]" contains=mlldURL,mlldVariable,mlldReservedVar,mlldProjectPath keepend contained
+" URLs
 syn match mlldURL "https\\?://[^\\]]*" contained
 
 " Strings
-syn region mlldString start='"' end='"' contained
+syn region mlldString start='"' end='"'
 
-" Operators
-syn keyword mlldOperator from as foreach with to contained
-syn match mlldAssignment "=" contained
+" Keywords
+syn keyword mlldKeyword from as foreach with to
 
 " Numbers
-syn match mlldNumber "\\<\\d\\+\\(\\.\\d\\+\\)\\?\\>" contained
+syn match mlldNumber "\\<\\d\\+\\(\\.\\d\\+\\)\\?\\>"
 
 " Booleans
-syn keyword mlldBoolean true false contained
+syn keyword mlldBoolean true false
 
 " Null
-syn keyword mlldNull null contained
+syn keyword mlldNull null
 
 " Define highlighting
 hi def link mlldComment Comment
-hi def link mlldDirective Statement
+hi def link mlldDirective Keyword
 hi def link mlldReservedVar Constant
-hi def link mlldProjectPath Constant
-hi def link mlldLanguage Type
-hi def link mlldVariable Normal
-hi def link mlldFieldAccess Special
+hi def link mlldVariable Identifier
 hi def link mlldTemplate String
-hi def link mlldTemplateInterpolation Delimiter
-hi def link mlldTemplateVariable Identifier
+hi def link mlldTemplateVar Special
 hi def link mlldCommand String
-hi def link mlldImportBlock Normal
-hi def link mlldImportVar Identifier
-hi def link mlldImportStar Operator
-hi def link mlldImportComma Delimiter
 hi def link mlldPath String
 hi def link mlldURL Underlined
 hi def link mlldString String
-hi def link mlldOperator Keyword
-hi def link mlldAssignment Operator
+hi def link mlldKeyword Operator
 hi def link mlldNumber Number
 hi def link mlldBoolean Boolean
 hi def link mlldNull Constant
@@ -466,11 +444,42 @@ let b:current_syntax = "mlld"
   }
 
   generateVimMarkdown() {
-    // Vim after/syntax file to add Mlld highlighting to Markdown
-    const vimAfter = `" Vim syntax additions for Mlld in Markdown
-" Place in after/syntax/markdown.vim
+    // Vim after/syntax file to override polyglot and ensure mlld highlighting works
+    const vimAfter = `" Override polyglot's interference with mlld syntax
+" This file loads AFTER other syntax files
 
-" Match Mlld directives at start of line in Markdown
+" Don't reload if already done
+if exists("b:mlld_after_loaded")
+  finish
+endif
+let b:mlld_after_loaded = 1
+
+" Define our syntax patterns directly
+syn match mlldComment "\\(>>\\|<<\\).*$"
+syn match mlldDirective "^@\\(${this.directives.join('\\|')}\\)\\>"
+syn match mlldReserved "@\\(INPUT\\|TIME\\|PROJECTPATH\\|STDIN\\|input\\|time\\|projectpath\\|stdin\\)\\>"
+syn match mlldReserved "@\\."
+syn match mlldVariable "@\\w\\+"
+syn region mlldString start='"' end='"'
+syn region mlldTemplate start="\\[\\[" end="\\]\\]" contains=mlldTemplateVar
+syn match mlldTemplateVar "{{[^}]*}}" contained
+syn region mlldCommand start="\\[(" end=")\\]"
+
+" Force our colors
+hi mlldComment ctermfg=242 guifg=#6c6c6c
+hi mlldDirective ctermfg=214 cterm=bold guifg=#ffaf00 gui=bold
+hi mlldReserved ctermfg=170 guifg=#d75fd7
+hi mlldVariable ctermfg=117 guifg=#87d7ff
+hi mlldString ctermfg=150 guifg=#afd787
+hi mlldTemplate ctermfg=150 guifg=#afd787
+hi mlldTemplateVar ctermfg=214 guifg=#ffaf00
+hi mlldCommand ctermfg=150 guifg=#afd787`;
+    
+    return vimAfter;
+  }
+  
+  generateOriginalVimMarkdown() {
+    const vimOrig = `" Vim syntax additions for Mlld in Markdown
 syn match markdownMlldDirective "^@\\(${this.directives.join('\\|')}\\)\\>" nextgroup=markdownMlldLine
 syn region markdownMlldLine start="." end="$" contained contains=mlldReservedVar,mlldVariable,mlldFieldAccess,mlldTemplate,mlldPath,mlldString,mlldOperator,mlldNumber,mlldBoolean,mlldNull
 

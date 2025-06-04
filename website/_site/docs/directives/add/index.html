@@ -92,7 +92,37 @@
           
         
           
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
             <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
           
         
           
@@ -103,6 +133,10 @@
             <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
           
         
         
@@ -189,6 +223,29 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
             
               
             
@@ -205,6 +262,8 @@
                 </a></li>
               
             
+              
+            
           </ul>
         </li>
       </ul>
@@ -212,10 +271,7 @@
   </aside>
   
   <div class="docs-content">
-    <hr>
-<h2 id="layout%3A-docs.njktitle%3A-%22%40add-directive%22" tabindex="-1">layout: docs.njk<br>
-title: &quot;@add Directive&quot;</h2>
-<h1 id="%40add-directive" tabindex="-1">@add Directive</h1>
+    <h1 id="%40add-directive" tabindex="-1">@add Directive</h1>
 <p>The <code>@add</code> directive includes content from external files, variables, or templates into your Mlld document.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
 <pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span>
@@ -245,7 +301,7 @@ title: &quot;@add Directive&quot;</h2>
 <pre class="language-mlld"><code class="language-mlld"># Extract a section keeping its original title
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>guide.md # Getting Started<span class="token punctuation">]</span></span>
 
-# Extract a section with a new title
+# Extract a section <span class="token operator">with</span> a new title
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>guide.md # Getting Started<span class="token punctuation">]</span></span> <span class="token operator">as</span> <span class="token string">"# Quick Start"</span>
 
 # Extract by section title <span class="token operator">from</span> the beginning
@@ -254,24 +310,24 @@ title: &quot;@add Directive&quot;</h2>
 </code></pre>
 <h2 id="including-variables" tabindex="-1">Including Variables</h2>
 <p>Add content from variables:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> <span class="token string">"Hello, world!"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> greeting = <span class="token string">"Hello, world!"</span>
 <span class="token directive keyword">@add</span> <span class="token variable variable">@greeting</span>
 
-<span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span> name: <span class="token string">"Alice"</span><span class="token punctuation">,</span> role: <span class="token string">"Admin"</span> <span class="token punctuation">}</span>
-<span class="token directive keyword">@add</span> <span class="token variable variable">@user</span>.name
+<span class="token directive keyword">@data</span> user = <span class="token punctuation">{</span> name: <span class="token string">"Alice"</span><span class="token punctuation">,</span> role: <span class="token string">"Admin"</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@user</span><span class="token field-access property">.name</span>
 </code></pre>
 <h2 id="template-content" tabindex="-1">Template Content</h2>
 <p>Add content with variable interpolation:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"Alice"</span>
-<span class="token directive keyword">@text</span> role <span class="token operator">=</span> <span class="token string">"Admin"</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name = <span class="token string">"Alice"</span>
+<span class="token directive keyword">@text</span> role = <span class="token string">"Admin"</span>
 <span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span>Welcome <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">name</span><span class="token punctuation">}}</span></span>! Your role is: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">role</span><span class="token punctuation">}}</span></span><span class="token punctuation">]]</span></span>
 </code></pre>
 <h2 id="template-functions" tabindex="-1">Template Functions</h2>
 <p>Use template functions defined with @text:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> greet<span class="token punctuation">(</span>name<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span>Hello, <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">name</span><span class="token punctuation">}}</span></span>!<span class="token punctuation">]]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> greet<span class="token punctuation">(</span>name<span class="token punctuation">)</span> = <span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span>Hello, <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">name</span><span class="token punctuation">}}</span></span>!<span class="token punctuation">]]</span></span>
 <span class="token directive keyword">@add</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span><span class="token string">"World"</span><span class="token punctuation">)</span>
 
-<span class="token directive keyword">@text</span> message<span class="token punctuation">(</span>user<span class="token punctuation">,</span> action<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span><span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">user</span><span class="token punctuation">}}</span></span> <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">action</span><span class="token punctuation">}}</span></span> successfully!<span class="token punctuation">]]</span></span>
+<span class="token directive keyword">@text</span> message<span class="token punctuation">(</span>user<span class="token punctuation">,</span> action<span class="token punctuation">)</span> = <span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span><span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">user</span><span class="token punctuation">}}</span></span> <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">action</span><span class="token punctuation">}}</span></span> successfully!<span class="token punctuation">]]</span></span>
 <span class="token directive keyword">@add</span> <span class="token variable variable">@message</span><span class="token punctuation">(</span><span class="token string">"Alice"</span><span class="token punctuation">,</span> <span class="token string">"logged in"</span><span class="token punctuation">)</span>
 </code></pre>
 <h2 id="path-types" tabindex="-1">Path Types</h2>

@@ -102,6 +102,104 @@ const variables = state.getVariables();
 
 ## Error Handling
 
+The SDK provides comprehensive error handling with enhanced formatting:
+
+### Basic Error Handling
+
+```typescript
+import { interpret, MlldError } from 'mlld';
+
+try {
+  const result = await interpret(content, options);
+  console.log(result);
+} catch (error) {
+  if (error instanceof MlldError) {
+    console.error('Mlld Error:', error.message);
+    console.error('Error Code:', error.code);
+    console.error('Severity:', error.severity);
+  } else {
+    console.error('Unexpected error:', error);
+  }
+}
+```
+
+### Enhanced Error Formatting
+
+Use the `formatError` function for rich error display:
+
+```typescript
+import { interpret, formatError } from 'mlld';
+import { NodeFileSystem } from 'mlld';
+
+try {
+  const result = await interpret(content, options);
+} catch (error) {
+  const fileSystem = new NodeFileSystem();
+  
+  // Format error with enhanced display
+  const formatted = await formatError(error, {
+    fileSystem,
+    useSourceContext: true,
+    useSmartPaths: true,
+    useColors: process.stdout.isTTY,
+    basePath: process.cwd(),
+    contextLines: 2
+  });
+  
+  // Display formatted error
+  console.error(formatted.formatted);
+  
+  // Access structured error data
+  console.log('Error details:', formatted.json);
+  
+  // Access source context if available
+  if (formatted.sourceContext) {
+    console.log('Error in file:', formatted.sourceContext.file);
+    console.log('At line:', formatted.sourceContext.errorLine);
+  }
+}
+```
+
+### Error Format Options
+
+- **`useSourceContext`**: Show source code around the error location
+- **`useSmartPaths`**: Display relative paths when within a project
+- **`useColors`**: Enable colorized output (auto-detected for terminals)
+- **`basePath`**: Project root for relative path calculation
+- **`contextLines`**: Number of context lines to show (default: 2)
+
+### Auto-Detecting Error Format
+
+The SDK can automatically choose the best error format:
+
+```typescript
+import { interpret, ErrorFormatSelector } from 'mlld';
+
+try {
+  const result = await interpret(content, options);
+} catch (error) {
+  const formatter = new ErrorFormatSelector(fileSystem);
+  
+  // Auto-detects CLI vs API format based on environment
+  const formatted = await formatter.formatAuto(error, {
+    useSourceContext: true,
+    useSmartPaths: true,
+    basePath: process.cwd()
+  });
+  
+  if (typeof formatted === 'string') {
+    // CLI format (when running in terminal)
+    console.error(formatted);
+  } else {
+    // API format (when running programmatically)
+    console.error(formatted.formatted);
+    // Access structured data: formatted.json, formatted.sourceContext
+  }
+}
+```
+
+### Error Types
+
 The SDK provides specialized error types for robust error handling:
 
 ```typescript

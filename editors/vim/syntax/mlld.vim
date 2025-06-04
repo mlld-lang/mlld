@@ -1,46 +1,47 @@
 " Vim syntax file for Mlld
 " Language: Mlld
 " Maintainer: Auto-generated
-" Latest Revision: 2025-06-04T04:23:08.345Z
+" Latest Revision: 2025-06-04T17:11:06.579Z
 
 if exists("b:current_syntax")
   finish
 endif
 
-" Keywords (directives)
-syn keyword mlldDirective @data @text @run @add @path @import @exec @when @output
+" Include Markdown syntax as base
+runtime! syntax/markdown.vim
 
-" Language keywords
-syn keyword mlldLanguage javascript js python py bash sh
-
+" Define mlld-specific patterns
 " Comments
-syn match mlldComment ">>.*$"
+syn match mlldComment "\(>>\|<<\).*$"
+
+" Directives - must be at start of line
+syn match mlldDirective "^@\(data\|text\|run\|add\|path\|import\|exec\|when\|output\)\>"
 
 " Reserved variables
-syn match mlldReservedVar "@\(INPUT\|TIME\|PROJECTPATH\)\>"
+syn match mlldReservedVar "@\(INPUT\|TIME\|PROJECTPATH\|STDIN\|input\|time\|projectpath\|stdin\)\>"
+syn match mlldReservedVar "@\."
 
-" Variables
+" Regular variables (lower priority than directives and reserved)
 syn match mlldVariable "@\w\+"
-
-" Field access
-syn match mlldFieldAccess "\.\(\w\+\|\d\+\)"
 
 " Template blocks
 syn region mlldTemplate start="\[\[" end="\]\]" contains=mlldTemplateVar
-syn match mlldTemplateVar "{{[^}]\+}}" contained
+syn region mlldTemplateVar start="{{" end="}}" contained
 
-" Command brackets - must come before path brackets
-syn region mlldCommand start="\[(" end=")\]" contains=mlldVariable
+" Command blocks
+syn region mlldCommand start="\[(" end=")\]" contains=mlldVariable,mlldReservedVar
 
-" Paths/URLs
-syn region mlldPath start="\[" end="\]" contains=mlldURL
+" Paths
+syn region mlldPath start="\[" end="\]" contains=mlldURL,mlldVariable,mlldReservedVar
+
+" URLs
 syn match mlldURL "https\?://[^\]]*" contained
 
 " Strings
 syn region mlldString start='"' end='"'
 
-" Operators
-syn match mlldOperator "\(=\|from\|as\|foreach\|with\|to\)"
+" Keywords
+syn keyword mlldKeyword from as foreach with to
 
 " Numbers
 syn match mlldNumber "\<\d\+\(\.\d\+\)\?\>"
@@ -52,19 +53,17 @@ syn keyword mlldBoolean true false
 syn keyword mlldNull null
 
 " Define highlighting
-hi def link mlldDirective Keyword
-hi def link mlldLanguage Type
 hi def link mlldComment Comment
+hi def link mlldDirective Keyword
 hi def link mlldReservedVar Constant
 hi def link mlldVariable Identifier
-hi def link mlldFieldAccess Special
 hi def link mlldTemplate String
 hi def link mlldTemplateVar Special
 hi def link mlldCommand String
 hi def link mlldPath String
 hi def link mlldURL Underlined
 hi def link mlldString String
-hi def link mlldOperator Operator
+hi def link mlldKeyword Operator
 hi def link mlldNumber Number
 hi def link mlldBoolean Boolean
 hi def link mlldNull Constant

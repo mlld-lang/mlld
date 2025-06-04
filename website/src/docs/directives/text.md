@@ -3,11 +3,6 @@ layout: docs.njk
 title: "@text Directive"
 ---
 
----
-layout: docs.njk
-title: "@text Directive"
----
-
 # @text Directive
 
 The `@text` directive defines a text variable that can store string values.
@@ -17,7 +12,7 @@ The `@text` directive defines a text variable that can store string values.
 ```mlld
 @text identifier = "value"
 @text identifier = @add [content]
-@text identifier = @run [command]
+@text identifier = @run [(command)]
 ```
 
 Where:
@@ -89,7 +84,7 @@ Basic text variable:
 
 Using the result of a command:
 ```mlld
-@text date = @run [date +"%Y-%m-%d"]
+@text date = @run [(date +"%Y-%m-%d")]
 ```
 
 Embedding file content:

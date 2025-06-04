@@ -3,11 +3,6 @@ layout: docs.njk
 title: "URL Support in Mlld"
 ---
 
----
-layout: docs.njk
-title: "URL Support in Mlld"
----
-
 # URL Support in Mlld
 
 Mlld supports fetching content from remote URLs using the `@add` and `@import` directives. This allows you to incorporate external resources into your Mlld documents without needing to download them first.

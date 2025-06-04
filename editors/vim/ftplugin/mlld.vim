@@ -32,11 +32,12 @@ setlocal formatoptions-=t " Don't auto-wrap text
 setlocal formatoptions+=croql " But do format comments nicely
 
 " Match pairs for brackets
-setlocal matchpairs+=\[\[:]]
+" Note: matchpairs only supports single characters, so we can't add [[ and ]]
+setlocal matchpairs+=(:),{:},[:]
 
 " Define patterns for the matchit plugin
 if exists("loaded_matchit")
-  let b:match_words = '@\(text\|data\|path\|run\|exec\):=,\[\[:]]'
+  let b:match_words = '@\(text\|data\|path\|run\|exec\):=,\[\[:]]:\[(:)]'
 endif
 
 " Commands for switching between mlld and Markdown

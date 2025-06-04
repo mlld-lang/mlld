@@ -50,13 +50,13 @@
     <div class="filename">code-review.mld</div>
     <div class="spacer"></div>
   </div>
-  <div class="terminal-content"><span class="token directive keyword">@import</span> <span class="token punctuation">{</span>roles<span class="token punctuation">,</span> t<span class="token operator">as</span>ks<span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>prompts.mld<span class="token punctuation">]</span></span>
+  <div class="terminal-content"><span class="token directive keyword">@import</span> <span class="token punctuation">{</span>roles<span class="token punctuation">,</span> tasks<span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>prompts.mld<span class="token punctuation">]</span></span>
 
-<span class="token directive keyword">@text</span> arch <span class="token operator">=</span> <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md # Architecture<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@text</span> standards <span class="token operator">=</span> <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md # Code Standards<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@text</span> diff <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>git diff | cat<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> arch = <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md # Architecture<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> standards = <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md # Code Standards<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> diff = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>git diff | cat<span class="token punctuation">]</span></span>
 
-<span class="token directive keyword">@text</span> prompt <span class="token operator">=</span> <span class="token template-block"><span class="token punctuation">[[</span>
+<span class="token directive keyword">@text</span> prompt = <span class="token template-block"><span class="token punctuation">[[</span>
    Read our docs: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">arch</span><span class="token punctuation">}}</span></span> <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">standards</span><span class="token punctuation">}}</span></span>
    Review the latest changes: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">diff</span><span class="token punctuation">}}</span></span>
    Here's your task: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">tasks.codereview</span><span class="token punctuation">}}</span></span>
@@ -136,9 +136,9 @@
               
 ## Overview 
 
-TypeBlorp is lightweight state management library built with TypeScript<span class="token punctuation">,</span> with a unidirectional data flow pattern combined  with observer-b<span class="token operator">as</span>ed pub/sub architecture.
+TypeBlorp is lightweight state management library built <span class="token operator">with</span> TypeScript<span class="token punctuation">,</span> <span class="token operator">with</span> a unidirectional data flow pattern combined  <span class="token operator">with</span> observer-based pub/sub architecture.
 
-Here's the structure of the codeb<span class="token operator">as</span>e:
+Here's the structure of the codebase:
 <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>tree --gitignore<span class="token punctuation">]</span></span>
 
 <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>@./docs/ARCHITECTURE.md<span class="token punctuation">]</span></span> <span class="token operator">as</span> ## Architecture
@@ -164,9 +164,9 @@ Here's the structure of the codeb<span class="token operator">as</span>e:
     <div class="filename">test-plan.mld</div>
     <div class="spacer"></div>
   </div>
-  <div class="terminal-content"><span class="token directive keyword">@text</span> tests <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>npm test<span class="token punctuation">]</span></span>
+  <div class="terminal-content"><span class="token directive keyword">@text</span> tests = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>npm test<span class="token punctuation">]</span></span>
 
-<span class="token directive keyword">@text</span> res <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot "What's broken here? @tests"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> res = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot "What's broken here? @tests"<span class="token punctuation">]</span></span>
 
 <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot "Make a plan to fix @res"<span class="token punctuation">]</span></span>
 <span class="space"></span>
@@ -193,16 +193,16 @@ Here's the structure of the codeb<span class="token operator">as</span>e:
     <div class="filename">imports.mld</div>
     <div class="spacer"></div>
   </div>
-  <div class="terminal-content"><span class="token directive keyword">@text</span> docs <span class="token operator">=</span> <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md<span class="token punctuation">]</span></span>
+  <div class="terminal-content"><span class="token directive keyword">@text</span> docs = <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md<span class="token punctuation">]</span></span>
               
-<span class="token directive keyword">@data</span> role <span class="token operator">=</span> <span class="token punctuation">{</span>
+<span class="token directive keyword">@data</span> role = <span class="token punctuation">{</span>
     <span class="token string">"architect"</span>: <span class="token string">"You are a software architect."</span><span class="token punctuation">,</span>
     <span class="token string">"security"</span>: <span class="token string">"You are a security engineer."</span><span class="token punctuation">,</span>
     <span class="token string">"ux"</span>: <span class="token string">"You are a ux designer."</span><span class="token punctuation">,</span>
     <span class="token string">"pm"</span>: <span class="token string">"You are a project manager."</span>
 <span class="token punctuation">}</span>
 
-<span class="token directive keyword">@data</span> t<span class="token operator">as</span>k <span class="token operator">=</span> <span class="token punctuation">{</span>
+<span class="token directive keyword">@data</span> task = <span class="token punctuation">{</span>
     <span class="token string">"archrev"</span>: <span class="token string">"What's the architecture's biggest flaw?"</span><span class="token punctuation">,</span>
     <span class="token string">"uxrev"</span>: <span class="token string">"Review the UX of this code"</span><span class="token punctuation">,</span>
     <span class="token string">"secrev"</span>: <span class="token string">"Review this code for vulnerabilities"</span><span class="token punctuation">,</span>
@@ -210,9 +210,9 @@ Here's the structure of the codeb<span class="token operator">as</span>e:
 <span class="token punctuation">}</span>
 
 # command creation examples
-<span class="token directive keyword">@exec</span> codecat<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>find @dir -type f -name "*.mld" | head -5<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> codecat<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>find @dir -type f -name "*.mld" | head -5<span class="token punctuation">]</span></span>
 
-<span class="token directive keyword">@exec</span> <span class="token operator">as</span>k<span class="token punctuation">(</span>context<span class="token punctuation">,</span> role<span class="token punctuation">,</span> t<span class="token operator">as</span>k<span class="token punctuation">)</span> <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot --context @context --instructions @task --system @role<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> ask<span class="token punctuation">(</span>context<span class="token punctuation">,</span> role<span class="token punctuation">,</span> task<span class="token punctuation">)</span> = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot --context @context --instructions @task --system @role<span class="token punctuation">]</span></span>
   </div>
 </div>
           
@@ -228,19 +228,19 @@ Here's the structure of the codeb<span class="token operator">as</span>e:
   </div>
   <div class="terminal-content"><span class="token directive keyword">@import</span> <span class="token punctuation">{</span>*<span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>imports.mld<span class="token punctuation">]</span></span>
 
-<span class="token directive keyword">@path</span> services <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>@./src/services<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@text</span> code <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token variable variable">@codecat</span><span class="token punctuation">(</span><span class="token variable variable">@services</span><span class="token punctuation">)</span>
+<span class="token directive keyword">@path</span> services = <span class="token path"><span class="token punctuation">[</span>@./src/services<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> code = <span class="token directive keyword">@run</span> <span class="token variable variable">@codecat</span><span class="token punctuation">(</span><span class="token variable variable">@services</span><span class="token punctuation">)</span>
 
-<span class="token directive keyword">@text</span> context <span class="token operator">=</span> <span class="token template-block"><span class="token punctuation">[[</span>
+<span class="token directive keyword">@text</span> context = <span class="token template-block"><span class="token punctuation">[[</span>
   Read our docs: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">docs</span><span class="token punctuation">}}</span></span>
   Review our code: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">code</span><span class="token punctuation">}}</span></span>
 <span class="token punctuation">]]</span></span>
 
-<span class="token directive keyword">@text</span> arch_review <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span>.architect<span class="token punctuation">,</span> <span class="token variable variable">@task</span>.archrev<span class="token punctuation">)</span>
-<span class="token directive keyword">@text</span> ux_review   <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span>.ux<span class="token punctuation">,</span> <span class="token variable variable">@task</span>.uxrev<span class="token punctuation">)</span>
-<span class="token directive keyword">@text</span> sec_review  <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span>.security<span class="token punctuation">,</span> <span class="token variable variable">@task</span>.secrev<span class="token punctuation">)</span>
+<span class="token directive keyword">@text</span> arch_review = <span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span><span class="token field-access property">.architect</span><span class="token punctuation">,</span> <span class="token variable variable">@task</span><span class="token field-access property">.archrev</span><span class="token punctuation">)</span>
+<span class="token directive keyword">@text</span> ux_review   = <span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span><span class="token field-access property">.ux</span><span class="token punctuation">,</span> <span class="token variable variable">@task</span><span class="token field-access property">.uxrev</span><span class="token punctuation">)</span>
+<span class="token directive keyword">@text</span> sec_review  = <span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span><span class="token field-access property">.security</span><span class="token punctuation">,</span> <span class="token variable variable">@task</span><span class="token field-access property">.secrev</span><span class="token punctuation">)</span>
 
-<span class="token directive keyword">@text</span> pm_review <span class="token operator">=</span> <span class="token template-block"><span class="token punctuation">[[</span>
+<span class="token directive keyword">@text</span> pm_review = <span class="token template-block"><span class="token punctuation">[[</span>
   Here's the team's input on our priorities:
   - Architect review: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">arch_review</span><span class="token punctuation">}}</span></span>
   - UX review: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">ux_review</span><span class="token punctuation">}}</span></span>
@@ -248,7 +248,7 @@ Here's the structure of the codeb<span class="token operator">as</span>e:
   Your task: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">task.roadmap</span><span class="token punctuation">}}</span></span>
 <span class="token punctuation">]]</span></span>
 
-<span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span>.pm<span class="token punctuation">,</span> <span class="token variable variable">@pm_review</span><span class="token punctuation">)</span>
+<span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span><span class="token field-access property">.pm</span><span class="token punctuation">,</span> <span class="token variable variable">@pm_review</span><span class="token punctuation">)</span>
   </div>
 </div>
         </div>

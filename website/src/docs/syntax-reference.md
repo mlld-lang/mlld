@@ -3,11 +3,6 @@ layout: docs.njk
 title: "Syntax Reference"
 ---
 
----
-layout: docs.njk
-title: "Syntax Reference"
----
-
 # Syntax Reference
 
 This document provides a comprehensive reference for the Mlld syntax.
@@ -135,9 +130,9 @@ def hello():
 ### @run
 
 ```mlld
-@run [command_text]
-@run [command_text] under header_text
-@run @command(@textvar1, @textvar2)
+@run [(command_text)]
+@run [(language code_text)]
+@run @command(@var1, @var2)
 ```
 
 ### @import
@@ -149,9 +144,9 @@ def hello():
 ### @exec
 
 ```mlld
-@exec identifier = @run [content]
-@exec command(param1, param2) = @run [content @param1 @param2]
-@exec command = @run javascript [code]
+@exec identifier = @run [(content)]
+@exec command(param1, param2) = @run [(content @param1 @param2)]
+@exec command = @run js [(code)]
 ```
 
 ### @text
@@ -159,7 +154,7 @@ def hello():
 ```mlld
 @text identifier = "value"
 @text identifier = @add [content]
-@text identifier = @run [command]
+@text identifier = @run [(command)]
 ```
 
 ### @path

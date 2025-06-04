@@ -3,11 +3,6 @@ layout: docs.njk
 title: "Mlld Output Formatting Guide"
 ---
 
----
-layout: docs.njk
-title: "Mlld Output Formatting Guide"
----
-
 # Mlld Output Formatting Guide
 
 This guide explains how output formatting works in Mlld and how to control it using the available options.

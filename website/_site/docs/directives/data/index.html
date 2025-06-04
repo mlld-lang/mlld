@@ -92,7 +92,37 @@
           
         
           
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
             <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
           
         
           
@@ -103,6 +133,10 @@
             <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
           
         
         
@@ -189,6 +223,29 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
             
               
             
@@ -205,6 +262,8 @@
                 </a></li>
               
             
+              
+            
           </ul>
         </li>
       </ul>
@@ -212,13 +271,10 @@
   </aside>
   
   <div class="docs-content">
-    <hr>
-<h2 id="layout%3A-docs.njktitle%3A-%22%40data-directive%22" tabindex="-1">layout: docs.njk<br>
-title: &quot;@data Directive&quot;</h2>
-<h1 id="%40data-directive" tabindex="-1">@data Directive</h1>
+    <h1 id="%40data-directive" tabindex="-1">@data Directive</h1>
 <p>The <code>@data</code> directive defines a structured data variable that can store objects, arrays, or other complex data types.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> identifier <span class="token operator">=</span> value
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> identifier = value
 </code></pre>
 <p>Where:</p>
 <ul>
@@ -244,10 +300,10 @@ title: &quot;@data Directive&quot;</h2>
 </ul>
 <h2 id="object-and-array-literals" tabindex="-1">Object and Array Literals</h2>
 <p>Data objects can be defined using object literal syntax:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> name: <span class="token string">"test"</span><span class="token punctuation">,</span> version: <span class="token number">1</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config = <span class="token punctuation">{</span><span class="token punctuation">{</span> name: <span class="token string">"test"</span><span class="token punctuation">,</span> version: <span class="token number">1</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>For multi-line objects:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> user = <span class="token punctuation">{</span><span class="token punctuation">{</span>
   name: <span class="token string">"Alice"</span><span class="token punctuation">,</span>
   id: <span class="token number">123</span><span class="token punctuation">,</span>
   roles: <span class="token path"><span class="token punctuation">[</span>"admin", "editor"<span class="token punctuation">]</span></span><span class="token punctuation">,</span>
@@ -258,13 +314,13 @@ title: &quot;@data Directive&quot;</h2>
 <span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>Arrays can be defined as well:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> colors <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>"red", "green", "blue"<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> colors = <span class="token path"><span class="token punctuation">[</span>"red", "green", "blue"<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="variable-interpolation-in-data" tabindex="-1">Variable Interpolation in Data</h2>
 <p>Data structures can contain variable references in both keys and values:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"John"</span>
-<span class="token directive keyword">@text</span> keyName <span class="token operator">=</span> <span class="token string">"username"</span>
-<span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name = <span class="token string">"John"</span>
+<span class="token directive keyword">@text</span> keyName = <span class="token string">"username"</span>
+<span class="token directive keyword">@data</span> user = <span class="token punctuation">{</span><span class="token punctuation">{</span>
   <span class="token punctuation">{</span><span class="token punctuation">{</span>keyName<span class="token punctuation">}</span><span class="token punctuation">}</span>: <span class="token punctuation">{</span><span class="token punctuation">{</span>name<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span>    # Dynamic key name
   id: <span class="token number">123</span><span class="token punctuation">,</span>
   active: <span class="token boolean">true</span>
@@ -272,45 +328,45 @@ title: &quot;@data Directive&quot;</h2>
 </code></pre>
 <h2 id="referencing-data-variables" tabindex="-1">Referencing Data Variables</h2>
 <p>Data variables are referenced using the <code>{{identifier}}</code> syntax:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> name: <span class="token string">"Alice"</span><span class="token punctuation">,</span> id: <span class="token number">123</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
-<span class="token directive keyword">@text</span> greeting <span class="token operator">=</span> `Hello<span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>user.name<span class="token punctuation">}</span><span class="token punctuation">}</span>!`
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> user = <span class="token punctuation">{</span><span class="token punctuation">{</span> name: <span class="token string">"Alice"</span><span class="token punctuation">,</span> id: <span class="token number">123</span> <span class="token punctuation">}</span><span class="token punctuation">}</span>
+<span class="token directive keyword">@text</span> greeting = `Hello<span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>user<span class="token field-access property">.name</span><span class="token punctuation">}</span><span class="token punctuation">}</span>!`
 </code></pre>
 <p>You can access nested fields using dot notation:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> 
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config = <span class="token punctuation">{</span><span class="token punctuation">{</span> 
   app: <span class="token punctuation">{</span> 
     name: <span class="token string">"MyApp"</span><span class="token punctuation">,</span>
     version: <span class="token string">"1.0.0"</span>
   <span class="token punctuation">}</span>
 <span class="token punctuation">}</span><span class="token punctuation">}</span>
-<span class="token directive keyword">@text</span> appInfo <span class="token operator">=</span> `App: <span class="token punctuation">{</span><span class="token punctuation">{</span>config.app.name<span class="token punctuation">}</span><span class="token punctuation">}</span> v<span class="token punctuation">{</span><span class="token punctuation">{</span>config.app.version<span class="token punctuation">}</span><span class="token punctuation">}</span>`
+<span class="token directive keyword">@text</span> appInfo = `App: <span class="token punctuation">{</span><span class="token punctuation">{</span>config<span class="token field-access property">.app</span><span class="token field-access property">.name</span><span class="token punctuation">}</span><span class="token punctuation">}</span> v<span class="token punctuation">{</span><span class="token punctuation">{</span>config<span class="token field-access property">.app</span><span class="token field-access property">.version</span><span class="token punctuation">}</span><span class="token punctuation">}</span>`
 </code></pre>
 <h3 id="accessing-array-elements" tabindex="-1">Accessing Array Elements</h3>
 <p>Use dot notation to access array elements:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> fruits <span class="token operator">=</span> <span class="token path"><span class="token punctuation">[</span>"apple", "banana", "cherry"<span class="token punctuation">]</span></span>
-<span class="token directive keyword">@text</span> favorite <span class="token operator">=</span> `My favorite fruit is <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits.<span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">}</span>`
-<span class="token directive keyword">@text</span> list <span class="token operator">=</span> `Items: <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits.<span class="token number">0</span><span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits.<span class="token number">1</span><span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span> and <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits.<span class="token number">2</span><span class="token punctuation">}</span><span class="token punctuation">}</span>`
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> fruits = <span class="token path"><span class="token punctuation">[</span>"apple", "banana", "cherry"<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> favorite = `My favorite fruit is <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits<span class="token field-access property">.0</span><span class="token punctuation">}</span><span class="token punctuation">}</span>`
+<span class="token directive keyword">@text</span> list = `Items: <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits<span class="token field-access property">.0</span><span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits<span class="token field-access property">.1</span><span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span> and <span class="token punctuation">{</span><span class="token punctuation">{</span>fruits<span class="token field-access property">.2</span><span class="token punctuation">}</span><span class="token punctuation">}</span>`
 </code></pre>
 <p>Note: Currently, only dot notation is supported for array access. Bracket notation (<code>fruits[0]</code>) is not supported.</p>
 <h2 id="json-string-format" tabindex="-1">JSON String Format</h2>
 <p>Values can also be provided as JSON strings which are parsed:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config <span class="token operator">=</span> '<span class="token punctuation">{</span><span class="token string">"key"</span>: <span class="token string">"value"</span><span class="token punctuation">}</span>'
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config = '<span class="token punctuation">{</span><span class="token string">"key"</span>: <span class="token string">"value"</span><span class="token punctuation">}</span>'
 </code></pre>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic data variable:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> settings <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> 
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> settings = <span class="token punctuation">{</span><span class="token punctuation">{</span> 
   darkMode: <span class="token boolean">true</span><span class="token punctuation">,</span>
   fontSize: <span class="token number">16</span>
 <span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>Using variables in data:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name <span class="token operator">=</span> <span class="token string">"John"</span>
-<span class="token directive keyword">@data</span> user <span class="token operator">=</span> <span class="token punctuation">{</span><span class="token punctuation">{</span> 
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name = <span class="token string">"John"</span>
+<span class="token directive keyword">@data</span> user = <span class="token punctuation">{</span><span class="token punctuation">{</span> 
   username: <span class="token punctuation">{</span><span class="token punctuation">{</span>name<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span>
   active: <span class="token boolean">true</span> 
 <span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <p>Using command output as data:</p>
-<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> gitInfo <span class="token operator">=</span> <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>git log -1 --format="%H,%an,%ae,%s"<span class="token punctuation">]</span></span>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> gitInfo = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(git log -1 --format="%H,%an,%ae,%s")<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The following errors are possible with data directives:</p>
