@@ -1,121 +1,72 @@
-" Vim syntax file
-" Language: MLLD
-" Maintainer: MLLD Team
-" Latest Revision: 2024
+" Vim syntax file for Mlld
+" Language: Mlld
+" Maintainer: Auto-generated
+" Latest Revision: 2025-06-04T04:23:08.345Z
 
 if exists("b:current_syntax")
   finish
 endif
 
-" Comments
-syn match mlldComment "^>>.*$" contains=mlldTodo
-syn keyword mlldTodo TODO FIXME XXX NOTE contained
+" Keywords (directives)
+syn keyword mlldDirective @data @text @run @add @path @import @exec @when @output
 
-" Directives - Keywords
-syn match mlldDirective "@text\>" nextgroup=mlldVariable skipwhite
-syn match mlldDirective "@data\>" nextgroup=mlldVariable skipwhite
-syn match mlldDirective "@path\>" nextgroup=mlldVariable skipwhite
-syn match mlldDirective "@run\>" nextgroup=mlldVariable skipwhite
-syn match mlldDirective "@exec\>" nextgroup=mlldVariable skipwhite
-syn match mlldDirective "@add\>" nextgroup=mlldAddArgs skipwhite
-syn match mlldDirective "@import\>" nextgroup=mlldImportArgs skipwhite
+" Language keywords
+syn keyword mlldLanguage javascript js python py bash sh
+
+" Comments
+syn match mlldComment ">>.*$"
+
+" Reserved variables
+syn match mlldReservedVar "@\(INPUT\|TIME\|PROJECTPATH\)\>"
 
 " Variables
-syn match mlldVariable "\<\w\+\>" contained nextgroup=mlldAssignment skipwhite
-syn match mlldVariableRef "@\w\+"
+syn match mlldVariable "@\w\+"
 
-" Assignment operator
-syn match mlldAssignment "=" contained nextgroup=mlldValue skipwhite
-
-" Values
-syn region mlldString start=+"+ end=+"+ contains=mlldEscape,mlldInterpolation contained
-syn region mlldString start=+'+ end=+'+ contains=mlldEscape contained
-syn match mlldEscape "\\." contained
-
-" Values can include paths with sections and section rename
-syn match mlldValue "\[.\{-}\]" contains=mlldPath nextgroup=mlldSectionRename skipwhite contained
+" Field access
+syn match mlldFieldAccess "\.\(\w\+\|\d\+\)"
 
 " Template blocks
-syn region mlldTemplate start="\[\[" end="\]\]" contains=mlldInterpolation,@Spell
-syn region mlldInterpolation start="{{" end="}}" contains=mlldInterpolationVar contained
-syn match mlldInterpolationVar "\w\+" contained
+syn region mlldTemplate start="\[\[" end="\]\]" contains=mlldTemplateVar
+syn match mlldTemplateVar "{{[^}]\+}}" contained
 
-" Path references
-syn region mlldPath start="\[" end="\]" contains=mlldSpecialVar,mlldSectionRef
-syn match mlldSpecialVar "@PROJECTPATH\|@CWD" contained
+" Command brackets - must come before path brackets
+syn region mlldCommand start="\[(" end=")\]" contains=mlldVariable
 
-" Section references with optional rename
-syn match mlldSectionRef "\([^]#]\+\)\(#\s*\)\([^]]\+\)" contained contains=mlldSectionPath,mlldSectionSep,mlldSectionName
-syn match mlldSectionPath "[^]#]\+" contained
-syn match mlldSectionSep "#" contained
-syn match mlldSectionName "[^]]\+" contained
+" Paths/URLs
+syn region mlldPath start="\[" end="\]" contains=mlldURL
+syn match mlldURL "https\?://[^\]]*" contained
 
-" Section rename with 'as'
-syn match mlldSectionRename "\s\+as\s\+\"[^\"]\+\"" contains=mlldAsKeyword,mlldSectionNewName
-syn keyword mlldAsKeyword as contained
-syn match mlldSectionNewName "\"[^\"]\+\"" contained
+" Strings
+syn region mlldString start='"' end='"'
 
-" JSON-like data structures
-syn region mlldObject start="{" end="}" contains=mlldObjectKey,mlldString,mlldNumber,mlldBoolean,mlldNull,mlldObject,mlldArray contained fold
-syn region mlldArray start="\[" end="\]" contains=mlldString,mlldNumber,mlldBoolean,mlldNull,mlldObject,mlldArray contained fold
-syn match mlldObjectKey '"\w\+"\_s*:' contains=mlldString contained
-syn match mlldNumber "-\?\d\+\(\.\d\+\)\?\([eE][+-]\?\d\+\)\?" contained
-syn keyword mlldBoolean true false contained
-syn keyword mlldNull null contained
+" Operators
+syn match mlldOperator "\(=\|from\|as\|foreach\|with\|to\)"
 
-" Code blocks
-syn region mlldCodeBlock start="```\z(\w*\)" end="```" contains=@mlldCode keepend
-syn cluster mlldCode contains=mlldCodeLang
-syn match mlldCodeLang "```\zs\w*" contained
+" Numbers
+syn match mlldNumber "\<\d\+\(\.\d\+\)\?\>"
 
-" Import specific
-syn match mlldImportArgs "\*\|{\w\+\(,\s*\w\+\)*}" contained nextgroup=mlldFrom skipwhite
-syn keyword mlldFrom from contained nextgroup=mlldPath skipwhite
+" Booleans
+syn keyword mlldBoolean true false
 
-" Add specific
-syn region mlldAddSection start='"' end='"' contained nextgroup=mlldFrom skipwhite
-syn match mlldAddTemplate "template\s\+\w\+\s*(" contained
-syn match mlldAddTemplateCall "\w\+\s*(" contained
+" Null
+syn keyword mlldNull null
 
-" Special assignment patterns
-syn match mlldFieldAccess "\w\+\.\w\+" contained
-
-" Link to default highlight groups
-hi def link mlldComment        Comment
-hi def link mlldTodo           Todo
-hi def link mlldDirective      Keyword
-hi def link mlldVariable       Identifier
-hi def link mlldVariableRef    Identifier
-hi def link mlldAssignment     Operator
-hi def link mlldString         String
-hi def link mlldEscape         SpecialChar
-hi def link mlldTemplate       String
-hi def link mlldInterpolation  Special
-hi def link mlldInterpolationVar Identifier
-hi def link mlldPath           String
-hi def link mlldSpecialVar     Constant
-hi def link mlldSectionPath    String
-hi def link mlldSectionSep     Delimiter
-hi def link mlldSectionName    Title
-hi def link mlldAsKeyword      Keyword
-hi def link mlldSectionNewName String
-hi def link mlldObject         Structure
-hi def link mlldArray          Structure
-hi def link mlldObjectKey      Type
-hi def link mlldNumber         Number
-hi def link mlldBoolean        Boolean
-hi def link mlldNull           Constant
-hi def link mlldCodeBlock      String
-hi def link mlldCodeLang       Type
-hi def link mlldFrom           Keyword
-hi def link mlldImportArgs     Identifier
-hi def link mlldAddSection     String
-hi def link mlldAddTemplate    Function
-hi def link mlldAddTemplateCall Function
-hi def link mlldFieldAccess    Type
-
-" Embedded markdown
-syn include @markdown syntax/markdown.vim
-syn region mlldMarkdown start="\%^" end="@\|>>\|$" contains=@markdown,mlldDirective,mlldComment
+" Define highlighting
+hi def link mlldDirective Keyword
+hi def link mlldLanguage Type
+hi def link mlldComment Comment
+hi def link mlldReservedVar Constant
+hi def link mlldVariable Identifier
+hi def link mlldFieldAccess Special
+hi def link mlldTemplate String
+hi def link mlldTemplateVar Special
+hi def link mlldCommand String
+hi def link mlldPath String
+hi def link mlldURL Underlined
+hi def link mlldString String
+hi def link mlldOperator Operator
+hi def link mlldNumber Number
+hi def link mlldBoolean Boolean
+hi def link mlldNull Constant
 
 let b:current_syntax = "mlld"

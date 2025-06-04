@@ -1,557 +1,98 @@
 {
-  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "mlld",
+  "name": "Mlld",
   "scopeName": "source.mlld",
+  "fileTypes": [
+    "mlld",
+    "mld"
+  ],
   "patterns": [
     {
-      "include": "#comments"
+      "name": "keyword.control.directive.mlld",
+      "match": "@(data|text|run|add|path|import|exec|when|output)\\b"
     },
     {
-      "include": "#directives"
+      "name": "comment.line.double-slash.mlld",
+      "match": ">>.*$"
     },
     {
-      "include": "#markdown"
+      "name": "keyword.other.language.mlld",
+      "match": "\\b(javascript|js|python|py|bash|sh)\\b"
+    },
+    {
+      "name": "string.template.mlld",
+      "begin": "\\[\\[",
+      "end": "\\]\\]",
+      "patterns": [
+        {
+          "name": "variable.template.mlld",
+          "match": "\\{\\{[^}]+\\}\\}"
+        }
+      ]
+    },
+    {
+      "name": "meta.command.mlld",
+      "begin": "\\[\\(",
+      "end": "\\)\\]",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.command.begin.mlld"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.command.end.mlld"
+        }
+      },
+      "contentName": "string.unquoted.command.mlld",
+      "patterns": [
+        {
+          "name": "variable.other.mlld",
+          "match": "@\\w+"
+        }
+      ]
+    },
+    {
+      "name": "meta.path.mlld",
+      "begin": "\\[",
+      "end": "\\]",
+      "patterns": [
+        {
+          "name": "markup.underline.link.mlld",
+          "match": "https?://[^\\]]+"
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.double.mlld",
+      "match": "\"[^\"]*\""
+    },
+    {
+      "name": "variable.language.reserved.mlld",
+      "match": "@(INPUT|TIME|PROJECTPATH)\\b"
+    },
+    {
+      "name": "variable.other.mlld",
+      "match": "@\\w+"
+    },
+    {
+      "name": "variable.other.member.mlld",
+      "match": "\\.(\\w+|\\d+)"
+    },
+    {
+      "name": "keyword.operator.mlld",
+      "match": "\\b(from|as|foreach|with|to)\\b|="
+    },
+    {
+      "name": "constant.numeric.mlld",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    {
+      "name": "constant.language.boolean.mlld",
+      "match": "\\b(true|false)\\b"
+    },
+    {
+      "name": "constant.language.null.mlld",
+      "match": "\\bnull\\b"
     }
-  ],
-  "repository": {
-    "comments": {
-      "patterns": [
-        {
-          "name": "comment.line.double-angle.mlld",
-          "match": "^\\s*(>>).*$",
-          "captures": {
-            "1": {
-              "name": "punctuation.definition.comment.mlld"
-            }
-          }
-        }
-      ]
-    },
-    "directives": {
-      "patterns": [
-        {
-          "include": "#text-directive"
-        },
-        {
-          "include": "#data-directive"
-        },
-        {
-          "include": "#path-directive"
-        },
-        {
-          "include": "#run-directive"
-        },
-        {
-          "include": "#exec-directive"
-        },
-        {
-          "include": "#add-directive"
-        },
-        {
-          "include": "#import-directive"
-        }
-      ]
-    },
-    "text-directive": {
-      "patterns": [
-        {
-          "name": "meta.directive.text.mlld",
-          "begin": "(@text)\\s+(\\w+)\\s*(=)",
-          "beginCaptures": {
-            "1": {
-              "name": "keyword.control.directive.text.mlld"
-            },
-            "2": {
-              "name": "variable.other.mlld"
-            },
-            "3": {
-              "name": "keyword.operator.assignment.mlld"
-            }
-          },
-          "end": "(?=^(?!\\s)|^\\s*@|^\\s*>>)",
-          "patterns": [
-            {
-              "include": "#text-value"
-            }
-          ]
-        }
-      ]
-    },
-    "data-directive": {
-      "patterns": [
-        {
-          "name": "meta.directive.data.mlld",
-          "begin": "(@data)\\s+([\\w\\.]+)\\s*(=)",
-          "beginCaptures": {
-            "1": {
-              "name": "keyword.control.directive.data.mlld"
-            },
-            "2": {
-              "name": "variable.other.mlld"
-            },
-            "3": {
-              "name": "keyword.operator.assignment.mlld"
-            }
-          },
-          "end": "(?=^(?!\\s)|^\\s*@|^\\s*>>)",
-          "patterns": [
-            {
-              "include": "#data-value"
-            }
-          ]
-        }
-      ]
-    },
-    "path-directive": {
-      "patterns": [
-        {
-          "name": "meta.directive.path.mlld",
-          "match": "(@path)\\s+(\\w+)\\s*(=)\\s*(.+)$",
-          "captures": {
-            "1": {
-              "name": "keyword.control.directive.path.mlld"
-            },
-            "2": {
-              "name": "variable.other.mlld"
-            },
-            "3": {
-              "name": "keyword.operator.assignment.mlld"
-            },
-            "4": {
-              "name": "string.unquoted.path.mlld"
-            }
-          }
-        }
-      ]
-    },
-    "run-directive": {
-      "patterns": [
-        {
-          "name": "meta.directive.run.mlld",
-          "begin": "(@run)\\s+(\\w+)\\s*(=)",
-          "beginCaptures": {
-            "1": {
-              "name": "keyword.control.directive.run.mlld"
-            },
-            "2": {
-              "name": "variable.other.mlld"
-            },
-            "3": {
-              "name": "keyword.operator.assignment.mlld"
-            }
-          },
-          "end": "(?=^(?!\\s)|^\\s*@|^\\s*>>)",
-          "patterns": [
-            {
-              "include": "#code-block"
-            }
-          ]
-        }
-      ]
-    },
-    "exec-directive": {
-      "patterns": [
-        {
-          "name": "meta.directive.exec.mlld",
-          "begin": "(@exec)\\s+(\\w+)\\s*(=)",
-          "beginCaptures": {
-            "1": {
-              "name": "keyword.control.directive.exec.mlld"
-            },
-            "2": {
-              "name": "variable.other.mlld"
-            },
-            "3": {
-              "name": "keyword.operator.assignment.mlld"
-            }
-          },
-          "end": "(?=^(?!\\s)|^\\s*@|^\\s*>>)",
-          "patterns": [
-            {
-              "include": "#code-block"
-            }
-          ]
-        }
-      ]
-    },
-    "add-directive": {
-      "patterns": [
-        {
-          "name": "meta.directive.add.template.mlld",
-          "begin": "(@add)\\s+(template)\\s+(\\w+)\\s*(\\(([^)]*)\\))?",
-          "beginCaptures": {
-            "1": {
-              "name": "keyword.control.directive.add.mlld"
-            },
-            "2": {
-              "name": "keyword.other.template.mlld"
-            },
-            "3": {
-              "name": "entity.name.function.mlld"
-            },
-            "5": {
-              "name": "variable.parameter.mlld"
-            }
-          },
-          "end": "(?=^(?!\\s)|^\\s*@|^\\s*>>)",
-          "patterns": [
-            {
-              "include": "#template-content"
-            }
-          ]
-        },
-        {
-          "name": "meta.directive.add.section.mlld",
-          "match": "(@add)\\s+\"([^\"]+)\"\\s+(from)\\s+\\[([^\\]]+)\\]",
-          "captures": {
-            "1": {
-              "name": "keyword.control.directive.add.mlld"
-            },
-            "2": {
-              "name": "string.quoted.double.section-name.mlld"
-            },
-            "3": {
-              "name": "keyword.other.from.mlld"
-            },
-            "4": {
-              "name": "string.unquoted.path.mlld"
-            }
-          }
-        },
-        {
-          "name": "meta.directive.add.path.mlld",
-          "match": "(@add)\\s+\\[([^\\]]+)\\]",
-          "captures": {
-            "1": {
-              "name": "keyword.control.directive.add.mlld"
-            },
-            "2": {
-              "name": "string.unquoted.path.mlld"
-            }
-          }
-        },
-        {
-          "name": "meta.directive.add.template-invocation.mlld",
-          "match": "(@add)\\s+(\\w+)\\s*(\\(([^)]*)\\))?",
-          "captures": {
-            "1": {
-              "name": "keyword.control.directive.add.mlld"
-            },
-            "2": {
-              "name": "entity.name.function.mlld"
-            },
-            "4": {
-              "name": "variable.parameter.mlld"
-            }
-          }
-        }
-      ]
-    },
-    "import-directive": {
-      "patterns": [
-        {
-          "name": "meta.directive.import.all.mlld",
-          "match": "(@import)\\s+\\*\\s+(from)\\s+\\[([^\\]]+)\\]",
-          "captures": {
-            "1": {
-              "name": "keyword.control.directive.import.mlld"
-            },
-            "2": {
-              "name": "keyword.other.from.mlld"
-            },
-            "3": {
-              "name": "string.unquoted.path.mlld"
-            }
-          }
-        },
-        {
-          "name": "meta.directive.import.selected.mlld",
-          "match": "(@import)\\s+\\{([^}]+)\\}\\s+(from)\\s+\\[([^\\]]+)\\]",
-          "captures": {
-            "1": {
-              "name": "keyword.control.directive.import.mlld"
-            },
-            "2": {
-              "name": "variable.other.mlld"
-            },
-            "3": {
-              "name": "keyword.other.from.mlld"
-            },
-            "4": {
-              "name": "string.unquoted.path.mlld"
-            }
-          }
-        }
-      ]
-    },
-    "text-value": {
-      "patterns": [
-        {
-          "name": "string.quoted.double.mlld",
-          "begin": "\"",
-          "end": "\"",
-          "patterns": [
-            {
-              "name": "constant.character.escape.mlld",
-              "match": "\\\\."
-            }
-          ]
-        },
-        {
-          "name": "string.quoted.single.mlld",
-          "begin": "'",
-          "end": "'",
-          "patterns": [
-            {
-              "name": "constant.character.escape.mlld",
-              "match": "\\\\."
-            }
-          ]
-        },
-        {
-          "include": "#template-content"
-        },
-        {
-          "include": "#path-reference"
-        },
-        {
-          "include": "#run-reference"
-        },
-        {
-          "include": "#section-rename"
-        }
-      ]
-    },
-    "data-value": {
-      "patterns": [
-        {
-          "include": "#json-value"
-        }
-      ]
-    },
-    "json-value": {
-      "patterns": [
-        {
-          "name": "constant.language.mlld",
-          "match": "\\b(true|false|null)\\b"
-        },
-        {
-          "name": "constant.numeric.mlld",
-          "match": "-?\\b\\d+(\\.\\d+)?([eE][+-]?\\d+)?\\b"
-        },
-        {
-          "name": "string.quoted.double.json.mlld",
-          "begin": "\"",
-          "end": "\"",
-          "patterns": [
-            {
-              "name": "constant.character.escape.mlld",
-              "match": "\\\\."
-            }
-          ]
-        },
-        {
-          "begin": "\\{",
-          "end": "\\}",
-          "patterns": [
-            {
-              "include": "#json-object-content"
-            }
-          ]
-        },
-        {
-          "begin": "\\[",
-          "end": "\\]",
-          "patterns": [
-            {
-              "include": "#json-value"
-            }
-          ]
-        }
-      ]
-    },
-    "json-object-content": {
-      "patterns": [
-        {
-          "name": "meta.object-member.mlld",
-          "match": "(\"[^\"]*\")\\s*(:)",
-          "captures": {
-            "1": {
-              "name": "support.type.property-name.json.mlld"
-            },
-            "2": {
-              "name": "punctuation.separator.dictionary.key-value.json.mlld"
-            }
-          }
-        },
-        {
-          "include": "#json-value"
-        }
-      ]
-    },
-    "code-block": {
-      "patterns": [
-        {
-          "name": "meta.embedded.block.shell.mlld",
-          "begin": "```(bash|sh|shell)?\\s*$",
-          "beginCaptures": {
-            "0": {
-              "name": "punctuation.definition.code.mlld"
-            },
-            "1": {
-              "name": "constant.other.language.mlld"
-            }
-          },
-          "end": "^\\s*```\\s*$",
-          "endCaptures": {
-            "0": {
-              "name": "punctuation.definition.code.mlld"
-            }
-          },
-          "patterns": [
-            {
-              "include": "source.shell"
-            }
-          ]
-        },
-        {
-          "name": "meta.embedded.block.javascript.mlld",
-          "begin": "```(javascript|js|node)?\\s*$",
-          "beginCaptures": {
-            "0": {
-              "name": "punctuation.definition.code.mlld"
-            },
-            "1": {
-              "name": "constant.other.language.mlld"
-            }
-          },
-          "end": "^\\s*```\\s*$",
-          "endCaptures": {
-            "0": {
-              "name": "punctuation.definition.code.mlld"
-            }
-          },
-          "patterns": [
-            {
-              "include": "source.js"
-            }
-          ]
-        },
-        {
-          "name": "string.unquoted.code.mlld",
-          "match": ".+"
-        }
-      ]
-    },
-    "template-content": {
-      "patterns": [
-        {
-          "name": "meta.template.mlld",
-          "begin": "\\[\\[",
-          "beginCaptures": {
-            "0": {
-              "name": "punctuation.definition.template.begin.mlld"
-            }
-          },
-          "end": "\\]\\]",
-          "endCaptures": {
-            "0": {
-              "name": "punctuation.definition.template.end.mlld"
-            }
-          },
-          "patterns": [
-            {
-              "include": "#variable-interpolation"
-            }
-          ]
-        }
-      ]
-    },
-    "variable-interpolation": {
-      "patterns": [
-        {
-          "name": "variable.other.interpolation.mlld",
-          "match": "\\{\\{(\\w+)\\}\\}",
-          "captures": {
-            "1": {
-              "name": "variable.other.mlld"
-            }
-          }
-        }
-      ]
-    },
-    "path-reference": {
-      "patterns": [
-        {
-          "name": "meta.path-reference.section.mlld",
-          "begin": "\\[([^\\]#]+)(#)([^\\]]+)\\]",
-          "beginCaptures": {
-            "1": {
-              "name": "string.unquoted.path.mlld"
-            },
-            "2": {
-              "name": "punctuation.separator.section.mlld"
-            },
-            "3": {
-              "name": "entity.name.section.mlld"
-            }
-          },
-          "end": "(?=\\s*(?:as\\s+\"|$))",
-          "patterns": [
-            {
-              "include": "#section-rename"
-            }
-          ]
-        },
-        {
-          "name": "meta.path-reference.mlld",
-          "match": "\\[([^\\]]+)\\]",
-          "captures": {
-            "1": {
-              "name": "string.unquoted.path.mlld"
-            }
-          }
-        }
-      ]
-    },
-    "section-rename": {
-      "patterns": [
-        {
-          "name": "meta.section-rename.mlld",
-          "match": "(as)\\s+(\"[^\"]+\")",
-          "captures": {
-            "1": {
-              "name": "keyword.other.as.mlld"
-            },
-            "2": {
-              "name": "string.quoted.double.section-name.mlld"
-            }
-          }
-        }
-      ]
-    },
-    "run-reference": {
-      "patterns": [
-        {
-          "name": "meta.run-reference.mlld",
-          "match": "(@)(\\w+)",
-          "captures": {
-            "1": {
-              "name": "punctuation.definition.variable.mlld"
-            },
-            "2": {
-              "name": "variable.other.mlld"
-            }
-          }
-        }
-      ]
-    },
-    "markdown": {
-      "patterns": [
-        {
-          "include": "text.html.markdown"
-        }
-      ]
-    }
-  }
+  ]
 }

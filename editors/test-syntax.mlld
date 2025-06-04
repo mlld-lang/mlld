@@ -1,0 +1,65 @@
+>> Test file for syntax highlighting
+>> This is a comment
+
+@text greeting = "Hello, World!"
+@text name = "mlld"
+@text message = [[Welcome to {{name}}!]]
+
+@data config = {
+  "name": "test-app",
+  "version": "1.0.0",
+  "enabled": true,
+  "count": 42,
+  "ratio": 3.14,
+  "empty": null
+}
+
+@path root = @PROJECTPATH
+@path dataFile = ./data/config.json
+@path docs = [/usr/local/docs]
+
+>> Reserved variables should be highlighted differently
+@text time = @TIME
+@text input = @INPUT
+@text project = @PROJECTPATH
+
+>> Field access
+@text appName = @config.name
+@text firstItem = @items.0.value
+
+>> Operators
+@add @greeting foreach item in @items
+@run [echo "test"] with env = @config
+@import { utils } from "./lib.mld" as helpers
+
+@run output = [(echo "Hello from shell")]
+@run result = [(if [ -f "test.txt" ]; then echo "exists"; fi)]
+
+>> Language-specific code blocks
+@run javascript [(console.log("Hello from JavaScript"))]
+@run python [(print("Hello from Python"))]
+@run bash [(echo "Hello from bash")]
+@run js [(
+  const greeting = "Hello";
+  console.log(greeting);
+)]
+
+@exec calc = @add(1, 2)
+@exec jsResult = ```javascript
+const sum = [1, 2, 3].reduce((a, b) => a + b, 0);
+return sum;
+```
+
+@add template greet(name)
+Hello {{name}}! Welcome to {{project}}.
+
+@add [examples/intro.md]
+@add "Installation" from [docs/setup.md]
+
+@import * from [config.mld]
+@import {apiKey, dbUrl} from [secrets.mld]
+
+@when @config.enabled
+  @text status = "Active"
+
+@output result to [output.txt]

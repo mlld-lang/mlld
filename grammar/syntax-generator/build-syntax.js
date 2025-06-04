@@ -17,12 +17,17 @@ class MlldSyntaxGenerator {
     this.patterns = {
       directive: `@(${this.directives.join('|')})\\b`,
       variable: '@\\w+',
+      reservedVariable: '@(INPUT|TIME|PROJECTPATH)\\b',
+      fieldAccess: '\\.(\\w+|\\d+)',
       templateBlock: '\\[\\[([^\\]\\]]|\\](?!\\]))*\\]\\]',
       templateVar: '\\{\\{[^}]+\\}\\}',
       pathBrackets: '\\[[^\\]]+\\]',
+      commandBrackets: '\\[\\(([^\\)]|\\)(?!\\]))*\\)\\]',
+      languageKeyword: '\\b(javascript|js|python|py|bash|sh)\\b',
       string: '"[^"]*"',
       comment: '>>.*$',
-      operators: '\\b(from|as)\\b|=',
+      operators: '\\b(from|as|foreach|with|to)\\b|=',
+      codeBlockDelimiter: '```\\w*',
       number: '\\b\\d+(\\.\\d+)?\\b',
       boolean: '\\b(true|false)\\b',
       null: '\\bnull\\b'
@@ -35,11 +40,22 @@ class MlldSyntaxGenerator {
       const grammar = fs.readFileSync(grammarPath, 'utf8');
       
       // Look for ReservedDirective rule
-      const reservedMatch = grammar.match(/ReservedDirective[^=]*=([^$]+?)(?=\n\n|\n\/\/|\ntext|\nexport|$)/s);
+      const reservedMatch = grammar.match(/ReservedDirective[^=]*=([^$]+?)$/s);
       if (reservedMatch) {
         const directiveMatches = reservedMatch[1].match(/"@(\w+)"/g);
         if (directiveMatches) {
-          return directiveMatches.map(d => d.replace(/["@]/g, ''));
+          // Also check for @output in directives folder
+          const directives = directiveMatches.map(d => d.replace(/["@]/g, ''));
+          
+          // Check if output.peggy exists
+          const outputGrammarPath = path.join(__dirname, '../directives/output.peggy');
+          if (fs.existsSync(outputGrammarPath)) {
+            if (!directives.includes('output')) {
+              directives.push('output');
+            }
+          }
+          
+          return directives;
         }
       }
     } catch (err) {
@@ -48,12 +64,14 @@ class MlldSyntaxGenerator {
     }
     
     // Fallback to known list (only existing directives)
-    return ['text', 'data', 'run', 'add', 'path', 'import', 'exec'];
+    return ['text', 'data', 'run', 'add', 'path', 'import', 'exec', 'when', 'output'];
   }
 
   generatePrism() {
     const prismLang = `// Auto-generated Prism.js language definition for Mlld
 // Generated from grammar at ${new Date().toISOString()}
+
+const Prism = require('prismjs');
 
 Prism.languages.mlld = {
   'comment': {
@@ -93,9 +111,17 @@ Prism.languages.mlld = {
     pattern: /${this.patterns.string}/,
     greedy: true
   },
+  'reserved-variable': {
+    pattern: /${this.patterns.reservedVariable}/,
+    alias: 'builtin'
+  },
   'variable': {
     pattern: /${this.patterns.variable}/,
     alias: 'variable'
+  },
+  'field-access': {
+    pattern: /${this.patterns.fieldAccess}/,
+    alias: 'property'
   },
   'operator': /${this.patterns.operators}/,
   'number': /${this.patterns.number}/,
@@ -162,6 +188,10 @@ Prism.languages.mld = Prism.languages.mlld;
         match: this.patterns.comment
       },
       {
+        name: 'keyword.other.language.mlld',
+        match: this.patterns.languageKeyword
+      },
+      {
         name: 'string.template.mlld',
         begin: '\\[\\[',
         end: '\\]\\]',
@@ -169,6 +199,25 @@ Prism.languages.mld = Prism.languages.mlld;
           {
             name: 'variable.template.mlld',
             match: this.patterns.templateVar
+          }
+        ]
+      },
+      {
+        // Command brackets [(...)], should come before path brackets
+        name: 'meta.command.mlld',
+        begin: '\\[\\(',
+        end: '\\)\\]',
+        beginCaptures: {
+          0: { name: 'punctuation.definition.command.begin.mlld' }
+        },
+        endCaptures: {
+          0: { name: 'punctuation.definition.command.end.mlld' }
+        },
+        contentName: 'string.unquoted.command.mlld',
+        patterns: [
+          {
+            name: 'variable.other.mlld',
+            match: this.patterns.variable
           }
         ]
       },
@@ -188,8 +237,16 @@ Prism.languages.mld = Prism.languages.mlld;
         match: this.patterns.string
       },
       {
+        name: 'variable.language.reserved.mlld',
+        match: this.patterns.reservedVariable
+      },
+      {
         name: 'variable.other.mlld',
         match: this.patterns.variable
+      },
+      {
+        name: 'variable.other.member.mlld',
+        match: this.patterns.fieldAccess
       },
       {
         name: 'keyword.operator.mlld',
@@ -223,15 +280,27 @@ endif
 " Keywords (directives)
 syn keyword mlldDirective ${this.directives.map(d => '@' + d).join(' ')}
 
+" Language keywords
+syn keyword mlldLanguage javascript js python py bash sh
+
 " Comments
 syn match mlldComment ">>.*$"
+
+" Reserved variables
+syn match mlldReservedVar "@\\(INPUT\\|TIME\\|PROJECTPATH\\)\\>"
 
 " Variables
 syn match mlldVariable "@\\w\\+"
 
+" Field access
+syn match mlldFieldAccess "\\.\\(\\w\\+\\|\\d\\+\\)"
+
 " Template blocks
 syn region mlldTemplate start="\\[\\[" end="\\]\\]" contains=mlldTemplateVar
 syn match mlldTemplateVar "{{[^}]\\+}}" contained
+
+" Command brackets - must come before path brackets
+syn region mlldCommand start="\\[(" end=")\\]" contains=mlldVariable
 
 " Paths/URLs
 syn region mlldPath start="\\[" end="\\]" contains=mlldURL
@@ -241,7 +310,7 @@ syn match mlldURL "https\\?://[^\\]]*" contained
 syn region mlldString start='"' end='"'
 
 " Operators
-syn match mlldOperator "\\(=\\|from\\|as\\)"
+syn match mlldOperator "\\(=\\|from\\|as\\|foreach\\|with\\|to\\)"
 
 " Numbers
 syn match mlldNumber "\\<\\d\\+\\(\\.\\d\\+\\)\\?\\>"
@@ -254,10 +323,14 @@ syn keyword mlldNull null
 
 " Define highlighting
 hi def link mlldDirective Keyword
+hi def link mlldLanguage Type
 hi def link mlldComment Comment
+hi def link mlldReservedVar Constant
 hi def link mlldVariable Identifier
+hi def link mlldFieldAccess Special
 hi def link mlldTemplate String
 hi def link mlldTemplateVar Special
+hi def link mlldCommand String
 hi def link mlldPath String
 hi def link mlldURL Underlined
 hi def link mlldString String
@@ -279,7 +352,7 @@ let b:current_syntax = "mlld"
 
 " Match Mlld directives at start of line in Markdown
 syn match markdownMlldDirective "^@\\(${this.directives.join('\\|')}\\)\\>" nextgroup=markdownMlldLine
-syn region markdownMlldLine start="." end="$" contained contains=mlldVariable,mlldTemplate,mlldPath,mlldString,mlldOperator,mlldNumber,mlldBoolean,mlldNull
+syn region markdownMlldLine start="." end="$" contained contains=mlldReservedVar,mlldVariable,mlldFieldAccess,mlldTemplate,mlldPath,mlldString,mlldOperator,mlldNumber,mlldBoolean,mlldNull
 
 " Link to Mlld syntax groups
 hi def link markdownMlldDirective mlldDirective
@@ -290,7 +363,7 @@ hi def link markdownMlldDirective mlldDirective
 
   generate() {
     const outputDir = path.join(__dirname, '../generated');
-    const rootDir = path.join(__dirname, '../../..');
+    const rootDir = path.join(__dirname, '../..');
     
     // Generate Prism.js
     const prismPath = path.join(outputDir, 'prism-mlld.js');

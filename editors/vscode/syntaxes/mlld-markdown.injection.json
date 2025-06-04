@@ -3,7 +3,7 @@
   "injectionSelector": "text.html.markdown, text.html.markdown.source",
   "patterns": [
     {
-      "begin": "^(@(text|data|run|add|path|import|exec|define|embed|url)\\b)",
+      "begin": "^(@(data|text|run|add|path|import|exec|when|output)\\b)",
       "end": "$",
       "name": "meta.embedded.block.mlld",
       "beginCaptures": {
@@ -17,6 +17,10 @@
           "match": ">>.*$"
         },
         {
+          "name": "keyword.other.language.mlld",
+          "match": "\\b(javascript|js|python|py|bash|sh)\\b"
+        },
+        {
           "name": "string.template.mlld",
           "begin": "\\[\\[",
           "end": "\\]\\]",
@@ -24,6 +28,28 @@
             {
               "name": "variable.template.mlld",
               "match": "\\{\\{[^}]+\\}\\}"
+            }
+          ]
+        },
+        {
+          "name": "meta.command.mlld",
+          "begin": "\\[\\(",
+          "end": "\\)\\]",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.command.begin.mlld"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.command.end.mlld"
+            }
+          },
+          "contentName": "string.unquoted.command.mlld",
+          "patterns": [
+            {
+              "name": "variable.other.mlld",
+              "match": "@\\w+"
             }
           ]
         },
@@ -43,12 +69,20 @@
           "match": "\"[^\"]*\""
         },
         {
+          "name": "variable.language.reserved.mlld",
+          "match": "@(INPUT|TIME|PROJECTPATH)\\b"
+        },
+        {
           "name": "variable.other.mlld",
           "match": "@\\w+"
         },
         {
+          "name": "variable.other.member.mlld",
+          "match": "\\.(\\w+|\\d+)"
+        },
+        {
           "name": "keyword.operator.mlld",
-          "match": "\\b(from|as)\\b|="
+          "match": "\\b(from|as|foreach|with|to)\\b|="
         },
         {
           "name": "constant.numeric.mlld",
