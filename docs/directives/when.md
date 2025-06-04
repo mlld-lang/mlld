@@ -1,284 +1,445 @@
 # @when Directive
 
-The `@when` directive provides conditional execution in mlld. It's designed to be extremely limited but powerful - conditions must be predefined commands that return truthy or falsy values, making conditional logic explicit and testable.
+The `@when` directive provides conditional execution in mlld. It evaluates conditions and executes actions based on truthiness.
 
 ## Overview
 
-The `@when` directive evaluates conditions and executes actions based on the results. Unlike traditional programming languages, mlld requires conditions to be predefined using `@exec`, which makes the conditional logic more declarative and easier to test.
+The `@when` directive offers flexible conditional logic with multiple evaluation strategies. Conditions can be variables, command executions, or any expression that produces a truthy/falsy value.
 
 ## Syntax Forms
 
-### 1. Single-Line Form
+### 1. Simple Form (One-line)
 
-The simplest form evaluates a condition and executes an action if true:
+The simplest form evaluates a single condition and executes an action if true:
 
 ```mlld
-@when <condition> => <action>
+@when @condition => @add "This appears if condition is truthy"
 ```
 
 Example:
 ```mlld
-@exec is_production() = @run [(echo "$NODE_ENV" | grep -q "production" && echo "true")]
-@when @is_production() => @add "⚠️  Running in production mode!"
+@text is_production = "true"
+@when @is_production => @add "⚠️  Running in production mode!"
 ```
 
-### 2. Block Form with Condition-Action Pairs
+### 2. Block Form with Modifiers
 
-The block form allows matching multiple conditions with their corresponding actions:
+The block form allows multiple conditions with different evaluation strategies:
 
-```mlld
-@when <variable> first: [
-  <condition1> => <action1>
-  <condition2> => <action2>
-  <condition3> => <action3>
-]
-```
+#### `first:` - Execute First Match Only
 
-This form evaluates conditions in order and executes the action for the **first** matching condition. The optional variable binding captures the condition's output.
-
-Example:
-```mlld
-@exec get_os() = @run [(uname -s)]
-@when @os first: [
-  @run [(echo "{{os}}" | grep -q "Darwin")] => @text platform = "macOS"
-  @run [(echo "{{os}}" | grep -q "Linux")] => @text platform = "Linux"
-  @run [(echo "{{os}}" | grep -q "MINGW\|MSYS")] => @text platform = "Windows"
-  @run [(echo "true")] => @text platform = "Unknown"
-]
-```
-
-### 3. Block Form with Combined Conditions
-
-The block form also supports `all` and `any` modifiers for combining multiple conditions:
-
-#### `any` Modifier
-Executes the block action if **any** condition is true:
+Evaluates conditions in order and executes only the first matching action:
 
 ```mlld
-@when any: [
-  <condition1>
-  <condition2>
-  <condition3>
-] => <action>
-```
-
-Example:
-```mlld
-@exec has_npm() = @run [(command -v npm >/dev/null && echo "true")]
-@exec has_yarn() = @run [(command -v yarn >/dev/null && echo "true")]
-@exec has_pnpm() = @run [(command -v pnpm >/dev/null && echo "true")]
-
-@when any: [
-  @has_npm()
-  @has_yarn()
-  @has_pnpm()
-] => @add "✓ Package manager found"
-```
-
-#### `all` Modifier
-Executes actions for **all** conditions that are true:
-
-```mlld
-@when all: [
-  <condition1> => <action1>
-  <condition2> => <action2>
-  <condition3> => <action3>
+@when @variable first: [
+  @condition1 => @add "Action 1"
+  @condition2 => @add "Action 2"
+  @condition3 => @add "Action 3"
 ]
 ```
 
 Example:
 ```mlld
-@data required_files = ["package.json", "README.md", "LICENSE"]
-@exec check_file(name) = @run [(test -f "{{name}}" && echo "✓ {{name}}")]
-
-@when all: [
-  foreach @check_file(@required_files)
-] => @add "All required files present"
+@text env = "production"
+@when @env first: [
+  @env == "development" => @add "Dev mode"
+  @env == "production" => @add "Prod mode"  
+  @env == "test" => @add "Test mode"
+  "true" => @add "Unknown mode"
+]
+# Output: Prod mode
 ```
 
-### 4. Nested @when Blocks
+#### `any:` - Execute if ANY Condition Matches
 
-You can nest @when directives for more complex conditional logic:
+Checks if any condition is true, then executes a single block action:
 
 ```mlld
-@exec is_ci() = @run [(test -n "$CI" && echo "true")]
-@exec is_main_branch() = @run [(git branch --show-current | grep -q "^main$" && echo "true")]
-
-@when @is_ci() => @when @is_main_branch() => @run [(
-  echo "Deploying from main branch in CI"
-  npm run deploy
-)]
+@when @variable any: [
+  @condition1
+  @condition2
+  @condition3
+] => @add "At least one condition matched"
 ```
 
-## Truthiness Model
+Example:
+```mlld
+@text is_admin = ""
+@text is_moderator = "true"
+@text is_verified = ""
 
-mlld uses a simple truthiness model for condition evaluation:
+@when @user any: [
+  @is_admin
+  @is_moderator
+  @is_verified
+] => @add "User has elevated privileges"
+# Output: User has elevated privileges
+```
+
+**Important**: `any:` does NOT support individual actions per condition. Use a block action only.
+
+#### `all:` - Two Different Behaviors
+
+##### With Block Action - ALL Must Match
+
+Executes the block action only if ALL conditions are true:
+
+```mlld
+@when @variable all: [
+  @condition1
+  @condition2
+  @condition3
+] => @add "All conditions are true"
+```
+
+Example:
+```mlld
+@text has_license = "true"
+@text is_active = "yes"
+@text is_paid = "1"
+
+@when @user all: [
+  @has_license
+  @is_active  
+  @is_paid
+] => @add "Full access granted"
+# Output: Full access granted
+```
+
+##### With Individual Actions - Execute All Matching
+
+Executes individual actions for each true condition (no ALL requirement):
+
+```mlld
+@when @variable all: [
+  @condition1 => @add "Action 1"
+  @condition2 => @add "Action 2"
+  @condition3 => @add "Action 3"
+]
+```
+
+Example:
+```mlld
+@text feature_chat = "enabled"
+@text feature_video = ""
+@text feature_screen = "true"
+
+@when @features all: [
+  @feature_chat => @add "Chat is enabled"
+  @feature_video => @add "Video is enabled"
+  @feature_screen => @add "Screen sharing is enabled"
+]
+# Output:
+# Chat is enabled
+# Screen sharing is enabled
+```
+
+### 3. Bare Form (No Modifier)
+
+The bare form without a modifier has two behaviors:
+
+#### With Individual Actions - Execute All Matching (Unique)
+
+This is unique to the bare form - it executes ALL matching conditions:
+
+```mlld
+@when @variable: [
+  @condition1 => @add "Action 1"
+  @condition2 => @add "Action 2"
+  @condition3 => @add "Action 3"
+]
+```
+
+Example:
+```mlld
+@text debug = "true"
+@text verbose = "yes"
+@text trace = ""
+
+@when @config: [
+  @debug => @add "Debug mode active"
+  @verbose => @add "Verbose logging enabled"
+  @trace => @add "Trace logging enabled"
+]
+# Output:
+# Debug mode active
+# Verbose logging enabled
+```
+
+Unlike `first:`, this executes all matching actions. Unlike `all:` with individual actions, this is the default behavior.
+
+#### With Block Action - Same as `all:`
+
+When using a block action, bare `@when` behaves like `all:`:
+
+```mlld
+@when @variable: [
+  @condition1
+  @condition2
+  @condition3
+] => @add "All conditions matched"
+```
+
+## Multi-line Examples
+
+All forms support multi-line formatting for better readability:
+
+```mlld
+# Complex condition checking with first:
+@exec get_request_type() = @run bash (
+  if [[ "$REQUEST_METHOD" == "GET" && "$REQUEST_PATH" == "/api/users" ]]; then
+    echo "list_users"
+  elif [[ "$REQUEST_METHOD" == "POST" && "$REQUEST_PATH" == "/api/users" ]]; then
+    echo "create_user"
+  elif [[ "$REQUEST_METHOD" == "DELETE" && "$REQUEST_PATH" =~ ^/api/users/[0-9]+$ ]]; then
+    echo "delete_user"
+  fi
+)
+
+@when @request_type first: [
+  @request_type == "list_users" => 
+    @add "Handling GET users request"
+  
+  @request_type == "create_user" => 
+    @add "Creating new user"
+  
+  @request_type == "delete_user" => 
+    @add "Deleting user"
+]
+
+# Multiple conditions with any:
+@text ip_blocked = ""
+@text rate_limit_exceeded = "true"
+@text invalid_token = ""
+
+@when @security any: [
+  @ip_blocked
+  @rate_limit_exceeded
+  @invalid_token
+] => @add "Access denied: Security policy violation"
+
+# Feature flags with bare form
+@text new_ui = "true"
+@text beta_features = "true"
+@text analytics = ""
+
+@when @flags: [
+  @new_ui => 
+    @add '''@import { NewHeader, NewFooter } from "./components/new"'''
+  
+  @beta_features => 
+    @add '''@import { BetaTools } from "./components/beta"'''
+  
+  @analytics => 
+    @add '''@import { Analytics } from "./services/analytics"'''
+]
+```
+
+## Command Execution in Conditions
+
+Conditions can use command execution results:
+
+```mlld
+@exec is_installed(cmd) = @run bash (command -v @cmd > /dev/null && echo "true" || echo "")
+
+@when @package_manager first: [
+  @is_installed("npm") => @run [npm install]
+  @is_installed("yarn") => @run [yarn install]
+  @is_installed("pnpm") => @run [pnpm install]
+  "true" => @add "No package manager found!"
+]
+```
+
+## Variable Binding
+
+The optional variable in block form captures the condition value:
+
+```mlld
+@text options = "verbose"
+
+@when @mode first: [
+  @options == "debug" => @add "Deep debugging: @mode"
+  @options == "verbose" => @add "Verbose mode: @mode"
+  @options => @add "Basic mode: @mode"
+]
+```
+
+## Truthiness Rules
+
+Values are considered truthy/falsy as follows:
 
 **Falsy values:**
-- Empty string (`""`)
-- String `"false"` (case-insensitive)
-- String `"0"`
-- Command exit code non-zero
+- `""` (empty string)
+- `"false"` (case-insensitive)
+- `"0"`
 - `null` or `undefined`
+- `[]` (empty array)
+- `{}` (empty object)
+- Command with non-zero exit code
+- Command with empty stdout
 
 **Truthy values:**
 - Any non-empty string (except "false" and "0")
-- Command exit code 0 with non-empty output
+- Numbers (except 0)
+- Arrays with elements
+- Objects with properties
+- Command with exit code 0 and non-empty stdout
 
 ## Common Patterns
 
-### File Existence Checks
+### Switch-like Behavior
 ```mlld
-@exec config_exists() = @run [(test -f config.json && echo "true")]
-@when @config_exists() => @add @path [config.json]
+@text command = "build"
+
+@when @command first: [
+  @command == "build" => @run [npm run build]
+  @command == "test" => @run [npm test]
+  @command == "deploy" => @run [npm run deploy]
+  "true" => @add "Unknown command: @command"
+]
 ```
 
-### Environment Detection
+### Permission Checking
 ```mlld
-@exec is_dev() = @run [(test "$NODE_ENV" = "development" && echo "true")]
-@when @is_dev() => @run [(npm run dev)]
+@data user = { "role": "editor", "id": 123 }
+@data resource = { "owner_id": 123 }
+
+@when @user any: [
+  @user.role == "admin"
+  @user.role == "owner"
+  @user.id == @resource.owner_id
+] => @add "Edit allowed"
 ```
 
-### Feature Flags
+### Progressive Enhancement
 ```mlld
-@exec feature_enabled(name) = @run [(
-  grep -q "{{name}}: true" features.json && echo "true"
-)]
-@when @feature_enabled("dark-mode") => @add "🌙 Dark mode enabled"
+@data browser = {
+  "supports": {
+    "webgl2": true,
+    "webgl": true,
+    "canvas": true
+  }
+}
+
+@when @browser: [
+  @browser.supports.webgl2 => @add '''@import "./3d-viewer"'''
+  @browser.supports.webgl => @add '''@import "./basic-3d"'''
+  @browser.supports.canvas => @add '''@import "./2d-viewer"'''
+]
 ```
 
-### Platform-Specific Logic
+## Error Messages
+
+The following patterns will produce helpful error messages:
+
 ```mlld
-@exec is_mac() = @run [(uname -s | grep -q "Darwin" && echo "true")]
-@exec is_linux() = @run [(uname -s | grep -q "Linux" && echo "true")]
+# ❌ Error: any: cannot have individual actions
+@when @var any: [
+  @condition1 => @add "Action 1"
+  @condition2 => @add "Action 2"
+]
 
-@when @is_mac() => @run [(brew install jq)]
-@when @is_linux() => @run [(apt-get install -y jq)]
-```
+# ❌ Error: all: cannot mix individual actions with block action
+@when @var all: [
+  @condition1 => @add "Action 1"
+  @condition2
+] => @add "Block action"
 
-### Validation Chains
-```mlld
-@exec has_node() = @run [(command -v node >/dev/null && echo "true")]
-@exec node_version_ok() = @run [(
-  node -v | grep -E "v(18|20|22)" >/dev/null && echo "true"
-)]
+# ✅ Correct: Use block action with any:
+@when @var any: [
+  @condition1
+  @condition2
+] => @add "Any condition matched"
 
-@when all: [
-  @has_node() => @add "✓ Node.js installed"
-  @node_version_ok() => @add "✓ Node.js version compatible"
+# ✅ Correct: Use either individual OR block with all:
+@when @var all: [
+  @condition1 => @add "Action 1"
+  @condition2 => @add "Action 2"
 ]
 ```
 
 ## Best Practices
 
-1. **Define Clear Conditions**: Use descriptive names for condition commands
-   ```mlld
-   @exec is_production() = @run [(...)]  # Good
-   @exec check() = @run [(...)]          # Too vague
-   ```
+1. **Choose the Right Modifier**:
+   - Use `first:` for switch-like behavior
+   - Use `any:` when you need to check if at least one condition is true
+   - Use `all:` with block action when ALL conditions must be true
+   - Use `all:` with individual actions to execute multiple independent checks
+   - Use bare form for maximum flexibility
 
 2. **Keep Conditions Simple**: Each condition should check one thing
    ```mlld
-   @exec has_git() = @run [(command -v git >/dev/null && echo "true")]
-   @exec is_git_repo() = @run [(git rev-parse --git-dir >/dev/null 2>&1 && echo "true")]
+   @text has_git = "true"
+   @text is_git_repo = "true"
+   
+   # Good: Separate conditions
+   @when @repo all: [
+     @has_git => @add "Git installed"
+     @is_git_repo => @add "In git repository"
+   ]
    ```
 
-3. **Provide Fallbacks**: Use `first` modifier with a catch-all
+3. **Provide Fallbacks**: Use `first:` with a catch-all
    ```mlld
    @when @result first: [
-     @condition1() => @action1
-     @condition2() => @action2
-     @run [(echo "true")] => @text result = "default"
+     @specific_condition => @add "Specific case"
+     @another_condition => @add "Another case"
+     "true" => @add "Default case"
    ]
    ```
 
-4. **Use Variable Binding**: Capture condition output for use in actions
+4. **Use Variable Binding**: Capture condition values for debugging
    ```mlld
-   @exec get_version() = @run [(cat VERSION)]
-   @when @version first: [
-     @run [(echo "{{version}}" | grep -q "^1\.")] => @text major = "1"
-     @run [(echo "{{version}}" | grep -q "^2\.")] => @text major = "2"
+   @text version = "2.1.0"
+   @when @v first: [
+     @version == "1.0.0" => @add "Legacy version: @v"
+     @version == "2.0.0" => @add "Current version: @v"
+     "true" => @add "Unknown version: @v"
    ]
    ```
 
-## Limitations
+## Integration with Other Directives
 
-1. **No Direct Commands**: Conditions must be predefined with @exec
-   ```mlld
-   # NOT SUPPORTED
-   @when @run [(test -f file.txt)] => @add "Found"
-   
-   # CORRECT
-   @exec file_exists() = @run [(test -f file.txt && echo "true")]
-   @when @file_exists() => @add "Found"
-   ```
+### With @exec Commands
+```mlld
+@exec is_ci() = @run bash (test -n "$CI" && echo "true" || echo "")
+@exec is_main_branch() = @run bash (git branch --show-current | grep -q "^main$" && echo "true" || echo "")
 
-2. **No Complex Expressions**: No boolean operators (AND, OR, NOT) in conditions
-   ```mlld
-   # Use 'all' modifier instead of AND
-   @when all: [
-     @condition1()
-     @condition2()
-   ] => @action
-   
-   # Use 'any' modifier instead of OR
-   @when any: [
-     @condition1()
-     @condition2()
-   ] => @action
-   ```
-
-3. **Sequential Evaluation**: Conditions are evaluated in order, not in parallel
-
-## Error Handling
-
-The `@when` directive handles errors gracefully:
-
-- Failed commands (non-zero exit) are treated as falsy
-- Missing commands throw clear errors
-- The `any` modifier logs warnings for failed conditions but continues
-- The `all` modifier stops on first error
-
-## Integration with Other Features
+@when @ci_state all: [
+  @is_ci() => @add "Running in CI"
+  @is_main_branch() => @add "On main branch"
+]
+```
 
 ### With @import
 ```mlld
-@import { is_production } from "./checks.mld"
-@when @is_production() => @import { prod_config } from "./config.mld"
-```
-
-### With foreach
-```mlld
-@data services = ["api", "web", "worker"]
-@exec service_running(name) = @run [(
-  systemctl is-active "{{name}}" >/dev/null && echo "{{name}} ✓"
-)]
-
-@when all: [
-  foreach @service_running(@services)
+@text environment = "production"
+@when @environment first: [
+  @environment == "development" => @import { dev_config } from "./config/dev.mld"
+  @environment == "production" => @import { prod_config } from "./config/prod.mld"
+  @environment == "test" => @import { test_config } from "./config/test.mld"
 ]
 ```
 
 ### With Templates
 ```mlld
-@exec get_env() = @run [(echo "$ENVIRONMENT")]
-@text message = [[
-  Running in {{env}} environment
-]]
+@text user_type = "premium"
+@text greeting[[type]] = [[Welcome, {{type}} user!]]
 
-@when @env first: [
-  @run [(echo "{{env}}" | grep -q "prod")] => @add "⚠️  {{message}}"
-  @run [(echo "true")] => @add "ℹ️  {{message}}"
+@when @user_type first: [
+  @user_type == "premium" => @add @greeting[[@user_type]]
+  @user_type == "basic" => @add "Welcome!"
+  "true" => @add "Hello, guest!"
 ]
 ```
 
 ## Comparison with Traditional Conditionals
 
 Unlike traditional if/else statements, mlld's @when:
-- Requires explicit condition definitions
-- Makes conditions testable and reusable
+- Supports multiple evaluation strategies (first, any, all, bare)
+- Makes conditions declarative and testable
 - Provides clear separation between condition logic and actions
-- Supports pattern matching with the `first` modifier
-- Enables declarative conditional logic
+- Enables pattern matching with the `first:` modifier
+- Allows parallel condition checking with bare form
 
-This design makes mlld scripts more maintainable and easier to debug, as all conditions are named and can be tested independently.
+This design makes mlld scripts more maintainable and easier to debug, as conditions are explicit and behavior is predictable.

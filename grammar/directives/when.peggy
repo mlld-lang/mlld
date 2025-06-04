@@ -59,18 +59,22 @@ WhenSimpleForm
 
 WhenBlockForm
   = DirectiveContext "@when" _ variable:("@" id:BaseIdentifier { return id; })? _ 
-    modifier:WhenModifier _ ":" _ "[" _ conditions:WhenConditionList _ "]" 
+    modifier:WhenModifier? _ ":" _ "[" _ conditions:WhenConditionList _ "]" 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
       helpers.debug('WhenBlockForm matched', { variable, modifier, conditions, action });
       
       const values = {
-        conditions: conditions,
-        modifier: [helpers.createNode(NodeType.Text, { 
+        conditions: conditions
+      };
+      
+      // Only add modifier if present
+      if (modifier) {
+        values.modifier = [helpers.createNode(NodeType.Text, { 
           content: modifier, 
           location: location() 
-        })]
-      };
+        })];
+      }
       
       if (variable) {
         values.variable = [helpers.createVariableReferenceNode('identifier', {
@@ -105,7 +109,7 @@ WhenBlockForm
         values,
         raw,
         {
-          modifier: modifier,
+          modifier: modifier || 'default',  // Use 'default' when no modifier specified
           conditionCount: conditions.length,
           hasVariable: !!variable
         },

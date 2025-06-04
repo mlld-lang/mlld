@@ -74,25 +74,41 @@ async function evaluateWhenBlock(
   const childEnv = env.createChild();
   
   try {
+    let result: EvalResult;
+    
     switch (modifier) {
       case 'first':
-        return await evaluateFirstMatch(conditions, childEnv, variableName);
+        result = await evaluateFirstMatch(conditions, childEnv, variableName);
+        break;
         
       case 'all':
-        return await evaluateAllMatches(conditions, childEnv, variableName);
+        result = await evaluateAllMatches(conditions, childEnv, variableName, node.values.action);
+        break;
         
       case 'any':
-        return await evaluateAnyMatch(conditions, childEnv, variableName, node.values.action);
+        result = await evaluateAnyMatch(conditions, childEnv, variableName, node.values.action);
+        break;
+        
+      case 'default':
+        // Bare @when executes all matching conditions (like 'all' with individual actions)
+        result = await evaluateAllMatches(conditions, childEnv, variableName);
+        break;
         
       default:
         throw new MlldConditionError(
           `Invalid when modifier: ${modifier}`,
-          modifier as 'first' | 'all' | 'any',
+          modifier as 'first' | 'all' | 'any' | 'default',
           node.location
         );
     }
+    
+    // Merge child environment nodes back to parent
+    // This ensures output nodes created by actions are preserved
+    env.mergeChild(childEnv);
+    
+    return result;
   } finally {
-    // Child environment goes out of scope, no need to clean up variables
+    // Child environment goes out of scope
   }
 }
 
@@ -109,7 +125,10 @@ async function evaluateFirstMatch(
     
     if (conditionResult) {
       if (pair.action) {
-        return await evaluate(pair.action, env);
+        const result = await evaluate(pair.action, env);
+        // The action has already added its output nodes during evaluation
+        // Just return the result
+        return result;
       }
       return { value: '', env };
     }
@@ -119,13 +138,47 @@ async function evaluateFirstMatch(
 }
 
 /**
- * Evaluates conditions using 'all' modifier - executes all matching conditions
+ * Evaluates conditions using 'all' modifier
+ * If blockAction is provided, executes it only if ALL conditions are true
+ * Otherwise, executes individual actions for each true condition
  */
 async function evaluateAllMatches(
   conditions: WhenConditionPair[],
   env: Environment,
-  variableName?: string
+  variableName?: string,
+  blockAction?: BaseMlldNode[]
 ): Promise<EvalResult> {
+  // If we have a block action, check if ALL conditions are true first
+  if (blockAction) {
+    // Check for invalid syntax: all: with block action cannot have individual actions
+    if (conditions.some(pair => pair.action)) {
+      throw new MlldConditionError(
+        "Invalid @when syntax: 'all:' modifier cannot have individual actions for conditions when using a block action. Use either individual actions OR a block action after the conditions: @when all: [...] => @add \"action\"",
+        'all',
+        undefined
+      );
+    }
+    
+    let allMatch = true;
+    
+    for (const pair of conditions) {
+      const conditionResult = await evaluateCondition(pair.condition, env, variableName);
+      
+      if (!conditionResult) {
+        allMatch = false;
+        break;
+      }
+    }
+    
+    // Execute block action only if all conditions matched
+    if (allMatch) {
+      return await evaluate(blockAction, env);
+    }
+    
+    return { value: '', env };
+  }
+  
+  // Otherwise, execute individual actions for each true condition
   const results: string[] = [];
   
   for (const pair of conditions) {
@@ -151,6 +204,15 @@ async function evaluateAnyMatch(
   variableName?: string,
   blockAction?: BaseMlldNode[]
 ): Promise<EvalResult> {
+  // Check for invalid syntax: any: cannot have individual actions
+  if (conditions.some(pair => pair.action)) {
+    throw new MlldConditionError(
+      "Invalid @when syntax: 'any:' modifier cannot have individual actions for conditions. Use a block action after the conditions instead: @when any: [...] => @add \"action\"",
+      'any',
+      undefined
+    );
+  }
+  
   // First check if any condition is true
   let anyMatch = false;
   
