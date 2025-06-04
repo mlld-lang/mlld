@@ -260,36 +260,13 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           }
           throw new Error(`Unexpected URL in test: ${url}`);
         };
-      } else if (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed') {
-        // Mock fetch for URL tests
-        global.fetch = async (url: string) => {
-          if (url === 'https://raw.githubusercontent.com/example/repo/main/README.md') {
-            return {
-              ok: true,
-              text: async () => '# Example Project\n\nThis is the README content fetched from the URL.'
-            } as any;
-          } else if (url === 'https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md') {
-            return {
-              ok: true,
-              text: async () => '# Getting Started\n\nWelcome to our project! This guide will help you get up and running quickly.\n\n## Installation\n\nRun `npm install` to get started.\n'
-            } as any;
-          } else if (url === 'https://raw.githubusercontent.com/example/repo/main/config.mld') {
-            return {
-              ok: true,
-              text: async () => '@text greeting = "Hello from URL!"\n@data version = "2.0.0"\n@text author = "URL Import"'
-            } as any;
-          } else if (url === 'https://raw.githubusercontent.com/example/repo/main/remote-config.mld') {
-            return {
-              ok: true,
-              text: async () => '@text remoteValue = "Value from remote config"\n@data remoteData = { "loaded": true }'
-            } as any;
-          }
-          throw new Error(`Unexpected URL in test: ${url}`);
-        };
       }
       
       // Set up environment variables from fixture if specified  
       let originalEnvVars: Record<string, string | undefined> = {};
+      
+      // Save original fetch for restoration
+      const originalFetch = (global as any).fetch;
       
       try {
         // For path assignment tests, we need to set the correct basePath
@@ -303,7 +280,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         }
         
         // Enable URL support for URL tests and module resolution
-        const urlConfig = (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'modules-stdlib-basic') ? {
+        const urlConfig = (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed' || fixture.name === 'modules-stdlib-basic') ? {
           enabled: true,
           allowedProtocols: ['https'],
           allowedDomains: [],
@@ -317,6 +294,34 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             rules: []
           }
         } : undefined;
+        
+        // Set up fetch mock for URL tests (but not for modules-stdlib-basic which has its own mock)
+        if ((fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed') && fixture.name !== 'modules-stdlib-basic') {
+          global.fetch = async (url: string) => {
+            if (url === 'https://raw.githubusercontent.com/example/repo/main/README.md') {
+              return {
+                ok: true,
+                text: async () => '# Example Project\n\nThis is the README content fetched from the URL.'
+              } as any;
+            } else if (url === 'https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md') {
+              return {
+                ok: true,
+                text: async () => '# Getting Started\n\nWelcome to our project! This guide will help you get up and running quickly.\n\n## Installation\n\nRun `npm install` to get started.\n'
+              } as any;
+            } else if (url === 'https://raw.githubusercontent.com/example/repo/main/config.mld') {
+              return {
+                ok: true,
+                text: async () => '@text greeting = "Hello from URL!"\n@data version = "2.0.0"\n@text author = "URL Import"'
+              } as any;
+            } else if (url === 'https://raw.githubusercontent.com/example/repo/main/remote-config.mld') {
+              return {
+                ok: true,
+                text: async () => '@text remoteValue = "Value from remote config"\n@data remoteData = { "loaded": true }'
+              } as any;
+            }
+            throw new Error(`Unexpected URL in test: ${url}`);
+          };
+        }
         
         if (isErrorFixture) {
           // Prepare stdin content for stdin import tests
@@ -513,6 +518,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         if (fixture.name === 'reserved-time-variable' || fixture.name === 'reserved-time-variable-lowercase') {
           delete process.env.MLLD_MOCK_TIME;
         }
+        
+        // Restore original fetch
+        (global as any).fetch = originalFetch;
       }
     });
   });
