@@ -4,7 +4,7 @@
   "description": "Documentation site for Mlld",
   "scripts": {
     "dev": "node src/convertDocs.js && eleventy --serve",
-    "build": "node src/convertDocs.js && eleventy",
+    "build": "npm run clean && node src/convertDocs.js && eleventy",
     "clean": "rm -rf _site src/docs",
     "convert-docs": "node src/convertDocs.js"
   },
