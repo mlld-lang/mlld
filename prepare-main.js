@@ -7,6 +7,10 @@
  * by removing development-only files and directories.
  * 
  * Usage: npm run prepare-main
+ * 
+ * Note: If you have GitHub Actions configured, the auto-clean-main workflow
+ * will handle this automatically when you create a PR from dev to main.
+ * This script is useful for local testing or manual releases.
  */
 
 const fs = require('fs');
