@@ -2,6 +2,9 @@
 
 repo: github.com/mlld-lang/mlld
 
+## Style Guide
+- **Name convention**: Always write "mlld" in all lowercase when referring to the language (not "MLLD", "Mlld", or "MllD")
+
 ## Module System (JavaScript/TypeScript)
 - **Package Type**: ESM-first (`"type": "module"`) - all `.js` files are ES modules
 - **Dual Build**: tsup creates both `.mjs` and `.cjs` outputs for compatibility
@@ -111,6 +114,7 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 - Multiple arrays create cartesian product: `foreach @cmd(@arr1, @arr2)`
 - Works with parameterized `@exec` commands or `@text` templates
 - Results are always arrays matching the iteration count
+- Parameter count must match array count: `@exec process(a, b)` requires 2 arrays
 
 ### Module System (Mlld Modules)
 - Install: `mlld install @author/module` or `mlld install` (from lock file)
