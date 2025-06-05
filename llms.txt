@@ -1,0 +1,40 @@
+# Mlld Language
+
+Mlld (pronounced "meld") is a prompt scripting language for assembling dynamic context. It's embedded in Markdown, making prompts readable as documentation and executable as code.
+
+## What is Mlld?
+
+Mlld lets you:
+- Build reusable context modules
+- Import and compose prompts from files and URLs
+- Execute commands and embed their output
+- Apply templates and transformations
+- Create dynamic, conditional content
+
+## Example
+
+```mlld
+@import { guidelines, examples } from "./context.mld"
+@path docs = "./documentation"
+
+@run [ls {{docs}}]
+
+@text prompt = [[
+Based on these guidelines:
+{{guidelines}}
+
+And these examples:
+{{examples}}
+
+Please help me with the following task...
+]]
+
+@add @prompt
+```
+
+## Learn More
+
+- Website: https://mlld.ai
+- Documentation: https://mlld.ai/docs/
+- GitHub: https://github.com/mlld-lang/mlld
+- npm: https://www.npmjs.com/package/mlld

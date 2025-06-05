@@ -27,6 +27,11 @@ module.exports = function(eleventyConfig) {
   eleventyConfig.addPassthroughCopy('images');
   eleventyConfig.addPassthroughCopy('.nojekyll');
   
+  // Copy llms.txt from project root to website root
+  eleventyConfig.addPassthroughCopy({
+    '../llms.txt': 'llms.txt'
+  });
+  
   // Copy Prism CSS theme
   eleventyConfig.addPassthroughCopy({
     'node_modules/prismjs/themes/prism-tomorrow.css': 'css/prism-theme.css'

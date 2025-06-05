@@ -1289,6 +1289,22 @@ section.content-section h2 {
   text-decoration: underline;
 }
 
+.llms-link {
+  margin-top: 0.5rem;
+}
+
+.llms-link a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 100;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+}
+
+.llms-link a:hover {
+  text-decoration: underline;
+}
+
 /* Common Terminal Window Styles */
 .terminal-window {
   position: relative;
