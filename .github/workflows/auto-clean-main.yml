@@ -1,0 +1,121 @@
+name: Auto Clean Main Branch
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  auto-clean:
+    if: github.head_ref == 'dev'  # Only run for PRs from dev branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+      
+      - name: Clean development files
+        run: |
+          echo "🧹 Cleaning development files for main branch..."
+          
+          # Directories to remove
+          DIRS_TO_REMOVE=(
+            "_meld"
+            "_issues"
+            "dev"
+            "tmp"
+            "logs"
+            "error-display-demo"
+            "docs/dev"
+            ".claude"
+            ".windsurf"
+            ".continue"
+            ".aider"
+            ".sourcegraph"
+          )
+          
+          # Remove directories
+          for dir in "${DIRS_TO_REMOVE[@]}"; do
+            if [ -d "$dir" ]; then
+              echo "Removing directory: $dir"
+              rm -rf "$dir"
+            fi
+          done
+          
+          # Files to remove
+          FILES_TO_REMOVE=(
+            "prepare-main.js"
+            "CLAUDE.md"
+            "AGENTS.md"
+            ".cursorrules"
+            ".aidigestignore"
+            "cursor.md"
+            ".cursorignore"
+            ".copilotignore"
+            ".sourcery.yaml"
+            "windsurf.md"
+          )
+          
+          # Remove specific files
+          for file in "${FILES_TO_REMOVE[@]}"; do
+            if [ -f "$file" ]; then
+              echo "Removing file: $file"
+              rm -f "$file"
+            fi
+          done
+          
+          # Remove pattern-based files
+          find . -name "diff.txt" -type f -delete 2>/dev/null || true
+          find . -name "test_*.txt" -type f -delete 2>/dev/null || true
+          find . -name "test_*.mjs" -type f -delete 2>/dev/null || true
+          find . -name "test_output.log" -type f -delete 2>/dev/null || true
+          find . -name "repomix-output.xml" -type f -delete 2>/dev/null || true
+          find . -name ".repomixignore" -type f -delete 2>/dev/null || true
+          find . -name ".windsurf*" -type f -delete 2>/dev/null || true
+          
+          echo "✅ Development files cleaned"
+      
+      - name: Commit cleaned version
+        run: |
+          # Check if there are changes
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "chore: auto-clean development files for main branch [skip ci]"
+            git push
+            echo "✅ Cleaned version committed"
+          else
+            echo "ℹ️ No development files to clean"
+          fi
+      
+      - name: Comment on PR
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const comment = `🤖 **Auto-Clean Complete**
+            
+            Development files have been automatically removed from this PR to prepare for the main branch.
+            
+            Removed:
+            - Development directories (docs/dev, _meld, etc.)
+            - AI tool configurations (CLAUDE.md, .cursorrules, etc.)
+            - Test and temporary files
+            
+            The main branch will receive a clean version suitable for public release.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
