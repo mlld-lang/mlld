@@ -57,12 +57,12 @@
     "bump:major": "node scripts/bump-version.js major",
     "testecho": "echo",
     "install:vim": "cd editors/vim && ./install.sh",
-    "install:vscode": "cd editors/vscode && npm install && npm run compile && npm pack && code --install-extension mlld-vscode-*.tgz",
-    "install:cursor": "cd editors/vscode && npm install && npm run compile && npm pack && cursor --install-extension mlld-vscode-*.tgz",
-    "install:windsurf": "cd editors/vscode && npm install && npm run compile && npm pack && windsurf --install-extension mlld-vscode-*.tgz",
+    "install:vscode": "cd editors/vscode && npm install && npx vsce package && code --install-extension mlld-vscode-*.vsix",
+    "install:cursor": "cd editors/vscode && npm install && npx vsce package && cursor --install-extension mlld-vscode-*.vsix",
+    "install:windsurf": "cd editors/vscode && npm install && npx vsce package && windsurf --install-extension mlld-vscode-*.vsix",
     "install:editors": "npm run install:vim && npm run install:vscode",
-    "publish:vscode": "cd editors/vscode && npm install && npm run compile && npx vsce publish",
-    "package:vscode": "cd editors/vscode && npm install && npm run compile && npx vsce package"
+    "publish:vscode": "cd editors/vscode && npm install && npx vsce publish",
+    "package:vscode": "cd editors/vscode && npm install && npx vsce package"
   },
   "repository": {
     "type": "git",

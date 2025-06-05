@@ -1,30 +1,19 @@
-import * as path from 'path';
-import { parse } from '../../../grammar/parser';
-import type { DirectiveNode, MlldNode } from '../../../core/types';
-
-export interface ParseResult {
-  ast: MlldNode[];
-  errors: ParseError[];
-}
-
-export interface ParseError {
-  message: string;
-  line: number;
-  column: number;
-  offset: number;
-}
+const path = require('path');
+const { parse } = require('../../../grammar/parser/parser.js');
 
 /**
  * Parse a Mlld document using the actual Mlld parser
+ * @param {string} text 
+ * @returns {Promise<{ast: any[], errors: any[]}>}
  */
-export async function parseDocument(text: string): Promise<ParseResult> {
+async function parseDocument(text) {
   try {
     // The parser returns an array of nodes
     const ast = parse(text);
     return { ast, errors: [] };
-  } catch (error: any) {
+  } catch (error) {
     // Extract error information from parser exception
-    const parseError: ParseError = {
+    const parseError = {
       message: error.message || 'Unknown parse error',
       line: error.location?.start?.line || 1,
       column: error.location?.start?.column || 1,
@@ -37,13 +26,15 @@ export async function parseDocument(text: string): Promise<ParseResult> {
 
 /**
  * Extract all variable definitions from the AST
+ * @param {any[]} ast 
+ * @returns {any[]}
  */
-export function extractVariables(ast: MlldNode[]): VariableInfo[] {
-  const variables: VariableInfo[] = [];
+function extractVariables(ast) {
+  const variables = [];
   
   for (const node of ast) {
     if (node.type === 'Directive') {
-      const directive = node as DirectiveNode;
+      const directive = node;
       
       switch (directive.subtype) {
         case 'TextAssignment':
@@ -75,13 +66,15 @@ export function extractVariables(ast: MlldNode[]): VariableInfo[] {
 
 /**
  * Extract imports from the AST
+ * @param {any[]} ast 
+ * @returns {any[]}
  */
-export function extractImports(ast: MlldNode[]): ImportInfo[] {
-  const imports: ImportInfo[] = [];
+function extractImports(ast) {
+  const imports = [];
   
   for (const node of ast) {
     if (node.type === 'Directive') {
-      const directive = node as DirectiveNode;
+      const directive = node;
       
       if (directive.subtype === 'ImportAll' || directive.subtype === 'ImportSelected') {
         imports.push({
@@ -103,11 +96,14 @@ export function extractImports(ast: MlldNode[]): ImportInfo[] {
 
 /**
  * Find all references to a variable in the AST
+ * @param {any[]} ast 
+ * @param {string} variableName 
+ * @returns {any[]}
  */
-export function findVariableReferences(ast: MlldNode[], variableName: string): LocationInfo[] {
-  const references: LocationInfo[] = [];
+function findVariableReferences(ast, variableName) {
+  const references = [];
   
-  function visitNode(node: any) {
+  function visitNode(node) {
     // Check for variable references in different contexts
     if (node.type === 'Variable' && node.value === variableName) {
       references.push({
@@ -143,31 +139,7 @@ export function findVariableReferences(ast: MlldNode[], variableName: string): L
   return references;
 }
 
-// Helper types and functions
-
-export interface VariableInfo {
-  name: string;
-  kind: VariableKind;
-  location: LocationInfo;
-  directive: DirectiveNode;
-}
-
-export interface ImportInfo {
-  type: 'all' | 'selected';
-  path: string;
-  variables: string[];
-  location: LocationInfo;
-}
-
-export interface LocationInfo {
-  line: number;
-  column: number;
-  offset: number;
-}
-
-export type VariableKind = 'text' | 'data' | 'path' | 'exec' | 'run';
-
-function getVariableKind(subtype: string): VariableKind {
+function getVariableKind(subtype) {
   switch (subtype) {
     case 'TextAssignment':
       return 'text';
@@ -186,18 +158,25 @@ function getVariableKind(subtype: string): VariableKind {
   }
 }
 
-function getImportPath(directive: DirectiveNode): string {
+function getImportPath(directive) {
   // Extract path from import directive
   // This depends on the exact AST structure
-  const pathNode = (directive as any).path;
+  const pathNode = directive.path;
   return pathNode?.value || '';
 }
 
-function getImportedVariables(directive: DirectiveNode): string[] {
+function getImportedVariables(directive) {
   // Extract imported variable names from ImportSelected directive
-  const imports = (directive as any).imports;
+  const imports = directive.imports;
   if (Array.isArray(imports)) {
-    return imports.map((imp: any) => imp.value || imp);
+    return imports.map((imp) => imp.value || imp);
   }
   return [];
 }
+
+module.exports = {
+  parseDocument,
+  extractVariables,
+  extractImports,
+  findVariableReferences
+};

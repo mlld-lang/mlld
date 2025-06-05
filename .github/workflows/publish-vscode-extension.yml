@@ -1,0 +1,40 @@
+name: Publish VSCode Extension
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'editors/vscode/**'
+      - 'grammar/**'  # Also publish when grammar changes (affects syntax highlighting)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install root dependencies
+      run: npm ci
+      
+    - name: Build grammar and syntax
+      run: npm run build:syntax
+      
+    - name: Install VSCode extension dependencies
+      working-directory: editors/vscode
+      run: npm ci
+      
+    - name: Publish to VSCode Marketplace
+      working-directory: editors/vscode
+      env:
+        VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      run: |
+        npm install -g @vscode/vsce
+        vsce publish -p $VSCE_PAT
