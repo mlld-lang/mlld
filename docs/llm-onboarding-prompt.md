@@ -149,7 +149,57 @@ Remember: "Double brackets, double braces"
 @data names = ["Alice", "Bob", "Charlie"]
 @text greetTemplate(name) = [[Hello, {{name}}!]]
 @data greetings = foreach @greetTemplate(@names)
-# greetings = ["Hello, Alice!", "Hello, Bob!", "Hello, Charlie!"]
+>> greetings = ["Hello, Alice!", "Hello, Bob!", "Hello, Charlie!"]
+```
+
+## Additional Essential Features
+
+### Comments
+```mlld
+>> This is a comment (starts with two > and a space)
+>> Comments must start at the beginning of a line
+```
+
+### Reserved Variables
+```mlld
+@add [[Current time: {{TIME}}]]        # Current timestamp
+@add [[Input data: {{INPUT.config}}]]  # Access stdin/env vars
+@add [[Project root: {{PROJECTPATH}}]] # Project directory
+```
+
+### Output Directive
+```mlld
+@output @content to "./report.md"
+@output @data to "./config.json" as json
+@output @result to @uploadCommand
+```
+
+### String Concatenation
+```mlld
+@text firstName = "John"
+@text lastName = "Doe"
+@text fullName = @firstName ++ " " ++ @lastName
+```
+
+### Frontmatter Metadata
+```mlld
+---
+description: Pipeline description
+version: 1.0.0
+author: Your Name
+---
+
+# Your MLLD Document
+```
+
+### URL Support
+```mlld
+# Add content from URLs directly:
+@add [https://raw.githubusercontent.com/example/repo/main/README.md]
+
+# Assign URL content to variables:
+@path docs = "https://example.com/api-docs.md"
+@text readme = [https://example.com/README.md]
 ```
 
 ## Philosophy: Simplicity in Files, Complexity in Modules
