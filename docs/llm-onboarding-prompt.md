@@ -80,7 +80,7 @@ This design keeps documents readable as regular Markdown while enabling programm
 ### 5. Context-Specific Variable Syntax
 Remember: "Double brackets, double braces"
 - String literals: `"literal text for @var"`
-- Command context: `[@var interpolation]`
+- Command context: `[echo "@var"]` (@ prefix inside brackets)
 - Template context: `[[template with {{var}}]]`
 
 ### 6. Field Access Rules
@@ -98,7 +98,7 @@ Remember: "Double brackets, double braces"
 ### 7. Parameterized Content
 ```mlld
 # For commands, use @exec:
-@exec greet(name) = @run [echo "Hello @name"]
+@exec greet(name) = @run [(echo "Hello @name")]
 @run @greet("Alice")
 
 # For templates, use @text:
