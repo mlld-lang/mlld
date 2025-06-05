@@ -19,7 +19,7 @@ These errors stop Mlld execution immediately:
 - Circular imports
 - Type mismatches (using wrong variable type)
 - Missing required command parameters
-- Invalid path references (not using $HOMEPATH/$PROJECTPATH)
+- Invalid path syntax or malformed paths
 
 ### Warning Errors (Continue with Warning)
 
@@ -44,7 +44,7 @@ These situations don't generate errors or warnings:
 ### File System Errors
 
 - **Missing Files**: When an `@add` or `@import` directive references a non-existent file
-- **Path Validation**: When paths don't use `$HOMEPATH` or `$PROJECTPATH`
+- **Path Validation**: When paths contain null bytes or are malformed
 - **File Permission Issues**: When Mlld can't read a referenced file
 
 ### Syntax Errors

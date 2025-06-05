@@ -29,7 +29,7 @@ mlld install
 Once installed, import modules in your `.mlld` files:
 
 ```mlld
-@import { formatDate, capitalize } from "@alice/utils"
+@import { formatDate, capitalize } from @alice/utils
 
 @text greeting = [[Hello {{capitalize("world")}}!]]
 @text today = [[Today is {{formatDate(@TIME)}}]]
@@ -347,7 +347,7 @@ If no `@data module` is defined, mlld automatically creates one with all top-lev
 Module frontmatter is always available via the `__meta__` property:
 
 ```mlld
-@import { utils } from "@alice/utils"
+@import { utils } from @alice/utils
 
 # Access metadata
 @add [[Author: {{utils.__meta__.author}}]]
@@ -576,7 +576,7 @@ mlld install @community/string-utils
 ```
 
 ```mlld
-@import { slugify, truncate } from "@community/string-utils"
+@import { slugify, truncate } from @community/string-utils
 
 @text title = "My Blog Post Title!"
 @text slug = [[{{slugify(@title)}}]]
@@ -596,7 +596,7 @@ mlld install @templates/blog
 ```
 
 ```mlld
-@import { postTemplate, authorBio } from "@templates/blog"
+@import { postTemplate, authorBio } from @templates/blog
 
 @data post = {
   "title": "Introduction to Mlld Modules",

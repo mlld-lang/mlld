@@ -15,105 +15,82 @@ Mlld supports fetching content from remote URLs using the `@add` and `@import` d
 - **Caching**: Automatically cache URL responses for better performance
 - **Error Handling**: Robust error handling for network issues and invalid URLs
 
-## Enabling URL Support
+## Using URLs in Mlld
 
-URL support is disabled by default and must be explicitly enabled using the `allowURLs=true` parameter:
+URLs can be used directly in `@add` and `@path` directives:
 
+```mlld
+@add [https://example.com/content.md]
+@path readme = "https://raw.githubusercontent.com/example/repo/main/README.md"
 ```
-@add(url="https://example.com/content.md", allowURLs=true)
-@import(url="https://example.com/variables.mld", allowURLs=true)
+
+## URL Security and Caching
+
+URLs in `@path` directives support TTL (Time-To-Live) and trust level options:
+
+```mlld
+@path (30m) trust verify api = "https://api.example.com/data.json"
+@path (static) trust always cdn = "https://cdn.example.com/assets.zip"
 ```
 
-## URL Parameters
-
-Both `@add` and `@import` directives support the following URL-specific parameters:
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `url` | string | The URL to fetch content from |
-| `allowURLs` | boolean | Must be set to `true` to enable URL functionality |
-| `urlOptions` | object | Configuration options for URL validation and fetching |
-
-### URL Options
-
-The `urlOptions` parameter accepts an object with the following properties:
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `allowedProtocols` | string[] | `["http", "https"]` | List of allowed protocols |
-| `allowedDomains` | string[] | `[]` (all domains allowed) | Domain allowlist |
-| `blockedDomains` | string[] | `[]` | Domain blocklist (overrides allowlist) |
-| `maxResponseSize` | number | `5242880` (5MB) | Maximum response size in bytes |
-| `timeout` | number | `30000` (30s) | Request timeout in milliseconds |
+See the [@path directive documentation](./path.md) for detailed information on URL caching and security options.
 
 ## Examples
 
 ### Basic URL Embedding
 
-```
-@add(url="https://raw.githubusercontent.com/example/repo/main/README.md", allowURLs=true)
-```
-
-### URL Embedding with Security Options
-
-```
-@add(
-  url="https://raw.githubusercontent.com/example/repo/main/README.md", 
-  allowURLs=true, 
-  urlOptions={
-    allowedProtocols: ["https"],
-    allowedDomains: ["raw.githubusercontent.com"],
-    maxResponseSize: 1048576,  // 1MB
-    timeout: 10000  // 10 seconds
-  }
-)
+```mlld
+@add [https://raw.githubusercontent.com/example/repo/main/README.md]
 ```
 
-### Embedding a Specific Section from a URL
+### URL with Section Extraction
 
-```
-@add(
-  url="https://raw.githubusercontent.com/example/repo/main/README.md", 
-  allowURLs=true, 
-  section="Getting Started"
-)
+```mlld
+@add [https://raw.githubusercontent.com/example/repo/main/README.md # Getting Started]
 ```
 
-### Importing Variables from a URL
+### URL in Path Variables
 
+```mlld
+@path docs = "https://raw.githubusercontent.com/example/repo/main/docs.md"
+@add [@docs]
 ```
-@import(url="https://example.com/variables.mld", allowURLs=true)
-```
 
-### Using Path Parameter with URLs
+### Cached URL Access
 
-For backward compatibility, you can also use the `path` parameter with URLs:
+```mlld
+# Cache for 1 hour
+@path (1h) trust verify api = "https://api.example.com/data.json"
+@add [@api]
 
-```
-@add(path="https://example.com/content.md", allowURLs=true)
+# Always fetch fresh
+@path (live) trust verify feed = "https://api.example.com/live-feed.json"
+@add [@feed]
 ```
 
 ## Security Considerations
 
-- URLs are only fetched when explicitly enabled with `allowURLs=true`
-- Use `allowedDomains` to restrict which domains can be accessed
-- Use `blockedDomains` to block specific domains
-- Set appropriate `maxResponseSize` to prevent loading overly large files
-- Configure `timeout` to prevent hanging on slow responses
-- Only HTTPS is recommended for production use
+- Use `trust verify` (default) to only allow HTTPS URLs
+- Use `trust always` only for trusted internal URLs
+- Use `trust never` to explicitly block URL access
+- TTL settings control how long content is cached
+- HTTPS is strongly recommended for production use
 
 ## Caching
 
-URL responses are automatically cached to improve performance and reduce network traffic. The cache uses an LRU (Least Recently Used) strategy with a default capacity of 100 entries.
+URL responses are automatically cached based on TTL settings:
 
-To bypass the cache for a specific request, use:
+```mlld
+# Static content - cache indefinitely
+@path (static) logo = "https://example.com/logo.png"
 
+# Live content - always fetch fresh
+@path (live) news = "https://example.com/latest-news.md"
+
+# Time-based caching
+@path (30m) api = "https://api.example.com/data.json"  # 30 minutes
+@path (1h) docs = "https://docs.example.com/guide.md"  # 1 hour
+@path (1d) archive = "https://example.com/archive.zip" # 1 day
 ```
-@add(
-  url="https://example.com/content.md", 
-  allowURLs=true, 
-  urlOptions={
-    bypassCache: true
-  }
-)
-```
+
+Cache is stored in `.mlld/cache/` and managed via `mlld.lock.json`.

@@ -34,7 +34,7 @@ Both can be used interchangeably:
 
 ## Array Access
 
-Use bracket notation to access array elements:
+Use dot notation with numeric indices to access array elements:
 
 ```mlld
 ---
@@ -44,9 +44,9 @@ tags:
   - third
 ---
 
-@add [[First tag: {{fm.tags[0]}}]]
-@add [[Second tag: {{fm.tags[1]}}]]
-@add [[Third tag: {{fm.tags[2]}}]]
+@add [[First tag: {{fm.tags.0}}]]
+@add [[Second tag: {{fm.tags.1}}]]
+@add [[Third tag: {{fm.tags.2}}]]
 ```
 
 ## Nested Objects

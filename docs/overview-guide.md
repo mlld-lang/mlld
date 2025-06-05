@@ -39,7 +39,7 @@ Mlld keeps its core language minimal - just enough to orchestrate work - while e
 
 Mlld enhances regular markdown - anything that isn't a directive (starting with `@`) is treated as normal markdown:
 
-```mld
+```mlld
 # My Document
 
 This is regular markdown.
@@ -55,7 +55,7 @@ The greeting is still markdown, but now we can make it dynamic.
 
 Meld processes directives sequentially, building up state as it goes:
 
-```meld
+```mlld
 @text name = "Alice"
 @text role = "software engineer"
 @data context = {
@@ -74,7 +74,7 @@ You are helping {{name}}, a {{role}}, working on {{context.project}} using {{con
 
 This is crucial - most directives just set up state. Only `@add` and `@run` actually contribute to the final document:
 
-```mld
+```mlld
 @text hidden = "This won't appear in output"
 @data config = { "debug": true }
 
@@ -86,7 +86,7 @@ This is crucial - most directives just set up state. Only `@add` and `@run` actu
 
 Mlld deliberately lacks traditional programming constructs (loops, error handling, complex logic). Instead, modules provide these capabilities:
 
-```mld
+```mlld
 # Instead of language features, use modules:
 @import { forEach, parallel, retry } from @mlld/core
 @import { validateResponse, improveAnswer } from @company/ai-tools
@@ -105,14 +105,14 @@ This separation keeps mlld scripts clean and focused on orchestration while modu
 Create reusable prompt components in separate files:
 
 **prompts/roles.mld:**
-```meld
+```mlld
 @text architect = "You are a senior software architect with 20 years of experience."
 @text reviewer = "You are a thorough code reviewer focused on security and performance."
 @text teacher = "You are a patient teacher who explains complex concepts simply."
 ```
 
 **prompts/tasks.mld:**
-```meld
+```mlld
 @text analyze_code = "Analyze this code for potential issues and suggest improvements."
 @text explain_concept = "Explain this concept as if teaching a junior developer."
 @text review_pr = "Review this pull request for merge readiness."
@@ -122,9 +122,9 @@ Create reusable prompt components in separate files:
 
 Import and combine modules to build sophisticated prompts:
 
-```meld
-@import { architect, reviewer } from "prompts/roles.mld"
-@import { analyze_code } from "prompts/tasks.mld"
+```mlld
+@import { architect, reviewer } from "./prompts/roles.mld"
+@import { analyze_code } from "./prompts/tasks.mld"
 
 @text codebase = @run [(find src -name "*.py" -exec cat {} \;)]
 @text recent_changes = @run [(git diff main..HEAD)]
@@ -172,7 +172,7 @@ export async function generateDocs(config) {
 ```
 
 Used in mlld:
-```mld
+```mlld
 @import { generateDocs } from @mlld/docgen
 
 @text docs = @run @generateDocs({
@@ -207,7 +207,7 @@ export async function getConsensus(question, options = {}) {
 ```
 
 Used in mlld:
-```mld
+```mlld
 @import { getConsensus } from @company/ai-consensus
 
 @text answer = @run @getConsensus("What are the risks of this approach?", {
@@ -232,7 +232,7 @@ Used in mlld:
 
 Instead of asking LLMs to "think step by step", mlld lets you **enforce** those steps through transformation pipelines:
 
-```mld
+```mlld
 # Define transformation stages
 @exec checkAccuracy(response) = @run @claude([[Review this response for factual accuracy: {{response}}]])
 
@@ -252,7 +252,7 @@ Instead of asking LLMs to "think step by step", mlld lets you **enforce** those 
 
 Encode your organization's standards and values into reusable pipelines:
 
-```mld
+```mlld
 @import { 
   ensureInclusiveLanguage,
   checkBrandVoice,
@@ -274,7 +274,7 @@ Encode your organization's standards and values into reusable pipelines:
 
 Use `@map` to gather diverse viewpoints efficiently:
 
-```mld
+```mlld
 @data perspectives = [
   { role: "security expert", focus: "vulnerabilities and risks" },
   { role: "performance engineer", focus: "scalability and efficiency" },
@@ -295,7 +295,7 @@ Use `@map` to gather diverse viewpoints efficiently:
 
 Meld has a built-in XML output format that converts markdown hierarchy into simple, non-strict XML - perfect for structured prompts:
 
-```meld
+```mlld
 # Document
 This is a doc
 ## Header
@@ -346,7 +346,7 @@ This XML format:
 
 ### Example: Structured Knowledge Base
 
-```meld
+```mlld
 # Product Documentation
 @text version = @run [(cat VERSION)]
 Version: @add @version
@@ -380,7 +380,7 @@ Meld has a decentralized module system supporting both public sharing and privat
 
 Import modules from the public registry using `@user/module` syntax:
 
-```meld
+```mlld
 @import { senior_reviewer, code_analyst } from @prompts/roles
 @import { coding_standards } from @company/standards
 @import { pr_template } from @templates/github
@@ -439,7 +439,7 @@ Configure custom resolvers for private or corporate modules in your lock file:
 
 Then import from your configured namespaces:
 
-```meld
+```mlld
 >> Local filesystem modules
 @import { daily_standup } from @notes/meetings
 @import { project_context } from @notes/projects/current
@@ -456,7 +456,7 @@ Then import from your configured namespaces:
 
 Control security with trust levels and TTL:
 
-```meld
+```mlld
 >> Always trust company modules
 @import { deploy } from @company/tools trust always
 
@@ -474,14 +474,14 @@ Control security with trust levels and TTL:
 
 Still support direct URL imports when needed:
 
-```meld
+```mlld
 @import { * } from "https://example.com/prompts/standard-roles.mld"
 @import { coding_standards } from "https://example.com/docs/standards.mld"
 ```
 
 ### Fetching Documentation
 
-```meld
+```mlld
 @text api_docs = [https://api.example.com/docs/latest.md]
 @text changelog = "## Recent Changes" from [https://example.com/CHANGELOG.md]
 
@@ -497,7 +497,7 @@ Still support direct URL imports when needed:
 
 ### Dynamic README Generation
 
-```meld
+```mlld
 @text version = @run [(npm version --json | jq -r .version)]
 @text contributors = @run [(git shortlog -sn | head -10)]
 @text last_commit = @run [(git log -1 --pretty=format:"%h - %s (%cr)")]
@@ -523,7 +523,7 @@ Last commit: {{last_commit}}
 
 ### Automated PR Description
 
-```meld
+```mlld
 @text branch = @run [(git branch --show-current)]
 @text changes = @run [(git diff main..HEAD --stat)]
 @text commits = @run [(git log main..HEAD --oneline)]
@@ -549,7 +549,7 @@ Last commit: {{last_commit}}
 
 ### Multi-Model Consensus
 
-```meld
+```mlld
 @text question = "What are the key considerations for migrating from REST to GraphQL?"
 
 >> Get responses from multiple models
@@ -604,7 +604,7 @@ Create a consensus view that incorporates the best insights from each.
 
 1. Install Meld: `npm install -g mlld`
 2. Create a file `hello.mld`:
-   ```meld
+   ```mlld
    @text name = @run [(whoami)]
    # Hello, {{name}}!
    

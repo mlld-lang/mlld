@@ -59,7 +59,7 @@ Add content from variables:
 @text greeting = "Hello, world!"
 @add @greeting
 
-@data user = { name: "Alice", role: "Admin" }
+@data user = { "name": "Alice", "role": "Admin" }
 @add @user.name
 ```
 

@@ -109,7 +109,7 @@ Using variables in commands:
 
 Using path variables:
 ```mlld
-@path src = [@PROJECTPATH/src]
+@path src = [@./src]
 @run [(ls -la @src)]
 ```
 

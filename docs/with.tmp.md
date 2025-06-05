@@ -6,7 +6,7 @@ With clauses provide powerful execution modifiers for `@run` and `@exec` command
 
 ## Basic Syntax
 
-```meld
+```mlld
 @run [(command)] with {
   pipeline: [<transformer>, ...],
   needs: {<dependencies>}
@@ -33,7 +33,7 @@ Pipelines allow you to chain multiple transformations on command output, creatin
 
 ### Example: API Data Processing
 
-```meld
+```mlld
 @exec validate_json(data) = @run [(
   node -e 'try { JSON.parse(`@data`); console.log(`@data`); } catch { }'
 )]
@@ -55,7 +55,7 @@ Pipelines allow you to chain multiple transformations on command output, creatin
 
 If any transformer returns empty output (falsy), the pipeline stops and returns an empty string:
 
-```meld
+```mlld
 @text data = @run [(fetch-unstable-api)] with {
   pipeline: [
     @validate_json(@input),  # Returns empty if invalid JSON
@@ -71,7 +71,7 @@ The `needs` clause declares required packages that must be available for your co
 
 ### Syntax
 
-```meld
+```mlld
 needs: {
   "<language>": {
     "<package>": "<version-constraint>"
@@ -91,7 +91,7 @@ Supported languages: `node`, `python`
 
 ### Example
 
-```meld
+```mlld
 @exec process_data(file) = @run [(node process.js @file)] with {
   needs: {
     "node": {
@@ -113,7 +113,7 @@ Supported languages: `node`, `python`
 
 ## Combining Pipelines and Dependencies
 
-```meld
+```mlld
 @exec fetch_and_process(url) = @run [(curl @url)] with {
   pipeline: [
     @validate_response(@input),
@@ -135,7 +135,7 @@ Supported languages: `node`, `python`
 
 Perfect for working with REST APIs:
 
-```meld
+```mlld
 @text api_data = @run [(curl -s https://api.example.com/data)] with {
   pipeline: [
     @validate_json(@input),
@@ -150,7 +150,7 @@ Perfect for working with REST APIs:
 
 Ensure data integrity through multiple validation steps:
 
-```meld
+```mlld
 @exec validate_config(file) = @run [(cat @file)] with {
   pipeline: [
     @validate_json(@input),
@@ -165,7 +165,7 @@ Ensure data integrity through multiple validation steps:
 
 Build complex data processing workflows:
 
-```meld
+```mlld
 @text report = @run [(generate-raw-report)] with {
   pipeline: [
     @parse_csv(@input),
@@ -201,7 +201,7 @@ Build complex data processing workflows:
 
 ### With foreach
 
-```meld
+```mlld
 @data files = ["data1.json", "data2.json", "data3.json"]
 @exec process_file(file) = @run [(cat @file)] with {
   pipeline: [@validate_json(@input), @extract_metrics(@input)]
@@ -211,7 +211,7 @@ Build complex data processing workflows:
 
 ### With @when
 
-```meld
+```mlld
 @text api_response = @run [(curl api.example.com)] with {
   pipeline: [@validate_json(@input)]
 }
@@ -225,7 +225,7 @@ Build complex data processing workflows:
 
 Create standard processing pipelines you can reuse:
 
-```meld
+```mlld
 # Define a standard API pipeline
 @exec api_pipeline(response) = @run [(echo "@response")] with {
   pipeline: [

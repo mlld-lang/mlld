@@ -4,19 +4,18 @@ The `@import` directive allows you to import variables and commands from other M
 
 ## Syntax
 
-Modern syntax:
+File imports:
 ```mlld
-@import [path.mld]                           # Import all variables
-@import [*] from [path.mld]                  # Import all variables (equivalent)
-@import [var1, var2] from [path.mld]        # Import specific variables
-@import [var1 as alias1, var2] from [path.mld] # Import with aliases
+@import { * } from "path/to/file.mld"           # Import all variables
+@import { var1, var2 } from "path/to/file.mld"  # Import specific variables
+@import { var1 as alias1, var2 } from "path/to/file.mld" # Import with aliases
 ```
 
-Legacy syntax (also supported):
+Module imports:
 ```mlld
-@import path="path.mld"                     # Import all variables
-@import path="path.mld" imports=[var1, var2] # Import specific variables
+@import { func1, func2 } from @author/module    # Import from registry module
 ```
+
 
 Where:
 - `path.mld` is the path to the Mlld file to import
@@ -43,55 +42,50 @@ The directive can import all types of variables:
 ## Path Specification
 
 The path can be:
-- An absolute path using `$HOMEPATH` or `$PROJECTPATH`
-- A path variable: `@import [$utils]`
+- A relative path from the importing file: `"./utils.mld"`
+- An absolute path: `"/home/user/project/utils.mld"`
+- A module reference (no quotes): `@author/module`
 
 ## Selective Imports and Aliases
 
-Specify selective imports using a comma-separated list:
+Specify selective imports using curly braces:
 ```mlld
-@import [var1, var2, var3] from [path.mld]
+@import { var1, var2, var3 } from "path.mld"
 ```
 
 Import with aliases to avoid name conflicts:
 ```mlld
-@import [var1 as myVar1, var2 as myVar2] from [path.mld]
-```
-
-Alternative alias syntax with colon:
-```mlld
-@import [var1:myVar1, var2:myVar2] from [path.mld]
+@import { var1 as myVar1, var2 as myVar2 } from "path.mld"
 ```
 
 ## Examples
 
 Basic import:
 ```mlld
-@import ["$PROJECTPATH/utils.mld"]
-```
-
-Import with path variables:
-```mlld
-@path lib = "$PROJECTPATH/lib"
-@import [$lib/utils.mld]
+@import { * } from "./utils.mld"
 ```
 
 Selective import:
 ```mlld
-@import [textVar, dataVar] from [$lib/utils.mld]
+@import { textVar, dataVar } from "./lib/utils.mld"
 ```
 
 Import with aliases:
 ```mlld
-@import [textVar as myText, dataVar as myData] from [$lib/utils.mld]
+@import { textVar as myText, dataVar as myData } from "./lib/utils.mld"
+```
+
+Module import:
+```mlld
+@import { http, utils } from @mlld/stdlib
 ```
 
 Using imported variables:
 ```mlld
-@import ["$PROJECTPATH/utils.mld"]
+@import { importedName, importedCommand } from "./utils.mld"
 
-@text message = `Hello, {{importedName}}!`
-@run [($importedCommand({{param}}))]
+@text message = [[Hello, {{importedName}}!]]
+@run @importedCommand(@param)
 ```
 
 ## Error Handling
