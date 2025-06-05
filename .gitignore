@@ -58,7 +58,10 @@ pids
 .env.local
 .env.development.local
 .env.test.local
-.env.production.local 
+.env.production.local
+
+# Mistakenly created directories
+Support/ 
 
 # Documentation in root (only for main branch)
 # Note: In dev branches, we want to include all documentation files

@@ -45,6 +45,44 @@ npm run build:syntax
 npm run build
 ```
 
+## Installing Editor Support
+
+### Vim/Neovim
+```bash
+npm run install:vim
+```
+
+### VSCode
+```bash
+npm run install:vscode
+```
+
+### Cursor
+```bash
+npm run install:cursor
+```
+
+### Windsurf
+```bash
+npm run install:windsurf
+```
+
+### All Editors at Once
+```bash
+npm run install:editors  # Installs for Vim and VSCode
+```
+
+## Publishing
+
+### VSCode Extension
+```bash
+# Package the extension locally (.vsix file)
+npm run package:vscode
+
+# Publish to VSCode Marketplace (requires authentication)
+npm run publish:vscode
+```
+
 ## File Structure
 
 ```

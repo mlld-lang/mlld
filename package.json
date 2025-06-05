@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "1.0.0-rc-6",
+  "version": "1.0.0-rc-7",
   "description": "mlld: a modular prompt scripting language",
   "type": "module",
   "main": "dist/index.cjs",
@@ -53,7 +53,14 @@
     "bump:patch": "node scripts/bump-version.js patch",
     "bump:minor": "node scripts/bump-version.js minor",
     "bump:major": "node scripts/bump-version.js major",
-    "testecho": "echo"
+    "testecho": "echo",
+    "install:vim": "cd editors/vim && ./install.sh",
+    "install:vscode": "cd editors/vscode && npm install && npm run compile && npm pack && code --install-extension mlld-vscode-*.tgz",
+    "install:cursor": "cd editors/vscode && npm install && npm run compile && npm pack && cursor --install-extension mlld-vscode-*.tgz",
+    "install:windsurf": "cd editors/vscode && npm install && npm run compile && npm pack && windsurf --install-extension mlld-vscode-*.tgz",
+    "install:editors": "npm run install:vim && npm run install:vscode",
+    "publish:vscode": "cd editors/vscode && npm install && npm run compile && npx vsce publish",
+    "package:vscode": "cd editors/vscode && npm install && npm run compile && npx vsce package"
   },
   "repository": {
     "type": "git",
