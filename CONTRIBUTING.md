@@ -16,6 +16,7 @@ We use a specific branch structure to keep development organized:
 3. Build the project: `npm run build`
    - This will generate parser files and test fixtures
    - Generated files are gitignored to avoid merge conflicts
+   - Syntax highlighting files are conditionally generated (see below)
 4. Run the tests: `npm run test`
 5. Make sure you're on the `dev` branch: `git checkout dev`
 
@@ -36,6 +37,17 @@ We use a specific branch structure to keep development organized:
 - Write tests for new features and bug fixes
 - Update documentation as needed
 - Keep commits small and focused on a single change
+
+## Working with Grammar and Syntax Highlighting
+
+When making changes to the grammar (`grammar/**/*.peggy` files):
+
+1. **Syntax files are NOT automatically regenerated** in feature branches to avoid merge conflicts
+2. To test syntax highlighting changes locally: `npm run build:syntax:force`
+3. **Do not commit** generated syntax files (`grammar/generated/*`) in feature branches
+4. Syntax files are automatically generated when merging to main
+
+For more details, see [docs/syntax-highlighting-build.md](docs/syntax-highlighting-build.md)
 
 ## Repository Structure
 

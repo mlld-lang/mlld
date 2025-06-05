@@ -48,6 +48,12 @@ The grammar build system (`grammar/build-grammar.mjs`) works as follows:
    npm test grammar/
    ```
 
+5. **Syntax highlighting generation**: Generated syntax files in `grammar/generated/` are:
+   - Automatically built on push to main branch
+   - Skipped in feature branches to avoid merge conflicts
+   - Can be manually generated with `npm run build:syntax:force`
+   - See `grammar/syntax-generator/README.md` for details
+
 ### Example: Adding a Helper Function
 
 ```typescript

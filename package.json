@@ -28,10 +28,12 @@
   "scripts": {
     "build:grammar:core": "npx tsc -p grammar/tsconfig.grammar.json && node grammar/build-grammar.mjs",
     "build:grammar:fixtures": "node ./scripts/build-fixtures.mjs",
-    "build:grammar:syntax": "node grammar/syntax-generator/build-syntax.js",
+    "build:grammar:syntax": "node grammar/syntax-generator/build-syntax-conditional.js",
+    "build:grammar:syntax:force": "FORCE_SYNTAX_BUILD=true node grammar/syntax-generator/build-syntax-conditional.js",
     "build:grammar": "npm run build:grammar:core && npm run build:grammar:fixtures && npm run build:grammar:syntax",
     "build:fixtures": "npm run build:grammar:fixtures",
     "build:syntax": "npm run build:grammar:syntax",
+    "build:syntax:force": "npm run build:grammar:syntax:force",
     "build:version": "node ./scripts/generate-version.js",
     "build:outputs": "node ./scripts/generate-outputs.mjs",
     "build:outputs:keep": "KEEP_OUTPUT=true node ./scripts/generate-outputs.mjs",
