@@ -187,7 +187,7 @@ parserSourceTS += defaultExportAddition;
 fs.writeFileSync(DIST_PARSER_TS, parserSourceTS);
 console.log('✓ parser.ts written with default export');
 
-// ---------- peggy generate JavaScript ----------
+// ---------- peggy generate JavaScript (ESM) ----------
 const peggyOptsJS = {
   format: 'es',
   output: 'source',
@@ -200,7 +200,7 @@ const peggyOptsJS = {
   },
 };
 
-console.log('Generating JavaScript parser...');
+console.log('Generating JavaScript ESM parser...');
 let parserSourceJS;
 try {
   parserSourceJS = peggy.generate(sources, peggyOptsJS);
@@ -214,11 +214,47 @@ parserSourceJS += defaultExportAddition;
 fs.writeFileSync(DIST_PARSER_JS, parserSourceJS);
 console.log('✓ parser.js written with default export');
 
+// ---------- peggy generate JavaScript (CommonJS) ----------
+const peggyOptsCJS = {
+  format: 'commonjs',
+  output: 'source',
+  optimize: 'speed',
+  allowedStartRules: ['Start'],
+  dependencies: {
+    NodeType: './deps/node-type.cjs',
+    DirectiveKind: './deps/directive-kind.cjs',
+    helpers: './deps/helpers.cjs',
+  },
+};
+
+console.log('Generating JavaScript CommonJS parser...');
+let parserSourceCJS;
+try {
+  parserSourceCJS = peggy.generate(sources, peggyOptsCJS);
+} catch (error) {
+  console.error('JavaScript CommonJS parser generation failed:', error.message);
+  throw error;
+}
+
+// CommonJS exports
+const cjsExportAddition = `
+// Add exports for CommonJS compatibility
+module.exports = {
+  parse: peg$parse,
+  SyntaxError: peg$SyntaxError,
+  StartRules: peg$allowedStartRules
+};
+`;
+
+parserSourceCJS += cjsExportAddition;
+fs.writeFileSync(path.join(DIST_DIR, 'parser.cjs'), parserSourceCJS);
+console.log('✓ parser.cjs written with CommonJS exports');
+
 // ---------- copy runtime deps ----------
 // Create deps directory in the output directory
 fs.mkdirSync(path.join(DIST_DIR, 'deps'), { recursive: true });
 
-// Convert helper files to TypeScript
+// Convert helper files to TypeScript and CommonJS
 for (const f of [
   'node-type.js',
   'directive-kind.js',
@@ -227,6 +263,7 @@ for (const f of [
   const srcPath = path.join(__dirname, 'deps', f);
   const destPathTS = path.join(DIST_DIR, 'deps', f.replace('.js', '.ts'));
   const destPathJS = path.join(DIST_DIR, 'deps', f);
+  const destPathCJS = path.join(DIST_DIR, 'deps', f.replace('.js', '.cjs'));
   
   // Read the file
   let content = fs.readFileSync(srcPath, 'utf8');
@@ -236,22 +273,56 @@ for (const f of [
   contentTS = contentTS.replace(/import\s+(.+?)\s+from\s+['"](.+?)\.js['"]/g, 'import $1 from \'$2.ts\'');
   fs.writeFileSync(destPathTS, contentTS);
   
-  // Copy JavaScript version as-is with path adjustments
+  // Copy JavaScript ESM version as-is with path adjustments
   let contentJS = content.replace('./grammar-core.js', '../grammar-core.js');
   fs.writeFileSync(destPathJS, contentJS);
   
-  console.log(`✓ Converted ${f} to TypeScript and copied JavaScript`);
+  // Create CommonJS version
+  let contentCJS = content.replace('./grammar-core.js', '../grammar-core.cjs');
+  // Convert ES modules to CommonJS
+  contentCJS = contentCJS.replace(/^export\s+{([^}]+)}/gm, (match, exports) => {
+    const exportList = exports.split(',').map(e => e.trim());
+    return exportList.map(exp => `exports.${exp} = ${exp};`).join('\n');
+  });
+  contentCJS = contentCJS.replace(/^export\s+const\s+(\w+)/gm, 'exports.$1');
+  contentCJS = contentCJS.replace(/^export\s+function\s+(\w+)/gm, 'exports.$1 = function $1');
+  contentCJS = contentCJS.replace(/^import\s+{([^}]+)}\s+from\s+['"](.+?)['"]/gm, (match, imports, module) => {
+    const importList = imports.split(',').map(i => i.trim());
+    const modPath = module.endsWith('.js') ? module.replace('.js', '.cjs') : module;
+    return `const { ${importList.join(', ')} } = require('${modPath}');`;
+  });
+  contentCJS = contentCJS.replace(/^import\s+(\w+)\s+from\s+['"](.+?)['"]/gm, (match, name, module) => {
+    const modPath = module.endsWith('.js') ? module.replace('.js', '.cjs') : module;
+    return `const ${name} = require('${modPath}');`;
+  });
+  
+  fs.writeFileSync(destPathCJS, contentCJS);
+  
+  console.log(`✓ Converted ${f} to TypeScript, ESM, and CommonJS`);
 }
 
 // Also copy grammar-core.js
 const coreJsPath = path.join(__dirname, 'deps/grammar-core.js');
 const destCoreJsPathTS = path.join(DIST_DIR, 'grammar-core.ts');
 const destCoreJsPathJS = path.join(DIST_DIR, 'grammar-core.js');
+const destCoreJsPathCJS = path.join(DIST_DIR, 'grammar-core.cjs');
 
 let coreContent = fs.readFileSync(coreJsPath, 'utf8');
 fs.writeFileSync(destCoreJsPathTS, coreContent);
 fs.writeFileSync(destCoreJsPathJS, coreContent);
 
-console.log(`✓ Copied grammar-core.js to both TypeScript and JavaScript`);
+// Create CommonJS version of grammar-core
+let coreCJS = coreContent;
+// Convert ES exports to CommonJS
+coreCJS = coreCJS.replace(/^export\s+{([^}]+)}/gm, (match, exports) => {
+  const exportList = exports.split(',').map(e => e.trim());
+  return exportList.map(exp => `exports.${exp} = ${exp};`).join('\n');
+});
+coreCJS = coreCJS.replace(/^export\s+const\s+(\w+)/gm, 'exports.$1');
+coreCJS = coreCJS.replace(/^export\s+function\s+(\w+)/gm, 'exports.$1 = function $1');
+
+fs.writeFileSync(destCoreJsPathCJS, coreCJS);
+
+console.log(`✓ Copied grammar-core.js to TypeScript, ESM, and CommonJS`);
 console.log('✓ helper modules converted and copied');
 console.log('Parser generation complete!');
