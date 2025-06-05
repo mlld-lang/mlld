@@ -1,9 +1,9 @@
 ---
 layout: docs.njk
-title: "Registering Mlld Modules"
+title: "Registering mlld Modules"
 ---
 
-# Registering Mlld Modules
+# Registering mlld Modules
 
 This guide explains how to register your mlld modules in the public registry so others can easily import and use them.
 

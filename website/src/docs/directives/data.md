@@ -36,24 +36,24 @@ The @data directive supports all standard JSON data types:
 
 ## Object and Array Literals
 
-Data objects can be defined using object literal syntax:
+Data objects can be defined using JSON syntax:
 
 ```mlld
-@data config = {{ name: "test", version: 1 }}
+@data config = { "name": "test", "version": 1 }
 ```
 
 For multi-line objects:
 
 ```mlld
-@data user = {{
-  name: "Alice",
-  id: 123,
-  roles: ["admin", "editor"],
-  settings: {
-    theme: "dark",
-    notifications: true
+@data user = {
+  "name": "Alice",
+  "id": 123,
+  "roles": ["admin", "editor"],
+  "settings": {
+    "theme": "dark",
+    "notifications": true
   }
-}}
+}
 ```
 
 Arrays can be defined as well:
@@ -69,32 +69,35 @@ Data structures can contain variable references in both keys and values:
 ```mlld
 @text name = "John"
 @text keyName = "username"
-@data user = {{
-  {{keyName}}: {{name}},    # Dynamic key name
-  id: 123,
-  active: true
-}}
+@data user = {
+  @keyName: @name,    # Dynamic key name
+  "id": 123,
+  "active": true
+}
 ```
 
 ## Referencing Data Variables
 
-Data variables are referenced using the `{{identifier}}` syntax:
+Data variables are referenced differently based on context:
+- In directives: `@identifier` or `@identifier.field`
+- In templates `[[...]]`: `{{identifier}}` or `{{identifier.field}}`
 
 ```mlld
-@data user = {{ name: "Alice", id: 123 }}
-@text greeting = `Hello, {{user.name}}!`
+@data user = { "name": "Alice", "id": 123 }
+@text greeting = [[Hello, {{user.name}}!]]
+@add @user.name
 ```
 
 You can access nested fields using dot notation:
 
 ```mlld
-@data config = {{ 
-  app: { 
-    name: "MyApp",
-    version: "1.0.0"
+@data config = { 
+  "app": { 
+    "name": "MyApp",
+    "version": "1.0.0"
   }
-}}
-@text appInfo = `App: {{config.app.name}} v{{config.app.version}}`
+}
+@text appInfo = [[App: {{config.app.name}} v{{config.app.version}}]]
 ```
 
 ### Accessing Array Elements
@@ -103,8 +106,8 @@ Use dot notation to access array elements:
 
 ```mlld
 @data fruits = ["apple", "banana", "cherry"]
-@text favorite = `My favorite fruit is {{fruits.0}}`
-@text list = `Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}`
+@text favorite = [[My favorite fruit is {{fruits.0}}]]
+@text list = [[Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}]]
 ```
 
 Note: Currently, only dot notation is supported for array access. Bracket notation (`fruits[0]`) is not supported.
@@ -121,19 +124,19 @@ Values can also be provided as JSON strings which are parsed:
 
 Basic data variable:
 ```mlld
-@data settings = {{ 
-  darkMode: true,
-  fontSize: 16
-}}
+@data settings = { 
+  "darkMode": true,
+  "fontSize": 16
+}
 ```
 
 Using variables in data:
 ```mlld
 @text name = "John"
-@data user = {{ 
-  username: {{name}},
-  active: true 
-}}
+@data user = { 
+  "username": @name,
+  "active": true 
+}
 ```
 
 Using command output as data:
@@ -151,7 +154,7 @@ The following errors are possible with data directives:
 ## Notes
 
 - Field access is only available for data variables
-- Data variables can be formatted with the `>>` operator
+- Data variables can be used in templates and directives
 - Simple data values are automatically converted to text when used in string contexts
 - Entire objects/arrays are converted to JSON strings when used in text contexts
 - Schema validation is planned but not yet implemented
