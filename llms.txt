@@ -220,7 +220,7 @@ While you CAN write JavaScript in mlld, it's best kept in modules:
 ## Best Practices
 
 1. **Keep .mld files readable**: They should make sense as Markdown documents
-2. **Use modules for complexity**: Don't try to implement algorithms in MLLD
+2. **Use modules for complexity**: Don't try to implement algorithms in mlld
 3. **Explicit over implicit**: Always be clear about what produces output
 4. **Test incrementally**: Use `@add` to verify variable values during development
 5. **Think pipelines**: mlld excels at composing data transformation pipelines
