@@ -79,9 +79,9 @@ This design keeps documents readable as regular Markdown while enabling programm
 
 ### 5. Context-Specific Variable Syntax
 Remember: "Double brackets, double braces"
-- String literals: `"literal text for @var"`
-- Command context: `[echo "@var"]` (@ prefix inside brackets)
-- Template context: `[[template with {{var}}]]`
+- String literals: `@text msg = "Hello @name"` - @name is NOT interpolated (literal text)
+- Command context: `[echo "Hello @name"]` - @name IS interpolated (variable value)
+- Template context: `[[Hello {{name}}]]` - {{name}} is interpolated
 
 ### 6. Field Access Rules
 ```mlld
@@ -194,6 +194,11 @@ MLLD's design philosophy centers on keeping `.mld` files simple and readable whi
 ❌ @run [echo "{{message}}"]      # Wrong syntax in command
 ✅ @add [[Hello {{name}}]]        # Correct template syntax
 ✅ @run [echo "@message"]         # Correct command syntax
+
+# String literal vs command context example:
+@text name = "Alice"
+@text literal = "Hello @name"     # Result: "Hello @name" (literal)
+@run [echo "Hello @name"]         # Result: "Hello Alice" (interpolated)
 ```
 
 ### 5. JavaScript Confusion
