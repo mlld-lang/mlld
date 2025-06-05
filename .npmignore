@@ -1,20 +1,73 @@
-# Dependencies
+# Development directories
+docs/dev/
+scripts/
+tests/
+examples/
+website/
+editors/
+grammar/
+.github/
+_meld/
+_issues/
+tmp/
+temp/
+error-display-demo/
+
+# AI Development Tools
+CLAUDE.md
+AGENTS.md
+.cursorrules
+.aidigestignore
+cursor.md
+.cursorignore
+.copilotignore
+.sourcery.yaml
+windsurf.md
+.windsurf*
+.claude/
+.continue/
+.aider/
+.sourcegraph/
+
+# Development & Test files
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js
+test_*.txt
+test_*.mjs
+test_output.log
+diff.txt
+repomix-output.xml
+.repomixignore
+prepare-main.js
+todo.txt
+WHEN-PLAN.md
+
+# Config files
+tsconfig.json
+tsconfig.*.json
+vitest.config.mts
+eslint.config.mjs
+.prettierrc
+.editorconfig
+tsup.config.ts
+mlld.config.json.example
+
+# TypeScript
+*.tsbuildinfo
+
+# Dependencies (shouldn't be published anyway)
 node_modules/
 .pnp
 .pnp.js
 
 # Testing
 coverage/
-
-# Production
-dist/
-build/
-
-# TypeScript
-*.tsbuildinfo
+.nyc_output/
 
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -31,10 +84,17 @@ pids
 .vscode/
 *.swp
 *.swo
+*~
 .DS_Store
 .env.local
 .env.development.local
 .env.test.local
-.env.production.local 
+.env.production.local
 
-docs/dev
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Build artifacts not in dist/
+lib/mlld-python/
