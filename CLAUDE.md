@@ -150,6 +150,7 @@ When compacting for the next session--*especially* mid-task, your emphasis shoul
 
 ## Coding Practices
 - Don't add comments saying something is being removed or changed -- keep comments timeless
+- **No branding in commits/PRs**: Do NOT add "🤖 Generated with Claude Code" or "Co-Authored-By: Claude" to commits or PRs. These add no value and are just annoying metrics/branding. Keep commits clean and professional.
 
 ## Development Workflows
 - **Local Testing**: To test mlld locally with custom command names:
