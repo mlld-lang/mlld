@@ -1,50 +1,18 @@
-# MLLD Language Guide for LLMs
+# mlld Language Guide for LLMs
 
-## RULES FOR EDITING THIS FILE
+## Critical Understanding: mlld is NOT a Template Language
 
-This document serves as the authoritative onboarding guide for LLMs learning MLLD. It must be accurate, complete, and verified against the actual implementation.
-
-### Editing Rules:
-1. **Verify Before Editing**: Every syntax example and claim must be verified against:
-   - Grammar files in `grammar/` (source of truth for syntax)
-   - Test cases in `tests/cases/` (examples of valid/invalid syntax)
-   - Interpreter code in `interpreter/` (implementation details)
-   - Documentation in `docs/` (user-facing explanations)
-
-2. **Confidence Threshold**: Only make edits when >95% confident in accuracy:
-   - 100%: Verified in grammar + tests + working examples
-   - 95%: Clear in code + documentation
-   - <95%: Needs more investigation - file GitHub issue instead
-
-3. **Example Accuracy**: All code examples must:
-   - Parse successfully according to the grammar
-   - Execute as described
-   - Demonstrate best practices
-   - Include both ❌ wrong and ✅ correct versions where helpful
-
-4. **Completeness**: Cover common LLM mistakes and misconceptions:
-   - MLLD is NOT a template language
-   - Context-specific variable syntax
-   - Module-first philosophy for complexity
-
-5. **Maintenance**: When MLLD syntax evolves:
-   - Update examples to match current syntax
-   - Note deprecated patterns explicitly
-   - Test all examples before committing
-
-## Critical Understanding: MLLD is NOT a Template Language
-
-MLLD (Markdown Language for LLM Development) is a **programming language embedded in Markdown**. This is the most important concept to internalize. Unlike template languages that process variables anywhere in text, MLLD **only executes lines that start with `@` directives**. Everything else is treated as literal Markdown.
+mlld (pronounced "meld") is a **programming language embedded in Markdown**. This is the most important concept to internalize. Unlike template languages that process variables anywhere in text, mlld **only executes lines that start with `@` directives**. Everything else is treated as literal Markdown.
 
 ## Core Mental Model
 
-Think of MLLD as having two distinct modes:
+Think of mlld as having two distinct modes:
 1. **Markdown mode** (default): Any line not starting with `@` is plain Markdown
-2. **MLLD mode**: Lines starting with `@` are interpreted as MLLD commands
+2. **mlld mode**: Lines starting with `@` are interpreted as mlld commands
 
 This design keeps documents readable as regular Markdown while enabling programmatic capabilities where needed.
 
-## The 10 Commandments of MLLD
+## The 10 Commandments of mlld
 
 ### 1. Directives Must Start Lines
 ```mlld
@@ -176,7 +144,7 @@ version: 1.0.0
 author: Your Name
 ---
 
-# Your MLLD Document
+# Your mlld Document
 ```
 
 ### URL Support
@@ -191,23 +159,23 @@ author: Your Name
 
 ## Philosophy: Simplicity in Files, Complexity in Modules
 
-MLLD's design philosophy centers on keeping `.mld` files simple and readable while abstracting complexity into reusable modules. Instead of adding language features, we encourage using modules:
+mlld's design philosophy centers on keeping `.mld` files simple and readable while abstracting complexity into reusable modules. Instead of adding language features, we encourage using modules:
 
 ```mlld
-# Don't try to implement complex logic in MLLD
+# Don't try to implement complex logic in mlld
 # Instead, import capabilities from modules:
 
 @import { parallel, retry, cache, pipeline } from @mlld/core
 @import { validateSchema, transform } from @myorg/data-utils
 
-# Simple, readable MLLD:
+# Simple, readable mlld:
 @data results = @parallel(@tasks, { concurrency: 5 })
 @data validated = @validateSchema(@results, @schema)
 ```
 
 ## Common Pitfalls to Avoid
 
-### 1. Treating MLLD as a Template Language
+### 1. Treating mlld as a Template Language
 ```mlld
 ❌ This is {{name}}'s document     # Won't work - no @ directive
 ✅ @add [[This is {{name}}'s document]]
@@ -239,7 +207,7 @@ MLLD's design philosophy centers on keeping `.mld` files simple and readable whi
 ```
 
 ### 5. JavaScript Confusion
-While you CAN write JavaScript in MLLD, it's best kept in modules:
+While you CAN write JavaScript in mlld, it's best kept in modules:
 ```mlld
 # Okay for simple cases:
 @run js [console.log("Debug: " + @count)]
@@ -255,9 +223,9 @@ While you CAN write JavaScript in MLLD, it's best kept in modules:
 2. **Use modules for complexity**: Don't try to implement algorithms in MLLD
 3. **Explicit over implicit**: Always be clear about what produces output
 4. **Test incrementally**: Use `@add` to verify variable values during development
-5. **Think pipelines**: MLLD excels at composing data transformation pipelines
+5. **Think pipelines**: mlld excels at composing data transformation pipelines
 
-## Example: Well-Structured MLLD File
+## Example: Well-Structured mlld File
 
 ```mlld
 ---
@@ -303,6 +271,6 @@ This document processes user data and generates insights.
 
 ## Remember
 
-MLLD empowers everyone to create versionable, collaborative "pipelines of thought." It achieves this by being a programming language that looks and reads like a document, not by being a template system. When writing MLLD, think in terms of discrete processing steps, not text interpolation.
+mlld empowers everyone to create versionable, collaborative "pipelines of thought." It achieves this by being a programming language that looks and reads like a document, not by being a template system. When writing mlld, think in terms of discrete processing steps, not text interpolation.
 
 The power comes from composition: simple directives in your files, powerful capabilities in your modules.

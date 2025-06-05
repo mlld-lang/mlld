@@ -158,3 +158,35 @@ When compacting for the next session--*especially* mid-task, your emphasis shoul
   - `npm run reinstall:clean` - removes ALL `mlld-*` commands
   - `npm run reinstall:clean -- myname` - removes only `mlld-myname`
   - These commands create symlinks in your global npm bin directory, so you can run multiple versions side-by-side
+
+## llms.txt Editing Rules
+
+The `llms.txt` file serves as the authoritative onboarding guide for LLMs learning mlld. It must be accurate, complete, and verified against the actual implementation.
+
+### Editing Guidelines:
+1. **Verify Before Editing**: Every syntax example and claim must be verified against:
+   - Grammar files in `grammar/` (source of truth for syntax)
+   - Test cases in `tests/cases/` (examples of valid/invalid syntax)
+   - Interpreter code in `interpreter/` (implementation details)
+   - Documentation in `docs/` (user-facing explanations)
+
+2. **Confidence Threshold**: Only make edits when >95% confident in accuracy:
+   - 100%: Verified in grammar + tests + working examples
+   - 95%: Clear in code + documentation
+   - <95%: Needs more investigation - file GitHub issue instead
+
+3. **Example Accuracy**: All code examples must:
+   - Parse successfully according to the grammar
+   - Execute as described
+   - Demonstrate best practices
+   - Include both ❌ wrong and ✅ correct versions where helpful
+
+4. **Completeness**: Cover common LLM mistakes and misconceptions:
+   - mlld is NOT a template language
+   - Context-specific variable syntax
+   - Module-first philosophy for complexity
+
+5. **Maintenance**: When mlld syntax evolves:
+   - Update examples to match current syntax
+   - Note deprecated patterns explicitly
+   - Test all examples before committing
