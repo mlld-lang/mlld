@@ -44,16 +44,17 @@ CodeCore
         subtype: 'codeBlock',
         values: { 
           code: code.parts,
-          ...(language ? { language } : {})
+          ...(language ? { language: [helpers.createNode(NodeType.Text, { content: language, location: location() })] } : {})
         },
         raw: { 
           code: codeContent,
           ...(language ? { language } : {})
         },
         meta: {
-          isBracketed: code.raw.trim().startsWith('[') && code.raw.trim().endsWith(']'),
           hasLanguage: !!language,
-          language: language || 'text'
+          language: language || 'text',
+          hasVariables: false,  // Code blocks don't support variable interpolation
+          isMultiLine: codeContent.includes('\n')
         }
       };
     }
@@ -71,7 +72,7 @@ LanguageCodeCore
         type: 'code',
         subtype: 'languageCode',
         values: { 
-          language,
+          language: [helpers.createNode(NodeType.Text, { content: language, location: location() })],
           code: code.parts
         },
         raw: { 
@@ -79,9 +80,10 @@ LanguageCodeCore
           code: code.raw
         },
         meta: {
-          isBracketed: code.raw.trim().startsWith('[') && code.raw.trim().endsWith(']'),
           hasLanguage: true,
-          language
+          language,
+          hasVariables: false,  // Code blocks don't support variable interpolation
+          isMultiLine: code.raw.includes('\n')
         }
       };
     }
@@ -93,11 +95,11 @@ LanguageCodeCore
 // This is the key abstraction that can be used by both run.peggy and exec.peggy
 // for consistent handling of language + code block patterns in different contexts
 RunLanguageCodeCore
-  = language:RunCodeLanguage _ args:RunCodeArgs? _ code:DirectCodeContent {
+  = language:RunCodeLanguage _ args:RunCodeArguments? _ code:DirectCodeContent {
       helpers.debug('RunLanguageCodeCore matched', { language, args, code });
       
       // Create language node
-      const langNode = helpers.createNode(NodeType.Text, { content: language }, location());
+      const langNode = helpers.createNode(NodeType.Text, { content: language, location: location() });
       
       // Process code content - get from bracketed content
       const codeContent = code[0].content;
@@ -119,7 +121,7 @@ RunLanguageCodeCore
       const meta = {
         isMultiLine: codeContent.includes('\n'),
         language: language,
-        isBracketed: true
+        hasVariables: false  // Code blocks don't support variable interpolation
       };
       
       // Return a structured result that can be used by both directives
@@ -142,24 +144,24 @@ CodeLanguage
       return lang;
     }
     
-// Code language identifier for run directive
+// Code language identifier for run directive - restricted to known languages
 RunCodeLanguage
-  = language:BaseIdentifier {
+  = language:("javascript" / "js" / "python" / "py" / "bash" / "sh") {
       return language;
     }
 
 // Optional arguments for code blocks
-RunCodeArgs
-  = "(" _ args:RunArgsList? _ ")" {
+RunCodeArguments
+  = "(" _ args:RunArgumentList? _ ")" {
       return args || [];
     }
 
-RunArgsList
-  = first:RunArg rest:(_ "," _ arg:RunArg { return arg; })* {
+RunArgumentList
+  = first:RunArgument rest:(_ "," _ arg:RunArgument { return arg; })* {
       return [first, ...rest];
     }
 
-RunArg
+RunArgument
   = varName:BaseIdentifier {
       return helpers.createVariableReferenceNode('varInterpolation', { identifier: varName }, location());
     }

@@ -1,38 +1,26 @@
-import 'reflect-metadata';
-import '@core/di-config.js';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { watch } from 'fs/promises';
 import { existsSync } from 'fs';
 import { createInterface } from 'readline';
 import { initCommand } from './commands/init';
-import { debugResolutionCommand } from './commands/debug-resolution';
-import { debugContextCommand } from './commands/debug-context';
-import { debugTransformCommand } from './commands/debug-transform';
-import { logger, cliLogger } from '@core/utils/logger';
-import { loggingConfig } from '@core/config/logging';
+import { registryCommand } from './commands/registry';
+import { createInstallCommand } from './commands/install';
+import { createLsCommand } from './commands/ls';
+import { createInfoCommand } from './commands/info';
 import chalk from 'chalk';
 import { version } from '@core/version';
-import { container } from 'tsyringe';
-import { ProjectPathResolver } from '@services/fs/ProjectPathResolver';
-import { type ProcessOptions, MeldError, ErrorSeverity, type Location } from '@core/types/index';
-import { IFileSystemService } from '@services/fs/FileSystemService/IFileSystemService';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService';
-import { loggingConfig as loggingConfigCore } from '@core/config/logging';
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
-import { PathValidationError, PathErrorCode } from '@services/fs/PathService/errors/PathValidationError';
-import type { ValidatedResourcePath } from '@core/types/paths';
-import { createRawPath } from '@core/types/paths';
-import { resolveService } from '@core/ServiceProvider';
-import { unsafeCreateNormalizedAbsoluteDirectoryPath, PathValidationContext, NormalizedAbsoluteDirectoryPath } from '@core/types/paths';
-import type { Position } from '@core/types/index';
-import type { IFileSystemServiceClient } from '@services/fs/FileSystemService/interfaces/IFileSystemServiceClient';
-import { IPathService } from '@services/fs/PathService/IPathService';
-import { IParserService } from '@services/pipeline/ParserService/IParserService';
-import { IInterpreterService } from '@services/pipeline/InterpreterService/IInterpreterService';
-import { IStateService } from '@services/state/StateService/IStateService';
-import { IOutputService } from '@services/pipeline/OutputService/IOutputService';
+import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
+import { PathService } from '@services/fs/PathService';
+import { OutputPathService } from '@services/fs/OutputPathService';
+import { interpret } from '@interpreter/index';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import type { IPathService } from '@services/fs/IPathService';
+import { logger, cliLogger } from '@core/utils/logger';
+import { ConfigLoader } from '@core/config/loader';
+import type { ResolvedURLConfig, ResolvedOutputConfig } from '@core/config/types';
+import { ErrorFormatSelector } from '@core/utils/errorFormatSelector';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -63,7 +51,20 @@ export interface CLIOptions {
   debugSourceMaps?: boolean; // Flag to display source mapping information
   detailedSourceMaps?: boolean; // Flag to display detailed source mapping information
   pretty?: boolean; // Flag to enable Prettier formatting
+  // URL support options
+  allowUrls?: boolean;
+  urlTimeout?: number;
+  urlMaxSize?: number;
+  urlAllowedDomains?: string[];
+  urlBlockedDomains?: string[];
   // No transform options - transformation is always enabled
+  // Output management options
+  maxOutputLines?: number;
+  showProgress?: boolean;
+  errorBehavior?: 'halt' | 'continue';
+  collectErrors?: boolean;
+  progressStyle?: 'emoji' | 'text';
+  showCommandContext?: boolean;
 }
 
 /**
@@ -98,6 +99,35 @@ function getOutputExtension(format: 'markdown' | 'xml'): string {
     default:
       return '.md';
   }
+}
+
+/**
+ * Parse flags from command line arguments
+ */
+function parseFlags(args: string[]): Record<string, any> {
+  const flags: Record<string, any> = {};
+  
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg.startsWith('--')) {
+      const key = arg.slice(2);
+      if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+        flags[key] = args[++i];
+      } else {
+        flags[key] = true;
+      }
+    } else if (arg.startsWith('-') && arg.length > 1) {
+      const key = arg.slice(1);
+      if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+        flags[key] = args[++i];
+      } else {
+        flags[key] = true;
+      }
+    }
+  }
+  
+  return flags;
 }
 
 /**
@@ -244,6 +274,54 @@ function parseArgs(args: string[]): CLIOptions {
       case '--pretty':
         options.pretty = true;
         break;
+      // URL support options
+      case '--allow-urls':
+        options.allowUrls = true;
+        break;
+      case '--url-timeout':
+        options.urlTimeout = parseInt(args[++i]);
+        if (isNaN(options.urlTimeout)) {
+          throw new Error('--url-timeout must be a number');
+        }
+        break;
+      case '--url-max-size':
+        options.urlMaxSize = parseInt(args[++i]);
+        if (isNaN(options.urlMaxSize)) {
+          throw new Error('--url-max-size must be a number');
+        }
+        break;
+      case '--url-allowed-domains':
+        options.urlAllowedDomains = args[++i].split(',').filter(Boolean);
+        break;
+      case '--url-blocked-domains':
+        options.urlBlockedDomains = args[++i].split(',').filter(Boolean);
+        break;
+      // Output management options
+      case '--max-output-lines':
+        options.maxOutputLines = parseInt(args[++i]);
+        if (isNaN(options.maxOutputLines) || options.maxOutputLines < 0) {
+          throw new Error('--max-output-lines must be a positive number');
+        }
+        break;
+      case '--show-progress':
+        options.showProgress = true;
+        break;
+      case '--no-progress':
+        options.showProgress = false;
+        break;
+      case '--error-behavior':
+        const behavior = args[++i];
+        if (behavior !== 'halt' && behavior !== 'continue') {
+          throw new Error('--error-behavior must be "halt" or "continue"');
+        }
+        options.errorBehavior = behavior;
+        break;
+      case '--collect-errors':
+        options.collectErrors = true;
+        break;
+      case '--show-command-context':
+        options.showCommandContext = true;
+        break;
       // Transformation is always enabled by default
       // No transform flags needed
       default:
@@ -267,11 +345,36 @@ function parseArgs(args: string[]): CLIOptions {
  * Display help information
  */
 function displayHelp(command?: string) {
+  if (command === 'registry') {
+    console.log(`
+Usage: mlld registry <subcommand> [options]
+
+Manage mlld module registry.
+
+Subcommands:
+  install              Install all modules from lock file
+  update [module]      Update module(s) to latest version
+  audit                Check for security advisories
+  search <query>       Search for modules
+  info <module>        Show module details
+  stats                Show local usage statistics
+  stats share          Share anonymous usage statistics
+  outdated             Show outdated modules
+
+Examples:
+  mlld registry search json
+  mlld registry info adamavenir/json-utils
+  mlld registry update
+  mlld registry audit
+    `);
+    return;
+  }
+  
   if (command === 'debug-resolution') {
     console.log(`
-Usage: meld debug-resolution [options] <input-file>
+Usage: mlld debug-resolution [options] <input-file>
 
-Debug variable resolution in a Meld file.
+Debug variable resolution in a Mlld file.
 
 Options:
   --var, --variable <n>     Filter to a specific variable
@@ -286,7 +389,7 @@ Options:
   
   if (command === 'debug-transform') {
     console.log(`
-Usage: meld debug-transform [options] <input-file>
+Usage: mlld debug-transform [options] <input-file>
 
 Debug node transformations through the pipeline.
 
@@ -302,11 +405,15 @@ Options:
   }
 
   console.log(`
-Usage: meld [command] [options] <input-file>
+Usage: mlld [command] [options] <input-file>
 
 Commands:
-  init                    Create a new Meld project
-  debug-resolution        Debug variable resolution in a Meld file
+  init                    Create a new Mlld project
+  install, i              Install mlld modules
+  ls, list               List installed modules
+  info, show             Show module details
+  registry                Manage mlld module registry
+  debug-resolution        Debug variable resolution in a Mlld file
   debug-transform         Debug node transformations through the pipeline
 
 Options:
@@ -322,6 +429,28 @@ Options:
   -w, --watch             Watch for changes and reprocess
   -h, --help              Display this help message
   -V, --version           Display version information
+
+URL Support Options:
+  --allow-urls            Enable URL support in directives
+  --url-timeout <ms>      URL request timeout in milliseconds [default: 30000]
+  --url-max-size <bytes>  Maximum URL response size [default: 5242880]
+  --url-allowed-domains   Comma-separated list of allowed domains
+  --url-blocked-domains   Comma-separated list of blocked domains
+
+Output Management Options:
+  --max-output-lines <n>  Limit command output to n lines [default: 50]
+  --show-progress         Show command execution progress [default: true]
+  --no-progress           Disable progress display
+  --error-behavior <mode> How to handle command failures: halt, continue [default: continue]
+  --collect-errors        Collect errors and display summary at end
+  --show-command-context  Show source context for command execution errors
+
+Configuration:
+  Mlld looks for configuration in:
+  1. ~/.config/mlld.json (global/user config)
+  2. mlld.config.json (project config)
+  
+  CLI options override configuration file settings.
   `);
 
   if (!command || command === 'debug-context') {
@@ -349,14 +478,10 @@ async function confirmOverwrite(filePath: string): Promise<{ outputPath: string;
   // Get the current CLI options from the outer scope
   const cliOptions = getCurrentCLIOptions();
   
-  // For .md files, auto-redirect to .o.md unless explicitly set with -o
-  if (filePath.endsWith('.md') && !cliOptions.output) {
-    console.log('Auto-redirecting .md file to prevent overwrite');
-    const baseName = filePath.slice(0, -3); // Remove .md extension
-    const newOutputPath = `${baseName}.o.md`;
-    if (!(await fs.access(newOutputPath).then(() => true).catch(() => false))) {
-      return { outputPath: newOutputPath, shouldOverwrite: true };
-    }
+  // If output path was not explicitly set, we're using the safe path from OutputPathService
+  // so we can just return it
+  if (!cliOptions.output) {
+    return { outputPath: filePath, shouldOverwrite: true };
   }
   
   // Check if we can use raw mode (might not be available in all environments)
@@ -490,8 +615,8 @@ async function watchFiles(options: CLIOptions): Promise<void> {
     const watcher = watch(watchDir, { recursive: true });
 
     for await (const event of watcher) {
-      // Only process .meld files or the specific input file
-      if (event.filename?.endsWith('.meld') || event.filename === path.basename(inputPath)) {
+      // Only process .mlld files or the specific input file
+      if (event.filename?.endsWith('.mlld') || event.filename === path.basename(inputPath)) {
         console.log(`Change detected in ${event.filename}, reprocessing...`);
         await processFile(options);
       }
@@ -505,6 +630,46 @@ async function watchFiles(options: CLIOptions): Promise<void> {
 }
 
 /**
+ * Read stdin content if available
+ */
+async function readStdinIfAvailable(): Promise<string | undefined> {
+  // Check if stdin is a TTY (terminal) - if so, there's no piped input
+  if (process.stdin.isTTY) {
+    return undefined;
+  }
+  
+  // Read from stdin
+  const chunks: Buffer[] = [];
+  
+  return new Promise((resolve) => {
+    let timeout: NodeJS.Timeout;
+    
+    // Set a short timeout to check if data is available
+    timeout = setTimeout(() => {
+      // No data received within timeout, assume no stdin
+      process.stdin.pause();
+      process.stdin.removeAllListeners('data');
+      process.stdin.removeAllListeners('end');
+      resolve(undefined);
+    }, 100);
+    
+    process.stdin.on('data', (chunk) => {
+      clearTimeout(timeout);
+      chunks.push(chunk);
+    });
+    
+    process.stdin.on('end', () => {
+      clearTimeout(timeout);
+      const content = Buffer.concat(chunks).toString('utf8');
+      resolve(content);
+    });
+    
+    // Start reading
+    process.stdin.resume();
+  });
+}
+
+/**
  * Process a file with specific API options
  */
 async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: ProcessOptions): Promise<void> {
@@ -512,8 +677,10 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
   let outputPath = output;
   const normalizedFormat = normalizeFormat(format); // Use normalized format
 
+
   if (!stdout && !outputPath) {
-    outputPath = input.replace(/\.mld$/, '.' + getOutputExtension(normalizedFormat));
+    const outputPathService = new OutputPathService();
+    outputPath = await outputPathService.getSafeOutputPath(input, normalizedFormat, output);
   }
 
   if (outputPath && outputPath === input) {
@@ -522,13 +689,9 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
   }
 
   try {
-    // Resolve necessary services from the container
-    const parserService = container.resolve<IParserService>('IParserService');
-    const stateService = container.resolve<IStateService>('IStateService');
-    const interpreterService = container.resolve<IInterpreterService>('IInterpreterService');
-    const outputService = container.resolve<IOutputService>('IOutputService');
-    const fsService = container.resolve<IFileSystemService>('IFileSystemService');
-    const pathService = container.resolve<IPathService>('IPathService');
+    // Create services for the interpreter
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
 
     if (debug) {
       console.log('CLI Options:', cliOptions);
@@ -536,17 +699,64 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       console.log('Output Path:', outputPath);
     }
 
-    // Core processing logic using resolved services
-    const content = await fsService.readFile(input as ValidatedResourcePath); // Keep cast for now
-    const ast = await parserService.parse(content);
-    stateService.setCurrentFilePath(input);
-    const resultState = await interpreterService.interpret(ast, {
-      filePath: input,
-      strict: cliOptions.strict ?? true,
-      initialState: stateService
+    // Read the input file using Node's fs directly
+    const fs = await import('fs/promises');
+    const content = await fs.readFile(input, 'utf8');
+    
+    // Read stdin if available
+    const stdinContent = await readStdinIfAvailable();
+    
+    // Load configuration
+    const configLoader = new ConfigLoader(path.dirname(input));
+    const config = configLoader.load();
+    const urlConfig = configLoader.resolveURLConfig(config);
+    const outputConfig = configLoader.resolveOutputConfig(config);
+    
+    // CLI options override config
+    let finalUrlConfig: ResolvedURLConfig | undefined = urlConfig;
+    
+    if (cliOptions.allowUrls) {
+      // CLI explicitly enables URLs, override config
+      finalUrlConfig = {
+        enabled: true,
+        allowedDomains: cliOptions.urlAllowedDomains || urlConfig?.allowedDomains || [],
+        blockedDomains: cliOptions.urlBlockedDomains || urlConfig?.blockedDomains || [],
+        allowedProtocols: urlConfig?.allowedProtocols || ['https', 'http'],
+        timeout: cliOptions.urlTimeout || urlConfig?.timeout || 30000,
+        maxSize: cliOptions.urlMaxSize || urlConfig?.maxSize || 5 * 1024 * 1024,
+        warnOnInsecureProtocol: urlConfig?.warnOnInsecureProtocol ?? true,
+        cache: urlConfig?.cache || {
+          enabled: true,
+          defaultTTL: 5 * 60 * 1000,
+          rules: []
+        }
+      };
+    } else if (urlConfig?.enabled && cliOptions.allowUrls !== false) {
+      // Config enables URLs and CLI doesn't explicitly disable
+      finalUrlConfig = urlConfig;
+    } else {
+      // URLs disabled
+      finalUrlConfig = undefined;
+    }
+    
+    // Use the new interpreter
+    const result = await interpret(content, {
+      basePath: path.resolve(path.dirname(input)),
+      filePath: path.resolve(input), // Pass the current file path for error reporting
+      format: normalizedFormat,
+      fileSystem: fileSystem,
+      pathService: pathService,
+      strict: cliOptions.strict,
+      urlConfig: finalUrlConfig,
+      stdinContent: stdinContent,
+      outputOptions: {
+        showProgress: cliOptions.showProgress !== undefined ? cliOptions.showProgress : outputConfig.showProgress,
+        maxOutputLines: cliOptions.maxOutputLines !== undefined ? cliOptions.maxOutputLines : outputConfig.maxOutputLines,
+        errorBehavior: cliOptions.errorBehavior || outputConfig.errorBehavior,
+        collectErrors: cliOptions.collectErrors !== undefined ? cliOptions.collectErrors : outputConfig.collectErrors,
+        showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext
+      }
     });
-    const nodesToProcess = resultState.getTransformedNodes();
-    const result = await outputService.convert(nodesToProcess, resultState, normalizedFormat);
 
     // Output handling (remains mostly the same)
     if (stdout) {
@@ -554,24 +764,15 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     } else if (outputPath) {
       const { outputPath: finalPath, shouldOverwrite } = await confirmOverwrite(outputPath);
       if (shouldOverwrite) {
-        // Validate paths before using them with FileSystemService
+        // Use Node's fs directly
         const dirPath = path.dirname(finalPath);
-        const validationContext: PathValidationContext = {
-          workingDirectory: unsafeCreateNormalizedAbsoluteDirectoryPath(process.cwd()),
-          allowExternalPaths: true,
-          rules: { allowAbsolute: true, allowRelative: true, allowParentTraversal: true, mustExist: false }
-        };
-
-        // Validate directory path
-        const validatedDirPath = await pathService.validatePath(dirPath, validationContext);
-        // Validate file path
-        const validatedFilePath = await pathService.validatePath(finalPath, validationContext);
-
-        // Ensure the output directory exists using the validated path
-        await fsService.ensureDir(validatedDirPath.validatedPath as ValidatedResourcePath);
-        // Write the file using the validated path
-        await fsService.writeFile(validatedFilePath.validatedPath as ValidatedResourcePath, result);
-        console.log(`Output written to ${finalPath}`);
+        
+        // Ensure the output directory exists
+        await fs.mkdir(dirPath, { recursive: true });
+        
+        // Write the file
+        await fs.writeFile(finalPath, result, 'utf8');
+        console.log(`\nOutput written to ${finalPath}`);
       } else {
         console.log('Operation cancelled by user.');
       }
@@ -618,7 +819,7 @@ const seenErrors = new Set<string>();
 let bypassDeduplication = false;
 
 // Check if error deduplication should be completely disabled
-const disableDeduplication = !!(global as any).MELD_DISABLE_ERROR_DEDUPLICATION;
+const disableDeduplication = !!(global as any).MLLD_DISABLE_ERROR_DEDUPLICATION;
 
 // Store the original console.error
 const originalConsoleError = console.error;
@@ -655,75 +856,53 @@ console.error = function(...args: any[]) {
 
 // Moved handleError definition before main
 async function handleError(error: any, options: CLIOptions): Promise<void> {
-  const isMeldError = error instanceof MeldError; // Ensure MeldError is used as value
-  const severity = isMeldError ? error.severity : ErrorSeverity.Fatal;
-
-  const displayErrorWithSourceContext = async (error: MeldError) => {
-    // Dynamically load ErrorDisplayService
-    try {
-      const { ErrorDisplayService } = await import('@services/display/ErrorDisplayService/ErrorDisplayService');
-      // Resolve FileSystemService (implementation) instead of IFileSystemService
-      const fsService = resolveService<FileSystemService>('FileSystemService'); 
-      const errorDisplayService = new ErrorDisplayService(fsService);
-
-      // Get source context if available
-      // Use sourceLocation property
-      if (error.sourceLocation) {
-        const { filePath } = error.sourceLocation;
-        // Explicitly cast to Location for DTS
-        const loc = error.sourceLocation as Location;
-        const displayContext: { message: string; code?: string; cause?: Error | unknown; path?: string; startLine?: number; endLine?: number } = {
-          message: error.message,
-          code: error.code,
-          cause: error.cause,
-          path: filePath,
-          startLine: loc.start?.line,
-          endLine: loc.end?.line 
-        };
-        
-        // Check if error.details exists and has path property (MeldError uses details)
-        if (error.details && 'path' in error.details) {
-          displayContext.path = error.details.path as string;
-        }
-
-        if (displayContext.path) {
-          console.error(chalk.red(`${error.name} in ${displayContext.path}:${displayContext.startLine}`));
-          console.error(chalk.red(`> ${error.message}`));
-        } else {
-          console.error(chalk.red(`Error: ${error.message}`));
-          // Check for cause on the base Error type
-          const cause = (error as Error).cause;
-          if (cause instanceof Error) {
-            console.error(chalk.red(`  Cause: ${cause.message}`));
-          }
-        }
-      } else {
-        console.error(chalk.red(`Error: ${error.message}`));
-        // Check for cause on the base Error type
-        const cause = (error as Error).cause;
-        if (cause instanceof Error) {
-          console.error(chalk.red(`  Cause: ${cause.message}`));
-        }
-      }
-    } catch (displayError) {
-      console.error(chalk.red(`Original error: ${error.message}`));
-      if (displayError instanceof Error) {
-        console.error(chalk.yellow(`Failed to display error with source context: ${displayError.message}`));
-      } else {
-        console.error(chalk.yellow(`Failed to display error with source context: ${String(displayError)}`));
-      }
-    }
-  };
+  const isMlldError = error instanceof MlldError;
+  const isCommandError = error.constructor.name === 'MlldCommandExecutionError';
+  const severity = isMlldError ? error.severity : ErrorSeverity.Fatal;
 
   // Ensure the logger configuration matches CLI options
   logger.level = options.debug ? 'debug' : (options.verbose ? 'info' : 'warn');
 
-  if (isMeldError) {
-    await displayErrorWithSourceContext(error);
+  if (isMlldError) {
+    // Use enhanced error formatting with auto-detection
+    const fileSystem = new NodeFileSystem();
+    const errorFormatter = new ErrorFormatSelector(fileSystem);
+    
+    try {
+      let result: string;
+      
+      if (isCommandError && options.showCommandContext) {
+        // Enhanced formatting for command errors with full context
+        result = await errorFormatter.formatForCLI(error, {
+          useColors: true,
+          useSourceContext: true,
+          useSmartPaths: true,
+          basePath: path.resolve(path.dirname(options.input)),
+          workingDirectory: process.cwd(),
+          contextLines: 3 // More context for command errors
+        });
+      } else {
+        // Standard formatting
+        result = await errorFormatter.formatForCLI(error, {
+          useColors: true,
+          useSourceContext: true,
+          useSmartPaths: true,
+          basePath: path.resolve(path.dirname(options.input)),
+          workingDirectory: process.cwd(),
+          contextLines: 2
+        });
+      }
+      
+      console.error('\n' + result + '\n');
+    } catch (formatError) {
+      // Fallback to basic API format if enhanced formatting fails
+      const fallbackFormatter = new ErrorFormatSelector();
+      const result = fallbackFormatter.formatForAPI(error);
+      console.error('\n' + result.formatted + '\n');
+    }
   } else if (error instanceof Error) {
     logger.error('An unexpected error occurred:', error);
     console.error(chalk.red(`Unexpected Error: ${error.message}`));
-    // Also check for cause on standard errors
     const cause = error.cause;
     if (cause instanceof Error) {
         console.error(chalk.red(`  Cause: ${cause.message}`));
@@ -746,7 +925,7 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
  * Allows injecting a filesystem adapter for testing.
  */
 export async function main(customArgs?: string[]): Promise<void> {
-  process.title = 'meld';
+  process.title = 'mlld';
   let cliOptions: CLIOptions = { input: '' }; // Initialize with default
 
   try {
@@ -767,7 +946,7 @@ export async function main(customArgs?: string[]): Promise<void> {
     
     // Handle version flag
     if (cliOptions.version) {
-      console.log(`meld version ${version}`);
+      console.log(`mlld version ${version}`);
       return;
     }
 
@@ -780,6 +959,33 @@ export async function main(customArgs?: string[]): Promise<void> {
     // Handle init command
     if (cliOptions.input === 'init') {
       await initCommand();
+      return;
+    }
+    
+    // Handle registry command
+    if (cliOptions.input === 'registry') {
+      await registryCommand(args.slice(1));
+      return;
+    }
+    
+    // Handle install command
+    if (cliOptions.input === 'install' || cliOptions.input === 'i') {
+      const installCmd = createInstallCommand();
+      await installCmd.execute(args.slice(1), parseFlags(args));
+      return;
+    }
+    
+    // Handle ls command
+    if (cliOptions.input === 'ls' || cliOptions.input === 'list') {
+      const lsCmd = createLsCommand();
+      await lsCmd.execute(args.slice(1), parseFlags(args));
+      return;
+    }
+    
+    // Handle info command
+    if (cliOptions.input === 'info' || cliOptions.input === 'show') {
+      const infoCmd = createInfoCommand();
+      await infoCmd.execute(args.slice(1), parseFlags(args));
       return;
     }
     
@@ -831,24 +1037,18 @@ export async function main(customArgs?: string[]): Promise<void> {
     if (cliOptions.debug) {
       // Set environment variable for child processes and imported modules
       process.env.DEBUG = 'true';
-      logger.level = 'trace'; // Use the imported logger directly
-      // Set log level for all service loggers using the imported config
-      Object.values(loggingConfig.services).forEach(serviceConfig => {
-        (serviceConfig as any).level = 'debug';
-      });
+      logger.level = 'trace';
+      cliLogger.level = 'trace';
     } else if (cliOptions.verbose) {
       // Show info level messages for verbose, but no debug logs
       logger.level = 'info';
+      cliLogger.level = 'info';
       process.env.DEBUG = ''; // Explicitly disable DEBUG
     } else {
       // Only show errors by default (no debug logs)
       logger.level = 'error';
+      cliLogger.level = 'error';
       process.env.DEBUG = ''; // Explicitly disable DEBUG
-      
-      // Set all service loggers to only show errors using the imported config
-      Object.values(loggingConfig.services).forEach(serviceConfig => {
-        (serviceConfig as any).level = 'error';
-      });
     }
 
     // Watch mode or single processing
@@ -865,27 +1065,4 @@ export async function main(customArgs?: string[]): Promise<void> {
   }
 }
 
-// Only call main if this file is being run directly (not imported)
-if (require.main === module) {
-  // Keep reference to options parsed in main, or default if main throws early
-  let optionsForErrorHandler: CLIOptions = { input: 'unknown' };
-  main()
-    .then(() => {
-      // Update options if main completed successfully
-      optionsForErrorHandler = getCurrentCLIOptions() || optionsForErrorHandler;
-    })
-    .catch(async err => { // Make catch async to allow await handleError
-      // Update options if main parsed them before throwing
-      optionsForErrorHandler = getCurrentCLIOptions() || optionsForErrorHandler;
-      // Call the centralized error handler if error hasn't been logged
-      if (!(err && typeof err === 'object' && (err as any).__logged)) {
-          // Ensure err is an Error instance before passing
-          const errorToHandle = err instanceof Error ? err : new Error(String(err));
-          // Pass the options captured from main or the default
-          await handleError(errorToHandle, optionsForErrorHandler);
-      }
-      if (process.env.NODE_ENV !== 'test') {
-        process.exit(1);
-      }
-    });
-}
+// This file is now imported by cli-entry.ts, which handles the main execution

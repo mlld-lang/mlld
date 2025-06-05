@@ -1,6 +1,6 @@
-# Meld Scripts
+# Mlld Scripts
 
-This directory contains various scripts for building, validating, and managing the Meld codebase.
+This directory contains various scripts for building, validating, and managing the Mlld codebase.
 
 ## AST Validation Scripts
 

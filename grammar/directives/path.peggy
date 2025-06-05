@@ -17,67 +17,18 @@ It is used in the form:
 // TOP-LEVEL PATH DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @path directive - handles bracketed paths
+// Primary @path directive - handles bracketed paths using proper abstraction
 AtPath
-  = DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ "[" pathContent:$(!"]" .)* "]" {
-      helpers.debug('AtPath matched bracketed path', { id, pathContent });
-      
-      // Process special path variables @~ and @. directly
-      // This ensures the AST and raw string are consistent with test expectations
-      const processedContent = pathContent
-        .replace(/@~/g, '@HOMEPATH')
-        .replace(/@\./g, '@PROJECTPATH');
-      
-      // Use WrappedPathContent abstraction to process the processed content 
-      // instead of manual parsing
-      const pathWrapper = {
-        parts: [],
-        raw: processedContent
-      };
-      
-      // Parse path contents for variables - similar to what WrappedPathContent would do
-      // but with our processed special variables
-      const pathParts = [];
-      let lastIndex = 0;
-      const varPattern = /@([a-zA-Z0-9_]+)/g;
-      let match;
-      
-      while ((match = varPattern.exec(processedContent)) !== null) {
-        // Add text content before the variable
-        if (match.index > lastIndex) {
-          const textContent = processedContent.substring(lastIndex, match.index);
-          if (textContent) {
-            pathParts.push(helpers.createNode(NodeType.Text, { content: textContent }, location()));
-          }
-        }
-        
-        // Add the variable reference node
-        const varName = match[1]; 
-        pathParts.push(helpers.createVariableReferenceNode('varIdentifier', { identifier: varName }, location()));
-        
-        // Update lastIndex to after the variable reference
-        lastIndex = match.index + match[0].length;
-      }
-      
-      // Add any remaining text after the last variable
-      if (lastIndex < processedContent.length) {
-        const textContent = processedContent.substring(lastIndex);
-        if (textContent) {
-          pathParts.push(helpers.createNode(NodeType.Text, { content: textContent }, location()));
-        }
-      }
+  // Quoted string path with security options
+  = DirectiveContext "@path" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ "\"" content:$([^"]*) "\"" {
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtPath matched quoted string', { id, content, securityOptions });
       
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
       
-      // Check for variables
-      const hasVariables = pathParts.some(part => part.type === NodeType.VariableReference);
-      
-      // Other path metadata
-      const isAbsolute = processedContent.startsWith('/');
-      const hasExtension = /\.[a-zA-Z0-9]+$/.test(processedContent);
-      const extension = hasExtension ? 
-        processedContent.substring(processedContent.lastIndexOf('.') + 1) : null;
+      // Create path parts
+      const pathParts = [helpers.createNode(NodeType.Text, { content, location: location() })];
       
       return helpers.createStructuredDirective(
         'path',
@@ -88,28 +39,78 @@ AtPath
         },
         {
           identifier: id,
-          path: processedContent
+          path: content
         },
         {
-          path: {
-            hasVariables,
-            isAbsolute,
-            hasExtension,
-            extension
+          path: helpers.createPathMetadata(content, pathParts),
+          ...helpers.createSecurityMeta(securityOptions)
+        },
+        location(),
+        'path'
+      );
+    }
+  // Bracketed path with security options - semantic parsing
+  / DirectiveContext "@path" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ "[" parts:PathAssignmentParts "]" {
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtPath matched bracketed path', { id, parts });
+      
+      // Process special path variables in the parsed content (only @. special case)
+      const processedPathParts = [];
+      
+      for (const part of parts) {
+        if (part.type === 'Text' && part.content && part.content.includes('@.')) {
+          // Handle @. in text nodes by replacing with @PROJECTPATH and re-parsing as variable
+          const updatedContent = part.content.replace(/@\./g, '@PROJECTPATH');
+          
+          // If the replacement happened, we need to split this into text and variable parts
+          if (updatedContent !== part.content) {
+            // For simplicity, just replace @. with @PROJECTPATH in the text content
+            // The interpreter will handle @PROJECTPATH as a special variable
+            const newTextNode = helpers.createNode(NodeType.Text, { 
+              content: updatedContent, 
+              location: part.location 
+            });
+            processedPathParts.push(newTextNode);
+          } else {
+            processedPathParts.push(part);
           }
+        } else {
+          processedPathParts.push(part);
+        }
+      }
+      
+      // Reconstruct raw string from processed parts for metadata
+      const rawString = helpers.reconstructRawString(processedPathParts);
+      
+      // Create variable reference node for identifier
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      
+      return helpers.createStructuredDirective(
+        'path',
+        'pathAssignment',
+        {
+          identifier: [idNode],
+          path: processedPathParts
+        },
+        {
+          identifier: id,
+          path: rawString
+        },
+        {
+          path: helpers.createPathMetadata(rawString, processedPathParts),
+          ...helpers.createSecurityMeta(securityOptions)
         },
         location(),
         'path'  // Source parameter
       );
     }
-  / DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ path:PathCore {
-      helpers.debug('AtPath matched normal path', { id, path });
+  / DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? {
+      helpers.debug('AtPath matched normal path', { id, path, security });
       
-      // ProcessedPath might need @~ and @. transformed like we did above
-      let processedPath = path.raw.path;
-      if (processedPath.includes('@~') || processedPath.includes('@.')) {
+      // Process special path variables
+      let processedPath = path.raw.path || path.raw.url;
+      if (processedPath.includes('@.')) {
         processedPath = processedPath
-          .replace(/@~/g, '@HOMEPATH')
           .replace(/@\./g, '@PROJECTPATH');
       }
       
@@ -117,14 +118,13 @@ AtPath
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
       
       // We need to also process the path parts if they contain special variables
-      const processedPathParts = [...path.values.path];
+      const processedPathParts = [...(path.values.path || path.values.parts || [])];
       for (let i = 0; i < processedPathParts.length; i++) {
         const part = processedPathParts[i];
-        if (part.type === NodeType.VariableReference && 
-            (part.identifier === '~' || part.identifier === '.')) {
+        if (part.type === NodeType.VariableReference && part.identifier === '.') {
           // Clone the node and update identifier
           const newNode = { ...part };
-          newNode.identifier = part.identifier === '~' ? 'HOMEPATH' : 'PROJECTPATH';
+          newNode.identifier = 'PROJECTPATH';
           processedPathParts[i] = newNode;
         }
       }
@@ -142,11 +142,10 @@ AtPath
         },
         {
           path: {
-            hasVariables: path.meta.hasVariables,
-            isAbsolute: path.meta.isAbsolute,
-            hasExtension: path.meta.hasExtension,
-            extension: path.meta.extension
-          }
+            ...path.meta,
+            pathSubtype: path.subtype // Preserve the specific path type
+          },
+          ...helpers.createSecurityMeta(security)
         },
         location(),
         'path'  // Source parameter
@@ -157,9 +156,26 @@ AtPath
 // HELPER RULES (special path identifiers)
 // -------------------------------------------------------------
 
-// Special path identifiers (HOMEPATH, PROJECTPATH, etc.)
+// Path parts for path assignment - allows @var interpolation
+PathAssignmentParts
+  = parts:(PathAssignmentVariable / PathTextSegment / PathSeparator)* {
+      return parts;
+    }
+
+// Variable in path assignment context
+PathAssignmentVariable
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / SpecialVariable
+
+// Special path identifiers
 SpecialPathIdentifier
-  = "HOMEPATH" / "~" / "PROJECTPATH" / "." {
+  = "PROJECTPATH" / "." {
       return text();
     }
 

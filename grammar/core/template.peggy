@@ -44,8 +44,7 @@ TemplateCore
           content: template.raw 
         },
         meta: {
-          hasVariables: hasVariables,
-          isTemplateContent: isTemplateContent,
+          ...helpers.createTemplateMetadata(template.parts, template.wrapperType),
           wrapperType: template.wrapperType
         }
       };
@@ -72,9 +71,7 @@ RichTemplateCore
           ...(options ? { options: options.raw } : {})
         },
         meta: {
-          hasVariables: template.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          ),
+          ...helpers.createTemplateMetadata(template.parts, template.wrapperType),
           hasOptions: !!options
         }
       };

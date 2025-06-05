@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -22,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -90,6 +91,54 @@
         
           
         
+          
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
+          
+        
         
         <li>
           <h4>Directives</h4>
@@ -112,6 +161,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" >
                   
                     @data
@@ -121,18 +179,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -174,6 +223,46 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
+              
             
           </ul>
         </li>
@@ -185,14 +274,14 @@
     <h1 id="%40text-directive" tabindex="-1">@text Directive</h1>
 <p>The <code>@text</code> directive defines a text variable that can store string values.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
-<pre><code class="language-meld">@text identifier = &quot;value&quot;
-@text identifier = @embed [content]
-@text identifier = @run [command]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> identifier = <span class="token string">"value"</span>
+<span class="token directive keyword">@text</span> identifier = <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>content<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> identifier = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(command)<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Where:</p>
 <ul>
 <li><code>identifier</code> is the variable name (must be a valid identifier)</li>
-<li><code>value</code> can be a quoted string, the result of an <code>@embed</code> directive, or the result of an <code>@run</code> directive</li>
+<li><code>value</code> can be a quoted string, the result of an <code>@add</code> directive, or the result of an <code>@run</code> directive</li>
 </ul>
 <h2 id="identifier-requirements" tabindex="-1">Identifier Requirements</h2>
 <ul>
@@ -203,21 +292,21 @@
 </ul>
 <h2 id="string-values" tabindex="-1">String Values</h2>
 <p>Text values can be defined using different quote styles:</p>
-<pre><code class="language-meld">@text simple = &quot;Plain string&quot;       # Double quotes
-@text also_simple = 'Single quotes' # Single quotes
-@text template = `Hello {{name}}`    # Template literal with variable
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> simple = <span class="token string">"Plain string"</span>       # Double quotes
+<span class="token directive keyword">@text</span> also_simple = 'Single quotes' # Single quotes
+<span class="token directive keyword">@text</span> template = `Hello <span class="token punctuation">{</span><span class="token punctuation">{</span>name<span class="token punctuation">}</span><span class="token punctuation">}</span>`    # Template literal <span class="token operator">with</span> variable
 </code></pre>
 <p>For multi-line strings, use template literals with the <code>[[</code> and <code>]]</code> delimiters:</p>
-<pre><code class="language-meld">@text multiline = [[`
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> multiline = <span class="token template-block"><span class="token punctuation">[[</span>`
   This is a
   multi-line
-  string with {{variables}}
-`]]
+  string with <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">variables</span><span class="token punctuation">}}</span></span>
+`<span class="token punctuation">]]</span></span>
 </code></pre>
 <h2 id="referencing-text-variables" tabindex="-1">Referencing Text Variables</h2>
 <p>Text variables are referenced using the <code>{{identifier}}</code> syntax:</p>
-<pre><code class="language-meld">@text name = &quot;World&quot;
-@text greeting = `Hello, {{name}}!`
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name = <span class="token string">"World"</span>
+<span class="token directive keyword">@text</span> greeting = `Hello<span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>name<span class="token punctuation">}</span><span class="token punctuation">}</span>!`
 </code></pre>
 <h2 id="variable-interpolation" tabindex="-1">Variable Interpolation</h2>
 <p>Template literals (using backticks) support variable interpolation:</p>
@@ -226,9 +315,9 @@
 <li>Nested variables: <code>Hello, {{user.{{userType}}}}</code></li>
 </ul>
 <h2 id="string-concatenation" tabindex="-1">String Concatenation</h2>
-<pre><code class="language-meld">@text first = &quot;Hello&quot;
-@text second = &quot;World&quot;
-@text message = {{first}} ++ &quot; &quot; ++ {{second}}
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> first = <span class="token string">"Hello"</span>
+<span class="token directive keyword">@text</span> second = <span class="token string">"World"</span>
+<span class="token directive keyword">@text</span> message = <span class="token punctuation">{</span><span class="token punctuation">{</span>first<span class="token punctuation">}</span><span class="token punctuation">}</span> ++ <span class="token string">" "</span> ++ <span class="token punctuation">{</span><span class="token punctuation">{</span>second<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <ul>
 <li>Requires spaces on both sides of the <code>++</code> operator</li>
@@ -237,14 +326,14 @@
 </ul>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic text variable:</p>
-<pre><code class="language-meld">@text title = &quot;My Document&quot;
-@text author = &quot;Jane Smith&quot;
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> title = <span class="token string">"My Document"</span>
+<span class="token directive keyword">@text</span> author = <span class="token string">"Jane Smith"</span>
 </code></pre>
 <p>Using the result of a command:</p>
-<pre><code class="language-meld">@text date = @run [date +&quot;%Y-%m-%d&quot;]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> date = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(date +"%Y-%m-%d")<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Embedding file content:</p>
-<pre><code class="language-meld">@text header = @embed [header.md]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> header = <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>header.md<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <ul>
@@ -320,7 +409,7 @@
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

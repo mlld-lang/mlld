@@ -1,293 +1,191 @@
-import type { IFileSystem } from '@services/fs/FileSystemService/IFileSystem';
-import * as path from 'path';
-import { Stats } from 'fs-extra';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
 
 /**
- * Simple in-memory file system implementation for use with the runMeld API.
- * This allows processing meld content without touching the real file system.
+ * In-memory file system for testing
+ * Implements the IFileSystemService interface needed by the interpreter
  */
-export class MemoryFileSystem implements IFileSystem {
-  private files: Map<string, string> = new Map();
-  private dirs: Set<string> = new Set();
-  isTestEnvironment: boolean = true;
-
-  constructor() {
-    // Initialize with root directory
-    this.dirs.add('/');
-  }
-
-  /**
-   * Read a file from memory
-   */
+export class MemoryFileSystem implements IFileSystemService {
+  private files = new Map<string, string>();
+  
   async readFile(filePath: string): Promise<string> {
     const normalizedPath = this.normalizePath(filePath);
-    if (!this.files.has(normalizedPath)) {
-      throw new Error(`File not found: ${filePath}`);
+    const content = this.files.get(normalizedPath);
+    if (content === undefined) {
+      const error = new Error(`ENOENT: no such file or directory, open '${filePath}'`) as any;
+      error.code = 'ENOENT';
+      error.path = filePath;
+      throw error;
     }
-    return this.files.get(normalizedPath) || '';
+    return content;
   }
-
-  /**
-   * Write a file to memory
-   */
+  
   async writeFile(filePath: string, content: string): Promise<void> {
     const normalizedPath = this.normalizePath(filePath);
-    // Ensure parent directory exists
-    const dirPath = path.dirname(normalizedPath);
-    await this.mkdir(dirPath);
-    
+    // Create parent directories if they don't exist
+    const dir = this.dirname(normalizedPath);
+    if (dir && dir !== '/' && !await this.isDirectory(dir)) {
+      await this.mkdir(dir, { recursive: true });
+    }
     this.files.set(normalizedPath, content);
   }
-
-  /**
-   * Check if a file exists in memory
-   */
+  
   async exists(filePath: string): Promise<boolean> {
     const normalizedPath = this.normalizePath(filePath);
-    return this.files.has(normalizedPath) || this.dirs.has(normalizedPath);
+    // Check if it's a file
+    if (this.files.has(normalizedPath)) {
+      return true;
+    }
+    // Check if it's a directory
+    return await this.isDirectory(normalizedPath);
   }
-
-  /**
-   * Create a directory in memory
-   */
+  
   async mkdir(dirPath: string, options?: { recursive?: boolean }): Promise<void> {
     const normalizedPath = this.normalizePath(dirPath);
-    
     if (options?.recursive) {
-      // Create parent directories if needed
-      const parts = normalizedPath.split('/').filter(Boolean);
-      let currentPath = '/';
-      
-      this.dirs.add(currentPath);
-      
+      // Create all parent directories
+      const parts = normalizedPath.split('/').filter(p => p);
+      let current = '';
       for (const part of parts) {
-        currentPath = path.join(currentPath, part);
-        this.dirs.add(currentPath);
+        current = current ? `${current}/${part}` : `/${part}`;
+        // Mark as directory by adding trailing slash in our tracking
+        this.files.set(current + '/.dir', '');
       }
     } else {
-      // Ensure parent directory exists for non-recursive mkdir
-      const parentDir = path.dirname(normalizedPath);
-      if (parentDir !== normalizedPath && !this.dirs.has(parentDir)) {
-        // Create parent directory recursively
-        await this.mkdir(parentDir, { recursive: true });
-      }
-      // Add this directory
-      this.dirs.add(normalizedPath);
+      // Just create this directory
+      this.files.set(normalizedPath + '/.dir', '');
     }
   }
-
-  /**
-   * Check if a path is a file
-   */
-  async isFile(filePath: string): Promise<boolean> {
-    const normalizedPath = this.normalizePath(filePath);
-    return this.files.has(normalizedPath);
+  
+  async readdir(dirPath: string): Promise<string[]> {
+    const normalizedPath = this.normalizePath(dirPath);
+    const entries = new Set<string>();
+    const prefix = normalizedPath === '/' ? '/' : normalizedPath + '/';
+    
+    for (const filePath of this.files.keys()) {
+      if (filePath.startsWith(prefix) && filePath !== prefix) {
+        const relativePath = filePath.slice(prefix.length);
+        // Skip .dir markers
+        if (relativePath === '.dir') continue;
+        
+        const firstSegment = relativePath.split('/')[0];
+        if (firstSegment && firstSegment !== '.dir') {
+          entries.add(firstSegment);
+        }
+      }
+    }
+    
+    return Array.from(entries).sort();
   }
-
-  /**
-   * Check if a path is a directory
-   */
+  
   async isDirectory(filePath: string): Promise<boolean> {
     const normalizedPath = this.normalizePath(filePath);
-    return this.dirs.has(normalizedPath);
-  }
-
-  /**
-   * List directory contents
-   */
-  async readDir(dirPath: string): Promise<string[]> {
-    const normalizedPath = this.normalizePath(dirPath);
-    if (!this.dirs.has(normalizedPath)) {
-      throw new Error(`Directory not found: ${dirPath}`);
+    
+    // Root is always a directory
+    if (normalizedPath === '/') return true;
+    
+    // Check if we have a .dir marker
+    if (this.files.has(normalizedPath + '/.dir')) {
+      return true;
     }
     
-    const entries: string[] = [];
-    const prefix = normalizedPath === '/' ? '/' : normalizedPath + '/';
-    
-    // Find all files directly in this directory
-    for (const filePath of this.files.keys()) {
-      if (filePath.startsWith(prefix)) {
-        const relativePath = filePath.substring(prefix.length);
-        if (!relativePath.includes('/')) {
-          entries.push(relativePath);
-        }
+    // Check if any files exist under this path
+    const prefix = normalizedPath + '/';
+    for (const key of this.files.keys()) {
+      if (key.startsWith(prefix)) {
+        return true;
       }
     }
-    
-    // Find all subdirectories directly in this directory
-    for (const dirPath of this.dirs) {
-      if (dirPath !== normalizedPath && dirPath.startsWith(prefix)) {
-        const relativePath = dirPath.substring(prefix.length);
-        if (!relativePath.includes('/')) {
-          entries.push(relativePath);
-        }
-      }
-    }
-    
-    return entries;
+    return false;
   }
-
-  /**
-   * Get file stats
-   */
-  async stat(filePath: string): Promise<Stats> {
+  
+  async stat(filePath: string): Promise<{ isDirectory(): boolean; isFile(): boolean; size?: number }> {
     const normalizedPath = this.normalizePath(filePath);
-    if (this.files.has(normalizedPath)) {
-      // It's a file
-      const content = this.files.get(normalizedPath) || '';
-      return {
-        isFile: () => true,
-        isDirectory: () => false,
-        size: content.length,
-        mtime: new Date(),
-        ctime: new Date(),
-        atime: new Date(),
-        birthtime: new Date(),
-        mode: 0o666,
-        // Add other required Stats properties
-      } as unknown as Stats;
+    const isDir = await this.isDirectory(normalizedPath);
+    const isFile = this.files.has(normalizedPath) && !normalizedPath.endsWith('/.dir');
+    
+    if (!isDir && !isFile) {
+      const error = new Error(`ENOENT: no such file or directory, stat '${filePath}'`) as any;
+      error.code = 'ENOENT';
+      error.path = filePath;
+      throw error;
     }
     
-    if (this.dirs.has(normalizedPath)) {
-      // It's a directory
-      return {
-        isFile: () => false,
-        isDirectory: () => true,
-        size: 0,
-        mtime: new Date(),
-        ctime: new Date(),
-        atime: new Date(),
-        birthtime: new Date(),
-        mode: 0o777,
-        // Add other required Stats properties
-      } as unknown as Stats;
-    }
+    const content = isFile ? this.files.get(normalizedPath) : '';
     
-    throw new Error(`Path not found: ${filePath}`);
-  }
-
-  /**
-   * Watch a file or directory for changes
-   * This is a minimal implementation that doesn't actually watch anything
-   * since it's for the runMeld API which doesn't need watching
-   */
-  async *watch(
-    path: string, 
-    options?: { recursive?: boolean }
-  ): AsyncIterableIterator<{ filename: string; eventType: string }> {
-    // This is a no-op implementation since we don't need actual watching
-    // for the runMeld API
-    return;
-  }
-
-  /**
-   * Execute a command
-   * This is a minimal implementation that doesn't actually execute anything
-   * but returns empty stdout/stderr
-   */
-  async executeCommand(
-    command: string, 
-    options?: { cwd?: string }
-  ): Promise<{ stdout: string; stderr: string }> {
-    // This is a simplified implementation for in-memory usage
-    // Just return empty output
     return {
-      stdout: '',
-      stderr: ''
+      isDirectory: () => isDir,
+      isFile: () => isFile,
+      size: content ? Buffer.byteLength(content, 'utf8') : 0
     };
   }
-
-  /**
-   * Rename a file or directory
-   */
-  async rename(oldPath: string, newPath: string): Promise<void> {
-    const normalizedOldPath = this.normalizePath(oldPath);
-    const normalizedNewPath = this.normalizePath(newPath);
-    
-    if (this.files.has(normalizedOldPath)) {
-      // Rename file
-      const content = this.files.get(normalizedOldPath) || '';
-      this.files.set(normalizedNewPath, content);
-      this.files.delete(normalizedOldPath);
-    } else if (this.dirs.has(normalizedOldPath)) {
-      // Rename directory
-      this.dirs.add(normalizedNewPath);
-      this.dirs.delete(normalizedOldPath);
-      
-      // Move all files in this directory
-      const oldPrefix = normalizedOldPath === '/' ? '/' : normalizedOldPath + '/';
-      const newPrefix = normalizedNewPath === '/' ? '/' : normalizedNewPath + '/';
-      
-      for (const [filePath, content] of [...this.files.entries()]) {
-        if (filePath.startsWith(oldPrefix)) {
-          const newFilePath = newPrefix + filePath.substring(oldPrefix.length);
-          this.files.set(newFilePath, content);
-          this.files.delete(filePath);
-        }
-      }
-      
-      // Move all subdirectories
-      for (const dirPath of [...this.dirs]) {
-        if (dirPath.startsWith(oldPrefix)) {
-          const newDirPath = newPrefix + dirPath.substring(oldPrefix.length);
-          this.dirs.add(newDirPath);
-          this.dirs.delete(dirPath);
-        }
-      }
-    } else {
-      throw new Error(`Path not found: ${oldPath}`);
-    }
+  
+  // Add execute method for command execution (needed by Environment)
+  async execute(command: string, options?: any): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    // Mock implementation - can be customized per test
+    return {
+      stdout: `Mock output for: ${command}`,
+      stderr: '',
+      exitCode: 0
+    };
   }
-
-  /**
-   * Delete a file
-   */
-  async unlink(filePath: string): Promise<void> {
-    const normalizedPath = this.normalizePath(filePath);
-    if (!this.files.has(normalizedPath)) {
-      throw new Error(`File not found: ${filePath}`);
-    }
-    this.files.delete(normalizedPath);
-  }
-
-  /**
-   * Delete a directory
-   */
-  async rmdir(dirPath: string): Promise<void> {
-    const normalizedPath = this.normalizePath(dirPath);
-    if (!this.dirs.has(normalizedPath)) {
-      throw new Error(`Directory not found: ${dirPath}`);
-    }
-    
-    // Check if directory is empty
-    const prefix = normalizedPath === '/' ? '/' : normalizedPath + '/';
-    
-    for (const filePath of this.files.keys()) {
-      if (filePath.startsWith(prefix)) {
-        throw new Error(`Directory not empty: ${dirPath}`);
-      }
-    }
-    
-    for (const subDirPath of this.dirs) {
-      if (subDirPath !== normalizedPath && subDirPath.startsWith(prefix)) {
-        throw new Error(`Directory not empty: ${dirPath}`);
-      }
-    }
-    
-    this.dirs.delete(normalizedPath);
-  }
-
-  /**
-   * Helper method to normalize a path
-   */
+  
+  // Helper methods
   private normalizePath(filePath: string): string {
-    return path.normalize(filePath).replace(/\\/g, '/');
+    // Normalize the path to always use forward slashes and handle edge cases
+    if (!filePath || filePath === '.') return '/';
+    
+    // Ensure absolute paths
+    let normalized = filePath.startsWith('/') ? filePath : '/' + filePath;
+    
+    // Remove trailing slashes except for root
+    if (normalized !== '/' && normalized.endsWith('/')) {
+      normalized = normalized.slice(0, -1);
+    }
+    
+    // Handle double slashes
+    normalized = normalized.replace(/\/+/g, '/');
+    
+    return normalized;
   }
-
-  /**
-   * Required by interface but no-op for in-memory FS
-   */
-  setFileSystem(fileSystem: IFileSystem): void {
-    // No-op
+  
+  private dirname(filePath: string): string {
+    const normalized = this.normalizePath(filePath);
+    if (normalized === '/') return '/';
+    
+    const lastSlash = normalized.lastIndexOf('/');
+    if (lastSlash === 0) return '/';
+    return normalized.slice(0, lastSlash);
   }
-} 
+  
+  // Extended methods for compatibility with code that uses fs directly
+  async rm(filePath: string, options?: { recursive?: boolean; force?: boolean }): Promise<void> {
+    const normalizedPath = this.normalizePath(filePath);
+    
+    if (options?.recursive) {
+      // Remove all files under this path
+      const toRemove: string[] = [];
+      for (const key of this.files.keys()) {
+        if (key.startsWith(normalizedPath)) {
+          toRemove.push(key);
+        }
+      }
+      toRemove.forEach(key => this.files.delete(key));
+    } else {
+      // Just remove this specific file
+      if (!this.files.delete(normalizedPath) && !options?.force) {
+        const error = new Error(`ENOENT: no such file or directory, rm '${filePath}'`) as any;
+        error.code = 'ENOENT';
+        throw error;
+      }
+    }
+  }
+  
+  // Access method for compatibility
+  async access(filePath: string): Promise<void> {
+    if (!await this.exists(filePath)) {
+      const error = new Error(`ENOENT: no such file or directory, access '${filePath}'`) as any;
+      error.code = 'ENOENT';
+      throw error;
+    }
+  }
+}

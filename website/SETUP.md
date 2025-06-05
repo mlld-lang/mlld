@@ -1,6 +1,6 @@
-# Setting Up the Meld Documentation Site
+# Setting Up the Mlld Documentation Site
 
-This guide explains how to set up and run the Meld documentation site locally.
+This guide explains how to set up and run the Mlld documentation site locally.
 
 ## Prerequisites
 
@@ -12,8 +12,8 @@ This guide explains how to set up and run the Meld documentation site locally.
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/meld.git
-cd meld
+git clone https://github.com/yourusername/mlld.git
+cd mlld
 ```
 
 2. Install the dependencies:

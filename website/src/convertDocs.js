@@ -65,20 +65,29 @@ function convertFile(filePath) {
   // Read the source file
   const content = fs.readFileSync(filePath, 'utf8');
   
-  // Extract the title from the first heading
-  const titleMatch = content.match(/^#\s+(.*)$/m);
-  let title = titleMatch ? titleMatch[1] : path.basename(filePath, '.md');
+  // Check if the file already has frontmatter
+  const hasFrontmatter = content.startsWith('---\n');
   
-  // Escape special characters in YAML by wrapping title in quotes
-  title = title.replace(/"/g, '\\"'); // Escape double quotes if present
-  
-  // Add frontmatter
-  const newContent = `---
+  let newContent;
+  if (hasFrontmatter) {
+    // File already has frontmatter, just copy it as-is
+    newContent = content;
+  } else {
+    // Extract the title from the first heading
+    const titleMatch = content.match(/^#\s+(.*)$/m);
+    let title = titleMatch ? titleMatch[1] : path.basename(filePath, '.md');
+    
+    // Escape special characters in YAML by wrapping title in quotes
+    title = title.replace(/"/g, '\\"'); // Escape double quotes if present
+    
+    // Add frontmatter
+    newContent = `---
 layout: docs.njk
 title: "${title}"
 ---
 
 ${content}`;
+  }
   
   // Write to destination
   fs.writeFileSync(outputPath, newContent);

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from '@core/ast/parser';
-import { TextAssignmentDirectiveNode, TextTemplateDirectiveNode } from '../../core/ast/types/text';
-import { isTextAssignmentDirective, isTextTemplateDirective } from '../../core/ast/types/guards';
+import { parse } from '@grammar/parser';
+import { TextAssignmentDirectiveNode, TextTemplateDirectiveNode } from '@core/types/text';
+import { isTextAssignmentDirective, isTextTemplateDirective } from '@core/types/guards';
 
 describe('Text Directive Tests', () => {
   describe('Text Assignment', () => {
@@ -29,27 +29,30 @@ describe('Text Directive Tests', () => {
       expect(isTextAssignmentDirective(result)).toBe(true);
     });
     
-    it('should parse a text assignment with add', async () => {
-      const result = (await parse('@text content = @add [./README.md]')).ast[0] as TextAssignmentDirectiveNode;
+    it('should parse a text assignment with path', async () => {
+      const result = (await parse('@text content = [./README.md]')).ast[0];
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
-      expect(result.subtype).toBe('textAssignment');
+      expect(result.subtype).toBe('textPath');
       
-      // Check values
+      // Check values - textPath uses 'path' not 'content'
       expect(result.values.identifier).toHaveLength(1);
       expect(result.values.identifier[0].identifier).toBe('content');
-      expect(result.source).toBe('add');
+      expect(result.values.path).toBeDefined();
+      expect(result.source).toBe('path');
       
       // Check meta
-      expect(result.meta.add).toBeDefined();
+      expect(result.meta.sourceType).toBe('path');
+      expect(result.meta.hasVariables).toBe(false);
       
-      // Type guard
-      expect(isTextAssignmentDirective(result)).toBe(true);
+      // For textPath subtype, we might need a different type guard
+      // For now, just check the subtype directly
+      expect(result.subtype).toBe('textPath');
     });
     
     it('should parse a text assignment with run', async () => {
-      const result = (await parse('@text output = @run [echo "Hello"]')).ast[0] as TextAssignmentDirectiveNode;
+      const result = (await parse('@text output = @run [(echo "Hello")]')).ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -61,6 +64,8 @@ describe('Text Directive Tests', () => {
       expect(result.source).toBe('run');
       
       // Check meta
+      expect(result.meta.sourceType).toBe('directive');
+      expect(result.meta.directive).toBe('run');
       expect(result.meta.run).toBeDefined();
       
       // Type guard
@@ -132,7 +137,9 @@ describe('Text Directive Tests', () => {
     
     it('should reject a template text without an identifier', async () => {
       // A text directive without an identifier should be rejected as invalid syntax
-      await expect(parse('@text [[This is invalid syntax]]')).rejects.toThrow();
+      const result = await parse('@text [[This is invalid syntax]]');
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
     });
   });
 });

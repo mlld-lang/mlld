@@ -1,8 +1,8 @@
 /**
  * Helper utilities for grammar testing
  */
-import { parse } from '../../../core/ast';
-import type { DirectiveNode, MeldNode } from '../../../core/ast/types';
+import { parse } from '@grammar/parser';
+import type { DirectiveNode, MlldNode } from '@core/types';
 
 /**
  * Parse input and return the first node, ensuring it's a directive
@@ -14,7 +14,7 @@ export async function parseDirective(input: string): Promise<DirectiveNode> {
     throw new Error(`Expected 1 node, got ${ast.length}`);
   }
   
-  const node = ast[0] as MeldNode;
+  const node = ast[0] as MlldNode;
   if (node.type !== 'Directive') {
     throw new Error(`Expected Directive node, got ${node.type}`);
   }

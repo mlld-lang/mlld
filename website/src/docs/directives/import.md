@@ -5,12 +5,12 @@ title: "@import Directive"
 
 # @import Directive
 
-The `@import` directive allows you to import variables and commands from other Meld files.
+The `@import` directive allows you to import variables and commands from other Mlld files.
 
 ## Syntax
 
 Modern syntax:
-```meld
+```mlld
 @import [path.mld]                           # Import all variables
 @import [*] from [path.mld]                  # Import all variables (equivalent)
 @import [var1, var2] from [path.mld]        # Import specific variables
@@ -18,19 +18,19 @@ Modern syntax:
 ```
 
 Legacy syntax (also supported):
-```meld
+```mlld
 @import path="path.mld"                     # Import all variables
 @import path="path.mld" imports=[var1, var2] # Import specific variables
 ```
 
 Where:
-- `path.mld` is the path to the Meld file to import
+- `path.mld` is the path to the Mlld file to import
 - `var1`, `var2` are variable names to import
 - `alias1` is an alternative name to use for the imported variable
 
 ## Import Behavior
 
-When you import a Meld file:
+When you import a Mlld file:
 - All variables and commands defined in the imported file become available
 - Text content from the imported file is NOT included
 - Imports should be placed at the top of your file
@@ -54,49 +54,49 @@ The path can be:
 ## Selective Imports and Aliases
 
 Specify selective imports using a comma-separated list:
-```meld
+```mlld
 @import [var1, var2, var3] from [path.mld]
 ```
 
 Import with aliases to avoid name conflicts:
-```meld
+```mlld
 @import [var1 as myVar1, var2 as myVar2] from [path.mld]
 ```
 
 Alternative alias syntax with colon:
-```meld
+```mlld
 @import [var1:myVar1, var2:myVar2] from [path.mld]
 ```
 
 ## Examples
 
 Basic import:
-```meld
+```mlld
 @import ["$PROJECTPATH/utils.mld"]
 ```
 
 Import with path variables:
-```meld
+```mlld
 @path lib = "$PROJECTPATH/lib"
 @import [$lib/utils.mld]
 ```
 
 Selective import:
-```meld
+```mlld
 @import [textVar, dataVar] from [$lib/utils.mld]
 ```
 
 Import with aliases:
-```meld
+```mlld
 @import [textVar as myText, dataVar as myData] from [$lib/utils.mld]
 ```
 
 Using imported variables:
-```meld
+```mlld
 @import ["$PROJECTPATH/utils.mld"]
 
 @text message = `Hello, {{importedName}}!`
-@run [$importedCommand({{param}})]
+@run [($importedCommand({{param}}))]
 ```
 
 ## Error Handling
@@ -110,7 +110,7 @@ The implementation handles various error scenarios:
 
 ## Notes
 
-- Imported files must be valid Meld files
+- Imported files must be valid Mlld files
 - Missing import files will generate fatal errors
 - Imports should generally be placed at the top of your file
 - Imported files can have their own imports (nesting is supported)

@@ -1,6 +1,6 @@
 # Test Standards and Best Practices
 
-This document outlines the standard patterns and best practices for testing in the Meld codebase.
+This document outlines the standard patterns and best practices for testing in the Mlld codebase.
 
 ## Core Principles
 
@@ -83,7 +83,7 @@ it('should handle errors', async () => {
   await expectToThrowWithConfig(async () => {
     await service.methodThatThrows();
   }, {
-    errorType: MeldError,
+    errorType: MlldError,
     code: ErrorCode.VALIDATION_ERROR,
     message: 'Expected error message'
   });

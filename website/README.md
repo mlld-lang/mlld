@@ -1,6 +1,6 @@
-# Meld Documentation Site
+# Mlld Documentation Site
 
-This is the documentation site for Meld, a document templating language designed for creating modular prompts and dynamic text content.
+This is the documentation site for Mlld, a document templating language designed for creating modular prompts and dynamic text content.
 
 ## Development
 

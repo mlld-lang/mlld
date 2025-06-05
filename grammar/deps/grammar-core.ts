@@ -12,7 +12,9 @@ export const NodeType = {
   SectionMarker: 'SectionMarker',
   Error: 'Error',
   Newline: 'Newline',
-  StringLiteral: 'StringLiteral', // Added missing type
+  StringLiteral: 'StringLiteral',
+  Frontmatter: 'Frontmatter',
+  CommandBase: 'CommandBase',
 } as const;
 export type NodeTypeKey = keyof typeof NodeType;
 
@@ -24,12 +26,14 @@ export const DirectiveKind = {
   data: 'data',
   path: 'path',
   import: 'import',
+  output: 'output',
+  when: 'when',
 } as const;
 export type DirectiveKindKey = keyof typeof DirectiveKind;
 
 export const helpers = {
   debug(msg: string, ...args: unknown[]) {
-    if (process.env.DEBUG_MELD_GRAMMAR) console.log('[DEBUG GRAMMAR]', msg, ...args);
+    if (process.env.DEBUG_MLLD_GRAMMAR) console.log('[DEBUG GRAMMAR]', msg, ...args);
   },
 
   isLogicalLineStart(input: string, pos: number) {
@@ -195,6 +199,17 @@ export const helpers = {
            !this.isRHSContext(input, pos);
   },
 
+  /**
+   * Determines if the current position is within a run code block context
+   * This is used to identify language + code block patterns
+   */
+  isInRunCodeBlockContext(input: string, pos: number): boolean {
+    // This is a simplified implementation
+    // In a full implementation, this would check for language + code block patterns
+    // For now, return false to avoid breaking the parser
+    return false;
+  },
+
   createNode<T extends object>(type: NodeTypeKey, props: T & { location?: any }) {
     return Object.freeze({
       type,
@@ -224,12 +239,12 @@ export const helpers = {
   },
 
   createVariableReferenceNode(valueType: string, data: any) {
-    return this.createNode(NodeType.VariableReference, { valueType, isVariableReference: true, ...data });
+    return this.createNode(NodeType.VariableReference, { valueType, ...data });
   },
 
   normalizePathVar(id: string) {
-    if (id === '~') return 'HOMEPATH';
     if (id === '.') return 'PROJECTPATH';
+    if (id === 'TIME') return 'TIME';
     return id;
   },
 
@@ -293,17 +308,28 @@ export const helpers = {
           // Handle different variable types with appropriate syntax
           const varId = nodes.identifier;
           const valueType = nodes.valueType;
+          const fields = nodes.fields || [];
+          
+          // Build the field access path
+          let fieldPath = '';
+          for (const field of fields) {
+            if (field.type === 'field' || field.type === 'dot') {
+              fieldPath += `.${field.name || field.value}`;
+            } else if (field.type === 'array') {
+              fieldPath += `[${field.index}]`;
+            }
+          }
           
           // Variable syntax handling:
           // - 'varInterpolation' for {{var}} (in strings)
           // - 'varIdentifier' for @var (direct reference)
           if (valueType === 'varInterpolation') {
-            return `{{${varId}}}`;
+            return `{{${varId}${fieldPath}}}`;
           } else if (valueType === 'varIdentifier') {
-            return `@${varId}`;
+            return `@${varId}${fieldPath}`;
           } else {
             // Default case - should not happen with consistent valueTypes
-            return `{{${varId}}}`;
+            return `{{${varId}${fieldPath}}}`;
           }
         }
       }
@@ -320,15 +346,26 @@ export const helpers = {
       } else if (node.type === NodeType.VariableReference) {
         const varId = node.identifier;
         const valueType = node.valueType;
+        const fields = node.fields || [];
+        
+        // Build the field access path
+        let fieldPath = '';
+        for (const field of fields) {
+          if (field.type === 'field' || field.type === 'dot') {
+            fieldPath += `.${field.name || field.value}`;
+          } else if (field.type === 'array') {
+            fieldPath += `[${field.index}]`;
+          }
+        }
         
         // Use the same variable syntax handling logic as above
         if (valueType === 'varInterpolation') {
-          raw += `{{${varId}}}`;
+          raw += `{{${varId}${fieldPath}}}`;
         } else if (valueType === 'varIdentifier') {
-          raw += `@${varId}`;
+          raw += `@${varId}${fieldPath}`;
         } else {
           // Default case - should not happen with consistent valueTypes
-          raw += `{{${varId}}}`;
+          raw += `{{${varId}${fieldPath}}}`;
         }
       } else if (node.type === NodeType.PathSeparator) {
         raw += node.value || ''; // Append '/' or '.'
@@ -347,5 +384,173 @@ export const helpers = {
       }
     }
     return raw;
+  },
+
+  createPathMetadata(rawPath: string, parts: any[]) {
+    return {
+      hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+      isAbsolute: rawPath.startsWith('/'),
+      hasExtension: /\.[a-zA-Z0-9]+$/.test(rawPath),
+      extension: rawPath.match(/\.([a-zA-Z0-9]+)$/)?.[1] || null
+    };
+  },
+
+  createCommandMetadata(parts: any[]) {
+    return {
+      hasVariables: parts.some(p => p && p.type === NodeType.VariableReference)
+    };
+  },
+
+  createTemplateMetadata(parts: any[], wrapperType: string) {
+    return {
+      hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+      isTemplateContent: wrapperType === 'doubleBracket'
+    };
+  },
+
+  createUrlMetadata(protocol: string, parts: any[], hasSection: boolean = false) {
+    return {
+      isUrl: true,
+      protocol,
+      hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+      hasSection
+    };
+  },
+
+  ttlToSeconds(value: number, unit: string): number {
+    const multipliers: Record<string, number> = {
+      'seconds': 1,
+      'minutes': 60,
+      'hours': 3600,
+      'days': 86400,
+      'weeks': 604800
+    };
+    return value * (multipliers[unit] || 1);
+  },
+
+  createSecurityMeta(options?: any) {
+    if (!options) return {};
+    
+    const meta: any = {};
+    
+    if (options.ttl) {
+      meta.ttl = options.ttl;
+    }
+    
+    if (options.trust) {
+      meta.trust = options.trust;
+    }
+    
+    return meta;
+  },
+
+  detectFormatFromPath(path: string): string | null {
+    const ext = path.match(/\.([a-zA-Z0-9]+)$/)?.[1]?.toLowerCase();
+    if (!ext) return null;
+    
+    const formatMap: Record<string, string> = {
+      'json': 'json',
+      'xml': 'xml',
+      'yaml': 'yaml',
+      'yml': 'yaml',
+      'csv': 'csv',
+      'md': 'markdown',
+      'markdown': 'markdown',
+      'txt': 'text',
+      'text': 'text'
+    };
+    return formatMap[ext] || null;
+  },
+
+  createSectionMeta(pathParts: any[], sectionParts: any[], hasRename: boolean) {
+    return {
+      sourceType: 'section',
+      hasVariables: [...pathParts, ...sectionParts].some(part =>
+        part && part.type === 'VariableReference'
+      ),
+      hasRename: hasRename
+    };
+  },
+
+  reconstructSectionPath(pathParts: any[], sectionParts: any[]): string {
+    const pathStr = this.reconstructRawString(pathParts);
+    const sectionStr = this.reconstructRawString(sectionParts);
+    return `${pathStr} # ${sectionStr}`;
+  },
+
+  /**
+   * Checks if we're at a bracket that should end command parsing
+   * This uses a specific heuristic: ] at end of input OR ] on its own line
+   */
+  isCommandEndingBracket(input: string, pos: number): boolean {
+    if (input[pos] !== ']') return false;
+
+    // Check if ] is at the end of input (single-line commands)
+    const nextPos = pos + 1;
+    if (nextPos >= input.length) return true;
+
+    // Check if ] is followed only by whitespace then newline (] on its own line in multi-line commands)
+    let i = nextPos;
+    while (i < input.length && (input[i] === ' ' || input[i] === '\t')) {
+      i++;
+    }
+    
+    // Must be followed by newline or end of input
+    return i >= input.length || input[i] === '\n';
+  },
+
+  /**
+   * Parse command content that may contain variables and text segments
+   * This is used by the CommandBracketContent rule to handle @var interpolation
+   */
+  parseCommandContent(content: string): any[] {
+    const parts = [];
+    let i = 0;
+    let currentText = '';
+    
+    while (i < content.length) {
+      // Check for variable reference
+      if (content[i] === '@' && i + 1 < content.length) {
+        // Save any accumulated text
+        if (currentText) {
+          parts.push(this.createNode(NodeType.Text, { 
+            content: currentText,
+            location: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } }
+          }));
+          currentText = '';
+        }
+        
+        // Extract variable name
+        i++; // Skip @
+        let varName = '';
+        while (i < content.length && /[a-zA-Z0-9_]/.test(content[i])) {
+          varName += content[i];
+          i++;
+        }
+        
+        if (varName) {
+          parts.push(this.createVariableReferenceNode('varIdentifier', {
+            identifier: varName
+          }));
+        } else {
+          // Not a valid variable, treat @ as literal text
+          currentText += '@';
+        }
+      } else {
+        // Regular character
+        currentText += content[i];
+        i++;
+      }
+    }
+    
+    // Add any remaining text
+    if (currentText) {
+      parts.push(this.createNode(NodeType.Text, { 
+        content: currentText,
+        location: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } }
+      }));
+    }
+    
+    return parts;
   },
 };

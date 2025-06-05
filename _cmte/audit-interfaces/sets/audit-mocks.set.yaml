@@ -1,8 +1,0 @@
-name: "audit-mocks"
-description: "Compares each service interface definition against mock implementations and test usage."
-for_each: services_to_audit
- 
-tasks:
-  # Task runs in parallel for each service
-  - useTask: compare-mock-usage
-    # Context includes item.key, item.value, and global_variables 

@@ -1,5 +1,10 @@
 const markdownIt = require('markdown-it');
 const markdownItAnchor = require('markdown-it-anchor');
+const markdownItPrism = require('markdown-it-prism');
+
+// Load our custom Meld language
+require('./src/prism-mlld.js');
+const highlightMeld = require('./src/eleventy-mld-highlight.js');
 
 module.exports = function(eleventyConfig) {
   // Configure Markdown
@@ -7,7 +12,9 @@ module.exports = function(eleventyConfig) {
     html: true,
     breaks: true,
     linkify: true
-  }).use(markdownItAnchor);
+  })
+  .use(markdownItAnchor)
+  .use(markdownItPrism);
   
   eleventyConfig.setLibrary('md', markdownLib);
   
@@ -19,6 +26,11 @@ module.exports = function(eleventyConfig) {
   eleventyConfig.addPassthroughCopy('js');
   eleventyConfig.addPassthroughCopy('images');
   eleventyConfig.addPassthroughCopy('.nojekyll');
+  
+  // Copy Prism CSS theme
+  eleventyConfig.addPassthroughCopy({
+    'node_modules/prismjs/themes/prism-tomorrow.css': 'css/prism-theme.css'
+  });
   
   // Create a collection for documentation pages
   eleventyConfig.addCollection('docs', function(collectionApi) {
@@ -63,6 +75,16 @@ module.exports = function(eleventyConfig) {
   
   // Add year shortcode
   eleventyConfig.addShortcode('year', () => `${new Date().getFullYear()}`);
+  
+  // Add Meld syntax highlighting shortcode
+  eleventyConfig.addShortcode('meld', function(code) {
+    return highlightMeld(code.trim(), true);
+  });
+  
+  // Add Meld code block shortcode
+  eleventyConfig.addShortcode('meldBlock', function(code) {
+    return highlightMeld(code.trim(), false);
+  });
   
   return {
     dir: {

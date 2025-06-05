@@ -1,11 +1,11 @@
-// MELD BASE WHITESPACE
+// MLLD BASE WHITESPACE
 // Whitespace and line termination patterns
 
 /* 
 # Whitespace Abstractions
 
 This file defines whitespace and line termination patterns used throughout
-the Meld grammar. These patterns are essential for handling formatting,
+the Mlld grammar. These patterns are essential for handling formatting,
 logical line boundaries, and directive separation.
 */
 
@@ -54,15 +54,15 @@ EndOfLine
       const isBeforeDirective = input.substr(pos).match(/^\s*@[a-z]/i);
       return isBeforeDirective;
     } { 
-      return helpers.createNode(NodeType.Newline, { content: term }, location());
+      return helpers.createNode(NodeType.Newline, { content: term, location: location() });
     }
   / ws:[ \t\r]* term:LineTerminator { 
-      return helpers.createNode(NodeType.Newline, { content: term }, location());
+      return helpers.createNode(NodeType.Newline, { content: term, location: location() });
     }
   / ws:[ \t\r]* &{ 
       const atEof = offset() === input.length;
       const nextChar = input[offset()];
       return atEof || (nextChar === '@' && helpers.isLogicalLineStart(input, offset())); 
     } { 
-      return helpers.createNode(NodeType.Newline, { content: '\n' }, location());
+      return helpers.createNode(NodeType.Newline, { content: '\n', location: location() });
     }

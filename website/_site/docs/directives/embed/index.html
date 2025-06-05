@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -22,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -86,6 +87,20 @@
         
           
         
+          
+        
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
           
         
           
@@ -175,6 +190,21 @@
             
               
             
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
           </ul>
         </li>
       </ul>
@@ -183,13 +213,13 @@
   
   <div class="docs-content">
     <h1 id="%40embed-directive" tabindex="-1">@embed Directive</h1>
-<p>The <code>@embed</code> directive includes content from external files into your Meld document.</p>
+<p>The <code>@embed</code> directive includes content from external files into your Mlld document.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
-<pre><code class="language-meld">@embed [path]
-@embed [path # section_text]
-@embed [path] as ###
-@embed [path # section_text] as ###
-@embed [path] under header_text
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>path # section_text<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span> <span class="token operator">as</span> ###
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>path # section_text<span class="token punctuation">]</span></span> <span class="token operator">as</span> ###
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span> under header_text
 </code></pre>
 <p>Where:</p>
 <ul>
@@ -206,24 +236,24 @@
 </ul>
 <h2 id="section-extraction" tabindex="-1">Section Extraction</h2>
 <p>You can extract specific sections from Markdown files using the <code>#</code> symbol:</p>
-<pre><code class="language-meld">@embed [guide.md # Getting Started]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>guide.md # Getting Started<span class="token punctuation">]</span></span>
 </code></pre>
 <p>This will extract only the section titled &quot;Getting Started&quot; from <a href="http://guide.md">guide.md</a>.</p>
 <h2 id="heading-level-adjustment" tabindex="-1">Heading Level Adjustment</h2>
 <p>You can adjust the heading level of embedded content using the <code>as</code> keyword:</p>
-<pre><code class="language-meld">@embed [guide.md] as ###
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>guide.md<span class="token punctuation">]</span></span> <span class="token operator">as</span> ###
 </code></pre>
 <p>This will increase all headings by the specified number of <code>#</code> characters.</p>
 <h2 id="adding-headers" tabindex="-1">Adding Headers</h2>
 <p>You can add a header to embedded content using the <code>under</code> keyword:</p>
-<pre><code class="language-meld">@embed [code.js] under Example Code
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>code.js<span class="token punctuation">]</span></span> under Example Code
 </code></pre>
 <p>This will add a header &quot;Example Code&quot; above the embedded content.</p>
 <h2 id="variable-support" tabindex="-1">Variable Support</h2>
 <p>Path, section, and header parameters can all contain variables:</p>
-<pre><code class="language-meld">@text section = &quot;Getting Started&quot;
-@text header = &quot;Code Example&quot;
-@embed [$docs/guide.md # {{section}}] under {{header}}
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> section <span class="token operator">=</span> <span class="token string">"Getting Started"</span>
+<span class="token directive keyword">@text</span> header <span class="token operator">=</span> <span class="token string">"Code Example"</span>
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$docs/guide.md # {{section}}<span class="token punctuation">]</span></span> under <span class="token punctuation">{</span><span class="token punctuation">{</span>header<span class="token punctuation">}</span><span class="token punctuation">}</span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The implementation handles these error scenarios:</p>
@@ -237,20 +267,20 @@
 </ul>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic file embedding:</p>
-<pre><code class="language-meld">@embed [&quot;$PROJECTPATH/README.md&quot;]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>"$PROJECTPATH/README.md"<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Embedding with path variables:</p>
-<pre><code class="language-meld">@path docs = &quot;$PROJECTPATH/docs&quot;
-@embed [$docs/guide.md]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> docs <span class="token operator">=</span> <span class="token string">"$PROJECTPATH/docs"</span>
+<span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$docs/guide.md<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Embedding specific sections:</p>
-<pre><code class="language-meld">@embed [$docs/api.md # Authentication]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$docs/api.md # Authentication<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Adjusting heading levels:</p>
-<pre><code class="language-meld">@embed [$docs/guide.md] as ##
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$docs/guide.md<span class="token punctuation">]</span></span> <span class="token operator">as</span> ##
 </code></pre>
 <p>Adding headers:</p>
-<pre><code class="language-meld">@embed [$src/example.js] under Code Example
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@embed</span> <span class="token path"><span class="token punctuation">[</span>$src/example.js<span class="token punctuation">]</span></span> under Code Example
 </code></pre>
 <h2 id="notes" tabindex="-1">Notes</h2>
 <ul>
@@ -321,7 +351,7 @@
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

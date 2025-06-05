@@ -1,9 +1,0 @@
-name: "synthesize-handler-audit"
-description: "Synthesizes findings from all handler audits."
-# Not iterated
- 
-tasks:
-  - useTask: generate-overall-fix-suggestions
-    prior_outputs:
-      # Collect all handler audit results
-      handler_audit_results: "{{ audit-handler-interfaces-and-mocks.analyze-handler-audit[*].output }}" 

@@ -18,58 +18,121 @@ It can be used in three main forms:
 // TOP-LEVEL RUN DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @run directive 
+// Primary @run directive - Supporting both command and code syntax
+// Order matters: most specific patterns first
 AtRun
-  = DirectiveContext "@run" _ runCode:RunLanguageCodeCore {
-      helpers.debug('AtRun matched language code block using shared abstraction', runCode);
+  = DirectiveContext "@run" _ security:(SecurityOptions _)? lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets withClause:WithClause? comment:InlineComment? {
+      // Language + code syntax: @run language [(code)]
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtRun matched language + code', { lang, code, securityOptions, withClause });
       
-      // Since we're using the shared abstraction, we just need to format it for this context
+      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
+      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
+      
+      const values = {
+        lang: [langNode],
+        args: args || [],
+        code: [codeNode]
+      };
+      
+      const raw = {
+        lang: lang,
+        args: args ? args.map(arg => arg.identifier || '') : [],
+        code: code.content
+      };
+      
+      const meta = {
+        isMultiLine: code.isMultiLine || code.content.includes('\n'),
+        language: lang,
+        hasVariables: false, // Code blocks don't support variable interpolation
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
+      
       return helpers.createStructuredDirective(
         'run',
         'runCode',
-        runCode.values,
-        runCode.raw,
-        runCode.meta,
-        runCode.location,
-        'code'  // Source parameter
+        values,
+        raw,
+        meta,
+        location(),
+        'code'
       );
     }
-  / DirectiveContext "@run" _ command:CommandCore {
-      helpers.debug('AtRun matched shell command', { command });
+  / DirectiveContext "@run" _ security:(SecurityOptions _)? content:UnifiedCommandBrackets withClause:WithClause? comment:InlineComment? {
+      // Command syntax: @run [(command)]
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtRun matched command', { content, securityOptions, withClause });
+      
+      const meta = {
+        ...content.meta,
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+      
+      const values = content.values;
+      const raw = content.raw;
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
       
       return helpers.createStructuredDirective(
         'run',
-        'runCommand',
-        command.values,
-        command.raw,
-        {
-          ...command.meta,
-          isMultiLine: command.raw.command.includes('\n')
-        },
+        content.subtype,
+        values,
+        raw,
+        meta,
         location(),
-        'command'  // Source parameter
+        content.type
       );
     }
-  / DirectiveContext "@run" _ "@" commandRef:RunCommandReference {
-      helpers.debug('AtRun matched command reference', { commandRef });
+  / DirectiveContext "@run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference withClause:WithClause? comment:InlineComment? {
+      // @ detected -> Command reference (exec)
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtRun matched command reference', { commandRef, securityOptions, withClause });
       
-      // This is used to run a previously defined command (created with @exec)
+      const values = {
+        identifier: commandRef.identifier,
+        args: commandRef.args || []
+      };
+      
+      const raw = {
+        identifier: commandRef.rawIdentifier,
+        args: commandRef.rawArgs || []
+      };
+      
+      const meta = {
+        argumentCount: commandRef.args ? commandRef.args.length : 0,
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        meta.withClause = withClause;
+      }
+      
       return helpers.createStructuredDirective(
         'run',
         'runExec',
-        {
-          identifier: commandRef.identifier,
-          args: commandRef.args || []
-        },
-        {
-          identifier: commandRef.rawIdentifier,
-          args: commandRef.rawArgs || []
-        },
-        {
-          argumentCount: commandRef.args ? commandRef.args.length : 0
-        },
+        values,
+        raw,
+        meta,
         location(),
-        'exec'  // Source parameter
+        'exec'
       );
     }
 
@@ -79,34 +142,46 @@ AtRun
 
 // Run directive reference in RHS contexts (nested in other directives)
 RunDirectiveRef
-  = RunCodeBlockContext runCode:RunLanguageCodeCore {
-      helpers.debug('RunDirectiveRef matched code in RHS using shared abstraction', runCode);
+  = lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets {
+      // Language + code syntax in RHS: language [(code)]
+      helpers.debug('RunDirectiveRef matched language + code in RHS', { lang, code });
       
-      // Use the shared abstraction but add RHS-specific metadata
+      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
+      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
+      
       return helpers.createStructuredDirective(
         'run',
         'runCode',
-        runCode.values,
-        runCode.raw,
+        {
+          lang: [langNode],
+          args: args || [],
+          code: [codeNode]
+        },
+        {
+          lang: lang,
+          args: args ? args.map(arg => arg.identifier || '') : [],
+          code: code.content
+        },
         { 
-          ...runCode.meta,
+          isMultiLine: code.isMultiLine || code.content.includes('\n'),
+          language: lang,
+          hasVariables: false,
           isRHSRef: true
         },
-        runCode.location
+        location()
       );
     }
-  / command:CommandCore {
-      helpers.debug('RunDirectiveRef matched in RHS', { command });
+  / content:UnifiedCommandBrackets {
+      helpers.debug('RunDirectiveRef matched command in RHS', { content });
       
       return helpers.createStructuredDirective(
         'run',
-        'runCommand',
-        command.values,
-        command.raw,
+        content.subtype,
+        content.values,
+        content.raw,
         { 
-          ...command.meta, 
-          isRHSRef: true,
-          isMultiLine: command.raw.command.includes('\n')
+          ...content.meta,
+          isRHSRef: true
         },
         location()
       );
@@ -116,9 +191,9 @@ RunDirectiveRef
 // HELPER RULES
 // -------------------------------------------------------------
 
-// Command reference structure (for @run @command)
+// Command reference structure (for @run @command with field access support)
 RunCommandReference
-  = identifier:BaseIdentifier _ args:RunCommandArgs? {
+  = identifier:BaseIdentifier fields:AnyFieldAccess* _ args:RunCommandArguments? {
       // Process arguments if present
       const processedArgs = args || [];
       const rawArgs = processedArgs.map(arg => {
@@ -127,33 +202,42 @@ RunCommandReference
         return '';
       });
       
+      // Create a variable reference node with field access support
+      const varRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: identifier,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+      
       return {
-        identifier: [helpers.createNode(NodeType.Text, { content: identifier }, location())],
+        identifier: [varRef],
         rawIdentifier: identifier,
+        fields: fields,
         args: processedArgs,
         rawArgs: rawArgs
       };
     }
 
 // Arguments for command references
-RunCommandArgs
-  = "(" _ args:RunCommandArgsList? _ ")" {
+RunCommandArguments
+  = "(" _ args:RunCommandArgumentList? _ ")" {
       return args || [];
     }
 
-RunCommandArgsList
-  = first:RunCommandArg rest:(_ "," _ arg:RunCommandArg { return arg; })* {
+// Using standard list pattern from patterns/lists.peggy
+RunCommandArgumentList
+  = first:RunCommandArgument rest:(CommaSpace arg:RunCommandArgument { return arg; })* {
       return [first, ...rest];
     }
 
-RunCommandArg
+RunCommandArgument
   = str:StringLiteral {
-      return helpers.createNode(NodeType.Text, { content: str }, location());
+      return helpers.createNode(NodeType.Text, { content: str, location: location() });
     }
   / varRef:Variable {
       return varRef;
     }
   / val:$([^,)]+) {
       // Plain value (raw argument)
-      return helpers.createNode(NodeType.Text, { content: val.trim() }, location());
+      return helpers.createNode(NodeType.Text, { content: val.trim(), location: location() });
     }
+

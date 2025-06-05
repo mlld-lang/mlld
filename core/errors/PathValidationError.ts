@@ -1,4 +1,4 @@
-import { MeldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MeldError';
+import { MlldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MlldError';
 import type { PathValidationContext } from '@core/types/paths';
 
 export enum PathErrorCode {
@@ -31,7 +31,7 @@ export interface PathValidationErrorDetails extends BaseErrorDetails {
 /**
  * Error thrown when path validation fails according to specified rules.
  */
-export class PathValidationError extends MeldError {
+export class PathValidationError extends MlldError {
   constructor(
     message: string,
     options: {

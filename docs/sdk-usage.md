@@ -1,63 +1,63 @@
 # SDK Usage
 
-The Meld SDK allows you to integrate Meld processing into your JavaScript or TypeScript applications.
+The Mlld SDK allows you to integrate Mlld processing into your JavaScript or TypeScript applications.
 
 ## Installation
 
 ```bash
-npm install meld
+npm install mlld
 ```
 
 ## Core Functions
 
-The SDK provides three main functions for working with Meld content:
+The SDK provides three main functions for working with Mlld content:
 
-### Parse Meld Content
+### Parse Mlld Content
 
-Parse raw Meld content into an Abstract Syntax Tree (AST):
+Parse raw Mlld content into an Abstract Syntax Tree (AST):
 
 ```typescript
-import { parseMeld } from 'meld';
+import { parseMlld } from 'mlld';
 
 const content = `
 @text name = "World"
 Hello, {{name}}!
 `;
 
-const nodes = parseMeld(content);
+const nodes = parseMlld(content);
 ```
 
 The parsed AST contains nodes representing directives and text content, which can be further processed or manipulated.
 
-### Interpret Meld AST
+### Interpret Mlld AST
 
 Interpret parsed AST nodes with optional initial state:
 
 ```typescript
-import { interpretMeld, InterpreterState } from 'meld';
+import { interpretMlld, InterpreterState } from 'mlld';
 
 // Create initial state (optional)
 const initialState = new InterpreterState();
 initialState.setText('greeting', 'Hi');
 
 // Interpret the nodes
-const finalState = interpretMeld(nodes, initialState);
+const finalState = interpretMlld(nodes, initialState);
 ```
 
 Interpretation executes directives, resolves variables, and produces a final state containing all defined variables and the processed content.
 
-### Run Meld Files
+### Run Mlld Files
 
-Convenience function to read and interpret Meld files in one step:
+Convenience function to read and interpret Mlld files in one step:
 
 ```typescript
-import { runMeld } from 'meld';
+import { runMlld } from 'mlld';
 
 // Run with default options (XML format)
-const { state, output } = await runMeld('path/to/file.mld');
+const { state, output } = await runMlld('path/to/file.mld');
 
 // Run with custom options
-const { state, output } = await runMeld('path/to/file.mld', {
+const { state, output } = await runMlld('path/to/file.mld', {
   format: 'md',  // or 'xml'
   initialState: new InterpreterState()
 });
@@ -74,7 +74,7 @@ console.log(output);
 The `InterpreterState` class manages variables, commands, and content during interpretation:
 
 ```typescript
-import { InterpreterState } from 'meld';
+import { InterpreterState } from 'mlld';
 
 // Create new state
 const state = new InterpreterState();
@@ -97,30 +97,128 @@ const variables = state.getVariables();
 
 ## Error Handling
 
+The SDK provides comprehensive error handling with enhanced formatting:
+
+### Basic Error Handling
+
+```typescript
+import { interpret, MlldError } from 'mlld';
+
+try {
+  const result = await interpret(content, options);
+  console.log(result);
+} catch (error) {
+  if (error instanceof MlldError) {
+    console.error('Mlld Error:', error.message);
+    console.error('Error Code:', error.code);
+    console.error('Severity:', error.severity);
+  } else {
+    console.error('Unexpected error:', error);
+  }
+}
+```
+
+### Enhanced Error Formatting
+
+Use the `formatError` function for rich error display:
+
+```typescript
+import { interpret, formatError } from 'mlld';
+import { NodeFileSystem } from 'mlld';
+
+try {
+  const result = await interpret(content, options);
+} catch (error) {
+  const fileSystem = new NodeFileSystem();
+  
+  // Format error with enhanced display
+  const formatted = await formatError(error, {
+    fileSystem,
+    useSourceContext: true,
+    useSmartPaths: true,
+    useColors: process.stdout.isTTY,
+    basePath: process.cwd(),
+    contextLines: 2
+  });
+  
+  // Display formatted error
+  console.error(formatted.formatted);
+  
+  // Access structured error data
+  console.log('Error details:', formatted.json);
+  
+  // Access source context if available
+  if (formatted.sourceContext) {
+    console.log('Error in file:', formatted.sourceContext.file);
+    console.log('At line:', formatted.sourceContext.errorLine);
+  }
+}
+```
+
+### Error Format Options
+
+- **`useSourceContext`**: Show source code around the error location
+- **`useSmartPaths`**: Display relative paths when within a project
+- **`useColors`**: Enable colorized output (auto-detected for terminals)
+- **`basePath`**: Project root for relative path calculation
+- **`contextLines`**: Number of context lines to show (default: 2)
+
+### Auto-Detecting Error Format
+
+The SDK can automatically choose the best error format:
+
+```typescript
+import { interpret, ErrorFormatSelector } from 'mlld';
+
+try {
+  const result = await interpret(content, options);
+} catch (error) {
+  const formatter = new ErrorFormatSelector(fileSystem);
+  
+  // Auto-detects CLI vs API format based on environment
+  const formatted = await formatter.formatAuto(error, {
+    useSourceContext: true,
+    useSmartPaths: true,
+    basePath: process.cwd()
+  });
+  
+  if (typeof formatted === 'string') {
+    // CLI format (when running in terminal)
+    console.error(formatted);
+  } else {
+    // API format (when running programmatically)
+    console.error(formatted.formatted);
+    // Access structured data: formatted.json, formatted.sourceContext
+  }
+}
+```
+
+### Error Types
+
 The SDK provides specialized error types for robust error handling:
 
 ```typescript
 import { 
-  parseMeld, 
-  MeldParseError, 
-  MeldInterpreterError,
-  MeldFileNotFoundError,
-  MeldError
-} from 'meld';
+  parseMlld, 
+  MlldParseError, 
+  MlldInterpreterError,
+  MlldFileNotFoundError,
+  MlldError
+} from 'mlld';
 
 try {
-  const nodes = parseMeld(invalidContent);
+  const nodes = parseMlld(invalidContent);
 } catch (error) {
-  if (error instanceof MeldParseError) {
+  if (error instanceof MlldParseError) {
     console.error('Parse error:', error.message);
     console.error('Line:', error.line);
     console.error('Column:', error.column);
-  } else if (error instanceof MeldInterpreterError) {
+  } else if (error instanceof MlldInterpreterError) {
     console.error('Interpreter error:', error.message);
-  } else if (error instanceof MeldFileNotFoundError) {
+  } else if (error instanceof MlldFileNotFoundError) {
     console.error('File not found:', error.message);
-  } else if (error instanceof MeldError) {
-    console.error('General Meld error:', error.message);
+  } else if (error instanceof MlldError) {
+    console.error('General Mlld error:', error.message);
   } else {
     console.error('Unknown error:', error);
   }
@@ -134,14 +232,14 @@ try {
 You can register custom format handlers for variable formatting:
 
 ```typescript
-import { registerFormatHandler } from 'meld';
+import { registerFormatHandler } from 'mlld';
 
 // Register a custom format handler
 registerFormatHandler('uppercase', (value) => {
   return String(value).toUpperCase();
 });
 
-// Now you can use it in Meld code
+// Now you can use it in Mlld code
 // @text name = "alice"
 // @text greeting = `Hello, {{name>>(uppercase)}}!`
 // Result: "Hello, ALICE!"
@@ -152,7 +250,7 @@ registerFormatHandler('uppercase', (value) => {
 You can provide custom file system handlers for testing or special environments:
 
 ```typescript
-import { runMeld, createMemoryFileSystem } from 'meld';
+import { runMlld, createMemoryFileSystem } from 'mlld';
 
 // Create an in-memory file system for testing
 const memfs = createMemoryFileSystem({
@@ -161,25 +259,25 @@ const memfs = createMemoryFileSystem({
 });
 
 // Use the custom file system
-const { state, output } = await runMeld('path/to/file.mld', {
+const { state, output } = await runMlld('path/to/file.mld', {
   fileSystem: memfs
 });
 ```
 
 ## Integration Example
 
-Here's a complete example of integrating Meld into an application:
+Here's a complete example of integrating Mlld into an application:
 
 ```typescript
-import { parseMeld, interpretMeld, InterpreterState } from 'meld';
+import { parseMlld, interpretMlld, InterpreterState } from 'mlld';
 import * as fs from 'fs';
 
-// Read a Meld file
+// Read a Mlld file
 const content = fs.readFileSync('template.mld', 'utf-8');
 
 try {
   // Parse the content
-  const nodes = parseMeld(content);
+  const nodes = parseMlld(content);
   
   // Create initial state with user data
   const state = new InterpreterState();
@@ -191,7 +289,7 @@ try {
   });
   
   // Interpret the nodes
-  const finalState = interpretMeld(nodes, state);
+  const finalState = interpretMlld(nodes, state);
   
   // Get the processed content
   const result = finalState.getContent();
@@ -201,6 +299,6 @@ try {
   console.log('Processing complete!');
   
 } catch (error) {
-  console.error('Error processing Meld file:', error.message);
+  console.error('Error processing Mlld file:', error.message);
 }
 ```

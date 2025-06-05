@@ -1,7 +1,0 @@
-# Data variables example
-
-@embed [data-variables.mld]
-
-# Circular import error
-
-@embed [$./tests/cases/invalid/circular-import.error.mld]

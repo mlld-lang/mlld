@@ -41,6 +41,25 @@ TextRHS
       helpers.debug('TextRHS matched @add reference');
       return { type: 'directive', directive: 'add' };
     }
+  / section:SectionExtractionCore {
+      // Handle section extraction (e.g., "## Setup" from [file.md])
+      helpers.debug('TextRHS matched section extraction', { section });
+      return { 
+        type: 'section',
+        section: section.section,
+        path: section.path,
+        rename: section.rename,
+        meta: section.meta
+      };
+    }
+  / path:PathExpression {
+      // Handle direct path content (e.g., [file.md] or https://example.com/file.md)
+      helpers.debug('TextRHS matched path content', { path });
+      return { 
+        type: 'path',
+        path: path
+      };
+    }
   / content:WrappedTemplateContent {
       // Handle template content
       helpers.debug('TextRHS matched template content');
@@ -133,30 +152,3 @@ RunRHS
       };
     }
 
-// -------------------------------------------------------------
-// EXEC RHS PATTERNS - Values for @exec assignments
-// -------------------------------------------------------------
-
-// RHS value for @exec directive
-ExecRHS
-  = command:WrappedCommandContent {
-      return {
-        type: 'command',
-        command: command.parts,
-        raw: command.raw
-      };
-    }
-  / code:WrappedCodeContent {
-      return {
-        type: 'code',
-        code: code.parts,
-        raw: code.raw
-      };
-    }
-
-// -------------------------------------------------------------
-// DIRECTIVE REFERENCE PLACEHOLDERS
-// -------------------------------------------------------------
-
-// These are simplified references to directives that might appear in RHS
-// They will be replaced with actual implementations from core/

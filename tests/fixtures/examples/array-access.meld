@@ -1,5 +1,0 @@
-@data items = ["apple", "banana", "cherry"]
-
-First item: {{items.0}}
-Second item: {{items.1}}
-Third item: {{items.2}} 

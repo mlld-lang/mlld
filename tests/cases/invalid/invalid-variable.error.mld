@@ -1,9 +1,0 @@
-# Invalid Variable Type Test
-
-This test demonstrates an error case where a variable has an invalid type.
-
-@text invalid-variable = This value is missing quotes
-
-## Output
-
-This should fail during variable validation. 

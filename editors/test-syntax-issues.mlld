@@ -1,0 +1,45 @@
+# Test Syntax Highlighting Issues
+
+## Testing Directive vs Variable Distinction
+
+@import { * } from [@./main.mld]
+
+@data codedirs = [@api, @cli, @core, @editors, @grammar, @interpreter @website]
+
+@exec getfiles (dir, pattern) = @run [ls @dir/@pattern] this is invalid text
+
+@data dirfiles = foreach @getfiles(@docs,"**/*.ts") << this is a comment after
+@data dirfiles = foreach @getfiles(@docs,"**/*.ts") >> this is a comment after
+
+@notadirective
+>> this is a start line commeent
+@text prompt = [[
+Please review the following files:
+
+{{files}}
+
+Please provide a thorough, user-friendly documentation in Markdown for this file. Include sections, examples, and any important notes or edge cases.
+]]
+
+## Testing Each Issue:
+
+1. **Directives should be different color from variables:**
+   - `@import` = directive (should be keyword color)
+   - `@data` = directive  
+   - `@text` = directive
+   - `@exec` = directive
+   - `@notadirective` = variable (should be normal color)
+   - `@api`, `@cli`, etc = variables
+
+2. **Template interpolation `{{files}}` should be highlighted:**
+   - See the `{{files}}` in the template above
+
+3. **Reserved variable `@.` should be recognized:**
+   - `@.` in the import line should be highlighted as reserved
+
+4. **Both comment styles `>>` and `<<` should work:**
+   - Both comment lines above should be highlighted as comments
+
+5. **Only directive lines should have mlld syntax:**
+   - The "this is invalid text" on the exec line should not be highlighted
+   - Regular markdown paragraphs should use markdown highlighting

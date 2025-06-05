@@ -23,12 +23,6 @@ PathCore
   = path:WrappedPathContent {
       helpers.debug('PathCore matched path', { path });
     
-      // Examine path for special attributes (absolute vs relative)
-      const isAbsolute = path.raw.startsWith('/');
-      const hasExtension = /\.[a-zA-Z0-9]+$/.test(path.raw);
-      const extension = hasExtension ? 
-        path.raw.substring(path.raw.lastIndexOf('.') + 1) : null;
-    
       // Structure for outputting a filesystem path
       return {
         type: 'path',
@@ -39,14 +33,7 @@ PathCore
         raw: { 
           path: path.raw 
         },
-        meta: {
-          isAbsolute,
-          hasExtension,
-          extension,
-          hasVariables: path.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
-        }
+        meta: helpers.createPathMetadata(path.raw, path.parts)
       };
     }
 
@@ -64,18 +51,15 @@ SectionPathCore
         subtype: 'sectionPath',
         values: { 
           path: path.parts,
-          section
+          section: [helpers.createNode(NodeType.Text, { content: section, location: location() })]
         },
         raw: { 
           path: path.raw,
           section
         },
         meta: {
-          isAbsolute: path.raw.startsWith('/'),
-          hasSection: true,
-          hasVariables: path.parts.some(part => 
-            part && part.type === NodeType.VariableReference
-          )
+          ...helpers.createPathMetadata(path.raw, path.parts),
+          hasSection: true
         }
       };
     }
@@ -94,8 +78,8 @@ URLPathCore
         type: 'path',
         subtype: 'urlPath',
         values: { 
-          url: fullUrl,
-          protocol
+          url: [helpers.createNode(NodeType.Text, { content: fullUrl, location: location() })],
+          protocol: [helpers.createNode(NodeType.Text, { content: protocol, location: location() })]
         },
         raw: { 
           url: fullUrl,

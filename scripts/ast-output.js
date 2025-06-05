@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Print a Meld AST for a snippet, builds grammar first via `npm run ast`
+ * Print a Mlld AST for a snippet, builds grammar first via `npm run ast`
  *
  *   npm run ast -- "@run [echo 'hi']"
  *   echo "@run [echo 'hi']" | npm run ast -- --debug
  */
 
 import fs from 'node:fs/promises';
-import { parse } from '../core/ast/grammar/parser.js';  // adjust path if needed
+import { parse } from '../grammar/parser/parser.js';  // adjust path if needed
 
 // ---------- CLI parsing ----------
 const argv = process.argv.slice(2);
@@ -31,11 +31,11 @@ async function readSource() {
 // ---------- main ----------
 (async () => {
   try {
-    if (debug) process.env.DEBUG_MELD_GRAMMAR = '1';
+    if (debug) process.env.DEBUG_MLLD_GRAMMAR = '1';
 
     const source = (await readSource()).trimEnd();
     if (!source) {
-      console.error('No Meld source provided (arg or stdin).');
+      console.error('No Mlld source provided (arg or stdin).');
       process.exit(1);
     }
 

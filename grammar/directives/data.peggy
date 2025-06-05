@@ -20,9 +20,15 @@ It can be used in these forms:
 // TOP-LEVEL DATA DIRECTIVE
 // -------------------------------------------------------------
 
+// Dotted identifier for nested property notation (e.g., greeting.text)
+DottedIdentifier "Dotted Identifier"
+  = first:BaseIdentifier rest:("." id:BaseIdentifier { return "." + id; })* {
+      return first + rest.join('');
+    }
+
 // Primary @data directive
 AtData
-  = DirectiveContext "@data" _ id:BaseIdentifier _ "=" _ value:DataValue {
+  = DirectiveContext "@data" _ id:DottedIdentifier _ securityOptions:SecurityOptions? _ "=" _ value:DataValue {
       helpers.debug('AtData matched', { id, valueType: value.type });
       
       // Create variable reference node for identifier
@@ -53,6 +59,15 @@ AtData
           type: 'array',
           items: value.value
         };
+      } else if (value.type === "template") {
+        // Template content - array of content nodes
+        values.value = value.value;
+      } else if (value.type === "variableReference") {
+        // Variable reference - wrap in array
+        values.value = [value.value];
+      } else if (value.type === "literalPath") {
+        // Literal path content - array of content nodes
+        values.value = value.value.parts;
       } else {
         // For primitive values, ensure it's a ContentNodeArray
         values.value = Array.isArray(value.value) ? value.value : [value.value];
@@ -71,6 +86,21 @@ AtData
       } else if (value.type === "array") {
         source = 'array';
         metaObj = { arrayData: { itemCount: value.value.length } };
+      } else if (value.type === "template") {
+        source = 'template';
+        metaObj = { templateData: helpers.createTemplateMetadata(value.value, 'quote') };
+      } else if (value.type === "variableReference") {
+        source = 'variable';
+        metaObj = { variableData: { 
+          identifier: value.value.identifier,
+          hasFieldAccess: !!(value.value.fields && value.value.fields.length > 0)
+        } };
+      } else if (value.type === "literalPath") {
+        source = 'literalPath';
+        metaObj = { literalPathData: { 
+          raw: value.value.raw,
+          hasVariables: value.value.parts.some(p => p.type === NodeType.VariableReference)
+        } };
       } else if (value.type === "primitive") {
         source = 'literal';
         // Detect the specific primitive type
@@ -83,9 +113,16 @@ AtData
           metaObj = { primitiveType: 'boolean' };
         } else if (primitiveValue === null) {
           metaObj = { primitiveType: 'null' };
-        } else if (primitiveValue.type === NodeType.VariableReference) {
+        } else if (primitiveValue && primitiveValue.type === NodeType.Null) {
+          metaObj = { primitiveType: 'null' };
+        } else if (primitiveValue && primitiveValue.type === NodeType.VariableReference) {
           metaObj = { primitiveType: 'variable' };
         }
+      }
+      
+      // Include security options in metadata if present
+      if (securityOptions) {
+        metaObj.security = securityOptions;
       }
       
       // Return the directive node
@@ -95,7 +132,8 @@ AtData
         values,
         {
           identifier: rawIdentifier,
-          value: rawValue
+          value: rawValue,
+          ...(securityOptions ? { securityOptions: JSON.stringify(securityOptions) } : {})
         },
         metaObj,
         location(),
@@ -107,22 +145,12 @@ AtData
 // DATA VALUE TYPES
 // -------------------------------------------------------------
 
-// Any data value (object, array, primitive, directive)
+// Any data value (object, array, primitive, directive, template, variable, literal path)
 DataValue
-  = "@run" _ runDirective:RunDirectiveRef {
-      return {
-        type: "nestedDirective",
-        directive: runDirective,
-        rawText: "@run " + (runDirective.raw && runDirective.raw.command ? runDirective.raw.command : "")
-      };
-    }
-  / "@add" _ addDirective:AddDirectiveRef {
-      return {
-        type: "nestedDirective",
-        directive: addDirective,
-        rawText: "@add " + (addDirective.raw && addDirective.raw.path ? addDirective.raw.path : "")
-      };
-    }
+  = ForeachCommandExpression
+  / DirectiveValue
+  / TemplateValue  
+  / VariableReferenceValue
   / object:DataObjectLiteral {
       return {
         type: "object",
@@ -137,6 +165,7 @@ DataValue
         rawText: JSON.stringify(array, null, 2)
       };
     }
+  / LiteralPathValue
   / value:DataPrimitiveValue {
       const rawText = typeof value === 'object' && value.type === NodeType.VariableReference ?
                      `@${value.identifier}` :
@@ -146,6 +175,140 @@ DataValue
         type: "primitive",
         value,
         rawText
+      };
+    }
+
+// Embedded directive value - semantic parsing for data context
+DirectiveValue
+  = "@run" _ "[" parts:DataCommandParts "]" {
+      const rawCommand = helpers.reconstructRawString(parts);
+      
+      // Extract command bases
+      let commandBases = [];
+      let rawBases = [];
+      if (parts.length > 0 && parts[0].type === NodeType.Text) {
+        const cmdMatch = parts[0].content.match(/^(\S+)/);
+        if (cmdMatch) {
+          commandBases.push(helpers.createNode(NodeType.CommandBase, {
+            command: cmdMatch[1],
+            location: parts[0].location
+          }));
+          rawBases.push(cmdMatch[1]);
+        }
+      }
+      
+      const runDirective = helpers.createStructuredDirective(
+        'run',
+        'runCommand',
+        {
+          command: parts,
+          commandBases: commandBases
+        },
+        {
+          command: rawCommand,
+          commandBases: rawBases
+        },
+        { 
+          isDataValue: true,
+          isMultiLine: rawCommand.includes('\n'),
+          commandCount: commandBases.length,
+          hasScriptRunner: false
+        },
+        location()
+      );
+      
+      return {
+        type: "nestedDirective",
+        directive: runDirective,
+        rawText: "@run [" + rawCommand + "]"
+      };
+    }
+  / "@run" _ exec:RunExecCore {
+      const runDirective = helpers.createStructuredDirective(
+        'run',
+        'runExec',
+        exec.values,
+        exec.raw,
+        {
+          ...exec.meta,
+          isDataValue: true
+        },
+        location(),
+        'exec'
+      );
+      
+      return {
+        type: "nestedDirective",
+        directive: runDirective,
+        rawText: "@run @" + exec.raw.identifier
+      };
+    }
+  / "@add" _ content:AddCore {
+      // Map the core type to the appropriate directive subtype
+      const subtypeMap = {
+        'addPath': 'addPath',
+        'addTemplate': 'addTemplate',
+        'addVariable': 'addVariable',
+        'addTemplateInvocation': 'addTemplateInvocation',
+        'addPathSection': 'addPathSection'
+      };
+      
+      const subtype = subtypeMap[content.type] || 'add';
+      
+      const addDirective = helpers.createStructuredDirective(
+        'add',
+        subtype,
+        content.values,
+        content.raw,
+        {
+          ...content.meta,
+          isDataValue: true
+        },
+        location(),
+        content.type === 'addPath' ? 'path' : 
+        content.type === 'addTemplate' ? 'template' :
+        content.type === 'addVariable' ? 'variable' :
+        content.type === 'addTemplateInvocation' ? 'templateInvocation' :
+        'section'
+      );
+      
+      return {
+        type: "nestedDirective",
+        directive: addDirective,
+        rawText: "@add " + (content.raw && content.raw.path ? content.raw.path : 
+                   content.raw && content.raw.content ? content.raw.content :
+                   content.raw && content.raw.variable ? content.raw.variable :
+                   content.raw && content.raw.templateName ? 
+                     "@" + content.raw.templateName + "(" + (content.raw.arguments || []).join(", ") + ")" :
+                   "")
+      };
+    }
+
+// Variable reference (including field access) with proper disambiguation
+VariableReferenceValue  
+  = !ReservedDirective "@" id:BaseIdentifier accessElements:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      const node = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(accessElements.length > 0 ? { fields: accessElements } : {})
+      }, location());
+      
+      return {
+        type: "variableReference",
+        value: node,
+        rawText: "@" + normalizedId + (accessElements ? accessElements.map(f => 
+          f.type === 'dotAccess' ? '.' + f.field : '[' + f.index + ']'
+        ).join('') : '')
+      };
+    }
+
+// Inline template value - using existing template core
+TemplateValue
+  = content:WrappedTemplateContent {
+      return {
+        type: "template",
+        value: content.parts,
+        rawText: content.raw
       };
     }
 
@@ -178,7 +341,19 @@ DataObjectLiteral
               type: 'array',
               items: value.value
             };
-          } 
+          }
+          // Handle template values
+          else if (value.type === "template") {
+            result[key] = value.value; // Array of content nodes
+          }
+          // Handle variable references
+          else if (value.type === "variableReference") {
+            result[key] = value.value; // Variable reference node
+          }
+          // Handle literal paths
+          else if (value.type === "literalPath") {
+            result[key] = value.value.parts; // Array of content nodes
+          }
           // Handle primitive values
           else {
             result[key] = value.value || value;
@@ -190,8 +365,9 @@ DataObjectLiteral
     }
 
 // Object properties list
+// Using standard list pattern from patterns/lists.peggy
 DataObjectProperties
-  = first:DataObjectProperty rest:(_ "," _ p:DataObjectProperty { return p; })* {
+  = first:DataObjectProperty rest:(CommaSpace p:DataObjectProperty { return p; })* {
       return [first, ...rest];
     }
 
@@ -208,35 +384,8 @@ DataPropertyKey
 
 // Property value (can be any data value)
 DataPropertyValue
-  = "@run" _ runDirective:RunDirectiveRef {
-      return {
-        type: "nestedDirective",
-        directive: runDirective
-      };
-    }
-  / "@add" _ addDirective:AddDirectiveRef {
-      return {
-        type: "nestedDirective",
-        directive: addDirective
-      };
-    }
-  / value:DataObjectLiteral {
-      return {
-        type: "object",
-        value
-      };
-    }
-  / value:DataArrayLiteral {
-      return {
-        type: "array",
-        value
-      };
-    }
-  / value:DataPrimitiveValue {
-      return {
-        type: "primitive",
-        value
-      };
+  = value:DataValue {
+      return value;
     }
 
 // -------------------------------------------------------------
@@ -260,6 +409,12 @@ DataArrayLiteral
             type: 'array',
             items: item.value
           };
+        } else if (item.type === "template") {
+          return item.value; // Array of content nodes
+        } else if (item.type === "variableReference") {
+          return item.value; // Variable reference node
+        } else if (item.type === "literalPath") {
+          return item.value.parts; // Array of content nodes
         } else {
           return item.value || item;
         }
@@ -267,8 +422,9 @@ DataArrayLiteral
     }
 
 // Array items list
+// Using standard list pattern from patterns/lists.peggy
 DataArrayItems
-  = first:DataPropertyValue rest:(_ "," _ v:DataPropertyValue { return v; })* trailingComma:(_ ",")? {
+  = first:DataPropertyValue rest:(CommaSpace v:DataPropertyValue { return v; })* trailingComma:(_ ",")? {
       return [first, ...rest];
     }
 
@@ -281,9 +437,146 @@ DataPrimitiveValue
   = value:StringLiteral { return value; }
   / value:NumberLiteral { return value; }
   / value:BooleanLiteral { return value; }
-  / value:NullLiteral { return value; }
+  / NullLiteral { 
+      // Return a proper node instead of raw null to avoid AST processing errors
+      return helpers.createNode('Null', { value: null }, location());
+    }
   / varRef:Variable { return varRef; }
+
+// -------------------------------------------------------------
+// LITERAL PATH VALUES
+// -------------------------------------------------------------
+
+// Literal path value for data objects (wrapped in brackets)
+LiteralPathValue
+  = "[" _ path:LiteralPathContent _ "]" {
+      return {
+        type: "literalPath",
+        value: path,
+        rawText: "[" + (path.raw || "") + "]"
+      };
+    }
+
+// Content inside literal path brackets (excluding @ for variables)
+LiteralPathContent
+  = parts:LiteralPathPart+ {
+      const raw = parts.map(p => {
+        if (p.type === NodeType.Text) {
+          return p.content;
+        } else if (p.type === NodeType.VariableReference) {
+          return '@' + p.identifier;
+        }
+        return p.content || p;
+      }).join('');
+      
+      return {
+        parts,
+        raw
+      };
+    }
+
+// Parts of a literal path (text or variable references)
+LiteralPathPart
+  = LiteralPathEscapedAt
+  / LiteralPathVariableRef  
+  / LiteralPathText
+
+// Escaped @ symbol in literal path
+LiteralPathEscapedAt
+  = "\\@" {
+      return helpers.createNode(NodeType.Text, { 
+        content: '@', 
+        location: location() 
+      });
+    }
+
+// Variable reference in literal path
+LiteralPathVariableRef
+  = "@" varName:BaseIdentifier {
+      return helpers.createVariableReferenceNode('literalPath', { 
+        identifier: varName,
+        location: location()
+      });
+    }
+
+// Regular text in literal path (everything except @, ], and newlines)
+LiteralPathText
+  = chars:$([^@\]\n]+) {
+      return helpers.createNode(NodeType.Text, { 
+        content: chars, 
+        location: location() 
+      });
+    }
+
+// -------------------------------------------------------------
+// FOREACH COMMAND EXPRESSIONS
+// -------------------------------------------------------------
+
+// Foreach command expression for iterating over arrays with parameterized commands
+ForeachCommandExpression
+  = "foreach" _ cmd:ForeachCommandRef _ "(" _ arrays:ForeachArrayArgumentList _ ")" {
+      helpers.debug('ForeachCommandExpression matched', { cmd, arrays });
+      
+      return {
+        type: "foreach-command",
+        value: {
+          type: 'foreach-command',
+          command: cmd,
+          arrays: arrays
+        },
+        rawText: text()
+      };
+    }
+
+// Command reference for foreach expressions
+ForeachCommandRef
+  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* {
+      return {
+        type: 'commandRef',
+        identifier: identifier,
+        fields: fields || []
+      };
+    }
+
+// List of array arguments separated by commas
+ForeachArrayArgumentList
+  = first:ForeachVariableRef rest:(_ "," _ arr:ForeachVariableRef { return arr; })* {
+      return [first].concat(rest || []);
+    }
+
+// Variable reference for array arguments
+ForeachVariableRef
+  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(identifier);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
 
 // -------------------------------------------------------------
 // DIRECTIVE REFERENCES
 // -------------------------------------------------------------
+
+// Command parts for data context - allows @var interpolation
+DataCommandParts
+  = parts:(DataCommandVariable / DataCommandText)* {
+      return parts;
+    }
+
+// Variable in data command context
+DataCommandVariable
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / SpecialVariable
+
+// Text segments in data commands
+DataCommandText
+  = chars:$((!']' !'@' .)+) {
+      return helpers.createNode(NodeType.Text, { content: chars, location: location() });
+    }

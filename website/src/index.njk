@@ -9,34 +9,8 @@ layout: base.njk
   </div>
   
   <div class="hero-terminal-container">
-    <div class="terminal-window hero-terminal">
-      <div class="title-bar">
-        <div class="window-controls">
-          <span class="window-control red"></span>
-          <span class="window-control yellow"></span>
-          <span class="window-control green"></span>
-        </div>
-        <div class="filename">code-review.mld</div>
-        <div class="spacer"></div>
-      </div>
-      <div class="terminal-content"><span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">, </span><span class="token variable">tasks</span><span class="token bracket">]</span> <span class="token keyword">from</span> <span class="token bracket">[</span>prompts.mld<span class="token bracket">]</span>
-<span class="space"></span>
-<span class="token keyword">@text</span> <span class="token variable">arch</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md <span class="token selector"># Architecture</span><span class="token bracket">]</span>
-<span class="token keyword">@text</span> <span class="token variable">standards</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md <span class="token selector"># Code Standards</span><span class="token bracket">]</span>
-<span class="token keyword">@text</span> <span class="token variable">diff</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>git diff | cat<span class="token bracket">]</span>
-<span class="space"></span>
-<span class="token keyword">@text</span> <span class="token variable">prompt</span> = <span class="token bracket">[[</span>
-   Read our docs: <span class="token variable">{% raw %}{{arch}}{% endraw %}</span> <span class="token variable">{% raw %}{{standards}}{% endraw %}</span>
-   Review the latest changes: <span class="token variable">{% raw %}{{diff}}{% endraw %}</span>
-   Here's your task: <span class="token variable">{% raw %}{{tasks.codereview}}{% endraw %}</span>
-<span class="token bracket">]]</span>
-<span class="space"></span>
-<span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot <span class="token variable">{% raw %}{{prompt}}{% endraw %}</span> --system <span class="token variable">{% raw %}{{roles.architect}}{% endraw %}</span><span class="token bracket">]</span>
-<span class="space"></span>
-<span class="token operator">---</span>
-<span class="animated-line" data-text="Looking at the TypeBlorp updates, the new unidirectional flow implementation correctly separates concerns between state mutations and subscriptions. The observer pattern implementation is clean but has potential race conditions in the notification queue that should be addressed with a proper message ordering mechanism. I recommend adding tests for concurrent updates."></span>
-      </div>
-    </div>
+    {% set example = examples.default['code-review'] or examples['code-review'] %}
+    {% include "components/mlld-example.njk" %}
   </div>
 
 </section>
@@ -44,13 +18,13 @@ layout: base.njk
 <section class="install">
   <div class="install-container">
     <div class="install-command">
-      <code>npm install -g meld oneshot</code>
-      <button class="copy-button" onclick="const btn = this; navigator.clipboard.writeText('npm install -g meld oneshot'); btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1500);"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16">
+      <code>npm install -g mlld oneshot</code>
+      <button class="copy-button" onclick="const btn = this; navigator.clipboard.writeText('npm install -g mlld oneshot'); btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1500);"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16">
   <path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>
 </svg></button>
     </div>
     <div class="vscode-link">
-      <a href="https://marketplace.visualstudio.com/items?itemName=meld.meld-vscode" target="_blank">VSCode/Cursor extension »</a>
+      <a href="https://marketplace.visualstudio.com/items?itemName=mlld.mlld-vscode" target="_blank">VSCode/Cursor extension »</a>
     </div>
   </div>
 </section>
@@ -88,140 +62,32 @@ layout: base.njk
       <!-- First row -->
       <div class="grid-row">
         <span class="vertical-line"></span>
-        <h3 class="card-heading">Embed LLM context in your docs and treat markdown sections as modules you can import</h3>
+        <h3 class="card-heading">{{ (examples.default['readme-embed'] or examples['readme-embed']).heading }}</h3>
         <div class="card-content">
-          <div class="terminal-window possibility-example">
-            <div class="title-bar">
-              <div class="window-controls">
-                <span class="window-control red"></span>
-                <span class="window-control yellow"></span>
-                <span class="window-control green"></span>
-              </div>
-              <div class="filename">README.md</div>
-              <div class="spacer"></div>
-            </div>
-            <pre><code><span class="token bracket">#</span> <span class="token selector">TypeBlorp</span>
-              
-<span class="token bracket">##</span> <span class="token selector">Overview</span> 
-
-TypeBlorp is lightweight state management library built with TypeScript, with a unidirectional data flow pattern combined  with observer-based pub/sub architecture.
-
-Here's the structure of the codebase:
-<span class="token keyword">@run</span> <span class="token bracket">[</span>tree --gitignore<span class="token bracket">]</span>
-
-<span class="token keyword">@embed</span> <span class="token bracket">[</span><span class="token variable">$.</span>/docs/ARCHITECTURE.md<span class="token bracket">]</span> <span class="token keyword">as</span> <span class="token bracket">##</span> <span class="token selector">Architecture</span>
-<span class="token keyword">@embed</span> <span class="token bracket">[</span><span class="token variable">$.</span>/docs/STANDARDS.md<span class="token bracket">]</span> <span class="token keyword">as</span> <span class="token bracket">##</span> <span class="token selector">Code Standards</span>
-            </code></pre>
-          </div>
+          {% set example = examples.default['readme-embed'] or examples['readme-embed'] %}
+          {% include "components/mlld-example.njk" %}
         </div>
       </div>
       
       <!-- Second row -->
       <div class="grid-row">
         <span class="vertical-line"></span>
-        <h3 class="card-heading">Chain requests like shell commands</h3>
+        <h3 class="card-heading">{{ (examples.default['test-plan'] or examples['test-plan']).heading }}</h3>
         <div class="card-content">
-          <div class="terminal-window possibility-example">
-            <div class="title-bar">
-              <div class="window-controls">
-                <span class="window-control red"></span>
-                <span class="window-control yellow"></span>
-                <span class="window-control green"></span>
-              </div>
-              <div class="filename">test-plan.mld</div>
-              <div class="spacer"></div>
-            </div>
-            <pre><code><span class="token keyword">@text</span> <span class="token variable">tests</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>npm test<span class="token bracket">]</span>
-
-<span class="token keyword">@text</span> <span class="token variable">res</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot "What's broken here? <span class="token variable">{% raw %}{{tests}}{% endraw %}</span>"<span class="token bracket">]</span>
-
-<span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot "Make a plan to fix <span class="token variable">{% raw %}{{res}}{% endraw %}</span>"<span class="token bracket">]</span>
-
-<span class="token operator">---</span>
-
-<span class="token string">"Here's a plan to fix the failing tests."</span>
-            </code></pre>
-          </div>
+          {% set example = examples.default['test-plan'] or examples['test-plan'] %}
+          {% include "components/mlld-example.njk" %}
         </div>
       </div>
       
       <!-- Third row -->
       <div class="grid-row">
         <span class="vertical-line"></span>
-        <h3 class="card-heading">Imports, templating, command creation</h3>
+        <h3 class="card-heading">{{ (examples.default['imports'] or examples['imports']).heading }}</h3>
         <div class="card-content">
-          <div class="terminal-window possibility-example">
-            <div class="title-bar">
-              <div class="window-controls">
-                <span class="window-control red"></span>
-                <span class="window-control yellow"></span>
-                <span class="window-control green"></span>
-              </div>
-              <div class="filename">imports.mld</div>
-              <div class="spacer"></div>
-            </div>
-            <pre><code><span class="token keyword">@text</span> <span class="token variable">docs</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md<span class="token bracket">]</span>
-              
-<span class="token keyword">@data</span> <span class="token variable">role</span> = {
-    "architect": "You are a software architect.",
-    "security": "You are a security engineer.",
-    "ux": "You are a ux designer."
-    "pm": "You are a project manager."
-}
-
-<span class="token keyword">@data</span> <span class="token variable">task</span> = {
-    "archrev": "What's the architecture's biggest flaw?",
-    "uxrev": "Review the UX of this code",
-    "secrev": "Review this code for vulnerabilities",
-    "roadmap": "Create a roadmap based on highest priority"
-}
-
-<span class="token bracket">>> recursively concatenate paths wrapped in xml tags</span>
-<span class="token keyword">@define</span> <span class="token selector">codecat</span><span class="token bracket">(</span><span class="token variable">dir</span><span class="token bracket">)</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>find <span class="token variable">{% raw %}{{dir}}{% endraw %}</span> -type f -exec sh -c 'echo "<$(realpath --relative-to=<span class="token variable">{% raw %}{{dir}}{% endraw %}</span> {})>"; cat {}; echo "</$(realpath --relative-to=<span class="token variable">{% raw %}{{dir}}{% endraw %}</span> {})>"' \;<span class="token bracket">]</span>
-
-@define $ask(context, role, task) = @run [oneshot 
-  --context <span class="token variable">{% raw %}{{context}}{% endraw %}</span>
-  --instructions <span class="token variable">{% raw %}{{task}}{% endraw %}</span>
-  --system <span class="token variable">{% raw %}{{role}}{% endraw %}</span>
-]
-
-            </code></pre>
-          </div>
-          <div class="terminal-window possibility-example second-possibility-example">
-            <div class="title-bar">
-              <div class="window-controls">
-                <span class="window-control red"></span>
-                <span class="window-control yellow"></span>
-                <span class="window-control green"></span>
-              </div>
-              <div class="filename">plan.mld</div>
-              <div class="spacer"></div>
-            </div>
-            <pre><code><span class="token keyword">@import</span> <span class="token bracket">[</span>imports.mld<span class="token bracket">]</span>
-
-<span class="token keyword">@path</span> <span class="token variable">services</span> = <span class="token string">"$./src/services"</span>
-<span class="token keyword">@text</span> <span class="token variable">code</span> = <span class="token keyword">@run</span> <span class="token variable">$codecat</span><span class="token bracket">(</span><span class="token variable">$services</span><span class="token bracket">)</span>
-
-<span class="token keyword">@text</span> <span class="token variable">context</span> = <span class="token bracket">[[</span>
-  Read our docs: <span class="token variable">{% raw %}{{docs}}{% endraw %}</span>
-  Review our code: <span class="token variable">{% raw %}{{code}}{% endraw %}</span>
-<span class="token bracket">]]</span>
-
-<span class="token keyword">@text</span> <span class="token variable">arch_review</span> = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{% raw %}{{context}}{% endraw %}</span>, <span class="token variable">{% raw %}{{role.architect}}{% endraw %}</span>, <span class="token variable">{% raw %}{{task.code_review}}{% endraw %}</span><span class="token bracket">)</span>
-<span class="token keyword">@text</span> <span class="token variable">ux_review</span>   = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{% raw %}{{context}}{% endraw %}</span>, <span class="token variable">{% raw %}{{role.ux}}{% endraw %}</span>, <span class="token variable">{% raw %}{{task.ux_review}}{% endraw %}</span><span class="token bracket">)</span>
-<span class="token keyword">@text</span> <span class="token variable">sec_review</span>  = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{% raw %}{{context}}{% endraw %}</span>, <span class="token variable">{% raw %}{{role.security}}{% endraw %}</span>, <span class="token variable">{% raw %}{{task.sec_review}}{% endraw %}</span><span class="token bracket">)</span>
-
-<span class="token keyword">@text</span> <span class="token variable">pm_review</span> = <span class="token bracket">[[</span>
-  Here's the team's input on our priorities:
-  - Architect review: <span class="token variable">{% raw %}{{arch_review}}{% endraw %}</span>
-  - UX review: <span class="token variable">{% raw %}{{ux_review}}{% endraw %}</span>
-  - Security review: <span class="token variable">{% raw %}{{sec_review}}{% endraw %}</span>
-  Your task: <span class="token variable">{% raw %}{{task.pmrev}}{% endraw %}</span>
-<span class="token bracket">]]</span>
-
-<span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{% raw %}{{context}}{% endraw %}</span>, <span class="token variable">{% raw %}{{role.pm}}{% endraw %}</span>, <span class="token variable">{% raw %}{{pm_review}}{% endraw %}</span><span class="token bracket">)</span>
-            </code></pre>
-          </div>
+          {% set example = examples.default['imports'] or examples['imports'] %}
+          {% include "components/mlld-example.njk" %}
+          {% set example = examples.default['plan'] or examples['plan'] %}
+          {% include "components/mlld-example.njk" %}
         </div>
       </div>
     </div>

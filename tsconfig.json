@@ -3,6 +3,7 @@
     "target": "ES2020",
     "module": "ESNext",
     "lib": ["ES2020", "DOM", "ES2022.Error"],
+    "types": ["node"],
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "allowJs": true,
@@ -22,6 +23,8 @@
     "paths": {
       "@core/*": ["core/*"],
       "@services/*": ["services/*"],
+      "@security/*": ["security/*"],
+      "@security": ["security/index.ts"],
       "@parser/*": ["parser/*"],
       "@interpreter/*": ["interpreter/*"],
       "@output/*": ["output/*"],
@@ -36,6 +39,7 @@
   "include": [
     "core/**/*",
     "services/**/*",
+    "security/**/*",
     "parser/**/*",
     "interpreter/**/*",
     "output/**/*",
@@ -44,6 +48,7 @@
     "tests/**/*",
     "grammar/**/*",
     "grammar/core/**/*.ts",
+    "types/**/*",
     "*.ts",
     "_dev/issues/active/audit/test-audit-script.ts"
   ],
@@ -51,8 +56,8 @@
     "node_modules",
     "dist",
     "_old",
-    "_meld",
-    "meld-ast",
+    "_mlld",
+    "mlld-ast",
     "core/ast/grammar/build-grammar.mjs",
     "core/ast/grammar/parser.cjs",
     "core/ast/grammar/parser.js",

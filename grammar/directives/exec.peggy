@@ -6,9 +6,9 @@
 
 The exec directive defines named commands or code blocks that can be executed
 by the @run directive. It can be used in these forms:
-1. @exec cmdName (param1, param2) = command-string   - Define a shell command
-2. @exec fnName (param1) = js [code-block]           - Define a code function
-3. @exec alias (param1) = @run @otherCmd             - Define a command reference
+1. @exec cmdName (param1, param2) = @run command-string   - Define a shell command
+2. @exec fnName (param1) = @run js [code-block]           - Define a code function
+3. @exec alias (param1) = @run @otherCmd                  - Define a command reference
 */
 
 // Core content handlers (context, tokens, whitespace, variables, command, code)
@@ -18,46 +18,60 @@ by the @run directive. It can be used in these forms:
 // TOP-LEVEL EXEC DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @exec directive - all variants
+// Primary @exec directive - supporting both command and code syntax
 AtExec
-  // This pattern must be first because of "first match wins" in PEG.js
-  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ runCode:RunLanguageCodeCore {
-      helpers.debug('AtExec matched code definition using RunLanguageCodeCore abstraction', { id, params, runCode });
+  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      // Language + code syntax: @exec fn() = @run language [(code)]
+      helpers.debug('AtExec matched with language + code', { id, params, lang, code, trust });
       
       // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id }, location());
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
       
       // Process parameters
       const processedParams = params || [];
-      const rawParams = processedParams.map(param => {
-        if (param.type === NodeType.VariableReference) return param.identifier;
-        return '';
-      });
       
-      // Build values and raw objects using the RunLanguageCodeCore values
+      // Build values and raw objects
+      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
+      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
+      
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        ...runCode.values // Use values from RunLanguageCodeCore abstraction
+        lang: [langNode],
+        args: args || [],
+        code: [codeNode]
       };
       
       const raw = {
         identifier: id,
-        params: rawParams,
-        ...runCode.raw // Use raw from RunLanguageCodeCore abstraction
+        params: processedParams,
+        lang: lang,
+        args: args ? args.map(arg => arg.identifier || '') : [],
+        code: code.content
       };
       
-      // Create meta object using the RunLanguageCodeCore metadata
+      // Metadata
       const metaObj = {
-        ...runCode.meta, // Use meta from RunLanguageCodeCore abstraction
-        parameterCount: processedParams.length
+        isMultiLine: code.content.includes('\n'),
+        language: lang,
+        hasVariables: false, // Code blocks don't support variable interpolation
+        parameterCount: processedParams.length,
+        ...helpers.createSecurityMeta({ trust }),
+        ...(meta ? { riskLevel: meta } : {})
       };
       
       // Add metadata if present
       if (meta) {
-        values.metadata = [helpers.createNode(NodeType.Text, { content: meta }, location())];
+        values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
         raw.metadata = meta;
         metaObj.metadata = { type: meta };
+      }
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        metaObj.withClause = withClause;
       }
       
       return helpers.createStructuredDirective(
@@ -67,46 +81,54 @@ AtExec
         raw,
         metaObj,
         location(),
-        'code'  // Source parameter
+        'code'
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ command:CommandCore {
-      helpers.debug('AtExec matched command definition', { id, params, command });
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      // Command syntax: @exec cmd() = @run [(command)]
+      helpers.debug('AtExec matched with command', { id, params, content, trust });
       
       // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id }, location());
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
       
       // Process parameters
       const processedParams = params || [];
-      const rawParams = processedParams.map(param => {
-        if (param.type === NodeType.VariableReference) return param.identifier;
-        return '';
-      });
       
       // Build values and raw objects
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        ...command.values
+        command: content.values.command,
+        commandBases: content.values.commandBases
       };
       
       const raw = {
         identifier: id,
-        params: rawParams,
-        ...command.raw
+        params: processedParams,
+        command: content.raw.command,
+        commandBases: content.raw.commandBases
       };
       
-      // Create meta object
+      // Metadata
       const metaObj = {
-        ...command.meta,
-        parameterCount: processedParams.length
+        ...content.meta,
+        parameterCount: processedParams.length,
+        ...helpers.createSecurityMeta({ trust }),
+        ...(meta ? { riskLevel: meta } : {})
       };
       
       // Add metadata if present
       if (meta) {
-        values.metadata = [helpers.createNode(NodeType.Text, { content: meta }, location())];
+        values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
         raw.metadata = meta;
         metaObj.metadata = { type: meta };
+      }
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        metaObj.withClause = withClause;
       }
       
       return helpers.createStructuredDirective(
@@ -116,27 +138,24 @@ AtExec
         raw,
         metaObj,
         location(),
-        'command'  // Added source parameter
+        'command'
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParams? _ "=" _ "@run" _ "@" commandRef:CommandReference {
-      helpers.debug('AtExec matched command reference', { id, params, commandRef });
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      helpers.debug('AtExec matched command reference', { id, params, commandRef, trust });
       
       // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id }, location());
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
       
       // Process parameters
       const processedParams = params || [];
-      const rawParams = processedParams.map(param => {
-        if (param.type === NodeType.VariableReference) return param.identifier;
-        return '';
-      });
+      const rawParams = processedParams; // params are now strings
       
       // Build values and raw objects
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        commandRef: commandRef.identifier,
+        commandRef: Array.isArray(commandRef.identifier) ? commandRef.identifier : [helpers.createNode(NodeType.Text, { content: commandRef.identifier, location: location() })],
         args: commandRef.args || []
       };
       
@@ -151,14 +170,22 @@ AtExec
       const metaObj = {
         parameterCount: processedParams.length,
         argumentCount: commandRef.args ? commandRef.args.length : 0,
-        isCommandRef: true
+        isCommandRef: true,
+        ...helpers.createSecurityMeta({ trust })
       };
       
       // Add metadata if present
       if (meta) {
-        values.metadata = [helpers.createNode(NodeType.Text, { content: meta }, location())];
+        values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
         raw.metadata = meta;
         metaObj.metadata = { type: meta };
+      }
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        metaObj.withClause = withClause;
       }
       
       return helpers.createStructuredDirective(
@@ -175,43 +202,7 @@ AtExec
 // -------------------------------------------------------------
 // HELPER RULES
 // -------------------------------------------------------------
-
-
-// Helper rule for command reference
-CommandReference
-  = name:BaseIdentifier _ args:CommandArgs? {
-      return {
-        name,
-        identifier: [helpers.createNode(NodeType.Text, { content: name }, location())],
-        args: args || [],
-        isCommandReference: true
-      };
-    }
-
-// Arguments for command references
-CommandArgs
-  = "(" _ args:CommandArgsList? _ ")" {
-      return args || [];
-    }
-
-CommandArgsList
-  = first:CommandArg rest:(_ "," _ arg:CommandArg { return arg; })* {
-      return [first, ...rest];
-    }
-
-CommandArg
-  = str:StringLiteral {
-      return { type: 'string', value: str };
-    }
-  / varRef:Variable {
-      return { type: 'variable', value: varRef };
-    }
-  / chars:RawArgChar+ {
-      return { type: 'raw', value: chars.join('').trim() };
-    }
-
-RawArgChar
-  = !("," / ")") char:. { return char; }
+// CommandReference and related rules have been moved to patterns/command-reference.peggy
 
 // Helper rules for exec metadata (.risk.high, .meta, etc.)
 ExecMetadata
@@ -227,17 +218,17 @@ ExecMetadata
   }
 
 // Helper rules for exec parameters
-ExecParams
-  = _ "(" _ params:ExecParamsList? _ ")" {
+ExecParameters
+  = _ "(" _ params:ExecParameterList? _ ")" {
       return params || [];
     }
 
-ExecParamsList
-  = first:ExecParam rest:(_ "," _ param:ExecParam { return param; })* {
+ExecParameterList
+  = first:ExecParameter rest:(_ "," _ param:ExecParameter { return param; })* {
       return [first, ...rest];
     }
 
-ExecParam
+ExecParameter
   = paramName:BaseIdentifier {
-      return helpers.createVariableReferenceNode('variable', { identifier: paramName }, location());
+      return paramName; // Just return the parameter name as a string
     }

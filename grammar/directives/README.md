@@ -1,6 +1,6 @@
-# Meld Grammar Directive Implementations
+# Mlld Grammar Directive Implementations
 
-This directory contains the top-level implementations of Meld directives. Each directive is implemented as a composition of core content handlers.
+This directory contains the top-level implementations of Mlld directives. Each directive is implemented as a composition of core content handlers.
 
 ## Directive Design Pattern
 

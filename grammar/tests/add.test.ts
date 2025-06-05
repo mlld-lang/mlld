@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { parse } from '@core/ast/parser';
+import { parse } from '@grammar/parser';
 
 // Helper function to log all keys and check if values are arrays
 function checkValuesAreArrays(directive) {
@@ -138,7 +138,7 @@ describe('Add Directive', () => {
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
     expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addSection');
+    expect(directiveNode.subtype).toBe('addPathSection');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('sectionTitle');
@@ -290,7 +290,7 @@ describe('Add Directive', () => {
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
     expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addSection');
+    expect(directiveNode.subtype).toBe('addPathSection');
     expect(directiveNode.source).toBe('section'); // Check source field
     
     // Check values structure
@@ -314,7 +314,7 @@ describe('Add Directive', () => {
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
     expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addSection');
+    expect(directiveNode.subtype).toBe('addPathSection');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('sectionTitle');
@@ -339,7 +339,7 @@ describe('Add Directive', () => {
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
     expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addSection');
+    expect(directiveNode.subtype).toBe('addPathSection');
     
     // Check path has a variable
     expect(directiveNode.meta.path.hasVariables).toBe(true);

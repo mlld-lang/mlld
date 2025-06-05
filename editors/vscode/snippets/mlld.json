@@ -1,0 +1,94 @@
+{
+  "Text Variable": {
+    "prefix": "text",
+    "body": [
+      "@text ${1:name} = \"${2:value}\""
+    ],
+    "description": "Create a text variable"
+  },
+  "Text Variable with Template": {
+    "prefix": "texttemplate",
+    "body": [
+      "@text ${1:name} = [[${2:content with {{${3:variable}}}}]]"
+    ],
+    "description": "Create a text variable with template interpolation"
+  },
+  "Data Object": {
+    "prefix": "data",
+    "body": [
+      "@data ${1:name} = {",
+      "  \"${2:key}\": \"${3:value}\"",
+      "}"
+    ],
+    "description": "Create a data object"
+  },
+  "Path Variable": {
+    "prefix": "path",
+    "body": [
+      "@path ${1:name} = ${2:./path/to/file}"
+    ],
+    "description": "Create a path variable"
+  },
+  "Run Command": {
+    "prefix": "run",
+    "body": [
+      "@run ${1:name} = ```${2|bash,sh|}",
+      "${3:command}",
+      "```"
+    ],
+    "description": "Run a shell command"
+  },
+  "Execute JavaScript": {
+    "prefix": "exec",
+    "body": [
+      "@exec ${1:name} = ```javascript",
+      "${2:// code}",
+      "return ${3:result};",
+      "```"
+    ],
+    "description": "Execute JavaScript code"
+  },
+  "Add File": {
+    "prefix": "add",
+    "body": [
+      "@add [${1:file.md}]"
+    ],
+    "description": "Include content from a file"
+  },
+  "Add Section": {
+    "prefix": "addsection",
+    "body": [
+      "@add \"${1:Section Name}\" from [${2:file.md}]"
+    ],
+    "description": "Include a specific section from a file"
+  },
+  "Add Template": {
+    "prefix": "addtemplate",
+    "body": [
+      "@add template ${1:templateName}(${2:param1, param2})",
+      "${3:Template content with {{param1}} and {{param2}}}"
+    ],
+    "description": "Define a reusable template"
+  },
+  "Import All": {
+    "prefix": "import",
+    "body": [
+      "@import * from [${1:config.mld}]"
+    ],
+    "description": "Import all variables from a file"
+  },
+  "Import Selected": {
+    "prefix": "importselect",
+    "body": [
+      "@import {${1:var1, var2}} from [${2:config.mld}]"
+    ],
+    "description": "Import specific variables from a file"
+  },
+  "Comment": {
+    "prefix": ">>",
+    "body": [
+      ">> ${1:comment}"
+    ],
+    "description": "Add a comment"
+  }
+}

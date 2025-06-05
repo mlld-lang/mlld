@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>meld - modular prompt scripting</title>
+  <title>mlld - modular prompt scripting</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -22,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" >Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -38,34 +39,35 @@
   </div>
   
   <div class="hero-terminal-container">
+    
     <div class="terminal-window hero-terminal">
-      <div class="title-bar">
-        <div class="window-controls">
-          <span class="window-control red"></span>
-          <span class="window-control yellow"></span>
-          <span class="window-control green"></span>
-        </div>
-        <div class="filename">code-review.mld</div>
-        <div class="spacer"></div>
-      </div>
-      <div class="terminal-content"><span class="token keyword">@import</span> <span class="token bracket">[</span><span class="token variable">roles</span><span class="token bracket">, </span><span class="token variable">tasks</span><span class="token bracket">]</span> <span class="token keyword">from</span> <span class="token bracket">[</span>prompts.mld<span class="token bracket">]</span>
-<span class="space"></span>
-<span class="token keyword">@text</span> <span class="token variable">arch</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md <span class="token selector"># Architecture</span><span class="token bracket">]</span>
-<span class="token keyword">@text</span> <span class="token variable">standards</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md <span class="token selector"># Code Standards</span><span class="token bracket">]</span>
-<span class="token keyword">@text</span> <span class="token variable">diff</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>git diff | cat<span class="token bracket">]</span>
-<span class="space"></span>
-<span class="token keyword">@text</span> <span class="token variable">prompt</span> = <span class="token bracket">[[</span>
-   Read our docs: <span class="token variable">{{arch}}</span> <span class="token variable">{{standards}}</span>
-   Review the latest changes: <span class="token variable">{{diff}}</span>
-   Here's your task: <span class="token variable">{{tasks.codereview}}</span>
-<span class="token bracket">]]</span>
-<span class="space"></span>
-<span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot <span class="token variable">{{prompt}}</span> --system <span class="token variable">{{roles.architect}}</span><span class="token bracket">]</span>
+  <div class="title-bar">
+    <div class="window-controls">
+      <span class="window-control red"></span>
+      <span class="window-control yellow"></span>
+      <span class="window-control green"></span>
+    </div>
+    <div class="filename">code-review.mld</div>
+    <div class="spacer"></div>
+  </div>
+  <div class="terminal-content"><span class="token directive keyword">@import</span> <span class="token punctuation">{</span>roles<span class="token punctuation">,</span> tasks<span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>prompts.mld<span class="token punctuation">]</span></span>
+
+<span class="token directive keyword">@text</span> arch = <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md # Architecture<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> standards = <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md # Code Standards<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> diff = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>git diff | cat<span class="token punctuation">]</span></span>
+
+<span class="token directive keyword">@text</span> prompt = <span class="token template-block"><span class="token punctuation">[[</span>
+   Read our docs: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">arch</span><span class="token punctuation">}}</span></span> <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">standards</span><span class="token punctuation">}}</span></span>
+   Review the latest changes: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">diff</span><span class="token punctuation">}}</span></span>
+   Here's your task: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">tasks.codereview</span><span class="token punctuation">}}</span></span>
+<span class="token punctuation">]]</span></span>
+
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot @prompt --system @roles.architect<span class="token punctuation">]</span></span>
 <span class="space"></span>
 <span class="token operator">---</span>
 <span class="animated-line" data-text="Looking at the TypeBlorp updates, the new unidirectional flow implementation correctly separates concerns between state mutations and subscriptions. The observer pattern implementation is clean but has potential race conditions in the notification queue that should be addressed with a proper message ordering mechanism. I recommend adding tests for concurrent updates."></span>
-      </div>
-    </div>
+  </div>
+</div>
   </div>
 
 </section>
@@ -73,13 +75,13 @@
 <section class="install">
   <div class="install-container">
     <div class="install-command">
-      <code>npm install -g meld oneshot</code>
-      <button class="copy-button" onclick="const btn = this; navigator.clipboard.writeText('npm install -g meld oneshot'); btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1500);"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16">
+      <code>npm install -g mlld oneshot</code>
+      <button class="copy-button" onclick="const btn = this; navigator.clipboard.writeText('npm install -g mlld oneshot'); btn.classList.add('copied'); setTimeout(() => btn.classList.remove('copied'), 1500);"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16">
   <path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>
 </svg></button>
     </div>
     <div class="vscode-link">
-      <a href="https://marketplace.visualstudio.com/items?itemName=meld.meld-vscode" target="_blank">VSCode/Cursor extension »</a>
+      <a href="https://marketplace.visualstudio.com/items?itemName=mlld.mlld-vscode" target="_blank">VSCode/Cursor extension »</a>
     </div>
   </div>
 </section>
@@ -119,29 +121,30 @@
         <span class="vertical-line"></span>
         <h3 class="card-heading">Embed LLM context in your docs and treat markdown sections as modules you can import</h3>
         <div class="card-content">
+          
           <div class="terminal-window possibility-example">
-            <div class="title-bar">
-              <div class="window-controls">
-                <span class="window-control red"></span>
-                <span class="window-control yellow"></span>
-                <span class="window-control green"></span>
-              </div>
-              <div class="filename">README.md</div>
-              <div class="spacer"></div>
-            </div>
-            <pre><code><span class="token bracket">#</span> <span class="token selector">TypeBlorp</span>
+  <div class="title-bar">
+    <div class="window-controls">
+      <span class="window-control red"></span>
+      <span class="window-control yellow"></span>
+      <span class="window-control green"></span>
+    </div>
+    <div class="filename">README.md</div>
+    <div class="spacer"></div>
+  </div>
+  <div class="terminal-content"># TypeBlorp
               
-<span class="token bracket">##</span> <span class="token selector">Overview</span> 
+## Overview 
 
-TypeBlorp is lightweight state management library built with TypeScript, with a unidirectional data flow pattern combined  with observer-based pub/sub architecture.
+TypeBlorp is lightweight state management library built <span class="token operator">with</span> TypeScript<span class="token punctuation">,</span> <span class="token operator">with</span> a unidirectional data flow pattern combined  <span class="token operator">with</span> observer-based pub/sub architecture.
 
 Here's the structure of the codebase:
-<span class="token keyword">@run</span> <span class="token bracket">[</span>tree --gitignore<span class="token bracket">]</span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>tree --gitignore<span class="token punctuation">]</span></span>
 
-<span class="token keyword">@embed</span> <span class="token bracket">[</span><span class="token variable">$.</span>/docs/ARCHITECTURE.md<span class="token bracket">]</span> <span class="token keyword">as</span> <span class="token bracket">##</span> <span class="token selector">Architecture</span>
-<span class="token keyword">@embed</span> <span class="token bracket">[</span><span class="token variable">$.</span>/docs/STANDARDS.md<span class="token bracket">]</span> <span class="token keyword">as</span> <span class="token bracket">##</span> <span class="token selector">Code Standards</span>
-            </code></pre>
-          </div>
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>@./docs/ARCHITECTURE.md<span class="token punctuation">]</span></span> <span class="token operator">as</span> ## Architecture
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>@./docs/STANDARDS.md<span class="token punctuation">]</span></span> <span class="token operator">as</span> ## Code Standards
+  </div>
+</div>
         </div>
       </div>
       
@@ -150,27 +153,27 @@ Here's the structure of the codebase:
         <span class="vertical-line"></span>
         <h3 class="card-heading">Chain requests like shell commands</h3>
         <div class="card-content">
+          
           <div class="terminal-window possibility-example">
-            <div class="title-bar">
-              <div class="window-controls">
-                <span class="window-control red"></span>
-                <span class="window-control yellow"></span>
-                <span class="window-control green"></span>
-              </div>
-              <div class="filename">test-plan.mld</div>
-              <div class="spacer"></div>
-            </div>
-            <pre><code><span class="token keyword">@text</span> <span class="token variable">tests</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>npm test<span class="token bracket">]</span>
+  <div class="title-bar">
+    <div class="window-controls">
+      <span class="window-control red"></span>
+      <span class="window-control yellow"></span>
+      <span class="window-control green"></span>
+    </div>
+    <div class="filename">test-plan.mld</div>
+    <div class="spacer"></div>
+  </div>
+  <div class="terminal-content"><span class="token directive keyword">@text</span> tests = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>npm test<span class="token punctuation">]</span></span>
 
-<span class="token keyword">@text</span> <span class="token variable">res</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot "What's broken here? <span class="token variable">{{tests}}</span>"<span class="token bracket">]</span>
+<span class="token directive keyword">@text</span> res = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot "What's broken here? @tests"<span class="token punctuation">]</span></span>
 
-<span class="token keyword">@run</span> <span class="token bracket">[</span>oneshot "Make a plan to fix <span class="token variable">{{res}}</span>"<span class="token bracket">]</span>
-
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot "Make a plan to fix @res"<span class="token punctuation">]</span></span>
+<span class="space"></span>
 <span class="token operator">---</span>
-
-<span class="token string">"Here's a plan to fix the failing tests."</span>
-            </code></pre>
-          </div>
+<span class="animated-line" data-text="Here&#39;s a plan to fix the failing tests."></span>
+  </div>
+</div>
         </div>
       </div>
       
@@ -179,78 +182,75 @@ Here's the structure of the codebase:
         <span class="vertical-line"></span>
         <h3 class="card-heading">Imports, templating, command creation</h3>
         <div class="card-content">
+          
           <div class="terminal-window possibility-example">
-            <div class="title-bar">
-              <div class="window-controls">
-                <span class="window-control red"></span>
-                <span class="window-control yellow"></span>
-                <span class="window-control green"></span>
-              </div>
-              <div class="filename">imports.mld</div>
-              <div class="spacer"></div>
-            </div>
-            <pre><code><span class="token keyword">@text</span> <span class="token variable">docs</span> = <span class="token keyword">@embed</span> <span class="token bracket">[</span>README.md<span class="token bracket">]</span>
+  <div class="title-bar">
+    <div class="window-controls">
+      <span class="window-control red"></span>
+      <span class="window-control yellow"></span>
+      <span class="window-control green"></span>
+    </div>
+    <div class="filename">imports.mld</div>
+    <div class="spacer"></div>
+  </div>
+  <div class="terminal-content"><span class="token directive keyword">@text</span> docs = <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md<span class="token punctuation">]</span></span>
               
-<span class="token keyword">@data</span> <span class="token variable">role</span> = {
-    "architect": "You are a software architect.",
-    "security": "You are a security engineer.",
-    "ux": "You are a ux designer."
-    "pm": "You are a project manager."
-}
+<span class="token directive keyword">@data</span> role = <span class="token punctuation">{</span>
+    <span class="token string">"architect"</span>: <span class="token string">"You are a software architect."</span><span class="token punctuation">,</span>
+    <span class="token string">"security"</span>: <span class="token string">"You are a security engineer."</span><span class="token punctuation">,</span>
+    <span class="token string">"ux"</span>: <span class="token string">"You are a ux designer."</span><span class="token punctuation">,</span>
+    <span class="token string">"pm"</span>: <span class="token string">"You are a project manager."</span>
+<span class="token punctuation">}</span>
 
-<span class="token keyword">@data</span> <span class="token variable">task</span> = {
-    "archrev": "What's the architecture's biggest flaw?",
-    "uxrev": "Review the UX of this code",
-    "secrev": "Review this code for vulnerabilities",
-    "roadmap": "Create a roadmap based on highest priority"
-}
+<span class="token directive keyword">@data</span> task = <span class="token punctuation">{</span>
+    <span class="token string">"archrev"</span>: <span class="token string">"What's the architecture's biggest flaw?"</span><span class="token punctuation">,</span>
+    <span class="token string">"uxrev"</span>: <span class="token string">"Review the UX of this code"</span><span class="token punctuation">,</span>
+    <span class="token string">"secrev"</span>: <span class="token string">"Review this code for vulnerabilities"</span><span class="token punctuation">,</span>
+    <span class="token string">"roadmap"</span>: <span class="token string">"Create a roadmap based on highest priority"</span>
+<span class="token punctuation">}</span>
 
-<span class="token bracket">>> recursively concatenate paths wrapped in xml tags</span>
-<span class="token keyword">@define</span> <span class="token selector">codecat</span><span class="token bracket">(</span><span class="token variable">dir</span><span class="token bracket">)</span> = <span class="token keyword">@run</span> <span class="token bracket">[</span>find <span class="token variable">{{dir}}</span> -type f -exec sh -c 'echo "<$(realpath --relative-to=<span class="token variable">{{dir}}</span> {})>"; cat {}; echo "</$(realpath --relative-to=<span class="token variable">{{dir}}</span> {})>"' \;<span class="token bracket">]</span>
+# command creation examples
+<span class="token directive keyword">@exec</span> codecat<span class="token punctuation">(</span>dir<span class="token punctuation">)</span> = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>find @dir -type f -name "*.mld" | head -5<span class="token punctuation">]</span></span>
 
-@define $ask(context, role, task) = @run [oneshot 
-  --context <span class="token variable">{{context}}</span>
-  --instructions <span class="token variable">{{task}}</span>
-  --system <span class="token variable">{{role}}</span>
-]
-
-            </code></pre>
-          </div>
+<span class="token directive keyword">@exec</span> ask<span class="token punctuation">(</span>context<span class="token punctuation">,</span> role<span class="token punctuation">,</span> task<span class="token punctuation">)</span> = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>oneshot --context @context --instructions @task --system @role<span class="token punctuation">]</span></span>
+  </div>
+</div>
+          
           <div class="terminal-window possibility-example second-possibility-example">
-            <div class="title-bar">
-              <div class="window-controls">
-                <span class="window-control red"></span>
-                <span class="window-control yellow"></span>
-                <span class="window-control green"></span>
-              </div>
-              <div class="filename">plan.mld</div>
-              <div class="spacer"></div>
-            </div>
-            <pre><code><span class="token keyword">@import</span> <span class="token bracket">[</span>imports.mld<span class="token bracket">]</span>
+  <div class="title-bar">
+    <div class="window-controls">
+      <span class="window-control red"></span>
+      <span class="window-control yellow"></span>
+      <span class="window-control green"></span>
+    </div>
+    <div class="filename">plan.mld</div>
+    <div class="spacer"></div>
+  </div>
+  <div class="terminal-content"><span class="token directive keyword">@import</span> <span class="token punctuation">{</span>*<span class="token punctuation">}</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>imports.mld<span class="token punctuation">]</span></span>
 
-<span class="token keyword">@path</span> <span class="token variable">services</span> = <span class="token string">"$./src/services"</span>
-<span class="token keyword">@text</span> <span class="token variable">code</span> = <span class="token keyword">@run</span> <span class="token variable">$codecat</span><span class="token bracket">(</span><span class="token variable">$services</span><span class="token bracket">)</span>
+<span class="token directive keyword">@path</span> services = <span class="token path"><span class="token punctuation">[</span>@./src/services<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> code = <span class="token directive keyword">@run</span> <span class="token variable variable">@codecat</span><span class="token punctuation">(</span><span class="token variable variable">@services</span><span class="token punctuation">)</span>
 
-<span class="token keyword">@text</span> <span class="token variable">context</span> = <span class="token bracket">[[</span>
-  Read our docs: <span class="token variable">{{docs}}</span>
-  Review our code: <span class="token variable">{{code}}</span>
-<span class="token bracket">]]</span>
+<span class="token directive keyword">@text</span> context = <span class="token template-block"><span class="token punctuation">[[</span>
+  Read our docs: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">docs</span><span class="token punctuation">}}</span></span>
+  Review our code: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">code</span><span class="token punctuation">}}</span></span>
+<span class="token punctuation">]]</span></span>
 
-<span class="token keyword">@text</span> <span class="token variable">arch_review</span> = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{{context}}</span>, <span class="token variable">{{role.architect}}</span>, <span class="token variable">{{task.code_review}}</span><span class="token bracket">)</span>
-<span class="token keyword">@text</span> <span class="token variable">ux_review</span>   = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{{context}}</span>, <span class="token variable">{{role.ux}}</span>, <span class="token variable">{{task.ux_review}}</span><span class="token bracket">)</span>
-<span class="token keyword">@text</span> <span class="token variable">sec_review</span>  = <span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{{context}}</span>, <span class="token variable">{{role.security}}</span>, <span class="token variable">{{task.sec_review}}</span><span class="token bracket">)</span>
+<span class="token directive keyword">@text</span> arch_review = <span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span><span class="token field-access property">.architect</span><span class="token punctuation">,</span> <span class="token variable variable">@task</span><span class="token field-access property">.archrev</span><span class="token punctuation">)</span>
+<span class="token directive keyword">@text</span> ux_review   = <span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span><span class="token field-access property">.ux</span><span class="token punctuation">,</span> <span class="token variable variable">@task</span><span class="token field-access property">.uxrev</span><span class="token punctuation">)</span>
+<span class="token directive keyword">@text</span> sec_review  = <span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span><span class="token field-access property">.security</span><span class="token punctuation">,</span> <span class="token variable variable">@task</span><span class="token field-access property">.secrev</span><span class="token punctuation">)</span>
 
-<span class="token keyword">@text</span> <span class="token variable">pm_review</span> = <span class="token bracket">[[</span>
+<span class="token directive keyword">@text</span> pm_review = <span class="token template-block"><span class="token punctuation">[[</span>
   Here's the team's input on our priorities:
-  - Architect review: <span class="token variable">{{arch_review}}</span>
-  - UX review: <span class="token variable">{{ux_review}}</span>
-  - Security review: <span class="token variable">{{sec_review}}</span>
-  Your task: <span class="token variable">{{task.pmrev}}</span>
-<span class="token bracket">]]</span>
+  - Architect review: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">arch_review</span><span class="token punctuation">}}</span></span>
+  - UX review: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">ux_review</span><span class="token punctuation">}}</span></span>
+  - Security review: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">sec_review</span><span class="token punctuation">}}</span></span>
+  Your task: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">task.roadmap</span><span class="token punctuation">}}</span></span>
+<span class="token punctuation">]]</span></span>
 
-<span class="token keyword">@run</span> <span class="token selector">$ask</span><span class="token bracket">(</span><span class="token variable">{{context}}</span>, <span class="token variable">{{role.pm}}</span>, <span class="token variable">{{pm_review}}</span><span class="token bracket">)</span>
-            </code></pre>
-          </div>
+<span class="token directive keyword">@run</span> <span class="token variable variable">@ask</span><span class="token punctuation">(</span><span class="token variable variable">@context</span><span class="token punctuation">,</span> <span class="token variable variable">@role</span><span class="token field-access property">.pm</span><span class="token punctuation">,</span> <span class="token variable variable">@pm_review</span><span class="token punctuation">)</span>
+  </div>
+</div>
         </div>
       </div>
     </div>
@@ -265,7 +265,7 @@ Here's the structure of the codebase:
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

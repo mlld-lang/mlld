@@ -7,15 +7,12 @@ const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'ut
 // Define common external dependencies to ensure consistency across builds
 const externalDependencies = [
   // Core libraries 
-  // Note: meld-ast is now consolidated into @core/ast and should be bundled, not external
-  'meld-spec',
+  // Note: mlld-ast is now consolidated into @core/ast and should be bundled, not external
   'llmxml',
   'marked',
   'minimatch',
   'winston',
   'yargs',
-  'tsyringe',
-  'reflect-metadata',
   
   // Node.js built-ins
   'fs',
@@ -25,6 +22,7 @@ const externalDependencies = [
   'child_process',
   'crypto',
   'fs/promises',
+  'readline/promises',
   'os',
   'events',
   'stream',
@@ -78,7 +76,7 @@ export default defineConfig([
       index: 'api/index.ts',
     },
     format: ['esm'],
-    dts: true,
+    dts: false, // Temporarily disable DTS due to tsup issue with process global
     clean: true,
     sourcemap: true,
     splitting: true,
@@ -155,7 +153,7 @@ export default defineConfig([
       cli: 'cli/cli-entry.ts',
     },
     format: 'cjs',
-    dts: true,
+    dts: false, // Temporarily disable DTS due to tsup issue with process global
     clean: false,
     sourcemap: true,
     treeshake: {

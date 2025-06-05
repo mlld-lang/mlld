@@ -1,6 +1,6 @@
-import { MeldError, ErrorSeverity } from './MeldError';
+import { MlldError, ErrorSeverity } from './MlldError';
 import { ResolutionErrorCode } from './index';
-import type { Field as AstField } from '@core/syntax/types/shared-types';
+import type { Field as AstField } from '@core/types/common';
 
 /**
  * Details specific to field access errors.
@@ -19,7 +19,7 @@ export interface FieldAccessErrorDetails {
 /**
  * Error class for issues encountered during field access (e.g., accessing a property on null/undefined, invalid index).
  */
-export class FieldAccessError extends MeldError {
+export class FieldAccessError extends MlldError {
   public details: FieldAccessErrorDetails;
 
   constructor(message: string, details: FieldAccessErrorDetails, cause?: unknown) {

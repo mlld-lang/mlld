@@ -8,17 +8,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ---------- paths ----------
-const ROOT_GRAMMAR = path.join(__dirname, 'meld.peggy');
-const DIST_DIR = path.join(__dirname, '../core/ast/grammar');
+const ROOT_GRAMMAR = path.join(__dirname, 'mlld.peggy');
+const DIST_DIR = path.join(__dirname, './parser');
 const DIST_PARSER_TS = path.join(DIST_DIR, 'parser.ts');
+const DIST_PARSER_JS = path.join(DIST_DIR, 'parser.js');
 
 // ensure dist dir
 fs.mkdirSync(DIST_DIR, { recursive: true });
 
 // ---------- fold all grammar sources ----------
 // Use the new grammar file if available
-const grammarFile = fs.existsSync(path.join(__dirname, 'meld.peggy.new')) ? 
-                   'meld.peggy.new' : 'meld.peggy';
+const grammarFile = fs.existsSync(path.join(__dirname, 'mlld.peggy.new')) ? 
+                   'mlld.peggy.new' : 'mlld.peggy';
 
 console.log(`Using grammar file: ${grammarFile}`);
 
@@ -123,15 +124,15 @@ if (process.argv.includes('--debug')) {
   }
 }
 
-// ---------- peggy generate ----------
-const peggyOpts = {
+// ---------- peggy generate TypeScript ----------
+const peggyOptsTS = {
   format: 'es',
   output: 'source',
   optimize: 'speed',
   allowedStartRules: ['Start'],
   // Native TypeScript type file!
   dts: true,
-  returnTypes: { Start: 'import("@core/syntax").MeldNode[]' },
+  returnTypes: { Start: 'import("@core/types").MlldNode[]' },
   dependencies: {
     NodeType: './deps/node-type.ts',
     DirectiveKind: './deps/directive-kind.ts',
@@ -139,10 +140,10 @@ const peggyOpts = {
   },
 };
 
-console.log('Generating parser...');
-let parserSource;
+console.log('Generating TypeScript parser...');
+let parserSourceTS;
 try {
-  parserSource = peggy.generate(sources, peggyOpts);
+  parserSourceTS = peggy.generate(sources, peggyOptsTS);
 } catch (error) {
   console.error('Parser generation failed:', error.message);
   
@@ -169,7 +170,7 @@ try {
 
 // Convert JavaScript to TypeScript syntax
 // Replace .js imports with .ts
-parserSource = parserSource.replace(/from ['"](.+)\.js['"]/g, 'from \'$1.ts\'');
+parserSourceTS = parserSourceTS.replace(/from ['"](.+)\.js['"]/g, 'from \'$1.ts\'');
 
 // Modify the generated parser to include a default export
 const defaultExportAddition = `
@@ -182,9 +183,36 @@ const parser = {
 export default parser;
 `;
 
-parserSource += defaultExportAddition;
-fs.writeFileSync(DIST_PARSER_TS, parserSource);
+parserSourceTS += defaultExportAddition;
+fs.writeFileSync(DIST_PARSER_TS, parserSourceTS);
 console.log('✓ parser.ts written with default export');
+
+// ---------- peggy generate JavaScript ----------
+const peggyOptsJS = {
+  format: 'es',
+  output: 'source',
+  optimize: 'speed',
+  allowedStartRules: ['Start'],
+  dependencies: {
+    NodeType: './deps/node-type.js',
+    DirectiveKind: './deps/directive-kind.js',
+    helpers: './deps/helpers.js',
+  },
+};
+
+console.log('Generating JavaScript parser...');
+let parserSourceJS;
+try {
+  parserSourceJS = peggy.generate(sources, peggyOptsJS);
+} catch (error) {
+  console.error('JavaScript parser generation failed:', error.message);
+  throw error;
+}
+
+// Add default export to JavaScript version
+parserSourceJS += defaultExportAddition;
+fs.writeFileSync(DIST_PARSER_JS, parserSourceJS);
+console.log('✓ parser.js written with default export');
 
 // ---------- copy runtime deps ----------
 // Create deps directory in the output directory
@@ -197,26 +225,33 @@ for (const f of [
   'helpers.js',
 ]) {
   const srcPath = path.join(__dirname, 'deps', f);
-  const destPath = path.join(DIST_DIR, 'deps', f.replace('.js', '.ts'));
+  const destPathTS = path.join(DIST_DIR, 'deps', f.replace('.js', '.ts'));
+  const destPathJS = path.join(DIST_DIR, 'deps', f);
   
-  // Read the file, adjust the import path and convert to TypeScript
+  // Read the file
   let content = fs.readFileSync(srcPath, 'utf8');
   
-  // Convert to TypeScript
-  content = content.replace('./grammar-core.js', '../grammar-core.ts');
-  content = content.replace(/import\s+(.+?)\s+from\s+['"](.+?)\.js['"]/g, 'import $1 from \'$2.ts\'');
+  // Create TypeScript version
+  let contentTS = content.replace('./grammar-core.js', '../grammar-core.ts');
+  contentTS = contentTS.replace(/import\s+(.+?)\s+from\s+['"](.+?)\.js['"]/g, 'import $1 from \'$2.ts\'');
+  fs.writeFileSync(destPathTS, contentTS);
   
-  fs.writeFileSync(destPath, content);
-  console.log(`✓ Converted ${f} to TypeScript`);
+  // Copy JavaScript version as-is with path adjustments
+  let contentJS = content.replace('./grammar-core.js', '../grammar-core.js');
+  fs.writeFileSync(destPathJS, contentJS);
+  
+  console.log(`✓ Converted ${f} to TypeScript and copied JavaScript`);
 }
 
-// Also convert grammar-core.js to TypeScript
+// Also copy grammar-core.js
 const coreJsPath = path.join(__dirname, 'deps/grammar-core.js');
-const destCoreJsPath = path.join(DIST_DIR, 'grammar-core.ts');
-let coreContent = fs.readFileSync(coreJsPath, 'utf8');
-// Add type annotations as needed
-fs.writeFileSync(destCoreJsPath, coreContent);
-console.log(`✓ Converted grammar-core.js to TypeScript`);
+const destCoreJsPathTS = path.join(DIST_DIR, 'grammar-core.ts');
+const destCoreJsPathJS = path.join(DIST_DIR, 'grammar-core.js');
 
-console.log('✓ helper modules converted to TypeScript');
+let coreContent = fs.readFileSync(coreJsPath, 'utf8');
+fs.writeFileSync(destCoreJsPathTS, coreContent);
+fs.writeFileSync(destCoreJsPathJS, coreContent);
+
+console.log(`✓ Copied grammar-core.js to both TypeScript and JavaScript`);
+console.log('✓ helper modules converted and copied');
 console.log('Parser generation complete!');

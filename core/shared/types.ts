@@ -218,7 +218,7 @@ interface SourceLocation {
 }
 
 /**
- * Node types in Meld AST
+ * Node types in Mlld AST
  */
 export enum NodeType {
   ROOT = 'Root',
@@ -226,7 +226,16 @@ export enum NodeType {
   DIRECTIVE = 'Directive',
   TEXT = 'Text',
   VARIABLE_REFERENCE = 'VariableReference',
-  COMMENT = 'Comment'
+  COMMENT = 'Comment',
+  NULL = 'Null',
+  STRING_LITERAL = 'StringLiteral',
+  SECTION_MARKER = 'SectionMarker',
+  CODE_FENCE = 'CodeFence',
+  PATH_SEPARATOR = 'PathSeparator',
+  DOT_SEPARATOR = 'DotSeparator',
+  NEWLINE = 'Newline',
+  ERROR = 'Error',
+  LITERAL = 'Literal'
 }
 
 /**

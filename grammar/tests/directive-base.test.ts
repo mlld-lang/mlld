@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parse } from '../../core/ast';
-import type { DirectiveNode } from '../../core/ast/types';
+import { parse } from '@grammar/parser';
+import type { DirectiveNode } from '@core/types';
 
 /**
  * Basic tests to verify the fundamental structure of all directives
@@ -8,13 +8,13 @@ import type { DirectiveNode } from '../../core/ast/types';
  */
 describe('Directive Base Structure', () => {
   const directiveExamples = [
-    '@import { * } from "file.md"',
+    '@import { * } from [file.md]',
     '@add "path/to/file.md"',
     '@text myvar = "some text"',
     '@data myvar = { "key": "value" }',
-    '@path myvar = "/path/to/file"',
-    '@run [echo "hello world"]',
-    '@exec mycommand (param) = @run [echo "hello"]'
+    '@path myvar = [/path/to/file]',
+    '@run [(echo "hello world")]',
+    '@exec mycommand (param) = @run [(echo "hello")]'
   ];
 
   for (const input of directiveExamples) {

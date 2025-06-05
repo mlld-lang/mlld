@@ -84,7 +84,7 @@ export function mockConsole(): MockConsoleResult {
  *   const { mockExit, restore: restoreExit } = mockProcessExit();
  *   
  *   try {
- *     await cli.run(['non-existent-file.meld']);
+ *     await cli.run(['non-existent-file.mlld']);
  *     expect(mocks.error).toHaveBeenCalledWith(
  *       expect.stringContaining('File not found')
  *     );

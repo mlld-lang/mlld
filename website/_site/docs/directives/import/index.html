@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -22,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -90,6 +91,54 @@
         
           
         
+          
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
+          
+        
         
         <li>
           <h4>Directives</h4>
@@ -112,6 +161,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" >
                   
                     @data
@@ -121,18 +179,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -174,6 +223,46 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
+              
             
           </ul>
         </li>
@@ -183,26 +272,26 @@
   
   <div class="docs-content">
     <h1 id="%40import-directive" tabindex="-1">@import Directive</h1>
-<p>The <code>@import</code> directive allows you to import variables and commands from other Meld files.</p>
+<p>The <code>@import</code> directive allows you to import variables and commands from other Mlld files.</p>
 <h2 id="syntax" tabindex="-1">Syntax</h2>
 <p>Modern syntax:</p>
-<pre><code class="language-meld">@import [path.mld]                           # Import all variables
-@import [*] from [path.mld]                  # Import all variables (equivalent)
-@import [var1, var2] from [path.mld]        # Import specific variables
-@import [var1 as alias1, var2] from [path.mld] # Import with aliases
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span>                           # Import all variables
+<span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>*<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span>                  # Import all variables <span class="token punctuation">(</span>equivalent<span class="token punctuation">)</span>
+<span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>var1, var2<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span>        # Import specific variables
+<span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>var1 as alias1, var2<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span> # Import <span class="token operator">with</span> aliases
 </code></pre>
 <p>Legacy syntax (also supported):</p>
-<pre><code class="language-meld">@import path=&quot;path.mld&quot;                     # Import all variables
-@import path=&quot;path.mld&quot; imports=[var1, var2] # Import specific variables
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> path=<span class="token string">"path.mld"</span>                     # Import all variables
+<span class="token directive keyword">@import</span> path=<span class="token string">"path.mld"</span> imports=<span class="token path"><span class="token punctuation">[</span>var1, var2<span class="token punctuation">]</span></span> # Import specific variables
 </code></pre>
 <p>Where:</p>
 <ul>
-<li><code>path.mld</code> is the path to the Meld file to import</li>
+<li><code>path.mld</code> is the path to the Mlld file to import</li>
 <li><code>var1</code>, <code>var2</code> are variable names to import</li>
 <li><code>alias1</code> is an alternative name to use for the imported variable</li>
 </ul>
 <h2 id="import-behavior" tabindex="-1">Import Behavior</h2>
-<p>When you import a Meld file:</p>
+<p>When you import a Mlld file:</p>
 <ul>
 <li>All variables and commands defined in the imported file become available</li>
 <li>Text content from the imported file is NOT included</li>
@@ -226,33 +315,33 @@
 </ul>
 <h2 id="selective-imports-and-aliases" tabindex="-1">Selective Imports and Aliases</h2>
 <p>Specify selective imports using a comma-separated list:</p>
-<pre><code class="language-meld">@import [var1, var2, var3] from [path.mld]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>var1, var2, var3<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Import with aliases to avoid name conflicts:</p>
-<pre><code class="language-meld">@import [var1 as myVar1, var2 as myVar2] from [path.mld]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>var1 as myVar1, var2 as myVar2<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Alternative alias syntax with colon:</p>
-<pre><code class="language-meld">@import [var1:myVar1, var2:myVar2] from [path.mld]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>var1:myVar1, var2:myVar2<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path.mld<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="examples" tabindex="-1">Examples</h2>
 <p>Basic import:</p>
-<pre><code class="language-meld">@import [&quot;$PROJECTPATH/utils.mld&quot;]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>"$PROJECTPATH/utils.mld"<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Import with path variables:</p>
-<pre><code class="language-meld">@path lib = &quot;$PROJECTPATH/lib&quot;
-@import [$lib/utils.mld]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> lib = <span class="token string">"$PROJECTPATH/lib"</span>
+<span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>$lib/utils.mld<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Selective import:</p>
-<pre><code class="language-meld">@import [textVar, dataVar] from [$lib/utils.mld]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>textVar, dataVar<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>$lib/utils.mld<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Import with aliases:</p>
-<pre><code class="language-meld">@import [textVar as myText, dataVar as myData] from [$lib/utils.mld]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>textVar as myText, dataVar as myData<span class="token punctuation">]</span></span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>$lib/utils.mld<span class="token punctuation">]</span></span>
 </code></pre>
 <p>Using imported variables:</p>
-<pre><code class="language-meld">@import [&quot;$PROJECTPATH/utils.mld&quot;]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>"$PROJECTPATH/utils.mld"<span class="token punctuation">]</span></span>
 
-@text message = `Hello, {{importedName}}!`
-@run [$importedCommand({{param}})]
+<span class="token directive keyword">@text</span> message = `Hello<span class="token punctuation">,</span> <span class="token punctuation">{</span><span class="token punctuation">{</span>importedName<span class="token punctuation">}</span><span class="token punctuation">}</span>!`
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>($importedCommand({{param}}))<span class="token punctuation">]</span></span>
 </code></pre>
 <h2 id="error-handling" tabindex="-1">Error Handling</h2>
 <p>The implementation handles various error scenarios:</p>
@@ -265,7 +354,7 @@
 </ul>
 <h2 id="notes" tabindex="-1">Notes</h2>
 <ul>
-<li>Imported files must be valid Meld files</li>
+<li>Imported files must be valid Mlld files</li>
 <li>Missing import files will generate fatal errors</li>
 <li>Imports should generally be placed at the top of your file</li>
 <li>Imported files can have their own imports (nesting is supported)</li>
@@ -333,7 +422,7 @@
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

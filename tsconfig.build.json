@@ -4,7 +4,7 @@
     "node_modules",
     "dist",
     "_old",
-    "_meld",
+    "_mlld",
     "**/*.test.ts",
     "**/*.spec.ts",
     // "tests/**/*",

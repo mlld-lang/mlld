@@ -1,10 +1,10 @@
-// MELD GRAMMAR CONTEXT DETECTION
+// MLLD GRAMMAR CONTEXT DETECTION
 // A comprehensive system for disambiguating different code contexts
 
 /* 
 # Context Detection System
 
-This file provides a core abstraction for detecting different contexts in Meld grammar,
+This file provides a core abstraction for detecting different contexts in Mlld grammar,
 with a particular focus on disambiguating @ symbol usage between:
 
 1. DirectiveContext   - Top-level directive start (e.g., @run, @text)
@@ -160,6 +160,22 @@ ExecRunRHSContext "Exec @run right-hand side context"
       return isInExecDirective;
     }
 
+// Detects if we're looking at a path pattern starting with @variable
+// This helps distinguish paths like @env/config.json from command references
+PathStartingWithVariableContext "Path starting with @variable context"
+  = &{
+      const pos = offset();
+      
+      // Look ahead to see if we have @identifier followed by path indicators
+      const remaining = input.substring(pos);
+      
+      // Match @identifier followed by / or . (path indicators)
+      // This pattern identifies paths that start with variables
+      const pathPattern = /^@[a-zA-Z_][a-zA-Z0-9_]*[\/\.]/;
+      
+      return pathPattern.test(remaining);
+    }
+
 // -------------------------------------------------------------
 // CONTEXT DETECTION ARCHITECTURE
 // -------------------------------------------------------------
@@ -182,4 +198,8 @@ The enhanced context predicates provide more specific context detection
 for specialized cases like language + code block patterns in different
 directive contexts, which is particularly important for consistent parsing
 between run.peggy and exec.peggy.
+
+The PathStartingWithVariableContext predicate helps distinguish between
+paths that start with variables (like @env/config.json) and command
+references, preventing incorrect parsing in text.peggy and similar contexts.
 */

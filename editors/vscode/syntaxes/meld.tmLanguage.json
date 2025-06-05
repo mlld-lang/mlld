@@ -1,0 +1,98 @@
+{
+  "name": "Mlld",
+  "scopeName": "source.mlld",
+  "fileTypes": [
+    "mlld",
+    "mld"
+  ],
+  "patterns": [
+    {
+      "name": "keyword.control.directive.mlld",
+      "match": "@(data|text|run|add|path|import|exec|when|output)\\b"
+    },
+    {
+      "name": "comment.line.double-slash.mlld",
+      "match": ">>.*$"
+    },
+    {
+      "name": "keyword.other.language.mlld",
+      "match": "\\b(javascript|js|python|py|bash|sh)\\b"
+    },
+    {
+      "name": "string.template.mlld",
+      "begin": "\\[\\[",
+      "end": "\\]\\]",
+      "patterns": [
+        {
+          "name": "variable.template.mlld",
+          "match": "\\{\\{[^}]+\\}\\}"
+        }
+      ]
+    },
+    {
+      "name": "meta.command.mlld",
+      "begin": "\\[\\(",
+      "end": "\\)\\]",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.command.begin.mlld"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.command.end.mlld"
+        }
+      },
+      "contentName": "string.unquoted.command.mlld",
+      "patterns": [
+        {
+          "name": "variable.other.mlld",
+          "match": "@\\w+"
+        }
+      ]
+    },
+    {
+      "name": "meta.path.mlld",
+      "begin": "\\[",
+      "end": "\\]",
+      "patterns": [
+        {
+          "name": "markup.underline.link.mlld",
+          "match": "https?://[^\\]]+"
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.double.mlld",
+      "match": "\"[^\"]*\""
+    },
+    {
+      "name": "variable.language.reserved.mlld",
+      "match": "@(INPUT|TIME|PROJECTPATH)\\b"
+    },
+    {
+      "name": "variable.other.mlld",
+      "match": "@\\w+"
+    },
+    {
+      "name": "variable.other.member.mlld",
+      "match": "\\.(\\w+|\\d+)"
+    },
+    {
+      "name": "keyword.operator.mlld",
+      "match": "\\b(from|as|foreach|with|to)\\b|="
+    },
+    {
+      "name": "constant.numeric.mlld",
+      "match": "\\b\\d+(\\.\\d+)?\\b"
+    },
+    {
+      "name": "constant.language.boolean.mlld",
+      "match": "\\b(true|false)\\b"
+    },
+    {
+      "name": "constant.language.null.mlld",
+      "match": "\\bnull\\b"
+    }
+  ]
+}

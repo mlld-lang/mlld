@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Version bumping script for the Meld project
+ * Version bumping script for the Mlld project
  * Usage: 
  *   node scripts/bump-version.js [patch|minor|major]
  * 
