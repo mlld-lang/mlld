@@ -1,11 +1,11 @@
 ---
 layout: docs.njk
-title: "Mlld Directives"
+title: "mlld Directives"
 ---
 
-# Mlld Directives
+# mlld Directives
 
-Directives are the core building blocks of Mlld. They always start with an `@` symbol and must appear at the beginning of a line (no indentation). Each directive has a specific purpose and syntax.
+Directives are the core building blocks of mlld. They always start with an `@` symbol and must appear at the beginning of a line (no indentation). Each directive has a specific purpose and syntax.
 
 ## Available Directives
 
@@ -14,7 +14,7 @@ Directives are the core building blocks of Mlld. They always start with an `@` s
 - [@path](./path.md) - Define filesystem path variables
 - [@add](./add.md) - Include content from files, variables, or templates
 - [@run](./run.md) - Execute shell commands and include output
-- [@import](./import.md) - Import variables from other Mlld files
+- [@import](./import.md) - Import variables from other mlld files
 - [@url](./url.md) - Reference remote URLs
 - [@exec](./exec.md) - Create reusable commands
 - [@when](./when.md) - Conditional actions 

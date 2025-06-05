@@ -5,7 +5,7 @@ title: "@run Directive"
 
 # @run Directive
 
-The `@run` directive executes shell commands or code blocks and includes their output in your Mlld document.
+The `@run` directive executes shell commands or code blocks and includes their output in your mlld document.
 
 ## Syntax
 
@@ -133,7 +133,7 @@ Using code execution with `@exec`:
 
 ## Environment & Working Directory
 
-- Commands execute in the environment of the Mlld process
+- Commands execute in the environment of the mlld process
 - The working directory defaults to the current working directory
 - Environment variables are available to the command
 

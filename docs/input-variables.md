@@ -1,6 +1,6 @@
 # Environment Variables and Input
 
-Mlld provides access to environment variables and stdin input through the `@INPUT` system, allowing you to create dynamic, configurable scripts.
+mlld provides access to environment variables and stdin input through the `@INPUT` system, allowing you to create dynamic, configurable scripts.
 
 ## Environment Variables
 

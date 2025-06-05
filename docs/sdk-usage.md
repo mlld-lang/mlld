@@ -1,6 +1,6 @@
 # SDK Usage
 
-The Mlld SDK allows you to integrate Mlld processing into your JavaScript or TypeScript applications.
+The mlld SDK allows you to integrate mlld processing into your JavaScript or TypeScript applications.
 
 ## Installation
 
@@ -10,54 +10,54 @@ npm install mlld
 
 ## Core Functions
 
-The SDK provides three main functions for working with Mlld content:
+The SDK provides three main functions for working with mlld content:
 
-### Parse Mlld Content
+### Parse mlld Content
 
-Parse raw Mlld content into an Abstract Syntax Tree (AST):
+Parse raw mlld content into an Abstract Syntax Tree (AST):
 
 ```typescript
-import { parseMlld } from 'mlld';
+import { parsemlld } from 'mlld';
 
 const content = `
 @text name = "World"
 Hello, {{name}}!
 `;
 
-const nodes = parseMlld(content);
+const nodes = parsemlld(content);
 ```
 
 The parsed AST contains nodes representing directives and text content, which can be further processed or manipulated.
 
-### Interpret Mlld AST
+### Interpret mlld AST
 
 Interpret parsed AST nodes with optional initial state:
 
 ```typescript
-import { interpretMlld, InterpreterState } from 'mlld';
+import { interpretmlld, InterpreterState } from 'mlld';
 
 // Create initial state (optional)
 const initialState = new InterpreterState();
 initialState.setText('greeting', 'Hi');
 
 // Interpret the nodes
-const finalState = interpretMlld(nodes, initialState);
+const finalState = interpretmlld(nodes, initialState);
 ```
 
 Interpretation executes directives, resolves variables, and produces a final state containing all defined variables and the processed content.
 
-### Run Mlld Files
+### Run mlld Files
 
-Convenience function to read and interpret Mlld files in one step:
+Convenience function to read and interpret mlld files in one step:
 
 ```typescript
-import { runMlld } from 'mlld';
+import { runmlld } from 'mlld';
 
 // Run with default options (XML format)
-const { state, output } = await runMlld('path/to/file.mld');
+const { state, output } = await runmlld('path/to/file.mld');
 
 // Run with custom options
-const { state, output } = await runMlld('path/to/file.mld', {
+const { state, output } = await runmlld('path/to/file.mld', {
   format: 'md',  // or 'xml'
   initialState: new InterpreterState()
 });
@@ -102,14 +102,14 @@ The SDK provides comprehensive error handling with enhanced formatting:
 ### Basic Error Handling
 
 ```typescript
-import { interpret, MlldError } from 'mlld';
+import { interpret, mlldError } from 'mlld';
 
 try {
   const result = await interpret(content, options);
   console.log(result);
 } catch (error) {
-  if (error instanceof MlldError) {
-    console.error('Mlld Error:', error.message);
+  if (error instanceof mlldError) {
+    console.error('mlld Error:', error.message);
     console.error('Error Code:', error.code);
     console.error('Severity:', error.severity);
   } else {
@@ -199,26 +199,26 @@ The SDK provides specialized error types for robust error handling:
 
 ```typescript
 import { 
-  parseMlld, 
-  MlldParseError, 
-  MlldInterpreterError,
-  MlldFileNotFoundError,
-  MlldError
+  parsemlld, 
+  mlldParseError, 
+  mlldInterpreterError,
+  mlldFileNotFoundError,
+  mlldError
 } from 'mlld';
 
 try {
-  const nodes = parseMlld(invalidContent);
+  const nodes = parsemlld(invalidContent);
 } catch (error) {
-  if (error instanceof MlldParseError) {
+  if (error instanceof mlldParseError) {
     console.error('Parse error:', error.message);
     console.error('Line:', error.line);
     console.error('Column:', error.column);
-  } else if (error instanceof MlldInterpreterError) {
+  } else if (error instanceof mlldInterpreterError) {
     console.error('Interpreter error:', error.message);
-  } else if (error instanceof MlldFileNotFoundError) {
+  } else if (error instanceof mlldFileNotFoundError) {
     console.error('File not found:', error.message);
-  } else if (error instanceof MlldError) {
-    console.error('General Mlld error:', error.message);
+  } else if (error instanceof mlldError) {
+    console.error('General mlld error:', error.message);
   } else {
     console.error('Unknown error:', error);
   }
@@ -239,7 +239,7 @@ registerFormatHandler('uppercase', (value) => {
   return String(value).toUpperCase();
 });
 
-// Now you can use it in Mlld code
+// Now you can use it in mlld code
 // @text name = "alice"
 // @text greeting = `Hello, {{name>>(uppercase)}}!`
 // Result: "Hello, ALICE!"
@@ -250,7 +250,7 @@ registerFormatHandler('uppercase', (value) => {
 You can provide custom file system handlers for testing or special environments:
 
 ```typescript
-import { runMlld, createMemoryFileSystem } from 'mlld';
+import { runmlld, createMemoryFileSystem } from 'mlld';
 
 // Create an in-memory file system for testing
 const memfs = createMemoryFileSystem({
@@ -259,25 +259,25 @@ const memfs = createMemoryFileSystem({
 });
 
 // Use the custom file system
-const { state, output } = await runMlld('path/to/file.mld', {
+const { state, output } = await runmlld('path/to/file.mld', {
   fileSystem: memfs
 });
 ```
 
 ## Integration Example
 
-Here's a complete example of integrating Mlld into an application:
+Here's a complete example of integrating mlld into an application:
 
 ```typescript
-import { parseMlld, interpretMlld, InterpreterState } from 'mlld';
+import { parsemlld, interpretmlld, InterpreterState } from 'mlld';
 import * as fs from 'fs';
 
-// Read a Mlld file
+// Read a mlld file
 const content = fs.readFileSync('template.mld', 'utf-8');
 
 try {
   // Parse the content
-  const nodes = parseMlld(content);
+  const nodes = parsemlld(content);
   
   // Create initial state with user data
   const state = new InterpreterState();
@@ -289,7 +289,7 @@ try {
   });
   
   // Interpret the nodes
-  const finalState = interpretMlld(nodes, state);
+  const finalState = interpretmlld(nodes, state);
   
   // Get the processed content
   const result = finalState.getContent();
@@ -299,6 +299,6 @@ try {
   console.log('Processing complete!');
   
 } catch (error) {
-  console.error('Error processing Mlld file:', error.message);
+  console.error('Error processing mlld file:', error.message);
 }
 ```

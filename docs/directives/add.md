@@ -5,7 +5,7 @@ title: "@add Directive"
 
 # @add Directive
 
-The `@add` directive includes content from external files, variables, or templates into your Mlld document.
+The `@add` directive includes content from external files, variables, or templates into your mlld document.
 
 ## Syntax
 

@@ -1,15 +1,15 @@
 ---
 layout: docs.njk
-title: "Introduction to Mlld"
+title: "Introduction to mlld"
 ---
 
-# Introduction to Mlld
+# Introduction to mlld
 
-Mlld is a simple and constrained scripting language designed for use within markdown-like documents. It allows you to create dynamic content by interpreting special directive lines while preserving all other content as-is.
+mlld is a simple and constrained scripting language designed for use within markdown-like documents. It allows you to create dynamic content by interpreting special directive lines while preserving all other content as-is.
 
 ## Core Concepts
 
-Mlld works by processing only lines that begin with directives (like `@text`, `@run`, etc.) while treating all other content as literal text. This makes it ideal for creating dynamic, templated documents.
+mlld works by processing only lines that begin with directives (like `@text`, `@run`, etc.) while treating all other content as literal text. This makes it ideal for creating dynamic, templated documents.
 
 ### Key Features
 
@@ -49,5 +49,5 @@ This example:
 ## Next Steps
 
 - Learn about [variables and interpolation](./variables.md)
-- Explore the [directives](./directives/README.md) available in Mlld
+- Explore the [directives](./directives/README.md) available in mlld
 - Check the complete [grammar reference](./grammar-reference.md) for detailed syntax

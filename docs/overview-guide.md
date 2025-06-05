@@ -1,18 +1,18 @@
-# Mlld Overview Guide
+# mlld Overview Guide
 
-## What is Mlld?
+## What is mlld?
 
-Mlld (`.mld`) is a scripting language designed for working with Large Language Models (LLMs) and generating dynamic content. It provides a simple syntax for orchestrating AI interactions, processing data, and producing markdown output.
+mlld (`.mld`) is a scripting language designed for working with Large Language Models (LLMs) and generating dynamic content. It provides a simple syntax for orchestrating AI interactions, processing data, and producing markdown output.
 
 ## Design Principles
 
-Mlld is built around several key principles:
+mlld is built around several key principles:
 - Provide clear context and specific instructions to LLMs
 - Support text-based workflows and transformations
 - Enable structured processing through pipelines
 - Keep the core language simple while allowing extension through modules
 
-## Why Mlld?
+## Why mlld?
 
 Traditional programming languages force you to think in terms of loops, exceptions, and types. But working with LLMs is different - it's more like:
 - Consulting multiple experts for different perspectives
@@ -20,11 +20,11 @@ Traditional programming languages force you to think in terms of loops, exceptio
 - Building institutional knowledge into reusable workflows
 - Creating "pipeline of thought" rather than just "chain of thought"
 
-Mlld provides exactly the primitives you need for this new paradigm, and nothing more.
+mlld provides exactly the primitives you need for this new paradigm, and nothing more.
 
 ## Core Philosophy: Simple Core, Extensible Modules
 
-Mlld maintains a minimal core language for orchestration while supporting extensibility through modules:
+mlld maintains a minimal core language for orchestration while supporting extensibility through modules:
 
 - **Simple syntax**: Limited set of directives to learn
 - **Module system**: JavaScript/TypeScript modules for complex functionality
@@ -35,7 +35,7 @@ Mlld maintains a minimal core language for orchestration while supporting extens
 
 ### 1. Everything is Markdown
 
-Mlld enhances regular markdown - anything that isn't a directive (starting with `@`) is treated as normal markdown:
+mlld enhances regular markdown - anything that isn't a directive (starting with `@`) is treated as normal markdown:
 
 ```mlld
 # My Document
@@ -82,7 +82,7 @@ This is crucial - most directives just set up state. Only `@add` and `@run` actu
 
 ### 4. Complexity Lives in Modules
 
-Mlld deliberately lacks traditional programming constructs (loops, error handling, complex logic). Instead, modules provide these capabilities:
+mlld deliberately lacks traditional programming constructs (loops, error handling, complex logic). Instead, modules provide these capabilities:
 
 ```mlld
 # Instead of language features, use modules:
@@ -148,7 +148,7 @@ Recent changes:
 
 ## The Power of Modules
 
-Mlld's true power comes from modules that encapsulate complex operations while keeping your scripts simple:
+mlld's true power comes from modules that encapsulate complex operations while keeping your scripts simple:
 
 ### Example: Document Generation Module
 
@@ -228,7 +228,7 @@ Used in mlld:
 
 ### Structured Processing with Pipelines
 
-Mlld supports explicit step-by-step processing through transformation pipelines:
+mlld supports explicit step-by-step processing through transformation pipelines:
 
 ```mlld
 # Define transformation stages
@@ -590,7 +590,7 @@ Create a consensus view that incorporates the best insights from each.
 
 ## Best Practices
 
-1. **Think Orchestration, Not Programming** - Mlld scripts should describe what to do, not how
+1. **Think Orchestration, Not Programming** - mlld scripts should describe what to do, not how
 2. **Build Institutional Knowledge** - Encode standards and values into pipeline modules
 3. **Embrace Probabilistic Outputs** - Use pipelines to guide, not control
 4. **Keep Core Scripts Simple** - Complex logic belongs in modules
@@ -614,4 +614,4 @@ Create a consensus view that incorporates the best insights from each.
 
 ## Summary
 
-Mlld provides a straightforward way to work with AI systems and generate dynamic content. Its simple core syntax combined with an extensible module system allows for building complex workflows while maintaining readability and maintainability.
+mlld provides a straightforward way to work with AI systems and generate dynamic content. Its simple core syntax combined with an extensible module system allows for building complex workflows while maintaining readability and maintainability.

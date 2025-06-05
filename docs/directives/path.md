@@ -48,7 +48,7 @@ Where:
 
 ## Special Path Prefixes
 
-Mlld provides a special path prefix for project-relative paths:
+mlld provides a special path prefix for project-relative paths:
 
 - `.`: Refers to the current project root directory
 
@@ -114,7 +114,7 @@ Paths can include variables, which are resolved during execution:
 
 - For project-relative paths, use the `.` prefix inside brackets
 - Use forward slashes for path separators (even on Windows)
-- Be cautious when using absolute paths or parent directory references (`..`), as they may make your Mlld files less portable
+- Be cautious when using absolute paths or parent directory references (`..`), as they may make your mlld files less portable
 - Consider using path variables to encapsulate filesystem paths for better maintainability
 
 ## URL Caching

@@ -1,6 +1,6 @@
-# Mlld Module System
+# mlld Module System
 
-The mlld module system allows you to share and reuse Mlld code across projects. Modules are distributed through a decentralized registry system that uses DNS for discovery and GitHub gists for storage.
+The mlld module system allows you to share and reuse mlld code across projects. Modules are distributed through a decentralized registry system that uses DNS for discovery and GitHub gists for storage.
 
 ## Quick Start
 
@@ -224,7 +224,7 @@ Created: January 15, 2024
 
 ### Creating Modules
 
-Create a module by writing standard Mlld code with an explicit module export:
+Create a module by writing standard mlld code with an explicit module export:
 
 **alice-utils.mlld:**
 ```mlld
@@ -250,7 +250,7 @@ version: 1.0.0
 
 #### Module Export Patterns
 
-Mlld supports multiple export patterns to fit different module design needs:
+mlld supports multiple export patterns to fit different module design needs:
 
 ##### 1. Explicit Module Export (`@data module`)
 
@@ -599,7 +599,7 @@ mlld install @templates/blog
 @import { postTemplate, authorBio } from @templates/blog
 
 @data post = {
-  "title": "Introduction to Mlld Modules",
+  "title": "Introduction to mlld Modules",
   "author": "Alice Developer", 
   "date": "2024-01-15",
   "content": "Modules make code reusable..."

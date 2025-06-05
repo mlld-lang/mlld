@@ -5,7 +5,7 @@ title: "Syntax Reference"
 
 # Syntax Reference
 
-This document provides a comprehensive reference for the Mlld syntax.
+This document provides a comprehensive reference for the mlld syntax.
 
 ## Core Tokens
 
@@ -15,7 +15,7 @@ Directives must appear at start of line (no indentation):
 ```
 @add      - Include content from files
 @run      - Execute shell commands
-@import   - Import variables and commands from other Mlld files
+@import   - Import variables and commands from other mlld files
 @exec     - Create reusable commands
 @text     - Define text variables
 @path     - Define filesystem path variables

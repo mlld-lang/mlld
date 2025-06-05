@@ -1,6 +1,6 @@
 # @import Directive
 
-The `@import` directive allows you to import variables and commands from other Mlld files.
+The `@import` directive allows you to import variables and commands from other mlld files.
 
 ## Syntax
 
@@ -18,13 +18,13 @@ Module imports:
 
 
 Where:
-- `path.mld` is the path to the Mlld file to import
+- `path.mld` is the path to the mlld file to import
 - `var1`, `var2` are variable names to import
 - `alias1` is an alternative name to use for the imported variable
 
 ## Import Behavior
 
-When you import a Mlld file:
+When you import a mlld file:
 - All variables and commands defined in the imported file become available
 - Text content from the imported file is NOT included
 - Imports should be placed at the top of your file
@@ -99,7 +99,7 @@ The implementation handles various error scenarios:
 
 ## Notes
 
-- Imported files must be valid Mlld files
+- Imported files must be valid mlld files
 - Missing import files will generate fatal errors
 - Imports should generally be placed at the top of your file
 - Imported files can have their own imports (nesting is supported)

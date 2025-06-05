@@ -1,18 +1,18 @@
 ---
 layout: docs.njk
-title: "URL Support in Mlld"
+title: "URL Support in mlld"
 ---
 
-# URL Support in Mlld
+# URL Support in mlld
 
-Mlld supports fetching content from remote URLs using the `@add` and `@import` directives. This allows you to incorporate external resources into your Mlld documents without needing to download them first.
+mlld supports fetching content from remote URLs using the `@add` and `@import` directives. This allows you to incorporate external resources into your mlld documents without needing to download them first.
 
 ## URL Functionality Overview
 
-- **URL Embedding**: Embed content from remote URLs directly into your Mlld documents
-- **URL Importing**: Import variables from remote Mlld files hosted on servers
+- **URL Embedding**: Embed content from remote URLs directly into your mlld documents
+- **URL Importing**: Import variables from remote mlld files hosted on servers
 
-## Using URLs in Mlld
+## Using URLs in mlld
 
 URLs can be used directly in `@add` and `@path` directives:
 

@@ -5,7 +5,7 @@ title: "Variables"
 
 # Variables
 
-Mlld has three distinct types of variables, each with its own syntax and usage patterns.
+mlld has three distinct types of variables, each with its own syntax and usage patterns.
 
 ## Variable Types
 
@@ -101,7 +101,7 @@ Variables can be converted between types automatically in many contexts:
 
 ### Object and Array Formatting
 
-When referencing complete objects or arrays (rather than their individual fields), Mlld formats them based on the context:
+When referencing complete objects or arrays (rather than their individual fields), mlld formats them based on the context:
 
 #### Array Formatting
 

@@ -1,6 +1,6 @@
 # CLI Usage
 
-The Mlld CLI provides a simple way to process Mlld files from the command line.
+The mlld CLI provides a simple way to process mlld files from the command line.
 
 ## Installation
 
@@ -19,14 +19,14 @@ npx mlld <options>
 
 ## Basic Usage
 
-Process a Mlld file with default options:
+Process a mlld file with default options:
 
 ```bash
 mlld input.mld
 ```
 
 By default, this will:
-- Parse and interpret the Mlld file
+- Parse and interpret the mlld file
 - Generate output in XML format
 - Save to a file with the same name but extension changed to `.llm`
 
@@ -72,43 +72,43 @@ mlld input.mld --format md --output custom.md --stdout
 
 ## File Extensions
 
-Mlld supports several file extensions:
+mlld supports several file extensions:
 
-- `.mld` - Standard Mlld files
-- `.mld.md` - Mlld files with Markdown content
-- `.mll` - Alternative extension for Mlld files
-- `.mll.md` - Alternative extension for Mlld Markdown files
+- `.mld` - Standard mlld files
+- `.mld.md` - mlld files with Markdown content
+- `.mll` - Alternative extension for mlld files
+- `.mll.md` - Alternative extension for mlld Markdown files
 
 ## Examples
 
-Process a Mlld file with default options:
+Process a mlld file with default options:
 ```bash
 mlld document.mld
 ```
 
-Process a Mlld file and output as Markdown:
+Process a mlld file and output as Markdown:
 ```bash
 mlld document.mld --format md
 ```
 
-Process a Mlld file and save with custom name:
+Process a mlld file and save with custom name:
 ```bash
 mlld document.mld --output result.llm
 ```
 
-Process a Mlld file and print to console:
+Process a mlld file and print to console:
 ```bash
 mlld document.mld --stdout
 ```
 
-Process a Mlld file with multiple options:
+Process a mlld file with multiple options:
 ```bash
 mlld document.mld --format md --output result.md --stdout
 ```
 
 ## Environment Variables
 
-Mlld scripts can access environment variables using the `{{ENV_NAME}}` syntax:
+mlld scripts can access environment variables using the `{{ENV_NAME}}` syntax:
 
 ```mlld
 @text token = "{{ENV_TOKEN}}"
@@ -122,4 +122,4 @@ ENV_TOKEN=12345 mlld script.mld
 
 ## Project Path
 
-The special `$PROJECTPATH` or `$.` variable refers to the directory where the Mlld CLI is executed. All relative paths in Mlld scripts are resolved relative to this directory.
+The special `$PROJECTPATH` or `$.` variable refers to the directory where the mlld CLI is executed. All relative paths in mlld scripts are resolved relative to this directory.
