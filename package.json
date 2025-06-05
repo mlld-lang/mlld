@@ -23,7 +23,11 @@
   },
   "files": [
     "dist/",
-    "bin/"
+    "bin/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "package.json"
   ],
   "scripts": {
     "build:grammar:core": "npx tsc -p grammar/tsconfig.grammar.json && node grammar/build-grammar.mjs",
