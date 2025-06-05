@@ -167,19 +167,6 @@ Remember: "Double brackets, double braces"
 @add [[Project root: {{PROJECTPATH}}]] # Project directory
 ```
 
-### Output Directive
-```mlld
-@output @content to "./report.md"
-@output @data to "./config.json" as json
-@output @result to @uploadCommand
-```
-
-### String Concatenation
-```mlld
-@text firstName = "John"
-@text lastName = "Doe"
-@text fullName = @firstName ++ " " ++ @lastName
-```
 
 ### Frontmatter Metadata
 ```mlld
