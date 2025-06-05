@@ -90,7 +90,6 @@ Use template functions defined with @text:
 Paths can be:
 - Relative: `[docs/guide.md]`
 - Absolute: `[/usr/local/docs/guide.md]`
-- Home directory: `[@~/Documents/guide.md]`
 - Project relative: `[@./docs/guide.md]`
 - From path variable: `[@docsPath/guide.md]`
 - URLs: `[https://example.com/guide.md]`

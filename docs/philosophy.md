@@ -1,35 +1,16 @@
-# The Mlld Philosophy
+# Philosophy
 
-## Core Principle: Learnable and Powerful
+## The goal 
 
-Mlld is built on a fundamental insight: **working with AI requires a different kind of language**. Not a programming language that treats AI as a deterministic function, but an orchestration language that treats AI as a collaborative partner.
-
-## The 10-Minute Promise
-
-You can learn the entire mlld language in 10 minutes:
+Mlld is designed to be a simple scripting language with minimal syntax:
 - **8 core directives**: `@text`, `@data`, `@run`, `@add`, `@import`, `@path`, `@exec`, `@when`
 - **2 advanced patterns**: `@map` (transformation), `with` (pipelines)
 - **2 output rules**: Only `@add` and `@run` produce output
 - **1 syntax rule**: Directives start with `@`, everything else is markdown
 
-That's it. Everything else is modules.
+Additional functionality is provided through modules.
 
-## Why Simplicity Matters
-
-### 1. Cognitive Load
-
-When orchestrating AI systems, your mental energy should focus on:
-- What questions to ask
-- How to structure context
-- What transformations to apply
-
-Not on:
-- Syntax details
-- Error handling patterns
-- Type systems
-- Memory management
-
-### 2. Readability as a Feature
+### Readability
 
 Mlld scripts should read like recipes or instructions to a colleague:
 
@@ -45,26 +26,25 @@ Mlld scripts should read like recipes or instructions to a colleague:
 {{security}}
 
 ## Generated Tests
-{{tests}}]]
+{{tests}}
+]]
 ```
 
 Anyone can understand what this does, even without knowing mlld.
 
-### 3. AI Systems Are Not Software
+### Working with AI Systems
 
-Traditional programming assumes:
+Traditional programming typically involves:
 - Deterministic execution
 - Predictable errors
 - Binary success/failure
 - Exact outputs
 
-AI systems are:
-- Probabilistic
-- Context-sensitive
-- Gradient success
-- Requiring refinement
-
-Mlld embraces this reality instead of fighting it.
+AI systems often exhibit:
+- Probabilistic behavior
+- Context-sensitive responses
+- Varying degrees of success
+- Results that may benefit from refinement
 
 ## The Module Ecosystem
 
@@ -88,9 +68,9 @@ export async function analyzeDocument(doc, options = {}) {
 }
 ```
 
-### Institutional Knowledge as Code
+### Encoding Domain Knowledge
 
-Organizations can encode their expertise into modules:
+Organizations can create modules that reflect their specific practices:
 
 ```mld
 @import { 
@@ -114,9 +94,9 @@ Modules can be:
 
 ## Pipeline of Thought
 
-### Beyond Chain of Thought
+### Structured Processing
 
-"Chain of thought" asks AI to think step-by-step internally. "Pipeline of thought" **enforces** those steps externally:
+"Chain of thought" asks AI to think step-by-step internally. Mlld's pipeline approach structures these steps explicitly:
 
 ```mld
 # Each stage has ONE job, does it well
@@ -148,9 +128,9 @@ Each pipeline stage:
 
 ## The Collaboration Paradigm
 
-### Working With, Not Programming
+### Collaborative Approach
 
-Mlld encourages thinking of AI as a knowledgeable colleague:
+Mlld is designed to facilitate working with AI systems:
 
 ```mld
 # This reads like delegating to team members
@@ -196,21 +176,21 @@ Instead of trying to control AI outputs, provide better context:
 - "Errors" are usually misunderstandings
 - Pipelines transform problems into solutions
 
-## The Future
+## Design Considerations
 
-Mlld represents a bet on the future of human-AI collaboration:
+mlld is built with several assumptions:
 
-1. **AI capabilities will expand** - The language shouldn't limit them
-2. **Complexity will grow** - But should live in modules, not syntax
-3. **Patterns will emerge** - And be shareable as modules
-4. **Teams will collaborate** - Through readable, versioned scripts
+1. **AI capabilities continue evolving** - The language aims to accommodate new capabilities
+2. **Complexity management** - Complex logic belongs in modules, keeping the core simple
+3. **Pattern reuse** - Common patterns can be shared as modules
+4. **Team collaboration** - Scripts should be readable and versionable
 
 ## Summary
 
-Mlld is intentionally minimal because:
-- **Simplicity enables mastery** - Learn once, use forever
-- **Modules enable power** - Unlimited extension without complexity
-- **Orchestration differs from programming** - Different problem, different tool
-- **AI collaboration needs new patterns** - Pipeline of thought, not chain of thought
+mlld is intentionally minimal because:
+- **Simplicity aids learning** - Designed to be accessible to users with varying technical backgrounds
+- **Modules provide extensibility** - Additional functionality without core complexity
+- **Different use case** - Focuses on orchestration and content generation rather than general programming
+- **AI-oriented patterns** - Provides structured approaches for working with AI systems
 
-The goal isn't to build another programming language. It's to create the perfect orchestration layer for the age of AI collaboration.
+Mlld aims to provide a straightforward way to coordinate AI-powered workflows and content generation.

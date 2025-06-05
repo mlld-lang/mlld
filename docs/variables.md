@@ -16,7 +16,6 @@ Path variables are used for filesystem paths and command arguments:
 ```mlld
 @path                # Reference a path variable in directives
 [@path]              # Use in path contexts (inside brackets)
-[@~/path]            # Home directory path
 [@./path]            # Project root path
 ```
 
@@ -24,7 +23,7 @@ Path variables are used for filesystem paths and command arguments:
 - Used primarily inside `[]` brackets in path contexts
 - Cannot use field access or formatting
 - Path segments are separated by forward slashes
-- Special prefixes: `~` for home directory, `.` for project root
+- Special prefix: `.` for project root
 
 Example:
 ```mlld

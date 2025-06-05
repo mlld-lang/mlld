@@ -1,18 +1,16 @@
-# Mlld: Orchestrating Intelligence
+# Mlld Overview Guide
 
 ## What is Mlld?
 
-Mlld (`.mld`) is an orchestration language for working with Large Language Models (LLMs). Rather than programming machines, mlld helps you collaborate with AI systems - treating them as intelligent partners rather than deterministic functions. It's designed to be learnable in 10 minutes yet powerful enough to build sophisticated AI workflows.
+Mlld (`.mld`) is a scripting language designed for working with Large Language Models (LLMs) and generating dynamic content. It provides a simple syntax for orchestrating AI interactions, processing data, and producing markdown output.
 
-## The Core Insight
+## Design Principles
 
-LLMs aren't traditional software - they're probabilistic reasoning engines that work best when:
-- Given clear context and specific asks
-- Allowed to work in their natural medium (language)
-- Guided through well-defined transformation pipelines
-- Treated as collaborative partners, not tools
-
-Mlld embraces this reality by providing just enough structure to orchestrate LLM interactions while keeping complexity in composable modules.
+Mlld is built around several key principles:
+- Provide clear context and specific instructions to LLMs
+- Support text-based workflows and transformations
+- Enable structured processing through pipelines
+- Keep the core language simple while allowing extension through modules
 
 ## Why Mlld?
 
@@ -24,14 +22,14 @@ Traditional programming languages force you to think in terms of loops, exceptio
 
 Mlld provides exactly the primitives you need for this new paradigm, and nothing more.
 
-## Core Philosophy: Simple Core, Powerful Modules
+## Core Philosophy: Simple Core, Extensible Modules
 
-Mlld keeps its core language minimal - just enough to orchestrate work - while enabling unlimited power through modules. This means:
+Mlld maintains a minimal core language for orchestration while supporting extensibility through modules:
 
-- **Learn in 10 minutes**: The entire language fits in your head
-- **Extend infinitely**: JavaScript/TypeScript modules handle complexity
-- **Read like recipes**: Scripts describe what to do, not how
-- **Think naturally**: Work with LLMs like collaborators, not functions
+- **Simple syntax**: Limited set of directives to learn
+- **Module system**: JavaScript/TypeScript modules for complex functionality
+- **Readable scripts**: Focus on clarity and maintainability
+- **LLM integration**: Built-in support for AI workflows
 
 ## Core Concepts
 
@@ -218,19 +216,19 @@ Used in mlld:
 @add @answer.synthesis
 ```
 
-### The Module Advantage
+### Module Benefits
 
-1. **Testable** - Modules have proper test suites
-2. **Reusable** - Share across projects and teams
-3. **Typed** - Full TypeScript support
-4. **Documented** - JSDoc and examples
-5. **Versioned** - Semantic versioning via npm
+1. **Testable** - Standard testing frameworks
+2. **Reusable** - Share across projects
+3. **Typed** - TypeScript support available
+4. **Documented** - Support for documentation
+5. **Versioned** - Compatible with npm versioning
 
 ## LLM Integration Patterns
 
-### Pipeline of Thought > Chain of Thought
+### Structured Processing with Pipelines
 
-Instead of asking LLMs to "think step by step", mlld lets you **enforce** those steps through transformation pipelines:
+Mlld supports explicit step-by-step processing through transformation pipelines:
 
 ```mlld
 # Define transformation stages
@@ -248,9 +246,9 @@ Instead of asking LLMs to "think step by step", mlld lets you **enforce** those 
 @add @answer
 ```
 
-### Institutional Knowledge as Code
+### Encoding Standards in Pipelines
 
-Encode your organization's standards and values into reusable pipelines:
+Organizations can create reusable pipelines that reflect their standards:
 
 ```mlld
 @import { 
@@ -614,8 +612,6 @@ Create a consensus view that incorporates the best insights from each.
 3. Run it: `mlld hello.mld`
 4. See the output in `hello.o.md`
 
-## Conclusion
+## Summary
 
-Mlld represents a new paradigm for working with AI systems. By treating LLMs as collaborative partners rather than deterministic functions, and by keeping the orchestration language simple while enabling unlimited extension through modules, mlld makes it possible to build sophisticated AI workflows that are still understandable, maintainable, and shareable.
-
-The future of software isn't about programming machines - it's about orchestrating intelligence. Mlld gives you exactly the tools you need for this new world, and nothing more.
+Mlld provides a straightforward way to work with AI systems and generate dynamic content. Its simple core syntax combined with an extensible module system allows for building complex workflows while maintaining readability and maintainability.

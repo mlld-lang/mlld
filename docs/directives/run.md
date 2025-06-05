@@ -41,7 +41,7 @@ The command can be:
 
 You can use different types of variables in commands:
 - All variables use `@` syntax: `@textvar`, `@path`
-- Special variables: `@HOMEPATH`, `@PROJECTPATH`, `@.`
+- Special variables: `@PROJECTPATH`, `@.`
 - Field access: `@object.field`, `@array.0`
 - Command references: `@command(@param1, @param2)`
 

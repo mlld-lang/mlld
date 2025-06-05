@@ -148,10 +148,11 @@ Track metrics through the pipeline:
 })
 ```
 
-## Real-World Results
+## Potential Benefits
 
-Teams using this pattern report:
-- 60% reduction in security issues reaching production
-- 40% faster PR turnaround time
-- 90% consistency in applying coding standards
-- 100% of PRs reviewed (vs 70% before)
+This automated review approach could help teams:
+- Apply coding standards more consistently
+- Catch security and performance issues earlier
+- Reduce time spent on routine review tasks
+- Ensure all PRs receive thorough review
+- Build institutional knowledge into the review process

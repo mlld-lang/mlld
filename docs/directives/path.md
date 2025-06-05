@@ -11,7 +11,6 @@ The `@path` directive defines filesystem path and URL variables that can be used
 
 ### Basic Paths
 ```mlld
-@path identifier = [@~/path]          # Home directory
 @path identifier = [@./path]          # Project root
 @path identifier = [/absolute/path]   # Absolute path
 @path identifier = [relative/path]    # Relative path
@@ -43,19 +42,17 @@ Where:
 - Must not be empty
 - Cannot contain null bytes
 - Path formats:
-  - Home directory: `[@~/path]`
   - Project root: `[@./path]`
   - Absolute paths: `[/usr/local/bin]`
   - Relative paths: `[path/to/file]`
 
 ## Special Path Prefixes
 
-Mlld provides special path prefixes for cross-platform portability:
+Mlld provides a special path prefix for project-relative paths:
 
-- `~`: Refers to the user's home directory
 - `.`: Refers to the current project root directory
 
-These prefixes must be used inside brackets: `[@~/path]`, `[@./path]`
+This prefix must be used inside brackets: `[@./path]`
 
 ## Referencing Path Variables
 
@@ -77,7 +74,7 @@ Basic path variables:
 ```mlld
 @path docs = [@./docs]
 @path configs = [@./configs]
-@path home = [@~/mlld]
+@path assets = [@./assets]
 ```
 
 Using path variables in commands:
@@ -115,7 +112,7 @@ Paths can include variables, which are resolved during execution:
 
 ## Path Best Practices
 
-- For cross-platform compatibility, use special path prefixes `~` and `.` inside brackets
+- For project-relative paths, use the `.` prefix inside brackets
 - Use forward slashes for path separators (even on Windows)
 - Be cautious when using absolute paths or parent directory references (`..`), as they may make your Mlld files less portable
 - Consider using path variables to encapsulate filesystem paths for better maintainability

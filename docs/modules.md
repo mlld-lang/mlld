@@ -651,15 +651,9 @@ mlld registry audit
 3. **Auditing**: Regular security audits of used modules
 4. **Training**: Educate developers on module best practices
 
-## Roadmap
+## Future Considerations
 
-### Planned Features
-
-- **Module Search**: `mlld search <query>` command
-- **Update Management**: `mlld update` and `mlld outdated` commands  
-- **Registry Management**: Enhanced registry configuration
-- **MCP Integration**: Module support for MCP servers
-- **IDE Support**: Better tooling integration
+The module system may be extended with additional features based on community needs and feedback. Potential areas for enhancement include improved search capabilities, update management, and better integration with development tools.
 
 ### Contributing
 

@@ -205,11 +205,11 @@ Alternatives Considered: {{decision.alternatives}}
 4. **Expert Location** - Know who knows what
 5. **Decision Memory** - Learn from past choices
 
-## ROI Example
+## Potential Applications
 
-One company using this approach reported:
-- 70% reduction in time to find information
-- 50% fewer repeat questions in Slack
-- 90% of decisions now have traceable rationale
-- 3x faster onboarding for new team members
-- $2M saved annually from better knowledge sharing
+This knowledge synthesis approach could help organizations:
+- Consolidate information from multiple sources
+- Keep documentation up-to-date automatically
+- Identify knowledge gaps and communication patterns
+- Build expertise directories
+- Create traceable decision records

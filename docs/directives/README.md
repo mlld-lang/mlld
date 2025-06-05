@@ -17,6 +17,7 @@ Directives are the core building blocks of Mlld. They always start with an `@` s
 - [@import](./import.md) - Import variables from other Mlld files
 - [@url](./url.md) - Reference remote URLs
 - [@exec](./exec.md) - Create reusable commands
+- [@when](./when.md) - Conditional actions 
 
 ## Directive Placement Rules
 

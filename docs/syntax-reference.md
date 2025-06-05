@@ -20,6 +20,7 @@ Directives must appear at start of line (no indentation):
 @text     - Define text variables
 @path     - Define filesystem path variables
 @data     - Define structured data variables
+@when     - Conditional actions
 ```
 
 ### Comments
@@ -39,9 +40,9 @@ Lines that begin with `>> ` (two greater-than signs followed by a space) are tre
 ### Delimiters
 
 ```
-[ ]     Command/path boundaries
-[[ ]]   Multi-line command boundaries
-{ }     Function embed boundaries
+[ ]     Path boundaries
+[[ ]]   Template boundaries
+[( )]   Command boundaries
 {{ }}   Multi-line object boundaries
 #       Section marker
 =       Assignment (requires spaces on both sides)
@@ -59,7 +60,6 @@ Lines that begin with `>> ` (two greater-than signs followed by a space) are tre
 - Backslashes and quotes within strings are treated as literal characters
 - Single-line strings (', ") cannot contain newlines
 - Template literals (`) can interpolate variables: `Hello {{name}}`
-- Multi-line strings use [[` and `]] delimiters
 
 ### Identifiers
 
@@ -75,7 +75,6 @@ Lines that begin with `>> ` (two greater-than signs followed by a space) are tre
 Syntax: `@identifier`
 ```mlld
 @path                # Reference a path variable
-[@~/path]           # Home directory path
 [@./path]           # Project root path
 ```
 
@@ -136,8 +135,6 @@ def hello():
 
 ### @import
 
-```mlld
-@import [path]
 ```
 
 ### @exec
@@ -152,14 +149,13 @@ def hello():
 
 ```mlld
 @text identifier = "value"
-@text identifier = @add [content]
+@text identifier = @add [path]
 @text identifier = @run [(command)]
 ```
 
 ### @path
 
 ```mlld
-@path identifier = [@~/path]
 @path identifier = [@./path]
 @path identifier = [/absolute/path]
 @path identifier = [relative/path]
@@ -172,25 +168,9 @@ def hello():
 @data identifier : schema = value
 ```
 
-## String Concatenation
-
-Uses the `++` operator with required spaces on both sides:
-
-```mlld
-@text greeting = "Hello" ++ " " ++ "World"
-@text message = @intro ++ @body
-```
-
 ## Template Literals
 
-Delimited by backticks (`):
-```mlld
-`Hello {{name}}!`                        # Text variable
-`Config: {{config.name}}`                # Data variable with field
-`{{greeting}}, your ID is {{user.id}}`    # Mixed variables
-```
-
-Multi-line template literals:
+Template literals:
 ```mlld
 @text prompt = [[`
   System: {{role}}
@@ -204,18 +184,6 @@ Multi-line template literals:
 
 ## Variable Interpolation Rules
 
-Variable references are allowed in:
-- Inside square brackets [...] for paths and commands
-- Inside object literals {{...}} and single-line objects
-- Inside template literals (backtick strings) for string interpolation
-- Inside directive values after = (including object literals and template literals)
-
-They are NOT allowed in:
-- Plain text lines
-- Regular string literals (use template literals instead)
-- Outside of the contexts listed above
-
-Rules for specific variable types:
-- Path variables ($path) only allowed in path contexts
-- Text variables ({{text}}) allowed in all interpolation contexts
-- Data variables ({{data}}) allowed in all interpolation contexts except command parameters
+Quotes are literal
+Double bracket templates, double braces variables
+@variables everywhere else
