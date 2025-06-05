@@ -7,7 +7,7 @@ import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
 import { createInterface } from 'readline';
 import { initCommand } from './commands/init.js';
 import { ProcessOptions } from '@core/types/index.js';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
+import { MlldError, ErrorSeverity } from '@core/errors/MlldError.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { watch } from 'fs/promises';
@@ -229,9 +229,9 @@ function parseArgs(args: string[]): CLIOptions {
 function displayHelp(command?: string) {
   if (command === 'debug-resolution') {
     console.log(`
-Usage: meld debug-resolution [options] <input-file>
+Usage: mlld debug-resolution [options] <input-file>
 
-Debug variable resolution in a Meld file.
+Debug variable resolution in a Mlld file.
 
 Options:
   --var, --variable <name>     Filter to a specific variable
@@ -245,11 +245,11 @@ Options:
   }
 
   console.log(`
-Usage: meld [command] [options] <input-file>
+Usage: mlld [command] [options] <input-file>
 
 Commands:
-  init                    Create a new Meld project
-  debug-resolution        Debug variable resolution in a Meld file
+  init                    Create a new Mlld project
+  debug-resolution        Debug variable resolution in a Mlld file
 
 Options:
   -f, --format <format>   Output format: md, markdown, xml, llm [default: llm]

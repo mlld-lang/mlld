@@ -1,10 +1,14 @@
 import { defineConfig } from 'vitest/config';
+import tsconfigPaths from 'vite-tsconfig-paths';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
+  plugins: [
+    tsconfigPaths()
+  ],
   test: {
     setupFiles: ['tests/setup.ts'],
     environment: 'node',
@@ -13,18 +17,13 @@ export default defineConfig({
     },
     globals: true,
     include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**'],
-    alias: {
-      '@core': resolve(__dirname, './core'),
-      '@services': resolve(__dirname, './services'),
-      '@tests': resolve(__dirname, './tests'),
-      '@api': resolve(__dirname, './api')
-    },
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**', '**/mlld-ast/**', '**/lib/**'],
     coverage: {
       reporter: ['text', 'json', 'html'],
       exclude: ['**/node_modules/**', '**/dist/**', '**/build/**']
     }
   },
+  /* // COMMENT OUT build section
   build: {
     target: 'esnext',
     rollupOptions: {
@@ -34,4 +33,5 @@ export default defineConfig({
       }
     }
   }
+  */
 }); 

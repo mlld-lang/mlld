@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mlld Output Formatting Guide - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">modular prompt scripting</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/syntax-reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/variables/" >Variables</a></li>
+          
+        
+          
+            <li><a href="/docs/error-handling/" >Error Handling</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
+            <li><a href="/docs/formatting-options/" aria-current=&quot;page&quot;>Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
+          
+        
+        
+        <li>
+          <h4>Directives</h4>
+          <ul class="nav-list">
+            <li><a href="/docs/directives/" >Overview</a></li>
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/data/" >
+                  
+                    @data
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/exec/" >
+                  
+                    @exec
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/import/" >
+                  
+                    @import
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/path/" >
+                  
+                    @path
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/run/" >
+                  
+                    @run
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/text/" >
+                  
+                    @text
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
+              
+            
+          </ul>
+        </li>
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1 id="mlld-output-formatting-guide" tabindex="-1">Mlld Output Formatting Guide</h1>
+<p>This guide explains how output formatting works in Mlld and how to control it using the available options.</p>
+<h2 id="default-output-behavior" tabindex="-1">Default Output Behavior</h2>
+<p>By default, Mlld preserves the exact formatting of your document, including:</p>
+<ul>
+<li>Whitespace and indentation</li>
+<li>Newlines between paragraphs</li>
+<li>Line breaks within text</li>
+<li>Spacing around elements</li>
+</ul>
+<p>When directives are processed, they are replaced with their output while maintaining the surrounding document structure.</p>
+<pre class="language-mlld"><code class="language-mlld">This is a paragraph.
+
+<span class="token directive keyword">@text</span> greeting = <span class="token string">"Hello"</span>
+<span class="token directive keyword">@text</span> name = <span class="token string">"World"</span>
+
+<span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span><span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">greeting</span><span class="token punctuation">}}</span></span>, <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">name</span><span class="token punctuation">}}</span></span>!<span class="token punctuation">]]</span></span>
+
+Another paragraph.
+</code></pre>
+<p>Output:</p>
+<pre><code>This is a paragraph.
+
+Hello, World!
+
+Another paragraph.
+</code></pre>
+<h2 id="pretty-formatting-with-prettier" tabindex="-1">Pretty Formatting with Prettier</h2>
+<p>If you want more consistent markdown formatting, you can use the <code>--pretty</code> flag in the CLI or the <code>pretty</code> option in the API to apply Prettier formatting to the output.</p>
+<h3 id="cli-usage" tabindex="-1">CLI Usage</h3>
+<pre class="language-bash"><code class="language-bash"><span class="token comment"># Standard output (preserves exact formatting)</span>
+mlld input.mlld
+
+<span class="token comment"># Pretty formatting with Prettier</span>
+mlld <span class="token parameter variable">--pretty</span> input.mlld
+</code></pre>
+<h3 id="api-usage" tabindex="-1">API Usage</h3>
+<pre class="language-typescript"><code class="language-typescript"><span class="token comment">// Standard output (preserves exact formatting)</span>
+<span class="token keyword">const</span> result <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMlld</span><span class="token punctuation">(</span>content<span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// Pretty formatting with Prettier</span>
+<span class="token keyword">const</span> prettyResult <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMlld</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> <span class="token punctuation">{</span> pretty<span class="token operator">:</span> <span class="token boolean">true</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h2 id="how-prettier-formatting-works" tabindex="-1">How Prettier Formatting Works</h2>
+<p>When you enable the <code>pretty</code> option, Mlld applies Prettier formatting to the output after all directives have been processed. This provides:</p>
+<ul>
+<li>Consistent spacing</li>
+<li>Standardized indentation</li>
+<li>Normalized newlines</li>
+<li>Proper list formatting</li>
+<li>Table alignment</li>
+<li>And other markdown formatting improvements</li>
+</ul>
+<h3 id="prettier-configuration" tabindex="-1">Prettier Configuration</h3>
+<p>Mlld uses a standard Prettier configuration for markdown:</p>
+<ul>
+<li><code>proseWrap: 'preserve'</code> - Preserves existing line wraps</li>
+<li><code>printWidth: 80</code> - Sets the line width to 80 characters</li>
+<li><code>tabWidth: 2</code> - Uses 2 spaces for indentation</li>
+<li><code>useTabs: false</code> - Uses spaces instead of tabs</li>
+<li><code>semi: true</code> - Adds semicolons when necessary</li>
+<li><code>singleQuote: true</code> - Uses single quotes</li>
+<li><code>trailingComma: 'es5'</code> - Adds trailing commas where valid in ES5</li>
+<li><code>bracketSpacing: true</code> - Adds spaces between brackets</li>
+</ul>
+<h2 id="output-format-options" tabindex="-1">Output Format Options</h2>
+<p>Mlld supports multiple output formats:</p>
+<pre class="language-bash"><code class="language-bash"><span class="token comment"># Markdown output (default)</span>
+mlld <span class="token parameter variable">-f</span> markdown input.mlld
+
+<span class="token comment"># XML output</span>
+mlld <span class="token parameter variable">-f</span> xml input.mlld
+</code></pre>
+<p>In the API:</p>
+<pre class="language-typescript"><code class="language-typescript"><span class="token comment">// Markdown output</span>
+<span class="token keyword">const</span> markdownResult <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMlld</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> <span class="token punctuation">{</span> format<span class="token operator">:</span> <span class="token string">'markdown'</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+
+<span class="token comment">// XML output</span>
+<span class="token keyword">const</span> xmlResult <span class="token operator">=</span> <span class="token keyword">await</span> <span class="token function">runMlld</span><span class="token punctuation">(</span>content<span class="token punctuation">,</span> <span class="token punctuation">{</span> format<span class="token operator">:</span> <span class="token string">'xml'</span> <span class="token punctuation">}</span><span class="token punctuation">)</span><span class="token punctuation">;</span>
+</code></pre>
+<h2 id="how-newlines-are-handled" tabindex="-1">How Newlines Are Handled</h2>
+<h3 id="within-text-content" tabindex="-1">Within Text Content</h3>
+<p>Mlld preserves newlines exactly as they appear in the source content:</p>
+<pre class="language-mlld"><code class="language-mlld">This is a paragraph
+<span class="token operator">with</span> a line break.
+
+This is another paragraph.
+</code></pre>
+<p>Output:</p>
+<pre><code>This is a paragraph
+with a line break.
+
+This is another paragraph.
+</code></pre>
+<h3 id="around-directives" tabindex="-1">Around Directives</h3>
+<p>When directives are processed, their output replaces the directive while maintaining proper context:</p>
+<pre class="language-mlld"><code class="language-mlld">Before directive.
+<span class="token directive keyword">@run</span><span class="token path"><span class="token punctuation">[</span>echo "Command output"<span class="token punctuation">]</span></span>
+After directive.
+</code></pre>
+<p>Output:</p>
+<pre><code>Before directive.
+Command output
+After directive.
+</code></pre>
+<h3 id="with-variables" tabindex="-1">With Variables</h3>
+<p>Variables maintain their format when substituted:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> multiline = <span class="token string">"Line 1
+Line 2
+Line 3"</span>
+
+The text is:
+<span class="token directive keyword">@add</span> <span class="token variable variable">@multiline</span>
+End of text.
+</code></pre>
+<p>Output:</p>
+<pre><code>The text is:
+Line 1
+Line 2
+Line 3
+End of text.
+</code></pre>
+<h2 id="tips-for-consistent-formatting" tabindex="-1">Tips for Consistent Formatting</h2>
+<ol>
+<li>
+<p><strong>Use the <code>--pretty</code> flag</strong> for standardized formatting when the exact layout isn't critical.</p>
+</li>
+<li>
+<p><strong>For precise control</strong>, arrange your source document exactly as you want the output to appear.</p>
+</li>
+<li>
+<p><strong>Take advantage of multiline variables</strong> for content that needs to maintain its structure.</p>
+</li>
+<li>
+<p><strong>Consider the context</strong> when using directives—their output will replace the directive while maintaining surrounding content.</p>
+</li>
+<li>
+<p><strong>For JSON or code</strong>, use code fences to ensure proper formatting is preserved:</p>
+</li>
+</ol>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> config = <span class="token punctuation">{</span> <span class="token string">"key"</span>: <span class="token string">"value"</span><span class="token punctuation">,</span> <span class="token string">"nested"</span>: <span class="token punctuation">{</span> <span class="token string">"prop"</span>: <span class="token number">1</span> <span class="token punctuation">}</span> <span class="token punctuation">}</span>
+
+My configuration is:
+\`\`\`json
+<span class="token directive keyword">@add</span> <span class="token variable variable">@config</span>
+\`\`\`
+</code></pre>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

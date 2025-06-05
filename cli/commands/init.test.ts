@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as initModule from './init.js';
+import * as initModule from './init';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createInterface } from 'readline';
@@ -41,10 +41,10 @@ describe('initCommand', () => {
     mockInitCommand = vi.fn(async () => {
       const cwd = process.cwd();
       
-      // Check if meld.json already exists
+      // Check if mlld.json already exists
       try {
-        await fs.access(path.join(cwd, 'meld.json'));
-        console.error('Error: meld.json already exists in this directory.');
+        await fs.access(path.join(cwd, 'mlld.json'));
+        console.error('Error: mlld.json already exists in this directory.');
         process.exit(1);
       } catch (e) {
         // File doesn't exist, continue
@@ -78,11 +78,11 @@ describe('initCommand', () => {
       
       // Write config file
       await fs.writeFile(
-        path.join(cwd, 'meld.json'),
+        path.join(cwd, 'mlld.json'),
         JSON.stringify(config, null, 2)
       );
       
-      console.log(`Meld project initialized successfully.`);
+      console.log(`Mlld project initialized successfully.`);
       console.log(`Project root set to: ${path.resolve(cwd, projectRoot)}`);
       
       rl.close();
@@ -118,7 +118,7 @@ describe('initCommand', () => {
     vi.resetAllMocks();
   });
   
-  it('should create a meld.json file with default project root', async () => {
+  it('should create a mlld.json file with default project root', async () => {
     // Mock file doesn't exist
     vi.mocked(fs.access).mockRejectedValue(new Error('File not found'));
     
@@ -129,14 +129,14 @@ describe('initCommand', () => {
     
     await initModule.initCommand();
     
-    // Verify meld.json was created with correct content
+    // Verify mlld.json was created with correct content
     expect(fs.writeFile).toHaveBeenCalledWith(
-      '/test/project/meld.json',
+      '/test/project/mlld.json',
       JSON.stringify({ projectRoot: '.', version: 1 }, null, 2)
     );
   });
   
-  it('should create a meld.json file with custom project root', async () => {
+  it('should create a mlld.json file with custom project root', async () => {
     // Mock file doesn't exist
     vi.mocked(fs.access).mockRejectedValue(new Error('File not found'));
     
@@ -150,9 +150,9 @@ describe('initCommand', () => {
     
     await initModule.initCommand();
     
-    // Verify meld.json was created with correct content
+    // Verify mlld.json was created with correct content
     expect(fs.writeFile).toHaveBeenCalledWith(
-      '/test/project/meld.json',
+      '/test/project/mlld.json',
       JSON.stringify({ projectRoot: 'src', version: 1 }, null, 2)
     );
   });
@@ -172,11 +172,11 @@ describe('initCommand', () => {
     // Expect process.exit to be called
     await expect(initModule.initCommand()).rejects.toThrow('Process exited with code 1');
     
-    // Verify meld.json was not created
+    // Verify mlld.json was not created
     expect(fs.writeFile).not.toHaveBeenCalled();
   });
   
-  it.skip('should exit if meld.json already exists', async () => {
+  it.skip('should exit if mlld.json already exists', async () => {
     // Mock that the file exists
     vi.mocked(fs.access).mockResolvedValue(undefined);
     
@@ -187,12 +187,12 @@ describe('initCommand', () => {
     await expect(initModule.initCommand()).rejects.toThrow('Process exited with code 1');
     
     // Verify console.error was called with the expected message
-    expect(consoleErrorSpy).toHaveBeenCalledWith('Error: meld.json already exists in this directory.');
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Error: mlld.json already exists in this directory.');
     
     // Verify readline was not used
     expect(createInterface).not.toHaveBeenCalled();
     
-    // Verify meld.json was not created
+    // Verify mlld.json was not created
     expect(fs.writeFile).not.toHaveBeenCalled();
   });
 }); 

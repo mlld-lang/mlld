@@ -10,8 +10,31 @@ coverage/
 dist/
 build/
 
+# Website built files
+website/_site/
+
+# Dev docs
+/_dev
+
 # TypeScript
 *.tsbuildinfo
+
+# Generated files
+core/version.ts
+
+# IDE-generated JavaScript files in core/types
+core/types/*.js
+core/types/*.js.map
+
+# Grammar generated files
+grammar/parser/parser.js
+grammar/parser/parser.ts
+grammar/generated/*
+!grammar/generated/.gitkeep
+
+# Test fixtures (generated from test cases)
+tests/fixtures/**/*.generated-fixture.json
+tests/fixtures/**/index.ts
 
 # Logs
 logs/
@@ -35,7 +58,10 @@ pids
 .env.local
 .env.development.local
 .env.test.local
-.env.production.local 
+.env.production.local
+
+# Mistakenly created directories
+Support/ 
 
 # Documentation in root (only for main branch)
 # Note: In dev branches, we want to include all documentation files
@@ -54,10 +80,9 @@ pids
 # /dev/
 # /tmp/
 
-# Example outputs
-examples/*.xml
-examples/*.md
-examples/logs/
+# mlld output
+*.o.xml
+*.o.md
 
 # Temporary files
 diff.txt
@@ -69,3 +94,29 @@ repomix-output.xml
 repomix.config.json
 /_issues/
 /error-display-demo/
+debug-embed.txt
+
+# TypeScript
+d.ts
+d.ts.map
+
+.env
+**/.claude/settings.local.json
+
+# Peggy debug output
+debug-combined-grammar.peggy
+
+# Built packages
+*.tgz
+*.vsix
+
+# If you're using npm pack
+*.tar.gz
+
+# VS Code extension specific
+*.vsix
+
+cli/temp-test-*
+
+# Local install metadata
+.mlld-local-installs.json

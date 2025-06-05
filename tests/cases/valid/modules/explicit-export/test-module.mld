@@ -1,0 +1,18 @@
+---
+author: test-author
+description: Test module with explicit exports
+version: 1.0.0
+---
+
+# Internal helper - not exported
+@text _internalHelper = "This is internal"
+
+# Public functions
+@text greet(name) = [[Hello, {{name}}!]]
+@text farewell(name) = [[Goodbye, {{name}}!]]
+
+# Explicit module export - only greet and farewell are exported
+@data module = {
+  greet: @greet,
+  farewell: @farewell
+}

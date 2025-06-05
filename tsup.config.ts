@@ -6,16 +6,13 @@ const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'ut
 
 // Define common external dependencies to ensure consistency across builds
 const externalDependencies = [
-  // Core libraries
-  'meld-ast',
-  'meld-spec',
+  // Core libraries 
+  // Note: mlld-ast is now consolidated into @core/ast and should be bundled, not external
   'llmxml',
   'marked',
   'minimatch',
   'winston',
   'yargs',
-  'tsyringe',
-  'reflect-metadata',
   
   // Node.js built-ins
   'fs',
@@ -25,6 +22,7 @@ const externalDependencies = [
   'child_process',
   'crypto',
   'fs/promises',
+  'readline/promises',
   'os',
   'events',
   'stream',
@@ -58,74 +56,131 @@ const getEsbuildOptions = (format: string) => (options: any) => {
   if (format === 'esm') {
     options.mainFields = ['module', 'main'];
     options.conditions = ['import', 'module', 'require', 'default'];
-    
-    // Add ESM-specific defines for compatibility
-    options.define = {
-      ...options.define,
-      '__dirname': 'import.meta.url',
-      '__filename': 'import.meta.url'
-    };
   }
   
   // Optimize for DI-based code
   options.keepNames = true; // Required for reflection-based DI
   
+  // Ensure proper module resolution
+  options.resolveExtensions = ['.ts', '.tsx', '.js', '.jsx', '.json'];
+  options.format = format;
+  options.target = 'es2020';
+  
   return options;
 };
 
 export default defineConfig([
-  // API build - both CJS and ESM
+  // API build - ESM only with splitting
   {
     entry: {
       index: 'api/index.ts',
     },
-    format: ['cjs', 'esm'],
-    dts: true,
+    format: ['esm'],
+    dts: false, // Temporarily disable DTS due to tsup issue with process global
     clean: true,
     sourcemap: true,
     splitting: true,
     treeshake: {
-      // Optimize tree shaking for DI-based code
       preset: 'recommended',
       moduleSideEffects: ['reflect-metadata', 'tsyringe']
     },
     outDir: 'dist',
     outExtension({ format }) {
       return {
-        js: format === 'cjs' ? '.cjs' : '.mjs'
-      }
+        js: '.mjs',
+        dts: '.d.ts'
+      };
     },
     tsconfig: 'tsconfig.build.json',
     external: externalDependencies,
     noExternal: [
-      // If there are any dependencies that should be bundled, list them here
+      // Bundle all internal dependencies
+      '@core/*',
+      '@services/*',
+      '@parser/*',
+      '@interpreter/*',
+      '@output/*',
+      '@cli/*',
+      '@sdk/*',
+      '@api/*',
+      '@tests/*'
     ],
     esbuildOptions(options, { format }) {
       return getEsbuildOptions(format)(options);
     }
   },
-  // CLI build - CJS only
+  // API build for CommonJS - no splitting
   {
     entry: {
-      cli: 'cli/cli-entry.ts',
+      index: 'api/index.ts',
     },
-    format: 'cjs',
-    dts: true,
+    format: ['cjs'],
+    dts: false,
     clean: false,
     sourcemap: true,
+    splitting: false,
     treeshake: {
-      // Optimize tree shaking for DI-based code
       preset: 'recommended',
       moduleSideEffects: ['reflect-metadata', 'tsyringe']
     },
     outDir: 'dist',
     outExtension({ format }) {
       return {
-        js: '.cjs'
-      }
+        js: '.cjs',
+      };
     },
     tsconfig: 'tsconfig.build.json',
     external: externalDependencies,
+    noExternal: [
+      // Bundle all internal dependencies
+      '@core/*',
+      '@services/*',
+      '@parser/*',
+      '@interpreter/*',
+      '@output/*',
+      '@cli/*',
+      '@sdk/*',
+      '@api/*',
+      '@tests/*'
+    ],
+    esbuildOptions(options, { format }) {
+      return getEsbuildOptions(format)(options);
+    }
+  },
+  // CLI build - CJS only but with ESM compatibility
+  {
+    entry: {
+      cli: 'cli/cli-entry.ts',
+    },
+    format: 'cjs',
+    dts: false, // Temporarily disable DTS due to tsup issue with process global
+    clean: false,
+    sourcemap: true,
+    treeshake: {
+      preset: 'recommended',
+      moduleSideEffects: ['reflect-metadata', 'tsyringe']
+    },
+    outDir: 'dist',
+    outExtension({ format }) {
+      return {
+        js: '.cjs',
+        dts: '.d.ts'
+      };
+    },
+    tsconfig: 'tsconfig.build.json',
+    external: externalDependencies,
+    noExternal: [
+      // Bundle all internal dependencies
+      '@core/*',
+      '@services/*',
+      '@parser/*',
+      '@interpreter/*',
+      '@output/*',
+      '@cli/*',
+      '@sdk/*',
+      '@api/*',
+      '@tests/*'
+    ],
     banner: {
       js: '#!/usr/bin/env node'
     },

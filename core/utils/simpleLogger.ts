@@ -1,6 +1,3 @@
-import { injectable, singleton } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
-
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface LogContext {
@@ -8,7 +5,7 @@ export interface LogContext {
 }
 
 /**
- * Interface for the simple Logger to enable DI resolution
+ * Interface for the simple Logger
  */
 export interface ISimpleLogger {
   debug(message: string, context?: LogContext): void;
@@ -20,11 +17,6 @@ export interface ISimpleLogger {
 /**
  * Simple logger implementation for minimal logging needs
  */
-@injectable()
-@singleton()
-@Service({
-  providedIn: 'root'
-})
 export class Logger implements ISimpleLogger {
   constructor(private namespace: string) {}
 

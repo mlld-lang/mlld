@@ -1,35 +1,31 @@
-**NOTE:** If you're looking for [the old 'meld' package for aspect oriented programming](https://www.npmjs.com/package/meld/v/1.3.2), you'll want to pin your version to `<2.0.0`
+# mlld (pre-release)
 
----
-
-# meld (pre-release)
-
-meld is a prompt scripting language.
+mlld is a modular prompt scripting language.
 
 ## Installation
 
 ```bash
-npm install -g meld
+npm install -g mlld
 ```
 
-or just run it with `npx meld`
+or just run it with `npx mlld`
 
 ## CLI Usage
 
-Process meld files from the command line:
+Process mlld files from the command line:
 
 ```bash
 # Basic usage - outputs .xml file
-meld input.mld
+mlld input.mld
 
 # Specify output format
-meld input.mld --format md
+mlld input.mld --format md
 
 # Specify output file
-meld input.mld --output output.xml
+mlld input.mld --output output.xml
 
 # Print to stdout instead of file
-meld input.mld --stdout
+mlld input.mld --stdout
 ```
 
 ### Supported Options
@@ -42,107 +38,191 @@ meld input.mld --stdout
 ### Supported File Extensions
 
 - `.mld` is standard `.mld.md` is another option.
-- `.md`: Meld can just interpret regular old markdown files with added meld syntax, too.
+- `.md`: Mlld can just interpret regular old markdown files with added mlld syntax, too.
 
 ## JavaScript API
 
-Meld has a fairly extensive js API which give access to its AST, interpreted variables, etc., but it's not documented yet. However, here's meld's simple API for processing content directly:
+Here's mlld's simple API for processing content directly in JS:
 
 ```javascript
 // ES Module import
-import runMeld from 'meld';
+import { processMlld } from 'mlld';
 
-// Process meld content
-const meldContent = `
+// Process mlld content
+const mlldContent = `
   @text greeting = "Hello"
   @text name = "World"
   
-  ${greeting}, ${name}!
+  @add [[{{greeting}}, {{name}}!]]
 `;
 
 // Simple usage
-const result = await runMeld(meldContent);
+const result = await processMlld(mlldContent);
 console.log(result); // "Hello, World!"
 
 // With options
-const xmlResult = await runMeld(meldContent, {
+const xmlResult = await processMlld(mlldContent, {
   format: 'xml',
-  transformation: true
+  basePath: '/path/to/project'
 });
 ```
 
-## Writing Meld Files
+## Writing Mlld Files
 
-Meld is a simple scripting language designed to work within markdown-like documents. It processes special `@directive` lines while preserving all other content as-is.
+Mlld is a simple scripting language designed to work within markdown-like documents. It processes special `@directive` lines while preserving all other content as-is.
 
 ### Core Directives
 
-```meld
+```mlld
 @text name = "value"              # Define a text variable
 @data config = { "key": "value" } # Define a structured data variable
-@path docs = "$PROJECTPATH/docs"  # Define a path (must use $PROJECTPATH or $HOMEPATH)
-@embed [file.md]                  # Embed content from another file
-@embed [file.md # section]        # Embed specific section from file
+@path docs = [file.md]            # Define a path reference
+@add [file.md]                    # Add content from another file
+@add "# Section" from [file.md]   # Add specific section from file
 @run [command]                    # Run a shell command
-@import [file.mld]               # Import another meld file
-@define cmd = @run [echo "hi"]    # Define a reusable command
+@import { * } from [file.mld]     # Import another mlld file
+@exec cmd = @run [echo "hi"]      # Define a reusable command
 ```
 
 ### Variables & Interpolation
 
-```meld
-{{variable}}            # Reference a variable
-{{datavar.field}}       # Access data field
-$pathvar                # Reference a path variable
+Must be inside an @ directive to be interpolated
 
-# Variables can be used in strings and commands:
-@text greeting = "Hello {{name}}!"
-@run [cat {{file}}]
+```mlld
+>> In directive contexts:
+@variable               << Reference a variable in directives
+@datavar.field          << Access data field in directives
+@pathvar                << Reference a path variable in directives
+
+>> In template contexts:
+{{variable}}            << Reference a variable in templates
+{{datavar.field}}       << Access data field in templates
+
+>> Variables can be used in templates and commands:
+@text greeting = [[Hello {{name}}!]]
+@run [cat @file]
 ```
 
 ### Comments & Code Fences
 
-```meld
+````mlld
 >> This is a comment
->> Comments must start at line beginning
+>> Comments work at line beginnings
+@add [file.md] << They can also be added at line endings
 
-# Code fences preserve content exactly:
+>> Code fences preserve content exactly:
 ```python
 def hello():
     print("Hi")  # @text directives here are preserved as-is
 ```
-```
+````
 
 ### String Values
 
 - Use single quotes, double quotes, or backticks
 - Quotes must match (no mixing)
 - Use backticks for template strings with variables:
-```meld
+```mlld
 @text simple = "Hello"
-@text template = `Hello {{name}}!`
-@text multiline = [[`
+@text template = [[Hello {{name}}!]]
+@text multiline = [[
   Multi-line
   template with {{vars}}
-`]]
+]]
 ```
 
 ### Path Variables
 
-- Must use `$PROJECTPATH` (or `$.`) or `$HOMEPATH` (or `$~`)
-- Forward slashes as separators
-```meld
-@path docs = "$PROJECTPATH/docs"
-@path home = "$HOMEPATH/meld"
+- Reference files and URLs using brackets
+- Support both local files and remote URLs
+```mlld
+@path docs = [./docs/api.md]
+@path remote = [https://example.com/config.json]
+>> Example Usage:
+@add @docs
+@add [./some_file.txt] 
 ```
 
 ### Data Variables
 
 - Store structured data (objects/arrays)
 - Support field access
-```meld
+```mlld
 @data user = { "name": "Alice", "id": 123 }
-@text name = "User: {{user.name}}"
+@text name = [[User: {{user.name}}]]
+```
+
+## Module System & Registry
+
+Mlld has a decentralized module system that enables sharing and reusing code across projects.
+
+### Public Modules
+
+Share modules publicly via the mlld registry:
+
+```mlld
+>> Import from public registry (DNS-based, no servers)
+@import { format, parse } from @alice/strings
+@import { * } from @company/templates
+
+>> Modules are cached locally and content-addressed for security
+>> Lock files ensure reproducible builds
+```
+
+Public modules are published as GitHub gists and discovered via DNS TXT records. No central servers required.
+
+### Private Modules & Custom Resolvers
+
+Configure resolvers for private or corporate modules:
+
+```mlld
+>> Local filesystem modules
+@import { utils } from @notes/helpers
+
+>> Private GitHub repositories  
+@import { internal } from @company/tools
+
+>> Custom HTTP endpoints
+@import { api } from @corporate/modules
+```
+
+Configure resolvers in your lock file:
+```json
+{
+  "registries": [
+    {
+      "prefix": "@notes/",
+      "resolver": "local",
+      "config": { "path": "~/Documents/Notes" }
+    },
+    {
+      "prefix": "@company/", 
+      "resolver": "github",
+      "config": {
+        "owner": "company",
+        "repo": "mlld-modules",
+        "token": "${GITHUB_TOKEN}"
+      }
+    }
+  ]
+}
+```
+
+### Security & Caching
+
+- **Content Addressing**: All modules identified by SHA-256 hash
+- **Progressive Trust**: Interactive approval for new modules  
+- **Offline-First**: Everything cached locally for reliability
+- **TTL Control**: Configure cache refresh intervals
+
+```mlld
+>> Security options
+@import { trusted } from @company/utils trust always
+@import { external } from @community/parser trust verify
+
+>> Cache control  
+@import { live } from @api/data (30m) << Refresh every 30 minutes
+@import { stable } from @alice/lib (static) << Never refresh
 ```
 
 ## License

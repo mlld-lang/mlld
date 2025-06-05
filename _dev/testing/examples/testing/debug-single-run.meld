@@ -1,2 +1,0 @@
->> Testing a single run directive
-@run [echo "Hello, world!"] 

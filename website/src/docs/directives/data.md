@@ -9,13 +9,13 @@ The `@data` directive defines a structured data variable that can store objects,
 
 ## Syntax
 
-```meld
+```mlld
 @data identifier = value
 ```
 
 Where:
 - `identifier` is the variable name (must be a valid identifier)
-- `value` can be an object literal, array literal, string literal, or the result of an `@embed`, `@run`, or `@call` directive
+- `value` can be an object literal, array literal, string literal, or the result of an `@add`, `@run`, or `@call` directive
 
 ## Identifier Requirements
 
@@ -38,13 +38,13 @@ The @data directive supports all standard JSON data types:
 
 Data objects can be defined using object literal syntax:
 
-```meld
+```mlld
 @data config = {{ name: "test", version: 1 }}
 ```
 
 For multi-line objects:
 
-```meld
+```mlld
 @data user = {{
   name: "Alice",
   id: 123,
@@ -58,7 +58,7 @@ For multi-line objects:
 
 Arrays can be defined as well:
 
-```meld
+```mlld
 @data colors = ["red", "green", "blue"]
 ```
 
@@ -66,7 +66,7 @@ Arrays can be defined as well:
 
 Data structures can contain variable references in both keys and values:
 
-```meld
+```mlld
 @text name = "John"
 @text keyName = "username"
 @data user = {{
@@ -80,14 +80,14 @@ Data structures can contain variable references in both keys and values:
 
 Data variables are referenced using the `{{identifier}}` syntax:
 
-```meld
+```mlld
 @data user = {{ name: "Alice", id: 123 }}
 @text greeting = `Hello, {{user.name}}!`
 ```
 
 You can access nested fields using dot notation:
 
-```meld
+```mlld
 @data config = {{ 
   app: { 
     name: "MyApp",
@@ -101,7 +101,7 @@ You can access nested fields using dot notation:
 
 Use dot notation to access array elements:
 
-```meld
+```mlld
 @data fruits = ["apple", "banana", "cherry"]
 @text favorite = `My favorite fruit is {{fruits.0}}`
 @text list = `Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}`
@@ -113,14 +113,14 @@ Note: Currently, only dot notation is supported for array access. Bracket notati
 
 Values can also be provided as JSON strings which are parsed:
 
-```meld
+```mlld
 @data config = '{"key": "value"}'
 ```
 
 ## Examples
 
 Basic data variable:
-```meld
+```mlld
 @data settings = {{ 
   darkMode: true,
   fontSize: 16
@@ -128,7 +128,7 @@ Basic data variable:
 ```
 
 Using variables in data:
-```meld
+```mlld
 @text name = "John"
 @data user = {{ 
   username: {{name}},
@@ -137,8 +137,8 @@ Using variables in data:
 ```
 
 Using command output as data:
-```meld
-@data gitInfo = @run [git log -1 --format="%H,%an,%ae,%s"]
+```mlld
+@data gitInfo = @run [(git log -1 --format="%H,%an,%ae,%s")]
 ```
 
 ## Error Handling
@@ -146,7 +146,7 @@ Using command output as data:
 The following errors are possible with data directives:
 - JSON parsing errors (if value is invalid JSON)
 - Variable resolution errors
-- Execution errors when using @run or @embed as sources
+- Execution errors when using @run or @add as sources
 
 ## Notes
 

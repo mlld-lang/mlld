@@ -3,15 +3,15 @@ import * as path from 'path';
 import { createInterface } from 'readline';
 
 /**
- * Initialize a new Meld project by creating a meld.json file
+ * Initialize a new Mlld project by creating a mlld.json file
  */
 export async function initCommand(): Promise<void> {
   const cwd = process.cwd();
   
-  // Check if meld.json already exists
+  // Check if mlld.json already exists
   try {
-    await fs.access(path.join(cwd, 'meld.json'));
-    console.error('Error: meld.json already exists in this directory.');
+    await fs.access(path.join(cwd, 'mlld.json'));
+    console.error('Error: mlld.json already exists in this directory.');
     process.exit(1);
   } catch (e) {
     // File doesn't exist, continue
@@ -45,11 +45,11 @@ export async function initCommand(): Promise<void> {
   
   // Write config file
   await fs.writeFile(
-    path.join(cwd, 'meld.json'),
+    path.join(cwd, 'mlld.json'),
     JSON.stringify(config, null, 2)
   );
   
-  console.log(`Meld project initialized successfully.`);
+  console.log(`Mlld project initialized successfully.`);
   console.log(`Project root set to: ${path.resolve(cwd, projectRoot)}`);
   
   rl.close();

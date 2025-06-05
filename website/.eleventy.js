@@ -1,5 +1,10 @@
-const markdownIt = require("markdown-it");
-const markdownItAnchor = require("markdown-it-anchor");
+const markdownIt = require('markdown-it');
+const markdownItAnchor = require('markdown-it-anchor');
+const markdownItPrism = require('markdown-it-prism');
+
+// Load our custom Meld language
+require('./src/prism-mlld.js');
+const highlightMeld = require('./src/eleventy-mld-highlight.js');
 
 module.exports = function(eleventyConfig) {
   // Configure Markdown
@@ -7,31 +12,38 @@ module.exports = function(eleventyConfig) {
     html: true,
     breaks: true,
     linkify: true
-  }).use(markdownItAnchor);
+  })
+  .use(markdownItAnchor)
+  .use(markdownItPrism);
   
-  eleventyConfig.setLibrary("md", markdownLib);
+  eleventyConfig.setLibrary('md', markdownLib);
   
   // Add watch target for docs folder
-  eleventyConfig.addWatchTarget("../docs/");
+  eleventyConfig.addWatchTarget('../docs/');
   
   // Add passthrough copy for assets
-  eleventyConfig.addPassthroughCopy("css");
-  eleventyConfig.addPassthroughCopy("js");
-  eleventyConfig.addPassthroughCopy("images");
-  eleventyConfig.addPassthroughCopy(".nojekyll");
+  eleventyConfig.addPassthroughCopy('css');
+  eleventyConfig.addPassthroughCopy('js');
+  eleventyConfig.addPassthroughCopy('images');
+  eleventyConfig.addPassthroughCopy('.nojekyll');
+  
+  // Copy Prism CSS theme
+  eleventyConfig.addPassthroughCopy({
+    'node_modules/prismjs/themes/prism-tomorrow.css': 'css/prism-theme.css'
+  });
   
   // Create a collection for documentation pages
-  eleventyConfig.addCollection("docs", function(collectionApi) {
-    return collectionApi.getFilteredByGlob("src/docs/**/*.md").sort((a, b) => {
+  eleventyConfig.addCollection('docs', function(collectionApi) {
+    return collectionApi.getFilteredByGlob('src/docs/**/*.md').sort((a, b) => {
       // Custom sort order for docs
       const order = {
-        "introduction": 1,
-        "cli-usage": 3,
-        "sdk-usage": 4,
-        "variables": 5,
-        "error-handling": 6,
-        "syntax-reference": 2,
-        "directives": 100 // Directives at the end
+        'introduction': 1,
+        'cli-usage': 3,
+        'sdk-usage': 4,
+        'variables': 5,
+        'error-handling': 6,
+        'syntax-reference': 2,
+        'directives': 100 // Directives at the end
       };
       
       // Extract slug from URL
@@ -57,23 +69,33 @@ module.exports = function(eleventyConfig) {
   });
   
   // Add isActive filter for navigation
-  eleventyConfig.addFilter("isActive", function(pageUrl, currentUrl) {
-    return currentUrl.startsWith(pageUrl) ? "aria-current=\"page\"" : "";
+  eleventyConfig.addFilter('isActive', function(pageUrl, currentUrl) {
+    return currentUrl.startsWith(pageUrl) ? 'aria-current="page"' : '';
   });
   
   // Add year shortcode
-  eleventyConfig.addShortcode("year", () => `${new Date().getFullYear()}`);
+  eleventyConfig.addShortcode('year', () => `${new Date().getFullYear()}`);
+  
+  // Add Meld syntax highlighting shortcode
+  eleventyConfig.addShortcode('meld', function(code) {
+    return highlightMeld(code.trim(), true);
+  });
+  
+  // Add Meld code block shortcode
+  eleventyConfig.addShortcode('meldBlock', function(code) {
+    return highlightMeld(code.trim(), false);
+  });
   
   return {
     dir: {
-      input: "src",
-      output: "_site",
-      includes: "_includes",
-      data: "_data"
+      input: 'src',
+      output: '_site',
+      includes: '_includes',
+      data: '_data'
     },
-    templateFormats: ["md", "njk"],
+    templateFormats: ['md', 'njk'],
     markdownTemplateEngine: false,
-    htmlTemplateEngine: "njk",
-    dataTemplateEngine: "njk"
+    htmlTemplateEngine: 'njk',
+    dataTemplateEngine: 'njk'
   };
 };

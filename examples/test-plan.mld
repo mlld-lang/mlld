@@ -1,0 +1,5 @@
+@text tests = @run [(npm test)]
+
+@text res = @run [(oneshot "What's broken here? @tests")]
+
+@run [(oneshot "Make a plan to fix @res")]

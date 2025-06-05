@@ -1,0 +1,149 @@
+# Todo
+
+## Configure registry:
+
+  1. Set up DNSimple credentials:
+  export DNSIMPLE_TOKEN="your-token"
+  export DNSIMPLE_ACCOUNT_ID="your-account-id"
+  2. When you add example modules to modules.json, run:
+  cd registry
+  node tools/validate.js
+  node tools/dns-sync.js
+  3. For module authors, they can use:
+  node tools/publish.js @username/module-name <gist-raw-url>
+
+## v0.1 - Core Module System (Simplified)
+
+### Phase 1: Grammar & Parsing ✅ COMPLETE
+1. **Grammar Updates** (_dev/workstreams/NOW/01-grammar-ttl-trust.md)
+   - [x] Add basic TTL syntax: (30m), (1h), (7d), (live), (static) 
+   - [x] Add frontmatter parsing (YAML at file start)
+   - [x] Extend module syntax for resolver paths (@namespace/path/to/module)
+   - [x] Change @stdin to @input throughout
+   - [x] Generate new AST types
+   - [x] Add trust levels (for v0.2) - already done!
+   - [x] Add @output directive (for v0.3) - already done!
+   - [x] Module hash syntax @user/module@hash
+
+2. **Frontmatter Support** (_dev/workstreams/NOW/07-frontmatter-support.md) ✅ COMPLETE
+   - [x] Add YAML parser dependency
+   - [x] Parse frontmatter from .mld files
+   - [x] Make frontmatter available as @fm variable
+   - [x] Handle frontmatter in imports
+   - [x] Integrate with resolver/cache systems
+
+### Phase 2: Module System
+3. **Resolver System** (_dev/workstreams/NOW/06-resolver-system.md) ✅ COMPLETE
+   - [x] Define Resolver interface
+   - [x] Build ResolverManager 
+   - [x] Create DNS resolver (for @user/module)
+   - [x] Create local resolver (for @custom/ paths)
+   - [x] Add resolver configuration to lock files
+   - [x] Integrate with cache system (handoff needed)
+
+4. **Hash-Cache Imports** (_dev/workstreams/NOW/03-hash-cache-imports.md) ✅ COMPLETE
+   - [x] Build HashUtils for SHA-256 content addressing
+   - [x] Create ModuleCache for ~/.mlld/cache storage
+   - [x] Integrate with resolver system (handoff needed)
+   - [x] Update lock file format for modules
+
+5. **Registry DNS** (_dev/workstreams/NOW/04-registry-gists.md) ✅ COMPLETE
+   - [x] Set up mlld-lang/registry GitHub repo
+   - [x] Configure DNS for public.mlld.ai
+   - [x] Support GitHub gists initially
+   - [x] Create 5-10 example modules
+   - [x] Write simple publishing guide
+
+### Phase 3: CLI & Integration
+6. **Interpreter Updates** (_dev/workstreams/NOW/08-interpreter-updates.md) ✅ COMPLETE
+   - [x] Reserve module prefixes as keywords
+   - [x] Implement @input (renamed from @stdin)
+   - [x] Integrate frontmatter as @fm
+   - [x] Route imports through resolver system
+   - [x] Focus on GREAT error messages
+
+7. **CLI Commands** (_dev/workstreams/NOW/05-cli-commands.md) ✅ COMPLETE
+   - [x] Implement `mlld install @user/module`
+   - [x] Implement `mlld ls` command
+   - [x] Basic progress indicators
+   - [x] Clear error messages
+
+## v0.2 - Security & Advanced Features
+
+### Security
+- [ ] Wire up existing SecurityManager
+- [ ] Basic command pattern detection
+- [ ] Path validation
+- [ ] Import approval UI (thoughtful design!)
+- [x] Add trust levels to grammar ✅ (already done in v0.1!)
+
+### Advanced Resolvers  
+- [ ] GitHub resolver (private repos)
+- [ ] HTTP resolver
+- [ ] GitLab, Bitbucket, Codeberg support
+
+### CLI Enhancements
+- [ ] `mlld update` command
+- [ ] `mlld rm` command
+- [ ] Resolver management commands
+
+## v0.3 - Future Features
+
+### Output System
+- [x] Design @output directive ✅ (grammar already done in v0.1!)
+- [ ] Output resolvers
+- [ ] Multi-output scripts
+
+### Registry Website
+- [ ] Static site generation
+- [ ] Module browsing
+- [ ] Search functionality
+
+## Much Later
+- Advisory system
+- MCP integration
+- Advanced security policies
+
+## Registry
+
+### NEXT Workstreams (After NOW is done):
+
+1. **Registry Static Site** (_dev/workstreams/NEXT/registry-static-site.md)
+   - [ ] Fetch registry data during 11ty build
+   - [ ] Create module browse/search pages
+   - [ ] Generate individual module pages
+   - [ ] Add client-side search with Fuse.js
+   - [ ] Deploy to mlld.ai/registry
+
+2. **Advisory Design** (_dev/workstreams/NEXT/advisory-design.md)
+   - [ ] Define advisory JSON format
+   - [ ] Create submission/review process
+   - [ ] Build CLI audit command
+   - [ ] Design reputation system
+   - [ ] Plan distribution mechanism
+
+3. **MCP Registry** (_dev/workstreams/NEXT/mcp-registry-design.md)
+   - [ ] Extend registry for MCP servers
+   - [ ] Design @mcp directive syntax
+   - [ ] Plan security/permissions model
+   - [ ] Create MCP runner infrastructure
+   - [ ] Define quality standards
+
+## Needs review
+- security/url implementation 
+- error system
+- output manager
+- cli 
+- syntax highlighting
+- website
+- docs/
+- docs/dev/
+  - ARCHITECTURE.md
+  - TESTS.md
+
+Find the "run with" concept notes .... what was that?!?
+
+@run with {
+  filter: ...
+  what else was it??
+}

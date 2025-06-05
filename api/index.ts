@@ -1,496 +1,85 @@
-import '@core/di-config.js';
-import * as path from 'path';
+/**
+ * Mlld API Entry Point
+ * 
+ * Provides the main API for processing Mlld documents programmatically.
+ */
+/// <reference types="node" />
+import { MlldError } from '@core/errors/MlldError';
+import { interpret } from '@interpreter/index';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import type { IPathService } from '@services/fs/IPathService';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
+import { PathService } from '@services/fs/PathService';
+import { ErrorFormatSelector, type FormattedErrorResult, type ErrorFormatOptions } from '@core/utils/errorFormatSelector';
 
-// Core services
-export * from '@services/pipeline/InterpreterService/InterpreterService.js';
-export * from '@services/pipeline/ParserService/ParserService.js';
-export * from '@services/state/StateService/StateService.js';
-export * from '@services/resolution/ResolutionService/ResolutionService.js';
-export * from '@services/pipeline/DirectiveService/DirectiveService.js';
-export * from '@services/resolution/ValidationService/ValidationService.js';
-export * from '@services/fs/PathService/PathService.js';
-export * from '@services/fs/FileSystemService/FileSystemService.js';
-export * from '@services/fs/FileSystemService/PathOperationsService.js';
-export * from '@services/pipeline/OutputService/OutputService.js';
-export * from '@services/resolution/CircularityService/CircularityService.js';
-export * from '@services/mediator/ServiceMediator.js';
+// Export core types/errors
+export { MlldError };
+export { ErrorFormatSelector };
+export type { FormattedErrorResult, ErrorFormatOptions };
 
-// Core types and errors
-export * from '@core/types/index.js';
-export * from '@core/errors/MeldDirectiveError.js';
-export * from '@core/errors/MeldInterpreterError.js';
-export * from '@core/errors/MeldParseError.js';
-import { MeldFileNotFoundError } from '@core/errors/MeldFileNotFoundError.js';
+// Export types
+export type { Location, Position } from '@core/types/index';
 
-// Import simple API helpers
-import { runMeld as runMeldImpl, MemoryFileSystem } from './run-meld.js';
-
-// Re-export runMeld as both named and default export for ease of use
-export { runMeld } from './run-meld.js';
-export { MemoryFileSystem } from './run-meld.js';
-
-// Default export of runMeld for simplicity
-export default runMeldImpl;
-
-// Import service classes
-import { InterpreterService } from '@services/pipeline/InterpreterService/InterpreterService.js';
-import { ParserService } from '@services/pipeline/ParserService/ParserService.js';
-import { StateService } from '@services/state/StateService/StateService.js';
-import { ResolutionService } from '@services/resolution/ResolutionService/ResolutionService.js';
-import { DirectiveService } from '@services/pipeline/DirectiveService/DirectiveService.js';
-import { ValidationService } from '@services/resolution/ValidationService/ValidationService.js';
-import { PathService } from '@services/fs/PathService/PathService.js';
-import { FileSystemService } from '@services/fs/FileSystemService/FileSystemService.js';
-import { PathOperationsService } from '@services/fs/FileSystemService/PathOperationsService.js';
-import { OutputService } from '@services/pipeline/OutputService/OutputService.js';
-import { CircularityService } from '@services/resolution/CircularityService/CircularityService.js';
-import { ServiceMediator } from '@services/mediator/ServiceMediator.js';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import { StateDebuggerService } from '@tests/utils/debug/StateDebuggerService/StateDebuggerService.js';
-import { ProcessOptions, Services } from '@core/types/index.js';
-import type { IStateDebuggerService } from '@tests/utils/debug/StateDebuggerService/IStateDebuggerService.js';
-
-// Import debug services
-import { StateTrackingService } from '@tests/utils/debug/StateTrackingService/StateTrackingService.js';
-import { StateVisualizationService } from '@tests/utils/debug/StateVisualizationService/StateVisualizationService.js';
-import { StateHistoryService } from '@tests/utils/debug/StateHistoryService/StateHistoryService.js';
-import { StateEventService } from '@services/state/StateEventService/StateEventService.js';
-import { TestDebuggerService } from '@tests/utils/debug/TestDebuggerService.js';
-import { interpreterLogger as logger } from '@core/utils/logger.js';
-
-// Package info
-export { version } from '@core/version.js';
-
-import { validateServicePipeline } from '@core/utils/serviceValidation.js';
-
-// Define the required services type
-type RequiredServices = {
-  filesystem: FileSystemService;
-  parser: ParserService;
-  interpreter: InterpreterService;
-  directive: DirectiveService;
-  state: StateService;
-  output: OutputService;
-  eventService: StateEventService;
-  path: PathService;
-  validation: ValidationService;
-  circularity: CircularityService;
-  resolution: ResolutionService;
-  debug?: StateDebuggerService;
-};
-
-export function createDefaultServices(options: ProcessOptions): Services & RequiredServices {
-  // Check if DI should be used
-  const useDI = process.env.USE_DI === 'true';
-  
-  if (useDI) {
-    // DI-based service creation
-    // Import required utilities for DI
-    const { resolveService, registerServiceInstance } = require('@core/ServiceProvider.js');
-    
-    // If a custom filesystem is provided, register it with the container
-    if (options.fs) {
-      registerServiceInstance('IFileSystem', options.fs);
-      registerServiceInstance('NodeFileSystem', options.fs);
-    }
-    
-    // Resolve services from the container
-    const filesystem = resolveService('FileSystemService');
-    const path = resolveService('PathService');
-    const eventService = resolveService('StateEventService');
-    const state = resolveService('StateService');
-    const parser = resolveService('ParserService');
-    const resolution = resolveService('ResolutionService');
-    const validation = resolveService('ValidationService');
-    const circularity = resolveService('CircularityService');
-    const directive = resolveService('DirectiveService');
-    const interpreter = resolveService('InterpreterService');
-    const output = resolveService('OutputService');
-    
-    // Initialize special path variables
-    state.setPathVar('PROJECTPATH', process.cwd());
-    state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
-
-    // Register default handlers after all services are initialized
-    directive.registerDefaultHandlers();
-    
-    // Create debug service if requested
-    let debug = undefined;
-    if (options.debug) {
-      try {
-        // Try to resolve from the container first
-        debug = resolveService('StateDebuggerService');
-      } catch (e) {
-        // If not available in container, create manually
-        const debugService = new TestDebuggerService(state);
-        debugService.initialize(state);
-        debug = debugService as unknown as StateDebuggerService;
-      }
-    }
-    
-    // Create services object in correct initialization order based on dependencies
-    const services: Services & RequiredServices = {
-      // Base services
-      filesystem,
-      path,
-      // State management
-      eventService,
-      state,
-      // Core pipeline
-      parser,
-      // Resolution layer
-      resolution,
-      validation,
-      circularity,
-      // Pipeline orchestration
-      directive,
-      interpreter,
-      // Output generation
-      output,
-      // Optional debug service
-      debug
-    };
-
-    // Validate the service pipeline
-    validateServicePipeline(services);
-
-    return services;
-  } else {
-    // Legacy non-DI service creation
-    // Create a service mediator to break circular dependencies
-    const serviceMediator = new ServiceMediator();
-    
-    // 1. FileSystemService (base dependency)
-    const pathOps = new PathOperationsService();
-    // If options.fs is provided, use it; otherwise create a new NodeFileSystem
-    const fs: IFileSystem = options.fs || new NodeFileSystem();
-    const filesystem = new FileSystemService(pathOps, serviceMediator, fs);
-    filesystem.setFileSystem(fs);
-
-    // 2. PathService (depends on filesystem)
-    const path = new PathService(serviceMediator);
-    path.initialize(filesystem);
-
-    // 3. State Management Services
-    const eventService = new StateEventService();
-    const trackingService = new StateTrackingService();
-    const state = new StateService(undefined, eventService, trackingService, serviceMediator);
-    state.setEventService(eventService);
-    
-    // Initialize special path variables
-    state.setPathVar('PROJECTPATH', process.cwd());
-    state.setPathVar('HOMEPATH', process.env.HOME || process.env.USERPROFILE || '/home');
-
-    // 4. ParserService (independent)
-    const parser = new ParserService(serviceMediator);
-
-    // 5. Resolution Layer Services
-    const resolution = new ResolutionService(state, filesystem, path, serviceMediator);
-    const validation = new ValidationService();
-    const circularity = new CircularityService();
-    
-    // Connect services through the mediator
-    serviceMediator.setFileSystemService(filesystem);
-    serviceMediator.setPathService(path);
-    serviceMediator.setParserService(parser);
-    serviceMediator.setResolutionService(resolution);
-    serviceMediator.setStateService(state);
-
-    // 6. Pipeline Orchestration (handle circular dependency)
-    const directive = new DirectiveService();
-    const interpreter = new InterpreterService();
-
-    // Initialize interpreter with directive and state
-    interpreter.initialize(directive, state);
-
-    // Initialize directive with all dependencies
-    directive.initialize(
-      validation,
-      state,
-      path,
-      filesystem,
-      parser,
-      interpreter,
-      circularity,
-      resolution
-    );
-
-    // Register default handlers after all services are initialized
-    directive.registerDefaultHandlers();
-
-    // 7. OutputService (depends on state and resolution)
-    const output = new OutputService();
-    output.initialize(state, resolution);
-
-    // Create debug service if requested
-    let debug = undefined;
-    if (options.debug) {
-      const debugService = new TestDebuggerService(state);
-      debugService.initialize(state);
-      debug = debugService as unknown as StateDebuggerService;
-    }
-
-    // Create services object in correct initialization order based on dependencies
-    const services: Services & RequiredServices = {
-      // Base services
-      filesystem,
-      path,
-      // State management
-      eventService,
-      state,
-      // Core pipeline
-      parser,
-      // Resolution layer
-      resolution,
-      validation,
-      circularity,
-      // Pipeline orchestration
-      directive,
-      interpreter,
-      // Output generation
-      output,
-      // Optional debug service
-      debug
-    };
-
-    // Validate the service pipeline
-    validateServicePipeline(services);
-
-    return services;
-  }
+/**
+ * Options for processing Mlld documents
+ */
+export interface ProcessOptions {
+  /** Output format */
+  format?: 'markdown' | 'xml';
+  /** Base path for resolving relative paths */
+  basePath?: string;
+  /** Custom file system implementation */
+  fileSystem?: IFileSystemService;
+  /** Custom path service implementation */
+  pathService?: IPathService;
 }
 
-export async function main(filePath: string, options: ProcessOptions = {}): Promise<string> {
-  // Create default services
-  const defaultServices = createDefaultServices(options);
+/**
+ * Process a Mlld document and return the output
+ */
+export async function processMlld(content: string, options?: ProcessOptions): Promise<string> {
+  // Create default services if not provided
+  const fileSystem = options?.fileSystem || new NodeFileSystem();
+  const pathService = options?.pathService || new PathService();
+  const basePath = options?.basePath || process.cwd();
+  
+  // Call the interpreter
+  const result = await interpret(content, {
+    basePath,
+    format: options?.format || 'markdown',
+    fileSystem,
+    pathService
+  });
 
-  // Merge with provided services and ensure proper initialization
-  const services = options.services ? { ...defaultServices, ...options.services } as Services & RequiredServices : defaultServices;
+  return result;
+}
 
-  // Validate the service pipeline after merging
-  validateServicePipeline(services);
-
-  // If directive service was injected, we need to re-initialize it and the interpreter
-  if (options.services?.directive) {
-    const directive = services.directive;
-    const interpreter = services.interpreter;
-
-    // Re-initialize directive with interpreter
-    directive.initialize(
-      services.validation,
-      services.state,
-      services.path,
-      services.filesystem,
-      services.parser,
-      interpreter, // Pass interpreter immediately
-      services.circularity,
-      services.resolution
-    );
-
-    // Re-initialize interpreter with directive
-    interpreter.initialize(directive, services.state);
-
-    // Register default handlers
-    directive.registerDefaultHandlers();
-  }
-
-  try {
-    // Read the file
-    const content = await services.filesystem.readFile(filePath);
-    
-    // Parse the content
-    const ast = await services.parser.parse(content);
-    
-    // Enable transformation if requested (do this before interpretation)
-    if (options.transformation) {
-      // If transformation is a boolean, use the legacy all-or-nothing approach
-      // If it's an object with options, use selective transformation
-      if (typeof options.transformation === 'boolean') {
-        services.state.enableTransformation(options.transformation);
-      } else {
-        services.state.enableTransformation(options.transformation);
-      }
-      
-      // Add debugging for transformation settings
-      logger.debug('Transformation enabled with options', {
-        isEnabled: services.state.isTransformationEnabled(),
-        options: services.state.getTransformationOptions?.()
-      });
-    }
-    
-    // Interpret the AST
-    const resultState = await services.interpreter.interpret(ast, { 
-      filePath, 
-      initialState: services.state,
-      strict: true  // Add strict mode to ensure validation errors are propagated
-    });
-    
-    // Check for path directives with invalid paths
-    const pathDirectives = ast.filter(node => 
-      node.type === 'Directive' && 
-      (node as any).directive && 
-      (node as any).directive.kind === 'path'
-    );
-    
-    if (pathDirectives.length > 0) {
-      for (const pathNode of pathDirectives) {
-        const pathValue = (pathNode as any).directive.path?.raw || (pathNode as any).directive.value;
-        
-        // Check for absolute paths
-        if (typeof pathValue === 'string' && path.isAbsolute(pathValue)) {
-          throw new Error(`Path directive must use a special path variable: ${pathValue}`);
-        }
-        
-        // Check for relative paths with dot segments, but exclude special prefixes $. and $~
-        if (typeof pathValue === 'string') {
-          // Skip validation for special path prefixes $. and $~
-          if (!pathValue.startsWith('$.') && !pathValue.startsWith('$~') && 
-              !pathValue.startsWith('"$.') && !pathValue.startsWith('"$~') && 
-              !pathValue.startsWith('\'$.') && !pathValue.startsWith('\'$~')) {
-            // Also properly handle path values that may be wrapped in quotes
-            let valueToCheck = pathValue;
-            // Remove quotes if present (handles both single and double quotes)
-            if ((valueToCheck.startsWith('"') && valueToCheck.endsWith('"')) || 
-                (valueToCheck.startsWith('\'') && valueToCheck.endsWith('\''))) {
-              valueToCheck = valueToCheck.substring(1, valueToCheck.length - 1);
-            }
-            
-            // Check for problematic relative segments
-            if (valueToCheck.includes('./') || valueToCheck.includes('../')) {
-              throw new Error(`Path cannot contain relative segments: ${pathValue}`);
-            }
-          }
-        }
-      }
-    }
-    
-    // Ensure transformation state is preserved from original state service
-    if (services.state.isTransformationEnabled()) {
-      // Pass the complete transformation options to preserve selective settings
-      const transformOpts = typeof options.transformation === 'boolean' 
-        ? options.transformation 
-        : options.transformation;
-      
-      resultState.enableTransformation(transformOpts);
-      
-      // Add debugging for resultState transformation settings
-      logger.debug('ResultState transformation settings', {
-        isEnabled: resultState.isTransformationEnabled(),
-        options: resultState.getTransformationOptions?.()
-      });
-
-      // IMPORTANT FIX: After interpretation, copy all variables from resultState back to the original state
-      // This ensures that variables from imports are properly propagated back to the state
-      // referenced by the test context
-      if (typeof resultState.getAllTextVars === 'function' && 
-          typeof services.state.setTextVar === 'function') {
-        // Copy text variables
-        const textVars = resultState.getAllTextVars();
-        textVars.forEach((value, key) => {
-          services.state.setTextVar(key, value);
-        });
-        
-        // Copy data variables
-        if (typeof resultState.getAllDataVars === 'function' && 
-            typeof services.state.setDataVar === 'function') {
-          const dataVars = resultState.getAllDataVars();
-          dataVars.forEach((value, key) => {
-            services.state.setDataVar(key, value);
-          });
-        }
-        
-        // Copy path variables
-        if (typeof resultState.getAllPathVars === 'function' && 
-            typeof services.state.setPathVar === 'function') {
-          const pathVars = resultState.getAllPathVars();
-          pathVars.forEach((value, key) => {
-            services.state.setPathVar(key, value);
-          });
-        }
-        
-        // Copy commands
-        if (typeof resultState.getAllCommands === 'function' && 
-            typeof services.state.setCommand === 'function') {
-          const commands = resultState.getAllCommands();
-          commands.forEach((value, key) => {
-            services.state.setCommand(key, value);
-          });
-        }
-      }
-    }
-    
-    // Get transformed nodes if available
-    const nodesToProcess = resultState.isTransformationEnabled() && resultState.getTransformedNodes()
-      ? resultState.getTransformedNodes()
-      : ast;
-    
-    // Convert to desired format using the updated state
-    let converted = await services.output.convert(nodesToProcess, resultState, options.format || 'xml');
-    
-    // Post-process the output in transformation mode to fix formatting issues
-    if (resultState.isTransformationEnabled()) {
-      // Fix newlines in variable output
-      converted = converted
-        // Replace multiple newlines with a single newline
-        .replace(/\n{2,}/g, '\n')
-        // Fix common patterns in test cases
-        .replace(/(\w+):\n(\w+)/g, '$1: $2')
-        .replace(/(\w+),\n(\w+)/g, '$1, $2')
-        .replace(/(\w+):\n{/g, '$1: {')
-        .replace(/},\n(\w+):/g, '}, $1:');
-      
-      // Check for any remaining variable references in the output and replace them with their values
-      const variableRegex = /\{\{([^{}]+)\}\}/g;
-      const matches = Array.from(converted.matchAll(variableRegex));
-      
-      for (const match of matches) {
-        const fullMatch = match[0]; // The entire match, e.g., {{variable}}
-        const variableName = match[1].trim(); // The variable name, e.g., variable
-        
-        // Try to get the variable value from the state
-        let value;
-        // Try text variable first
-        value = resultState.getTextVar(variableName);
-        
-        // If not found as text variable, try data variable
-        if (value === undefined) {
-          value = resultState.getDataVar(variableName);
-        }
-        
-        // If a value was found, replace the variable reference with its value
-        if (value !== undefined) {
-          const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
-          converted = converted.replace(fullMatch, stringValue);
-        }
-      }
-        
-      // Special handling for object properties in test cases
-      // Replace object JSON with direct property access
-      converted = converted
-        // Handle object property access - replace JSON objects with their property values
-        .replace(/User: {\s*"name": "([^"]+)",\s*"age": (\d+)\s*}, Age: {\s*"name": "[^"]+",\s*"age": (\d+)\s*}/g, 'User: $1, Age: $3')
-        // Handle nested arrays with HTML entities for quotes
-        .replace(/Name: \{&quot;users&quot;:\[\{&quot;name&quot;:&quot;([^&]+)&quot;.*?\}\]}\s*Hobby: \{.*?&quot;hobbies&quot;:\[&quot;([^&]+)&quot;/gs, 'Name: $1\nHobby: $2')
-        // Handle other nested arrays without HTML entities
-        .replace(/Name: {"users":\[\{"name":"([^"]+)".*?\}\]}\s*Hobby: \{.*?"hobbies":\["([^"]+)"/gs, 'Name: $1\nHobby: $2')
-        // Handle complex nested array case 
-        .replace(/Name: (.*?)\s+Hobby: ([^,\n]+).*$/s, 'Name: Alice\nHobby: reading')
-        // Handle other specific test cases as needed
-        .replace(/Name: \{\s*"name": "([^"]+)"[^}]*\}, Hobby: \[\s*"([^"]+)"/g, 'Name: $1\nHobby: $2');
-    }
-    
-    return converted;
-  } catch (error) {
-    // If it's a MeldFileNotFoundError, just throw it as is
-    if (error instanceof MeldFileNotFoundError) {
-      throw error;
-    }
-    // For other Error instances, preserve the error
-    if (error instanceof Error) {
-      throw error;
-    }
-    // For non-Error objects, convert to string
-    throw new Error(String(error));
-  }
+/**
+ * Enhanced error formatting for API users
+ * 
+ * @example
+ * ```typescript
+ * try {
+ *   await processMlld(content);
+ * } catch (error) {
+ *   if (error instanceof MlldError) {
+ *     const formatter = new ErrorFormatSelector(fileSystem);
+ *     const result = await formatter.formatAuto(error, {
+ *       useSmartPaths: true,
+ *       basePath: '/path/to/project'
+ *     });
+ *     
+ *     console.log(result.formatted); // Human-readable
+ *     console.log(result.json);      // Structured data
+ *   }
+ * }
+ * ```
+ */
+export async function formatError(
+  error: MlldError,
+  options?: ErrorFormatOptions & { fileSystem?: IFileSystemService }
+): Promise<FormattedErrorResult> {
+  const { fileSystem, ...formatOptions } = options || {};
+  const formatter = new ErrorFormatSelector(fileSystem);
+  return await formatter.formatAuto(error, formatOptions);
 }

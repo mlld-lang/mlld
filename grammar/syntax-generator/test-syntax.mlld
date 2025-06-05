@@ -1,0 +1,32 @@
+> This is a comment
+@text greeting = "Hello, World!"
+@data config = {
+  name: "Test",
+  count: 42,
+  enabled: true,
+  empty: null
+}
+
+@path docs = [./docs/README.md]
+@import {greeting, config} from [utils.mld]
+@url apiDocs = [https://api.example.com/docs]
+
+@exec greet(name) = @run [echo "Hello, @name!"]
+@run @greet("Alice")
+
+@add [[
+This is a template with {{greeting}}
+And a number: {{config.count}}
+]]
+
+@add [file.md # Section Title]
+@add @docs
+
+@define macro = [[Complex template {{config.name}}]]
+@embed [README.md # Installation]
+
+> Test all directives and patterns
+@text result = @run javascript [
+  console.log("Code block");
+  return 42;
+]

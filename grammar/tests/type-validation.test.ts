@@ -1,0 +1,175 @@
+import { describe, it, expect } from 'vitest';
+import { parse } from '@grammar/parser';
+import { 
+  isDirectiveNode,
+  isTextDirective,
+  isDataDirective,
+  isRunDirective,
+  isExecDirective,
+  isAddDirective,
+  isPathDirective,
+  isImportDirective,
+  isVariableReferenceNode,
+  DirectiveSubtype
+} from '@core/types';
+import { NodeType } from '@core/shared/types';
+
+/**
+ * Type validation tests for grammar output
+ * 
+ * These tests ensure that the AST produced by the grammar
+ * matches the TypeScript type definitions exactly.
+ */
+
+describe('Grammar-Type System Alignment', () => {
+  
+  describe('Text Directive Type Validation', () => {
+    it('should produce valid textAssignment nodes', async () => {
+      const input = '@text greeting = "Hello World"';
+      const result = await parse(input);
+      const ast = result.ast;
+      
+      const directive = ast[0];
+      expect(isDirectiveNode(directive)).toBe(true);
+      expect(isTextDirective(directive)).toBe(true);
+      
+      // Check subtype is valid
+      const validTextSubtypes: DirectiveSubtype[] = [
+        'textAssignment', 
+        'textTemplate',
+        'textPath',
+        'textPathSection',
+        'textTemplateDefinition'
+      ];
+      expect(validTextSubtypes).toContain(directive.subtype);
+      
+      // Check required properties exist
+      expect(directive.values).toBeDefined();
+      expect(directive.raw).toBeDefined();
+      expect(directive.meta).toBeDefined();
+      
+      // Check values structure
+      expect(directive.values.identifier).toBeDefined();
+      expect(Array.isArray(directive.values.identifier)).toBe(true);
+      expect(directive.values.content).toBeDefined();
+    });
+
+    it('should produce valid textTemplate nodes', async () => {
+      const input = '@text message = [[Hello {{name}}!]]';
+      const result = await parse(input);
+      const ast = result.ast;
+      
+      const directive = ast[0];
+      expect(directive.subtype).toBe('textTemplate');
+      expect(directive.meta.hasVariables).toBe(true);
+    });
+
+    it('should reject invalid text subtypes', async () => {
+      // This test would fail currently because grammar produces
+      // subtypes like 'textPath' that don't exist in types
+      const input = '@text content = [file.md]';
+      const result = await parse(input);
+      const ast = result.ast;
+      
+      const directive = ast[0];
+      const validTextSubtypes: DirectiveSubtype[] = [
+        'textAssignment', 
+        'textTemplate',
+        'textPath',
+        'textPathSection',
+        'textTemplateDefinition'
+      ];
+      
+      // This should now pass
+      expect(validTextSubtypes).toContain(directive.subtype);
+    });
+  });
+
+  describe('Data Directive Type Validation', () => {
+    it('should produce dataAssignment not dataDirective', async () => {
+      const input = '@data config = { "key": "value" }';
+      const result = await parse(input);
+      const ast = result.ast;
+      
+      const directive = ast[0];
+      expect(directive.subtype).toBe('dataAssignment'); // Currently fails
+    });
+  });
+
+  describe('Variable Reference Type Validation', () => {
+    it('should produce valid VariableReferenceNode structure', async () => {
+      const input = '@text message = [[Hello {{user.name}}!]]';
+      const result = await parse(input);
+      const ast = result.ast;
+      
+      const directive = ast[0];
+      const content = directive.values.content;
+      const varRef = content.find(node => isVariableReferenceNode(node));
+      
+      expect(varRef).toBeDefined();
+      expect(varRef.identifier).toBe('user');
+      expect(varRef.fields).toBeDefined();
+      expect(Array.isArray(varRef.fields)).toBe(true);
+      
+      // Should NOT have both valueType and isVariableReference
+      expect(varRef.isVariableReference).toBeUndefined();
+    });
+  });
+
+  describe('Node Type Constants', () => {
+    it('should only use defined NodeType values', async () => {
+      // Test various inputs to ensure they only produce valid node types
+      const inputs = [
+        '@text val = "null"',
+        '@text str = "string"',
+        '@text section = "# Section" from [file.md]'
+      ];
+      
+      const validNodeTypes = Object.values(NodeType);
+      
+      for (const input of inputs) {
+        const result = await parse(input);
+        const ast = result.ast;
+        // Walk the AST and check all node types
+        walkAst(ast, (node) => {
+          if (node.type) {
+            expect(validNodeTypes).toContain(node.type);
+          }
+        });
+      }
+    });
+  });
+
+  describe('Directive Property Placement', () => {
+    it('should place source at root level when present', async () => {
+      const input = '@add [[template content]]';
+      const result = await parse(input);
+      const ast = result.ast;
+      
+      const directive = ast[0];
+      
+      // source should be at root level (nullable)
+      expect('source' in directive).toBe(true);
+      
+      // When source is provided, it should be a string at root
+      if (directive.source !== null) {
+        expect(typeof directive.source).toBe('string');
+      }
+    });
+  });
+});
+
+// Helper to walk AST
+function walkAst(node: any, visitor: (node: any) => void) {
+  visitor(node);
+  
+  if (Array.isArray(node)) {
+    node.forEach(child => walkAst(child, visitor));
+  } else if (node && typeof node === 'object') {
+    Object.values(node).forEach(value => {
+      if (value && typeof value === 'object') {
+        walkAst(value, visitor);
+      }
+    });
+  }
+}

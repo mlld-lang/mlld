@@ -1,7 +1,7 @@
 {
-  "name": "meld-docs",
+  "name": "mlld-docs",
   "version": "1.0.0",
-  "description": "Documentation site for Meld",
+  "description": "Documentation site for Mlld",
   "scripts": {
     "dev": "node src/convertDocs.js && eleventy --serve",
     "build": "node src/convertDocs.js && eleventy",
@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "@11ty/eleventy": "^3.0.0",
+    "js-yaml": "^4.1.0",
     "markdown-it": "^13.0.2",
-    "markdown-it-anchor": "^8.6.7"
+    "markdown-it-anchor": "^8.6.7",
+    "markdown-it-prism": "^3.0.0",
+    "prismjs": "^1.30.0"
   }
 }

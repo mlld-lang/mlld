@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Introduction to Meld - mlld</title>
+  <title>Introduction to Mlld - mlld</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -22,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -90,6 +91,54 @@
         
           
         
+          
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
+          
+        
         
         <li>
           <h4>Directives</h4>
@@ -112,6 +161,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" >
                   
                     @data
@@ -121,18 +179,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -174,6 +223,46 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
+              
             
           </ul>
         </li>
@@ -182,10 +271,10 @@
   </aside>
   
   <div class="docs-content">
-    <h1 id="introduction-to-meld" tabindex="-1">Introduction to Meld</h1>
-<p>Meld is a simple and constrained scripting language designed for use within markdown-like documents. It allows you to create dynamic content by interpreting special directive lines while preserving all other content as-is.</p>
+    <h1 id="introduction-to-mlld" tabindex="-1">Introduction to Mlld</h1>
+<p>Mlld is a simple and constrained scripting language designed for use within markdown-like documents. It allows you to create dynamic content by interpreting special directive lines while preserving all other content as-is.</p>
 <h2 id="core-concepts" tabindex="-1">Core Concepts</h2>
-<p>Meld works by processing only lines that begin with directives (like <code>@text</code>, <code>@run</code>, etc.) while treating all other content as literal text. This makes it ideal for creating dynamic, templated documents.</p>
+<p>Mlld works by processing only lines that begin with directives (like <code>@text</code>, <code>@run</code>, etc.) while treating all other content as literal text. This makes it ideal for creating dynamic, templated documents.</p>
 <h3 id="key-features" tabindex="-1">Key Features</h3>
 <ul>
 <li>Simple, predictable syntax with clear boundaries</li>
@@ -194,21 +283,21 @@
 <li>Preserves existing content structure</li>
 </ul>
 <h2 id="basic-example" tabindex="-1">Basic Example</h2>
-<pre><code class="language-meld">@text name = &quot;World&quot;
-@path docs = &quot;$./docs&quot;
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name = <span class="token string">"World"</span>
+<span class="token directive keyword">@path</span> docs = <span class="token string">"$./docs"</span>
 
-This line will be interpreted as plain text.
+This line will be interpreted <span class="token operator">as</span> plain text.
 
 </code></pre>
 <p>This will remain a codefence.</p>
 <pre><code>
-@embed [[
+@add [[
     Hello, {{name}}!
 ]]
 
-@embed [$docs/example.md]
+@add [$docs/example.md]
 
-@run [echo &quot;Current time: $(date)&quot;]
+@run [(echo &quot;Current time: $(date)&quot;)]
 </code></pre>
 <p>This example:</p>
 <ol>
@@ -221,7 +310,7 @@ This line will be interpreted as plain text.
 <h2 id="next-steps" tabindex="-1">Next Steps</h2>
 <ul>
 <li>Learn about <a href="./variables.md">variables and interpolation</a></li>
-<li>Explore the <a href="./directives/README.md">directives</a> available in Meld</li>
+<li>Explore the <a href="./directives/README.md">directives</a> available in Mlld</li>
 <li>Check the complete <a href="./grammar-reference.md">grammar reference</a> for detailed syntax</li>
 </ul>
 
@@ -285,7 +374,7 @@ This line will be interpreted as plain text.
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

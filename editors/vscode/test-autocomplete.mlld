@@ -1,0 +1,27 @@
+>> Test file for autocomplete features
+
+# Autocomplete Test
+
+>> Type @ at the beginning of a line to see directive completions
+
+>> Type @text and see the snippet expand
+
+@text greeting = "Hello, World!"
+@data config = {
+  "name": "Test",
+  "version": "1.0.0"
+}
+
+>> Type @ below to see variable completions (should show 'greeting' and 'config')
+
+
+>> Type [[ to create a template, then type {{ to see variable interpolation
+@text message = [[Welcome {{}}]]
+
+>> Type [ to see path completions (should show project files and special variables)
+@add []
+
+>> Type @add " to see section completions from all markdown files
+@add ""
+
+>> Try importing - type @import and see the snippet

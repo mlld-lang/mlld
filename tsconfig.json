@@ -1,20 +1,30 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "Node16",
-    "moduleResolution": "Node16",
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM", "ES2022.Error"],
+    "types": ["node"],
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "allowJs": true,
     "esModuleInterop": true,
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "declaration": true,
+    "declaration": false,
+    "declarationMap": false,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+    "isolatedModules": true,
+    "noEmitOnError": false,
+    "verbatimModuleSyntax": false,
+    "noEmit": true,
     "baseUrl": ".",
     "paths": {
       "@core/*": ["core/*"],
       "@services/*": ["services/*"],
+      "@security/*": ["security/*"],
+      "@security": ["security/index.ts"],
       "@parser/*": ["parser/*"],
       "@interpreter/*": ["interpreter/*"],
       "@output/*": ["output/*"],
@@ -22,24 +32,40 @@
       "@sdk/*": ["api/*"],
       "@api/*": ["api/*"],
       "@api": ["api/index.ts", "api/index.js"],
-      "@tests/*": ["tests/*"]
+      "@tests/*": ["tests/*"],
+      "@grammar/*": ["grammar/*"]
     }
   },
   "include": [
     "core/**/*",
     "services/**/*",
+    "security/**/*",
     "parser/**/*",
     "interpreter/**/*",
     "output/**/*",
     "cli/**/*",
     "api/**/*",
     "tests/**/*",
-    "*.ts"
+    "grammar/**/*",
+    "grammar/core/**/*.ts",
+    "types/**/*",
+    "*.ts",
+    "_dev/issues/active/audit/test-audit-script.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
     "_old",
-    "_meld"
+    "_mlld",
+    "mlld-ast",
+    "core/ast/grammar/build-grammar.mjs",
+    "core/ast/grammar/parser.cjs",
+    "core/ast/grammar/parser.js",
+    "core/ast/tests/debug-test.js",
+    "core/ast/tests/debug-text-directive.cjs",
+    "core/ast/tests/embed-double-bracket-test.js",
+    "tests/circular-dependency-test.js",
+    "tests/embed-variable-test.js",
+    "tests/utils/cli/mockArgv.js"
   ]
 } 

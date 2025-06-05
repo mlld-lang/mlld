@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
   <link rel="stylesheet" href="/css/style.css">
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
@@ -22,7 +23,7 @@
       <nav>
         <ul>
           <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
-          <li><a href="https://github.com/meldorg/meld">GitHub</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
         </ul>
       </nav>
     </div>
@@ -90,6 +91,54 @@
         
           
         
+          
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
+          
+        
         
         <li>
           <h4>Directives</h4>
@@ -112,6 +161,15 @@
             
               
                 
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
                 <li><a href="/docs/directives/data/" >
                   
                     @data
@@ -121,18 +179,9 @@
             
               
                 
-                <li><a href="/docs/directives/define/" >
+                <li><a href="/docs/directives/exec/" >
                   
-                    @define
-                  
-                </a></li>
-              
-            
-              
-                
-                <li><a href="/docs/directives/embed/" >
-                  
-                    @embed
+                    @exec
                   
                 </a></li>
               
@@ -174,6 +223,46 @@
               
             
               
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
+              
             
           </ul>
         </li>
@@ -183,23 +272,23 @@
   
   <div class="docs-content">
     <h1 id="syntax-reference" tabindex="-1">Syntax Reference</h1>
-<p>This document provides a comprehensive reference for the Meld syntax.</p>
+<p>This document provides a comprehensive reference for the Mlld syntax.</p>
 <h2 id="core-tokens" tabindex="-1">Core Tokens</h2>
 <h3 id="directives" tabindex="-1">Directives</h3>
 <p>Directives must appear at start of line (no indentation):</p>
-<pre><code>@embed    - Include content from files
+<pre><code>@add      - Include content from files
 @run      - Execute shell commands
-@import   - Import variables and commands from other Meld files
-@define   - Create reusable commands
+@import   - Import variables and commands from other Mlld files
+@exec     - Create reusable commands
 @text     - Define text variables
 @path     - Define filesystem path variables
 @data     - Define structured data variables
 </code></pre>
 <h3 id="comments" tabindex="-1">Comments</h3>
 <p>Lines that begin with <code>&gt;&gt; </code> (two greater-than signs followed by a space) are treated as comments:</p>
-<pre><code class="language-meld">&gt;&gt; This is a comment
-&gt;&gt; Comments must start at beginning of line (no indentation)
-@text message = &quot;Hello&quot;  &gt;&gt; Invalid - comments must be on their own line
+<pre class="language-mlld"><code class="language-mlld">>> This is a comment
+>> Comments must start at beginning of line <span class="token punctuation">(</span>no indentation<span class="token punctuation">)</span>
+<span class="token directive keyword">@text</span> message = <span class="token string">"Hello"</span>  >> Invalid - comments must be on their own line
 </code></pre>
 <ul>
 <li>Must appear at start of line (no indentation)</li>
@@ -239,22 +328,22 @@
 </ul>
 <h2 id="variable-types" tabindex="-1">Variable Types</h2>
 <h3 id="path-variables" tabindex="-1">Path Variables</h3>
-<p>Syntax: <code>$identifier</code></p>
-<pre><code class="language-meld">$path                # Reference a path variable
-$HOMEPATH or $~      # Special path variable for home directory
-$PROJECTPATH or $.   # Special path variable for project root
+<p>Syntax: <code>@identifier</code></p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span>                # Reference a path variable
+<span class="token path"><span class="token punctuation">[</span>@~/path<span class="token punctuation">]</span></span>           # Home directory path
+<span class="token path"><span class="token punctuation">[</span>@./path<span class="token punctuation">]</span></span>           # Project root path
 </code></pre>
 <h3 id="text-variables" tabindex="-1">Text Variables</h3>
-<p>Syntax: <code>{{identifier}}</code></p>
-<pre><code class="language-meld">{{textvar}}                    # Text variable reference
-{{textvar&gt;&gt;(format)}}         # Formatted text variable
+<p>Syntax: <code>@identifier</code> in regular text, <code>{{identifier}}</code> in templates</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token variable variable">@textvar</span>                       # Text variable reference
+<span class="token template-block"><span class="token punctuation">[[</span>Content with <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">textvar</span><span class="token punctuation">}}</span></span><span class="token punctuation">]]</span></span>   # Variable in template
 </code></pre>
 <h3 id="data-variables" tabindex="-1">Data Variables</h3>
-<p>Syntax: <code>{{identifier}}</code></p>
-<pre><code class="language-meld">{{datavar}}                    # Data variable reference
-{{datavar.field}}             # Data variable field access
-{{datavar.0}}                 # Array element access (use dot notation)
-{{datavar.field&gt;&gt;(format)}}   # Formatted data field access
+<p>Syntax: <code>@identifier</code> in regular text, <code>{{identifier}}</code> in templates</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token variable variable">@datavar</span>                       # Data variable reference
+<span class="token variable variable">@datavar</span><span class="token field-access property">.field</span>                 # Data variable field access
+<span class="token variable variable">@datavar</span><span class="token path"><span class="token punctuation">[</span>0<span class="token punctuation">]</span></span>                    # Array element access
+<span class="token template-block"><span class="token punctuation">[[</span>Content: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">datavar.field</span><span class="token punctuation">}}</span></span><span class="token punctuation">]]</span></span> # Variable in template
 </code></pre>
 <h2 id="code-fences" tabindex="-1">Code Fences</h2>
 <p>Triple backticks that:</p>
@@ -266,69 +355,67 @@ $PROJECTPATH or $.   # Special path variable for project root
 <li>Support nesting with different numbers of backticks</li>
 </ul>
 <p>Example:</p>
-<pre><code class="language-meld">​```python
-def hello():
-    print(&quot;Hi&quot;)  # @text directives here are preserved as-is
+<pre class="language-mlld"><code class="language-mlld">​```python
+def hello<span class="token punctuation">(</span><span class="token punctuation">)</span>:
+    print<span class="token punctuation">(</span><span class="token string">"Hi"</span><span class="token punctuation">)</span>  # <span class="token directive keyword">@text</span> directives here are preserved <span class="token operator">as</span>-is
 ​```
 </code></pre>
 <h2 id="directive-patterns" tabindex="-1">Directive Patterns</h2>
-<h3 id="%40embed" tabindex="-1">@embed</h3>
-<pre><code class="language-meld">@embed [path]
-@embed [path # section_text]
-@embed [path] as ###                    # ### parsed as count of # chars
-@embed [path # section_text] as ###
-@embed [path] under header_text
+<h3 id="%40add" tabindex="-1">@add</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>path # section_text<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span> <span class="token operator">as</span> <span class="token string">"# New Title"</span>           # Rename section
+<span class="token directive keyword">@add</span> <span class="token string">"Section"</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token string">"Section"</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span> <span class="token operator">as</span> <span class="token string">"# New Title"</span>
 </code></pre>
 <h3 id="%40run" tabindex="-1">@run</h3>
-<pre><code class="language-meld">@run [command_text]
-@run [command_text] under header_text
-@run [$command({{textvar1}}, {{textvar2}})]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(command_text)<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(language code_text)<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@run</span> <span class="token variable variable">@command</span><span class="token punctuation">(</span><span class="token variable variable">@var1</span><span class="token punctuation">,</span> <span class="token variable variable">@var2</span><span class="token punctuation">)</span>
 </code></pre>
 <h3 id="%40import" tabindex="-1">@import</h3>
-<pre><code class="language-meld">@import [path]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@import</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span>
 </code></pre>
-<h3 id="%40define" tabindex="-1">@define</h3>
-<pre><code class="language-meld">@define identifier = @run [content]
-@define command(param1, param2) = @run [content {{param1}} {{param2}}]
-@define command.risk = &quot;description&quot;
-@define command.about = &quot;description&quot;
-@define command.meta = &quot;description&quot;
+<h3 id="%40exec" tabindex="-1">@exec</h3>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@exec</span> identifier = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(content)<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> command<span class="token punctuation">(</span>param1<span class="token punctuation">,</span> param2<span class="token punctuation">)</span> = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(content @param1 @param2)<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@exec</span> command = <span class="token directive keyword">@run</span> js <span class="token path"><span class="token punctuation">[</span>(code)<span class="token punctuation">]</span></span>
 </code></pre>
 <h3 id="%40text" tabindex="-1">@text</h3>
-<pre><code class="language-meld">@text identifier = &quot;value&quot;
-@text identifier = @embed [content]
-@text identifier = @run [command]
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> identifier = <span class="token string">"value"</span>
+<span class="token directive keyword">@text</span> identifier = <span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>content<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@text</span> identifier = <span class="token directive keyword">@run</span> <span class="token path"><span class="token punctuation">[</span>(command)<span class="token punctuation">]</span></span>
 </code></pre>
 <h3 id="%40path" tabindex="-1">@path</h3>
-<pre><code class="language-meld">@path identifier = &quot;$HOMEPATH/path&quot;
-@path identifier = &quot;$~/path&quot;
-@path identifier = &quot;$PROJECTPATH/path&quot;
-@path identifier = &quot;$./path&quot;
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@path</span> identifier = <span class="token path"><span class="token punctuation">[</span>@~/path<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@path</span> identifier = <span class="token path"><span class="token punctuation">[</span>@./path<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@path</span> identifier = <span class="token path"><span class="token punctuation">[</span>/absolute/path<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@path</span> identifier = <span class="token path"><span class="token punctuation">[</span>relative/path<span class="token punctuation">]</span></span>
 </code></pre>
 <h3 id="%40data" tabindex="-1">@data</h3>
-<pre><code class="language-meld">@data identifier = value
-@data identifier : schema = value
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@data</span> identifier = value
+<span class="token directive keyword">@data</span> identifier : schema = value
 </code></pre>
 <h2 id="string-concatenation" tabindex="-1">String Concatenation</h2>
 <p>Uses the <code>++</code> operator with required spaces on both sides:</p>
-<pre><code class="language-meld">@text greeting = &quot;Hello&quot; ++ &quot; &quot; ++ &quot;World&quot;
-@text message = {{intro}} ++ {{body}}
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> greeting = <span class="token string">"Hello"</span> ++ <span class="token string">" "</span> ++ <span class="token string">"World"</span>
+<span class="token directive keyword">@text</span> message = <span class="token variable variable">@intro</span> ++ <span class="token variable variable">@body</span>
 </code></pre>
 <h2 id="template-literals" tabindex="-1">Template Literals</h2>
 <p>Delimited by backticks (`):</p>
-<pre><code class="language-meld">`Hello {{name}}!`                        # Text variable
-`Config: {{config.name}}`                # Data variable with field
-`{{greeting}}, your ID is {{user.id}}`    # Mixed variables
+<pre class="language-mlld"><code class="language-mlld">`Hello <span class="token punctuation">{</span><span class="token punctuation">{</span>name<span class="token punctuation">}</span><span class="token punctuation">}</span>!`                        # Text variable
+`Config: <span class="token punctuation">{</span><span class="token punctuation">{</span>config<span class="token field-access property">.name</span><span class="token punctuation">}</span><span class="token punctuation">}</span>`                # Data variable <span class="token operator">with</span> field
+`<span class="token punctuation">{</span><span class="token punctuation">{</span>greeting<span class="token punctuation">}</span><span class="token punctuation">}</span><span class="token punctuation">,</span> your ID is <span class="token punctuation">{</span><span class="token punctuation">{</span>user<span class="token field-access property">.id</span><span class="token punctuation">}</span><span class="token punctuation">}</span>`    # Mixed variables
 </code></pre>
 <p>Multi-line template literals:</p>
-<pre><code class="language-meld">@text prompt = [[`
-  System: {{role}}
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> prompt = <span class="token template-block"><span class="token punctuation">[[</span>`
+  System: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">role</span><span class="token punctuation">}}</span></span>
   
   Context:
-  {{context.data}}
+  <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">context.data</span><span class="token punctuation">}}</span></span>
   
-  User: {{username}}
-`]]
+  User: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">username</span><span class="token punctuation">}}</span></span>
+`<span class="token punctuation">]]</span></span>
 </code></pre>
 <h2 id="variable-interpolation-rules" tabindex="-1">Variable Interpolation Rules</h2>
 <p>Variable references are allowed in:</p>
@@ -411,7 +498,7 @@ def hello():
 
   <footer>
     <div class="container">
-      <p>&copy; 2025 meld - <a href="https://github.com/meldorg/meld">GitHub</a></p>
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
     </div>
   </footer>
 </body>

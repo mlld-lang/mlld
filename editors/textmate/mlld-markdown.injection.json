@@ -1,0 +1,188 @@
+{
+  "scopeName": "markdown.mlld.injection",
+  "injectionSelector": "text.html.markdown, text.html.markdown.source",
+  "patterns": [
+    {
+      "begin": "^(@(data|text|run|add|path|import|exec|when|output)\\b)",
+      "end": "$",
+      "name": "meta.embedded.block.mlld",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.directive.mlld"
+        }
+      },
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.mlld",
+          "match": "(>>|<<).*$"
+        },
+        {
+          "name": "variable.language.reserved.mlld",
+          "match": "@(INPUT|TIME|PROJECTPATH|input|time|projectpath|Input|Time|ProjectPath|STDIN|stdin|Stdin)\\b"
+        },
+        {
+          "name": "variable.language.reserved.mlld",
+          "match": "@\\."
+        },
+        {
+          "name": "keyword.other.language.mlld",
+          "match": "\\b(javascript|js|python|py|bash|sh)\\b"
+        },
+        {
+          "name": "string.template.mlld",
+          "begin": "\\[\\[",
+          "end": "\\]\\]",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.template.begin.mlld"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.template.end.mlld"
+            }
+          },
+          "patterns": [
+            {
+              "name": "variable.template.mlld",
+              "begin": "\\{\\{",
+              "end": "\\}\\}",
+              "beginCaptures": {
+                "0": {
+                  "name": "punctuation.definition.template.variable.begin.mlld"
+                }
+              },
+              "endCaptures": {
+                "0": {
+                  "name": "punctuation.definition.template.variable.end.mlld"
+                }
+              },
+              "patterns": [
+                {
+                  "name": "variable.other.interpolation.mlld",
+                  "match": "[^}]+"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "meta.command.mlld",
+          "begin": "\\[\\(",
+          "end": "\\)\\]",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.command.begin.mlld"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.command.end.mlld"
+            }
+          },
+          "contentName": "string.unquoted.command.mlld",
+          "patterns": [
+            {
+              "name": "variable.language.reserved.mlld",
+              "match": "@(INPUT|TIME|PROJECTPATH|input|time|projectpath|Input|Time|ProjectPath|STDIN|stdin|Stdin)\\b"
+            },
+            {
+              "name": "variable.other.mlld",
+              "match": "@\\w+"
+            }
+          ]
+        },
+        {
+          "name": "meta.path.mlld",
+          "begin": "\\[",
+          "end": "\\]",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.path.begin.mlld"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.path.end.mlld"
+            }
+          },
+          "patterns": [
+            {
+              "name": "markup.underline.link.mlld",
+              "match": "https?://[^\\]]+"
+            },
+            {
+              "name": "variable.language.reserved.mlld",
+              "match": "@(INPUT|TIME|PROJECTPATH|input|time|projectpath|Input|Time|ProjectPath|STDIN|stdin|Stdin)\\b"
+            },
+            {
+              "name": "variable.other.mlld",
+              "match": "@\\w+"
+            }
+          ]
+        },
+        {
+          "name": "meta.import.mlld",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.import.begin.mlld"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.import.end.mlld"
+            }
+          },
+          "patterns": [
+            {
+              "name": "variable.other.import.mlld",
+              "match": "\\w+"
+            },
+            {
+              "name": "punctuation.separator.comma.mlld",
+              "match": ","
+            },
+            {
+              "name": "keyword.operator.star.mlld",
+              "match": "\\*"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.mlld",
+          "match": "\"[^\"]*\""
+        },
+        {
+          "name": "variable.other.member.mlld",
+          "match": "\\.(\\w+|\\d+)"
+        },
+        {
+          "name": "keyword.operator.mlld",
+          "match": "\\b(from|as|foreach|with|to)\\b"
+        },
+        {
+          "name": "keyword.operator.assignment.mlld",
+          "match": "="
+        },
+        {
+          "name": "constant.numeric.mlld",
+          "match": "\\b\\d+(\\.\\d+)?\\b"
+        },
+        {
+          "name": "constant.language.boolean.mlld",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.mlld",
+          "match": "\\bnull\\b"
+        },
+        {
+          "name": "variable.other.mlld",
+          "match": "@\\w+"
+        }
+      ]
+    }
+  ]
+}

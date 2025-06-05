@@ -1,8 +1,7 @@
 import winston from 'winston';
 import path from 'path';
-import { loggingConfig } from '@core/config/logging.js';
-import { injectable, singleton } from 'tsyringe';
-import { Service } from '@core/ServiceProvider.js';
+import { loggingConfig } from '@core/config/logging';
+// Removed tsyringe imports - no longer using dependency injection
 import fs from 'fs';
 
 /**
@@ -80,11 +79,6 @@ const getLogLevel = () => {
 /**
  * Factory service for creating Winston loggers
  */
-@injectable()
-@singleton()
-@Service({
-  providedIn: 'root'
-})
 export class LoggerFactory implements ILoggerFactory {
   /**
    * Create a service-specific logger

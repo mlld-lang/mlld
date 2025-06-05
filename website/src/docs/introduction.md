@@ -1,15 +1,15 @@
 ---
 layout: docs.njk
-title: "Introduction to Meld"
+title: "Introduction to Mlld"
 ---
 
-# Introduction to Meld
+# Introduction to Mlld
 
-Meld is a simple and constrained scripting language designed for use within markdown-like documents. It allows you to create dynamic content by interpreting special directive lines while preserving all other content as-is.
+Mlld is a simple and constrained scripting language designed for use within markdown-like documents. It allows you to create dynamic content by interpreting special directive lines while preserving all other content as-is.
 
 ## Core Concepts
 
-Meld works by processing only lines that begin with directives (like `@text`, `@run`, etc.) while treating all other content as literal text. This makes it ideal for creating dynamic, templated documents.
+Mlld works by processing only lines that begin with directives (like `@text`, `@run`, etc.) while treating all other content as literal text. This makes it ideal for creating dynamic, templated documents.
 
 ### Key Features
 
@@ -20,7 +20,7 @@ Meld works by processing only lines that begin with directives (like `@text`, `@
 
 ## Basic Example
 
-```meld
+```mlld
 @text name = "World"
 @path docs = "$./docs"
 
@@ -30,13 +30,13 @@ This line will be interpreted as plain text.
 This will remain a codefence.
 ```
 
-@embed [[
+@add [[
     Hello, {{name}}!
 ]]
 
-@embed [$docs/example.md]
+@add [$docs/example.md]
 
-@run [echo "Current time: $(date)"]
+@run [(echo "Current time: $(date)")]
 ```
 
 This example:
@@ -49,5 +49,5 @@ This example:
 ## Next Steps
 
 - Learn about [variables and interpolation](./variables.md)
-- Explore the [directives](./directives/README.md) available in Meld
+- Explore the [directives](./directives/README.md) available in Mlld
 - Check the complete [grammar reference](./grammar-reference.md) for detailed syntax

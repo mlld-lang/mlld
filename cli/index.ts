@@ -1,26 +1,26 @@
-import 'reflect-metadata';
-import '@core/di-config.js';
-
-// CLI initialization
-
-import { main as apiMain } from '@api/index.js';
-import { version } from '@core/version.js';
-import { cliLogger as logger } from '@core/utils/logger.js';
-import { loggingConfig } from '@core/config/logging.js';
-import { IFileSystem } from '@services/fs/FileSystemService/IFileSystem.js';
-import { createInterface } from 'readline';
-import { initCommand } from './commands/init.js';
-import { ProcessOptions } from '../core/types/index.js';
-import { MeldError, ErrorSeverity } from '@core/errors/MeldError.js';
-import fs from 'fs/promises';
-import path from 'path';
+import * as path from 'path';
+import * as fs from 'fs/promises';
 import { watch } from 'fs/promises';
-import { NodeFileSystem } from '@services/fs/FileSystemService/NodeFileSystem.js';
-import { debugResolutionCommand } from './commands/debug-resolution.js';
-import { debugContextCommand } from './commands/debug-context.js';
-import { debugTransformCommand } from './commands/debug-transform.js';
-import chalk from 'chalk';
 import { existsSync } from 'fs';
+import { createInterface } from 'readline';
+import { initCommand } from './commands/init';
+import { registryCommand } from './commands/registry';
+import { createInstallCommand } from './commands/install';
+import { createLsCommand } from './commands/ls';
+import { createInfoCommand } from './commands/info';
+import chalk from 'chalk';
+import { version } from '@core/version';
+import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
+import { PathService } from '@services/fs/PathService';
+import { OutputPathService } from '@services/fs/OutputPathService';
+import { interpret } from '@interpreter/index';
+import type { IFileSystemService } from '@services/fs/IFileSystemService';
+import type { IPathService } from '@services/fs/IPathService';
+import { logger, cliLogger } from '@core/utils/logger';
+import { ConfigLoader } from '@core/config/loader';
+import type { ResolvedURLConfig, ResolvedOutputConfig } from '@core/config/types';
+import { ErrorFormatSelector } from '@core/utils/errorFormatSelector';
 
 // CLI Options interface
 export interface CLIOptions {
@@ -50,24 +50,40 @@ export interface CLIOptions {
   includeContent?: boolean;
   debugSourceMaps?: boolean; // Flag to display source mapping information
   detailedSourceMaps?: boolean; // Flag to display detailed source mapping information
-  useDI?: boolean; // Flag to enable/disable DI
+  pretty?: boolean; // Flag to enable Prettier formatting
+  // URL support options
+  allowUrls?: boolean;
+  urlTimeout?: number;
+  urlMaxSize?: number;
+  urlAllowedDomains?: string[];
+  urlBlockedDomains?: string[];
   // No transform options - transformation is always enabled
+  // Output management options
+  maxOutputLines?: number;
+  showProgress?: boolean;
+  errorBehavior?: 'halt' | 'continue';
+  collectErrors?: boolean;
+  progressStyle?: 'emoji' | 'text';
+  showCommandContext?: boolean;
 }
 
 /**
  * Normalize format string to supported output format
  */
 function normalizeFormat(format?: string): 'markdown' | 'xml' {
-  if (!format) return 'markdown';
+  if (!format) return 'markdown'; // Default to markdown, not llm
   
   switch (format.toLowerCase()) {
     case 'md':
     case 'markdown':
       return 'markdown';
     case 'xml':
-      return 'xml'; // Return 'xml' for XML format
+      return 'xml';
+    // Removed 'llm' case to match return type
     default:
-      return 'markdown';
+      // Consider throwing an error for invalid format or defaulting
+      logger.warn(`Invalid format specified: ${format}. Defaulting to markdown.`);
+      return 'markdown'; // Default to markdown
   }
 }
 
@@ -86,9 +102,44 @@ function getOutputExtension(format: 'markdown' | 'xml'): string {
 }
 
 /**
+ * Parse flags from command line arguments
+ */
+function parseFlags(args: string[]): Record<string, any> {
+  const flags: Record<string, any> = {};
+  
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg.startsWith('--')) {
+      const key = arg.slice(2);
+      if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+        flags[key] = args[++i];
+      } else {
+        flags[key] = true;
+      }
+    } else if (arg.startsWith('-') && arg.length > 1) {
+      const key = arg.slice(1);
+      if (i + 1 < args.length && !args[i + 1].startsWith('-')) {
+        flags[key] = args[++i];
+      } else {
+        flags[key] = true;
+      }
+    }
+  }
+  
+  return flags;
+}
+
+/**
  * Parse command line arguments
  */
 function parseArgs(args: string[]): CLIOptions {
+  // Add defensive check
+  if (!Array.isArray(args)) {
+    console.error('Internal CLI Error: args is not an array in parseArgs', args);
+    throw new TypeError('Internal CLI Error: Expected args to be an array.');
+  }
+
   const options: CLIOptions = {
     input: '',
     format: 'markdown', // Default to markdown format
@@ -212,22 +263,6 @@ function parseArgs(args: string[]): CLIOptions {
       case '-h':
         options.help = true;
         break;
-      // Add DI related options
-      case '--use-di':
-        options.useDI = true;
-        break;
-      case '--no-di':
-        options.useDI = false;
-        break;
-      // Add new debug-resolution options
-      case '--var':
-      case '--variable':
-      case '--variable-name':
-        options.variableName = args[++i];
-        break;
-      case '--output-format':
-        options.outputFormat = args[++i] as 'json' | 'text' | 'mermaid';
-        break;
       // Add directive type option for debug-transform
       case '--directive':
         options.directiveType = args[++i];
@@ -235,6 +270,57 @@ function parseArgs(args: string[]): CLIOptions {
       // Add include-content option for debug-transform
       case '--include-content':
         options.includeContent = true;
+        break;
+      case '--pretty':
+        options.pretty = true;
+        break;
+      // URL support options
+      case '--allow-urls':
+        options.allowUrls = true;
+        break;
+      case '--url-timeout':
+        options.urlTimeout = parseInt(args[++i]);
+        if (isNaN(options.urlTimeout)) {
+          throw new Error('--url-timeout must be a number');
+        }
+        break;
+      case '--url-max-size':
+        options.urlMaxSize = parseInt(args[++i]);
+        if (isNaN(options.urlMaxSize)) {
+          throw new Error('--url-max-size must be a number');
+        }
+        break;
+      case '--url-allowed-domains':
+        options.urlAllowedDomains = args[++i].split(',').filter(Boolean);
+        break;
+      case '--url-blocked-domains':
+        options.urlBlockedDomains = args[++i].split(',').filter(Boolean);
+        break;
+      // Output management options
+      case '--max-output-lines':
+        options.maxOutputLines = parseInt(args[++i]);
+        if (isNaN(options.maxOutputLines) || options.maxOutputLines < 0) {
+          throw new Error('--max-output-lines must be a positive number');
+        }
+        break;
+      case '--show-progress':
+        options.showProgress = true;
+        break;
+      case '--no-progress':
+        options.showProgress = false;
+        break;
+      case '--error-behavior':
+        const behavior = args[++i];
+        if (behavior !== 'halt' && behavior !== 'continue') {
+          throw new Error('--error-behavior must be "halt" or "continue"');
+        }
+        options.errorBehavior = behavior;
+        break;
+      case '--collect-errors':
+        options.collectErrors = true;
+        break;
+      case '--show-command-context':
+        options.showCommandContext = true;
         break;
       // Transformation is always enabled by default
       // No transform flags needed
@@ -259,11 +345,36 @@ function parseArgs(args: string[]): CLIOptions {
  * Display help information
  */
 function displayHelp(command?: string) {
+  if (command === 'registry') {
+    console.log(`
+Usage: mlld registry <subcommand> [options]
+
+Manage mlld module registry.
+
+Subcommands:
+  install              Install all modules from lock file
+  update [module]      Update module(s) to latest version
+  audit                Check for security advisories
+  search <query>       Search for modules
+  info <module>        Show module details
+  stats                Show local usage statistics
+  stats share          Share anonymous usage statistics
+  outdated             Show outdated modules
+
+Examples:
+  mlld registry search json
+  mlld registry info adamavenir/json-utils
+  mlld registry update
+  mlld registry audit
+    `);
+    return;
+  }
+  
   if (command === 'debug-resolution') {
     console.log(`
-Usage: meld debug-resolution [options] <input-file>
+Usage: mlld debug-resolution [options] <input-file>
 
-Debug variable resolution in a Meld file.
+Debug variable resolution in a Mlld file.
 
 Options:
   --var, --variable <n>     Filter to a specific variable
@@ -278,7 +389,7 @@ Options:
   
   if (command === 'debug-transform') {
     console.log(`
-Usage: meld debug-transform [options] <input-file>
+Usage: mlld debug-transform [options] <input-file>
 
 Debug node transformations through the pipeline.
 
@@ -294,11 +405,15 @@ Options:
   }
 
   console.log(`
-Usage: meld [command] [options] <input-file>
+Usage: mlld [command] [options] <input-file>
 
 Commands:
-  init                    Create a new Meld project
-  debug-resolution        Debug variable resolution in a Meld file
+  init                    Create a new Mlld project
+  install, i              Install mlld modules
+  ls, list               List installed modules
+  info, show             Show module details
+  registry                Manage mlld module registry
+  debug-resolution        Debug variable resolution in a Mlld file
   debug-transform         Debug node transformations through the pipeline
 
 Options:
@@ -307,14 +422,35 @@ Options:
   --stdout                Print to stdout instead of file
   --strict                Enable strict mode (fail on all errors)
   --permissive            Enable permissive mode (ignore recoverable errors) [default]
+  --pretty                Format the output with Prettier
   --home-path <path>      Custom home path for ~/ substitution
   -v, --verbose           Enable verbose output (some additional info)
   -d, --debug             Enable debug output (full verbose logging)
   -w, --watch             Watch for changes and reprocess
-  --use-di                Enable dependency injection (USE_DI=true)
-  --no-di                 Disable dependency injection (USE_DI=false)
   -h, --help              Display this help message
   -V, --version           Display version information
+
+URL Support Options:
+  --allow-urls            Enable URL support in directives
+  --url-timeout <ms>      URL request timeout in milliseconds [default: 30000]
+  --url-max-size <bytes>  Maximum URL response size [default: 5242880]
+  --url-allowed-domains   Comma-separated list of allowed domains
+  --url-blocked-domains   Comma-separated list of blocked domains
+
+Output Management Options:
+  --max-output-lines <n>  Limit command output to n lines [default: 50]
+  --show-progress         Show command execution progress [default: true]
+  --no-progress           Disable progress display
+  --error-behavior <mode> How to handle command failures: halt, continue [default: continue]
+  --collect-errors        Collect errors and display summary at end
+  --show-command-context  Show source context for command execution errors
+
+Configuration:
+  Mlld looks for configuration in:
+  1. ~/.config/mlld.json (global/user config)
+  2. mlld.config.json (project config)
+  
+  CLI options override configuration file settings.
   `);
 
   if (!command || command === 'debug-context') {
@@ -342,14 +478,10 @@ async function confirmOverwrite(filePath: string): Promise<{ outputPath: string;
   // Get the current CLI options from the outer scope
   const cliOptions = getCurrentCLIOptions();
   
-  // For .md files, auto-redirect to .o.md unless explicitly set with -o
-  if (filePath.endsWith(".md") && !cliOptions.output) {
-    console.log("Auto-redirecting .md file to prevent overwrite");
-    const baseName = filePath.slice(0, -3); // Remove .md extension
-    const newOutputPath = `${baseName}.o.md`;
-    if (!(await fs.access(newOutputPath).then(() => true).catch(() => false))) {
-      return { outputPath: newOutputPath, shouldOverwrite: true };
-    }
+  // If output path was not explicitly set, we're using the safe path from OutputPathService
+  // so we can just return it
+  if (!cliOptions.output) {
+    return { outputPath: filePath, shouldOverwrite: true };
   }
   
   // Check if we can use raw mode (might not be available in all environments)
@@ -462,21 +594,11 @@ function findAvailableIncrementalFilename(filePath: string): string {
  * Convert CLI options to API options
  */
 function cliToApiOptions(cliOptions: CLIOptions): ProcessOptions {
-  // Always use transformation mode
-  const options: ProcessOptions = {
+  return {
     format: normalizeFormat(cliOptions.format),
     debug: cliOptions.debug,
-    // Always transform by default
-    transformation: true,
-    fs: cliOptions.custom ? undefined : new NodeFileSystem() // Allow custom filesystem in test mode
+    pretty: cliOptions.pretty,
   };
-  
-  // Add strict property to options for backward compatibility with tests
-  if (cliOptions.strict !== undefined) {
-    (options as any).strict = cliOptions.strict;
-  }
-  
-  return options;
 }
 
 /**
@@ -493,8 +615,8 @@ async function watchFiles(options: CLIOptions): Promise<void> {
     const watcher = watch(watchDir, { recursive: true });
 
     for await (const event of watcher) {
-      // Only process .meld files or the specific input file
-      if (event.filename?.endsWith('.meld') || event.filename === path.basename(inputPath)) {
+      // Only process .mlld files or the specific input file
+      if (event.filename?.endsWith('.mlld') || event.filename === path.basename(inputPath)) {
         console.log(`Change detected in ${event.filename}, reprocessing...`);
         await processFile(options);
       }
@@ -508,166 +630,156 @@ async function watchFiles(options: CLIOptions): Promise<void> {
 }
 
 /**
+ * Read stdin content if available
+ */
+async function readStdinIfAvailable(): Promise<string | undefined> {
+  // Check if stdin is a TTY (terminal) - if so, there's no piped input
+  if (process.stdin.isTTY) {
+    return undefined;
+  }
+  
+  // Read from stdin
+  const chunks: Buffer[] = [];
+  
+  return new Promise((resolve) => {
+    let timeout: NodeJS.Timeout;
+    
+    // Set a short timeout to check if data is available
+    timeout = setTimeout(() => {
+      // No data received within timeout, assume no stdin
+      process.stdin.pause();
+      process.stdin.removeAllListeners('data');
+      process.stdin.removeAllListeners('end');
+      resolve(undefined);
+    }, 100);
+    
+    process.stdin.on('data', (chunk) => {
+      clearTimeout(timeout);
+      chunks.push(chunk);
+    });
+    
+    process.stdin.on('end', () => {
+      clearTimeout(timeout);
+      const content = Buffer.concat(chunks).toString('utf8');
+      resolve(content);
+    });
+    
+    // Start reading
+    process.stdin.resume();
+  });
+}
+
+/**
  * Process a file with specific API options
  */
 async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: ProcessOptions): Promise<void> {
+  const { input, output, format, stdout, debug } = cliOptions;
+  let outputPath = output;
+  const normalizedFormat = normalizeFormat(format); // Use normalized format
+
+
+  if (!stdout && !outputPath) {
+    const outputPathService = new OutputPathService();
+    outputPath = await outputPathService.getSafeOutputPath(input, normalizedFormat, output);
+  }
+
+  if (outputPath && outputPath === input) {
+    console.error('Error: Input and output files cannot be the same.');
+    process.exit(1);
+  }
+
   try {
-    // Show source map debug info before processing if requested
-    if (cliOptions.debugSourceMaps || cliOptions.detailedSourceMaps) {
-      console.log(chalk.cyan('Source map debugging enabled for file:', cliOptions.input));
+    // Create services for the interpreter
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService();
+
+    if (debug) {
+      console.log('CLI Options:', cliOptions);
+      console.log('API Options:', apiOptions);
+      console.log('Output Path:', outputPath);
     }
+
+    // Read the input file using Node's fs directly
+    const fs = await import('fs/promises');
+    const content = await fs.readFile(input, 'utf8');
     
-    // Process the file through the API with provided options
-    const result = await apiMain(cliOptions.input, apiOptions);
+    // Read stdin if available
+    const stdinContent = await readStdinIfAvailable();
     
-    // Show source map debug info after processing if requested
-    if (cliOptions.debugSourceMaps) {
-      try {
-        const { getSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
-        console.log(chalk.cyan('\nSource map debug information:'));
-        console.log(getSourceMapDebugInfo());
-      } catch (e) {
-        console.error('Failed to get source map debug info:', e);
-      }
-    }
+    // Load configuration
+    const configLoader = new ConfigLoader(path.dirname(input));
+    const config = configLoader.load();
+    const urlConfig = configLoader.resolveURLConfig(config);
+    const outputConfig = configLoader.resolveOutputConfig(config);
     
-    // Show detailed source map debug info if requested
-    if (cliOptions.detailedSourceMaps) {
-      try {
-        const { getDetailedSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
-        console.log(chalk.cyan('\nDetailed source map debug information:'));
-        console.log(getDetailedSourceMapDebugInfo());
-      } catch (e) {
-        console.error('Failed to get detailed source map debug info:', e);
-      }
-    }
+    // CLI options override config
+    let finalUrlConfig: ResolvedURLConfig | undefined = urlConfig;
     
-    // Handle output based on CLI options
-    if (cliOptions.stdout) {
-      console.log(result);
-      if (!cliOptions.debug) {
-        console.log('✅ Successfully processed Meld file');
-      } else {
-        logger.info('Successfully wrote output to stdout');
-      }
+    if (cliOptions.allowUrls) {
+      // CLI explicitly enables URLs, override config
+      finalUrlConfig = {
+        enabled: true,
+        allowedDomains: cliOptions.urlAllowedDomains || urlConfig?.allowedDomains || [],
+        blockedDomains: cliOptions.urlBlockedDomains || urlConfig?.blockedDomains || [],
+        allowedProtocols: urlConfig?.allowedProtocols || ['https', 'http'],
+        timeout: cliOptions.urlTimeout || urlConfig?.timeout || 30000,
+        maxSize: cliOptions.urlMaxSize || urlConfig?.maxSize || 5 * 1024 * 1024,
+        warnOnInsecureProtocol: urlConfig?.warnOnInsecureProtocol ?? true,
+        cache: urlConfig?.cache || {
+          enabled: true,
+          defaultTTL: 5 * 60 * 1000,
+          rules: []
+        }
+      };
+    } else if (urlConfig?.enabled && cliOptions.allowUrls !== false) {
+      // Config enables URLs and CLI doesn't explicitly disable
+      finalUrlConfig = urlConfig;
     } else {
-      // Handle output path
-      let outputPath = cliOptions.output;
-      
-      if (!outputPath) {
-        // If no output path specified, use input path with .o.{format} extension pattern
-        const inputPath = cliOptions.input;
-        const inputExt = path.extname(inputPath);
-        const outputExt = getOutputExtension(normalizeFormat(cliOptions.format));
-        
-        // Extract the base filename without extension
-        const basePath = inputPath.substring(0, inputPath.length - inputExt.length);
-        
-        // Always append .o.{format} for default behavior
-        outputPath = `${basePath}.o${outputExt}`;
-      } else if (!outputPath.includes('.')) {
-        // If output path has no extension, add default extension
-        outputPath += getOutputExtension(normalizeFormat(cliOptions.format));
-      }
-      
-      // In test mode with custom filesystem, we might need special handling
-      if (cliOptions.custom && apiOptions.fs) {
-        // Use the filesystem from API options if available
-        const fs = apiOptions.fs;
-        if (typeof fs.writeFile === 'function') {
-          // Check if file exists first
-          const fileExists = await fs.exists(outputPath);
-          if (fileExists) {
-            const { outputPath: confirmedPath, shouldOverwrite } = await confirmOverwrite(outputPath);
-            if (!shouldOverwrite) {
-              logger.info('Operation cancelled by user');
-              return;
-            }
-            // Update the output path with the confirmed path
-            outputPath = confirmedPath;
-          }
-          await fs.writeFile(outputPath, result);
-          logger.info('Successfully wrote output file using custom filesystem', { path: outputPath });
-          return;
-        }
-      }
-      
-      // Standard file system operations
-      const fileExists = await fs.access(outputPath).then(() => true).catch(() => false);
-      if (fileExists) {
-        const { outputPath: confirmedPath, shouldOverwrite } = await confirmOverwrite(outputPath);
-        if (!shouldOverwrite) {
-          logger.info('Operation cancelled by user');
-          return;
-        }
-        // Update the output path with the confirmed path
-        outputPath = confirmedPath;
-      }
-      
-      await fs.writeFile(outputPath, result);
-      
-      // Show a clean success message in normal mode
-      if (!cliOptions.debug) {
-        console.log(`✅ Successfully processed Meld file and wrote output to ${outputPath}`);
-      } else {
-        logger.info('Successfully wrote output file', { path: outputPath });
-      }
-    }
-  } catch (error) {
-    // Show source map debug info on error if requested
-    if (cliOptions.debugSourceMaps) {
-      try {
-        const { getSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
-        console.log(chalk.cyan('\nSource map debug information (on error):'));
-        console.log(getSourceMapDebugInfo());
-      } catch (e) {
-        console.error('Failed to get source map debug info:', e);
-      }
+      // URLs disabled
+      finalUrlConfig = undefined;
     }
     
-    // Show detailed source map debug info on error if requested
-    if (cliOptions.detailedSourceMaps) {
-      try {
-        const { getDetailedSourceMapDebugInfo } = require('@core/utils/sourceMapUtils.js');
-        console.log(chalk.cyan('\nDetailed source map debug information (on error):'));
-        console.log(getDetailedSourceMapDebugInfo());
-      } catch (e) {
-        console.error('Failed to get detailed source map debug info:', e);
+    // Use the new interpreter
+    const result = await interpret(content, {
+      basePath: path.resolve(path.dirname(input)),
+      filePath: path.resolve(input), // Pass the current file path for error reporting
+      format: normalizedFormat,
+      fileSystem: fileSystem,
+      pathService: pathService,
+      strict: cliOptions.strict,
+      urlConfig: finalUrlConfig,
+      stdinContent: stdinContent,
+      outputOptions: {
+        showProgress: cliOptions.showProgress !== undefined ? cliOptions.showProgress : outputConfig.showProgress,
+        maxOutputLines: cliOptions.maxOutputLines !== undefined ? cliOptions.maxOutputLines : outputConfig.maxOutputLines,
+        errorBehavior: cliOptions.errorBehavior || outputConfig.errorBehavior,
+        collectErrors: cliOptions.collectErrors !== undefined ? cliOptions.collectErrors : outputConfig.collectErrors,
+        showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext
       }
-    }
-    
-    // Convert to MeldError if needed
-    const meldError = error instanceof MeldError 
-      ? error 
-      : new MeldError(error instanceof Error ? error.message : String(error), {
-          severity: ErrorSeverity.Fatal,
-          code: 'PROCESSING_ERROR'
-        });
-    
-    // Log the error for detailed debugging
-    logger.error('Error processing file', {
-      error: meldError.message,
-      code: meldError.code,
-      severity: meldError.severity
     });
-    
-    // Format error message appropriately for tests vs. normal mode
-    if (process.env.NODE_ENV === 'test') {
-      console.error(`Error: ${meldError.message}`);
-    } else if (!cliOptions.debug) {
-      // For regular users, we want to show the source location if available
-      if (meldError.filePath && meldError.context?.sourceLocation) {
-        const sourceLocation = meldError.context.sourceLocation;
-        console.error(`Error in ${sourceLocation.filePath}:${sourceLocation.line}: ${meldError.message}`);
-      } else if (meldError.filePath) {
-        console.error(`Error in ${meldError.filePath}: ${meldError.message}`);
+
+    // Output handling (remains mostly the same)
+    if (stdout) {
+      console.log(result);
+    } else if (outputPath) {
+      const { outputPath: finalPath, shouldOverwrite } = await confirmOverwrite(outputPath);
+      if (shouldOverwrite) {
+        // Use Node's fs directly
+        const dirPath = path.dirname(finalPath);
+        
+        // Ensure the output directory exists
+        await fs.mkdir(dirPath, { recursive: true });
+        
+        // Write the file
+        await fs.writeFile(finalPath, result, 'utf8');
+        console.log(`\nOutput written to ${finalPath}`);
       } else {
-        console.error(`Error: ${meldError.message}`);
+        console.log('Operation cancelled by user.');
       }
     }
-    
-    // Rethrow for the main function to handle
-    throw meldError;
+  } catch (error: any) {
+    await handleError(error, cliOptions);
+    throw error;
   }
 }
 
@@ -707,7 +819,7 @@ const seenErrors = new Set<string>();
 let bypassDeduplication = false;
 
 // Check if error deduplication should be completely disabled
-const disableDeduplication = !!(global as any).MELD_DISABLE_ERROR_DEDUPLICATION;
+const disableDeduplication = !!(global as any).MLLD_DISABLE_ERROR_DEDUPLICATION;
 
 // Store the original console.error
 const originalConsoleError = console.error;
@@ -742,73 +854,149 @@ console.error = function(...args: any[]) {
   originalConsoleError.apply(console, args);
 };
 
-/**
- * Main CLI entry point
- * 
- * @param fsAdapter Optional filesystem adapter for testing
- * @param customArgs Optional command line arguments (defaults to process.argv.slice(2))
- */
-export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void> {
-  process.title = 'meld';
+// Moved handleError definition before main
+async function handleError(error: any, options: CLIOptions): Promise<void> {
+  const isMlldError = error instanceof MlldError;
+  const isCommandError = error.constructor.name === 'MlldCommandExecutionError';
+  const severity = isMlldError ? error.severity : ErrorSeverity.Fatal;
 
-  // Reset errorLogged flag for each invocation of main
-  errorLogged = false;
-  
-  // Clear the set of seen errors
-  seenErrors.clear();
+  // Ensure the logger configuration matches CLI options
+  logger.level = options.debug ? 'debug' : (options.verbose ? 'info' : 'warn');
 
-  // Explicitly disable debug mode by default
-  process.env.DEBUG = '';
-  
-  // Parse command-line arguments
-  const args = customArgs || process.argv.slice(2);
-  
-  // Define options outside try block so it's accessible in catch block
-  let options: CLIOptions = {
-    input: '',
-  };
-  
-  try {
-    // Parse command-line arguments
-    options = parseArgs(args);
+  if (isMlldError) {
+    // Use enhanced error formatting with auto-detection
+    const fileSystem = new NodeFileSystem();
+    const errorFormatter = new ErrorFormatSelector(fileSystem);
     
-    // Store the current CLI options for access by other functions
-    setCurrentCLIOptions(options);
-    
-    // Apply DI setting to environment if specified
-    if (options.useDI !== undefined) {
-      process.env.USE_DI = options.useDI ? 'true' : 'false';
-      if (options.verbose) {
-        console.log(`Dependency Injection ${options.useDI ? 'enabled' : 'disabled'}`);
+    try {
+      let result: string;
+      
+      if (isCommandError && options.showCommandContext) {
+        // Enhanced formatting for command errors with full context
+        result = await errorFormatter.formatForCLI(error, {
+          useColors: true,
+          useSourceContext: true,
+          useSmartPaths: true,
+          basePath: path.resolve(path.dirname(options.input)),
+          workingDirectory: process.cwd(),
+          contextLines: 3 // More context for command errors
+        });
+      } else {
+        // Standard formatting
+        result = await errorFormatter.formatForCLI(error, {
+          useColors: true,
+          useSourceContext: true,
+          useSmartPaths: true,
+          basePath: path.resolve(path.dirname(options.input)),
+          workingDirectory: process.cwd(),
+          contextLines: 2
+        });
       }
+      
+      console.error('\n' + result + '\n');
+    } catch (formatError) {
+      // Fallback to basic API format if enhanced formatting fails
+      const fallbackFormatter = new ErrorFormatSelector();
+      const result = fallbackFormatter.formatForAPI(error);
+      console.error('\n' + result.formatted + '\n');
     }
+  } else if (error instanceof Error) {
+    logger.error('An unexpected error occurred:', error);
+    console.error(chalk.red(`Unexpected Error: ${error.message}`));
+    const cause = error.cause;
+    if (cause instanceof Error) {
+        console.error(chalk.red(`  Cause: ${cause.message}`));
+    }
+    if (error.stack) {
+      console.error(chalk.gray(error.stack));
+    }
+  } else {
+    logger.error('An unknown error occurred:', { error });
+    console.error(chalk.red(`Unknown Error: ${String(error)}`));
+  }
+
+  if (severity === ErrorSeverity.Fatal) {
+    process.exit(1);
+  }
+}
+
+/**
+ * Central entry point for the CLI, parsing arguments and orchestrating file processing.
+ * Allows injecting a filesystem adapter for testing.
+ */
+export async function main(customArgs?: string[]): Promise<void> {
+  process.title = 'mlld';
+  let cliOptions: CLIOptions = { input: '' }; // Initialize with default
+
+  try {
+    // Reset errorLogged flag for each invocation of main
+    errorLogged = false;
+    
+    // Clear the set of seen errors
+    seenErrors.clear();
+
+    // Explicitly disable debug mode by default
+    process.env.DEBUG = '';
+    
+    // Parse command-line arguments
+    const args = customArgs || process.argv.slice(2);
+    
+    cliOptions = parseArgs(args); // Assign parsed options
+    setCurrentCLIOptions(cliOptions);
     
     // Handle version flag
-    if (options.version) {
-      console.log(`meld version ${version}`);
+    if (cliOptions.version) {
+      console.log(`mlld version ${version}`);
       return;
     }
 
     // Handle help flag
-    if (options.help) {
+    if (cliOptions.help) {
       displayHelp(args[0]);
       return;
     }
     
     // Handle init command
-    if (options.input === 'init') {
+    if (cliOptions.input === 'init') {
       await initCommand();
       return;
     }
     
+    // Handle registry command
+    if (cliOptions.input === 'registry') {
+      await registryCommand(args.slice(1));
+      return;
+    }
+    
+    // Handle install command
+    if (cliOptions.input === 'install' || cliOptions.input === 'i') {
+      const installCmd = createInstallCommand();
+      await installCmd.execute(args.slice(1), parseFlags(args));
+      return;
+    }
+    
+    // Handle ls command
+    if (cliOptions.input === 'ls' || cliOptions.input === 'list') {
+      const lsCmd = createLsCommand();
+      await lsCmd.execute(args.slice(1), parseFlags(args));
+      return;
+    }
+    
+    // Handle info command
+    if (cliOptions.input === 'info' || cliOptions.input === 'show') {
+      const infoCmd = createInfoCommand();
+      await infoCmd.execute(args.slice(1), parseFlags(args));
+      return;
+    }
+    
     // Handle debug-resolution command
-    if (options.debugResolution) {
+    if (cliOptions.debugResolution) {
       try {
         await debugResolutionCommand({
-          filePath: options.input,
-          variableName: options.variableName,
-          outputFormat: options.outputFormat as 'json' | 'text',
-          watchMode: options.watch
+          filePath: cliOptions.input,
+          variableName: cliOptions.variableName,
+          outputFormat: cliOptions.outputFormat as 'json' | 'text',
+          watchMode: cliOptions.watch
         });
       } catch (error) {
         logger.error('Error running debug-resolution command', { error });
@@ -818,520 +1006,63 @@ export async function main(fsAdapter?: any, customArgs?: string[]): Promise<void
     }
 
     // Handle debug-context command
-    if (options.debugContext) {
+    if (cliOptions.debugContext) {
       await debugContextCommand({
-        filePath: options.input,
-        variableName: options.variableName,
-        visualizationType: options.visualizationType || 'hierarchy',
-        rootStateId: options.rootStateId,
-        outputFormat: options.outputFormat as 'mermaid' | 'dot' | 'json',
-        outputFile: options.output,
-        includeVars: options.includeVars !== false,
-        includeTimestamps: options.includeTimestamps !== false,
-        includeFilePaths: options.includeFilePaths !== false
+        filePath: cliOptions.input,
+        variableName: cliOptions.variableName,
+        visualizationType: cliOptions.visualizationType || 'hierarchy',
+        rootStateId: cliOptions.rootStateId,
+        outputFormat: cliOptions.outputFormat as 'mermaid' | 'dot' | 'json',
+        outputFile: cliOptions.output,
+        includeVars: cliOptions.includeVars !== false,
+        includeTimestamps: cliOptions.includeTimestamps !== false,
+        includeFilePaths: cliOptions.includeFilePaths !== false
       });
       return;
     }
 
     // Handle debug-transform command
-    if (options.debugTransform) {
+    if (cliOptions.debugTransform) {
       await debugTransformCommand({
-        filePath: options.input,
-        directiveType: options.directiveType,
-        outputFormat: options.outputFormat as 'text' | 'json' | 'mermaid',
-        outputFile: options.output,
-        includeContent: options.includeContent
+        filePath: cliOptions.input,
+        directiveType: cliOptions.directiveType,
+        outputFormat: cliOptions.outputFormat as 'text' | 'json' | 'mermaid',
+        outputFile: cliOptions.output,
+        includeContent: cliOptions.includeContent
       });
       return;
     }
 
     // Configure logging based on options
-    if (options.debug) {
+    if (cliOptions.debug) {
       // Set environment variable for child processes and imported modules
       process.env.DEBUG = 'true';
       logger.level = 'trace';
-      // Set log level for all service loggers
-      Object.values(loggingConfig.services).forEach(serviceConfig => {
-        (serviceConfig as any).level = 'debug';
-      });
-    } else if (options.verbose) {
+      cliLogger.level = 'trace';
+    } else if (cliOptions.verbose) {
       // Show info level messages for verbose, but no debug logs
       logger.level = 'info';
+      cliLogger.level = 'info';
       process.env.DEBUG = ''; // Explicitly disable DEBUG
     } else {
       // Only show errors by default (no debug logs)
       logger.level = 'error';
+      cliLogger.level = 'error';
       process.env.DEBUG = ''; // Explicitly disable DEBUG
-      
-      // Set all service loggers to only show errors
-      Object.values(loggingConfig.services).forEach(serviceConfig => {
-        (serviceConfig as any).level = 'error';
-      });
     }
 
-    // Handle testing with custom filesystem
-    let customApiOptions: ProcessOptions | undefined;
-    if (fsAdapter) {
-      // Mark for special handling in cliToApiOptions
-      options.custom = true; 
-      
-      // Create custom API options with the test filesystem
-      customApiOptions = cliToApiOptions(options);
-      customApiOptions.fs = fsAdapter;
-    }
-
-    // Watch mode handling
-    if (options.watch) {
-      await watchFiles(options);
+    // Watch mode or single processing
+    if (cliOptions.watch) {
+      await watchFiles(cliOptions); // Pass cliOptions
       return;
     }
 
-    // Process the file with custom filesystem if provided
-    if (customApiOptions) {
-      await processFileWithOptions(options, customApiOptions);
-    } else {
-      await processFile(options);
-    }
-  } catch (error) {
-    // Only log if not already logged
-    if (!errorLogged) {
-      logger.error('CLI execution failed', {
-        error: error instanceof Error ? error.message : String(error)
-      });
-      
-      // Create a simple error display function instead of using the service
-      const displayErrorWithSourceContext = async (error: MeldError) => {
-        if (!error.filePath) {
-          return chalk.red.bold(`Error: ${error.message}`);
-        }
-        
-        // Debug the actual file path being searched
-        if (options.debug) {
-          console.error(`DEBUG: Searching for source file: ${error.filePath}`);
-        }
-        
-        try {
-          // Get file path and location
-          let filePath = error.filePath;
-          let line = 1;
-          let column = 1;
-          
-          // Extract location from error
-          if ((error as any).location?.start) {
-            line = (error as any).location.start.line;
-            column = (error as any).location.start.column;
-          } else if (error.context?.sourceLocation) {
-            line = error.context.sourceLocation.line;
-            column = error.context.sourceLocation.column;
-          }
-          
-          // Fix for hard-coded 'examples/error-test.meld' paths in error objects
-          if (filePath === 'examples/error-test.meld' && options.input) {
-            if (options.debug) {
-              console.error(`DEBUG: Replacing hardcoded path with input file: ${options.input}`);
-            }
-            filePath = options.input;
-          }
-          
-          // Verify file exists
-          let fileExists = false;
-          try {
-            await fs.access(filePath);
-            fileExists = true;
-          } catch (err) {
-            if (options.debug) {
-              console.error(`DEBUG: Could not access file: ${filePath}`);
-            }
-          }
-          
-          if (!fileExists) {
-            return chalk.red.bold(`Error in ${filePath}: ${error.message}`);
-          }
-          
-          // Read the source file
-          const sourceCode = await fs.readFile(filePath, 'utf8');
-          const lines = sourceCode.split('\n');
-          
-          // Get the error line
-          const errorLine = lines[line - 1] || '';
-          
-          // Highlight the error character
-          const beforeError = errorLine.substring(0, column - 1);
-          const errorChar = errorLine.substring(column - 1, column) || ' ';
-          const afterError = errorLine.substring(column);
-          
-          const highlightedLine = chalk.white(beforeError) + 
-                                chalk.bgRed.white(errorChar) + 
-                                chalk.white(afterError);
-          
-          // Create pointer line
-          const pointerLine = ' '.repeat(column - 1 + 6) + chalk.red('^');
-          
-          // Get context lines (up to 2 lines before and after)
-          const contextLines = [];
-          
-          for (let i = Math.max(1, line - 2); i < line; i++) {
-            contextLines.push(
-              chalk.dim(`${i.toString().padStart(4)} | `) + 
-              chalk.dim(lines[i - 1] || '')
-            );
-          }
-          
-          // Add error line
-          contextLines.push(
-            chalk.bold(`${line.toString().padStart(4)} | `) + 
-            highlightedLine
-          );
-          contextLines.push(pointerLine);
-          
-          // Add lines after
-          for (let i = line + 1; i <= Math.min(lines.length, line + 2); i++) {
-            contextLines.push(
-              chalk.dim(`${i.toString().padStart(4)} | `) + 
-              chalk.dim(lines[i - 1] || '')
-            );
-          }
-          
-          // Compose the final message
-          const errorType = error.constructor.name.replace('Meld', '').replace('Error', ' Error');
-          
-          return [
-            chalk.red.bold(`${errorType}: `) + error.message,
-            chalk.dim(`    at ${chalk.cyan(filePath)}:${chalk.yellow(line.toString())}:${chalk.yellow(column.toString())}`),
-            '',
-            ...contextLines
-          ].join('\n');
-        } catch (err) {
-          console.log("Failed to format error with source context:", err);
-          return chalk.red(`Error in ${error.filePath}: ${error.message}`);
-        }
-      };
-      
-      // Display error to user in a clean format
-      if (process.env.NODE_ENV === 'test') {
-        // Show errors with the "Error:" prefix for test expectations
-        console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      } else {
-        try {
-          // Add debug logging to see what kind of error we're dealing with
-          if (options.debug) {
-            // Log the error type for debugging
-            const errorType = error instanceof MeldError 
-              ? `MeldError (${error.constructor.name})` 
-              : (error instanceof Error ? error.constructor.name : typeof error);
-            
-            console.error('DEBUG: Error type:', errorType);
-            
-            // For MeldError types, log additional properties
-            if (error instanceof MeldError) {
-              console.error('DEBUG: Error properties:');
-              console.error('  - message:', error.message);
-              console.error('  - code:', error.code);
-              console.error('  - severity:', error.severity);
-              console.error('  - filePath:', error.filePath);
-              
-              // Log specialized properties based on error type
-              if ('directiveKind' in error) {
-                console.error('  - directiveKind:', (error as any).directiveKind);
-              }
-              if ('location' in error) {
-                console.error('  - location:', JSON.stringify((error as any).location, null, 2));
-              }
-              if ('details' in error) {
-                console.error('  - details:', JSON.stringify((error as any).details, null, 2));
-              }
-              
-              // Log context for debugging
-              console.error('  - context:', JSON.stringify(error.context, null, 2));
-              
-              if (error.stack) {
-                console.error('  - stack trace available');
-              }
-            } else if (error instanceof Error) {
-              console.error('DEBUG: Standard Error properties:');
-              console.error('  - message:', error.message);
-              console.error('  - name:', error.name);
-              if (error.stack) {
-                console.error('  - stack trace available');
-              }
+    await processFileWithOptions(cliOptions, cliToApiOptions(cliOptions));
 
-              // Add debugging for direct meld-ast errors
-              if ('line' in error && 'column' in error) {
-                console.error('DEBUG: Raw meld-ast error properties:');
-                console.error('  - line:', (error as any).line);
-                console.error('  - column:', (error as any).column);
-                if ('sourceFile' in error) {
-                  console.error('  - sourceFile:', (error as any).sourceFile);
-                }
-              }
-            }
-          }
-          
-          // Handle both MeldError and raw errors that might come from meld-ast
-          try {
-            // Always use input file path if available to handle hardcoded paths
-            if (error instanceof MeldError && options.input && error.filePath === 'examples/error-test.meld') {
-              // Create a clone of the error with the correct file path
-              const fixedPathError = new MeldError(error.message, {
-                code: error.code,
-                severity: error.severity,
-                filePath: options.input,
-                context: error.context ? { ...error.context } : {},
-                cause: error.cause as Error | undefined
-              });
-              
-              // Copy special properties if they exist (like location)
-              for (const prop of ['location', 'details', 'directiveKind', 'originalError']) {
-                if (prop in error) {
-                  (fixedPathError as any)[prop] = (error as any)[prop];
-                }
-              }
-              
-              // Use this error instead
-              error = fixedPathError;
-            }
-            
-            // Bypass deduplication for our enhanced display
-            bypassDeduplication = true;
-            
-            // Clear previous errors from the seen set that might conflict
-            seenErrors.clear(); // Clear all seen errors to be safe
-            
-            // Convert to a consistent format for deduplication
-            const errorKey = error instanceof Error ? `Error: ${error.message}` : `Error: ${String(error)}`;
-            
-            // In a real implementation, we would import and use the ErrorDisplayService directly
-            // Here we need to dynamically load it to avoid circular dependencies
-            try {
-              // Dynamic import of the ErrorDisplayService and file system
-              const { ErrorDisplayService } = await import('@services/display/ErrorDisplayService/ErrorDisplayService.js');
-              const { FileSystemService } = await import('@services/fs/FileSystemService/FileSystemService.js');
-              const { NodeFileSystem } = await import('@services/fs/FileSystemService/NodeFileSystem.js');
-              const { PathOperationsService } = await import('@services/fs/FileSystemService/PathOperationsService.js');
-              
-              // Create the required services
-              const nodeFs = fsAdapter || new NodeFileSystem();
-              const pathOps = new PathOperationsService();
-              const fsService = new FileSystemService(pathOps, nodeFs);
-              
-              // Create a new instance of the ErrorDisplayService with the file system
-              const errorDisplayService = new ErrorDisplayService(fsService);
-              
-              // Debug logging for file path issues
-              if (options.debug) {
-                console.error("DEBUG: Input file path:", options.input);
-                
-                // Cast error to MeldError for type safety
-                const meldError = error as MeldError;
-                
-                console.error("DEBUG: Error filePath property:", meldError.filePath);
-                if (meldError.context?.sourceLocation) {
-                  console.error("DEBUG: Error sourceLocation.filePath:", meldError.context.sourceLocation.filePath);
-                }
-                if (meldError.context?.errorFilePath) {
-                  console.error("DEBUG: Error context.errorFilePath:", meldError.context.errorFilePath);
-                }
-                if ((meldError as any).location?.filePath) {
-                  console.error("DEBUG: Error location.filePath:", (meldError as any).location.filePath);
-                }
-
-                // Check if file exists at the input path
-                try {
-                  fsService.exists(options.input).then(exists => {
-                    console.error("DEBUG: Input file exists:", exists);
-                  });
-                } catch (err) {
-                  console.error("DEBUG: Error checking if file exists:", err);
-                }
-              }
-              
-              // Fix file path issues - if filePath is missing, create a new error with the correct path
-              // Cast error to MeldError for type safety
-              let meldError = error as MeldError;
-              
-              if (!meldError.filePath && options.input) {
-                // Start with a clean context object
-                const newContext: Record<string, any> = {};
-                
-                // Copy the original context if available
-                if (meldError.context) {
-                  Object.assign(newContext, meldError.context);
-                }
-                
-                // Set sourceLocation with the proper file path
-                if (meldError.context?.sourceLocation) {
-                  newContext.sourceLocation = {
-                    ...meldError.context.sourceLocation,
-                    filePath: options.input
-                  };
-                }
-                
-                // Create a new error with the correct file path
-                const updatedError = new MeldError(meldError.message, {
-                  filePath: options.input,
-                  code: meldError.code,
-                  severity: meldError.severity,
-                  cause: meldError instanceof Error ? meldError : undefined,
-                  context: newContext
-                });
-                
-                // For any other properties, try to copy them
-                for (const prop of ['location', 'details', 'directiveKind', 'originalError']) {
-                  if (prop in meldError) {
-                    (updatedError as any)[prop] = (meldError as any)[prop];
-                  }
-                }
-                
-                // Use this updated error instead
-                meldError = updatedError;
-                error = updatedError;
-              }
-              
-              // Use the enhanced error display service which now handles nested errors correctly
-              const enhancedErrorDisplay = await errorDisplayService.enhanceErrorDisplay(error);
-              
-              // Check if we've seen this error before
-              if (!seenErrors.has(errorKey)) {
-                // This is a new error, add it to our set
-                seenErrors.add(errorKey);
-                
-                // The service will now display just the filepath and source context
-                console.error(enhancedErrorDisplay);
-              }
-            } catch (importError) {
-              // If dynamic import fails, fall back to our simple display function
-              if (options.debug) {
-                console.error('DEBUG: Failed to load ErrorDisplayService:', importError);
-              }
-              
-              // Use our custom error display function as fallback
-              const enhancedErrorDisplay = await displayErrorWithSourceContext(error instanceof MeldError ? error : new MeldError(
-                error instanceof Error ? error.message : String(error),
-                {
-                  filePath: options.input,
-                  cause: error instanceof Error ? error : undefined,
-                  context: {
-                    // Copy line/column from meld-ast errors if available
-                    sourceLocation: (typeof error === 'object' && error !== null && 'line' in error && 'column' in error) ? {
-                      filePath: (typeof error === 'object' && error !== null && 'sourceFile' in error && typeof (error as any).sourceFile === 'string') 
-                        ? (error as any).sourceFile 
-                        : options.input,
-                      line: (error as any).line,
-                      column: (error as any).column
-                    } : undefined
-                  }
-                }
-              ));
-              
-              // Check if we've seen this error before
-              if (!seenErrors.has(errorKey)) {
-                // This is a new error, add it to our set
-                seenErrors.add(errorKey);
-                
-                // Display the enhanced error with a blank line for separation
-                console.log('\n'); 
-                console.error(enhancedErrorDisplay);
-              }
-            }
-            
-            // Reset the bypass flag
-            bypassDeduplication = false;
-          } catch (displayError) {
-            // If the enhanced display fails, fall back to basic formatting
-            if (error instanceof MeldError) {
-              const errorMsg = `\nError in ${error.filePath || 'unknown'}: ${error.message}`;
-              
-              // Check if we've seen this error before
-              if (!seenErrors.has(errorMsg.trim())) {
-                seenErrors.add(errorMsg.trim());
-                console.error(errorMsg);
-              }
-            } else if (error instanceof Error) {
-              // Check for meld-ast error properties
-              if ('line' in error && 'column' in error) {
-                const filePath = ('sourceFile' in error) ? (error as any).sourceFile : options.input;
-                const errorMsg = `\nError in ${filePath}:${(error as any).line}:${(error as any).column}: ${error.message}`;
-                
-                // Check if we've seen this error before
-                if (!seenErrors.has(errorMsg.trim())) {
-                  seenErrors.add(errorMsg.trim());
-                  console.error(errorMsg);
-                }
-              } else {
-                const errorMsg = `\nError: ${error.message}`;
-                
-                // Check if we've seen this error before
-                if (!seenErrors.has(errorMsg.trim())) {
-                  seenErrors.add(errorMsg.trim());
-                  console.error(errorMsg);
-                }
-              }
-            } else {
-              const errorMsg = `\nError: ${String(error)}`;
-              
-              // Check if we've seen this error before
-              if (!seenErrors.has(errorMsg.trim())) {
-                seenErrors.add(errorMsg.trim());
-                console.error(errorMsg);
-              }
-            }
-            
-            if (options.debug) {
-              console.error(`\nDebug: Display error: ${displayError instanceof Error ? displayError.message : String(displayError)}`);
-            }
-          }
-        } catch (displayError) {
-          // Fallback if enhanced display fails
-          logger.error('Error display failed', { 
-            error: displayError instanceof Error ? displayError.message : String(displayError) 
-          });
-          
-          // Add more debugging for display errors
-          if (options.debug) {
-            console.error('DEBUG: Error display failure:', displayError);
-          }
-          
-          // Display a basic error message as fallback
-          if (error instanceof MeldError) {
-            if (error.filePath) {
-              console.error(`Error in ${error.filePath}: ${error.message}`);
-            } else {
-              console.error(`Error: ${error.message}`);
-            }
-          } else if (error instanceof Error && 'line' in error && 'column' in error) {
-            // Handle raw meld-ast errors
-            const filePath = ('sourceFile' in error) ? (error as any).sourceFile : options.input;
-            console.error(`Error in ${filePath}:${(error as any).line}:${(error as any).column}: ${error.message}`);
-          } else {
-            console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-          }
-        }
-      }
-      
-      // Mark as logged to prevent duplicate logging
-      errorLogged = true;
-      
-      // Add a property to the error object to indicate it's been logged
-      // This helps bin/meld.ts avoid duplicate logging
-      if (error && typeof error === 'object') {
-        (error as any).__logged = true;
-      }
-    }
-    
-    // Exit with error code for non-test environments
-    if (process.env.NODE_ENV !== 'test') {
-      process.exit(1);
-    } else {
-      // For tests, rethrow to be caught by the test runner
-      throw error;
-    }
+  } catch (error: unknown) { // Catch unknown type
+    // Use the centralized error handler
+    await handleError(error, cliOptions); // Pass potentially unparsed cliOptions
   }
 }
 
-// Only call main if this file is being run directly (not imported)
-if (require.main === module) {
-  main().catch(err => {
-    // Don't log the error again since it's already logged in the main function
-    process.exit(1);
-  });
-}
+// This file is now imported by cli-entry.ts, which handles the main execution

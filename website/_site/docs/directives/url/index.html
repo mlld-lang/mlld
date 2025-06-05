@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>URL Support in Mlld - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">modular prompt scripting</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/syntax-reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/variables/" >Variables</a></li>
+          
+        
+          
+            <li><a href="/docs/error-handling/" >Error Handling</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
+          
+        
+        
+        <li>
+          <h4>Directives</h4>
+          <ul class="nav-list">
+            <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/add/" >
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/data/" >
+                  
+                    @data
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/exec/" >
+                  
+                    @exec
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/import/" >
+                  
+                    @import
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/path/" >
+                  
+                    @path
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/run/" >
+                  
+                    @run
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/text/" >
+                  
+                    @text
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" aria-current=&quot;page&quot;>
+                  
+                    @url
+                  
+                </a></li>
+              
+            
+              
+            
+          </ul>
+        </li>
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1 id="url-support-in-mlld" tabindex="-1">URL Support in Mlld</h1>
+<p>Mlld supports fetching content from remote URLs using the <code>@add</code> and <code>@import</code> directives. This allows you to incorporate external resources into your Mlld documents without needing to download them first.</p>
+<h2 id="url-functionality-overview" tabindex="-1">URL Functionality Overview</h2>
+<ul>
+<li><strong>URL Embedding</strong>: Embed content from remote URLs directly into your Mlld documents</li>
+<li><strong>URL Importing</strong>: Import variables from remote Mlld files hosted on servers</li>
+<li><strong>Security Controls</strong>: Configure security policies to restrict which URLs can be accessed</li>
+<li><strong>Caching</strong>: Automatically cache URL responses for better performance</li>
+<li><strong>Error Handling</strong>: Robust error handling for network issues and invalid URLs</li>
+</ul>
+<h2 id="enabling-url-support" tabindex="-1">Enabling URL Support</h2>
+<p>URL support is disabled by default and must be explicitly enabled using the <code>allowURLs=true</code> parameter:</p>
+<pre><code>@add(url=&quot;https://example.com/content.md&quot;, allowURLs=true)
+@import(url=&quot;https://example.com/variables.mld&quot;, allowURLs=true)
+</code></pre>
+<h2 id="url-parameters" tabindex="-1">URL Parameters</h2>
+<p>Both <code>@add</code> and <code>@import</code> directives support the following URL-specific parameters:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>url</code></td>
+<td>string</td>
+<td>The URL to fetch content from</td>
+</tr>
+<tr>
+<td><code>allowURLs</code></td>
+<td>boolean</td>
+<td>Must be set to <code>true</code> to enable URL functionality</td>
+</tr>
+<tr>
+<td><code>urlOptions</code></td>
+<td>object</td>
+<td>Configuration options for URL validation and fetching</td>
+</tr>
+</tbody>
+</table>
+<h3 id="url-options" tabindex="-1">URL Options</h3>
+<p>The <code>urlOptions</code> parameter accepts an object with the following properties:</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>allowedProtocols</code></td>
+<td>string[]</td>
+<td><code>[&quot;http&quot;, &quot;https&quot;]</code></td>
+<td>List of allowed protocols</td>
+</tr>
+<tr>
+<td><code>allowedDomains</code></td>
+<td>string[]</td>
+<td><code>[]</code> (all domains allowed)</td>
+<td>Domain allowlist</td>
+</tr>
+<tr>
+<td><code>blockedDomains</code></td>
+<td>string[]</td>
+<td><code>[]</code></td>
+<td>Domain blocklist (overrides allowlist)</td>
+</tr>
+<tr>
+<td><code>maxResponseSize</code></td>
+<td>number</td>
+<td><code>5242880</code> (5MB)</td>
+<td>Maximum response size in bytes</td>
+</tr>
+<tr>
+<td><code>timeout</code></td>
+<td>number</td>
+<td><code>30000</code> (30s)</td>
+<td>Request timeout in milliseconds</td>
+</tr>
+</tbody>
+</table>
+<h2 id="examples" tabindex="-1">Examples</h2>
+<h3 id="basic-url-embedding" tabindex="-1">Basic URL Embedding</h3>
+<pre><code>@add(url=&quot;https://raw.githubusercontent.com/example/repo/main/README.md&quot;, allowURLs=true)
+</code></pre>
+<h3 id="url-embedding-with-security-options" tabindex="-1">URL Embedding with Security Options</h3>
+<pre><code>@add(
+  url=&quot;https://raw.githubusercontent.com/example/repo/main/README.md&quot;, 
+  allowURLs=true, 
+  urlOptions={
+    allowedProtocols: [&quot;https&quot;],
+    allowedDomains: [&quot;raw.githubusercontent.com&quot;],
+    maxResponseSize: 1048576,  // 1MB
+    timeout: 10000  // 10 seconds
+  }
+)
+</code></pre>
+<h3 id="embedding-a-specific-section-from-a-url" tabindex="-1">Embedding a Specific Section from a URL</h3>
+<pre><code>@add(
+  url=&quot;https://raw.githubusercontent.com/example/repo/main/README.md&quot;, 
+  allowURLs=true, 
+  section=&quot;Getting Started&quot;
+)
+</code></pre>
+<h3 id="importing-variables-from-a-url" tabindex="-1">Importing Variables from a URL</h3>
+<pre><code>@import(url=&quot;https://example.com/variables.mld&quot;, allowURLs=true)
+</code></pre>
+<h3 id="using-path-parameter-with-urls" tabindex="-1">Using Path Parameter with URLs</h3>
+<p>For backward compatibility, you can also use the <code>path</code> parameter with URLs:</p>
+<pre><code>@add(path=&quot;https://example.com/content.md&quot;, allowURLs=true)
+</code></pre>
+<h2 id="security-considerations" tabindex="-1">Security Considerations</h2>
+<ul>
+<li>URLs are only fetched when explicitly enabled with <code>allowURLs=true</code></li>
+<li>Use <code>allowedDomains</code> to restrict which domains can be accessed</li>
+<li>Use <code>blockedDomains</code> to block specific domains</li>
+<li>Set appropriate <code>maxResponseSize</code> to prevent loading overly large files</li>
+<li>Configure <code>timeout</code> to prevent hanging on slow responses</li>
+<li>Only HTTPS is recommended for production use</li>
+</ul>
+<h2 id="caching" tabindex="-1">Caching</h2>
+<p>URL responses are automatically cached to improve performance and reduce network traffic. The cache uses an LRU (Least Recently Used) strategy with a default capacity of 100 entries.</p>
+<p>To bypass the cache for a specific request, use:</p>
+<pre><code>@add(
+  url=&quot;https://example.com/content.md&quot;, 
+  allowURLs=true, 
+  urlOptions={
+    bypassCache: true
+  }
+)
+</code></pre>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>

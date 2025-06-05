@@ -5,7 +5,7 @@ title: "Syntax Reference"
 
 # Syntax Reference
 
-This document provides a comprehensive reference for the Meld syntax.
+This document provides a comprehensive reference for the Mlld syntax.
 
 ## Core Tokens
 
@@ -13,10 +13,10 @@ This document provides a comprehensive reference for the Meld syntax.
 
 Directives must appear at start of line (no indentation):
 ```
-@embed    - Include content from files
+@add      - Include content from files
 @run      - Execute shell commands
-@import   - Import variables and commands from other Meld files
-@define   - Create reusable commands
+@import   - Import variables and commands from other Mlld files
+@exec     - Create reusable commands
 @text     - Define text variables
 @path     - Define filesystem path variables
 @data     - Define structured data variables
@@ -25,7 +25,7 @@ Directives must appear at start of line (no indentation):
 ### Comments
 
 Lines that begin with `>> ` (two greater-than signs followed by a space) are treated as comments:
-```meld
+```mlld
 >> This is a comment
 >> Comments must start at beginning of line (no indentation)
 @text message = "Hello"  >> Invalid - comments must be on their own line
@@ -73,29 +73,29 @@ Lines that begin with `>> ` (two greater-than signs followed by a space) are tre
 
 ### Path Variables
 
-Syntax: `$identifier`
-```meld
-$path                # Reference a path variable
-$HOMEPATH or $~      # Special path variable for home directory
-$PROJECTPATH or $.   # Special path variable for project root
+Syntax: `@identifier`
+```mlld
+@path                # Reference a path variable
+[@~/path]           # Home directory path
+[@./path]           # Project root path
 ```
 
 ### Text Variables
 
-Syntax: `{{identifier}}`
-```meld
-{{textvar}}                    # Text variable reference
-{{textvar>>(format)}}         # Formatted text variable
+Syntax: `@identifier` in regular text, `{{identifier}}` in templates
+```mlld
+@textvar                       # Text variable reference
+[[Content with {{textvar}}]]   # Variable in template
 ```
 
 ### Data Variables
 
-Syntax: `{{identifier}}`
-```meld
-{{datavar}}                    # Data variable reference
-{{datavar.field}}             # Data variable field access
-{{datavar.0}}                 # Array element access (use dot notation)
-{{datavar.field>>(format)}}   # Formatted data field access
+Syntax: `@identifier` in regular text, `{{identifier}}` in templates
+```mlld
+@datavar                       # Data variable reference
+@datavar.field                 # Data variable field access
+@datavar[0]                    # Array element access
+[[Content: {{datavar.field}}]] # Variable in template
 ```
 
 ## Code Fences
@@ -108,7 +108,7 @@ Triple backticks that:
 - Support nesting with different numbers of backticks
 
 Example:
-```meld
+```mlld
 ​```python
 def hello():
     print("Hi")  # @text directives here are preserved as-is
@@ -117,60 +117,58 @@ def hello():
 
 ## Directive Patterns
 
-### @embed
+### @add
 
-```meld
-@embed [path]
-@embed [path # section_text]
-@embed [path] as ###                    # ### parsed as count of # chars
-@embed [path # section_text] as ###
-@embed [path] under header_text
+```mlld
+@add [path]
+@add [path # section_text]
+@add [path] as "# New Title"           # Rename section
+@add "Section" from [path]
+@add "Section" from [path] as "# New Title"
 ```
 
 ### @run
 
-```meld
-@run [command_text]
-@run [command_text] under header_text
-@run [$command({{textvar1}}, {{textvar2}})]
+```mlld
+@run [(command_text)]
+@run [(language code_text)]
+@run @command(@var1, @var2)
 ```
 
 ### @import
 
-```meld
+```mlld
 @import [path]
 ```
 
-### @define
+### @exec
 
-```meld
-@define identifier = @run [content]
-@define command(param1, param2) = @run [content {{param1}} {{param2}}]
-@define command.risk = "description"
-@define command.about = "description"
-@define command.meta = "description"
+```mlld
+@exec identifier = @run [(content)]
+@exec command(param1, param2) = @run [(content @param1 @param2)]
+@exec command = @run js [(code)]
 ```
 
 ### @text
 
-```meld
+```mlld
 @text identifier = "value"
-@text identifier = @embed [content]
-@text identifier = @run [command]
+@text identifier = @add [content]
+@text identifier = @run [(command)]
 ```
 
 ### @path
 
-```meld
-@path identifier = "$HOMEPATH/path"
-@path identifier = "$~/path"
-@path identifier = "$PROJECTPATH/path"
-@path identifier = "$./path"
+```mlld
+@path identifier = [@~/path]
+@path identifier = [@./path]
+@path identifier = [/absolute/path]
+@path identifier = [relative/path]
 ```
 
 ### @data 
 
-```meld
+```mlld
 @data identifier = value
 @data identifier : schema = value
 ```
@@ -179,22 +177,22 @@ def hello():
 
 Uses the `++` operator with required spaces on both sides:
 
-```meld
+```mlld
 @text greeting = "Hello" ++ " " ++ "World"
-@text message = {{intro}} ++ {{body}}
+@text message = @intro ++ @body
 ```
 
 ## Template Literals
 
 Delimited by backticks (`):
-```meld
+```mlld
 `Hello {{name}}!`                        # Text variable
 `Config: {{config.name}}`                # Data variable with field
 `{{greeting}}, your ID is {{user.id}}`    # Mixed variables
 ```
 
 Multi-line template literals:
-```meld
+```mlld
 @text prompt = [[`
   System: {{role}}
   

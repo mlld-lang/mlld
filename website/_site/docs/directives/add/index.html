@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>@add Directive - mlld</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/prism-theme.css">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/terminal.js" defer></script>
+  <script src="/js/animation.js" defer></script>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <div class="logo-container">
+        <a href="/" class="logo">mlld</a>
+        <span class="logo-tagline">modular prompt scripting</span>
+      </div>
+      <nav>
+        <ul>
+          <li><a href="/docs/" aria-current=&quot;page&quot;>Docs</a></li>
+          <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      
+<div class="docs-layout">
+  <button class="docs-sidebar-toggle" aria-label="Toggle menu" aria-expanded="false">
+    <span class="hamburger-icon">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </span>
+    <span class="toggle-text">Menu</span>
+  </button>
+  
+  <!-- Add overlay for mobile --> 
+  <div class="docs-overlay" id="docs-overlay"></div>
+  
+  <aside class="docs-sidebar" id="docs-sidebar">
+    <nav>
+      <h3>Documentation</h3>
+      <ul class="nav-list">
+        <li><a href="/docs/introduction/" >Introduction</a></li>
+        
+          
+        
+          
+            <li><a href="/docs/syntax-reference/" >Syntax Reference</a></li>
+          
+        
+          
+            <li><a href="/docs/cli-usage/" >CLI Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/sdk-usage/" >SDK Usage</a></li>
+          
+        
+          
+            <li><a href="/docs/variables/" >Variables</a></li>
+          
+        
+          
+            <li><a href="/docs/error-handling/" >Error Handling</a></li>
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+        
+          
+            <li><a href="/docs/input-variables/" >Environment Variables and Input</a></li>
+          
+        
+          
+            <li><a href="/docs/foreach/" >Foreach</a></li>
+          
+        
+          
+            <li><a href="/docs/frontmatter/" >Frontmatter Support</a></li>
+          
+        
+          
+            <li><a href="/docs/overview-guide/" >Meld: Modular Prompt Scripting</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/modules/" >Mlld Module System</a></li>
+          
+        
+          
+            <li><a href="/docs/formatting-options/" >Mlld Output Formatting Guide</a></li>
+          
+        
+          
+            <li><a href="/docs/security/" >mlld Security Model</a></li>
+          
+        
+          
+            <li><a href="/docs/registering-modules/" >Registering Mlld Modules</a></li>
+          
+        
+          
+            <li><a href="/docs/test-highlighting/" >Syntax Highlighting Test</a></li>
+          
+        
+          
+            <li><a href="/docs/testing/TEST_STANDARDS/" >Test Standards and Best Practices</a></li>
+          
+        
+          
+        
+          
+            <li><a href="/docs/with.tmp/" >With Clauses</a></li>
+          
+        
+        
+        <li>
+          <h4>Directives</h4>
+          <ul class="nav-list">
+            <li><a href="/docs/directives/" aria-current=&quot;page&quot;>Overview</a></li>
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/add/" aria-current=&quot;page&quot;>
+                  
+                    @add
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/data/" >
+                  
+                    @data
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/exec/" >
+                  
+                    @exec
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/import/" >
+                  
+                    @import
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/path/" >
+                  
+                    @path
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/run/" >
+                  
+                    @run
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/text/" >
+                  
+                    @text
+                  
+                </a></li>
+              
+            
+              
+                
+                <li><a href="/docs/directives/when/" >
+                  
+                    @when
+                  
+                </a></li>
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+            
+              
+                
+                <li><a href="/docs/directives/url/" >
+                  
+                    @url
+                  
+                </a></li>
+              
+            
+              
+            
+          </ul>
+        </li>
+      </ul>
+    </nav>
+  </aside>
+  
+  <div class="docs-content">
+    <h1 id="%40add-directive" tabindex="-1">@add Directive</h1>
+<p>The <code>@add</code> directive includes content from external files, variables, or templates into your Mlld document.</p>
+<h2 id="syntax" tabindex="-1">Syntax</h2>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>path # section<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>path # section<span class="token punctuation">]</span></span> <span class="token operator">as</span> <span class="token string">"# New Title"</span>
+<span class="token directive keyword">@add</span> <span class="token string">"Section Title"</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token string">"Section Title"</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>path<span class="token punctuation">]</span></span> <span class="token operator">as</span> <span class="token string">"# New Title"</span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@variable</span>
+<span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span>template content with <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">variables</span><span class="token punctuation">}}</span></span><span class="token punctuation">]]</span></span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@templateFunction</span><span class="token punctuation">(</span>param1<span class="token punctuation">,</span> param2<span class="token punctuation">)</span>
+</code></pre>
+<p>Where:</p>
+<ul>
+<li><code>path</code> is the path to the file to include</li>
+<li><code>section</code> is optional text that identifies a specific section to extract</li>
+<li><code>&quot;# New Title&quot;</code> is an optional replacement title for the section</li>
+<li><code>@variable</code> is a variable reference</li>
+<li><code>[[...]]</code> is a template with variable interpolation</li>
+</ul>
+<h2 id="including-files" tabindex="-1">Including Files</h2>
+<p>Basic file inclusion:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>docs/guide.md<span class="token punctuation">]</span></span>
+</code></pre>
+<h2 id="section-extraction" tabindex="-1">Section Extraction</h2>
+<p>Extract specific sections from files:</p>
+<pre class="language-mlld"><code class="language-mlld"># Extract a section keeping its original title
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>guide.md # Getting Started<span class="token punctuation">]</span></span>
+
+# Extract a section <span class="token operator">with</span> a new title
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>guide.md # Getting Started<span class="token punctuation">]</span></span> <span class="token operator">as</span> <span class="token string">"# Quick Start"</span>
+
+# Extract by section title <span class="token operator">from</span> the beginning
+<span class="token directive keyword">@add</span> <span class="token string">"Getting Started"</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>guide.md<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token string">"Getting Started"</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>guide.md<span class="token punctuation">]</span></span> <span class="token operator">as</span> <span class="token string">"# Quick Start"</span>
+</code></pre>
+<h2 id="including-variables" tabindex="-1">Including Variables</h2>
+<p>Add content from variables:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> greeting = <span class="token string">"Hello, world!"</span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@greeting</span>
+
+<span class="token directive keyword">@data</span> user = <span class="token punctuation">{</span> name: <span class="token string">"Alice"</span><span class="token punctuation">,</span> role: <span class="token string">"Admin"</span> <span class="token punctuation">}</span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@user</span><span class="token field-access property">.name</span>
+</code></pre>
+<h2 id="template-content" tabindex="-1">Template Content</h2>
+<p>Add content with variable interpolation:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> name = <span class="token string">"Alice"</span>
+<span class="token directive keyword">@text</span> role = <span class="token string">"Admin"</span>
+<span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span>Welcome <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">name</span><span class="token punctuation">}}</span></span>! Your role is: <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">role</span><span class="token punctuation">}}</span></span><span class="token punctuation">]]</span></span>
+</code></pre>
+<h2 id="template-functions" tabindex="-1">Template Functions</h2>
+<p>Use template functions defined with @text:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@text</span> greet<span class="token punctuation">(</span>name<span class="token punctuation">)</span> = <span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span>Hello, <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">name</span><span class="token punctuation">}}</span></span>!<span class="token punctuation">]]</span></span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@greet</span><span class="token punctuation">(</span><span class="token string">"World"</span><span class="token punctuation">)</span>
+
+<span class="token directive keyword">@text</span> message<span class="token punctuation">(</span>user<span class="token punctuation">,</span> action<span class="token punctuation">)</span> = <span class="token directive keyword">@add</span> <span class="token template-block"><span class="token punctuation">[[</span><span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">user</span><span class="token punctuation">}}</span></span> <span class="token template-variable"><span class="token punctuation">{{</span><span class="token variable">action</span><span class="token punctuation">}}</span></span> successfully!<span class="token punctuation">]]</span></span>
+<span class="token directive keyword">@add</span> <span class="token variable variable">@message</span><span class="token punctuation">(</span><span class="token string">"Alice"</span><span class="token punctuation">,</span> <span class="token string">"logged in"</span><span class="token punctuation">)</span>
+</code></pre>
+<h2 id="path-types" tabindex="-1">Path Types</h2>
+<p>Paths can be:</p>
+<ul>
+<li>Relative: <code>[docs/guide.md]</code></li>
+<li>Absolute: <code>[/usr/local/docs/guide.md]</code></li>
+<li>Home directory: <code>[@~/Documents/guide.md]</code></li>
+<li>Project relative: <code>[@./docs/guide.md]</code></li>
+<li>From path variable: <code>[@docsPath/guide.md]</code></li>
+<li>URLs: <code>[https://example.com/guide.md]</code></li>
+</ul>
+<h2 id="error-handling" tabindex="-1">Error Handling</h2>
+<p>The implementation handles these error scenarios:</p>
+<ul>
+<li>File not found</li>
+<li>Section not found in target file</li>
+<li>Invalid syntax</li>
+<li>Circular file inclusions</li>
+</ul>
+<h2 id="examples" tabindex="-1">Examples</h2>
+<p>Include entire file:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>README.md<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>@./docs/architecture.md<span class="token punctuation">]</span></span>
+</code></pre>
+<p>Include specific sections:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>docs/api.md # Authentication<span class="token punctuation">]</span></span>
+<span class="token directive keyword">@add</span> <span class="token string">"## Installation"</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>README.md<span class="token punctuation">]</span></span>
+</code></pre>
+<p>Include with renamed sections:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span>guide.md # Getting Started<span class="token punctuation">]</span></span> <span class="token operator">as</span> <span class="token string">"# Quick Start Guide"</span>
+<span class="token directive keyword">@add</span> <span class="token string">"Installation"</span> <span class="token operator">from</span> <span class="token path"><span class="token punctuation">[</span>README.md<span class="token punctuation">]</span></span> <span class="token operator">as</span> <span class="token string">"## Setup Instructions"</span>
+</code></pre>
+<p>Include from URLs:</p>
+<pre class="language-mlld"><code class="language-mlld"><span class="token directive keyword">@add</span> <span class="token path"><span class="token punctuation">[</span><span class="token url string">https://raw.githubusercontent.com/example/repo/main/README.md</span><span class="token punctuation">]</span></span>
+</code></pre>
+<h2 id="notes" tabindex="-1">Notes</h2>
+<ul>
+<li>Missing files will generate errors</li>
+<li>Section matching is case-sensitive</li>
+<li>For non-markdown files, the entire file content is included</li>
+<li>The implementation protects against circular file inclusions</li>
+<li>Template variables use <code>{{variable}}</code> syntax inside <code>[[...]]</code> blocks</li>
+</ul>
+
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const toggleButton = document.querySelector('.docs-sidebar-toggle');
+    const sidebar = document.getElementById('docs-sidebar');
+    const overlay = document.getElementById('docs-overlay');
+    
+    // Function to toggle the sidebar
+    function toggleSidebar() {
+      const isExpanded = toggleButton.getAttribute('aria-expanded') === 'true';
+      toggleButton.setAttribute('aria-expanded', !isExpanded);
+      sidebar.classList.toggle('open');
+      
+      // Toggle overlay
+      overlay.classList.toggle('active');
+      
+      // Lock/unlock body scroll when sidebar is open on mobile
+      if (window.innerWidth <= 950) {
+        document.body.classList.toggle('sidebar-open', !isExpanded);
+      }
+    }
+    
+    // Add click event for toggle button
+    toggleButton.addEventListener('click', toggleSidebar);
+    
+    // Add click event for overlay to close sidebar
+    overlay.addEventListener('click', function() {
+      if (sidebar.classList.contains('open')) {
+        toggleSidebar();
+      }
+    });
+    
+    // Close sidebar when clicking on a link (mobile only)
+    sidebar.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', function() {
+        if (window.innerWidth <= 950 && sidebar.classList.contains('open')) {
+          toggleSidebar();
+        }
+      });
+    });
+    
+    // Close sidebar when clicking outside of it (mobile only) - now handled by overlay
+    document.addEventListener('click', function(event) {
+      if (window.innerWidth <= 950 && 
+          sidebar.classList.contains('open') && 
+          !sidebar.contains(event.target) && 
+          !toggleButton.contains(event.target) &&
+          !overlay.contains(event.target)) {
+        toggleSidebar();
+      }
+    });
+  });
+</script>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 mlld - <a href="https://github.com/mlld-lang/mlld">GitHub</a></p>
+    </div>
+  </footer>
+</body>
+</html>
