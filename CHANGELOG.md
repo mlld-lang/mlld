@@ -55,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed critical shell command syntax errors when using commands with special characters like parentheses
-- Fixed multi-line text processing issues in commands, particularly affecting the `oneshot` command
+- Fixed multi-line text processing issues in commands, particularly affecting the `llm` command
 - Improved error handling for shell commands to prevent syntax errors from appearing in output
 - Enhanced command execution to safely handle shell special characters and properly preserve multi-line content
 

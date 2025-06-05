@@ -3,7 +3,7 @@
 >> Create a folder for generated docs:
 @run [(mkdir -p @src/docs)]
 
->> For each .ts file in src, send it to oneshot asking for detailed docs:
+>> For each .ts file in src, send it to llm asking for detailed docs:
 @run [(
   for f in @src/**/*.ts; do
     filename=$(basename "$f")
@@ -13,7 +13,7 @@
 
 @run [(
   for f in @src/**/*.ts; do 
-    oneshot \
+    llm \
       --task "Please provide a thorough, user-friendly documentation in Markdown for this file. Include usage instructions, examples, and any important notes or edge cases." \
       --file "$f" \
       --output "docs/$(basename "$f").md" \

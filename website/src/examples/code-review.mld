@@ -10,4 +10,4 @@
    Here's your task: {{tasks.codereview}}
 ]]
 
-@run [oneshot @prompt --system @roles.architect]
+@run [llm @prompt --system @roles.architect]

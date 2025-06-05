@@ -4,7 +4,7 @@ The `foreach` operator enables powerful iteration over arrays by applying parame
 
 ## Basic Syntax
 
-```meld
+```mlld
 @data <result> = foreach <parameterized-command>(<arrays>)
 ```
 
@@ -17,7 +17,7 @@ Where:
 
 Apply the same operation to each element in an array:
 
-```meld
+```mlld
 @data topics = ["security", "performance", "scalability"]
 @exec analyze(topic) = @run [(claude --message "Analyze @topic aspects of the code")]
 @data analyses = foreach @analyze(@topics)
@@ -29,7 +29,7 @@ Result: `analyses` contains an array with 3 elements (one analysis per topic).
 
 When given multiple arrays, `foreach` computes the cartesian product, testing all combinations:
 
-```meld
+```mlld
 @data models = ["claude", "gpt-4"]
 @data temperatures = [0.7, 0.9]
 @exec test(model, temp) = @run [(@model --temperature @temp "Explain quantum computing")]
@@ -46,7 +46,7 @@ Result: `results` contains 4 elements:
 
 When iterating over objects, the entire object is passed as the parameter:
 
-```meld
+```mlld
 @data users = [
   {"name": "Alice", "role": "admin"},
   {"name": "Bob", "role": "user"}
@@ -65,7 +65,7 @@ Permissions: {{user.role}} level access
 
 The number of arrays must match the number of parameters in the command/template:
 
-```meld
+```mlld
 @exec process(a, b) = @run [(echo "@a and @b")]
 
 # Valid:
@@ -83,7 +83,7 @@ The number of arrays must match the number of parameters in the command/template
 
 Process multiple questions with the same LLM:
 
-```meld
+```mlld
 @data questions = [
   "What is machine learning?",
   "Explain neural networks",
@@ -100,7 +100,7 @@ Process multiple questions with the same LLM:
 
 Compare responses across different AI models:
 
-```meld
+```mlld
 @data models = ["claude-3", "gpt-4", "gemini-pro"]
 @data prompts = ["Write a haiku about programming", "Explain recursion"]
 
@@ -114,7 +114,7 @@ Compare responses across different AI models:
 
 Process multiple files with the same operation:
 
-```meld
+```mlld
 @data js_files = @run [(find ./src -name "*.js" -type f)]
 @exec analyze_file(file) = @run [(eslint @file --format json)]
 @data lint_results = foreach @analyze_file(@js_files)
@@ -124,7 +124,7 @@ Process multiple files with the same operation:
 
 Generate structured reports from data:
 
-```meld
+```mlld
 @data metrics = [
   {"name": "CPU", "value": 45, "unit": "%"},
   {"name": "Memory", "value": 2.3, "unit": "GB"},
@@ -143,7 +143,7 @@ Generate structured reports from data:
 
 Work with complex combinations of parameters:
 
-```meld
+```mlld
 @data departments = ["engineering", "sales", "support"]
 @data quarters = ["Q1", "Q2", "Q3", "Q4"]
 
@@ -201,7 +201,7 @@ Command failed with exit code 1
 
 ### With @when Conditions
 
-```meld
+```mlld
 @data files = ["config.json", "data.csv", "readme.txt"]
 @exec process_if_json(file) = @run [(
   if [[ "@file" == *.json )]]; then jq . "@file"; fi
@@ -213,7 +213,7 @@ Command failed with exit code 1
 
 ### With Pipeline Processing (Planned)
 
-```meld
+```mlld
 @data files = ["data1.json", "data2.json", "data3.json"]
 @exec process_file(file) = @run [(cat @file)] with {
   pipeline: [@validate_json(@input), @extract_metrics(@input)]

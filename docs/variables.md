@@ -5,7 +5,7 @@ title: "Variables"
 
 # Variables
 
-Mlld has three distinct types of variables, each with its own syntax and usage patterns.
+mlld has three distinct types of variables, each with its own syntax and usage patterns.
 
 ## Variable Types
 
@@ -14,21 +14,21 @@ Mlld has three distinct types of variables, each with its own syntax and usage p
 Path variables are used for filesystem paths and command arguments:
 
 ```mlld
-$path                # Reference a path variable
-$HOMEPATH or $~      # Special path variable for home directory
-$PROJECTPATH or $.   # Special path variable for project root
+@path                # Reference a path variable in directives
+[@path]              # Use in path contexts (inside brackets)
+[@./path]            # Project root path
 ```
 
 - Must be defined with `@path` directive
-- All paths must be absolute (via $HOMEPATH or $PROJECTPATH)
-- Used primarily inside `[]` brackets
+- Used primarily inside `[]` brackets in path contexts
 - Cannot use field access or formatting
 - Path segments are separated by forward slashes
+- Special prefix: `.` for project root
 
 Example:
 ```mlld
-@path docs = "$PROJECTPATH/docs"
-@add [$docs/guide.md]
+@path docs = [@./docs]
+@add [@docs/guide.md]
 ```
 
 ### Text Variables
@@ -36,19 +36,20 @@ Example:
 Text variables store unstructured text:
 
 ```mlld
-{{variable}}            # Reference a text variable
-{{variable>>(format)}}  # Reference with formatting
+@variable            # Reference in directives
+{{variable}}         # Reference in templates [[...]]
 ```
 
 - Defined with `@text` directive
 - No field access (text is atomic)
-- Environment variables ({{ENV_*}}) are a special case of text variables
+- In directives: use `@variable`
+- In templates `[[...]]`: use `{{variable}}`
 
 Example:
 ```mlld
 @text greeting = "Hello"
 @text name = "World"
-@text message = `{{greeting}}, {{name}}!`
+@text message = [[{{greeting}}, {{name}}!]]
 ```
 
 ### Data Variables
@@ -56,21 +57,20 @@ Example:
 Data variables store structured data:
 
 ```mlld
-{{variable}}                   # Reference a data variable
-{{variable.field}}            # Access a field in a data variable
-{{variable.field>>(format)}}  # Reference with formatting
+@variable             # Reference in directives
+@variable.field       # Field access in directives
+{{variable}}          # Reference in templates
+{{variable.field}}    # Field access in templates
 ```
 
 - Defined with `@data` directive
-- Support field access ({{config.name}})
-- Fields can be nested ({{config.user.name}})
-- Can be formatted with `>>`
+- Support field access (`@config.name` in directives, `{{config.name}}` in templates)
+- Fields can be nested (`@config.user.name`, `{{config.user.name}}`)
 
 Example:
 ```mlld
-@data user = {{ name: "Alice", id: 123 }}
-@text greeting = `Hello, {{user.name}}! Your ID is {{user.id}}.`
-```
+@data user = { "name": "Alice", "id": 123 }
+@text greeting = [[Hello, {{user.name}}! Your ID is {{user.id}}.]]```
 
 ### Array Access
 
@@ -78,8 +78,8 @@ When working with arrays, use dot notation to access array elements by index:
 
 ```mlld
 @data items = ["apple", "banana", "cherry"]
-@text first = `First item: {{items.0}}`
-@text second = `Second item: {{items.1}}`
+@text first = [[First item: {{items.0}}]]
+@text second = [[Second item: {{items.1}}]]
 ```
 
 Note: Currently, only dot notation is supported for array access. Bracket notation (`items[0]`) is not supported.
@@ -94,14 +94,14 @@ Variables can be converted between types automatically in many contexts:
 - Objects and arrays convert to JSON string representation
 
 ```mlld
-@data config = {{ name: "test", version: 1 }}
-@text simple = `Name: {{config.name}}`          # Outputs: Name: test
-@text object = `Config: {{config}}`             # Outputs: Config: {"name":"test","version":1}
+@data config = { "name": "test", "version": 1 }
+@text simple = [[Name: {{config.name}}]]          # Outputs: Name: test
+@text object = [[Config: {{config}}]]             # Outputs: Config: {"name":"test","version":1}
 ```
 
 ### Object and Array Formatting
 
-When referencing complete objects or arrays (rather than their individual fields), Mlld formats them based on the context:
+When referencing complete objects or arrays (rather than their individual fields), mlld formats them based on the context:
 
 #### Array Formatting
 
@@ -113,20 +113,20 @@ When referencing an entire array:
 
 - **Inline context** (within text, template literals):
   ```mlld
-  @text list = `My fruits: {{fruits}}`  # Outputs: My fruits: apple, banana, orange
+  @text list = [[My fruits: {{fruits}}]]  # Outputs: My fruits: apple, banana, orange
   ```
   Arrays are formatted as comma-separated values with spaces.
 
 - **Block context** (in embed directives, standalone references):
   ```mlld
-  @add {{fruits}}
+  @add @fruits
   ```
   Simple arrays (of strings, numbers) use comma-separated values with spaces.
   
   Arrays of objects are formatted as properly indented JSON:
   ```mlld
   @data people = [{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }]
-  @add {{people}}
+  @add @people
   ```
   This outputs the array as properly indented JSON:
   ```json
@@ -152,13 +152,13 @@ When referencing an entire object:
 
 - **Inline context**:
   ```mlld
-  @text settings = `My config: {{config}}`  # Outputs: My config: {"host":"localhost","port":8080}
+  @text settings = [[My config: {{config}}]]  # Outputs: My config: {"host":"localhost","port":8080}
   ```
   Objects are formatted as compact JSON without whitespace.
 
 - **Block context** (in embed directives, standalone references):
   ```mlld
-  @add {{config}}
+  @add @config
   ```
   Objects are formatted as properly indented JSON:
   ```json
@@ -177,13 +177,13 @@ When referencing an entire object:
 @text name = "Alice"
 @text key = "username"
 
-@data user = {{
-  {{key}}: {{name}},              # Dynamic key from text
-  id: 123,
-  settings: {
-    displayName: {{name}}        # Nested text value
+@data user = {
+  @key: @name,              # Dynamic key from text
+  "id": 123,
+  "settings": {
+    "displayName": @name        # Nested text value
   }
-}}
+}
 ```
 
 ## Where Variables Can Be Used
@@ -205,7 +205,7 @@ You can concatenate strings using the `++` operator:
 
 ```mlld
 @text greeting = "Hello" ++ " " ++ "World"
-@text message = {{intro}} ++ {{body}}
+@text message = @intro ++ @body
 ```
 
 - Requires spaces on both sides of `++`

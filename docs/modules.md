@@ -1,6 +1,6 @@
-# Mlld Module System
+# mlld Module System
 
-The mlld module system allows you to share and reuse Mlld code across projects. Modules are distributed through a decentralized registry system that uses DNS for discovery and GitHub gists for storage.
+The mlld module system allows you to share and reuse mlld code across projects. Modules are distributed through a decentralized registry system that uses DNS for discovery and GitHub gists for storage.
 
 ## Quick Start
 
@@ -29,7 +29,7 @@ mlld install
 Once installed, import modules in your `.mlld` files:
 
 ```mlld
-@import { formatDate, capitalize } from "@alice/utils"
+@import { formatDate, capitalize } from @alice/utils
 
 @text greeting = [[Hello {{capitalize("world")}}!]]
 @text today = [[Today is {{formatDate(@TIME)}}]]
@@ -224,7 +224,7 @@ Created: January 15, 2024
 
 ### Creating Modules
 
-Create a module by writing standard Mlld code with an explicit module export:
+Create a module by writing standard mlld code with an explicit module export:
 
 **alice-utils.mlld:**
 ```mlld
@@ -250,7 +250,7 @@ version: 1.0.0
 
 #### Module Export Patterns
 
-Mlld supports multiple export patterns to fit different module design needs:
+mlld supports multiple export patterns to fit different module design needs:
 
 ##### 1. Explicit Module Export (`@data module`)
 
@@ -347,7 +347,7 @@ If no `@data module` is defined, mlld automatically creates one with all top-lev
 Module frontmatter is always available via the `__meta__` property:
 
 ```mlld
-@import { utils } from "@alice/utils"
+@import { utils } from @alice/utils
 
 # Access metadata
 @add [[Author: {{utils.__meta__.author}}]]
@@ -576,7 +576,7 @@ mlld install @community/string-utils
 ```
 
 ```mlld
-@import { slugify, truncate } from "@community/string-utils"
+@import { slugify, truncate } from @community/string-utils
 
 @text title = "My Blog Post Title!"
 @text slug = [[{{slugify(@title)}}]]
@@ -596,10 +596,10 @@ mlld install @templates/blog
 ```
 
 ```mlld
-@import { postTemplate, authorBio } from "@templates/blog"
+@import { postTemplate, authorBio } from @templates/blog
 
 @data post = {
-  "title": "Introduction to Mlld Modules",
+  "title": "Introduction to mlld Modules",
   "author": "Alice Developer", 
   "date": "2024-01-15",
   "content": "Modules make code reusable..."
@@ -651,15 +651,9 @@ mlld registry audit
 3. **Auditing**: Regular security audits of used modules
 4. **Training**: Educate developers on module best practices
 
-## Roadmap
+## Future Considerations
 
-### Planned Features
-
-- **Module Search**: `mlld search <query>` command
-- **Update Management**: `mlld update` and `mlld outdated` commands  
-- **Registry Management**: Enhanced registry configuration
-- **MCP Integration**: Module support for MCP servers
-- **IDE Support**: Better tooling integration
+The module system may be extended with additional features based on community needs and feedback. Potential areas for enhancement include improved search capabilities, update management, and better integration with development tools.
 
 ### Contributing
 

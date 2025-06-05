@@ -2,6 +2,9 @@
 
 repo: github.com/mlld-lang/mlld
 
+## Style Guide
+- **Name convention**: Always write "mlld" in all lowercase when referring to the language (not "MLLD", "Mlld", or "MllD")
+
 ## Module System (JavaScript/TypeScript)
 - **Package Type**: ESM-first (`"type": "module"`) - all `.js` files are ES modules
 - **Dual Build**: tsup creates both `.mjs` and `.cjs` outputs for compatibility
@@ -111,6 +114,7 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 - Multiple arrays create cartesian product: `foreach @cmd(@arr1, @arr2)`
 - Works with parameterized `@exec` commands or `@text` templates
 - Results are always arrays matching the iteration count
+- Parameter count must match array count: `@exec process(a, b)` requires 2 arrays
 
 ### Module System (Mlld Modules)
 - Install: `mlld install @author/module` or `mlld install` (from lock file)
@@ -146,6 +150,7 @@ When compacting for the next session--*especially* mid-task, your emphasis shoul
 
 ## Coding Practices
 - Don't add comments saying something is being removed or changed -- keep comments timeless
+- **No branding in commits/PRs**: Do NOT add "🤖 Generated with Claude Code" or "Co-Authored-By: Claude" to commits or PRs. These add no value and are just annoying metrics/branding. Keep commits clean and professional.
 
 ## Development Workflows
 - **Local Testing**: To test mlld locally with custom command names:
@@ -153,4 +158,40 @@ When compacting for the next session--*especially* mid-task, your emphasis shoul
   - `npm run reinstall -- myname` - installs as `mlld-myname` 
   - `npm run reinstall:clean` - removes ALL `mlld-*` commands
   - `npm run reinstall:clean -- myname` - removes only `mlld-myname`
+<<<<<<< HEAD
   - These commands create symlinks in your global npm bin directory, so you can run multiple versions side-by-side
+=======
+  - These commands create symlinks in your global npm bin directory, so you can run multiple versions side-by-side
+
+## llms.txt Editing Rules
+
+The `llms.txt` file serves as the authoritative onboarding guide for LLMs learning mlld. It must be accurate, complete, and verified against the actual implementation.
+
+### Editing Guidelines:
+1. **Verify Before Editing**: Every syntax example and claim must be verified against:
+   - Grammar files in `grammar/` (source of truth for syntax)
+   - Test cases in `tests/cases/` (examples of valid/invalid syntax)
+   - Interpreter code in `interpreter/` (implementation details)
+   - Documentation in `docs/` (user-facing explanations)
+
+2. **Confidence Threshold**: Only make edits when >95% confident in accuracy:
+   - 100%: Verified in grammar + tests + working examples
+   - 95%: Clear in code + documentation
+   - <95%: Needs more investigation - file GitHub issue instead
+
+3. **Example Accuracy**: All code examples must:
+   - Parse successfully according to the grammar
+   - Execute as described
+   - Demonstrate best practices
+   - Include both ❌ wrong and ✅ correct versions where helpful
+
+4. **Completeness**: Cover common LLM mistakes and misconceptions:
+   - mlld is NOT a template language
+   - Context-specific variable syntax
+   - Module-first philosophy for complexity
+
+5. **Maintenance**: When mlld syntax evolves:
+   - Update examples to match current syntax
+   - Note deprecated patterns explicitly
+   - Test all examples before committing
+>>>>>>> origin/s1
