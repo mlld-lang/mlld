@@ -3,8 +3,35 @@
 
 // Primary @text directive
 AtText
+  // Foreach expression assignment - must come early to avoid misparsing
+  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ foreach:ForeachCommandExpression {
+      helpers.debug('AtText matched foreach expression', { id, foreach });
+      
+      const subtype = 'textAssignment';
+      const sourceType = 'foreach';
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          foreach: foreach
+        },
+        {
+          identifier: id,
+          foreach: helpers.reconstructRawString([foreach])
+        },
+        {
+          sourceType,
+          hasVariables: true,
+          isTemplateContent: false
+        },
+        location(),
+        sourceType
+      );
+    }
   // Literal string assignment with security options
-  = DirectiveContext "@text" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ content:StringLiteral {
+  / DirectiveContext "@text" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ content:StringLiteral {
       const securityOptions = security ? security[0] : null;
       helpers.debug('AtText matched literal string', { id, content, securityOptions });
       

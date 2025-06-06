@@ -18,6 +18,16 @@ Uses context predicates from `base/context.peggy` to disambiguate different uses
 Defines patterns for accessing fields in objects and arrays:
 - `FieldAccess` - Dot notation for accessing object properties (e.g., `obj.property`)
 - `NumericFieldAccess` - Numeric field access (e.g., `obj.123`)
+
+### foreach.peggy
+Defines patterns for foreach functionality used across multiple directives:
+- `ForeachCommandExpression` - Main foreach expression pattern for iterating over arrays
+- `ForeachCommandRef` - References to parameterized commands or templates
+- `ForeachArrayArgumentList` - List of array arguments for iteration
+- `ForeachVariableRef` - Variable references for arrays
+- `ForeachWithClause` - Optional with clause for separator and template options
+
+Used by `@data`, `@text`, and available in `@when` action blocks.
 - `ArrayAccess` - Array indexing with brackets (e.g., `array[0]`)
 
 ### content.peggy
