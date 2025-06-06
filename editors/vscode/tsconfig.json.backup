@@ -6,16 +6,13 @@
     "outDir": "dist",
     "rootDir": "src",
     "sourceMap": true,
-    "strict": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "baseUrl": ".",
-    "paths": {
-      "@mlld/parser": ["../../grammar/parser/index.ts"],
-      "@mlld/types": ["../../core/types/index.ts"]
-    }
+    "resolveJsonModule": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]

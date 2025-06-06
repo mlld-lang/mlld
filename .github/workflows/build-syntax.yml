@@ -1,0 +1,60 @@
+name: Build Syntax Highlighting
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # Only trigger when grammar files change
+      - 'grammar/**/*.peggy'
+      - 'grammar/syntax-generator/**'
+      - 'package.json'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  build-syntax:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build grammar core
+        run: npm run build:grammar:core
+      
+      - name: Force build syntax files
+        run: npm run build:syntax:force
+        env:
+          FORCE_SYNTAX_BUILD: true
+      
+      - name: Check if syntax files were generated
+        id: check_files
+        run: |
+          if [ -n "$(git status --porcelain grammar/generated/)" ]; then
+            echo "files_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "files_changed=false" >> $GITHUB_OUTPUT
+            echo "No syntax files were changed"
+          fi
+      
+      - name: Commit and push syntax files
+        if: steps.check_files.outputs.files_changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add grammar/generated/
+          git commit -m "chore: update generated syntax highlighting files [skip ci]"
+          git push

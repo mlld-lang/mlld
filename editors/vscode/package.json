@@ -3,7 +3,7 @@
   "displayName": "mlld",
   "description": "Language support for mlld - A modular prompt scripting language",
   "version": "0.1.0",
-  "publisher": "mlld-lang",
+  "publisher": "andyet",
   "repository": {
     "type": "git",
     "url": "https://github.com/mlld-lang/mlld.git"
@@ -27,11 +27,11 @@
     "composition",
     "template"
   ],
-  "icon": "images/icon.png",
+  "icon": "images/mlld-logo-m.png",
   "activationEvents": [
     "onLanguage:mlld"
   ],
-  "main": "./dist/extension.js",
+  "main": "./src/extension.js",
   "contributes": {
     "languages": [
       {
@@ -94,9 +94,7 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "echo 'No compilation needed for JavaScript'",
     "test": "jest"
   },
   "devDependencies": {
