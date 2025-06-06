@@ -381,6 +381,7 @@ Options:
   -f, --force          Force publish even with uncommitted changes
   -g, --gist           Create a gist even if in a git repository
   --use-gist           Same as --gist
+  -o, --org <name>     Publish on behalf of an organization
   -v, --verbose        Show detailed output
 
 Git Integration:
@@ -390,6 +391,12 @@ Git Integration:
   - Validates clean working tree (use --force to override)
   - Falls back to gist creation if not in git repo or repo is private
 
+Organization Publishing:
+  - Use --org <name> to publish as an organization you're a member of
+  - Or set 'author: org-name' in frontmatter (will verify membership)
+  - Organizations cannot create gists - must use git repositories
+  - Requires membership verification via GitHub API
+
 Examples:
   mlld publish                    # Publish from git repo or create gist
   mlld publish my-module.mld      # Publish specific file
@@ -397,6 +404,7 @@ Examples:
   mlld publish --dry-run          # Test publish without creating PR
   mlld publish --force            # Publish with uncommitted changes
   mlld publish --use-gist         # Force gist creation
+  mlld publish --org myorg        # Publish as organization 'myorg'
     `);
     return;
   }

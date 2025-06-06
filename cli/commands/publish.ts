@@ -21,6 +21,7 @@ export interface PublishOptions {
   force?: boolean;
   message?: string;
   useGist?: boolean; // Force gist creation even if in git repo
+  org?: string; // Publish on behalf of an organization
 }
 
 export interface ModuleMetadata {
@@ -71,11 +72,49 @@ export class PublishCommand {
       const resolvedPath = path.resolve(modulePath);
       const { content, metadata, filename, filePath } = await this.readModule(resolvedPath);
       
-      // Validate author matches
-      if (metadata.author && metadata.author !== user.login) {
+      // Determine the publishing author (user or org)
+      let publishingAuthor = user.login;
+      
+      // Check if publishing on behalf of an organization
+      if (options.org) {
+        publishingAuthor = options.org;
+        
+        // Verify user has permission to publish for this org
+        const hasOrgPermission = await this.checkOrgPermission(octokit, options.org, user.login);
+        if (!hasOrgPermission) {
+          throw new MlldError(
+            `You don't have permission to publish on behalf of organization '${options.org}'.\n` +
+            `Please ensure you're a member of the organization.`
+          );
+        }
+        
+        console.log(chalk.green(`✅ Verified permission to publish as @${options.org}`));
+      } else if (metadata.author && metadata.author !== user.login) {
+        // Check if the author field is an org the user belongs to
+        const isOrg = await this.checkOrgPermission(octokit, metadata.author, user.login);
+        if (isOrg) {
+          publishingAuthor = metadata.author;
+          console.log(chalk.green(`✅ Publishing as organization @${metadata.author}`));
+        } else {
+          throw new MlldError(
+            `Frontmatter author '${metadata.author}' doesn't match your GitHub user '${user.login}'.\n` +
+            `If '${metadata.author}' is an organization, you need to be a member to publish.\n` +
+            `Otherwise, update the author field or authenticate as '${metadata.author}'.`
+          );
+        }
+      }
+      
+      // Update metadata author to match publishing author
+      metadata.author = publishingAuthor;
+
+      // Validate imports reference only public modules
+      console.log(chalk.gray('Validating module imports...'));
+      const importValidation = await this.validateImports(content, octokit);
+      if (!importValidation.valid) {
         throw new MlldError(
-          `Frontmatter author '${metadata.author}' doesn't match GitHub user '${user.login}'\n` +
-          `Please update the author field or authenticate as '${metadata.author}'.`
+          'Module imports validation failed:\n' +
+          importValidation.errors.map(e => `  • ${e}`).join('\n') +
+          '\n\nOnly published modules from the registry can be imported.'
         );
       }
 
@@ -91,7 +130,7 @@ export class PublishCommand {
       }
 
       console.log(chalk.bold('Module Information:'));
-      console.log(`  Name: @${metadata.author}/${metadata.name}`);
+      console.log(`  Name: @${publishingAuthor}/${metadata.name}`);
       console.log(`  Description: ${metadata.description}`);
       console.log(`  Version: ${metadata.version || '1.0.0'}`);
       
@@ -129,7 +168,7 @@ export class PublishCommand {
               output: process.stdout,
             });
             
-            console.log(chalk.blue(`\n📦 Publishing @${metadata.author}/${metadata.name} from ${gitInfo.owner}/${gitInfo.repo}`));
+            console.log(chalk.blue(`\n📦 Publishing @${publishingAuthor}/${metadata.name} from ${gitInfo.owner}/${gitInfo.repo}`));
             console.log(chalk.gray(`   Source: ${gitInfo.relPath} @ ${gitInfo.sha?.substring(0, 8)}`));
             console.log(chalk.gray(`   This will create a pull request to the mlld registry\n`));
             
@@ -213,6 +252,18 @@ export class PublishCommand {
       
       if (!registryEntry) {
         // Gist-based publishing (fallback)
+        
+        // Check if we're trying to publish as an organization
+        if (publishingAuthor !== user.login) {
+          throw new MlldError(
+            `Cannot create gists on behalf of organization '${publishingAuthor}'.\n` +
+            `GitHub organizations cannot create gists. Please use one of these alternatives:\n` +
+            `  1. Publish from a public git repository\n` +
+            `  2. Remove the --org flag or org author to publish under your personal account\n` +
+            `  3. Create the module in a public repository owned by ${publishingAuthor}`
+          );
+        }
+        
         console.log(chalk.yellow('\n📝 Preparing to create GitHub gist...'));
         
         // Interactive confirmation for gist creation
@@ -226,7 +277,7 @@ export class PublishCommand {
             `${path.basename(filePath)} (not in git repo)` : 
             path.basename(filePath);
           
-          console.log(chalk.blue(`\n📤 Publishing @${metadata.author}/${metadata.name} as a GitHub gist`));
+          console.log(chalk.blue(`\n📤 Publishing @${publishingAuthor}/${metadata.name} as a GitHub gist`));
           console.log(chalk.gray(`   Source: ${sourceInfo}`));
           console.log(chalk.gray(`   This will create a new gist and pull request to the mlld registry\n`));
           
@@ -295,7 +346,7 @@ export class PublishCommand {
       console.log(chalk.green('\n✅ Module published successfully!\n'));
       console.log(chalk.bold('Next steps:'));
       console.log(`  1. Your pull request: ${chalk.cyan(prUrl)}`);
-      console.log(`  2. Once merged, install with: ${chalk.cyan(`mlld install @${user.login}/${metadata.name}`)}`);
+      console.log(`  2. Once merged, install with: ${chalk.cyan(`mlld install @${publishingAuthor}/${metadata.name}`)}`);
       console.log(`  3. Module source: ${chalk.cyan(sourceUrl)}`);
       
     } catch (error) {
@@ -319,6 +370,25 @@ export class PublishCommand {
         return false;
       }
       // For other errors, assume private to be safe
+      return false;
+    }
+  }
+
+  /**
+   * Check if user has permission to publish on behalf of an organization
+   */
+  private async checkOrgPermission(octokit: Octokit, org: string, username: string): Promise<boolean> {
+    try {
+      // Check if user is a member of the organization
+      const { data: membership } = await octokit.orgs.getMembershipForUser({
+        org,
+        username
+      });
+      
+      // User must be at least a member (admin is even better)
+      return membership.state === 'active' && (membership.role === 'admin' || membership.role === 'member');
+    } catch (error: any) {
+      // 404 means not a member, other errors mean we can't verify
       return false;
     }
   }
@@ -470,6 +540,52 @@ export class PublishCommand {
   }
 
   /**
+   * Validate module imports to ensure they reference public modules
+   */
+  private async validateImports(content: string, octokit: Octokit): Promise<{ valid: boolean; errors: string[] }> {
+    const errors: string[] = [];
+    
+    // Find all @import directives that reference modules (start with @)
+    const importRegex = /@import\s+\{[^}]+\}\s+from\s+(@[a-z0-9-]+\/[a-z0-9-]+)(?:@[a-f0-9]+)?/g;
+    const matches = content.matchAll(importRegex);
+    
+    for (const match of matches) {
+      const moduleRef = match[1]; // e.g. @author/module
+      const [, author, moduleName] = moduleRef.match(/^@([a-z0-9-]+)\/([a-z0-9-]+)$/) || [];
+      
+      if (!author || !moduleName) {
+        errors.push(`Invalid module reference format: ${moduleRef}`);
+        continue;
+      }
+      
+      try {
+        // Check if the module exists in the registry
+        const registryUrl = `https://raw.githubusercontent.com/mlld-lang/registry/main/modules.json`;
+        const response = await fetch(registryUrl);
+        
+        if (!response.ok) {
+          errors.push(`Could not access registry to validate module ${moduleRef}`);
+          continue;
+        }
+        
+        const registry = await response.json() as Record<string, any>;
+        const fullModuleName = `@${author}/${moduleName}`;
+        
+        if (!(fullModuleName in registry)) {
+          errors.push(`Module ${moduleRef} not found in public registry. Only published modules can be imported.`);
+        }
+      } catch (error) {
+        errors.push(`Failed to validate module ${moduleRef}: ${error.message}`);
+      }
+    }
+    
+    return {
+      valid: errors.length === 0,
+      errors
+    };
+  }
+
+  /**
    * Parse module metadata from content
    */
   private parseMetadata(content: string, filename: string): ModuleMetadata {
@@ -479,9 +595,9 @@ export class PublishCommand {
       author: '',
     };
     
-    // Extract name from filename if not in frontmatter
+    // Module name comes from frontmatter 'name' field, NOT from filename
+    // The filename is only used as a fallback if no frontmatter name exists
     const baseName = path.basename(filename, '.mld');
-    metadata.name = baseName === 'main' || baseName === 'index' ? '' : baseName;
     
     // Parse frontmatter if exists
     const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
@@ -489,7 +605,8 @@ export class PublishCommand {
       try {
         const parsed = yaml.load(frontmatterMatch[1]) as any;
         
-        metadata.name = parsed.name || parsed.module || metadata.name;
+        // Frontmatter 'name' field takes precedence
+        metadata.name = parsed.name || parsed.module || '';
         metadata.description = parsed.description || metadata.description;
         metadata.author = parsed.author || metadata.author;
         metadata.version = parsed.version;
@@ -500,6 +617,11 @@ export class PublishCommand {
       } catch (e) {
         // Invalid YAML, continue with defaults
       }
+    }
+    
+    // Only use filename as fallback if no frontmatter name
+    if (!metadata.name && baseName !== 'main' && baseName !== 'index') {
+      metadata.name = baseName;
     }
     
     // Extract description from first heading if not in frontmatter
@@ -749,6 +871,7 @@ export function createPublishCommand() {
         force: flags.force || flags.f,
         message: flags.message || flags.m,
         useGist: flags['use-gist'] || flags.gist || flags.g,
+        org: flags.org || flags.o,
       };
       
       try {
