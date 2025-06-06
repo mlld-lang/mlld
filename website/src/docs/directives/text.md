@@ -33,34 +33,37 @@ Text values can be defined using different quote styles:
 ```mlld
 @text simple = "Plain string"       # Double quotes
 @text also_simple = 'Single quotes' # Single quotes
-@text template = `Hello {{name}}`    # Template literal with variable
+@text template = [[Hello {{name}}]]  # Template with variable interpolation
 ```
 
-For multi-line strings, use template literals with the `[[` and `]]` delimiters:
+For multi-line templates, use double brackets:
 
 ```mlld
-@text multiline = [[`
+@text multiline = [[
   This is a
   multi-line
-  string with {{variables}}
-`]]
+  template with {{variables}}
+]]
 ```
 
 ## Referencing Text Variables
 
-Text variables are referenced using the `{{identifier}}` syntax:
+Text variables are referenced differently based on context:
+- In directives: `@identifier`
+- In templates `[[...]]`: `{{identifier}}`
 
 ```mlld
 @text name = "World"
-@text greeting = `Hello, {{name}}!`
+@text greeting = [[Hello, {{name}}!]]
+@add @greeting
 ```
 
 ## Variable Interpolation
 
-Template literals (using backticks) support variable interpolation:
+Templates (using double brackets) support variable interpolation:
 
-- Text variables: `Hello, {{name}}!`
-- Nested variables: `Hello, {{user.{{userType}}}}`
+- Text variables: `[[Hello, {{name}}!]]`
+- Field access: `[[User: {{user.name}}]]`
 
 
 ## Examples
@@ -91,5 +94,6 @@ Embedding file content:
 ## Notes
 
 - Text variables cannot have field access (use data variables for structured data)
-- Text variables can be used in template strings, commands, and data structures
-- Only backtick strings support variable interpolation
+- Text variables can be used in templates, commands, and data structures
+- Only templates `[[...]]` support variable interpolation with `{{var}}`
+- In directives, use `@var` syntax

@@ -5,7 +5,7 @@ title: "@add Directive"
 
 # @add Directive
 
-The `@add` directive includes content from external files, variables, or templates into your Mlld document.
+The `@add` directive includes content from external files, variables, or templates into your mlld document.
 
 ## Syntax
 
@@ -59,7 +59,7 @@ Add content from variables:
 @text greeting = "Hello, world!"
 @add @greeting
 
-@data user = { name: "Alice", role: "Admin" }
+@data user = { "name": "Alice", "role": "Admin" }
 @add @user.name
 ```
 
@@ -90,7 +90,6 @@ Use template functions defined with @text:
 Paths can be:
 - Relative: `[docs/guide.md]`
 - Absolute: `[/usr/local/docs/guide.md]`
-- Home directory: `[@~/Documents/guide.md]`
 - Project relative: `[@./docs/guide.md]`
 - From path variable: `[@docsPath/guide.md]`
 - URLs: `[https://example.com/guide.md]`

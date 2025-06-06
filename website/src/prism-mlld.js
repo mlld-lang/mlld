@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2025-06-05T17:52:39.570Z
+// Generated from grammar at 2025-06-05T21:09:22.545Z
 
 const Prism = require('prismjs');
 
