@@ -1,6 +1,6 @@
-# Mlld Grammar Developer Guide
+# mlld Grammar Developer Guide
 
-This guide explains the principles, patterns, and practices for developing and maintaining the Mlld grammar. It serves as the primary reference for developers working on the grammar system.
+This guide explains the principles, patterns, and practices for developing and maintaining the mlld grammar. It serves as the primary reference for developers working on the grammar system.
 
 > **For Grammar Consumers**: Use `npm run ast -- '<mlld syntax>'` to explore the AST output and refer to [docs/dev/AST.md](../../docs/dev/AST.md) for understanding the AST structure.
 > **For debugging**: Refer to [grammar/DEBUG.md](./DEBUG.md)
@@ -473,6 +473,43 @@ Full syntax examples:
 └─ '"' detected?
    └─ LiteralContent
       └─ "text to add"
+```
+
+### @output Directive
+
+```
+@output ...
+├─ "@" variable/command detected?
+│  ├─ YES: Output variable/command result
+│  │  ├─ @output @var [file.md]
+│  │  │  └─ Variable content → file
+│  │  │
+│  │  ├─ @output @template(args) [file.md]
+│  │  │  └─ Template result → file
+│  │  │
+│  │  └─ @output @cmd(args) [file.md]
+│  │     └─ Command result → file
+│  │
+│  └─ Followed by "[" path?
+│     └─ [path/to/file.md]
+│        └─ Path can have @var interpolation
+│
+├─ '"' string detected?
+│  ├─ YES: Output literal text
+│  │  └─ @output "text content" [file.md]
+│  │     └─ Literal text → file
+│  │
+├─ "[" path detected (no source)?
+│  ├─ YES: Output full document
+│  │  └─ @output [file.md]
+│  │     └─ Complete document → file
+│  │
+└─ Other patterns
+   └─ Parse error (invalid syntax)
+
+Usage in @when blocks:
+- @when @condition => @output [file.md]
+- @when @var: [@cond => @output @result [file.md]]
 ```
 
 ## Parse Tree Maintenance

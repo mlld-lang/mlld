@@ -46,15 +46,16 @@ This design keeps documents readable as regular Markdown while enabling programm
 ```mlld
 @text name = "Alice"        # Create without @
 @add [[Hello {{name}}!]]    # Reference with {{}} in templates
-@run [echo "@name"]         # Reference with @ in commands
+@run [(echo "@name")]       # Reference with @ in commands
 ```
 
-### 3. Commands Require Brackets
+### 3. Commands Require Brackets [(...))]
 ```mlld
 ❌ WRONG: @run echo "hello"
-✅ RIGHT: @run [echo "hello"]
-✅ RIGHT: @run js [console.log("hello")]  # Language outside brackets
-✅ RIGHT: @run javascript [console.log("hello")]  # 'js' is shorthand for 'javascript'
+❌ WRONG: @run [echo "hello"]
+✅ RIGHT: @run [(echo "hello")]
+✅ RIGHT: @run js [(console.log("hello"))]  # Language outside brackets
+✅ RIGHT: @run javascript [(console.log("hello"))]  # 'js' is shorthand for 'javascript'
 ```
 
 ### 4. Only @add and @run Produce Output
@@ -62,13 +63,13 @@ This design keeps documents readable as regular Markdown while enabling programm
 @text secret = "hidden"     # No output
 @data config = {"x": 1}     # No output
 @add [[Visible text]]       # This appears!
-@run [echo "Also visible"]  # This appears!
+@run [(echo "Also visible")]  # This appears!
 ```
 
 ### 5. Context-Specific Variable Syntax
 Remember: "Double brackets, double braces"
 - String literals: `@text msg = "Hello @name"` - @name is NOT interpolated (literal text)
-- Command context: `[echo "Hello @name"]` - @name IS interpolated (variable value)
+- Command context: `[(echo "Hello @name")]` - @name IS interpolated (variable value)
 - Template context: `[[Hello {{name}}]]` - {{name}} is interpolated
 
 ### 6. Field Access Rules
@@ -110,8 +111,8 @@ Remember: "Double brackets, double braces"
 
 # Multiple conditions with strategies:
 # Note: Conditions must be variables or command results, not comparisons
-@exec checkExcellent(score) = @run js [score > 90 ? "true" : ""]
-@exec checkGood(score) = @run js [score > 70 ? "true" : ""]
+@exec checkExcellent(score) = @run js [(score > 90 ? "true" : "")]
+@exec checkGood(score) = @run js [(score > 70 ? "true" : "")]
 
 @when first: [
   @checkExcellent(@score) => @add "Excellent!"
@@ -226,7 +227,7 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 ### 2. Forgetting Command Brackets
 ```mlld
 ❌ @run npm install
-✅ @run [npm install]
+✅ @run [(npm install)]
 ❌ @run js console.log("hello")
 ✅ @run js [(console.log("hello"))]
 ```
@@ -240,14 +241,14 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 ### 4. Mixing Variable Syntaxes
 ```mlld
 ❌ @add [[Hello @name]]           # Wrong syntax in template
-❌ @run [echo "{{message}}"]      # Wrong syntax in command
+❌ @run [(echo "{{message}}")]    # Wrong syntax in command
 ✅ @add [[Hello {{name}}]]        # Correct template syntax
-✅ @run [echo "@message"]         # Correct command syntax
+✅ @run [(echo "@message")]        # Correct command syntax
 
 # String literal vs command context example:
 @text name = "Alice"
 @text literal = "Hello @name"     # Result: "Hello @name" (literal)
-@run [echo "Hello @name"]         # Result: "Hello Alice" (interpolated)
+@run [(echo "Hello @name")]       # Result: "Hello Alice" (interpolated)
 ```
 
 ### 5. Trying to Nest Function Calls

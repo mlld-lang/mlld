@@ -1,8 +1,8 @@
-# Semantic Parsing in Mlld Grammar
+# Semantic Parsing in mlld Grammar
 
 ## Overview
 
-The Mlld grammar uses a **semantic-first parsing approach** where directives determine their content parsing rules based on context, rather than trying to guess intent from delimiters. This document explains how this system works and why it's designed this way.
+The mlld grammar uses a **semantic-first parsing approach** where directives determine their content parsing rules based on context, rather than trying to guess intent from delimiters. This document explains how this system works and why it's designed this way.
 
 ## Core Philosophy
 

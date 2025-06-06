@@ -1,4 +1,4 @@
-# MLLD QA Testing Framework
+# QA Testing Framework
 
 This directory contains manual QA testing prompts and checklists designed for Claude to systematically test mlld functionality. These tests complement the automated test suite in `tests/cases/` by focusing on end-to-end user scenarios and edge cases.
 

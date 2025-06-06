@@ -102,6 +102,7 @@ d.ts.map
 
 .env
 **/.claude/settings.local.json
+.claude
 
 # Peggy debug output
 debug-combined-grammar.peggy
@@ -120,6 +121,3 @@ cli/temp-test-*
 
 # Local install metadata
 .mlld-local-installs.json
-
-# ai
-.claude

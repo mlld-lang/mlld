@@ -1,39 +1,58 @@
 // OUTPUT DIRECTIVE
-// Implementation of the @output directive for routing output to various targets
+// Implementation of the @output directive for writing content to files
 
-// Main @output directive
+// Main @output directive - supports multiple forms:
+// @output [file.md]                    <- outputs full document content
+// @output @variable [file.md]          <- outputs variable content
+// @output @template(args) [file.md]    <- outputs template result
+// @output @command(args) [file.md]     <- outputs command result  
+// @output "text content" [file.md]     <- outputs literal text
 AtOutput
-  = DirectiveContext "@output" _ source:AtVar _ "to" _ target:OutputTarget format:(_ "as" _ f:OutputFormat { return f; })? {
-      helpers.debug('AtOutput matched', { source, target, format });
-      
-      // Smart format detection from file extension if not explicit
-      let detectedFormat = format;
-      if (!detectedFormat && target.type === 'outputFile') {
-        const pathStr = helpers.reconstructRawString(target.values);
-        detectedFormat = helpers.detectFormatFromPath(pathStr);
-      }
+  = DirectiveContext "@output" _ source:OutputSource _ path:WrappedPathContent {
+      helpers.debug('AtOutput with source matched', { source, path });
       
       const values = {
-        source: source,
-        target: target.values,
-        ...(detectedFormat ? { format: [helpers.createNode(NodeType.Text, { content: detectedFormat, location: location() })] } : {})
+        source: source.values,
+        path: path.parts  // Use .parts, not .values
       };
       
       const raw = {
-        source: helpers.reconstructRawString([source]),
-        target: target.raw,
-        ...(detectedFormat ? { format: detectedFormat } : {})
+        source: source.raw,
+        path: path.raw
       };
       
       const meta = {
-        targetType: target.type,
-        format: detectedFormat || 'text',  // Default to text
-        explicitFormat: !!format  // Track if format was explicit
+        sourceType: source.type,
+        hasSource: true
       };
       
       return helpers.createStructuredDirective(
         'output',
-        target.type,  // outputResolver, outputFile, outputCommand
+        source.subtype,
+        values,
+        raw,
+        meta,
+        location()
+      );
+    }
+  / DirectiveContext "@output" _ path:WrappedPathContent {
+      helpers.debug('AtOutput without source matched', { path });
+      
+      const values = {
+        path: path.parts  // Use .parts, not .values
+      };
+      
+      const raw = {
+        path: path.raw
+      };
+      
+      const meta = {
+        hasSource: false
+      };
+      
+      return helpers.createStructuredDirective(
+        'output',
+        'outputDocument',
         values,
         raw,
         meta,
@@ -41,59 +60,109 @@ AtOutput
       );
     }
 
-// Output target types
-OutputTarget
-  = ResolverOutputPath
-  / FileOutputPath
-  / CommandOutputPath
+// Output source types
+OutputSource
+  = OutputVariable
+  / OutputCommand  
+  / OutputLiteral
 
-// Resolver path: @storage/reports/daily.json
-ResolverOutputPath
-  = "@" path:ResolverPath {
+// Variable reference with optional arguments (includes templates and commands)
+OutputVariable
+  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* args:OutputArguments? {
+      const hasArgs = args && args.length > 0;
+      const isTemplate = hasArgs; // With args, it's a template/command invocation
+      
+      const values = {
+        identifier: [helpers.createNode(NodeType.Text, { content: identifier, location: location() })],
+        ...(fields && fields.length > 0 ? { fields } : {}),
+        ...(hasArgs ? { args } : {})
+      };
+      
+      const raw = {
+        identifier,
+        ...(fields && fields.length > 0 ? { fields: fields.map(f => f.value) } : {}),
+        ...(hasArgs ? { args: args.map(arg => helpers.reconstructRawString([arg])) } : {})
+      };
+      
       return {
-        type: 'outputResolver',
-        values: path,
-        raw: '@' + helpers.reconstructRawString(path)
+        type: 'variable',
+        subtype: hasArgs ? 'outputInvocation' : 'outputVariable',
+        values,
+        raw
       };
     }
 
-// File output: file [./output.xml]
-FileOutputPath
-  = "file" _ path:WrappedPathContent {
+// Command reference (for exec commands)
+OutputCommand
+  = "@run" _ "@" commandRef:OutputCommandReference {
+      helpers.debug('OutputCommand matched', { commandRef });
+      
       return {
-        type: 'outputFile',
-        values: path.values,
-        raw: path.raw
+        type: 'command',
+        subtype: 'outputCommand',
+        values: {
+          identifier: commandRef.identifier,
+          args: commandRef.args || []
+        },
+        raw: {
+          identifier: commandRef.rawIdentifier,
+          args: commandRef.rawArgs || []
+        }
       };
     }
 
-// Command output: @run @uploadCommand
-CommandOutputPath
-  = "@run" _ cmd:AtVar {
+// Literal text output
+OutputLiteral
+  = str:StringLiteral {
       return {
-        type: 'outputCommand',
-        values: [cmd],
-        raw: '@run ' + helpers.reconstructRawString([cmd])
+        type: 'literal',
+        subtype: 'outputLiteral',
+        values: [helpers.createNode(NodeType.Text, { content: str, location: location() })],
+        raw: str
       };
     }
 
-// Resolver path segments
-ResolverPath
-  = first:BaseIdentifier rest:(PathSeparatorToken segment:BaseIdentifier { return [helpers.createNode(NodeType.Text, { content: segment, location: location() })]; })* {
-      return [
-        helpers.createNode(NodeType.Text, { content: first, location: location() }),
-        ...rest.flat()
-      ];
+// Command reference structure (similar to RunCommandReference)
+OutputCommandReference
+  = identifier:BaseIdentifier fields:AnyFieldAccess* _ args:OutputArguments? {
+      const processedArgs = args || [];
+      const rawArgs = processedArgs.map(arg => {
+        if (arg.type === 'Variable') {
+          return '@' + arg.identifier;
+        }
+        return arg.content || '';
+      });
+      
+      return {
+        identifier: [helpers.createNode(NodeType.Text, { content: identifier, location: location() })],
+        ...(fields && fields.length > 0 ? { fields } : {}),
+        args: processedArgs,
+        rawIdentifier: identifier,
+        rawArgs: rawArgs
+      };
     }
 
-// Output format options
-OutputFormat
-  = "markdown" { return "markdown"; }
-  / "md" { return "markdown"; }
-  / "text" { return "text"; }
-  / "txt" { return "text"; }
-  / "json" { return "json"; }
-  / "xml" { return "xml"; }
-  / "yaml" { return "yaml"; }
-  / "yml" { return "yaml"; }
-  / "csv" { return "csv"; }
+// Arguments for templates/commands
+OutputArguments
+  = "(" _ args:OutputArgumentList? _ ")" {
+      return args || [];
+    }
+
+// Argument list
+OutputArgumentList
+  = first:OutputArgument rest:(CommaSpace arg:OutputArgument { return arg; })* {
+      return [first, ...rest];
+    }
+
+// Individual argument
+OutputArgument
+  = str:StringLiteral {
+      return helpers.createNode(NodeType.Text, { content: str, location: location() });
+    }
+  / varRef:Variable {
+      return varRef;
+    }
+  / val:$([^,)]+) {
+      // Plain value (raw argument)
+      return helpers.createNode(NodeType.Text, { content: val.trim(), location: location() });
+    }

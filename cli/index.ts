@@ -8,6 +8,8 @@ import { registryCommand } from './commands/registry';
 import { createInstallCommand } from './commands/install';
 import { createLsCommand } from './commands/ls';
 import { createInfoCommand } from './commands/info';
+import { createAuthCommand } from './commands/auth';
+import { createPublishCommand } from './commands/publish';
 import chalk from 'chalk';
 import { version } from '@core/version';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
@@ -345,6 +347,68 @@ function parseArgs(args: string[]): CLIOptions {
  * Display help information
  */
 function displayHelp(command?: string) {
+  if (command === 'auth') {
+    console.log(`
+Usage: mlld auth <subcommand> [options]
+
+Manage GitHub authentication for mlld registry.
+
+Subcommands:
+  login                Sign in with GitHub
+  logout               Sign out
+  status               Show authentication status
+
+Options:
+  -v, --verbose        Show detailed output
+
+Examples:
+  mlld auth login
+  mlld auth status
+  mlld auth logout
+    `);
+    return;
+  }
+  
+  if (command === 'publish') {
+    console.log(`
+Usage: mlld publish [options] [module-path]
+
+Publish a module to the mlld registry.
+
+Options:
+  -n, --dry-run        Show what would be published without actually publishing
+  -m, --message <msg>  Add a custom message to the pull request
+  -f, --force          Force publish even with uncommitted changes
+  -g, --gist           Create a gist even if in a git repository
+  --use-gist           Same as --gist
+  -o, --org <name>     Publish on behalf of an organization
+  -v, --verbose        Show detailed output
+
+Git Integration:
+  - Automatically detects git repositories
+  - Checks if repository is public (private repos use gists)
+  - Uses commit SHA for immutable references
+  - Validates clean working tree (use --force to override)
+  - Falls back to gist creation if not in git repo or repo is private
+
+Organization Publishing:
+  - Use --org <name> to publish as an organization you're a member of
+  - Or set 'author: org-name' in frontmatter (will verify membership)
+  - Organizations cannot create gists - must use git repositories
+  - Requires membership verification via GitHub API
+
+Examples:
+  mlld publish                    # Publish from git repo or create gist
+  mlld publish my-module.mld      # Publish specific file
+  mlld publish ./modules/utils    # Publish from directory
+  mlld publish --dry-run          # Test publish without creating PR
+  mlld publish --force            # Publish with uncommitted changes
+  mlld publish --use-gist         # Force gist creation
+  mlld publish --org myorg        # Publish as organization 'myorg'
+    `);
+    return;
+  }
+  
   if (command === 'registry') {
     console.log(`
 Usage: mlld registry <subcommand> [options]
@@ -412,6 +476,8 @@ Commands:
   install, i              Install mlld modules
   ls, list               List installed modules
   info, show             Show module details
+  auth                    Manage GitHub authentication
+  publish                 Publish module to mlld registry
   registry                Manage mlld module registry
   debug-resolution        Debug variable resolution in a Mlld file
   debug-transform         Debug node transformations through the pipeline
@@ -740,7 +806,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     }
     
     // Use the new interpreter
-    const result = await interpret(content, {
+    const interpretResult = await interpret(content, {
       basePath: path.resolve(path.dirname(input)),
       filePath: path.resolve(input), // Pass the current file path for error reporting
       format: normalizedFormat,
@@ -755,13 +821,21 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
         errorBehavior: cliOptions.errorBehavior || outputConfig.errorBehavior,
         collectErrors: cliOptions.collectErrors !== undefined ? cliOptions.collectErrors : outputConfig.collectErrors,
         showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext
-      }
+      },
+      returnEnvironment: true
     });
 
-    // Output handling (remains mostly the same)
+    // Extract result and environment
+    const result = typeof interpretResult === 'string' ? interpretResult : interpretResult.output;
+    const environment = typeof interpretResult === 'string' ? null : interpretResult.environment;
+    
+    // Check if @output was used in the document
+    const hasExplicitOutput = environment && (environment as any).hasExplicitOutput;
+
+    // Output handling - skip default output if @output was used (unless explicitly requested)
     if (stdout) {
       console.log(result);
-    } else if (outputPath) {
+    } else if (outputPath && (!hasExplicitOutput || output)) {
       const { outputPath: finalPath, shouldOverwrite } = await confirmOverwrite(outputPath);
       if (shouldOverwrite) {
         // Use Node's fs directly
@@ -986,6 +1060,20 @@ export async function main(customArgs?: string[]): Promise<void> {
     if (cliOptions.input === 'info' || cliOptions.input === 'show') {
       const infoCmd = createInfoCommand();
       await infoCmd.execute(args.slice(1), parseFlags(args));
+      return;
+    }
+    
+    // Handle auth command
+    if (cliOptions.input === 'auth') {
+      const authCmd = createAuthCommand();
+      await authCmd.execute(args.slice(1), parseFlags(args));
+      return;
+    }
+    
+    // Handle publish command
+    if (cliOptions.input === 'publish') {
+      const publishCmd = createPublishCommand();
+      await publishCmd.execute(args.slice(1), parseFlags(args));
       return;
     }
     
