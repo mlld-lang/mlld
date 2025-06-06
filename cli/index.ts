@@ -8,6 +8,8 @@ import { registryCommand } from './commands/registry';
 import { createInstallCommand } from './commands/install';
 import { createLsCommand } from './commands/ls';
 import { createInfoCommand } from './commands/info';
+import { createAuthCommand } from './commands/auth';
+import { createPublishCommand } from './commands/publish';
 import chalk from 'chalk';
 import { version } from '@core/version';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
@@ -345,6 +347,58 @@ function parseArgs(args: string[]): CLIOptions {
  * Display help information
  */
 function displayHelp(command?: string) {
+  if (command === 'auth') {
+    console.log(`
+Usage: mlld auth <subcommand> [options]
+
+Manage GitHub authentication for mlld registry.
+
+Subcommands:
+  login                Sign in with GitHub
+  logout               Sign out
+  status               Show authentication status
+
+Options:
+  -v, --verbose        Show detailed output
+
+Examples:
+  mlld auth login
+  mlld auth status
+  mlld auth logout
+    `);
+    return;
+  }
+  
+  if (command === 'publish') {
+    console.log(`
+Usage: mlld publish [options] [module-path]
+
+Publish a module to the mlld registry.
+
+Options:
+  -n, --dry-run        Show what would be published without actually publishing
+  -m, --message <msg>  Add a custom message to the pull request
+  -f, --force          Force publish even with uncommitted changes
+  --use-gist           Create a gist even if in a git repository
+  -v, --verbose        Show detailed output
+
+Git Integration:
+  - Automatically detects git repositories
+  - Uses commit SHA for immutable references
+  - Validates clean working tree (use --force to override)
+  - Falls back to gist creation if not in git repo
+
+Examples:
+  mlld publish                    # Publish from git repo or create gist
+  mlld publish my-module.mld      # Publish specific file
+  mlld publish ./modules/utils    # Publish from directory
+  mlld publish --dry-run          # Test publish without creating PR
+  mlld publish --force            # Publish with uncommitted changes
+  mlld publish --use-gist         # Force gist creation
+    `);
+    return;
+  }
+  
   if (command === 'registry') {
     console.log(`
 Usage: mlld registry <subcommand> [options]
@@ -412,6 +466,8 @@ Commands:
   install, i              Install mlld modules
   ls, list               List installed modules
   info, show             Show module details
+  auth                    Manage GitHub authentication
+  publish                 Publish module to mlld registry
   registry                Manage mlld module registry
   debug-resolution        Debug variable resolution in a Mlld file
   debug-transform         Debug node transformations through the pipeline
@@ -986,6 +1042,20 @@ export async function main(customArgs?: string[]): Promise<void> {
     if (cliOptions.input === 'info' || cliOptions.input === 'show') {
       const infoCmd = createInfoCommand();
       await infoCmd.execute(args.slice(1), parseFlags(args));
+      return;
+    }
+    
+    // Handle auth command
+    if (cliOptions.input === 'auth') {
+      const authCmd = createAuthCommand();
+      await authCmd.execute(args.slice(1), parseFlags(args));
+      return;
+    }
+    
+    // Handle publish command
+    if (cliOptions.input === 'publish') {
+      const publishCmd = createPublishCommand();
+      await publishCmd.execute(args.slice(1), parseFlags(args));
       return;
     }
     
