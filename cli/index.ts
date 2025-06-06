@@ -740,7 +740,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     }
     
     // Use the new interpreter
-    const result = await interpret(content, {
+    const interpretResult = await interpret(content, {
       basePath: path.resolve(path.dirname(input)),
       filePath: path.resolve(input), // Pass the current file path for error reporting
       format: normalizedFormat,
@@ -755,13 +755,21 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
         errorBehavior: cliOptions.errorBehavior || outputConfig.errorBehavior,
         collectErrors: cliOptions.collectErrors !== undefined ? cliOptions.collectErrors : outputConfig.collectErrors,
         showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext
-      }
+      },
+      returnEnvironment: true
     });
 
-    // Output handling (remains mostly the same)
+    // Extract result and environment
+    const result = typeof interpretResult === 'string' ? interpretResult : interpretResult.output;
+    const environment = typeof interpretResult === 'string' ? null : interpretResult.environment;
+    
+    // Check if @output was used in the document
+    const hasExplicitOutput = environment && (environment as any).hasExplicitOutput;
+
+    // Output handling - skip default output if @output was used (unless explicitly requested)
     if (stdout) {
       console.log(result);
-    } else if (outputPath) {
+    } else if (outputPath && (!hasExplicitOutput || output)) {
       const { outputPath: finalPath, shouldOverwrite } = await confirmOverwrite(outputPath);
       if (shouldOverwrite) {
         // Use Node's fs directly

@@ -28,6 +28,15 @@ export interface InterpretOptions {
   urlConfig?: ResolvedURLConfig;
   outputOptions?: CommandExecutionOptions;
   stdinContent?: string; // Optional stdin content
+  returnEnvironment?: boolean; // Return environment with result
+}
+
+/**
+ * Result from the interpreter when returnEnvironment is true
+ */
+export interface InterpretResult {
+  output: string;
+  environment: Environment;
 }
 
 /**
@@ -37,7 +46,7 @@ export interface InterpretOptions {
 export async function interpret(
   source: string,
   options: InterpretOptions
-): Promise<string> {
+): Promise<string | InterpretResult> {
   // Parse the source into AST
   const parseResult = await parse(source);
   
@@ -129,10 +138,20 @@ export async function interpret(
   const nodes = env.getNodes();
   
   // Format the output
-  return await formatOutput(nodes, {
+  const output = await formatOutput(nodes, {
     format: options.format || 'markdown',
     variables: env.getAllVariables()
   });
+  
+  // Return environment if requested
+  if (options.returnEnvironment) {
+    return {
+      output,
+      environment: env
+    };
+  }
+  
+  return output;
 }
 
 // Re-export key types for convenience
