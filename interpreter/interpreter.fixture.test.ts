@@ -221,7 +221,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       } else if (fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
         // Enable bash mocking for bash tests and bracket nesting tests that use bash
         process.env.MOCK_BASH = 'true';
-      } else if (fixture.name === 'with-combined') {
+      } else if (fixture.name === 'with-combined' || fixture.name === 'with-needs-node') {
         // Enable command mocking for npm/sed test
         process.env.MLLD_TEST_MODE = 'true';
       } else if (fixture.name === 'reserved-time-variable') {
@@ -230,6 +230,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       } else if (fixture.name === 'reserved-time-variable-lowercase') {
         // Mock time for the lowercase time variable test
         process.env.MLLD_MOCK_TIME = '2024-05-30T14:30:00.000Z';
+      } else if (fixture.name === 'reserved-debug-variable') {
+        // Mock time for consistent debug output
+        process.env.MLLD_MOCK_TIME = '2024-05-30T14:30:00.000Z';
+        // TODO: Debug output contains dynamic paths and environment-specific data
+        // This test would need special handling to work across different environments
       } else if (fixture.name === 'text-template') {
         // This test expects a 'variable' to exist with value 'value'
         // But the fixture doesn't define it - skip for now
@@ -604,10 +609,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         if (fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
           delete process.env.MOCK_BASH;
         }
-        if (fixture.name === 'with-combined') {
+        if (fixture.name === 'with-combined' || fixture.name === 'with-needs-node') {
           delete process.env.MLLD_TEST_MODE;
         }
-        if (fixture.name === 'reserved-time-variable' || fixture.name === 'reserved-time-variable-lowercase') {
+        if (fixture.name === 'reserved-time-variable' || fixture.name === 'reserved-time-variable-lowercase' || 
+            fixture.name === 'reserved-debug-variable' || fixture.name === 'reserved-debug-variable-lowercase') {
           delete process.env.MLLD_MOCK_TIME;
         }
         if (fixture.name === 'modules-hash') {

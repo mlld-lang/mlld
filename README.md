@@ -38,7 +38,7 @@ mlld input.mld --stdout
 ### Supported File Extensions
 
 - `.mld` is standard `.mld.md` is another option.
-- `.md`: Mlld can just interpret regular old markdown files with added mlld syntax, too.
+- `.md`: mlld can just interpret regular old markdown files with added mlld syntax, too.
 
 ## JavaScript API
 
@@ -67,9 +67,9 @@ const xmlResult = await processMlld(mlldContent, {
 });
 ```
 
-## Writing Mlld Files
+## Writing mlld Files
 
-Mlld is a simple scripting language designed to work within markdown-like documents. It processes special `@directive` lines while preserving all other content as-is.
+mlld is a simple scripting language designed to work within markdown-like documents. It processes special `@directive` lines while preserving all other content as-is.
 
 ### Core Directives
 
@@ -154,7 +154,7 @@ def hello():
 
 ## Module System & Registry
 
-Mlld has a decentralized module system that enables sharing and reusing code across projects.
+mlld has a decentralized module system that enables sharing and reusing code across projects.
 
 ### Public Modules
 

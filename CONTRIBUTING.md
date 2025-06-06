@@ -1,6 +1,6 @@
-# Contributing to Mlld
+# Contributing to mlld
 
-Thank you for your interest in contributing to Mlld! We welcome contributions from the community to make this project better.
+Thank you for your interest in contributing to mlld! We welcome contributions from the community to make this project better.
 
 ## Branch Structure
 
@@ -55,7 +55,7 @@ The repository is organized to separate development files from the public-facing
 
 - Development directories that are excluded from the public branch:
   - `_issues/`: Issue tracking and documentation
-  - `_mlld/`: Development-specific Mlld files
+  - `_mlld/`: Development-specific mlld files
   - `dev/`: Development utilities and scripts
   - `logs/`: Log files
   - `tmp/`: Temporary files
@@ -112,4 +112,4 @@ All contributors are expected to adhere to the project's Code of Conduct. Please
 
 ## License
 
-By contributing to Mlld, you agree that your contributions will be licensed under the project's MIT License.
+By contributing to mlld, you agree that your contributions will be licensed under the project's MIT License.

@@ -19,7 +19,7 @@ repo: github.com/mlld-lang/mlld
 npm run build        # Build the project
 npm test <dir>       # Run tests for a specific section of code
 npm test <file_path> # Run specific test file (e.g. npm test cli/priority-cli.test.ts)
-npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
+npm run ast -- '<mlld syntax>'  # Shows AST for any valid mlld syntax
 ```
 
 ## Generated Files (Gitignored)
@@ -57,7 +57,7 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 **Meld is a scripting language embedded in Markdown documents** - it enhances Markdown with dynamic content generation while preserving the readability of the source document.
 
 ### Core Syntax Principles
-1. **Directives only at start of lines** - Mlld syntax is only interpreted in lines that start with a mlld directive
+1. **Directives only at start of lines** - mlld syntax is only interpreted in lines that start with a mlld directive
    - Exception: `@run` can be used on RHS of `@text` and `@exec` definitions
    - Exception: Directives can be used in RHS of `@data` object definitions
 2. **Variables are created without `@`** - `@text name = "value"` (not `@text @name`)
@@ -116,7 +116,7 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid Mlld syntax
 - Results are always arrays matching the iteration count
 - Parameter count must match array count: `@exec process(a, b)` requires 2 arrays
 
-### Module System (Mlld Modules)
+### Module System (mlld Modules)
 - Install: `mlld install @author/module` or `mlld install` (from lock file)
 - List: `mlld ls` shows installed modules with metadata
 - Import: `@import { funcName } from @author/module` (no quotes!)

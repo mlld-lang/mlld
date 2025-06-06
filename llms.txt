@@ -1,8 +1,28 @@
 # mlld Language Guide for LLMs
 
+## The mlld Mindset: Orchestration, Not Programming
+
+mlld is NOT a programming language - it's an **orchestration language embedded in Markdown**. This fundamental distinction drives everything about how you should use mlld.
+
+### Think Like a Conductor, Not a Programmer
+- You're orchestrating tools and data, not implementing algorithms
+- Each directive is a clear, simple instruction
+- Complexity belongs in modules and external tools
+- If you're writing complex logic, you're using mlld wrong
+
+### The mlld Way
+❌ WRONG: Trying to concatenate strings procedurally
+✅ RIGHT: Define templates and use them
+
+❌ WRONG: Nested function calls in commands
+✅ RIGHT: Call functions at directive level, pass results
+
+❌ WRONG: Complex conditionals and loops
+✅ RIGHT: Simple foreach over data with clear transformations
+
 ## Critical Understanding: mlld is NOT a Template Language
 
-mlld (pronounced "meld") is a **programming language embedded in Markdown**. This is the most important concept to internalize. Unlike template languages that process variables anywhere in text, mlld **only executes lines that start with `@` directives**. Everything else is treated as literal Markdown.
+mlld (pronounced "meld") only executes lines that start with `@` directives. Everything else is treated as literal Markdown. Unlike template languages that process variables anywhere in text, mlld has clear boundaries between content and code.
 
 ## Core Mental Model
 
@@ -26,15 +46,16 @@ This design keeps documents readable as regular Markdown while enabling programm
 ```mlld
 @text name = "Alice"        # Create without @
 @add [[Hello {{name}}!]]    # Reference with {{}} in templates
-@run [echo "@name"]         # Reference with @ in commands
+@run [(echo "@name")]       # Reference with @ in commands
 ```
 
-### 3. Commands Require Brackets
+### 3. Commands Require Brackets [(...))]
 ```mlld
 ❌ WRONG: @run echo "hello"
-✅ RIGHT: @run [echo "hello"]
-✅ RIGHT: @run js [console.log("hello")]  # Language outside brackets
-✅ RIGHT: @run javascript [console.log("hello")]  # 'js' is shorthand for 'javascript'
+❌ WRONG: @run [echo "hello"]
+✅ RIGHT: @run [(echo "hello")]
+✅ RIGHT: @run js [(console.log("hello"))]  # Language outside brackets
+✅ RIGHT: @run javascript [(console.log("hello"))]  # 'js' is shorthand for 'javascript'
 ```
 
 ### 4. Only @add and @run Produce Output
@@ -42,13 +63,13 @@ This design keeps documents readable as regular Markdown while enabling programm
 @text secret = "hidden"     # No output
 @data config = {"x": 1}     # No output
 @add [[Visible text]]       # This appears!
-@run [echo "Also visible"]  # This appears!
+@run [(echo "Also visible")]  # This appears!
 ```
 
 ### 5. Context-Specific Variable Syntax
 Remember: "Double brackets, double braces"
 - String literals: `@text msg = "Hello @name"` - @name is NOT interpolated (literal text)
-- Command context: `[echo "Hello @name"]` - @name IS interpolated (variable value)
+- Command context: `[(echo "Hello @name")]` - @name IS interpolated (variable value)
 - Template context: `[[Hello {{name}}]]` - {{name}} is interpolated
 
 ### 6. Field Access Rules
@@ -90,8 +111,8 @@ Remember: "Double brackets, double braces"
 
 # Multiple conditions with strategies:
 # Note: Conditions must be variables or command results, not comparisons
-@exec checkExcellent(score) = @run js [score > 90 ? "true" : ""]
-@exec checkGood(score) = @run js [score > 70 ? "true" : ""]
+@exec checkExcellent(score) = @run js [(score > 90 ? "true" : "")]
+@exec checkGood(score) = @run js [(score > 70 ? "true" : "")]
 
 @when first: [
   @checkExcellent(@score) => @add "Excellent!"
@@ -119,6 +140,28 @@ Remember: "Double brackets, double braces"
 @data greetings = foreach @greetTemplate(@names)
 >> greetings = ["Hello, Alice!", "Hello, Bob!", "Hello, Charlie!"]
 ```
+
+## Creating Helper Functions
+
+When you need utility functions, create them with @exec instead of trying to work around mlld's constraints:
+
+```mlld
+# String manipulation helpers
+@exec join(array, separator) = @run js [(array.join(separator))]
+@exec capitalize(text) = @run js [(text.charAt(0).toUpperCase() + text.slice(1))]
+@exec fileList(paths) = @run js [(paths.map(p => `${p}/**/*.md`).join(' '))]
+
+# Using the helpers
+@data names = ["alice", "bob", "charlie"]
+@text formatted = @join(@names, ", ")
+@add [[Team members: {{formatted}}]]
+
+# For bash operations
+@exec countFiles(dir) = @run [(find @dir -type f | wc -l)]
+@data fileCount = @countFiles("./src")
+```
+
+Remember: If you're wishing mlld had a feature, you can probably create it as a helper function!
 
 ## Additional Essential Features
 
@@ -184,7 +227,9 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 ### 2. Forgetting Command Brackets
 ```mlld
 ❌ @run npm install
-✅ @run [npm install]
+✅ @run [(npm install)]
+❌ @run js console.log("hello")
+✅ @run js [(console.log("hello"))]
 ```
 
 ### 3. Using @ When Creating Variables
@@ -196,25 +241,112 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 ### 4. Mixing Variable Syntaxes
 ```mlld
 ❌ @add [[Hello @name]]           # Wrong syntax in template
-❌ @run [echo "{{message}}"]      # Wrong syntax in command
+❌ @run [(echo "{{message}}")]    # Wrong syntax in command
 ✅ @add [[Hello {{name}}]]        # Correct template syntax
-✅ @run [echo "@message"]         # Correct command syntax
+✅ @run [(echo "@message")]        # Correct command syntax
 
 # String literal vs command context example:
 @text name = "Alice"
 @text literal = "Hello @name"     # Result: "Hello @name" (literal)
-@run [echo "Hello @name"]         # Result: "Hello Alice" (interpolated)
+@run [(echo "Hello @name")]       # Result: "Hello Alice" (interpolated)
 ```
 
-### 5. JavaScript Confusion
-While you CAN write JavaScript in mlld, it's best kept in modules:
+### 5. Trying to Nest Function Calls
+```mlld
+❌ WRONG: Trying to call mlld functions inside commands
+@exec helper(x) = @run [(echo "@x")]
+@run [(
+  RESULT=$(@helper("test"))  # This doesn't work!
+  echo $RESULT
+)]
+
+✅ RIGHT: Call functions at directive level
+@text result = @helper("test")
+@run [(echo "@result")]
+
+✅ BETTER: Use foreach for multiple operations
+@data results = foreach @helper(@items)
+```
+
+### 6. String Concatenation Instead of Templates
+```mlld
+❌ WRONG: Trying to concatenate procedurally
+# Attempting to build strings piece by piece
+
+✅ RIGHT: Use templates
+@text greeting(name, time) = [[Good {{time}}, {{name}}!]]
+@add @greeting("Alice", "morning")
+```
+
+### 7. Complex Logic in mlld
+```mlld
+❌ WRONG: Implementing algorithms in mlld
+# Don't try to write sorting algorithms or complex data manipulation
+
+✅ RIGHT: Use helper functions or modules
+@exec sortData(data) = @run js [(data.sort((a, b) => a.name.localeCompare(b.name)))]
+@data sorted = @sortData(@users)
+```
+
+### 8. JavaScript Confusion
+While you CAN write JavaScript in mlld, it's best kept simple:
 ```mlld
 # Okay for simple cases:
-@run js [console.log("Debug: " + @count)]
+@run js [(console.log("Debug: " + @count))]
 
-# Better for complex logic - create a module:
+# For complex logic - create a helper:
+@exec processData(data) = @run js [(
+  // Your complex logic here
+  return data.map(d => ({...d, processed: true}))
+)]
+
+# Or better yet - create a module:
 @import { processData } from @myorg/utils
 @data result = @processData(@rawData)
+```
+
+## Orchestration Patterns
+
+mlld shines when orchestrating external tools and data. Here are patterns that showcase its strengths:
+
+### Pattern 1: Tool Orchestration
+```mlld
+# Orchestrating multiple Claude sessions for QA
+@data testAreas = [
+  { "name": "auth", "files": ["auth/*.ts"], "tests": ["test/auth/*"] },
+  { "name": "api", "files": ["api/*.ts"], "tests": ["test/api/*"] }
+]
+
+@exec runQA(area) = @run [(
+  echo "Testing {{area.name}} module"
+  claude -p "Test the {{area.name}} functionality" \
+    --allowedTools "Bash,Read,Write"
+)]
+
+@data results = foreach @runQA(@testAreas)
+```
+
+### Pattern 2: Data Pipeline
+```mlld
+# Processing data through multiple stages
+@import { fetchData, validate, transform } from @data/pipeline
+
+@data raw = @fetchData("https://api.example.com/users")
+@data valid = @validate(@raw, { schema: "user" })
+@data transformed = @transform(@valid, { format: "report" })
+
+@add [[Processed {{transformed.count}} records successfully]]
+```
+
+### Pattern 3: Conditional Workflows
+```mlld
+# Different actions based on environment
+@data env = @run [(echo $NODE_ENV)]
+
+@exec loadConfig(env) = @run [(cat "./config/@env.json")]
+@data config = @loadConfig(@env)
+
+@when @config.debug => @add [[Debug mode enabled]]
 ```
 
 ## Best Practices
@@ -223,7 +355,9 @@ While you CAN write JavaScript in mlld, it's best kept in modules:
 2. **Use modules for complexity**: Don't try to implement algorithms in mlld
 3. **Explicit over implicit**: Always be clear about what produces output
 4. **Test incrementally**: Use `@add` to verify variable values during development
-5. **Think pipelines**: mlld excels at composing data transformation pipelines
+5. **Think orchestration**: mlld excels at coordinating tools and data flows
+6. **Create helpers liberally**: If you need it twice, make it a helper function
+7. **Embrace constraints**: Working with mlld's design leads to cleaner solutions
 
 ## Example: Well-Structured mlld File
 
@@ -269,8 +403,32 @@ This document processes user data and generates insights.
 @add [[Processed {{validUsers.length}} valid users out of {{users.length}} total.]]
 ```
 
+## Execution Context Reference
+
+Understanding where different variable syntaxes work is crucial:
+
+| Context | Syntax | Example | Notes |
+|---------|--------|---------|-------|
+| Templates `[[...]]` | `{{variable}}` | `[[Hello {{name}}!]]` | Double brackets, double braces |
+| Commands `[...]` | `@variable` | `[echo "@message"]` | @ prefix for interpolation |
+| JavaScript | Plain names | `[(array.join(sep))]` | Parameters are JS variables |
+| String literals | No interpolation | `"Hello @name"` | @name is literal text |
+| Directive level | `@variable` | `@add @greeting` | Direct variable reference |
+
+### Key Rules:
+- **In templates**: Always use `{{variable}}` or `{{object.field}}`
+- **In commands**: Always use `@variable` or `@object.field`
+- **In JavaScript**: Parameters become plain JavaScript variables
+- **String assignments**: Variables are NOT interpolated (they're literals)
+
 ## Remember
 
-mlld empowers everyone to create versionable, collaborative "pipelines of thought." It achieves this by being a programming language that looks and reads like a document, not by being a template system. When writing mlld, think in terms of discrete processing steps, not text interpolation.
+mlld empowers everyone to create versionable, collaborative "pipelines of thought." It achieves this by being an orchestration language that looks and reads like a document, not by being a template system or programming language.
+
+When writing mlld:
+- Think in terms of discrete processing steps, not text interpolation
+- Embrace the constraints - they lead to cleaner solutions
+- Use helpers and modules for complexity
+- Keep your .mld files simple and readable
 
 The power comes from composition: simple directives in your files, powerful capabilities in your modules.
