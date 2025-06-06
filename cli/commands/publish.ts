@@ -120,40 +120,127 @@ export class PublishCommand {
           // Fall through to gist creation
         } else {
           // Git-native publishing for public repos
-          sourceUrl = `https://raw.githubusercontent.com/${gitInfo.owner}/${gitInfo.repo}/${gitInfo.sha}/${gitInfo.relPath}`;
+          console.log(chalk.green(`\n✅ Repository is public`));
           
-          registryEntry = {
-          name: metadata.name,
-          description: metadata.description,
-          author: {
-            name: user.name || user.login,
-            github: user.login,
-          },
-          source: {
-            type: 'github' as const,
-            url: sourceUrl,
-            contentHash: contentHash,
-            repository: {
-              type: 'git',
-              url: `https://github.com/${gitInfo.owner}/${gitInfo.repo}`,
-              commit: gitInfo.sha,
-              path: gitInfo.relPath,
-            },
-          },
-          publishedAt: new Date().toISOString(),
-          mlldVersion: metadata.mlldVersion || '>=0.5.0',
-          keywords: metadata.keywords || [],
-          version: metadata.version || '1.0.0',
-          license: metadata.license,
-        };
-          
-          console.log(chalk.green(`\n✅ Using git repository for source`));
+          // Interactive confirmation
+          if (!options.dryRun && !options.force) {
+            const rl = readline.createInterface({
+              input: process.stdin,
+              output: process.stdout,
+            });
+            
+            console.log(chalk.blue(`\n📦 Publishing @${metadata.author}/${metadata.name} from ${gitInfo.owner}/${gitInfo.repo}`));
+            console.log(chalk.gray(`   Source: ${gitInfo.relPath} @ ${gitInfo.sha?.substring(0, 8)}`));
+            console.log(chalk.gray(`   This will create a pull request to the mlld registry\n`));
+            
+            console.log('Options:');
+            console.log('  [Enter] Confirm and publish from repository');
+            console.log('  [g]     Publish as gist instead');
+            console.log('  [c]     Cancel');
+            
+            const choice = await rl.question('\nYour choice: ');
+            rl.close();
+            
+            if (choice.toLowerCase() === 'c') {
+              throw new MlldError('Publication cancelled by user');
+            } else if (choice.toLowerCase() === 'g') {
+              console.log(chalk.yellow('\n📝 Switching to gist creation...'));
+              // Fall through to gist creation
+            } else {
+              // Continue with git repo publishing
+              sourceUrl = `https://raw.githubusercontent.com/${gitInfo.owner}/${gitInfo.repo}/${gitInfo.sha}/${gitInfo.relPath}`;
+              
+              registryEntry = {
+                name: metadata.name,
+                description: metadata.description,
+                author: {
+                  name: user.name || user.login,
+                  github: user.login,
+                },
+                source: {
+                  type: 'github' as const,
+                  url: sourceUrl,
+                  contentHash: contentHash,
+                  repository: {
+                    type: 'git',
+                    url: `https://github.com/${gitInfo.owner}/${gitInfo.repo}`,
+                    commit: gitInfo.sha,
+                    path: gitInfo.relPath,
+                  },
+                },
+                publishedAt: new Date().toISOString(),
+                mlldVersion: metadata.mlldVersion || '>=0.5.0',
+                keywords: metadata.keywords || [],
+                version: metadata.version || '1.0.0',
+                license: metadata.license,
+              };
+              
+              console.log(chalk.green(`\n✅ Using git repository for source`));
+            }
+          } else {
+            // Skip confirmation with --use-gist or --force
+            sourceUrl = `https://raw.githubusercontent.com/${gitInfo.owner}/${gitInfo.repo}/${gitInfo.sha}/${gitInfo.relPath}`;
+            
+            registryEntry = {
+              name: metadata.name,
+              description: metadata.description,
+              author: {
+                name: user.name || user.login,
+                github: user.login,
+              },
+              source: {
+                type: 'github' as const,
+                url: sourceUrl,
+                contentHash: contentHash,
+                repository: {
+                  type: 'git',
+                  url: `https://github.com/${gitInfo.owner}/${gitInfo.repo}`,
+                  commit: gitInfo.sha,
+                  path: gitInfo.relPath,
+                },
+              },
+              publishedAt: new Date().toISOString(),
+              mlldVersion: metadata.mlldVersion || '>=0.5.0',
+              keywords: metadata.keywords || [],
+              version: metadata.version || '1.0.0',
+              license: metadata.license,
+            };
+            
+            console.log(chalk.green(`\n✅ Using git repository for source`));
+          }
         }
       }
       
       if (!registryEntry) {
         // Gist-based publishing (fallback)
-        console.log(chalk.yellow('\n📝 Creating GitHub gist (no git repo detected or --use-gist specified)'));
+        console.log(chalk.yellow('\n📝 Preparing to create GitHub gist...'));
+        
+        // Interactive confirmation for gist creation
+        if (!options.dryRun && !options.force) {
+          const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+          });
+          
+          const sourceInfo = gitInfo.isGitRepo ? 
+            `${path.basename(filePath)} (not in git repo)` : 
+            path.basename(filePath);
+          
+          console.log(chalk.blue(`\n📤 Publishing @${metadata.author}/${metadata.name} as a GitHub gist`));
+          console.log(chalk.gray(`   Source: ${sourceInfo}`));
+          console.log(chalk.gray(`   This will create a new gist and pull request to the mlld registry\n`));
+          
+          console.log('Options:');
+          console.log('  [Enter] Confirm and create gist');
+          console.log('  [c]     Cancel');
+          
+          const choice = await rl.question('\nYour choice: ');
+          rl.close();
+          
+          if (choice.toLowerCase() === 'c') {
+            throw new MlldError('Publication cancelled by user');
+          }
+        }
         
         if (options.dryRun) {
           console.log(chalk.cyan('\n✅ Dry run completed - no changes made'));
