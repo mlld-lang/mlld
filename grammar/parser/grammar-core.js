@@ -1,5 +1,8 @@
-import { randomUUID } from 'crypto';
-export const NodeType = {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.helpers = exports.DirectiveKind = exports.NodeType = void 0;
+const crypto_1 = require("crypto");
+exports.NodeType = {
     Text: 'Text',
     Comment: 'Comment',
     CodeFence: 'CodeFence',
@@ -15,7 +18,7 @@ export const NodeType = {
     Frontmatter: 'Frontmatter',
     CommandBase: 'CommandBase',
 };
-export const DirectiveKind = {
+exports.DirectiveKind = {
     run: 'run',
     add: 'add',
     text: 'text',
@@ -26,7 +29,7 @@ export const DirectiveKind = {
     output: 'output',
     when: 'when',
 };
-export const helpers = {
+exports.helpers = {
     debug(msg, ...args) {
         if (process.env.DEBUG_MLLD_GRAMMAR)
             console.log('[DEBUG GRAMMAR]', msg, ...args);
@@ -56,7 +59,7 @@ export const helpers = {
         if (!isAtLineStart)
             return false;
         // Check if it's followed by a valid directive keyword
-        const directiveKeywords = Object.keys(DirectiveKind);
+        const directiveKeywords = Object.keys(exports.DirectiveKind);
         const afterAtPos = pos + 1;
         // Look ahead to see if a directive keyword follows
         for (const keyword of directiveKeywords) {
@@ -190,7 +193,7 @@ export const helpers = {
     createNode(type, props) {
         return Object.freeze({
             type,
-            nodeId: randomUUID(),
+            nodeId: (0, crypto_1.randomUUID)(),
             location: props.location ?? { start: { offset: 0, line: 1, column: 1 },
                 end: { offset: 0, line: 1, column: 1 } },
             ...props,
@@ -198,11 +201,11 @@ export const helpers = {
     },
     createDirective(kind, data) {
         // Legacy method maintained for backward compatibility
-        return this.createNode(NodeType.Directive, { directive: { kind, ...data } });
+        return this.createNode(exports.NodeType.Directive, { directive: { kind, ...data } });
     },
     // New method for creating directives with the updated structure
     createStructuredDirective(kind, subtype, values, raw, meta, locationData, source = null) {
-        return this.createNode(NodeType.Directive, {
+        return this.createNode(exports.NodeType.Directive, {
             kind,
             subtype,
             source,
@@ -213,7 +216,7 @@ export const helpers = {
         });
     },
     createVariableReferenceNode(valueType, data) {
-        return this.createNode(NodeType.VariableReference, { valueType, ...data });
+        return this.createNode(exports.NodeType.VariableReference, { valueType, ...data });
     },
     normalizePathVar(id) {
         if (id === '.')
@@ -232,7 +235,7 @@ export const helpers = {
         // Process path parts
         if (pathParts && pathParts.length > 0) {
             for (const node of pathParts) {
-                if (node.type === NodeType.VariableReference) {
+                if (node.type === exports.NodeType.VariableReference) {
                     hasVariables = true;
                 }
             }
@@ -270,9 +273,9 @@ export const helpers = {
         if (!Array.isArray(nodes)) {
             // Handle cases where a single node might be passed (though likely expects array)
             if (nodes && typeof nodes === 'object') {
-                if (nodes.type === NodeType.Text)
+                if (nodes.type === exports.NodeType.Text)
                     return nodes.content || '';
-                if (nodes.type === NodeType.VariableReference) {
+                if (nodes.type === exports.NodeType.VariableReference) {
                     // Handle different variable types with appropriate syntax
                     const varId = nodes.identifier;
                     const valueType = nodes.valueType;
@@ -309,10 +312,10 @@ export const helpers = {
         for (const node of nodes) {
             if (!node)
                 continue;
-            if (node.type === NodeType.Text) {
+            if (node.type === exports.NodeType.Text) {
                 raw += node.content || '';
             }
-            else if (node.type === NodeType.VariableReference) {
+            else if (node.type === exports.NodeType.VariableReference) {
                 const varId = node.identifier;
                 const valueType = node.valueType;
                 const fields = node.fields || [];
@@ -338,13 +341,13 @@ export const helpers = {
                     raw += `{{${varId}${fieldPath}}}`;
                 }
             }
-            else if (node.type === NodeType.PathSeparator) {
+            else if (node.type === exports.NodeType.PathSeparator) {
                 raw += node.value || ''; // Append '/' or '.'
             }
-            else if (node.type === NodeType.SectionMarker) {
+            else if (node.type === exports.NodeType.SectionMarker) {
                 raw += node.value || ''; // Append '#'
             }
-            else if (node.type === NodeType.StringLiteral) {
+            else if (node.type === exports.NodeType.StringLiteral) {
                 // Handle string literals properly - avoids adding extra quotes
                 raw += node.value || '';
             }
@@ -362,7 +365,7 @@ export const helpers = {
     },
     createPathMetadata(rawPath, parts) {
         return {
-            hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+            hasVariables: parts.some(p => p && p.type === exports.NodeType.VariableReference),
             isAbsolute: rawPath.startsWith('/'),
             hasExtension: /\.[a-zA-Z0-9]+$/.test(rawPath),
             extension: rawPath.match(/\.([a-zA-Z0-9]+)$/)?.[1] || null
@@ -370,12 +373,12 @@ export const helpers = {
     },
     createCommandMetadata(parts) {
         return {
-            hasVariables: parts.some(p => p && p.type === NodeType.VariableReference)
+            hasVariables: parts.some(p => p && p.type === exports.NodeType.VariableReference)
         };
     },
     createTemplateMetadata(parts, wrapperType) {
         return {
-            hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+            hasVariables: parts.some(p => p && p.type === exports.NodeType.VariableReference),
             isTemplateContent: wrapperType === 'doubleBracket'
         };
     },
@@ -383,7 +386,7 @@ export const helpers = {
         return {
             isUrl: true,
             protocol,
-            hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+            hasVariables: parts.some(p => p && p.type === exports.NodeType.VariableReference),
             hasSection
         };
     },
@@ -470,7 +473,7 @@ export const helpers = {
             if (content[i] === '@' && i + 1 < content.length) {
                 // Save any accumulated text
                 if (currentText) {
-                    parts.push(this.createNode(NodeType.Text, {
+                    parts.push(this.createNode(exports.NodeType.Text, {
                         content: currentText,
                         location: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } }
                     }));
@@ -501,7 +504,7 @@ export const helpers = {
         }
         // Add any remaining text
         if (currentText) {
-            parts.push(this.createNode(NodeType.Text, {
+            parts.push(this.createNode(exports.NodeType.Text, {
                 content: currentText,
                 location: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } }
             }));
@@ -509,3 +512,4 @@ export const helpers = {
         return parts;
     },
 };
+//# sourceMappingURL=grammar-core.js.map
