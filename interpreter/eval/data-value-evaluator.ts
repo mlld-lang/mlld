@@ -280,7 +280,7 @@ export function collectEvaluationErrors(
  * @param env - The evaluation environment
  * @returns Array of results from command execution
  */
-async function evaluateForeachCommand(
+export async function evaluateForeachCommand(
   foreachExpr: any, // Use any for now since the grammar output structure might not match exactly
   env: Environment
 ): Promise<any[]> {

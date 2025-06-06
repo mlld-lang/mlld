@@ -140,6 +140,16 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
         return { value: '', env };
       }
       
+      // Check if this is a built-in function
+      if (varRef.valueType === 'commandRef') {
+        const { isBuiltinFunction, executeBuiltinFunction } = await import('../eval/builtin-functions');
+        if (isBuiltinFunction(varRef.identifier)) {
+          const args = varRef.args || [];
+          const result = executeBuiltinFunction(varRef.identifier, args, env);
+          return { value: result, env };
+        }
+      }
+      
       const variable = env.getVariable(varRef.identifier);
       if (!variable) {
         // For interpolation variables, return empty if not found

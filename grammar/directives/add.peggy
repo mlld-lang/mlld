@@ -21,8 +21,50 @@ It can be used in these forms:
 
 // Primary @add directive with all variants
 AtAdd
+  // Foreach expression: @add foreach @command(@arrays)
+  = DirectiveContext "@add" _ expr:ForeachCommandExpression {
+      helpers.debug('AtAdd matched foreach expression', { expr });
+      
+      // Extract the inner value from the ForeachCommandExpression
+      const foreachValue = expr.value;
+      
+      // Create values object with foreach expression
+      const values = {
+        foreach: foreachValue
+      };
+      
+      // Add with clause if present
+      if (foreachValue.with) {
+        values.withClause = foreachValue.with;
+      }
+      
+      // Create raw object
+      const raw = {
+        foreach: `foreach @${foreachValue.command.identifier}(${foreachValue.arrays.map(a => `@${a.identifier}`).join(', ')})`
+      };
+      
+      if (foreachValue.with) {
+        raw.withClause = 'with { ... }';
+      }
+      
+      // Create meta object
+      const meta = {
+        isForeach: true,
+        arrayCount: foreachValue.arrays.length
+      };
+      
+      return helpers.createStructuredDirective(
+        'add',
+        'addForeach',
+        values,
+        raw,
+        meta,
+        location(),
+        'foreach'
+      );
+    }
   // Double-bracketed path with section: [[path/to/file.md # Section]]
-  = DirectiveContext "@add" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
+  / DirectiveContext "@add" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
       helpers.debug('AtAdd matched double-bracketed path section', { content, rename });
       
       const rawPath = content.raw.split(' # ')[0];

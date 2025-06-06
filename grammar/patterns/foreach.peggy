@@ -87,12 +87,12 @@ ForeachWithOption
 // Usage: separator: "delimiter"
 ForeachSeparatorOption
   = "separator" _ ":" _ value:StringLiteral {
-      return { key: 'separator', value: value.value };
+      return { key: 'separator', value: value };
     }
 
 // Template option for formatting foreach results  
 // Usage: template: "format string"
 ForeachTemplateOption
   = "template" _ ":" _ value:StringLiteral {
-      return { key: 'template', value: value.value };
+      return { key: 'template', value: value };
     }

@@ -165,27 +165,41 @@ function parseTemplateString(template: string): any[] {
 export function parseForeachOptions(withClause: any): ForeachOptions {
   const options: ForeachOptions = {};
   
-  if (!withClause || !withClause.options) {
+  if (!withClause) {
     return options;
   }
   
   // Parse separator option
-  if (withClause.options.separator) {
-    if (typeof withClause.options.separator === 'string') {
-      options.separator = withClause.options.separator;
-    } else if (withClause.options.separator.type === 'Text') {
-      options.separator = withClause.options.separator.content;
+  if (withClause.separator !== undefined) {
+    if (typeof withClause.separator === 'string') {
+      options.separator = processEscapeSequences(withClause.separator);
+    } else if (withClause.separator && withClause.separator.type === 'Text') {
+      options.separator = processEscapeSequences(withClause.separator.content);
     }
   }
   
   // Parse template option
-  if (withClause.options.template) {
-    if (typeof withClause.options.template === 'string') {
-      options.template = withClause.options.template;
-    } else if (withClause.options.template.type === 'Text') {
-      options.template = withClause.options.template.content;
+  if (withClause.template !== undefined) {
+    if (typeof withClause.template === 'string') {
+      options.template = processEscapeSequences(withClause.template);
+    } else if (withClause.template && withClause.template.type === 'Text') {
+      options.template = processEscapeSequences(withClause.template.content);
     }
   }
   
   return options;
+}
+
+/**
+ * Process escape sequences in a string
+ * Converts \n to newline, \t to tab, etc.
+ */
+function processEscapeSequences(str: string): string {
+  return str
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\r/g, '\r')
+    .replace(/\\\\/g, '\\')
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'");
 }

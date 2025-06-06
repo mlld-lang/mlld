@@ -328,7 +328,7 @@ export async function evaluateAdd(
     }
     
     // Parse options from with clause if present
-    const options = parseForeachOptions(directive.values?.withClause);
+    const options = parseForeachOptions(foreachExpression.with);
     
     // For @add, we want each result on its own line without the heavy separator
     if (!options.separator) {
