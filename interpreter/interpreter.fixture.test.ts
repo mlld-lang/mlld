@@ -221,7 +221,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       } else if (fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
         // Enable bash mocking for bash tests and bracket nesting tests that use bash
         process.env.MOCK_BASH = 'true';
-      } else if (fixture.name === 'with-combined') {
+      } else if (fixture.name === 'with-combined' || fixture.name === 'with-needs-node') {
         // Enable command mocking for npm/sed test
         process.env.MLLD_TEST_MODE = 'true';
       } else if (fixture.name === 'reserved-time-variable') {
@@ -609,7 +609,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         if (fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
           delete process.env.MOCK_BASH;
         }
-        if (fixture.name === 'with-combined') {
+        if (fixture.name === 'with-combined' || fixture.name === 'with-needs-node') {
           delete process.env.MLLD_TEST_MODE;
         }
         if (fixture.name === 'reserved-time-variable' || fixture.name === 'reserved-time-variable-lowercase' || 
