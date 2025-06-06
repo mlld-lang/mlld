@@ -120,6 +120,3 @@ cli/temp-test-*
 
 # Local install metadata
 .mlld-local-installs.json
-
-# ai
-.claude
