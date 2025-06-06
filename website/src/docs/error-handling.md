@@ -5,21 +5,21 @@ title: "Error Handling"
 
 # Error Handling
 
-Mlld has a structured approach to error handling, categorizing errors into different severity levels.
+mlld has a structured approach to error handling, categorizing errors into different severity levels.
 
 ## Error Categories
 
 ### Fatal Errors (Halt Execution)
 
-These errors stop Mlld execution immediately:
+These errors stop mlld execution immediately:
 
 - Missing or inaccessible referenced files
-- Invalid syntax in Mlld files
+- Invalid syntax in mlld files
 - Invalid file extensions
 - Circular imports
 - Type mismatches (using wrong variable type)
 - Missing required command parameters
-- Invalid path references (not using $HOMEPATH/$PROJECTPATH)
+- Invalid path syntax or malformed paths
 
 ### Warning Errors (Continue with Warning)
 
@@ -44,8 +44,8 @@ These situations don't generate errors or warnings:
 ### File System Errors
 
 - **Missing Files**: When an `@add` or `@import` directive references a non-existent file
-- **Path Validation**: When paths don't use `$HOMEPATH` or `$PROJECTPATH`
-- **File Permission Issues**: When Mlld can't read a referenced file
+- **Path Validation**: When paths contain null bytes or are malformed
+- **File Permission Issues**: When mlld can't read a referenced file
 
 ### Syntax Errors
 
@@ -56,16 +56,16 @@ These situations don't generate errors or warnings:
 ### Execution Errors
 
 - **Command Failures**: When an `@run` command exits with a non-zero status
-- **Circular Imports**: When Mlld detects circular file imports
+- **Circular Imports**: When mlld detects circular file imports
 - **Type Mismatches**: Using the wrong variable type in a context
 
 ## Enhanced Error Display
 
-Mlld provides rich, contextual error messages with visual source code context:
+mlld provides rich, contextual error messages with visual source code context:
 
 ### CLI Error Display
 
-When using Mlld from the command line, errors show:
+When using mlld from the command line, errors show:
 
 - **Colorized output** with syntax highlighting
 - **Source code context** with line numbers
@@ -95,7 +95,7 @@ Details:
 
 ### API Error Handling
 
-For programmatic usage, Mlld provides structured error information:
+For programmatic usage, mlld provides structured error information:
 
 ```typescript
 import { formatError } from 'mlld';
@@ -127,7 +127,7 @@ You can control error formatting with these options:
 
 ## Error Recovery
 
-Mlld attempts to recover from non-fatal errors by:
+mlld attempts to recover from non-fatal errors by:
 
 - Substituting empty strings for missing data fields
 - Continuing past warnings when possible
@@ -141,4 +141,4 @@ Mlld attempts to recover from non-fatal errors by:
 - Validate command exit codes
 - Handle optional data fields gracefully
 - Check for environment variables before using them
-- Test Mlld scripts with error cases to ensure proper handling
+- Test mlld scripts with error cases to ensure proper handling

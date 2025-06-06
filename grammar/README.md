@@ -1,6 +1,6 @@
-# Mlld Grammar Developer Guide
+# mlld Grammar Developer Guide
 
-This guide explains the principles, patterns, and practices for developing and maintaining the Mlld grammar. It serves as the primary reference for developers working on the grammar system.
+This guide explains the principles, patterns, and practices for developing and maintaining the mlld grammar. It serves as the primary reference for developers working on the grammar system.
 
 > **For Grammar Consumers**: Use `npm run ast -- '<mlld syntax>'` to explore the AST output and refer to [docs/dev/AST.md](../../docs/dev/AST.md) for understanding the AST structure.
 > **For debugging**: Refer to [grammar/DEBUG.md](./DEBUG.md)

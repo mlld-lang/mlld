@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "1.0.0-rc-9",
+  "version": "1.0.0-rc-10",
   "description": "mlld: a modular prompt scripting language",
   "type": "module",
   "main": "dist/index.cjs",
@@ -23,7 +23,11 @@
   },
   "files": [
     "dist/",
-    "bin/"
+    "bin/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "package.json"
   ],
   "scripts": {
     "build:grammar:core": "npx tsc -p grammar/tsconfig.grammar.json && node grammar/build-grammar.mjs",
@@ -43,6 +47,7 @@
     "ast:debug": "DEBUG_MLLD_GRAMMAR=1 npm run ast --",
     "reinstall": "node scripts/install-local.cjs",
     "reinstall:clean": "node scripts/clean-local.cjs",
+    "prepare-main": "node prepare-main.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -83,6 +88,7 @@
   },
   "homepage": "https://github.com/mlld-lang/mlld#readme",
   "dependencies": {
+    "@octokit/rest": "^22.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/lodash": "^4.17.16",
     "@types/uuid": "^10.0.0",

@@ -2,11 +2,11 @@
 
 ## Overview
 
-This document describes the design for handling brackets in the Mlld grammar. Brackets serve different purposes in different contexts, requiring a context-aware parsing approach.
+This document describes the design for handling brackets in the mlld grammar. Brackets serve different purposes in different contexts, requiring a context-aware parsing approach.
 
 ## The Problem
 
-Brackets in Mlld have different semantics depending on context:
+Brackets in mlld have different semantics depending on context:
 
 1. **Command brackets**: `@run [echo "test"]` - Shell commands with potential nested brackets
 2. **Code brackets**: `@run python [data[0] = [1,2,3]]` - Language-specific syntax preservation

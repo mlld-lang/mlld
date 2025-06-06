@@ -116,9 +116,9 @@ Commands can be used within data structures:
 @exec getVersion = @run [(echo "1.0.0")]
 
 @data systemInfo = {
-  status: @run @getStatus,
-  version: @run @getVersion,
-  timestamp: @run [(date -u +"%Y-%m-%dT%H:%M:%SZ")]
+  "status": @run @getStatus,
+  "version": @run @getVersion,
+  "timestamp": @run [(date -u +"%Y-%m-%dT%H:%M:%SZ")]
 }
 ```
 

@@ -65,17 +65,6 @@ Templates (using double brackets) support variable interpolation:
 - Text variables: `[[Hello, {{name}}!]]`
 - Field access: `[[User: {{user.name}}]]`
 
-## String Concatenation
-
-```mlld
-@text first = "Hello"
-@text second = "World"
-@text message = @first ++ " " ++ @second
-```
-
-- Requires spaces on both sides of the `++` operator
-- Joins string parts without adding spaces between them
-- Cannot concatenate across multiple lines
 
 ## Examples
 

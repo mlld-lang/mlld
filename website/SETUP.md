@@ -1,6 +1,6 @@
-# Setting Up the Mlld Documentation Site
+# Setting Up the mlld Documentation Site
 
-This guide explains how to set up and run the Mlld documentation site locally.
+This guide explains how to set up and run the mlld documentation site locally.
 
 ## Prerequisites
 
