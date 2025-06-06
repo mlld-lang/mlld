@@ -88,6 +88,7 @@
   },
   "homepage": "https://github.com/mlld-lang/mlld#readme",
   "dependencies": {
+    "@octokit/rest": "^22.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/lodash": "^4.17.16",
     "@types/uuid": "^10.0.0",
