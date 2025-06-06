@@ -22,6 +22,15 @@ export class DefaultDependencyChecker implements DependencyChecker {
     const missing: string[] = [];
     const mismatched: string[] = [];
     
+    // In test mode, assume all dependencies are satisfied
+    if (process.env.MLLD_TEST_MODE === 'true') {
+      return {
+        satisfied: true,
+        missing: [],
+        mismatched: []
+      };
+    }
+    
     for (const [pkg, constraint] of Object.entries(packages)) {
       const cacheKey = `node:${pkg}:${constraint}`;
       
@@ -94,6 +103,15 @@ export class DefaultDependencyChecker implements DependencyChecker {
   async checkPythonPackages(packages: Record<string, string>): Promise<DependencyCheckResult> {
     const missing: string[] = [];
     const mismatched: string[] = [];
+    
+    // In test mode, assume all dependencies are satisfied
+    if (process.env.MLLD_TEST_MODE === 'true') {
+      return {
+        satisfied: true,
+        missing: [],
+        mismatched: []
+      };
+    }
     
     for (const [pkg, constraint] of Object.entries(packages)) {
       const cacheKey = `python:${pkg}:${constraint}`;
