@@ -269,39 +269,252 @@ export class Environment {
   
   /**
    * Create the debug object with environment information
-   * Version 1: Full environment as pretty-printed JSON
+   * @param version - 1 = full JSON, 2 = reduced/useful, 3 = markdown format
    */
-  private createDebugObject(): any {
+  private createDebugObject(version: number = 2): any {
     // TODO: Add security toggle from mlld.lock.json when available
     // For now, assume debug is enabled
     
-    // Collect all variables (including from parent scopes)
-    const allVars = this.getAllVariables();
-    const variablesObj: Record<string, any> = {};
-    
-    for (const [name, variable] of allVars) {
-      variablesObj[name] = {
-        type: variable.type,
-        value: variable.value,
-        metadata: variable.metadata
+    if (version === 1) {
+      // Version 1: Full environment as pretty-printed JSON
+      // Collect all variables (including from parent scopes)
+      const allVars = this.getAllVariables();
+      const variablesObj: Record<string, any> = {};
+      
+      for (const [name, variable] of allVars) {
+        variablesObj[name] = {
+          type: variable.type,
+          value: variable.value,
+          metadata: variable.metadata
+        };
+      }
+      
+      // Collect environment information
+      const debugInfo = {
+        basePath: this.basePath,
+        currentFile: this.getCurrentFilePath() || null,
+        variables: variablesObj,
+        reservedVariables: Array.from(this.reservedNames),
+        nodes: this.nodes.length,
+        urlConfig: this.urlConfig || null,
+        outputOptions: this.outputOptions,
+        errors: this.collectedErrors.length,
+        importStack: Array.from(this.importStack),
+        hasParent: this.parent !== undefined
       };
+      
+      return debugInfo;
+    } else if (version === 2) {
+      // Version 2: Reduced/useful version for debugging
+      const allVars = this.getAllVariables();
+      
+      // Separate variables by category
+      const reservedVars: Record<string, any> = {};
+      const userVars: Record<string, any> = {};
+      const importedVars: Record<string, any> = {};
+      
+      for (const [name, variable] of allVars) {
+        const varInfo: any = {
+          type: variable.type,
+          value: this.truncateValue(variable.value, variable.type, 50)
+        };
+        
+        // Add source information
+        if (variable.metadata?.definedAt) {
+          varInfo.source = variable.metadata.definedAt.filePath || 'unknown';
+          varInfo.line = variable.metadata.definedAt.line;
+        }
+        
+        if (variable.metadata?.isReserved) {
+          reservedVars[name] = varInfo;
+        } else if (variable.metadata?.isImported) {
+          importedVars[name] = varInfo;
+          if (variable.metadata.importPath) {
+            varInfo.importedFrom = variable.metadata.importPath;
+          }
+        } else {
+          userVars[name] = varInfo;
+        }
+      }
+      
+      // Get environment variable names only (no values for security)
+      const envVarNames = Object.keys(process.env).filter(key => 
+        !key.startsWith('npm_') && // Filter npm-specific vars
+        !key.includes('PATH') &&    // Filter path-related vars  
+        key !== 'DEBUG' &&          // Filter debug var
+        key !== '_'                 // Filter underscore var
+      );
+      
+      const debugInfo = {
+        project: {
+          basePath: this.basePath,
+          currentFile: this.getCurrentFilePath() || null,
+          projectPath: this.basePath // Should be computed via getProjectPath()
+        },
+        environment: {
+          variables: envVarNames.sort(),
+          note: "Values hidden for security. Use @INPUT to access if needed."
+        },
+        globalVariables: reservedVars,
+        userVariables: userVars,
+        importedVariables: importedVars,
+        stats: {
+          totalVariables: allVars.size,
+          outputNodes: this.nodes.length,
+          errors: this.collectedErrors.length,
+          importStackDepth: this.importStack.size
+        }
+      };
+      
+      return debugInfo;
+    } else if (version === 3) {
+      // Version 3: Markdown formatted output
+      const allVars = this.getAllVariables();
+      
+      // Separate variables by category
+      const reservedVars: Array<[string, MlldVariable]> = [];
+      const userVars: Array<[string, MlldVariable]> = [];
+      const importedVars: Array<[string, MlldVariable]> = [];
+      
+      for (const [name, variable] of allVars) {
+        if (variable.metadata?.isReserved) {
+          reservedVars.push([name, variable]);
+        } else if (variable.metadata?.isImported) {
+          importedVars.push([name, variable]);
+        } else {
+          userVars.push([name, variable]);
+        }
+      }
+      
+      // Get environment variable names
+      const envVarNames = Object.keys(process.env).filter(key => 
+        !key.startsWith('npm_') && 
+        !key.includes('PATH') &&
+        key !== 'DEBUG' &&
+        key !== '_'
+      ).sort();
+      
+      // Build markdown output
+      let markdown = `## ${this.getCurrentFilePath() || 'mlld'} debug:\n\n`;
+      
+      // Environment variables section
+      markdown += '### Environment variables:\n';
+      if (envVarNames.length > 0) {
+        markdown += envVarNames.join(', ') + '\n';
+        markdown += '_(not available unless passed via @INPUT)_\n\n';
+      } else {
+        markdown += '_None detected_\n\n';
+      }
+      
+      // Global variables section
+      markdown += '### Global variables:\n';
+      for (const [name, variable] of reservedVars) {
+        if (name === 'DEBUG') continue; // Don't show DEBUG itself
+        markdown += `**@${name}**\n`;
+        markdown += `- type: ${variable.type}\n`;
+        const value = this.truncateValue(variable.value, variable.type, 50);
+        if (variable.type === 'text' && typeof value === 'string') {
+          markdown += `- value: "${value}"\n`;
+        } else {
+          markdown += `- value: ${value}\n`;
+        }
+        markdown += '\n';
+      }
+      
+      // User variables section
+      if (userVars.length > 0) {
+        markdown += '### User variables:\n';
+        for (const [name, variable] of userVars) {
+          markdown += `**@${name}**\n`;
+          markdown += `- type: ${variable.type}\n`;
+          const value = this.truncateValue(variable.value, variable.type, 50);
+          if (variable.type === 'text' && typeof value === 'string') {
+            markdown += `- value: "${value}"\n`;
+          } else {
+            markdown += `- value: ${value}\n`;
+          }
+          if (variable.metadata?.definedAt) {
+            const source = variable.metadata.definedAt.filePath || 'unknown';
+            const relativePath = source.startsWith(this.basePath) 
+              ? source.substring(this.basePath.length + 1) 
+              : source;
+            markdown += `- defined at: ${relativePath}:${variable.metadata.definedAt.line}\n`;
+          }
+          markdown += '\n';
+        }
+      }
+      
+      // Imported variables section
+      if (importedVars.length > 0) {
+        markdown += '### Imported variables:\n';
+        for (const [name, variable] of importedVars) {
+          markdown += `**@${name}**\n`;
+          markdown += `- type: ${variable.type}\n`;
+          const value = this.truncateValue(variable.value, variable.type, 50);
+          if (variable.type === 'text' && typeof value === 'string') {
+            markdown += `- value: "${value}"\n`;
+          } else {
+            markdown += `- value: ${value}\n`;
+          }
+          if (variable.metadata?.importPath) {
+            markdown += `- imported from: ${variable.metadata.importPath}\n`;
+          }
+          markdown += '\n';
+        }
+      }
+      
+      // Stats section
+      markdown += '### Statistics:\n';
+      markdown += `- Total variables: ${allVars.size}\n`;
+      markdown += `- Output nodes: ${this.nodes.length}\n`;
+      markdown += `- Errors collected: ${this.collectedErrors.length}\n`;
+      markdown += `- Current file: ${this.getCurrentFilePath() || 'none'}\n`;
+      markdown += `- Base path: ${this.basePath}\n`;
+      
+      return markdown;
+    } else {
+      // Default to version 2
+      return this.createDebugObject(2);
+    }
+  }
+  
+  /**
+   * Truncate values for display in debug output
+   */
+  private truncateValue(value: any, type: string, maxLength: number = 50): any {
+    if (value === null || value === undefined) {
+      return value;
     }
     
-    // Collect environment information
-    const debugInfo = {
-      basePath: this.basePath,
-      currentFile: this.getCurrentFilePath() || null,
-      variables: variablesObj,
-      reservedVariables: Array.from(this.reservedNames),
-      nodes: this.nodes.length,
-      urlConfig: this.urlConfig || null,
-      outputOptions: this.outputOptions,
-      errors: this.collectedErrors.length,
-      importStack: Array.from(this.importStack),
-      hasParent: this.parent !== undefined
-    };
+    if (type === 'text' && typeof value === 'string') {
+      if (value.length > maxLength) {
+        return `${value.substring(0, maxLength)}... (${value.length} chars)`;
+      }
+      return value;
+    }
     
-    return debugInfo;
+    if (type === 'data') {
+      // For objects/arrays, show structure but truncate strings
+      if (Array.isArray(value)) {
+        return `[array with ${value.length} items]`;
+      } else if (typeof value === 'object') {
+        const keys = Object.keys(value);
+        if (keys.length > 5) {
+          return `{object with ${keys.length} keys: ${keys.slice(0, 5).join(', ')}, ...}`;
+        }
+        return `{object with keys: ${keys.join(', ')}}`;
+      }
+    }
+    
+    if (type === 'path' && typeof value === 'object' && value.resolvedPath) {
+      return value.resolvedPath;
+    }
+    
+    if (type === 'exec' || type === 'command') {
+      return '[command definition]';
+    }
+    
+    return value;
   }
   
   // --- Property Accessors ---
@@ -416,13 +629,12 @@ export class Environment {
       // Handle lazy DEBUG variable
       if (name === 'DEBUG' && variable.metadata?.isLazy && variable.value === null) {
         // Compute debug value on first access
-        const debugData = this.createDebugObject();
-        // Pretty print JSON with 2-space indentation
-        const jsonString = JSON.stringify(debugData, null, 2);
+        // Default to version 3 (markdown format) for user-friendliness
+        const debugData = this.createDebugObject(3);
         
         // Update the variable with computed value
-        variable.type = 'text'; // Return as text for v1
-        variable.value = jsonString;
+        variable.type = 'text'; // Always return as text
+        variable.value = debugData;
         variable.metadata!.isLazy = false; // No longer lazy
       }
       return variable;
