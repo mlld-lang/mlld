@@ -1,11 +1,11 @@
-# Mlld TextMate Grammar
+# mlld TextMate Grammar
 
-This directory contains TextMate grammar files for Mlld syntax highlighting.
+This directory contains TextMate grammar files for mlld syntax highlighting.
 
 ## Files
 
-- `mlld.tmLanguage.json` - Main Mlld syntax highlighting for `.mlld` and `.mld` files
-- `mlld-markdown.injection.json` - Injection grammar to highlight Mlld directives in Markdown files
+- `mlld.tmLanguage.json` - Main mlld syntax highlighting for `.mlld` and `.mld` files
+- `mlld-markdown.injection.json` - Injection grammar to highlight mlld directives in Markdown files
 
 ## Compatible Editors
 
@@ -20,9 +20,9 @@ These grammar files can be used with:
 Copy these files to your editor's syntax directory. The exact location varies by editor.
 
 ### Sublime Text
-- macOS: `~/Library/Application Support/Sublime Text/Packages/Mlld/`
-- Windows: `%APPDATA%\Sublime Text\Packages\Mlld\`
-- Linux: `~/.config/sublime-text/Packages/Mlld/`
+- macOS: `~/Library/Application Support/Sublime Text/Packages/mlld/`
+- Windows: `%APPDATA%\Sublime Text\Packages\mlld\`
+- Linux: `~/.config/sublime-text/Packages/mlld/`
 
 ### TextMate
-- Create a bundle: `~/Library/Application Support/TextMate/Bundles/Mlld.tmbundle/Syntaxes/`
+- Create a bundle: `~/Library/Application Support/TextMate/Bundles/mlld.tmbundle/Syntaxes/`

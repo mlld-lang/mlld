@@ -5,7 +5,7 @@ title: "@run Directive"
 
 # @run Directive
 
-The `@run` directive executes shell commands or code blocks and includes their output in your Mlld document.
+The `@run` directive executes shell commands or code blocks and includes their output in your mlld document.
 
 ## Syntax
 
@@ -41,7 +41,7 @@ The command can be:
 
 You can use different types of variables in commands:
 - All variables use `@` syntax: `@textvar`, `@path`
-- Special variables: `@HOMEPATH`, `@PROJECTPATH`, `@.`
+- Special variables: `@PROJECTPATH`, `@.`
 - Field access: `@object.field`, `@array.0`
 - Command references: `@command(@param1, @param2)`
 
@@ -109,7 +109,7 @@ Using variables in commands:
 
 Using path variables:
 ```mlld
-@path src = [@PROJECTPATH/src]
+@path src = [@./src]
 @run [(ls -la @src)]
 ```
 
@@ -133,7 +133,7 @@ Using code execution with `@exec`:
 
 ## Environment & Working Directory
 
-- Commands execute in the environment of the Mlld process
+- Commands execute in the environment of the mlld process
 - The working directory defaults to the current working directory
 - Environment variables are available to the command
 

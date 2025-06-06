@@ -1,6 +1,6 @@
-# Mlld Grammar Directive Implementations
+# mlld Grammar Directive Implementations
 
-This directory contains the top-level implementations of Mlld directives. Each directive is implemented as a composition of core content handlers.
+This directory contains the top-level implementations of mlld directives. Each directive is implemented as a composition of core content handlers.
 
 ## Directive Design Pattern
 

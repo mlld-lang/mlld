@@ -11,14 +11,9 @@ The `@path` directive defines filesystem path and URL variables that can be used
 
 ### Basic Paths
 ```mlld
-@path identifier = "$HOMEPATH/path"
-@path identifier = "$~/path"
-@path identifier = "$PROJECTPATH/path"
-@path identifier = "$./path"
-@path identifier = "/absolute/path"
-@path identifier = "relative/path"
-@path identifier = "../parent/path"
-@path identifier = "./current/path"
+@path identifier = [@./path]          # Project root
+@path identifier = [/absolute/path]   # Absolute path
+@path identifier = [relative/path]    # Relative path
 ```
 
 ### URLs with Caching and Security
@@ -46,28 +41,26 @@ Where:
 
 - Must not be empty
 - Cannot contain null bytes
-- Any standard path format is allowed:
-  - Absolute paths (e.g., `/usr/local/bin`) 
-  - Relative paths (e.g., `path/to/file`)
-  - Paths with dot segments (e.g., `./current` or `../parent`)
-  - Paths with special variables (e.g., `$HOMEPATH/path`)
+- Path formats:
+  - Project root: `[@./path]`
+  - Absolute paths: `[/usr/local/bin]`
+  - Relative paths: `[path/to/file]`
 
-## Special Path Variables (Optional)
+## Special Path Prefixes
 
-Mlld provides special path variables for enhanced cross-platform portability:
+mlld provides a special path prefix for project-relative paths:
 
-- `$HOMEPATH` or `$~`: Refers to the user's home directory
-- `$PROJECTPATH` or `$.`: Refers to the current project root directory
+- `.`: Refers to the current project root directory
 
-Using special path variables is recommended (but not required) for best cross-platform portability.
+This prefix must be used inside brackets: `[@./path]`
 
 ## Referencing Path Variables
 
-Path variables are referenced using the `$identifier` syntax:
+Path variables are referenced using the `@identifier` syntax:
 
 ```mlld
-@path docs = "$PROJECTPATH/docs"
-@add [$docs/guide.md]
+@path docs = [@./docs]
+@add [@docs/guide.md]
 ```
 
 Path variables can be used:
@@ -79,27 +72,27 @@ Path variables can be used:
 
 Basic path variables:
 ```mlld
-@path docs = "$PROJECTPATH/docs"
-@path configs = "$PROJECTPATH/configs"
-@path home = "$HOMEPATH/mlld"
+@path docs = [@./docs]
+@path configs = [@./configs]
+@path assets = [@./assets]
 ```
 
 Using path variables in commands:
 ```mlld
-@path src = "$PROJECTPATH/src"
-@run [(ls -la $src)]
+@path src = [@./src]
+@run [(ls -la @src)]
 ```
 
 Embedding files with path variables:
 ```mlld
-@path templates = "$PROJECTPATH/templates"
-@add [$templates/header.md]
+@path templates = [@./templates]
+@add [@templates/header.md]
 ```
 
 Using path segments:
 ```mlld
-@path src = "$PROJECTPATH/src"
-@add [$src/components/button.js]
+@path src = [@./src]
+@add [@src/components/button.js]
 ```
 
 ## Error Handling
@@ -114,14 +107,14 @@ Paths can include variables, which are resolved during execution:
 
 ```mlld
 @text dir = "docs"
-@path docs = "$PROJECTPATH/{{dir}}"
+@path docs = [@./@dir]
 ```
 
 ## Path Best Practices
 
-- For cross-platform compatibility, use special path variables `$PROJECTPATH` and `$HOMEPATH`
+- For project-relative paths, use the `.` prefix inside brackets
 - Use forward slashes for path separators (even on Windows)
-- Be cautious when using absolute paths or parent directory references (`..`), as they may make your Mlld files less portable
+- Be cautious when using absolute paths or parent directory references (`..`), as they may make your mlld files less portable
 - Consider using path variables to encapsulate filesystem paths for better maintainability
 
 ## URL Caching

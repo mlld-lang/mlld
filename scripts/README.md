@@ -1,6 +1,6 @@
-# Mlld Scripts
+# mlld Scripts
 
-This directory contains various scripts for building, validating, and managing the Mlld codebase.
+This directory contains various scripts for building, validating, and managing the mlld codebase.
 
 ## AST Validation Scripts
 

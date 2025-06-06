@@ -11,25 +11,25 @@ pip install mlld
 ## Usage
 
 ```python
-from mlld import Mlld
+from mlld import mlld
 
 # Create processor instance
-mlld = Mlld()
+processor = mlld()
 
 # Process mlld content
-output = mlld.process("""
+output = processor.process("""
 @text greeting = "Hello, World!"
 @run [echo "Processing..."]
 @add @greeting
 """)
 
 # Process files
-mlld.process_file("input.mld", "output.md")
+processor.process_file("input.mld", "output.md")
 
 # Handle errors
 try:
-    result = mlld.process("@invalid syntax")
-except MlldError as e:
+    result = processor.process("@invalid syntax")
+except mlldError as e:
     print(e.formatted_error)
 ```
 
