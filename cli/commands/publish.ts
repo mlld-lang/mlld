@@ -108,13 +108,21 @@ export class PublishCommand {
       let registryEntry: any;
       
       if (gitInfo.isGitRepo && !options.useGist && gitInfo.remoteUrl?.includes('github.com')) {
-        // Git-native publishing
+        // Check if repository is public
         console.log(`  Repository: ${chalk.cyan(`github.com/${gitInfo.owner}/${gitInfo.repo}`)}`);
         console.log(`  Commit: ${chalk.gray(gitInfo.sha?.substring(0, 8))}`);
         
-        sourceUrl = `https://raw.githubusercontent.com/${gitInfo.owner}/${gitInfo.repo}/${gitInfo.sha}/${gitInfo.relPath}`;
+        const isPublicRepo = await this.checkIfRepoIsPublic(octokit, gitInfo.owner!, gitInfo.repo!);
         
-        registryEntry = {
+        if (!isPublicRepo) {
+          console.log(chalk.yellow('\n⚠️  Repository is private. Switching to gist creation...'));
+          console.log(chalk.gray('Modules must be publicly accessible. Use --use-gist to force gist creation.'));
+          // Fall through to gist creation
+        } else {
+          // Git-native publishing for public repos
+          sourceUrl = `https://raw.githubusercontent.com/${gitInfo.owner}/${gitInfo.repo}/${gitInfo.sha}/${gitInfo.relPath}`;
+          
+          registryEntry = {
           name: metadata.name,
           description: metadata.description,
           author: {
@@ -138,9 +146,12 @@ export class PublishCommand {
           version: metadata.version || '1.0.0',
           license: metadata.license,
         };
-        
-        console.log(chalk.green(`\n✅ Using git repository for source`));
-      } else {
+          
+          console.log(chalk.green(`\n✅ Using git repository for source`));
+        }
+      }
+      
+      if (!registryEntry) {
         // Gist-based publishing (fallback)
         console.log(chalk.yellow('\n📝 Creating GitHub gist (no git repo detected or --use-gist specified)'));
         
@@ -205,6 +216,23 @@ export class PublishCommand {
         console.error(error);
       }
       throw new MlldError(`Publication failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Check if a GitHub repository is public
+   */
+  private async checkIfRepoIsPublic(octokit: Octokit, owner: string, repo: string): Promise<boolean> {
+    try {
+      const { data } = await octokit.repos.get({ owner, repo });
+      return !data.private;
+    } catch (error: any) {
+      // If we get a 404, it might be private or doesn't exist
+      if (error.status === 404) {
+        return false;
+      }
+      // For other errors, assume private to be safe
+      return false;
     }
   }
 
@@ -633,7 +661,7 @@ export function createPublishCommand() {
         dryRun: flags['dry-run'] || flags.n,
         force: flags.force || flags.f,
         message: flags.message || flags.m,
-        useGist: flags['use-gist'] || flags.gist,
+        useGist: flags['use-gist'] || flags.gist || flags.g,
       };
       
       try {

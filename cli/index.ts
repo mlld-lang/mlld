@@ -379,14 +379,16 @@ Options:
   -n, --dry-run        Show what would be published without actually publishing
   -m, --message <msg>  Add a custom message to the pull request
   -f, --force          Force publish even with uncommitted changes
-  --use-gist           Create a gist even if in a git repository
+  -g, --gist           Create a gist even if in a git repository
+  --use-gist           Same as --gist
   -v, --verbose        Show detailed output
 
 Git Integration:
   - Automatically detects git repositories
+  - Checks if repository is public (private repos use gists)
   - Uses commit SHA for immutable references
   - Validates clean working tree (use --force to override)
-  - Falls back to gist creation if not in git repo
+  - Falls back to gist creation if not in git repo or repo is private
 
 Examples:
   mlld publish                    # Publish from git repo or create gist
