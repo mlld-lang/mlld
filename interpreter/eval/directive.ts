@@ -11,6 +11,7 @@ import { evaluateExec } from './exec';
 import { evaluateAdd } from './add';
 import { evaluateImport } from './import';
 import { evaluateWhen } from './when';
+import { evaluateOutput } from './output';
 
 /**
  * Main directive evaluation router.
@@ -45,6 +46,9 @@ export async function evaluateDirective(
       
     case 'when':
       return await evaluateWhen(directive as any, env);
+      
+    case 'output':
+      return evaluateOutput(directive, env);
       
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);

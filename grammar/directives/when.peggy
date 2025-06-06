@@ -225,9 +225,69 @@ WhenActionDirective
         location: location()
       })];
     }
+  / "@output" _ source:WhenOutputSource? _ "[" path:WhenPathText "]" {
+      // @output directive for when actions
+      const values = {
+        path: [helpers.createNode(NodeType.Text, { 
+          content: path, 
+          location: location() 
+        })]
+      };
+      
+      const raw = {
+        path: path
+      };
+      
+      let subtype = 'outputDocument';
+      const meta = { hasSource: false };
+      
+      if (source) {
+        values.source = source.values;
+        raw.source = source.raw;
+        meta.hasSource = true;
+        meta.sourceType = source.type;
+        subtype = source.subtype;
+      }
+      
+      return [helpers.createNode(NodeType.Directive, {
+        kind: 'output',
+        subtype: subtype,
+        values: values,
+        raw: raw,
+        meta: meta,
+        location: location()
+      })];
+    }
 
 // Simple command text without interpolation for now
 WhenCommandText
   = chars:[^\]]+ {
       return chars.join('');
+    }
+
+// Path text for output directive in when actions
+WhenPathText
+  = chars:[^\]]+ {
+      return chars.join('').trim();
+    }
+
+// Output source for when actions (simplified)
+WhenOutputSource
+  = "@" id:BaseIdentifier {
+      // Simple variable reference
+      return {
+        type: 'variable',
+        subtype: 'outputVariable',
+        values: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+        raw: '@' + id
+      };
+    }
+  / str:StringLiteral {
+      // Literal text
+      return {
+        type: 'literal',
+        subtype: 'outputLiteral',
+        values: [helpers.createNode(NodeType.Text, { content: str, location: location() })],
+        raw: '"' + str + '"'
+      };
     }

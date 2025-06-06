@@ -48,6 +48,12 @@ The grammar build system (`grammar/build-grammar.mjs`) works as follows:
    npm test grammar/
    ```
 
+5. **Syntax highlighting generation**: Generated syntax files in `grammar/generated/` are:
+   - Automatically built on push to main branch
+   - Skipped in feature branches to avoid merge conflicts
+   - Can be manually generated with `npm run build:syntax:force`
+   - See `grammar/syntax-generator/README.md` for details
+
 ### Example: Adding a Helper Function
 
 ```typescript
@@ -467,6 +473,43 @@ Full syntax examples:
 └─ '"' detected?
    └─ LiteralContent
       └─ "text to add"
+```
+
+### @output Directive
+
+```
+@output ...
+├─ "@" variable/command detected?
+│  ├─ YES: Output variable/command result
+│  │  ├─ @output @var [file.md]
+│  │  │  └─ Variable content → file
+│  │  │
+│  │  ├─ @output @template(args) [file.md]
+│  │  │  └─ Template result → file
+│  │  │
+│  │  └─ @output @cmd(args) [file.md]
+│  │     └─ Command result → file
+│  │
+│  └─ Followed by "[" path?
+│     └─ [path/to/file.md]
+│        └─ Path can have @var interpolation
+│
+├─ '"' string detected?
+│  ├─ YES: Output literal text
+│  │  └─ @output "text content" [file.md]
+│  │     └─ Literal text → file
+│  │
+├─ "[" path detected (no source)?
+│  ├─ YES: Output full document
+│  │  └─ @output [file.md]
+│  │     └─ Complete document → file
+│  │
+└─ Other patterns
+   └─ Parse error (invalid syntax)
+
+Usage in @when blocks:
+- @when @condition => @output [file.md]
+- @when @var: [@cond => @output @result [file.md]]
 ```
 
 ## Parse Tree Maintenance
