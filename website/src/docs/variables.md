@@ -199,15 +199,3 @@ They are NOT allowed in:
 - Regular string literals (use template literals instead)
 - Outside of specific interpolation contexts
 
-## String Concatenation
-
-You can concatenate strings using the `++` operator:
-
-```mlld
-@text greeting = "Hello" ++ " " ++ "World"
-@text message = {{intro}} ++ {{body}}
-```
-
-- Requires spaces on both sides of `++`
-- Can concatenate string literals, template literals, and text variables
-- Cannot concatenate across multiple lines
