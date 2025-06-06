@@ -1,6 +1,6 @@
-# Mlld Grammar Patterns
+# mlld Grammar Patterns
 
-This directory contains pattern abstractions for the Mlld grammar. These patterns are reusable components that can be composed to build directive parsers.
+This directory contains pattern abstractions for the mlld grammar. These patterns are reusable components that can be composed to build directive parsers.
 
 ## Pattern Organization
 

@@ -1,6 +1,6 @@
-# Mlld Grammar Core Abstractions
+# mlld Grammar Core Abstractions
 
-This directory contains core content-type abstractions for Mlld grammar. Unlike directive-based cores, these abstractions focus on the underlying content types that are reused across different directives.
+This directory contains core content-type abstractions for mlld grammar. Unlike directive-based cores, these abstractions focus on the underlying content types that are reused across different directives.
 
 ## Purpose
 
