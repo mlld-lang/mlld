@@ -65,6 +65,7 @@ export interface CLIOptions {
   collectErrors?: boolean;
   progressStyle?: 'emoji' | 'text';
   showCommandContext?: boolean;
+  commandTimeout?: number;
 }
 
 /**
@@ -322,6 +323,12 @@ function parseArgs(args: string[]): CLIOptions {
       case '--show-command-context':
         options.showCommandContext = true;
         break;
+      case '--command-timeout':
+        options.commandTimeout = parseInt(args[++i]);
+        if (isNaN(options.commandTimeout) || options.commandTimeout < 0) {
+          throw new Error('--command-timeout must be a positive number (milliseconds)');
+        }
+        break;
       // Transformation is always enabled by default
       // No transform flags needed
       default:
@@ -444,6 +451,7 @@ Output Management Options:
   --error-behavior <mode> How to handle command failures: halt, continue [default: continue]
   --collect-errors        Collect errors and display summary at end
   --show-command-context  Show source context for command execution errors
+  --command-timeout <ms>  Command execution timeout in milliseconds [default: 30000]
 
 Configuration:
   Mlld looks for configuration in:
@@ -754,7 +762,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
         maxOutputLines: cliOptions.maxOutputLines !== undefined ? cliOptions.maxOutputLines : outputConfig.maxOutputLines,
         errorBehavior: cliOptions.errorBehavior || outputConfig.errorBehavior,
         collectErrors: cliOptions.collectErrors !== undefined ? cliOptions.collectErrors : outputConfig.collectErrors,
-        showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext
+        showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext,
+        timeout: cliOptions.commandTimeout
       }
     });
 

@@ -418,11 +418,12 @@ async function invokeParameterizedCommand(
   if (commandDef.type === 'command') {
     // Execute command template with bound parameters
     const command = await interpolate(commandDef.commandTemplate, childEnv);
-    return await env.executeCommand(command);
+    return await childEnv.executeCommand(command);
   } else if (commandDef.type === 'code') {
     // Execute code template with bound parameters
     const code = await interpolate(commandDef.codeTemplate, childEnv);
-    return await env.executeCode(code, commandDef.language);
+    // Pass argMap as parameters for bash/shell to convert to environment variables
+    return await childEnv.executeCode(code, commandDef.language, argMap);
   } else {
     throw new Error(`Unsupported command type: ${commandDef.type}`);
   }

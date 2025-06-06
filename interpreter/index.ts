@@ -13,6 +13,7 @@ interface CommandExecutionOptions {
   errorBehavior?: 'halt' | 'continue';
   collectErrors?: boolean;
   showCommandContext?: boolean;
+  timeout?: number;
 }
 
 /**

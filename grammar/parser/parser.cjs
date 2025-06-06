@@ -312,7 +312,7 @@ function peg$parse(input, options) {
   var peg$r2 = /^[ \t]/;
   var peg$r3 = /^[^`\r\n]/;
   var peg$r4 = /^[0-9]/;
-  var peg$r5 = /^["'@[-\]`{}]/;
+  var peg$r5 = /^["$'@[-\]`{}]/;
   var peg$r6 = /^[ \t\r\n\/\]@${{}"'`]/;
   var peg$r7 = /^[\/[\]@${}]/;
   var peg$r8 = /^[\]\/[\]@${}]/;
@@ -399,7 +399,7 @@ function peg$parse(input, options) {
   var peg$e34 = peg$otherExpectation("Multi-line Template Literal");
   var peg$e35 = peg$otherExpectation("Escape sequence");
   var peg$e36 = peg$literalExpectation("\\", false);
-  var peg$e37 = peg$classExpectation(["\"", "'", "@", ["[", "]"], "`", "{", "}"], false, false);
+  var peg$e37 = peg$classExpectation(["\"", "$", "'", "@", ["[", "]"], "`", "{", "}"], false, false);
   var peg$e38 = peg$otherExpectation("Plain text segment");
   var peg$e39 = peg$classExpectation([" ", "\t", "\r", "\n", "/", "]", "@", "$", "{", "{", "}", "\"", "'", "`"], false, false);
   var peg$e40 = peg$otherExpectation("Template text segment");
