@@ -141,6 +141,20 @@ WhenConditionExpression
       // Variable reference from patterns/variables.peggy
       return [text()];
     }
+  / value:BooleanLiteral {
+      // Boolean literal (true/false)
+      return [helpers.createNode(NodeType.Text, { 
+        content: String(value), 
+        location: location() 
+      })];
+    }
+  / value:NullLiteral {
+      // Null literal
+      return [helpers.createNode(NodeType.Text, { 
+        content: String(value), 
+        location: location() 
+      })];
+    }
 
 // -------------------------------------------------------------
 // CONDITION LIST AND PAIRS

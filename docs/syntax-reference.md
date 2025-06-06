@@ -50,7 +50,6 @@ Lines that begin with `>> ` (two greater-than signs followed by a space) are tre
 ,       List separator
 ()      Command parameter list
 :       Schema reference operator (optional)
-++      String concatenation operator (requires spaces on both sides)
 ```
 
 ### String Values
