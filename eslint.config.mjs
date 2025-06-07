@@ -136,6 +136,17 @@ export default tseslint.config(
     }
   },
   
+  // CLI commands need console output for user interaction
+  {
+    files: [
+      'cli/commands/**/*.ts',
+      'cli/utils/**/*.ts'
+    ],
+    rules: {
+      'no-console': 'off', // CLI commands need console output
+    }
+  },
+  
   // Files with legitimate string operations (not for AST manipulation)
   {
     files: [
