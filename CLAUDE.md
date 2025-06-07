@@ -52,6 +52,35 @@ npm run ast -- '<mlld syntax>'  # Shows AST for any valid mlld syntax
 - **XML via llmxml** - Uses SCREAMING_SNAKE format for maximum clarity
 - **AST Parsing**: ALWAYS use the AST -- never use regex
 
+## CRITICAL: AST Usage Pattern
+**BUILD WITH THE AST, NOT AROUND IT OR AGAINST IT**
+
+The interpreter MUST work with the AST structure provided by the parser. This means:
+- **NEVER use `.raw` fields** - These are legacy/debug fields. Use `.values` arrays exclusively
+- **NEVER use string manipulation** - No regex, split, replace, match, startsWith on AST content
+- **ALWAYS evaluate nodes** - Use `interpolate()` to extract values from node arrays
+- **NEVER extract `.content` directly** - Even "simple" Text nodes should go through evaluation
+- **NEVER construct nodes manually** - If you need synthetic nodes, create proper AST construction helpers
+
+**Why this matters**: We've fixed this multiple times. Using `.raw` or string manipulation:
+1. Defeats the entire purpose of having a parser and AST
+2. Makes the code fragile - any grammar change breaks string assumptions
+3. Creates inconsistent patterns - same operation done differently everywhere
+4. Is actually MORE work than using the AST properly
+
+**Correct pattern example**:
+```typescript
+// WRONG - uses raw field
+const identifier = directive.raw?.identifier;
+
+// WRONG - uses string manipulation  
+if (content.startsWith('@')) { ... }
+
+// RIGHT - uses AST evaluation
+const identifierNodes = directive.values?.identifier;
+const identifier = await interpolate(identifierNodes, env);
+```
+
 ## Meld Syntax Rules
 
 **Meld is a scripting language embedded in Markdown documents** - it enhances Markdown with dynamic content generation while preserving the readability of the source document.

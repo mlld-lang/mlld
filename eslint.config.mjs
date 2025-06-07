@@ -3,6 +3,11 @@ import tseslint from 'typescript-eslint';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Custom AST rules
+import noRawFieldAccess from './eslint-rules/no-raw-field-access.js';
+import noAstStringManipulation from './eslint-rules/no-ast-string-manipulation.js';
+import requireAstTypeGuards from './eslint-rules/require-ast-type-guards.js';
+
 // Mimic __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,6 +47,13 @@ export default tseslint.config(
     },
     plugins: {
       '@typescript-eslint': tseslint.plugin,
+      'mlld': {
+        rules: {
+          'no-raw-field-access': noRawFieldAccess,
+          'no-ast-string-manipulation': noAstStringManipulation,
+          'require-ast-type-guards': requireAstTypeGuards,
+        }
+      }
     },
     rules: {
       // Custom rules from old config
@@ -77,6 +89,28 @@ export default tseslint.config(
     }
   },
   
+  // Strict AST rules for interpreter and core modules
+  {
+    files: [
+      'interpreter/**/*.ts',
+      'core/**/*.ts',
+      'api/**/*.ts',
+    ],
+    rules: {
+      // Enforce our custom AST rules
+      'mlld/no-raw-field-access': 'error',
+      'mlld/no-ast-string-manipulation': 'error',
+      'mlld/require-ast-type-guards': 'warn', // Warning for now, can make error later
+      
+      // Extra strictness for core code
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+    }
+  },
+  
   // Disable type-aware rules for low-impact areas
   {
     files: [
@@ -94,6 +128,11 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
+      
+      // Also disable our custom AST rules in these areas
+      'mlld/no-raw-field-access': 'off',
+      'mlld/no-ast-string-manipulation': 'off',
+      'mlld/require-ast-type-guards': 'off',
     }
   },
   
