@@ -106,7 +106,7 @@ const sources = [
 
 // Check for debug flag
 if (process.argv.includes('--debug')) {
-  console.log("\n=== FILE MAPPING ===");
+  console.log('\n=== FILE MAPPING ===');
   fileMap.forEach(entry => {
     console.log(`${entry.file}: lines ${entry.startLine}-${entry.endLine}`);
   });
@@ -266,7 +266,7 @@ for (const f of [
   const destPathCJS = path.join(DIST_DIR, 'deps', f.replace('.js', '.cjs'));
   
   // Read the file
-  let content = fs.readFileSync(srcPath, 'utf8');
+  const content = fs.readFileSync(srcPath, 'utf8');
   
   // Create TypeScript version
   let contentTS = content.replace('./grammar-core.js', '../grammar-core.ts');
@@ -274,7 +274,7 @@ for (const f of [
   fs.writeFileSync(destPathTS, contentTS);
   
   // Copy JavaScript ESM version as-is with path adjustments
-  let contentJS = content.replace('./grammar-core.js', '../grammar-core.js');
+  const contentJS = content.replace('./grammar-core.js', '../grammar-core.js');
   fs.writeFileSync(destPathJS, contentJS);
   
   // Create CommonJS version
@@ -307,7 +307,7 @@ const destCoreJsPathTS = path.join(DIST_DIR, 'grammar-core.ts');
 const destCoreJsPathJS = path.join(DIST_DIR, 'grammar-core.js');
 const destCoreJsPathCJS = path.join(DIST_DIR, 'grammar-core.cjs');
 
-let coreContent = fs.readFileSync(coreJsPath, 'utf8');
+const coreContent = fs.readFileSync(coreJsPath, 'utf8');
 fs.writeFileSync(destCoreJsPathTS, coreContent);
 fs.writeFileSync(destCoreJsPathJS, coreContent);
 

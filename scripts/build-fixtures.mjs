@@ -344,7 +344,11 @@ async function generateTopLevelIndex() {
  * Convert kebab-case to camelCase for export names
  */
 function toCamelCase(str) {
-  return str.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+  // Handle special case where hyphen is followed by a number
+  // e.g., "complex-test-1-nested-imports" -> "complexTest1NestedImports"
+  return str
+    .replace(/-(\d)/g, '$1') // Remove hyphen before numbers
+    .replace(/-([a-z])/g, (g) => g[1].toUpperCase()); // Capitalize letters after hyphens
 }
 
 /**
@@ -542,7 +546,7 @@ async function processExampleDirectory(dirPath, category, name, directive = null
       }
       
       // Note: Actual output generation will be handled by separate post-build script
-      let actualOutput = null;
+      const actualOutput = null;
       
       // Create fixture
       const fixture = {

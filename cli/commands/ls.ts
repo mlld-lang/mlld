@@ -170,7 +170,7 @@ export class LsCommand {
     console.log(parts.join(', '));
     
     if (missing > 0 && !options.missing) {
-      console.log(chalk.gray("Run 'mlld install' to fetch missing modules"));
+      console.log(chalk.gray('Run \'mlld install\' to fetch missing modules'));
     }
   }
 

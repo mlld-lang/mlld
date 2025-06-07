@@ -99,7 +99,7 @@ class ShellCommandEscapingStrategy implements EscapingStrategy {
     // in double-quoted strings: \ $ ` "
     
     // Important: We must escape backslashes first to avoid double-escaping
-    let escaped = value
+    const escaped = value
       .replace(/\\/g, '\\\\')  // Escape backslashes first
       .replace(/"/g, '\\"')    // Escape double quotes
       .replace(/\$/g, '\\$')   // Escape dollar signs

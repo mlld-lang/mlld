@@ -284,7 +284,7 @@ export class LocalResolver implements Resolver {
 
     try {
       const relativePath = this.extractRelativePath(ref, config);
-      let fullPath = await this.resolveFullPath(relativePath, config);
+      const fullPath = await this.resolveFullPath(relativePath, config);
 
       // If no extension and the file doesn't exist, try with .mld extension
       if (operation === 'read' && !path.extname(fullPath)) {

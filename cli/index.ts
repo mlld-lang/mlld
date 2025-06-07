@@ -899,7 +899,7 @@ let errorLogged = false;
 const seenErrors = new Set<string>();
 
 // Flag to bypass the error deduplication for formatted errors
-let bypassDeduplication = false;
+const bypassDeduplication = false;
 
 // Check if error deduplication should be completely disabled
 const disableDeduplication = !!(global as any).MLLD_DISABLE_ERROR_DEDUPLICATION;

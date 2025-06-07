@@ -109,7 +109,7 @@ export class RegistryResolver implements Resolver {
       
       // Look up the module - try both full name (@user/module) and just module name
       const fullModuleName = `@${user}/${moduleName}`;
-      let moduleEntry = registryFile.modules[fullModuleName] || registryFile.modules[moduleName];
+      const moduleEntry = registryFile.modules[fullModuleName] || registryFile.modules[moduleName];
       
       if (!moduleEntry) {
         throw new MlldResolutionError(

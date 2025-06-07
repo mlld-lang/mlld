@@ -7,7 +7,7 @@ describe('Text Directive Tests', () => {
   describe('Text Assignment', () => {
     it('should parse a basic text assignment', async () => {
       const parseResult = await parse('@text greeting = "Hello, world!"');
-      console.log("Basic text assignment parsed result:", JSON.stringify(parseResult, null, 2));
+      console.log('Basic text assignment parsed result:', JSON.stringify(parseResult, null, 2));
       const result = parseResult.ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');

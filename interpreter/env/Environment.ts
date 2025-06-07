@@ -353,7 +353,7 @@ export class Environment {
         },
         environment: {
           variables: envVarNames.sort(),
-          note: "Values hidden for security. Use @INPUT to access if needed."
+          note: 'Values hidden for security. Use @INPUT to access if needed.'
         },
         globalVariables: reservedVars,
         userVariables: userVars,
@@ -871,7 +871,7 @@ export class Environment {
         }
         if (command.startsWith('sed ')) {
           // Simple sed mock for the format command
-          if (command.includes("'s/^/> /'")) {
+          if (command.includes('\'s/^/> /\'')) {
             // Read from stdin and prefix each line with "> "
             const input = options?.input || '';
             // Debug logging
@@ -1107,7 +1107,7 @@ export class Environment {
                 
                 // Handle quoted strings
                 if ((echoContent.startsWith('"') && echoContent.endsWith('"')) ||
-                    (echoContent.startsWith("'") && echoContent.endsWith("'"))) {
+                    (echoContent.startsWith('\'') && echoContent.endsWith('\''))) {
                   output = echoContent.slice(1, -1);
                 }
                 

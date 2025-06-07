@@ -43,7 +43,7 @@ function preprocessYAML(content: string): string {
  */
 function isQuoted(value: string): boolean {
   return (value.startsWith('"') && value.endsWith('"')) ||
-         (value.startsWith("'") && value.endsWith("'"));
+         (value.startsWith('\'') && value.endsWith('\''));
 }
 
 /**

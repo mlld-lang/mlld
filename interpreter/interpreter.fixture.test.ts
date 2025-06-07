@@ -363,7 +363,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       }
       
       // Set up environment variables from fixture if specified  
-      let originalEnvVars: Record<string, string | undefined> = {};
+      const originalEnvVars: Record<string, string | undefined> = {};
       
       // Save original fetch for restoration
       const originalFetch = (global as any).fetch;

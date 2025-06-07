@@ -201,5 +201,5 @@ function processEscapeSequences(str: string): string {
     .replace(/\\r/g, '\r')
     .replace(/\\\\/g, '\\')
     .replace(/\\"/g, '"')
-    .replace(/\\'/g, "'");
+    .replace(/\\'/g, '\'');
 }

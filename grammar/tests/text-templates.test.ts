@@ -149,7 +149,7 @@ The {{name}} Team
 
   describe('Edge Cases', () => {
     it('should handle single quotes in arguments', async () => {
-      const input = "@add @greetingTemplate('Alice', 'Dr.')";
+      const input = '@add @greetingTemplate(\'Alice\', \'Dr.\')';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       

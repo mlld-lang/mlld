@@ -113,7 +113,7 @@ exports.helpers = {
         while (i >= 0) {
             const char = input[i];
             // Handle string context
-            if ((char === '"' || char === "'") && (i === 0 || input[i - 1] !== '\\')) {
+            if ((char === '"' || char === '\'') && (i === 0 || input[i - 1] !== '\\')) {
                 if (!inString) {
                     inString = true;
                     stringChar = char;

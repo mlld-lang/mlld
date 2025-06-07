@@ -444,7 +444,7 @@ async function evaluateInputImport(
   }
   
   // Convert inputData to variables
-  let variables: Map<string, MlldVariable> = new Map();
+  const variables: Map<string, MlldVariable> = new Map();
   
   if (typeof inputData === 'object' && inputData !== null && !Array.isArray(inputData)) {
     // Object data - extract fields as variables

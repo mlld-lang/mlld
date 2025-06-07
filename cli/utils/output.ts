@@ -194,7 +194,7 @@ export function formatModuleReference(ref: string): { username: string; moduleNa
   // username/module
   // username/module@version
   
-  let cleanRef = ref.startsWith('@') ? ref.slice(1) : ref;
+  const cleanRef = ref.startsWith('@') ? ref.slice(1) : ref;
   
   const [fullName, version] = cleanRef.split('@');
   const [username, moduleName] = fullName.split('/');

@@ -159,7 +159,7 @@ async function evaluateAllMatches(
     // Check for invalid syntax: all: with block action cannot have individual actions
     if (conditions.some(pair => pair.action)) {
       throw new MlldConditionError(
-        "Invalid @when syntax: 'all:' modifier cannot have individual actions for conditions when using a block action. Use either individual actions OR a block action after the conditions: @when all: [...] => @add \"action\"",
+        'Invalid @when syntax: \'all:\' modifier cannot have individual actions for conditions when using a block action. Use either individual actions OR a block action after the conditions: @when all: [...] => @add "action"',
         'all',
         undefined
       );
@@ -213,7 +213,7 @@ async function evaluateAnyMatch(
   // Check for invalid syntax: any: cannot have individual actions
   if (conditions.some(pair => pair.action)) {
     throw new MlldConditionError(
-      "Invalid @when syntax: 'any:' modifier cannot have individual actions for conditions. Use a block action after the conditions instead: @when any: [...] => @add \"action\"",
+      'Invalid @when syntax: \'any:\' modifier cannot have individual actions for conditions. Use a block action after the conditions instead: @when any: [...] => @add "action"',
       'any',
       undefined
     );
