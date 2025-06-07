@@ -15,6 +15,7 @@ Directives are the core building blocks of mlld. They always start with an `@` s
 - [@add](./add.md) - Include content from files, variables, or templates
 - [@run](./run.md) - Execute shell commands and include output
 - [@import](./import.md) - Import variables from other mlld files
+- [@output](./output.md) - Write content to files
 - [@url](./url.md) - Reference remote URLs
 - [@exec](./exec.md) - Create reusable commands
 - [@when](./when.md) - Conditional actions 

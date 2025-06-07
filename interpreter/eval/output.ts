@@ -1,10 +1,11 @@
 import type { DirectiveNode, VariableReferenceNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
-import { evaluate } from '../core/interpreter';
+import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
 import { isTextVariable, isCommandVariable } from '@core/types';
+import { logger } from '@core/utils/logger';
 import * as path from 'path';
 
 /**
@@ -28,7 +29,11 @@ export async function evaluateOutput(
   if (env.hasVariable('DEBUG')) {
     const debug = env.getVariable('DEBUG');
     if (debug && debug.value) {
-      console.log('[Output] Evaluating directive:', JSON.stringify(directive, null, 2));
+      logger.debug('Evaluating output directive', { 
+        directive: directive.subtype,
+        source: sourceType,
+        hasSource: hasSource 
+      });
     }
   }
   
@@ -59,7 +64,7 @@ export async function evaluateOutput(
         if (env.hasVariable('DEBUG')) {
           const debug = env.getVariable('DEBUG');
           if (debug && debug.value) {
-            console.error('[Output] Format error:', formatError);
+            logger.error('Output format error', { error: formatError.message });
           }
         }
         throw formatError;
@@ -83,9 +88,25 @@ export async function evaluateOutput(
             // Get the variable
             const variable = env.getVariable(varName);
             
-            if (isTextVariable(variable)) {
+            if (!variable) {
+              throw new MlldOutputError(
+                `Variable ${varName} not found`,
+                directive.location
+              );
+            }
+            
+            if (isTextVariable(variable) || variable.type === 'textTemplate') {
               // It's a text template - evaluate it with arguments
-              const templateContent = variable.value;
+              let templateContent: string;
+              let templateNodes: any[];
+              
+              if (variable.type === 'textTemplate') {
+                // Parameterized text template - has content nodes instead of value string
+                templateNodes = variable.content || [];
+              } else {
+                // Regular text variable
+                templateContent = variable.value;
+              }
               
               // Create a child environment for parameter substitution
               const childEnv = env.createChild();
@@ -103,8 +124,13 @@ export async function evaluateOutput(
               }
               
               // Evaluate the template with the child environment
-              const templateResult = await childEnv.interpolate(templateContent);
-              content = templateResult;
+              if (variable.type === 'textTemplate') {
+                // For parameterized templates, evaluate the content nodes
+                content = await interpolate(templateNodes, childEnv);
+              } else {
+                // For regular text variables, interpolate the string
+                content = await childEnv.interpolate(templateContent);
+              }
               
             } else if (isCommandVariable(variable)) {
               // It's a command - execute it with arguments
@@ -300,7 +326,10 @@ export async function evaluateOutput(
     if (env.hasVariable('DEBUG')) {
       const debug = env.getVariable('DEBUG');
       if (debug && debug.value) {
-        console.error('[Output] Error:', error);
+        logger.error('Output directive error', { 
+          error: error.message,
+          stack: error.stack 
+        });
       }
     }
     

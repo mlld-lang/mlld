@@ -39,6 +39,11 @@ export async function evaluateDataValue(
     return value;
   }
   
+  // Handle Text nodes
+  if (value && typeof value === 'object' && value.type === 'Text' && 'content' in value) {
+    return value.content;
+  }
+  
   // Handle embedded directives
   if (isDirectiveValue(value)) {
     // Check if we've already evaluated this directive
