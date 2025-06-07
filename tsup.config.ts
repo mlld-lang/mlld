@@ -1,8 +1,15 @@
 import { defineConfig } from 'tsup';
+import type { Options } from 'tsup';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf-8'));
+interface PackageJson {
+  version: string;
+  name: string;
+  [key: string]: unknown;
+}
+
+const packageJson = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf-8')) as PackageJson;
 
 // Define common external dependencies to ensure consistency across builds
 const externalDependencies = [
@@ -31,7 +38,9 @@ const externalDependencies = [
 ];
 
 // Define common esbuild options
-const getEsbuildOptions = (format: string) => (options: any) => {
+type EsbuildOptions = NonNullable<Options['esbuildOptions']> extends (options: infer T, context: unknown) => unknown ? T : never;
+
+const getEsbuildOptions = (format: string) => (options: EsbuildOptions) => {
   options.alias = {
     '@core': './core',
     '@services': './services',
@@ -45,7 +54,7 @@ const getEsbuildOptions = (format: string) => (options: any) => {
   };
   
   options.define = {
-    ...options.define,
+    ...(options.define || {}),
     '__VERSION__': `"${packageJson.version}"`
   };
   

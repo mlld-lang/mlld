@@ -136,6 +136,28 @@ export default tseslint.config(
     }
   },
   
+  // CLI commands need console output for user interaction
+  {
+    files: [
+      'cli/commands/**/*.ts',
+      'cli/utils/**/*.ts'
+    ],
+    rules: {
+      'no-console': 'off', // CLI commands need console output
+    }
+  },
+  
+  // Test mock utilities need to access real console
+  {
+    files: [
+      'tests/utils/cli/mockConsole.ts',
+      'tests/utils/cli/mockProcessExit.ts'
+    ],
+    rules: {
+      'no-console': 'off', // Mock utilities need console for debugging
+    }
+  },
+  
   // Files with legitimate string operations (not for AST manipulation)
   {
     files: [
