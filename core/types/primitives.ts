@@ -96,6 +96,13 @@ export interface SectionMarkerNode extends BaseMlldNode {
   value: string;
 }
 
+// Parameter node for exec directive parameters
+export interface ParameterNode extends BaseMlldNode {
+  type: 'Parameter';
+  name: string;
+}
+
+
 // Formatting metadata for text nodes
 export interface FormattingMetadata {
   trimLines?: boolean;

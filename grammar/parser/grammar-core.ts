@@ -14,6 +14,7 @@ export const NodeType = {
     StringLiteral: 'StringLiteral',
     Frontmatter: 'Frontmatter',
     CommandBase: 'CommandBase',
+    Parameter: 'Parameter',
 };
 export const DirectiveKind = {
     run: 'run',

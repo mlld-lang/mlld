@@ -37,7 +37,15 @@ AtRun
       
       const raw = {
         lang: lang,
-        args: args ? args.map(arg => arg.identifier || '') : [],
+        args: args ? args.map(arg => {
+          // Handle Argument nodes
+          if (arg.type === NodeType.Argument && arg.value) {
+            if (arg.value.type === NodeType.Text) return arg.value.content;
+            if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
+          }
+          // Legacy handling
+          return arg.identifier || '';
+        }) : [],
         code: code.content
       };
       
@@ -159,7 +167,15 @@ RunDirectiveRef
         },
         {
           lang: lang,
-          args: args ? args.map(arg => arg.identifier || '') : [],
+          args: args ? args.map(arg => {
+          // Handle Argument nodes
+          if (arg.type === NodeType.Argument && arg.value) {
+            if (arg.value.type === NodeType.Text) return arg.value.content;
+            if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
+          }
+          // Legacy handling
+          return arg.identifier || '';
+        }) : [],
           code: code.content
         },
         { 
@@ -197,8 +213,14 @@ RunCommandReference
       // Process arguments if present
       const processedArgs = args || [];
       const rawArgs = processedArgs.map(arg => {
+        // Handle Argument nodes
+        if (arg.type === NodeType.Argument && arg.value) {
+          if (arg.value.type === NodeType.Text) return arg.value.content;
+          if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
+        }
+        // Legacy handling for unwrapped nodes (shouldn't happen with new grammar)
         if (arg.type === NodeType.Text) return arg.content;
-        if (arg.type === NodeType.VariableReference) return arg.identifier;
+        if (arg.type === NodeType.VariableReference) return '@' + arg.identifier;
         return '';
       });
       
@@ -231,13 +253,15 @@ RunCommandArgumentList
 
 RunCommandArgument
   = str:StringLiteral {
+      // Create a Text node directly
       return helpers.createNode(NodeType.Text, { content: str, location: location() });
     }
   / varRef:Variable {
+      // Return the VariableReference directly
       return varRef;
     }
   / val:$([^,)]+) {
-      // Plain value (raw argument)
+      // Plain value - create a Text node directly
       return helpers.createNode(NodeType.Text, { content: val.trim(), location: location() });
     }
 

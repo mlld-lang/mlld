@@ -242,7 +242,7 @@ AtText
         },
         {
           identifier: id,
-          params: processedParams,
+          params: processedParams.map(p => p.name),
           content: template.raw.content
         },
         meta,
@@ -664,7 +664,11 @@ TextParameterList
 
 TextParameter
   = paramName:BaseIdentifier {
-      return paramName; // Just return the parameter name as a string
+      // Create a proper Parameter node to match exec directive
+      return helpers.createNode(NodeType.Parameter, {
+        name: paramName,
+        location: location()
+      });
     }
 
 // AsNewTitle is imported from add.peggy

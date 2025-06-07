@@ -44,7 +44,7 @@ AtExec
       
       const raw = {
         identifier: id,
-        params: processedParams,
+        params: processedParams.map(p => p.name),  // Extract parameter names for raw field
         lang: lang,
         args: args ? args.map(arg => arg.identifier || '') : [],
         code: code.content
@@ -104,7 +104,7 @@ AtExec
       
       const raw = {
         identifier: id,
-        params: processedParams,
+        params: processedParams.map(p => p.name),  // Extract parameter names for raw field
         command: content.raw.command,
         commandBases: content.raw.commandBases
       };
@@ -149,7 +149,7 @@ AtExec
       
       // Process parameters
       const processedParams = params || [];
-      const rawParams = processedParams; // params are now strings
+      const rawParams = processedParams.map(p => p.name); // Extract parameter names for raw field
       
       // Build values and raw objects
       const values = {
@@ -163,7 +163,15 @@ AtExec
         identifier: id,
         params: rawParams,
         commandRef: commandRef.name,
-        args: commandRef.args ? commandRef.args.map(arg => arg.value || '') : []
+        args: commandRef.args ? commandRef.args.map(arg => {
+          // Extract value from Argument node
+          if (arg.value && arg.value.type === 'Text') {
+            return arg.value.content;
+          } else if (arg.value && arg.value.type === 'VariableReference') {
+            return '@' + arg.value.identifier;
+          }
+          return '';
+        }) : []
       };
       
       // Create meta object
@@ -230,5 +238,9 @@ ExecParameterList
 
 ExecParameter
   = paramName:BaseIdentifier {
-      return paramName; // Just return the parameter name as a string
+      // Create a proper Parameter node
+      return helpers.createNode(NodeType.Parameter, {
+        name: paramName,
+        location: location()
+      });
     }

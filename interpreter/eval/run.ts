@@ -233,10 +233,15 @@ export async function evaluateRun(
           continue;
         }
         
-        // Handle variable references in arguments
+        // Handle argument nodes
         const arg = args[i];
-        if (arg && arg.type === 'Text' && 'content' in arg && arg.content.startsWith('@')) {
-          // This is a variable reference
+        
+        // TODO: This is a workaround for a parser bug where @variable in function
+        // arguments is parsed as Text instead of VariableReference
+        // Remove this when the parser is fixed to properly parse variable references in arguments
+        if (arg && arg.type === 'Text' && 'content' in arg && 
+            typeof arg.content === 'string' && arg.content.startsWith('@')) {
+          // This looks like a variable reference that was parsed as text
           const varName = arg.content.substring(1);
           const variable = env.getVariable(varName);
           if (variable) {
@@ -248,7 +253,7 @@ export async function evaluateRun(
             argValues[paramName] = arg.content;
           }
         } else {
-          // Normal interpolation
+          // Normal interpolation for properly parsed nodes
           const argValue = await interpolate([arg], env, InterpolationContext.Default);
           argValues[paramName] = argValue;
         }

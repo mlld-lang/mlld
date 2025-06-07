@@ -15,7 +15,11 @@ describe('Parameterized Text Templates', () => {
       expect(result[0].source).toBe('template');
       
       // Check parameters
-      expect(result[0].values.params).toEqual(['name', 'title']);
+      expect(result[0].values.params).toHaveLength(2);
+      expect(result[0].values.params[0].type).toBe('Parameter');
+      expect(result[0].values.params[0].name).toBe('name');
+      expect(result[0].values.params[1].type).toBe('Parameter');
+      expect(result[0].values.params[1].name).toBe('title');
       expect(result[0].raw.params).toEqual(['name', 'title']);
       
       // Check metadata
@@ -47,7 +51,11 @@ The {{name}} Team
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
-      expect(result[0].values.params).toEqual(['name', 'subject']);
+      expect(result[0].values.params).toHaveLength(2);
+      expect(result[0].values.params[0].type).toBe('Parameter');
+      expect(result[0].values.params[0].name).toBe('name');
+      expect(result[0].values.params[1].type).toBe('Parameter');
+      expect(result[0].values.params[1].name).toBe('subject');
       
       // Count how many times each parameter is used
       const content = result[0].values.content;

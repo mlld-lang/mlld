@@ -87,12 +87,22 @@ export async function evaluateText(
   
   // Handle parameterized text templates
   if (directive.subtype === 'textTemplateDefinition') {
+    // Extract parameter names from Parameter nodes
+    const params = (directive.values?.params || []).map(p => {
+      if (typeof p === 'string') {
+        return p;
+      } else if (p.type === 'Parameter') {
+        return p.name;
+      }
+      return '';
+    }).filter(Boolean);
+
     // Store the template definition
     const templateDef = {
       type: 'textTemplate' as const,
       name: identifier,
       identifier,
-      params: directive.values?.params || [],
+      params,
       content: directive.values?.content || [],
       value: '' // Templates don't have a direct value
     };

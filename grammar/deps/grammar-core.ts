@@ -15,6 +15,7 @@ export const NodeType = {
   StringLiteral: 'StringLiteral',
   Frontmatter: 'Frontmatter',
   CommandBase: 'CommandBase',
+  Parameter: 'Parameter',
 } as const;
 export type NodeTypeKey = keyof typeof NodeType;
 

@@ -4,6 +4,7 @@
 import { DirectiveNode, TypedDirectiveNode } from './base';
 import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
 import { WithClause } from './run';
+import { ParameterNode } from './primitives';
 
 /**
  * Exec directive raw values
@@ -53,7 +54,7 @@ export type ExecSubtype = 'execCommand' | 'execCode';
  */
 export interface ExecValues {
   identifier: TextNodeArray;
-  params: VariableNodeArray[];
+  params: ParameterNode[];
   metadata?: TextNodeArray;
   command?: ContentNodeArray;
   lang?: TextNodeArray;
@@ -68,7 +69,7 @@ export interface ExecCommandDirectiveNode extends ExecDirectiveNode {
   subtype: 'execCommand';
   values: {
     identifier: TextNodeArray;
-    params: VariableNodeArray[];
+    params: ParameterNode[];
     metadata?: TextNodeArray;
     command: ContentNodeArray;
   };
@@ -88,7 +89,7 @@ export interface ExecCodeDirectiveNode extends ExecDirectiveNode {
   subtype: 'execCode';
   values: {
     identifier: TextNodeArray;
-    params: VariableNodeArray[];
+    params: ParameterNode[];
     metadata?: TextNodeArray;
     lang: TextNodeArray;
     code: ContentNodeArray;

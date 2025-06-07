@@ -29,29 +29,31 @@ CommandArgumentList "command arguments list"
 
 CommandArgument "command argument"
   = str:StringLiteral {
-      return { type: 'string', value: str };
+      // Create a Text node directly
+      return helpers.createNode(NodeType.Text, {
+        content: str,
+        location: location()
+      });
     }
   / varRef:Variable {
-      return { type: 'variable', value: varRef };
+      // Return the VariableReference directly
+      return varRef;
     }
   / chars:RawArgChar+ {
       const content = chars.join('').trim();
       // If it starts with @, create a VariableReference node
       if (content.startsWith('@')) {
-        return {
-          type: 'variable',
-          value: helpers.createNode(NodeType.VariableReference, {
-            identifier: content.substring(1),
-            valueType: 'varIdentifier',
-            location: location()
-          })
-        };
+        return helpers.createNode(NodeType.VariableReference, {
+          identifier: content.substring(1),
+          valueType: 'varIdentifier',
+          location: location()
+        });
       } else {
-        // Otherwise create a Text node wrapped in a string type
-        return {
-          type: 'string',
-          value: content
-        };
+        // Otherwise create a Text node
+        return helpers.createNode(NodeType.Text, {
+          content: content,
+          location: location()
+        });
       }
     }
 

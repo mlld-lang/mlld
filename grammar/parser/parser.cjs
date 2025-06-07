@@ -1150,29 +1150,31 @@ function peg$parse(input, options) {
       return [first, ...rest];
     };
   var peg$f96 = function(str) {
-      return { type: 'string', value: str };
+      // Create a Text node directly
+      return helpers.createNode(NodeType.Text, {
+        content: str,
+        location: location()
+      });
     };
   var peg$f97 = function(varRef) {
-      return { type: 'variable', value: varRef };
+      // Return the VariableReference directly
+      return varRef;
     };
   var peg$f98 = function(chars) {
       const content = chars.join('').trim();
       // If it starts with @, create a VariableReference node
       if (content.startsWith('@')) {
-        return {
-          type: 'variable',
-          value: helpers.createNode(NodeType.VariableReference, {
-            identifier: content.substring(1),
-            valueType: 'varIdentifier',
-            location: location()
-          })
-        };
+        return helpers.createNode(NodeType.VariableReference, {
+          identifier: content.substring(1),
+          valueType: 'varIdentifier',
+          location: location()
+        });
       } else {
-        // Otherwise create a Text node wrapped in a string type
-        return {
-          type: 'string',
-          value: content
-        };
+        // Otherwise create a Text node
+        return helpers.createNode(NodeType.Text, {
+          content: content,
+          location: location()
+        });
       }
     };
   var peg$f99 = function(char) { return char; };
@@ -3755,7 +3757,7 @@ function peg$parse(input, options) {
       
       const raw = {
         identifier: id,
-        params: processedParams,
+        params: processedParams.map(p => p.name),  // Extract parameter names for raw field
         lang: lang,
         args: args ? args.map(arg => arg.identifier || '') : [],
         code: code.content
@@ -3816,7 +3818,7 @@ function peg$parse(input, options) {
       
       const raw = {
         identifier: id,
-        params: processedParams,
+        params: processedParams.map(p => p.name),  // Extract parameter names for raw field
         command: content.raw.command,
         commandBases: content.raw.commandBases
       };
@@ -3862,7 +3864,7 @@ function peg$parse(input, options) {
       
       // Process parameters
       const processedParams = params || [];
-      const rawParams = processedParams; // params are now strings
+      const rawParams = processedParams.map(p => p.name); // Extract parameter names for raw field
       
       // Build values and raw objects
       const values = {
@@ -3876,7 +3878,15 @@ function peg$parse(input, options) {
         identifier: id,
         params: rawParams,
         commandRef: commandRef.name,
-        args: commandRef.args ? commandRef.args.map(arg => arg.value || '') : []
+        args: commandRef.args ? commandRef.args.map(arg => {
+          // Extract value from Argument node
+          if (arg.value && arg.value.type === 'Text') {
+            return arg.value.content;
+          } else if (arg.value && arg.value.type === 'VariableReference') {
+            return '@' + arg.value.identifier;
+          }
+          return '';
+        }) : []
       };
       
       // Create meta object
@@ -3922,7 +3932,11 @@ function peg$parse(input, options) {
       return [first, ...rest];
     };
   var peg$f386 = function(paramName) {
-      return paramName; // Just return the parameter name as a string
+      // Create a proper Parameter node
+      return helpers.createNode(NodeType.Parameter, {
+        name: paramName,
+        location: location()
+      });
     };
   var peg$f387 = function(security, path) {
       const securityOptions = security ? security[0] : null;
@@ -4443,7 +4457,15 @@ function peg$parse(input, options) {
       
       const raw = {
         lang: lang,
-        args: args ? args.map(arg => arg.identifier || '') : [],
+        args: args ? args.map(arg => {
+          // Handle Argument nodes
+          if (arg.type === NodeType.Argument && arg.value) {
+            if (arg.value.type === NodeType.Text) return arg.value.content;
+            if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
+          }
+          // Legacy handling
+          return arg.identifier || '';
+        }) : [],
         code: code.content
       };
       
@@ -4558,7 +4580,15 @@ function peg$parse(input, options) {
         },
         {
           lang: lang,
-          args: args ? args.map(arg => arg.identifier || '') : [],
+          args: args ? args.map(arg => {
+          // Handle Argument nodes
+          if (arg.type === NodeType.Argument && arg.value) {
+            if (arg.value.type === NodeType.Text) return arg.value.content;
+            if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
+          }
+          // Legacy handling
+          return arg.identifier || '';
+        }) : [],
           code: code.content
         },
         { 
@@ -4589,8 +4619,14 @@ function peg$parse(input, options) {
       // Process arguments if present
       const processedArgs = args || [];
       const rawArgs = processedArgs.map(arg => {
+        // Handle Argument nodes
+        if (arg.type === NodeType.Argument && arg.value) {
+          if (arg.value.type === NodeType.Text) return arg.value.content;
+          if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
+        }
+        // Legacy handling for unwrapped nodes (shouldn't happen with new grammar)
         if (arg.type === NodeType.Text) return arg.content;
-        if (arg.type === NodeType.VariableReference) return arg.identifier;
+        if (arg.type === NodeType.VariableReference) return '@' + arg.identifier;
         return '';
       });
       
@@ -4616,13 +4652,15 @@ function peg$parse(input, options) {
       return [first, ...rest];
     };
   var peg$f437 = function(str) {
+      // Create a Text node directly
       return helpers.createNode(NodeType.Text, { content: str, location: location() });
     };
   var peg$f438 = function(varRef) {
+      // Return the VariableReference directly
       return varRef;
     };
   var peg$f439 = function(val) {
-      // Plain value (raw argument)
+      // Plain value - create a Text node directly
       return helpers.createNode(NodeType.Text, { content: val.trim(), location: location() });
     };
   var peg$f440 = function(id, foreach) {
@@ -4860,7 +4898,7 @@ function peg$parse(input, options) {
         },
         {
           identifier: id,
-          params: processedParams,
+          params: processedParams.map(p => p.name),
           content: template.raw.content
         },
         meta,
@@ -5264,7 +5302,11 @@ function peg$parse(input, options) {
       return [first, ...rest];
     };
   var peg$f462 = function(paramName) {
-      return paramName; // Just return the parameter name as a string
+      // Create a proper Parameter node to match exec directive
+      return helpers.createNode(NodeType.Parameter, {
+        name: paramName,
+        location: location()
+      });
     };
   var peg$f463 = function(parts) {
       return parts;

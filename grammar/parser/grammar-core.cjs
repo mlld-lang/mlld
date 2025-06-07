@@ -14,6 +14,7 @@ exports.NodeType = {
     StringLiteral: 'StringLiteral',
     Frontmatter: 'Frontmatter',
     CommandBase: 'CommandBase',
+    Parameter: 'Parameter',
 };
 exports.DirectiveKind = {
     run: 'run',

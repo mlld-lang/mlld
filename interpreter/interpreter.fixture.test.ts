@@ -121,7 +121,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'text-url-section': 'Issue #82: URL section support not implemented',
       'text-variable-copy': 'Issue #176: Variable copying with @text copy = @original not supported',
       'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
-      'exec-param-interpolation': 'Parameter interpolation bug with escaped @ symbols'
+      'exec-param-interpolation': 'Parser bug: escaped @ symbols in exec templates are parsed as variable references'
     };
 
     const testFn = skipTests[fixture.name] ? it.skip : it;
