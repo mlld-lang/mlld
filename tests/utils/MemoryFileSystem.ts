@@ -120,7 +120,7 @@ export class MemoryFileSystem implements IFileSystemService {
   }
   
   // Add execute method for command execution (needed by Environment)
-  async execute(command: string, options?: any): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  async execute(command: string, _options?: any): Promise<{ stdout: string; stderr: string; exitCode: number }> {
     // Mock implementation - can be customized per test
     return {
       stdout: `Mock output for: ${command}`,

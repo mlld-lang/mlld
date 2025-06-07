@@ -20,7 +20,7 @@ export class FileSystemAdapter {
         return Buffer.from(content, 'utf8');
       },
 
-      writeFile: async (filePath: string, content: string | Buffer, encoding?: string): Promise<void> => {
+      writeFile: async (filePath: string, content: string | Buffer, _encoding?: string): Promise<void> => {
         const data = Buffer.isBuffer(content) ? content.toString('utf8') : content;
         await this.fileSystem.writeFile(filePath, data);
       },
