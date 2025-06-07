@@ -5,62 +5,9 @@ import * as path from 'path';
 import { ImportApproval } from '@security/import';
 import { ImmutableCache } from '@security/cache';
 import { URLValidator } from '@security/url';
-import { IMMUTABLE_SECURITY_PATTERNS } from '@security/policy/patterns';
-
-// GitHub Gist API Response Types
-interface GistFile {
-  filename: string;
-  type: string;
-  language: string | null;
-  raw_url: string;
-  size: number;
-  truncated: boolean;
-  content: string;
-}
-
-interface GistHistory {
-  version: string;
-  committed_at: string;
-  change_status: {
-    total: number;
-    additions: number;
-    deletions: number;
-  };
-  url: string;
-}
-
-interface GistResponse {
-  id: string;
-  html_url: string;
-  files: Record<string, GistFile>;
-  history: GistHistory[];
-  created_at: string;
-  updated_at: string;
-  description: string;
-  owner: {
-    login: string;
-    id: number;
-  };
-}
-
-// Type guards for API responses
-function isGistFile(obj: unknown): obj is GistFile {
-  return typeof obj === 'object' && 
-         obj !== null &&
-         'filename' in obj &&
-         typeof (obj as GistFile).filename === 'string';
-}
-
-function isGistResponse(obj: unknown): obj is GistResponse {
-  return typeof obj === 'object' && 
-         obj !== null &&
-         'id' in obj &&
-         'files' in obj &&
-         'history' in obj &&
-         Array.isArray((obj as GistResponse).history) &&
-         (obj as GistResponse).history.length > 0 &&
-         typeof (obj as GistResponse).history[0].version === 'string';
-}
+import { StorageManager } from './StorageManager';
+import { MlldModuleSource, StorageOptions } from './types';
+import { MlldImportError } from '@core/errors';
 
 export interface RegistryImport {
   resolved: string;
@@ -84,12 +31,14 @@ export class RegistryClient {
   private cache: ImmutableCache;
   private importApproval: ImportApproval;
   private urlValidator: URLValidator;
+  private storageManager: StorageManager;
   
   constructor(projectPath: string) {
     this.lockFile = new LockFile(path.join(projectPath, '.mlld', 'mlld.lock.json'));
     this.cache = new ImmutableCache(projectPath);
     this.importApproval = new ImportApproval(projectPath);
     this.urlValidator = new URLValidator();
+    this.storageManager = new StorageManager();
   }
   
   /**
@@ -108,92 +57,65 @@ export class RegistryClient {
       return this.fetchLocked(importPath, locked);
     }
     
-    // 2. New import - fetch, approve, and lock
-    if (importPath.startsWith('mlld://gist/')) {
-      return this.fetchAndLockGist(importPath);
-    }
+    // 2. New import - determine type and fetch
     if (importPath.startsWith('mlld://registry/')) {
+      // Registry URLs need special handling to resolve to actual storage
       return this.fetchAndLockFromRegistry(importPath);
     }
     
-    // 3. Regular URL imports (backward compatibility)
+    // 3. Use storage manager for all other supported formats
+    if (this.storageManager.canResolve(importPath)) {
+      return this.fetchAndLockModule(importPath);
+    }
+    
+    // 4. Regular URL imports (backward compatibility)
     if (importPath.startsWith('http://') || importPath.startsWith('https://')) {
       return this.fetchAndLockURL(importPath);
     }
     
-    throw new Error(`Unsupported import path: ${importPath}`);
+    throw new MlldImportError(`Unsupported import path: ${importPath}`);
   }
   
   /**
-   * Fetch and lock a GitHub Gist import
+   * Fetch and lock a module using the storage manager
    */
-  private async fetchAndLockGist(path: string): Promise<string> {
-    const [, , username, gistId] = path.split('/');
-    
-    // Validate username isn't trying to access system paths
-    if (IMMUTABLE_SECURITY_PATTERNS.protectedReadPaths.some(p => username.includes(p))) {
-      throw new Error(`Security: Invalid gist username`);
-    }
-    
-    // Fetch gist metadata
-    const response = await fetch(`https://api.github.com/gists/${gistId}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch gist: ${response.statusText}`);
-    }
-    
-    const gistData = await response.json();
-    
-    // Validate the response structure
-    if (!isGistResponse(gistData)) {
-      throw new Error('Invalid gist response from GitHub API');
-    }
-    
-    const gist = gistData;
-    
-    // Get the current revision
-    const revision = gist.history[0].version;
-    
-    // Find .mld or .mlld file
-    const mldFile = Object.values(gist.files).find((f) => 
-      f.filename.endsWith('.mld') || f.filename.endsWith('.mlld')
-    );
-    
-    if (!mldFile) {
-      throw new Error('No .mld or .mlld file found in gist');
-    }
-    
-    // Construct the raw URL with revision for immutability
-    const resolvedUrl = `https://gist.githubusercontent.com/${username}/${gistId}/raw/${revision}/${mldFile.filename}`;
-    
-    // Fetch the actual content
-    const contentResponse = await fetch(resolvedUrl);
-    const content = await contentResponse.text();
-    
-    // Calculate integrity hash
-    const integrity = await this.calculateIntegrity(content);
-    
-    // Check for security advisories
-    await this.checkAdvisories(path, integrity);
-    
-    // Request user approval (reusing existing ImportApproval)
-    const approved = await this.importApproval.checkApproval(path, content);
-    if (!approved) {
-      throw new Error('Import rejected by user');
-    }
-    
-    // Lock the import
-    await this.lockFile.addImport(path, {
-      resolved: resolvedUrl,
-      integrity,
-      gistRevision: revision,
-      approvedAt: new Date().toISOString(),
-      approvedBy: process.env.USER || 'unknown'
+  private async fetchAndLockModule(importPath: string): Promise<string> {
+    // Fetch module using appropriate adapter
+    const moduleSource = await this.storageManager.fetch(importPath, {
+      // TODO: Add auth token from config if available
     });
     
-    // Cache the content
-    await this.cache.set(resolvedUrl, content);
+    // Calculate integrity hash
+    const integrity = await this.calculateIntegrity(moduleSource.content);
     
-    return content;
+    // Check for security advisories
+    await this.checkAdvisories(importPath, integrity);
+    
+    // Request user approval
+    const approved = await this.importApproval.checkApproval(importPath, moduleSource.content);
+    if (!approved) {
+      throw new MlldImportError('Import rejected by user');
+    }
+    
+    // Lock the import with metadata
+    const lockData: RegistryImport = {
+      resolved: moduleSource.metadata.immutableUrl || moduleSource.metadata.sourceUrl,
+      integrity,
+      approvedAt: new Date().toISOString(),
+      approvedBy: process.env.USER || 'unknown'
+    };
+    
+    // Add provider-specific metadata if available
+    if (moduleSource.metadata.provider === 'github-gist' && moduleSource.metadata.revision) {
+      lockData.gistRevision = moduleSource.metadata.revision;
+    }
+    
+    await this.lockFile.addImport(importPath, lockData);
+    
+    // Cache the content
+    await this.cache.set(lockData.resolved, moduleSource.content);
+    
+    return moduleSource.content;
   }
   
   /**
