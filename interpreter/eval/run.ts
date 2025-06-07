@@ -148,13 +148,22 @@ export async function evaluateRun(
       throw new Error('Run exec directive missing exec reference');
     }
     
+    // Extract command name first for call stack tracking
+    let commandName: string = '';
+    const identifierNode = identifierNodes[0];
+    
+    if (identifierNode.type === 'Text' && 'content' in identifierNode) {
+      commandName = (identifierNode as any).content;
+    } else if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
+      commandName = (identifierNode as any).identifier;
+    }
+    
     // Add current command to call stack if not already there
-    if (!callStack.includes(execRef)) {
-      callStack = [...callStack, execRef];
+    if (commandName && !callStack.includes(commandName)) {
+      callStack = [...callStack, commandName];
     }
     
     // Check if this is a field access pattern (e.g., @http.get)
-    const identifierNode = identifierNodes[0];
     let cmdVar: CommandVariable;
     
     if (identifierNode.type === 'VariableReference' && (identifierNode as VariableReference).fields && (identifierNode as VariableReference).fields.length > 0) {
@@ -196,13 +205,8 @@ export async function evaluateRun(
       }
     } else {
       // Handle simple command reference (original behavior)
-      // Extract the command name from the identifier node
-      let commandName: string;
-      if (identifierNode.type === 'Text' && 'content' in identifierNode) {
-        commandName = (identifierNode as any).content;
-      } else if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
-        commandName = (identifierNode as any).identifier;
-      } else {
+      // Command name already extracted above
+      if (!commandName) {
         throw new Error('Run exec directive identifier must be a command reference');
       }
       
