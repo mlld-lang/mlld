@@ -1,4 +1,4 @@
-import { MlldError, type MlldErrorOptions, ErrorSeverity, type BaseErrorDetails, type ErrorSourceLocation } from '@core/errors/MlldError';
+import { MlldError, ErrorSeverity, type BaseErrorDetails, type ErrorSourceLocation } from '@core/errors/MlldError';
 import { formatLocationForError } from '@core/utils/locationFormatter';
 
 // Define options specific to FileSystemError, without extending MlldErrorOptions

@@ -1,5 +1,4 @@
 import { MlldError, ErrorSeverity, BaseErrorDetails, ErrorSourceLocation } from './MlldError';
-import { PathErrorMessages } from '@core/errors/messages/index';
 
 /**
  * Represents details specific to file not found errors.

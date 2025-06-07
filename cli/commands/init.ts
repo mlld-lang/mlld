@@ -13,7 +13,7 @@ export async function initCommand(): Promise<void> {
     await fs.access(path.join(cwd, 'mlld.json'));
     console.error('Error: mlld.json already exists in this directory.');
     process.exit(1);
-  } catch (e) {
+  } catch {
     // File doesn't exist, continue
   }
   

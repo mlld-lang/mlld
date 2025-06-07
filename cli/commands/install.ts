@@ -1,4 +1,3 @@
-import * as path from 'path';
 import { RegistryManager } from '@core/registry/RegistryManager';
 import { ProgressIndicator } from '../utils/progress';
 import { OutputFormatter, formatModuleReference, formatInstallTarget } from '../utils/output';
@@ -190,12 +189,12 @@ export class InstallCommand {
     return `@${cleaned}`;
   }
 
-  private async simulateFetch(moduleName: string): Promise<void> {
+  private async simulateFetch(_moduleName: string): Promise<void> {
     // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
   }
 
-  private async simulateResolveAndInstall(username: string, moduleName: string, version?: string): Promise<void> {
+  private async simulateResolveAndInstall(_username: string, _moduleName: string, _version?: string): Promise<void> {
     // Simulate resolution and installation
     await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 500));
     
