@@ -1,4 +1,22 @@
-import type { MlldNode, DirectiveNode, TextNode, CommentNode, MlldDocument, MlldVariable, FrontmatterNode, CommandVariable } from '@core/types';
+import type { 
+  MlldNode, 
+  DirectiveNode, 
+  TextNode, 
+  CommentNode, 
+  MlldDocument, 
+  MlldVariable, 
+  FrontmatterNode, 
+  CommandVariable,
+  DataVariable,
+  VariableReferenceNode,
+  CodeFenceNode,
+  NewlineNode,
+  ErrorNode,
+  LiteralNode,
+  DotSeparatorNode,
+  PathSeparatorNode,
+  SectionMarkerNode
+} from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
@@ -8,10 +26,111 @@ import { InterpolationContext, EscapingStrategyFactory } from './interpolation-c
 import { parseFrontmatter } from '../utils/frontmatter-parser';
 
 /**
+ * Type for variable values
+ */
+export type VariableValue = string | number | boolean | null | 
+                           VariableValue[] | { [key: string]: VariableValue };
+
+/**
+ * Field access types from the AST
+ */
+interface FieldAccess {
+  type: 'field' | 'arrayIndex' | 'numericField';
+  name?: string;
+  index?: number;
+}
+
+/**
+ * Safe field access helper
+ */
+function accessField(value: unknown, field: FieldAccess): unknown {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  
+  if (field.type === 'arrayIndex' || field.type === 'numericField') {
+    if (!Array.isArray(value)) {
+      return undefined;
+    }
+    const index = field.index;
+    if (index === undefined || index < 0 || index >= value.length) {
+      return undefined;
+    }
+    return value[index];
+  } else if (field.type === 'field') {
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      return undefined;
+    }
+    const name = field.name;
+    if (!name) {
+      return undefined;
+    }
+    return (value as Record<string, unknown>)[name];
+  }
+  
+  return undefined;
+}
+
+/**
+ * Type guards for AST nodes
+ */
+function isDocument(node: MlldNode): node is MlldDocument {
+  return node.type === 'Document';
+}
+
+function isDirective(node: MlldNode): node is DirectiveNode {
+  return node.type === 'Directive';
+}
+
+function isText(node: MlldNode): node is TextNode {
+  return node.type === 'Text';
+}
+
+function isNewline(node: MlldNode): node is NewlineNode {
+  return node.type === 'Newline';
+}
+
+function isComment(node: MlldNode): node is CommentNode {
+  return node.type === 'Comment';
+}
+
+function isFrontmatter(node: MlldNode): node is FrontmatterNode {
+  return node.type === 'Frontmatter';
+}
+
+function isCodeFence(node: MlldNode): node is CodeFenceNode {
+  return node.type === 'CodeFence';
+}
+
+function isVariableReference(node: MlldNode): node is VariableReferenceNode {
+  return node.type === 'VariableReference';
+}
+
+function isError(node: MlldNode): node is ErrorNode {
+  return node.type === 'Error';
+}
+
+function isLiteral(node: MlldNode): node is LiteralNode {
+  return node.type === 'Literal';
+}
+
+function isDotSeparator(node: MlldNode): node is DotSeparatorNode {
+  return node.type === 'DotSeparator';
+}
+
+function isPathSeparator(node: MlldNode): node is PathSeparatorNode {
+  return node.type === 'PathSeparator';
+}
+
+function isSectionMarker(node: MlldNode): node is SectionMarkerNode {
+  return node.type === 'SectionMarker';
+}
+
+/**
  * Core evaluation result type
  */
 export interface EvalResult {
-  value: any;
+  value: unknown;
   env: Environment;
   stdout?: string;
   stderr?: string;
@@ -25,12 +144,12 @@ export interface EvalResult {
 export async function evaluate(node: MlldNode | MlldNode[], env: Environment): Promise<EvalResult> {
   // Handle array of nodes (from parser)
   if (Array.isArray(node)) {
-    let lastValue: any = undefined;
+    let lastValue: unknown = undefined;
     let lastResult: EvalResult | null = null;
     
     // First, check if the first node is frontmatter and process it
-    if (node.length > 0 && node[0].type === 'Frontmatter') {
-      const frontmatterNode = node[0] as FrontmatterNode;
+    if (node.length > 0 && isFrontmatter(node[0])) {
+      const frontmatterNode = node[0];
       const frontmatterData = parseFrontmatter(frontmatterNode.content);
       env.setFrontmatter(frontmatterData);
       
@@ -42,10 +161,9 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
         lastResult = result;
         
         // Add text nodes to output if they're top-level and not inline comments
-        if (n.type === 'Text') {
-          const textNode = n as TextNode;
+        if (isText(n)) {
           // Skip inline comments (lines starting with >> or <<)
-          if (!textNode.content.trimStart().match(/^(>>|<<)/)) {
+          if (!n.content.trimStart().match(/^(>>|<<)/)) {
             env.addNode(n);
           }
         }
@@ -58,10 +176,9 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
         lastResult = result;
         
         // Add text nodes to output if they're top-level and not inline comments
-        if (n.type === 'Text') {
-          const textNode = n as TextNode;
+        if (isText(n)) {
           // Skip inline comments (lines starting with >> or <<)
-          if (!textNode.content.trimStart().match(/^(>>|<<)/)) {
+          if (!n.content.trimStart().match(/^(>>|<<)/)) {
             env.addNode(n);
           }
         }
@@ -77,110 +194,116 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
   }
   
   // Handle single node
-  switch (node.type) {
-    case 'Document':
-      return evaluateDocument(node as MlldDocument, env);
+  if (isDocument(node)) {
+    return evaluateDocument(node, env);
+  }
+  
+  if (isDirective(node)) {
+    return evaluateDirective(node, env);
+  }
+  
+  if (isText(node)) {
+    return evaluateText(node, env);
+  }
+  
+  if (isNewline(node)) {
+    // Preserve newlines in output
+    const newlineTextNode: TextNode = {
+      type: 'Text',
+      nodeId: `${node.nodeId || 'newline'}-text`,
+      content: '\n'
+    };
+    env.addNode(newlineTextNode);
+    return { value: '\n', env };
+  }
+  
+  if (isComment(node)) {
+    // Comments are NOT included in output
+    // Skip comments - don't add any nodes to output
+    return { value: node.content, env };
+  }
+  
+  if (isFrontmatter(node)) {
+    // Process frontmatter node
+    const frontmatterData = parseFrontmatter(node.content);
+    env.setFrontmatter(frontmatterData);
+    return { value: frontmatterData, env };
+  }
+  
+  if (isCodeFence(node)) {
+    // Handle markdown code fences as text content
+    const codeTextNode: TextNode = {
+      type: 'Text',
+      nodeId: `${node.nodeId || 'codefence'}-text`,
+      content: node.content
+    };
+    env.addNode(codeTextNode);
+    return { value: node.content, env };
+  }
       
-    case 'Directive':
-      return evaluateDirective(node as DirectiveNode, env);
+  if (isVariableReference(node)) {
+    // Variable references are handled by interpolation in context
+    // If we get here, it's likely an error or a grammar bug
+    
+    // TODO: Remove this workaround when issue #50 is fixed
+    // The grammar incorrectly creates top-level VariableReference nodes
+    // for parameters in exec directives. These have location offset 0,0
+    // which is impossible for real variable references.
+    // However, variable interpolation nodes also have offset 0,0 but
+    // they have valueType: 'varInterpolation'
+    if (node.location?.start?.offset === 0 && 
+        node.location?.end?.offset === 0 &&
+        node.valueType !== 'varInterpolation' &&
+        node.valueType !== 'commandRef') {
+      // Skip orphaned parameter references from grammar bug
+      return { value: '', env };
+    }
+    
+    // Check if this is a built-in function
+    if (node.valueType === 'commandRef') {
+      const { isBuiltinFunction, executeBuiltinFunction } = await import('../eval/builtin-functions');
+      if (isBuiltinFunction(node.identifier)) {
+        // Handle args property safely - it may not exist in the type definition
+        const args: unknown[] = (node as { args?: unknown[] }).args || [];
+        const result = executeBuiltinFunction(node.identifier, args, env);
+        return { value: result, env };
+      }
+    }
+    
+    const variable = env.getVariable(node.identifier);
+    if (!variable) {
+      // For interpolation variables, return empty if not found
+      if (node.valueType === 'varInterpolation') {
+        return { value: `{{${node.identifier}}}`, env };
+      }
+      throw new Error(`Variable not found: ${node.identifier}`);
+    }
+    
+    // Handle command references (e.g., @is_true() in conditions)
+    if (node.valueType === 'commandRef' && isCommandVariable(variable)) {
+      // Execute the command
+      const args: unknown[] = (node as { args?: unknown[] }).args || [];
       
-    case 'Text':
-      return evaluateText(node as TextNode, env);
+      // Check the structure - new vs old command variable format
+      const definition = (variable as { definition?: unknown }).definition || variable.value;
       
-    case 'Newline':
-      // Preserve newlines in output
-      const newlineNode: TextNode = {
-        type: 'Text',
-        nodeId: `${(node as any).nodeId || 'newline'}-text`,
-        content: '\n'
-      };
-      env.addNode(newlineNode);
-      return { value: '\n', env };
-      
-    case 'Comment':
-      // Comments are NOT included in output
-      const commentNode = node as CommentNode;
-      // Skip comments - don't add any nodes to output
-      return { value: commentNode.content, env };
-      
-    case 'Frontmatter':
-      // Process frontmatter node
-      const frontmatterNode = node as FrontmatterNode;
-      const frontmatterData = parseFrontmatter(frontmatterNode.content);
-      env.setFrontmatter(frontmatterData);
-      return { value: frontmatterData, env };
-      
-    case 'CodeFence':
-      // Handle markdown code fences as text content
-      const codeFenceNode = node as any;
-      const codeTextNode: TextNode = {
-        type: 'Text',
-        nodeId: `${codeFenceNode.nodeId || 'codefence'}-text`,
-        content: codeFenceNode.content
-      };
-      env.addNode(codeTextNode);
-      return { value: codeFenceNode.content, env };
-      
-    case 'VariableReference':
-      // Variable references are handled by interpolation in context
-      // If we get here, it's likely an error or a grammar bug
-      const varRef = node as any;
-      
-      // TODO: Remove this workaround when issue #50 is fixed
-      // The grammar incorrectly creates top-level VariableReference nodes
-      // for parameters in exec directives. These have location offset 0,0
-      // which is impossible for real variable references.
-      // However, variable interpolation nodes also have offset 0,0 but
-      // they have valueType: 'varInterpolation'
-      if (varRef.location?.start?.offset === 0 && 
-          varRef.location?.end?.offset === 0 &&
-          varRef.valueType !== 'varInterpolation' &&
-          varRef.valueType !== 'commandRef') {
-        // Skip orphaned parameter references from grammar bug
-        return { value: '', env };
+      if (!definition) {
+        throw new Error(`Command variable ${node.identifier} has no definition`);
       }
       
-      // Check if this is a built-in function
-      if (varRef.valueType === 'commandRef') {
-        const { isBuiltinFunction, executeBuiltinFunction } = await import('../eval/builtin-functions');
-        if (isBuiltinFunction(varRef.identifier)) {
-          const args = varRef.args || [];
-          const result = executeBuiltinFunction(varRef.identifier, args, env);
-          return { value: result, env };
-        }
-      }
-      
-      const variable = env.getVariable(varRef.identifier);
-      if (!variable) {
-        // For interpolation variables, return empty if not found
-        if (varRef.valueType === 'varInterpolation') {
-          return { value: `{{${varRef.identifier}}}`, env };
-        }
-        throw new Error(`Variable not found: ${varRef.identifier}`);
-      }
-      
-      // Handle command references (e.g., @is_true() in conditions)
-      if (varRef.valueType === 'commandRef' && isCommandVariable(variable)) {
-        // Execute the command
-        const cmdVar = variable as CommandVariable;
-        const args = varRef.args || [];
+      // Type guard for command definition
+      if (typeof definition === 'object' && definition !== null && 'type' in definition) {
+        const typedDef = definition as { type: string; commandTemplate?: MlldNode[]; codeTemplate?: MlldNode[]; language?: string; command?: MlldNode[]; code?: MlldNode[] };
         
-        // Check the structure - new vs old command variable format
-        const definition = cmdVar.definition || cmdVar.value;
-        
-        if (!definition) {
-          throw new Error(`Command variable ${varRef.identifier} has no definition`);
-        }
-        
-        if (definition.type === 'command') {
+        if (typedDef.type === 'command') {
           // Execute command with interpolated template
-          const commandTemplate = (definition as any).commandTemplate || (definition as any).command;
+          const commandTemplate = typedDef.commandTemplate || typedDef.command;
           if (!commandTemplate) {
-            throw new Error(`Command ${varRef.identifier} has no command template`);
+            throw new Error(`Command ${node.identifier} has no command template`);
           }
           
           // Interpolate the command template
-          const command = await interpolate(commandTemplate, env);
+          const command = await interpolate(commandTemplate as InterpolationNode[], env);
           
           if (args.length > 0) {
             // TODO: Implement proper argument interpolation
@@ -195,19 +318,19 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
             stderr: '',
             exitCode: 0  // executeCommand only returns on success
           };
-        } else if (definition.type === 'code') {
+        } else if (typedDef.type === 'code') {
           // Execute code with interpolated template
-          const codeTemplate = (definition as any).codeTemplate || (definition as any).code;
+          const codeTemplate = typedDef.codeTemplate || typedDef.code;
           if (!codeTemplate) {
-            throw new Error(`Code command ${varRef.identifier} has no code template`);
+            throw new Error(`Code command ${node.identifier} has no code template`);
           }
           
           // Interpolate the code template
-          const code = await interpolate(codeTemplate, env);
+          const code = await interpolate(codeTemplate as InterpolationNode[], env);
           
           const result = await env.executeCode(
             code,
-            (definition as any).language || 'javascript'
+            typedDef.language || 'javascript'
           );
           return {
             value: result.stdout || '',
@@ -218,32 +341,34 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           };
         }
       }
-      
-      // Handle complex data variables with lazy evaluation
-      const resolvedValue = await resolveVariableValue(variable, env);
-      
-      // For interpolation variables, we need to add the resolved text to output
-      if (varRef.valueType === 'varInterpolation') {
-        let stringValue = String(resolvedValue);
-        // Handle path objects specially
-        if (typeof resolvedValue === 'object' && resolvedValue?.resolvedPath) {
-          stringValue = resolvedValue.resolvedPath;
-        }
-        env.addNode({ type: 'Text', content: stringValue } as any);
+    }
+    
+    // Handle complex data variables with lazy evaluation
+    const resolvedValue = await resolveVariableValue(variable, env);
+    
+    // For interpolation variables, we need to add the resolved text to output
+    if (node.valueType === 'varInterpolation') {
+      let stringValue = String(resolvedValue);
+      // Handle path objects specially
+      if (typeof resolvedValue === 'object' && resolvedValue !== null && 'resolvedPath' in resolvedValue) {
+        stringValue = (resolvedValue as any).resolvedPath;
       }
-      
-      return { value: resolvedValue, env };
-      
-    default:
-      throw new Error(`Unknown node type: ${(node as any).type}`);
+      const textNode: TextNode = { type: 'Text', nodeId: node.nodeId, content: stringValue };
+      env.addNode(textNode);
+    }
+    
+    return { value: resolvedValue, env };
   }
+  
+  // If we get here, it's an unknown node type
+  throw new Error(`Unknown node type: ${node.type}`);
 }
 
 /**
  * Evaluate a document node (contains multiple child nodes)
  */
 async function evaluateDocument(doc: MlldDocument, env: Environment): Promise<EvalResult> {
-  let lastValue: any = undefined;
+  let lastValue: unknown = undefined;
   
   // Evaluate each child node in sequence
   for (const child of doc.nodes) {
@@ -251,7 +376,7 @@ async function evaluateDocument(doc: MlldDocument, env: Environment): Promise<Ev
     lastValue = result.value;
     
     // Add text nodes to output
-    if (child.type === 'Text') {
+    if (isText(child)) {
       env.addNode(child);
     }
     // VariableReference nodes with varInterpolation are now handled in evaluate()
@@ -271,26 +396,31 @@ async function evaluateText(node: TextNode, env: Environment): Promise<EvalResul
 /**
  * Resolve variable value with lazy evaluation support for complex data
  */
-export async function resolveVariableValue(variable: MlldVariable, env: Environment): Promise<any> {
+export async function resolveVariableValue(variable: MlldVariable, env: Environment): Promise<VariableValue> {
   // Check if this is a complex data variable that needs evaluation
-  if (variable.type === 'data') {
+  if (isDataVariable(variable)) {
     // For data variables, check if the value needs evaluation
     const dataValue = variable.value;
     
     // If it's an AST structure (has type property), evaluate it
     if (dataValue && typeof dataValue === 'object' && 'type' in dataValue) {
-      const evaluatedValue = await evaluateDataValue(dataValue, env);
-      return evaluatedValue;
+      const evaluatedValue = await evaluateDataValue(dataValue as MlldNode, env);
+      return evaluatedValue as VariableValue;
     }
     
     // Check legacy complex data variable format
-    if ('isFullyEvaluated' in variable) {
-      const complexVar = variable as any; // ComplexDataVariable
+    if (typeof variable === 'object' && 'isFullyEvaluated' in variable) {
+      interface ComplexDataVariable extends DataVariable {
+        isFullyEvaluated?: boolean;
+        evaluationErrors?: Record<string, Error>;
+      }
+      
+      const complexVar = variable as ComplexDataVariable;
       
       if (!complexVar.isFullyEvaluated) {
         // Evaluate the complex data value
         try {
-          const evaluatedValue = await evaluateDataValue(complexVar.value, env);
+          const evaluatedValue = await evaluateDataValue(complexVar.value as MlldNode, env);
           
           // Update the variable with the evaluated value
           complexVar.value = evaluatedValue;
@@ -302,7 +432,7 @@ export async function resolveVariableValue(variable: MlldVariable, env: Environm
             complexVar.evaluationErrors = errors;
           }
           
-          return evaluatedValue;
+          return evaluatedValue as VariableValue;
         } catch (error) {
           // Store the error but still mark as evaluated to prevent infinite loops
           complexVar.isFullyEvaluated = true;
@@ -311,19 +441,50 @@ export async function resolveVariableValue(variable: MlldVariable, env: Environm
         }
       }
       
-      return complexVar.value;
+      return complexVar.value as VariableValue;
     }
+    
+    return dataValue as VariableValue;
   }
   
-  // For non-complex variables, return the value directly
-  return variable.value;
+  // Handle other variable types
+  if (isTextVariable(variable)) {
+    return variable.value;
+  }
+  
+  if (isPathVariable(variable)) {
+    return variable.value;
+  }
+  
+  if (isCommandVariable(variable)) {
+    return variable.value;
+  }
+  
+  if (isImportVariable(variable)) {
+    return variable.value;
+  }
+  
+  // This should never happen with proper typing
+  throw new Error(`Unknown variable type: ${(variable as any).type}`);
+}
+
+/**
+ * Type for interpolation nodes
+ */
+interface InterpolationNode {
+  type: string;
+  content?: string;
+  name?: string;
+  identifier?: string;
+  fields?: FieldAccess[];
+  value?: string;
 }
 
 /**
  * String interpolation helper - resolves {{variables}} in content
  */
 export async function interpolate(
-  nodes: Array<{ type: string; content?: string; name?: string; identifier?: string; fields?: any[]; value?: string }>,
+  nodes: InterpolationNode[],
   env: Environment,
   context: InterpolationContext = InterpolationContext.Default
 ): Promise<string> {
@@ -351,7 +512,7 @@ export async function interpolate(
       }
       
       // Extract value based on variable type using type-safe approach
-      let value: any = '';
+      let value: unknown = '';
       if (isTextVariable(variable)) {
         // Text variables contain string content - use directly
         value = variable.value;
@@ -369,30 +530,21 @@ export async function interpolate(
         value = variable.value;
       } else {
         // This should never happen with proper typing
-        throw new Error(`Unknown variable type for interpolation: ${(variable as any).type}`);
+        const varType = (variable as MlldVariable).type;
+        throw new Error(`Unknown variable type for interpolation: ${varType}`);
       }
       
       // Handle field access if present
       if (node.fields && node.fields.length > 0 && typeof value === 'object' && value !== null) {
         for (const field of node.fields) {
-          if (field.type === 'arrayIndex' || field.type === 'numericField') {
-            const index = field.index;
-            if (Array.isArray(value)) {
-              value = value[index];
-            } else {
-              value = undefined;
-              break;
-            }
-          } else if (field.type === 'field') {
-            value = value[field.name];
-            
-            // Handle null nodes from the grammar
-            if (value && typeof value === 'object' && value.type === 'Null') {
-              value = null;
-            }
-            
-            if (value === undefined) break;
+          value = accessField(value, field);
+          
+          // Handle null nodes from the grammar
+          if (value && typeof value === 'object' && 'type' in value && (value as any).type === 'Null') {
+            value = null;
           }
+          
+          if (value === undefined) break;
         }
       }
       
@@ -401,7 +553,7 @@ export async function interpolate(
       
       if (value === null) {
         stringValue = 'null';
-      } else if (typeof value === 'object' && value.type === 'Null') {
+      } else if (typeof value === 'object' && 'type' in value && (value as any).type === 'Null') {
         // Handle null nodes from the grammar
         stringValue = 'null';
       } else if (Array.isArray(value)) {
@@ -424,8 +576,8 @@ export async function interpolate(
         }
       } else if (typeof value === 'object') {
         // For path objects, try to extract the resolved path first
-        if (value.resolvedPath && typeof value.resolvedPath === 'string') {
-          stringValue = value.resolvedPath;
+        if (value && 'resolvedPath' in value && typeof (value as any).resolvedPath === 'string') {
+          stringValue = (value as any).resolvedPath;
         } else {
           stringValue = JSON.stringify(value);
         }
