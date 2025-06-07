@@ -143,12 +143,8 @@ export async function evaluateRun(
   } else if (directive.subtype === 'runExec') {
     // Handle exec reference with field access support
     const identifierNodes = directive.values?.identifier;
-    if (!identifierNodes || !Array.isArray(identifierNodes)) {
+    if (!identifierNodes || !Array.isArray(identifierNodes) || identifierNodes.length === 0) {
       throw new Error('Run exec directive missing exec reference');
-    }
-    const execRef = await interpolate(identifierNodes, env);
-    if (!execRef) {
-      throw new Error('Run exec directive identifier evaluated to empty');
     }
     
     // Check if this is a field access pattern (e.g., @http.get)
@@ -194,9 +190,19 @@ export async function evaluateRun(
       }
     } else {
       // Handle simple command reference (original behavior)
-      const variable = env.getVariable(execRef);
+      // Extract the command name from the identifier node
+      let commandName: string;
+      if (identifierNode.type === 'Text' && 'content' in identifierNode) {
+        commandName = (identifierNode as any).content;
+      } else if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
+        commandName = (identifierNode as any).identifier;
+      } else {
+        throw new Error('Run exec directive identifier must be a command reference');
+      }
+      
+      const variable = env.getVariable(commandName);
       if (!variable || !isCommandVariable(variable)) {
-        throw new Error(`Command variable not found: ${execRef}`);
+        throw new Error(`Command variable not found: ${commandName}`);
       }
       cmdVar = variable;
     }

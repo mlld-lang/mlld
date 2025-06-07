@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/types';
+import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
@@ -61,14 +61,22 @@ export async function evaluateText(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
-  // Extract identifier
+  // Extract identifier - this is a variable name, not content to interpolate
   const identifierNodes = directive.values?.identifier;
-  if (!identifierNodes || !Array.isArray(identifierNodes)) {
+  if (!identifierNodes || !Array.isArray(identifierNodes) || identifierNodes.length === 0) {
     throw new Error('Text directive missing identifier');
   }
-  const identifier = await interpolate(identifierNodes, env);
-  if (!identifier) {
-    throw new Error('Text directive identifier evaluated to empty');
+  
+  // For assignment directives, extract the variable name
+  const identifierNode = identifierNodes[0];
+  let identifier: string;
+  
+  if (identifierNode.type === 'Text' && 'content' in identifierNode) {
+    identifier = (identifierNode as TextNode).content;
+  } else if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
+    identifier = (identifierNode as any).identifier;
+  } else {
+    throw new Error('Text directive identifier must be a simple variable name');
   }
   
   // Handle parameterized text templates
