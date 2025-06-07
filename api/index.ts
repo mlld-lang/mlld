@@ -41,10 +41,10 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
   // Create default services if not provided
   const fileSystem = options?.fileSystem || new NodeFileSystem();
   const pathService = options?.pathService || new PathService();
-  const basePath = options?.basePath || process.cwd();
+  const basePath: string = options?.basePath || process.cwd();
   
   // Call the interpreter
-  const result = await interpret(content, {
+  const result: string = await interpret(content, {
     basePath,
     format: options?.format || 'markdown',
     fileSystem,
