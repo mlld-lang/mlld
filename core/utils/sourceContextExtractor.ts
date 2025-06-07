@@ -1,3 +1,8 @@
+// String operations are legitimate in this file for error message formatting
+// This file extracts source code context for error messages, requiring line-by-line
+// string splitting to show code snippets with line numbers and error indicators.
+// This is purely for human-readable output formatting, not AST manipulation.
+
 import { IFileSystemService } from '@services/fs/IFileSystemService';
 import { FormattedLocation } from './locationFormatter';
 

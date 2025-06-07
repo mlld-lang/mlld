@@ -1,3 +1,8 @@
+// String operations are legitimate in this file for YAML frontmatter preprocessing
+// This file preprocesses YAML frontmatter before parsing to handle edge cases like
+// unquoted @ symbols in package names. This preprocessing is necessary because YAML
+// parsers interpret @ as special characters, requiring pre-parse string manipulation.
+
 import * as yaml from 'js-yaml';
 import { MlldParseError } from '@core/errors';
 

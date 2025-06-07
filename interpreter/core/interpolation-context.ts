@@ -1,3 +1,8 @@
+// String operations are legitimate in this file for security escaping
+// This file implements security-critical escaping strategies for different execution
+// contexts (shell, URL, etc.). String manipulation here prevents injection attacks
+// by properly escaping special characters based on the target context.
+
 /**
  * Interpolation Context System
  * 

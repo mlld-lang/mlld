@@ -1,3 +1,8 @@
+// String operations are legitimate in this file for JSONL parsing
+// This file reads and writes JSON Lines format (.jsonl) for usage statistics,
+// which requires line-by-line string splitting to parse multiple JSON objects
+// from a single file. This is a storage format concern, not AST manipulation.
+
 import * as fs from 'fs';
 import * as path from 'path';
 

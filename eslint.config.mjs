@@ -136,6 +136,20 @@ export default tseslint.config(
     }
   },
   
+  // Files with legitimate string operations (not for AST manipulation)
+  {
+    files: [
+      'core/registry/StatsCollector.ts',         // JSONL parsing for usage statistics
+      'core/utils/sourceContextExtractor.ts',    // Error message formatting
+      'interpreter/core/interpolation-context.ts', // Security escaping for execution contexts
+      'interpreter/utils/frontmatter-parser.ts'   // YAML frontmatter preprocessing
+    ],
+    rules: {
+      // These files legitimately manipulate strings for non-AST purposes
+      'mlld/no-ast-string-manipulation': 'off'
+    }
+  },
+  
   // Ignore patterns
   {
     ignores: [
