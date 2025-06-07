@@ -74,7 +74,7 @@ function accessField(value: unknown, field: FieldAccess): unknown {
 /**
  * Type guards for AST nodes
  */
-function isDocument(node: MlldNode): node is MlldDocument {
+function isDocument(node: MlldNode): node is DocumentNode {
   return node.type === 'Document';
 }
 
@@ -127,6 +127,40 @@ function isSectionMarker(node: MlldNode): node is SectionMarkerNode {
 }
 
 /**
+ * Frontmatter data type
+ */
+type FrontmatterData = Record<string, unknown> | null;
+
+/**
+ * Document node type (if not defined in core types)
+ */
+interface DocumentNode extends BaseMlldNode {
+  type: 'Document';
+  nodes: MlldNode[];
+}
+
+// Use DocumentNode if MlldDocument is not properly defined
+type MlldDocumentType = MlldDocument extends never ? DocumentNode : MlldDocument;
+
+/**
+ * Path value type
+ */
+interface PathValue {
+  resolvedPath: string;
+}
+
+/**
+ * Type guard for path values
+ */
+function isPathValue(value: unknown): value is PathValue {
+  return typeof value === 'object' && 
+         value !== null && 
+         'resolvedPath' in value &&
+         typeof (value as PathValue).resolvedPath === 'string';
+}
+
+
+/**
  * Core evaluation result type
  */
 export interface EvalResult {
@@ -150,7 +184,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     // First, check if the first node is frontmatter and process it
     if (node.length > 0 && isFrontmatter(node[0])) {
       const frontmatterNode = node[0];
-      const frontmatterData = parseFrontmatter(frontmatterNode.content);
+      const frontmatterData: FrontmatterData = parseFrontmatter(frontmatterNode.content);
       env.setFrontmatter(frontmatterData);
       
       // Process remaining nodes
@@ -225,20 +259,21 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
   
   if (isFrontmatter(node)) {
     // Process frontmatter node
-    const frontmatterData = parseFrontmatter(node.content);
+    const frontmatterData: FrontmatterData = parseFrontmatter(node.content);
     env.setFrontmatter(frontmatterData);
     return { value: frontmatterData, env };
   }
   
   if (isCodeFence(node)) {
     // Handle markdown code fences as text content
+    const content = node.content;
     const codeTextNode: TextNode = {
       type: 'Text',
-      nodeId: `${node.nodeId || 'codefence'}-text`,
-      content: node.content
+      nodeId: `${node.nodeId}-text`,
+      content: content
     };
     env.addNode(codeTextNode);
-    return { value: node.content, env };
+    return { value: content, env };
   }
       
   if (isVariableReference(node)) {
@@ -251,8 +286,20 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     // which is impossible for real variable references.
     // However, variable interpolation nodes also have offset 0,0 but
     // they have valueType: 'varInterpolation'
-    if (node.location?.start?.offset === 0 && 
-        node.location?.end?.offset === 0 &&
+    interface LocationWithOffset {
+      start?: { offset?: number };
+      end?: { offset?: number };
+    }
+    
+    function hasValidLocation(loc: unknown): loc is LocationWithOffset {
+      return typeof loc === 'object' && loc !== null && 'start' in loc && 'end' in loc;
+    }
+    
+    const location: unknown = node.location;
+    const hasZeroOffset = hasValidLocation(location) &&
+                         location.start?.offset === 0 && 
+                         location.end?.offset === 0;
+    if (hasZeroOffset &&
         node.valueType !== 'varInterpolation' &&
         node.valueType !== 'commandRef') {
       // Skip orphaned parameter references from grammar bug
@@ -264,8 +311,9 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       const { isBuiltinFunction, executeBuiltinFunction } = await import('../eval/builtin-functions');
       if (isBuiltinFunction(node.identifier)) {
         // Handle args property safely - it may not exist in the type definition
-        const args: unknown[] = (node as { args?: unknown[] }).args || [];
-        const result = executeBuiltinFunction(node.identifier, args, env);
+        const nodeWithArgs = node as { args?: unknown[] };
+        const args: unknown[] = nodeWithArgs.args || [];
+        const result: unknown = executeBuiltinFunction(node.identifier, args, env);
         return { value: result, env };
       }
     }
@@ -333,11 +381,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
             typedDef.language || 'javascript'
           );
           return {
-            value: result.stdout || '',
+            value: result,
             env,
-            stdout: result.stdout,
-            stderr: result.stderr,
-            exitCode: result.exitCode
+            stdout: result,
+            stderr: '',
+            exitCode: 0
           };
         }
       }
@@ -350,10 +398,14 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     if (node.valueType === 'varInterpolation') {
       let stringValue = String(resolvedValue);
       // Handle path objects specially
-      if (typeof resolvedValue === 'object' && resolvedValue !== null && 'resolvedPath' in resolvedValue) {
-        stringValue = (resolvedValue as any).resolvedPath;
+      if (isPathValue(resolvedValue)) {
+        stringValue = resolvedValue.resolvedPath;
       }
-      const textNode: TextNode = { type: 'Text', nodeId: node.nodeId, content: stringValue };
+      const textNode: TextNode = { 
+        type: 'Text', 
+        nodeId: node.nodeId || 'var-interpolation',
+        content: stringValue 
+      };
       env.addNode(textNode);
     }
     
@@ -367,7 +419,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
 /**
  * Evaluate a document node (contains multiple child nodes)
  */
-async function evaluateDocument(doc: MlldDocument, env: Environment): Promise<EvalResult> {
+async function evaluateDocument(doc: DocumentNode, env: Environment): Promise<EvalResult> {
   let lastValue: unknown = undefined;
   
   // Evaluate each child node in sequence
@@ -404,8 +456,10 @@ export async function resolveVariableValue(variable: MlldVariable, env: Environm
     
     // If it's an AST structure (has type property), evaluate it
     if (dataValue && typeof dataValue === 'object' && 'type' in dataValue) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const evaluatedValue = await evaluateDataValue(dataValue as MlldNode, env);
-      return evaluatedValue as VariableValue;
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return evaluatedValue;
     }
     
     // Check legacy complex data variable format
@@ -417,12 +471,14 @@ export async function resolveVariableValue(variable: MlldVariable, env: Environm
       
       const complexVar = variable as ComplexDataVariable;
       
-      if (!complexVar.isFullyEvaluated) {
+      if (!complexVar.isFullyEvaluated && complexVar.value) {
         // Evaluate the complex data value
         try {
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           const evaluatedValue = await evaluateDataValue(complexVar.value as MlldNode, env);
           
           // Update the variable with the evaluated value
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           complexVar.value = evaluatedValue;
           complexVar.isFullyEvaluated = true;
           
@@ -432,7 +488,8 @@ export async function resolveVariableValue(variable: MlldVariable, env: Environm
             complexVar.evaluationErrors = errors;
           }
           
-          return evaluatedValue as VariableValue;
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+          return evaluatedValue;
         } catch (error) {
           // Store the error but still mark as evaluated to prevent infinite loops
           complexVar.isFullyEvaluated = true;
@@ -465,7 +522,8 @@ export async function resolveVariableValue(variable: MlldVariable, env: Environm
   }
   
   // This should never happen with proper typing
-  throw new Error(`Unknown variable type: ${(variable as any).type}`);
+  const varType = (variable as Record<string, unknown>).type || 'unknown';
+  throw new Error(`Unknown variable type: ${String(varType)}`);
 }
 
 /**
@@ -540,8 +598,11 @@ export async function interpolate(
           value = accessField(value, field);
           
           // Handle null nodes from the grammar
-          if (value && typeof value === 'object' && 'type' in value && (value as any).type === 'Null') {
-            value = null;
+          if (value && typeof value === 'object' && 'type' in value) {
+            const nodeValue = value as Record<string, unknown>;
+            if (nodeValue.type === 'Null') {
+              value = null;
+            }
           }
           
           if (value === undefined) break;
@@ -553,9 +614,14 @@ export async function interpolate(
       
       if (value === null) {
         stringValue = 'null';
-      } else if (typeof value === 'object' && 'type' in value && (value as any).type === 'Null') {
-        // Handle null nodes from the grammar
-        stringValue = 'null';
+      } else if (typeof value === 'object' && 'type' in value) {
+        const nodeValue = value as Record<string, unknown>;
+        if (nodeValue.type === 'Null') {
+          // Handle null nodes from the grammar
+          stringValue = 'null';
+        } else {
+          stringValue = JSON.stringify(value);
+        }
       } else if (Array.isArray(value)) {
         // Special handling for arrays in shell command context
         if (context === InterpolationContext.ShellCommand) {
@@ -576,8 +642,8 @@ export async function interpolate(
         }
       } else if (typeof value === 'object') {
         // For path objects, try to extract the resolved path first
-        if (value && 'resolvedPath' in value && typeof (value as any).resolvedPath === 'string') {
-          stringValue = (value as any).resolvedPath;
+        if (isPathValue(value)) {
+          stringValue = value.resolvedPath;
         } else {
           stringValue = JSON.stringify(value);
         }
