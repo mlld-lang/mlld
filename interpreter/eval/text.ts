@@ -4,6 +4,7 @@ import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { createTextVariable, astLocationToSourceLocation } from '@core/types';
 import { createLLMXML } from 'llmxml';
+import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 
 /**
  * Remove single blank lines but preserve multiple blank lines.
@@ -104,8 +105,20 @@ export async function evaluateText(
   
   let resolvedValue: string;
   
-  // Handle path source directives (both new source field and old subtype)
-  if (directive.source === 'path' && directive.subtype === 'textPath' && !directive.values?.section) {
+  // Handle foreach expressions
+  if (directive.subtype === 'textForeach') {
+    const foreachExpression = directive.values?.foreach;
+    if (!foreachExpression) {
+      throw new Error('Text foreach directive missing foreach expression');
+    }
+    
+    // Parse options from with clause if present
+    const options = parseForeachOptions(directive.values?.withClause);
+    
+    // Evaluate foreach and format as text
+    resolvedValue = await evaluateForeachAsText(foreachExpression, env, options);
+    
+  } else if (directive.source === 'path' && directive.subtype === 'textPath' && !directive.values?.section) {
     // Handle direct path content: @text content = [file.md] or @text content = file.md
     // For textAssignment with source='path', path is in content
     // For textPath subtype, path is in path

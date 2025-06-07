@@ -263,23 +263,20 @@ async function evaluateCondition(
   env: Environment,
   variableName?: string
 ): Promise<boolean> {
+  // Create a child environment for condition evaluation
+  const childEnv = env.createChild();
+  
   // If a variable name is specified, set it to the condition value for evaluation
   if (variableName) {
-    const conditionResult = await evaluate(condition, env);
-    const conditionValue = conditionResult.value;
-    
-    // Create a variable from the condition value
-    const variable = {
-      type: typeof conditionValue === 'string' ? 'text' : 'data' as const,
-      value: conditionValue,
-      nodeId: '',
-      location: { line: 0, column: 0 }
-    };
-    env.setVariable(variableName, variable);
+    const variable = env.getVariable(variableName);
+    if (variable) {
+      // Set the _whenValue context for built-in functions
+      childEnv.setVariable('_whenValue', variable);
+    }
   }
   
   // Evaluate the condition
-  const result = await evaluate(condition, env);
+  const result = await evaluate(condition, childEnv);
   
   // For command execution results, check stdout or exit code
   if (result.stdout !== undefined) {

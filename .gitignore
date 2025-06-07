@@ -121,3 +121,7 @@ cli/temp-test-*
 
 # Local install metadata
 .mlld-local-installs.json
+
+# Test output files
+output-test.md
+**/output-test.md

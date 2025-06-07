@@ -458,6 +458,12 @@ Full syntax examples:
 
 ```
 @add ...
+├─ "foreach" detected?
+│  ├─ YES: ForeachExpression
+│  │  └─ foreach @command(@arrays) [with options]
+│  │     └─ Text concatenation mode
+│  │        └─ Default separator: "\n"
+│  │
 ├─ "[[" detected?
 │  ├─ YES: TemplateContent
 │  │  └─ [[text with {{vars}}]]

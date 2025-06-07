@@ -3,7 +3,6 @@
 This is a test document with some content.
 
 Hello, World!
-
 The document continues here.
 
 This line comes after the output directive.

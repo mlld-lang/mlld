@@ -80,8 +80,8 @@ function formatMarkdown(nodes: MlldNode[], options: FormatOptions): string {
   result = result.replace(/\n{3,}/g, '\n\n');
   
   // Ensure the output ends with exactly one newline, but only if there's content
-  if (result.length > 0) {
-    result = result.replace(/\n*$/, '\n');
+  if (result.length > 0 && !result.endsWith('\n')) {
+    result = result + '\n';
   }
   
   return result;

@@ -31,7 +31,15 @@ IsInRHS "In right-hand side of assignment"
 
 // RHS value for @text directive
 TextRHS
-  = "@run" _ RunDirectiveRef {
+  = foreach:ForeachCommandExpression {
+      // Handle foreach expression
+      helpers.debug('TextRHS matched foreach', { foreach });
+      return { 
+        type: 'foreach',
+        value: foreach.value
+      };
+    }
+  / "@run" _ RunDirectiveRef {
       // Handle nested @run directive
       helpers.debug('TextRHS matched @run reference');
       return { type: 'directive', directive: 'run' };
@@ -76,7 +84,15 @@ TextRHS
 
 // RHS value for @data directive
 DataRHS
-  = "@run" IsInRHS _ RunDirectiveRef {
+  = foreach:ForeachCommandExpression {
+      // Handle foreach expression
+      helpers.debug('DataRHS matched foreach', { foreach });
+      return { 
+        type: 'foreach',
+        value: foreach.value
+      };
+    }
+  / "@run" IsInRHS _ RunDirectiveRef {
       // Handle nested @run directive
       return { type: 'directive', directive: 'run' };
     }

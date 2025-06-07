@@ -5,6 +5,7 @@ import { interpolate } from '../core/interpreter';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
 import { createLLMXML } from 'llmxml';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
+import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 
 /**
  * Remove single blank lines but preserve multiple blank lines.
@@ -323,6 +324,24 @@ export async function evaluateAdd(
     
     // Interpolate the template content with the child environment
     content = await interpolate(template.content, childEnv);
+    
+  } else if (directive.subtype === 'addForeach') {
+    // Handle foreach expressions for direct output
+    const foreachExpression = directive.values?.foreach;
+    if (!foreachExpression) {
+      throw new Error('Add foreach directive missing foreach expression');
+    }
+    
+    // Parse options from with clause if present
+    const options = parseForeachOptions(foreachExpression.with);
+    
+    // For @add, we want each result on its own line without the heavy separator
+    if (!options.separator) {
+      options.separator = '\n';
+    }
+    
+    // Evaluate foreach and format as text
+    content = await evaluateForeachAsText(foreachExpression, env, options);
     
   } else {
     throw new Error(`Unsupported add subtype: ${directive.subtype}`);
