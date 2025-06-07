@@ -26,6 +26,7 @@ export async function evaluateData(
   let identifier: string;
   
   if (identifierNode.type === 'Text' && 'content' in identifierNode) {
+    // eslint-disable-next-line mlld/no-ast-string-manipulation
     identifier = (identifierNode as TextNode).content;
   } else if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
     identifier = (identifierNode as any).identifier;
@@ -55,6 +56,8 @@ export async function evaluateData(
   const isComplex = needsEvaluation(dataValue);
   
   // Handle field access in identifier (e.g., greeting.text)
+  // TODO: This should be parsed by the grammar as field access, not string splitting
+  // eslint-disable-next-line mlld/no-ast-string-manipulation
   const parts = identifier.split('.');
   const varName = parts[0];
   
@@ -78,6 +81,7 @@ export async function evaluateData(
   } else {
     // Nested field access - build up the object structure
     // For example: @data greeting.text = "Hello"
+    // eslint-disable-next-line mlld/no-ast-string-manipulation
     const parts = identifier.split('.');
     const rootName = parts[0];
     

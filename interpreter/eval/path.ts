@@ -26,6 +26,7 @@ export async function evaluatePath(
   let identifier: string;
   
   if (identifierNode.type === 'Text' && 'content' in identifierNode) {
+    // eslint-disable-next-line mlld/no-ast-string-manipulation
     identifier = (identifierNode as TextNode).content;
   } else if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
     identifier = (identifierNode as any).identifier;

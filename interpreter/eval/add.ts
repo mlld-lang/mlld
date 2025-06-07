@@ -11,6 +11,8 @@ import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
  * This helps match the expected output format.
  */
 function compactBlankLines(content: string): string {
+  // This operates on final output strings, not AST content
+  // eslint-disable-next-line mlld/no-ast-string-manipulation
   return content.replace(/\n\n/g, '\n');
 }
 

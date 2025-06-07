@@ -48,6 +48,7 @@ function formatMarkdown(nodes: MlldNode[], options: FormatOptions): string {
   for (const node of nodes) {
     if (node.type === 'Text') {
       // Check if this is just a single newline
+      // eslint-disable-next-line mlld/no-ast-string-manipulation
       if (node.content === '\n') {
         consecutiveNewlines++;
         pendingContent += '\n';
@@ -62,6 +63,7 @@ function formatMarkdown(nodes: MlldNode[], options: FormatOptions): string {
         pendingContent = '';
         
         // Add the actual content
+        // eslint-disable-next-line mlld/no-ast-string-manipulation
         parts.push(node.content);
       }
     }

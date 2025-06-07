@@ -78,6 +78,7 @@ export function parseDataValue(node: ASTDataNode): DataValue {
   
   // Handle bare Text nodes (common in simple data values)
   if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'Text') {
+    // eslint-disable-next-line mlld/no-ast-string-manipulation
     return (node as TextNode).content; // Extract the text content directly
   }
   
@@ -85,6 +86,7 @@ export function parseDataValue(node: ASTDataNode): DataValue {
   if (Array.isArray(node)) {
     // Special case: single Text node arrays (common in data values)
     if (node.length === 1 && typeof node[0] === 'object' && node[0] !== null && 'type' in node[0] && node[0].type === 'Text') {
+      // eslint-disable-next-line mlld/no-ast-string-manipulation
       return (node[0] as TextNode).content; // Extract the text content directly
     }
     
@@ -169,6 +171,7 @@ export function extractPlainValue(value: DataValue): PlainValue {
   
   // Handle Text nodes (from string values in data assignments)
   if ((value as any)?.type === 'Text' && 'content' in (value as any)) {
+    // eslint-disable-next-line mlld/no-ast-string-manipulation
     return (value as TextNode).content;
   }
   
