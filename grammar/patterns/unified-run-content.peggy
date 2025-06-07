@@ -31,50 +31,42 @@ UnifiedCodeBrackets "Code brackets [(...))]"
 // Used by: AtRun directive when no language is specified  
 // Purpose: Parse command content with variable interpolation and security checks
 UnifiedCommandBrackets "Command brackets [(...))]"
-  = "[(" _ cmdLine:ShellCommandLineContent _ ")]" {
-      helpers.debug('UnifiedCommandBrackets matched with ShellCommandLine', { cmdLine });
-      
-      // Convert ShellCommandLine structure to parts array
-      const parts = [];
-      
-      cmdLine.commands.forEach((cmd, idx) => {
-        if (cmd.type === 'command') {
-          // Add command name
-          if (cmd.command) {
-            parts.push(cmd.command);
-          }
-          // Add arguments
-          if (cmd.arguments) {
-            cmd.arguments.forEach(arg => parts.push(arg));
-          }
-        } else if (cmd.type === 'operator' && cmd.operator === '|') {
-          // Add pipe as text node
-          if (idx > 0) {
-            parts.push(helpers.createNode(NodeType.Text, { 
-              content: ' | ', 
-              location: location() 
-            }));
-          }
-        }
-      });
+  = "[(" _ parts:UnifiedCommandParts _ ")]" {
+      helpers.debug('UnifiedCommandBrackets matched with UnifiedCommandParts', { parts });
       
       const rawCommand = helpers.reconstructRawString(parts);
+      
+      // Extract command bases
+      let commandBases = [];
+      let rawBases = [];
+      
+      // Simple command base detection from first text segment
+      if (parts.length > 0 && parts[0].type === NodeType.Text) {
+        const cmdMatch = parts[0].content.match(/^(\S+)/);
+        if (cmdMatch) {
+          commandBases.push(helpers.createNode(NodeType.CommandBase, {
+            command: cmdMatch[1],
+            location: parts[0].location
+          }));
+          rawBases.push(cmdMatch[1]);
+        }
+      }
       
       return {
         type: 'command',
         subtype: 'runCommand',
         values: {
           command: parts,
-          commandBases: cmdLine.commandBases || []
+          commandBases: commandBases
         },
         raw: {
           command: rawCommand,
-          commandBases: cmdLine.commandBases ? cmdLine.commandBases.map(b => b.command) : []
+          commandBases: rawBases
         },
         meta: {
           isMultiLine: rawCommand.includes('\n'),
-          commandCount: cmdLine.commandBases ? cmdLine.commandBases.length : 0,
-          hasScriptRunner: cmdLine.commands.some(cmd => cmd.hasScriptRunner || false)
+          commandCount: commandBases.length,
+          hasScriptRunner: false // TODO: Detect script runners
         }
       };
     }
@@ -249,7 +241,38 @@ UnifiedCommandChar
       // Preserve brackets in commands
       return '[' + inner + ']';
     }
-  / !'@' !')]' char:. { return char; }
+  / &{ 
+      // Security checks for banned operators
+      const pos = peg$currPos;
+      const ahead = input.substring(pos, pos + 3);
+      if (ahead.startsWith('&&')) {
+        error(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+      }
+      if (ahead.startsWith('||')) {
+        error(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+      }
+      if (ahead.startsWith('>>')) {
+        error(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
+      }
+      if (ahead.startsWith(';&')) {
+        error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+      }
+      // Check for single character operators
+      const char = input[pos];
+      if (char === ';') {
+        error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+      }
+      if (char === '>' && input[pos + 1] !== '>') {
+        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+      }
+      if (char === '<') {
+        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+      }
+      if (char === '&' && input[pos + 1] !== '&' && input[pos + 1] !== '>') {
+        error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+      }
+      return true;
+    } !'@' !')]' char:. { return char; }
 
 // Inner content of nested brackets
 UnifiedCommandInnerContent
