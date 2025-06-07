@@ -43,7 +43,8 @@ function determineTaintLevel(nodes: MlldNode[], env: Environment): TaintLevel {
  */
 export async function evaluateRun(
   directive: DirectiveNode,
-  env: Environment
+  env: Environment,
+  callStack: string[] = []
 ): Promise<EvalResult> {
   let output = '';
   
@@ -145,6 +146,11 @@ export async function evaluateRun(
     const identifierNodes = directive.values?.identifier;
     if (!identifierNodes || !Array.isArray(identifierNodes) || identifierNodes.length === 0) {
       throw new Error('Run exec directive missing exec reference');
+    }
+    
+    // Add current command to call stack if not already there
+    if (!callStack.includes(execRef)) {
+      callStack = [...callStack, execRef];
     }
     
     // Check if this is a field access pattern (e.g., @http.get)
@@ -299,9 +305,19 @@ export async function evaluateRun(
         throw new Error(`Referenced command not found: ${cmdDef.commandRef}`);
       }
       
+      // Check for circular references
+      if (callStack.includes(cmdDef.commandRef)) {
+        const cycle = [...callStack, cmdDef.commandRef].join(' -> ');
+        throw new Error(`Circular command reference detected: ${cycle}`);
+      }
+      
       // Create a new run directive for the referenced command
       const refDirective = {
         ...directive,
+        raw: {
+          ...directive.raw,
+          identifier: cmdDef.commandRef
+        },
         values: {
           ...directive.values,
           identifier: [{ type: 'Text', content: cmdDef.commandRef }],
@@ -309,8 +325,10 @@ export async function evaluateRun(
         }
       };
       
-      // Recursively evaluate the referenced command
-      const result = await evaluateRun(refDirective, env);
+      // Recursively evaluate the referenced command with updated call stack
+      // Note: We don't add cmdDef.commandRef here because it will be added 
+      // at the beginning of the runExec case when processing refDirective
+      const result = await evaluateRun(refDirective, env, callStack);
       output = result.value;
       
     } else if (cmdDef.type === 'code') {
