@@ -14,6 +14,29 @@ export interface Registry {
   modules: Record<string, RegistryModule>;
 }
 
+// Type guards for registry data
+function isRegistryModule(obj: unknown): obj is RegistryModule {
+  return typeof obj === 'object' && 
+         obj !== null &&
+         'gist' in obj &&
+         'author' in obj &&
+         'description' in obj &&
+         'tags' in obj &&
+         typeof (obj as RegistryModule).gist === 'string' &&
+         typeof (obj as RegistryModule).author === 'string' &&
+         typeof (obj as RegistryModule).description === 'string' &&
+         Array.isArray((obj as RegistryModule).tags);
+}
+
+function isRegistry(obj: unknown): obj is Registry {
+  return typeof obj === 'object' && 
+         obj !== null &&
+         'version' in obj &&
+         'modules' in obj &&
+         typeof (obj as Registry).version === 'string' &&
+         typeof (obj as Registry).modules === 'object';
+}
+
 /**
  * Resolves mlld://registry/ URLs to their underlying gist URLs
  * Provides human-friendly names for modules in the registry
@@ -101,9 +124,9 @@ export class RegistryResolver {
       const cached = await this.cache.get(RegistryResolver.REGISTRY_URL);
       if (cached) {
         // Cache returns the raw content, parse it
-        return JSON.parse(cached);
+        return JSON.parse(cached) as Registry;
       }
-    } catch (error) {
+    } catch {
       // Cache miss or error, continue to fetch
     }
     
@@ -116,12 +139,14 @@ export class RegistryResolver {
     }
     
     const text = await response.text();
-    const registry = JSON.parse(text) as Registry;
+    const registryData = JSON.parse(text);
     
-    // Validate registry format
-    if (!registry.version || !registry.modules) {
+    // Validate registry format with type guard
+    if (!isRegistry(registryData)) {
       throw new MlldImportError('Invalid registry format');
     }
+    
+    const registry = registryData;
     
     // Cache for next time using URL as key
     await this.cache.set(RegistryResolver.REGISTRY_URL, text);
@@ -141,7 +166,7 @@ export class RegistryResolver {
     
     // GitHub gist URL
     if (url.includes('gist.github.com/')) {
-      const match = url.match(/gist\.github\.com\/([^\/]+)\/([a-f0-9]+)/);
+      const match = url.match(/gist\.github\.com\/([^/]+)\/([a-f0-9]+)/);
       if (match) {
         return `mlld://gist/${match[1]}/${match[2]}`;
       }

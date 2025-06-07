@@ -16,8 +16,8 @@ export enum TaintLevel {
   MIXED = 'mixed'                      // Combined sources
 }
 
-export interface TaintedValue {
-  value: any;
+export interface TaintedValue<T = unknown> {
+  value: T;
   taint: TaintLevel;
   sources: string[];  // Track origin for forensics
   advisories?: string[]; // Advisory IDs if any
@@ -32,9 +32,9 @@ export class TaintTracker {
   /**
    * Mark a value with a taint level
    */
-  mark(
+  mark<T = unknown>(
     id: string, 
-    value: any, 
+    value: T, 
     taint: TaintLevel, 
     source: string,
     advisoryIds?: string[]
@@ -50,8 +50,8 @@ export class TaintTracker {
   /**
    * Get taint info for a value
    */
-  getTaint(id: string): TaintedValue | undefined {
-    return this.taintMap.get(id);
+  getTaint<T = unknown>(id: string): TaintedValue<T> | undefined {
+    return this.taintMap.get(id) as TaintedValue<T> | undefined;
   }
   
   /**
