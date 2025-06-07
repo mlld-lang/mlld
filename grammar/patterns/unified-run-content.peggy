@@ -28,45 +28,53 @@ UnifiedCodeBrackets "Code brackets [(...))]"
     }
 
 // UNIFIED COMMAND BRACKETS - Parses [(command)] for shell commands
-// Used by: AtRun directive when no language is specified
-// Purpose: Parse command content with variable interpolation
+// Used by: AtRun directive when no language is specified  
+// Purpose: Parse command content with variable interpolation and security checks
 UnifiedCommandBrackets "Command brackets [(...))]"
-  = "[(" _ parts:UnifiedCommandParts _ ")]" {
-      helpers.debug('UnifiedCommandBrackets matched', { parts });
+  = "[(" _ cmdLine:ShellCommandLineContent _ ")]" {
+      helpers.debug('UnifiedCommandBrackets matched with ShellCommandLine', { cmdLine });
+      
+      // Convert ShellCommandLine structure to parts array
+      const parts = [];
+      
+      cmdLine.commands.forEach((cmd, idx) => {
+        if (cmd.type === 'command') {
+          // Add command name
+          if (cmd.command) {
+            parts.push(cmd.command);
+          }
+          // Add arguments
+          if (cmd.arguments) {
+            cmd.arguments.forEach(arg => parts.push(arg));
+          }
+        } else if (cmd.type === 'operator' && cmd.operator === '|') {
+          // Add pipe as text node
+          if (idx > 0) {
+            parts.push(helpers.createNode(NodeType.Text, { 
+              content: ' | ', 
+              location: location() 
+            }));
+          }
+        }
+      });
       
       const rawCommand = helpers.reconstructRawString(parts);
-      
-      // Extract command bases
-      let commandBases = [];
-      let rawBases = [];
-      
-      // Simple command base detection from first text segment
-      if (parts.length > 0 && parts[0].type === NodeType.Text) {
-        const cmdMatch = parts[0].content.match(/^(\S+)/);
-        if (cmdMatch) {
-          commandBases.push(helpers.createNode(NodeType.CommandBase, {
-            command: cmdMatch[1],
-            location: parts[0].location
-          }));
-          rawBases.push(cmdMatch[1]);
-        }
-      }
       
       return {
         type: 'command',
         subtype: 'runCommand',
         values: {
           command: parts,
-          commandBases: commandBases
+          commandBases: cmdLine.commandBases || []
         },
         raw: {
           command: rawCommand,
-          commandBases: rawBases
+          commandBases: cmdLine.commandBases ? cmdLine.commandBases.map(b => b.command) : []
         },
         meta: {
           isMultiLine: rawCommand.includes('\n'),
-          commandCount: commandBases.length,
-          hasScriptRunner: false // TODO: Detect script runners
+          commandCount: cmdLine.commandBases ? cmdLine.commandBases.length : 0,
+          hasScriptRunner: cmdLine.commands.some(cmd => cmd.hasScriptRunner || false)
         }
       };
     }
@@ -147,6 +155,63 @@ UnifiedRunContentInner
           commandCount: commandBases.length,
           hasScriptRunner: false // TODO: Detect script runners
         }
+      };
+    }
+
+// -------------------------------------------------------------  
+// SHELL COMMAND LINE INTEGRATION
+// -------------------------------------------------------------
+
+// Parse shell command line content with proper operator checking
+ShellCommandLineContent
+  = content:$([^)]*) {
+      // Use a simple tokenizer approach instead of the full ShellCommandLine parser
+      // for now to avoid circular dependencies
+      const tokens = [];
+      let current = '';
+      let inQuote = null;
+      
+      for (let i = 0; i < content.length; i++) {
+        const char = content[i];
+        const next = content[i + 1];
+        
+        // Check for quotes
+        if ((char === '"' || char === "'") && !inQuote) {
+          inQuote = char;
+          current += char;
+        } else if (char === inQuote) {
+          inQuote = null;
+          current += char;
+        } else if (!inQuote) {
+          // Check for banned operators
+          if (char === '&' && next === '&') {
+            error(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+          } else if (char === '|' && next === '|') {
+            error(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+          } else if (char === ';') {
+            error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+          } else if (char === '>' && next === '>') {
+            error(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
+          } else if (char === '>' || char === '<') {
+            error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+          } else if (char === '&' && next !== '&' && next !== '>') {
+            error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+          } else {
+            current += char;
+          }
+        } else {
+          current += char;
+        }
+      }
+      
+      // For now, return a simple structure
+      return {
+        commands: [{
+          type: 'command',
+          command: helpers.createNode(NodeType.Text, { content: content.trim(), location: location() }),
+          arguments: []
+        }],
+        commandBases: []
       };
     }
 

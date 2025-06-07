@@ -52,5 +52,6 @@ MultilineTemplateLiteral "Multi-line Template Literal"
     }
 
 MultilineTemplateChar
-  = EscapeSequence
+  = StringEscapeSequence  // Process string escapes first
+  / EscapeSequence       // Then mlld syntax escapes
   / !"]]" char:. { return char; }

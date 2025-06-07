@@ -20,34 +20,18 @@ This is NOT a full shell parser - just enough for Mlld's needs.
 
 // Parse a complete shell command line
 ShellCommandLine
-  = pipeline:Pipeline rest:(op:ChainOperator _ next:Pipeline { 
-      return { operator: op, pipeline: next }; 
-    })* {
-      // Build command structure with all pipelines
+  = pipeline:Pipeline {
+      // Only single pipeline allowed - no chaining with &&, ||, ;
+      // Build command structure
       const allCommands = [];
       const allBases = [];
       
-      // Process first pipeline
+      // Process pipeline
       pipeline.commands.forEach(cmd => {
         allCommands.push(cmd);
         if (cmd.base) {
           allBases.push(cmd.base);
         }
-      });
-      
-      // Process chained pipelines
-      rest.forEach(item => {
-        allCommands.push({
-          type: 'operator',
-          operator: item.operator
-        });
-        
-        item.pipeline.commands.forEach(cmd => {
-          allCommands.push(cmd);
-          if (cmd.base) {
-            allBases.push(cmd.base);
-          }
-        });
       });
       
       return {
@@ -56,11 +40,35 @@ ShellCommandLine
       };
     }
 
-// Chain operators (command separators)
+// Chain operators (command separators) - BANNED for security
 ChainOperator
-  = "&&" { return '&&'; }
-  / "||" { return '||'; }
-  / ";" { return ';'; }
+  = op:("&&" / "||" / ";") {
+      // These operators are banned in mlld for security reasons
+      // Use separate @run commands or @when for control flow
+      const opName = op === '&&' ? 'AND (&&)' : 
+                     op === '||' ? 'OR (||)' : 
+                     'semicolon (;)';
+      error(`Shell operator ${opName} is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+    }
+
+// Redirection operators - BANNED for security
+RedirectionOperator
+  = op:(">>" / ">" / "<" / "&>") {
+      // Redirection operators are banned in mlld for security reasons
+      // Use @output directive for file writing
+      const opName = op === '>>' ? 'append (>>)' : 
+                     op === '>' ? 'redirect (>)' : 
+                     op === '<' ? 'input (<)' :
+                     'error redirect (&>)';
+      error(`Shell ${opName} operator is not allowed in mlld. Use @output directive for file operations.`);
+    }
+
+// Background operator - BANNED for security  
+BackgroundOperator
+  = "&" ![&>] {
+      // Background execution is banned in mlld
+      error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+    }
 
 // -------------------------------------------------------------
 // PIPELINE PARSER
@@ -154,9 +162,34 @@ ShellCommandName
 
 // Command argument
 ShellCommandArgument
-  = QuotedString
-  / ShellVariable
-  / word:UnquotedWord {
+  = &{ 
+      // Check ahead for banned operators
+      const ahead = input.substring(peg$currPos, peg$currPos + 3);
+      if (ahead.startsWith('&&') || ahead.startsWith('||')) {
+        error(`Shell operators are not allowed in mlld. Use separate @run commands or @when for control flow.`);
+      }
+      if (ahead.startsWith('>>') || ahead.startsWith('>&')) {
+        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+      }
+      if (ahead.startsWith(';')) {
+        error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+      }
+      // Check for single character operators
+      const char = input[peg$currPos];
+      if (char === '>' || char === '<') {
+        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+      }
+      if (char === '&' && input[peg$currPos + 1] !== '&' && input[peg$currPos + 1] !== '>') {
+        error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+      }
+      return true;
+    } arg:(QuotedString / ShellVariable / UnquotedWordWithCheck) {
+      return arg;
+    }
+
+// Unquoted word with operator check
+UnquotedWordWithCheck
+  = word:UnquotedWord {
       return helpers.createNode(NodeType.Text, { 
         content: word, 
         location: location() 
@@ -204,4 +237,13 @@ SingleQuotedContent
 
 // Unquoted word (no spaces or special chars)
 UnquotedWord
-  = $([^@|&;<> \t\n\r"']+)
+  = word:$([^@|&;<> \t\n\r"']+) {
+      // Check for banned operators that might appear as part of a word
+      if (word.includes('&&') || word.includes('||')) {
+        error(`Shell operators are not allowed in mlld. Use separate @run commands or @when for control flow.`);
+      }
+      if (word.includes('>>') || (word.includes('>') && !word.includes('>&'))) {
+        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+      }
+      return word;
+    }
