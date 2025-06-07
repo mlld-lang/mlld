@@ -1,10 +1,66 @@
 import { createHash } from 'crypto';
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 import { ImportApproval } from '@security/import';
 import { ImmutableCache } from '@security/cache';
 import { URLValidator } from '@security/url';
 import { IMMUTABLE_SECURITY_PATTERNS } from '@security/policy/patterns';
+
+// GitHub Gist API Response Types
+interface GistFile {
+  filename: string;
+  type: string;
+  language: string | null;
+  raw_url: string;
+  size: number;
+  truncated: boolean;
+  content: string;
+}
+
+interface GistHistory {
+  version: string;
+  committed_at: string;
+  change_status: {
+    total: number;
+    additions: number;
+    deletions: number;
+  };
+  url: string;
+}
+
+interface GistResponse {
+  id: string;
+  html_url: string;
+  files: Record<string, GistFile>;
+  history: GistHistory[];
+  created_at: string;
+  updated_at: string;
+  description: string;
+  owner: {
+    login: string;
+    id: number;
+  };
+}
+
+// Type guards for API responses
+function isGistFile(obj: unknown): obj is GistFile {
+  return typeof obj === 'object' && 
+         obj !== null &&
+         'filename' in obj &&
+         typeof (obj as GistFile).filename === 'string';
+}
+
+function isGistResponse(obj: unknown): obj is GistResponse {
+  return typeof obj === 'object' && 
+         obj !== null &&
+         'id' in obj &&
+         'files' in obj &&
+         'history' in obj &&
+         Array.isArray((obj as GistResponse).history) &&
+         (obj as GistResponse).history.length > 0 &&
+         typeof (obj as GistResponse).history[0].version === 'string';
+}
 
 export interface RegistryImport {
   resolved: string;
@@ -31,7 +87,7 @@ export class RegistryClient {
   
   constructor(projectPath: string) {
     this.lockFile = new LockFile(path.join(projectPath, '.mlld', 'mlld.lock.json'));
-    this.cache = new ImmutableCache(path.join(projectPath, '.mlld', 'cache'));
+    this.cache = new ImmutableCache(projectPath);
     this.importApproval = new ImportApproval(projectPath);
     this.urlValidator = new URLValidator();
   }
@@ -44,7 +100,7 @@ export class RegistryClient {
     const locked = await this.lockFile.getImport(importPath);
     if (locked) {
       // Try cache
-      const cached = await this.cache.get(locked.integrity);
+      const cached = await this.cache.get(locked.resolved, locked.integrity);
       if (cached) {
         return cached;
       }
@@ -85,13 +141,20 @@ export class RegistryClient {
       throw new Error(`Failed to fetch gist: ${response.statusText}`);
     }
     
-    const gist = await response.json();
+    const gistData = await response.json();
+    
+    // Validate the response structure
+    if (!isGistResponse(gistData)) {
+      throw new Error('Invalid gist response from GitHub API');
+    }
+    
+    const gist = gistData;
     
     // Get the current revision
     const revision = gist.history[0].version;
     
     // Find .mld or .mlld file
-    const mldFile = Object.values(gist.files).find((f: any) => 
+    const mldFile = Object.values(gist.files).find((f) => 
       f.filename.endsWith('.mld') || f.filename.endsWith('.mlld')
     );
     
@@ -128,7 +191,7 @@ export class RegistryClient {
     });
     
     // Cache the content
-    await this.cache.store(integrity, content);
+    await this.cache.set(resolvedUrl, content);
     
     return content;
   }
@@ -157,7 +220,7 @@ export class RegistryClient {
     }
     
     // Cache for next time
-    await this.cache.store(integrity, content);
+    await this.cache.set(locked.resolved, content);
     
     return content;
   }
@@ -173,10 +236,10 @@ export class RegistryClient {
   /**
    * Check security advisories for an import
    */
-  private async checkAdvisories(importPath: string, integrity: string): Promise<void> {
+  private async checkAdvisories(importPath: string, _integrity: string): Promise<void> {
     // TODO: Implement advisory checking
     // For now, this is a placeholder
-    console.log(`Checking advisories for ${importPath}...`);
+    // Will use AdvisoryChecker service when fully implemented
   }
   
   /**
@@ -216,7 +279,7 @@ export class RegistryClient {
       approvedBy: process.env.USER || 'unknown'
     });
     
-    await this.cache.store(integrity, content);
+    await this.cache.set(url, content);
     
     return content;
   }
@@ -234,7 +297,7 @@ class LockFile {
   
   private load(): LockFileData {
     try {
-      const content = require('fs').readFileSync(this.path, 'utf8');
+      const content = fsSync.readFileSync(this.path, 'utf8');
       return JSON.parse(content);
     } catch {
       return { version: '1.0.0', imports: {} };
