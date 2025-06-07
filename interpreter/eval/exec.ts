@@ -39,9 +39,13 @@ export async function evaluateExec(
   env: Environment
 ): Promise<EvalResult> {
   // Extract identifier
-  const identifier = directive.raw?.identifier;
-  if (!identifier) {
+  const identifierNodes = directive.values?.identifier;
+  if (!identifierNodes || !Array.isArray(identifierNodes)) {
     throw new Error('Exec directive missing identifier');
+  }
+  const identifier = await interpolate(identifierNodes, env);
+  if (!identifier) {
+    throw new Error('Exec directive identifier evaluated to empty');
   }
   
   let commandDef;
@@ -97,7 +101,8 @@ export async function evaluateExec(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
-    const language = directive.raw?.lang || 'javascript';
+    // Language is stored in meta, not raw
+    const language = directive.meta?.language || 'javascript';
     
     // Store the code template (not interpolated yet)
     commandDef = {

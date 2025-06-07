@@ -257,9 +257,12 @@ export async function evaluateAdd(
     content = await interpolate(templateNodes, env);
     
     // Handle section extraction if specified
-    const section = directive.raw?.section;
-    if (section) {
-      content = extractSection(content, section);
+    const sectionNodes = directive.values?.section;
+    if (sectionNodes && Array.isArray(sectionNodes)) {
+      const section = await interpolate(sectionNodes, env);
+      if (section) {
+        content = extractSection(content, section);
+      }
     }
     
   } else if (directive.subtype === 'addTemplateInvocation') {

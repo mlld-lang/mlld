@@ -1,6 +1,7 @@
 import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
+import { interpolate } from '../core/interpreter';
 import { parseDataValue, needsEvaluation, extractPlainValue } from './data-value-parser';
 import { createDataVariable, createComplexDataVariable, astLocationToSourceLocation } from '@core/types';
 import { validateForeachExpression } from './data-value-evaluator';
@@ -16,9 +17,13 @@ export async function evaluateData(
   env: Environment
 ): Promise<EvalResult> {
   // Extract identifier
-  const identifier = directive.raw?.identifier;
-  if (!identifier) {
+  const identifierNodes = directive.values?.identifier;
+  if (!identifierNodes || !Array.isArray(identifierNodes)) {
     throw new Error('Data directive missing identifier');
+  }
+  const identifier = await interpolate(identifierNodes, env);
+  if (!identifier) {
+    throw new Error('Data directive identifier evaluated to empty');
   }
   
   // Data is already parsed in the AST!

@@ -118,9 +118,12 @@ async function importFromPath(
     
     // Handle section extraction if specified
     let processedContent = content;
-    const section = directive.raw?.section;
-    if (section) {
-      processedContent = extractSection(content, section);
+    const sectionNodes = directive.values?.section;
+    if (sectionNodes && Array.isArray(sectionNodes)) {
+      const section = await interpolate(sectionNodes, env);
+      if (section) {
+        processedContent = extractSection(content, section);
+      }
     }
     
     // Parse the imported content

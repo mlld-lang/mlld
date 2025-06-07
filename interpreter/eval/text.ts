@@ -62,9 +62,13 @@ export async function evaluateText(
   env: Environment
 ): Promise<EvalResult> {
   // Extract identifier
-  const identifier = directive.raw?.identifier;
-  if (!identifier) {
+  const identifierNodes = directive.values?.identifier;
+  if (!identifierNodes || !Array.isArray(identifierNodes)) {
     throw new Error('Text directive missing identifier');
+  }
+  const identifier = await interpolate(identifierNodes, env);
+  if (!identifier) {
+    throw new Error('Text directive identifier evaluated to empty');
   }
   
   // Handle parameterized text templates
@@ -191,10 +195,7 @@ export async function evaluateText(
           }],
           args: [] // TODO: Parse args from content if present
         },
-        raw: {
-          identifier: directive.meta.run.commandName,
-          args: []
-        },
+        raw: {}, // Empty raw field for synthetic node
         meta: {
           argumentCount: 0
         }
@@ -239,7 +240,7 @@ export async function evaluateText(
             };
           }
         });
-        runDirective.raw.args = args;
+        // Remove raw field usage - args are already in values.args
         runDirective.meta!.argumentCount = args.length;
       }
       
@@ -267,6 +268,9 @@ export async function evaluateText(
   }
   
   // Handle append operator
+  // Note: operator is a direct property on DirectiveNode, not in values
+  // This is part of the AST structure, not content to be interpolated
+  // eslint-disable-next-line mlld/no-raw-field-access
   const operator = directive.operator || '=';
   let finalValue = resolvedValue;
   

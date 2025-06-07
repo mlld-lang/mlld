@@ -16,9 +16,13 @@ export async function evaluatePath(
   env: Environment
 ): Promise<EvalResult> {
   // Extract identifier
-  const identifier = directive.raw?.identifier;
-  if (!identifier) {
+  const identifierNodes = directive.values?.identifier;
+  if (!identifierNodes || !Array.isArray(identifierNodes)) {
     throw new Error('Path directive missing identifier');
+  }
+  const identifier = await interpolate(identifierNodes, env);
+  if (!identifier) {
+    throw new Error('Path directive identifier evaluated to empty');
   }
   
   // Extract path nodes

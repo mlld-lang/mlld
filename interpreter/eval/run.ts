@@ -137,22 +137,21 @@ export async function evaluateRun(
     const code = await interpolate(codeNodes, env, InterpolationContext.Default);
     
     // Execute the code (default to JavaScript) with context for errors
-    const language = directive.raw?.lang || (directive.meta?.language as string) || 'javascript';
+    const language = (directive.meta?.language as string) || 'javascript';
     output = await env.executeCode(code, language, undefined, executionContext);
     
   } else if (directive.subtype === 'runExec') {
     // Handle exec reference with field access support
-    const execRef = directive.raw?.identifier;
-    if (!execRef) {
+    const identifierNodes = directive.values?.identifier;
+    if (!identifierNodes || !Array.isArray(identifierNodes)) {
       throw new Error('Run exec directive missing exec reference');
+    }
+    const execRef = await interpolate(identifierNodes, env);
+    if (!execRef) {
+      throw new Error('Run exec directive identifier evaluated to empty');
     }
     
     // Check if this is a field access pattern (e.g., @http.get)
-    const identifierNodes = directive.values?.identifier;
-    if (!identifierNodes || identifierNodes.length === 0) {
-      throw new Error('Run exec directive missing identifier');
-    }
-    
     const identifierNode = identifierNodes[0];
     let cmdVar: CommandVariable;
     
