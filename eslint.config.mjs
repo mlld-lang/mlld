@@ -147,6 +147,17 @@ export default tseslint.config(
     }
   },
   
+  // Test mock utilities need to access real console
+  {
+    files: [
+      'tests/utils/cli/mockConsole.ts',
+      'tests/utils/cli/mockProcessExit.ts'
+    ],
+    rules: {
+      'no-console': 'off', // Mock utilities need console for debugging
+    }
+  },
+  
   // Files with legitimate string operations (not for AST manipulation)
   {
     files: [
