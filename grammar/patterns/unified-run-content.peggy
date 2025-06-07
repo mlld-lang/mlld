@@ -28,11 +28,11 @@ UnifiedCodeBrackets "Code brackets [(...))]"
     }
 
 // UNIFIED COMMAND BRACKETS - Parses [(command)] for shell commands
-// Used by: AtRun directive when no language is specified
-// Purpose: Parse command content with variable interpolation
+// Used by: AtRun directive when no language is specified  
+// Purpose: Parse command content with variable interpolation and security checks
 UnifiedCommandBrackets "Command brackets [(...))]"
   = "[(" _ parts:UnifiedCommandParts _ ")]" {
-      helpers.debug('UnifiedCommandBrackets matched', { parts });
+      helpers.debug('UnifiedCommandBrackets matched with UnifiedCommandParts', { parts });
       
       const rawCommand = helpers.reconstructRawString(parts);
       
@@ -150,6 +150,63 @@ UnifiedRunContentInner
       };
     }
 
+// -------------------------------------------------------------  
+// SHELL COMMAND LINE INTEGRATION
+// -------------------------------------------------------------
+
+// Parse shell command line content with proper operator checking
+ShellCommandLineContent
+  = content:$([^)]*) {
+      // Use a simple tokenizer approach instead of the full ShellCommandLine parser
+      // for now to avoid circular dependencies
+      const tokens = [];
+      let current = '';
+      let inQuote = null;
+      
+      for (let i = 0; i < content.length; i++) {
+        const char = content[i];
+        const next = content[i + 1];
+        
+        // Check for quotes
+        if ((char === '"' || char === "'") && !inQuote) {
+          inQuote = char;
+          current += char;
+        } else if (char === inQuote) {
+          inQuote = null;
+          current += char;
+        } else if (!inQuote) {
+          // Check for banned operators
+          if (char === '&' && next === '&') {
+            error(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+          } else if (char === '|' && next === '|') {
+            error(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+          } else if (char === ';') {
+            error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+          } else if (char === '>' && next === '>') {
+            error(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
+          } else if (char === '>' || char === '<') {
+            error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+          } else if (char === '&' && next !== '&' && next !== '>') {
+            error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+          } else {
+            current += char;
+          }
+        } else {
+          current += char;
+        }
+      }
+      
+      // For now, return a simple structure
+      return {
+        commands: [{
+          type: 'command',
+          command: helpers.createNode(NodeType.Text, { content: content.trim(), location: location() }),
+          arguments: []
+        }],
+        commandBases: []
+      };
+    }
+
 // -------------------------------------------------------------
 // COMMAND CONTENT - With variable interpolation
 // -------------------------------------------------------------
@@ -184,7 +241,38 @@ UnifiedCommandChar
       // Preserve brackets in commands
       return '[' + inner + ']';
     }
-  / !'@' !')]' char:. { return char; }
+  / &{ 
+      // Security checks for banned operators
+      const pos = peg$currPos;
+      const ahead = input.substring(pos, pos + 3);
+      if (ahead.startsWith('&&')) {
+        error(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+      }
+      if (ahead.startsWith('||')) {
+        error(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+      }
+      if (ahead.startsWith('>>')) {
+        error(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
+      }
+      if (ahead.startsWith(';&')) {
+        error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+      }
+      // Check for single character operators
+      const char = input[pos];
+      if (char === ';') {
+        error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+      }
+      if (char === '>' && input[pos + 1] !== '>') {
+        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+      }
+      if (char === '<') {
+        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+      }
+      if (char === '&' && input[pos + 1] !== '&' && input[pos + 1] !== '>') {
+        error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+      }
+      return true;
+    } !'@' !')]' char:. { return char; }
 
 // Inner content of nested brackets
 UnifiedCommandInnerContent

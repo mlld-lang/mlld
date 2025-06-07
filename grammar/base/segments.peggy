@@ -19,6 +19,21 @@ EscapeSequence "Escape sequence"
       return char === "\\" ? "\\" : char;
     }
 
+// String escape sequence - processes standard string escapes like \n, \t
+StringEscapeSequence "String escape sequence"
+  = "\\" char:("n" / "t" / "r" / "0" / "\\" / '"' / "'") {
+      switch (char) {
+        case 'n': return '\n';
+        case 't': return '\t';
+        case 'r': return '\r';
+        case '0': return '\0';
+        case '\\': return '\\';
+        case '"': return '"';
+        case "'": return "'";
+        default: return char;
+      }
+    }
+
 // -------------------------------------------------------------
 // TEXT SEGMENT PATTERNS
 // -------------------------------------------------------------
@@ -32,7 +47,8 @@ BaseTextSegment "Plain text segment"
     }
 
 BaseChar
-  = EscapeSequence
+  = StringEscapeSequence  // Process string escapes first
+  / EscapeSequence       // Then mlld syntax escapes
   / ![ \t\r\n/\]@${{}"'`] char:. { return char; }
 
 // Template text segment - for template content, with escape support
@@ -44,7 +60,8 @@ TemplateTextSegment "Template text segment"
     }
 
 TemplateChar
-  = EscapeSequence
+  = StringEscapeSequence  // Process string escapes first
+  / EscapeSequence       // Then mlld syntax escapes
   / !('{{' / '}}' / '[[' / ']]') char:. { return char; }
 
 // Command text segment - for command content, with escape support
@@ -98,7 +115,8 @@ EscapedStringContent "String content with escapes"
     }
 
 EscapedStringChar
-  = EscapeSequence
+  = StringEscapeSequence  // Process string escapes first
+  / EscapeSequence       // Then mlld syntax escapes
   / !'"' char:. { return char; }
 
 // Text with escape sequences for single-quoted strings

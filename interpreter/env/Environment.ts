@@ -21,6 +21,7 @@ import {
   convertLockFileToResolverConfigs
 } from '@core/resolvers';
 import { logger } from '@core/utils/logger';
+import * as shellQuote from 'shell-quote';
 
 interface CommandExecutionOptions {
   showProgress?: boolean;
@@ -847,6 +848,35 @@ export class Environment {
     return this.parent.readStdin();
   }
   
+  /**
+   * Parse a command string and validate it for security
+   * This ensures no dangerous operators are present
+   */
+  private validateAndParseCommand(command: string): string {
+    // Check for dangerous operators that should have been caught by grammar
+    // These are additional safety checks
+    const dangerousPatterns = [
+      /&&/, // AND operator
+      /\|\|/, // OR operator  
+      /;\s*(?:[^'"]*(?:'[^']*'|"[^"]*")[^'"]*)*[^'"]*$/, // Semicolon (not in quotes)
+      />\s*[^>]/, // Single redirect
+      />>/,  // Append redirect
+      /<(?![=<])/, // Input redirect (not <= or <<)
+      /&(?![&>])/ // Background (not && or &>)
+    ];
+    
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(command)) {
+        throw new Error(`Command contains banned shell operator`);
+      }
+    }
+    
+    // For now, just return the command as-is since it passed validation
+    // The shell-quote library was causing issues with over-escaping
+    // The grammar should have already caught most dangerous operators
+    return command;
+  }
+
   async executeCommand(
     command: string, 
     options?: CommandExecutionOptions,
@@ -857,6 +887,26 @@ export class Environment {
     const { showProgress, maxOutputLines, errorBehavior, timeout } = finalOptions;
     
     const startTime = Date.now();
+    
+    // Validate and parse the command for safe execution
+    let safeCommand: string;
+    try {
+      safeCommand = this.validateAndParseCommand(command);
+    } catch (error: any) {
+      // If validation fails, it's likely due to a banned operator
+      throw new MlldCommandExecutionError(
+        `Invalid command: ${error.message}`,
+        context?.sourceLocation,
+        {
+          command,
+          exitCode: 1,
+          duration: 0,
+          stderr: error.message,
+          workingDirectory: await this.getProjectPath(),
+          directiveType: context?.directiveType || 'run'
+        }
+      );
+    }
     
     // Simple progress message without emoji
     if (showProgress) {
@@ -884,7 +934,8 @@ export class Environment {
       }
       
       const workingDirectory = await this.getProjectPath();
-      const result = execSync(command, {
+      // Execute the validated command
+      const result = execSync(safeCommand, {
         encoding: 'utf8',
         cwd: workingDirectory,
         env: { ...process.env },
