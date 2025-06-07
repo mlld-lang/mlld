@@ -318,10 +318,6 @@ export async function evaluateRun(
       // Create a new run directive for the referenced command
       const refDirective = {
         ...directive,
-        raw: {
-          ...directive.raw,
-          identifier: cmdDef.commandRef
-        },
         values: {
           ...directive.values,
           identifier: [{ type: 'Text', content: cmdDef.commandRef }],

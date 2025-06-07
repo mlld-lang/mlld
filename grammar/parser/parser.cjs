@@ -1156,7 +1156,24 @@ function peg$parse(input, options) {
       return { type: 'variable', value: varRef };
     };
   var peg$f98 = function(chars) {
-      return { type: 'raw', value: chars.join('').trim() };
+      const content = chars.join('').trim();
+      // If it starts with @, create a VariableReference node
+      if (content.startsWith('@')) {
+        return {
+          type: 'variable',
+          value: helpers.createNode(NodeType.VariableReference, {
+            identifier: content.substring(1),
+            valueType: 'varIdentifier',
+            location: location()
+          })
+        };
+      } else {
+        // Otherwise create a Text node wrapped in a string type
+        return {
+          type: 'string',
+          value: content
+        };
+      }
     };
   var peg$f99 = function(char) { return char; };
   var peg$f100 = function(content) { 
@@ -4298,10 +4315,7 @@ function peg$parse(input, options) {
           identifier: [idNode],
           path: pathParts
         },
-        {
-          identifier: id,
-          path: content
-        },
+        {},  // No raw field needed - simple string values provide no debugging benefit
         {
           path: helpers.createPathMetadata(content, pathParts),
           ...helpers.createSecurityMeta(securityOptions)
@@ -4352,10 +4366,7 @@ function peg$parse(input, options) {
           identifier: [idNode],
           path: processedPathParts
         },
-        {
-          identifier: id,
-          path: rawString
-        },
+        {},  // No raw field needed - can be reconstructed from parts if needed for debugging
         {
           path: helpers.createPathMetadata(rawString, processedPathParts),
           ...helpers.createSecurityMeta(securityOptions)
@@ -4397,10 +4408,7 @@ function peg$parse(input, options) {
           identifier: [idNode],
           path: processedPathParts
         },
-        {
-          identifier: id,
-          path: processedPath
-        },
+        {},  // No raw field needed - values contain all necessary information
         {
           path: {
             ...path.meta,

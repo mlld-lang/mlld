@@ -37,10 +37,7 @@ AtPath
           identifier: [idNode],
           path: pathParts
         },
-        {
-          identifier: id,
-          path: content
-        },
+        {},  // No raw field needed - simple string values provide no debugging benefit
         {
           path: helpers.createPathMetadata(content, pathParts),
           ...helpers.createSecurityMeta(securityOptions)
@@ -92,10 +89,7 @@ AtPath
           identifier: [idNode],
           path: processedPathParts
         },
-        {
-          identifier: id,
-          path: rawString
-        },
+        {},  // No raw field needed - can be reconstructed from parts if needed for debugging
         {
           path: helpers.createPathMetadata(rawString, processedPathParts),
           ...helpers.createSecurityMeta(securityOptions)
@@ -136,10 +130,7 @@ AtPath
           identifier: [idNode],
           path: processedPathParts
         },
-        {
-          identifier: id,
-          path: processedPath
-        },
+        {},  // No raw field needed - values contain all necessary information
         {
           path: {
             ...path.meta,
