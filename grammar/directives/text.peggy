@@ -471,10 +471,11 @@ AtText
         sourceType: sourceType,
         hasVariables: false,
         isCommandRef: true,
-        commandName: commandRef.name
+        commandName: commandRef.name,
+        commandArgs: commandRef.args || []  // Store structured arguments
       };
       
-      // Create command reference syntax
+      // Create command reference syntax for content (backward compatibility)
       const rawContent = `@${commandRef.name}${
         commandRef.args && commandRef.args.length > 0 ? 
         `(${commandRef.args.map(arg => arg.value || '').join(', ')})` : ''
@@ -485,7 +486,9 @@ AtText
         subtype,
           {
             identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })]
+            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })],
+            commandName: [helpers.createNode(NodeType.Text, { content: commandRef.name, location: location() })],
+            commandArgs: commandRef.args || []  // Store structured arguments in values
           },
         {
           identifier: id,
@@ -584,11 +587,12 @@ AtText
         hasVariables: false,
         run: {
           isCommandRef: true,
-          commandName: commandRef.name
+          commandName: commandRef.name,
+          commandArgs: commandRef.args || []  // Store structured arguments
         }
       };
       
-      // Create command reference syntax
+      // Create command reference syntax for content (backward compatibility)
       const rawContent = `@run @${commandRef.name}${
         commandRef.args && commandRef.args.length > 0 ? 
         `(${commandRef.args.map(arg => arg.value || '').join(', ')})` : ''
@@ -599,7 +603,9 @@ AtText
         subtype,
           {
             identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })]
+            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })],
+            runCommandName: [helpers.createNode(NodeType.Text, { content: commandRef.name, location: location() })],
+            runCommandArgs: commandRef.args || []  // Store structured arguments in values
           },
         {
           identifier: id,

@@ -34,9 +34,7 @@ AtData
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
       
-      // Capture raw text
-      const rawIdentifier = id;
-      const rawValue = value.rawText || '';
+      // No need for separate raw capture - id is already a string
       
       // Create structured values object
       const values = {
@@ -130,11 +128,7 @@ AtData
         'data',
         'dataAssignment',
         values,
-        {
-          identifier: rawIdentifier,
-          value: rawValue,
-          ...(securityOptions ? { securityOptions: JSON.stringify(securityOptions) } : {})
-        },
+        {},  // No raw field needed - values contain all necessary information
         metaObj,
         location(),
         source  // Use the determined source type

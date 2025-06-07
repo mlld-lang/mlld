@@ -3332,9 +3332,7 @@ function peg$parse(input, options) {
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
       
-      // Capture raw text
-      const rawIdentifier = id;
-      const rawValue = value.rawText || '';
+      // No need for separate raw capture - id is already a string
       
       // Create structured values object
       const values = {
@@ -3428,11 +3426,7 @@ function peg$parse(input, options) {
         'data',
         'dataAssignment',
         values,
-        {
-          identifier: rawIdentifier,
-          value: rawValue,
-          ...(securityOptions ? { securityOptions: JSON.stringify(securityOptions) } : {})
-        },
+        {},  // No raw field needed - values contain all necessary information
         metaObj,
         location(),
         source  // Use the determined source type
@@ -5091,10 +5085,11 @@ function peg$parse(input, options) {
         sourceType: sourceType,
         hasVariables: false,
         isCommandRef: true,
-        commandName: commandRef.name
+        commandName: commandRef.name,
+        commandArgs: commandRef.args || []  // Store structured arguments
       };
       
-      // Create command reference syntax
+      // Create command reference syntax for content (backward compatibility)
       const rawContent = `@${commandRef.name}${
         commandRef.args && commandRef.args.length > 0 ? 
         `(${commandRef.args.map(arg => arg.value || '').join(', ')})` : ''
@@ -5105,7 +5100,9 @@ function peg$parse(input, options) {
         subtype,
           {
             identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })]
+            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })],
+            commandName: [helpers.createNode(NodeType.Text, { content: commandRef.name, location: location() })],
+            commandArgs: commandRef.args || []  // Store structured arguments in values
           },
         {
           identifier: id,
@@ -5200,11 +5197,12 @@ function peg$parse(input, options) {
         hasVariables: false,
         run: {
           isCommandRef: true,
-          commandName: commandRef.name
+          commandName: commandRef.name,
+          commandArgs: commandRef.args || []  // Store structured arguments
         }
       };
       
-      // Create command reference syntax
+      // Create command reference syntax for content (backward compatibility)
       const rawContent = `@run @${commandRef.name}${
         commandRef.args && commandRef.args.length > 0 ? 
         `(${commandRef.args.map(arg => arg.value || '').join(', ')})` : ''
@@ -5215,7 +5213,9 @@ function peg$parse(input, options) {
         subtype,
           {
             identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })]
+            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })],
+            runCommandName: [helpers.createNode(NodeType.Text, { content: commandRef.name, location: location() })],
+            runCommandArgs: commandRef.args || []  // Store structured arguments in values
           },
         {
           identifier: id,

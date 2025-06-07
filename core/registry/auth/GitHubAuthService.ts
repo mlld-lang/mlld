@@ -7,7 +7,6 @@ import * as keytar from 'keytar';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { Octokit } from '@octokit/rest';
 import { MlldError } from '@core/errors';
 
 export interface AuthConfig {
@@ -48,6 +47,7 @@ export class GitHubAuthService {
   private accountName: string;
   private fallbackTokenPath: string;
   private clientId: string;
+  private octokitModule: any;
 
   constructor(config: AuthConfig = {}) {
     this.config = {
@@ -65,13 +65,24 @@ export class GitHubAuthService {
   }
 
   /**
+   * Dynamically load Octokit module
+   */
+  private async getOctokitModule() {
+    if (!this.octokitModule) {
+      this.octokitModule = await import('@octokit/rest');
+    }
+    return this.octokitModule;
+  }
+
+  /**
    * Get authenticated Octokit instance
    */
-  async getOctokit(): Promise<Octokit> {
+  async getOctokit(): Promise<any> {
     const token = await this.getStoredToken();
     if (!token) {
       throw new MlldError('Not authenticated. Please run: mlld auth login');
     }
+    const { Octokit } = await this.getOctokitModule();
     return new Octokit({ auth: token });
   }
 
@@ -84,6 +95,7 @@ export class GitHubAuthService {
       if (!token) return false;
 
       // Validate token with GitHub API
+      const { Octokit } = await this.getOctokitModule();
       const octokit = new Octokit({ auth: token });
       await octokit.users.getAuthenticated();
       return true;
@@ -299,6 +311,7 @@ export class GitHubAuthService {
           await this.storeToken(data.access_token);
           
           // Get user info
+          const { Octokit } = await this.getOctokitModule();
           const octokit = new Octokit({ auth: data.access_token });
           const { data: user } = await octokit.users.getAuthenticated();
           

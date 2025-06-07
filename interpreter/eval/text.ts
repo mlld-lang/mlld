@@ -206,6 +206,21 @@ export async function evaluateText(
       // Import the run evaluator to handle this properly
       const { evaluateRun } = await import('./run');
       
+      // Get structured arguments from the grammar
+      const commandArgs = directive.meta.run.commandArgs || [];
+      
+      // Convert parsed arguments to the format expected by run directive
+      const processedArgs = [];
+      for (const arg of commandArgs) {
+        if (arg.type === 'string') {
+          processedArgs.push(arg.value);
+        } else if (arg.type === 'variable' && arg.value) {
+          // Variable reference - evaluate it
+          const varValue = await interpolate([arg.value], env);
+          processedArgs.push(varValue);
+        }
+      }
+      
       // Create a synthetic run directive to evaluate
       const runDirective: DirectiveNode = {
         type: 'Directive',
@@ -219,62 +234,17 @@ export async function evaluateText(
             nodeId: '', 
             content: directive.meta.run.commandName 
           }],
-          args: [] // TODO: Parse args from content if present
+          args: processedArgs.map(arg => ({ 
+            type: 'Text', 
+            nodeId: '', 
+            content: String(arg) 
+          }))
         },
         raw: {}, // Empty raw field for synthetic node
         meta: {
-          argumentCount: 0
+          argumentCount: processedArgs.length
         }
       };
-      
-      // Parse arguments from the content if present
-      const contentStr = await interpolate(contentNodes, env);
-      // TODO: This should be parsed by the grammar, not regex
-      // eslint-disable-next-line mlld/no-ast-string-manipulation
-      const argsMatch = contentStr.match(/@\w+\((.*?)\)/);
-      if (argsMatch && argsMatch[1]) {
-        const argStr = argsMatch[1];
-        // Simple argument parsing - split by comma and trim quotes
-        // eslint-disable-next-line mlld/no-ast-string-manipulation
-        const args = argStr.split(',').map(arg => {
-          const trimmed = arg.trim();
-          // Remove quotes if present
-          // eslint-disable-next-line mlld/no-ast-string-manipulation
-          if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || 
-              // eslint-disable-next-line mlld/no-ast-string-manipulation
-              (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
-            return trimmed.slice(1, -1);
-          }
-          // Check if it's a variable reference
-          // eslint-disable-next-line mlld/no-ast-string-manipulation
-          if (trimmed.startsWith('@')) {
-            return trimmed;
-          }
-          return trimmed;
-        });
-        
-        // Update the directive with parsed arguments
-        runDirective.values.args = args.map(arg => {
-          if (arg.startsWith('@')) {
-            // Variable reference
-            return {
-              type: 'VariableReference' as const,
-              nodeId: '',
-              valueType: 'varIdentifier' as const,
-              identifier: arg.substring(1)
-            };
-          } else {
-            // String literal
-            return {
-              type: 'Text' as const,
-              nodeId: '',
-              content: arg
-            };
-          }
-        });
-        // Remove raw field usage - args are already in values.args
-        runDirective.meta!.argumentCount = args.length;
-      }
       
       // Evaluate the run directive
       const result = await evaluateRun(runDirective, env);
@@ -288,6 +258,65 @@ export async function evaluateText(
     
     // Trim trailing newlines for consistency
     resolvedValue = resolvedValue.replace(/\n+$/, '');
+    
+  } else if (directive.source === 'commandRef') {
+    // Direct command reference: @text result = @greet(args)
+    const commandArgs = directive.meta?.commandArgs || directive.values?.commandArgs || [];
+    const commandName = directive.meta?.commandName;
+    
+    if (!commandName) {
+      throw new Error('Command reference missing command name');
+    }
+    
+    // Look up the command definition
+    const cmdVar = env.getVariable(commandName);
+    if (!cmdVar || cmdVar.type !== 'command') {
+      throw new Error(`Command '${commandName}' not found`);
+    }
+    
+    // Import the run evaluator to execute the command
+    const { evaluateRun } = await import('./run');
+    
+    // Convert parsed arguments to the format expected by run directive
+    const processedArgs = [];
+    for (const arg of commandArgs) {
+      if (arg.type === 'string') {
+        processedArgs.push(arg.value);
+      } else if (arg.type === 'variable' && arg.value) {
+        // Variable reference - evaluate it
+        const varValue = await interpolate([arg.value], env);
+        processedArgs.push(varValue);
+      }
+    }
+    
+    // Create a synthetic run directive to evaluate
+    const runDirective: DirectiveNode = {
+      type: 'Directive',
+      nodeId: directive.nodeId + '-run',
+      kind: 'run',
+      subtype: 'runExec',
+      source: 'exec',
+      values: {
+        identifier: [{ 
+          type: 'Text', 
+          nodeId: '', 
+          content: commandName 
+        }],
+        args: processedArgs.map(arg => ({ 
+          type: 'Text', 
+          nodeId: '', 
+          content: String(arg) 
+        }))
+      },
+      raw: {}, // Empty raw field for synthetic node
+      meta: {
+        argumentCount: processedArgs.length
+      }
+    };
+    
+    // Evaluate the run directive
+    const result = await evaluateRun(runDirective, env);
+    resolvedValue = result.value;
     
   } else {
     // Normal case: interpolate the content (resolve {{variables}})
