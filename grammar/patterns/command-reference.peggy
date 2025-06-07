@@ -35,7 +35,24 @@ CommandArgument "command argument"
       return { type: 'variable', value: varRef };
     }
   / chars:RawArgChar+ {
-      return { type: 'raw', value: chars.join('').trim() };
+      const content = chars.join('').trim();
+      // If it starts with @, create a VariableReference node
+      if (content.startsWith('@')) {
+        return {
+          type: 'variable',
+          value: helpers.createNode(NodeType.VariableReference, {
+            identifier: content.substring(1),
+            valueType: 'varIdentifier',
+            location: location()
+          })
+        };
+      } else {
+        // Otherwise create a Text node wrapped in a string type
+        return {
+          type: 'string',
+          value: content
+        };
+      }
     }
 
 RawArgChar
