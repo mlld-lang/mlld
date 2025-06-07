@@ -14,7 +14,7 @@ export interface AuthOptions {
 export class AuthCommand {
   private authService: GitHubAuthService;
 
-  constructor(options: AuthOptions = {}) {
+  constructor(_options: AuthOptions = {}) {
     const config: AuthConfig = {
       clientId: process.env.MLLD_GITHUB_CLIENT_ID,
       serviceName: 'mlld-cli',

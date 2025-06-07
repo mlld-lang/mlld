@@ -1,4 +1,3 @@
-import * as path from 'path';
 import { RegistryManager } from '@core/registry/RegistryManager';
 import { OutputFormatter, type ModuleDisplayInfo } from '../utils/output';
 import { lockFileManager } from '../utils/lock-file';
@@ -67,7 +66,7 @@ export class LsCommand {
           registry: this.extractRegistry(entry.resolved),
           cached: false,
           missing: true,
-          error: error.message
+          error: (error as Error).message
         });
       }
     }
@@ -228,7 +227,7 @@ export async function lsCommand(options: LsOptions = {}): Promise<void> {
   const basePath = options.basePath || process.cwd();
   
   // Ensure we have a lock file
-  const lockFile = await lockFileManager.ensureLockFile(basePath);
+  await lockFileManager.ensureLockFile(basePath);
   
   const lister = new LsCommand(basePath);
   await lister.list(options);

@@ -17,11 +17,9 @@ import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { OutputPathService } from '@services/fs/OutputPathService';
 import { interpret } from '@interpreter/index';
-import type { IFileSystemService } from '@services/fs/IFileSystemService';
-import type { IPathService } from '@services/fs/IPathService';
 import { logger, cliLogger } from '@core/utils/logger';
 import { ConfigLoader } from '@core/config/loader';
-import type { ResolvedURLConfig, ResolvedOutputConfig } from '@core/config/types';
+import type { ResolvedURLConfig } from '@core/config/types';
 import { ErrorFormatSelector } from '@core/utils/errorFormatSelector';
 
 // CLI Options interface
@@ -90,19 +88,6 @@ function normalizeFormat(format?: string): 'markdown' | 'xml' {
   }
 }
 
-/**
- * Get file extension for the given format
- */
-function getOutputExtension(format: 'markdown' | 'xml'): string {
-  switch (format) {
-    case 'markdown':
-      return '.md';
-    case 'xml':
-      return '.xml';
-    default:
-      return '.md';
-  }
-}
 
 /**
  * Parse flags from command line arguments
@@ -892,9 +877,6 @@ async function processFile(options: CLIOptions): Promise<void> {
   await processFileWithOptions(options, apiOptions);
 }
 
-// Track if an error has been logged to prevent duplicate messages
-let errorLogged = false;
-
 // Keep track of error messages we've seen
 const seenErrors = new Set<string>();
 
@@ -977,7 +959,7 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
       }
       
       console.error('\n' + result + '\n');
-    } catch (formatError) {
+    } catch {
       // Fallback to basic API format if enhanced formatting fails
       const fallbackFormatter = new ErrorFormatSelector();
       const result = fallbackFormatter.formatForAPI(error);
@@ -1012,9 +994,6 @@ export async function main(customArgs?: string[]): Promise<void> {
   let cliOptions: CLIOptions = { input: '' }; // Initialize with default
 
   try {
-    // Reset errorLogged flag for each invocation of main
-    errorLogged = false;
-    
     // Clear the set of seen errors
     seenErrors.clear();
 

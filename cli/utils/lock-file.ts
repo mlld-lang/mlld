@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { LockFile, type LockEntry } from '@core/registry/LockFile';
+import { LockFile } from '@core/registry/LockFile';
 
 export interface LockFileUtils {
   ensureLockFile(basePath: string): Promise<LockFile>;
@@ -25,7 +25,7 @@ export class LockFileManager implements LockFileUtils {
     const mlldDir = path.dirname(lockFilePath);
     try {
       await fs.mkdir(mlldDir, { recursive: true });
-    } catch (error) {
+    } catch {
       // Directory might already exist, that's fine
     }
     
@@ -76,7 +76,7 @@ export class LockFileManager implements LockFileUtils {
         }
         
       } catch (error) {
-        result.errors.push(`Failed to validate ${importPath}: ${error.message}`);
+        result.errors.push(`Failed to validate ${importPath}: ${(error as Error).message}`);
         result.valid = false;
       }
     }
@@ -93,7 +93,7 @@ export class LockFileManager implements LockFileUtils {
       await fs.copyFile(lockFilePath, backupPath);
       return backupPath;
     } catch (error) {
-      throw new Error(`Failed to backup lock file: ${error.message}`);
+      throw new Error(`Failed to backup lock file: ${(error as Error).message}`);
     }
   }
   
@@ -103,7 +103,7 @@ export class LockFileManager implements LockFileUtils {
     try {
       await fs.copyFile(backupPath, lockFilePath);
     } catch (error) {
-      throw new Error(`Failed to restore lock file: ${error.message}`);
+      throw new Error(`Failed to restore lock file: ${(error as Error).message}`);
     }
   }
   
@@ -126,7 +126,7 @@ export class LockFileManager implements LockFileUtils {
       for (const backup of backupFiles) {
         try {
           backup.stat = await fs.stat(backup.path);
-        } catch (error) {
+        } catch {
           // Skip files we can't stat
         }
       }
@@ -142,11 +142,11 @@ export class LockFileManager implements LockFileUtils {
       for (const backup of toDelete) {
         try {
           await fs.unlink(backup.path);
-        } catch (error) {
+        } catch {
           // Ignore errors when deleting old backups
         }
       }
-    } catch (error) {
+    } catch {
       // Ignore errors in cleanup
     }
   }

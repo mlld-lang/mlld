@@ -1,5 +1,4 @@
 import { RegistryManager } from '@core/registry';
-import * as path from 'path';
 
 export async function registryCommand(args: string[]): Promise<void> {
   const subcommand = args[0];

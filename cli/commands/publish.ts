@@ -542,7 +542,7 @@ export class PublishCommand {
   /**
    * Validate module imports to ensure they reference public modules
    */
-  private async validateImports(content: string, octokit: Octokit): Promise<{ valid: boolean; errors: string[] }> {
+  private async validateImports(content: string, _octokit: Octokit): Promise<{ valid: boolean; errors: string[] }> {
     const errors: string[] = [];
     
     // Find all @import directives that reference modules (start with @)

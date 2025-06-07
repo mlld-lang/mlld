@@ -1,4 +1,3 @@
-import * as path from 'path';
 import { RegistryManager } from '@core/registry/RegistryManager';
 import { OutputFormatter, formatModuleReference } from '../utils/output';
 import { lockFileManager } from '../utils/lock-file';
@@ -79,7 +78,7 @@ export class InfoCommand {
         if (cached) {
           info.size = Buffer.byteLength(cached, 'utf8');
         }
-      } catch (error) {
+      } catch {
         // Ignore cache errors
       }
     }

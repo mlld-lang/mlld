@@ -4,7 +4,6 @@ import { Cache } from './Cache';
 import { RegistryResolver } from './RegistryResolver';
 import { StatsCollector } from './StatsCollector';
 import { MlldImportError } from '@core/errors';
-import type { Config } from '@core/config/types';
 
 export interface RegistryConfig {
   enabled?: boolean;
