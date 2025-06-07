@@ -19,7 +19,7 @@ jobs:
       - name: Check for ignored files in PR
         run: |
           # Create a list of directories that should not be in the public repo
-          IGNORED_DIRS="_meld dev tmp _issues logs error-display-demo docs/dev .claude .windsurf .continue .aider .sourcegraph"
+          IGNORED_DIRS="_meld dev tmp _issues logs error-display-demo .claude .windsurf .continue .aider .sourcegraph"
           
           # Check for ignored directories and files
           FOUND_FILES=""
@@ -31,7 +31,7 @@ jobs:
           done
           
           # Check for ignored files
-          for pattern in "diff.txt" "test_*.txt" "test_*.mjs" "test_output.log" "repomix-output.xml" ".repomixignore" "CLAUDE.md" "AGENTS.md" ".cursorrules" ".aidigestignore" "cursor.md" ".cursorignore" ".copilotignore" ".sourcery.yaml" "windsurf.md" ".windsurf*" "prepare-main.js"; do
+          for pattern in "diff.txt" "test_*.txt" "test_*.mjs" "test_output.log" "repomix-output.xml" ".repomixignore" "AGENTS.md" ".cursorrules" ".aidigestignore" "cursor.md" ".cursorignore" ".copilotignore" ".sourcery.yaml" "windsurf.md" ".windsurf*" "prepare-main.js"; do
             MATCHES=$(find . -name "$pattern" -type f -not -path "*/node_modules/*" -not -path "*/dist/*" | wc -l)
             if [ "$MATCHES" -gt 0 ]; then
               echo "::warning::Found files matching pattern: $pattern"

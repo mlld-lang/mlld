@@ -37,7 +37,6 @@ jobs:
             "tmp"
             "logs"
             "error-display-demo"
-            "docs/dev"
             ".claude"
             ".windsurf"
             ".continue"
@@ -56,7 +55,6 @@ jobs:
           # Files to remove
           FILES_TO_REMOVE=(
             "prepare-main.js"
-            "CLAUDE.md"
             "AGENTS.md"
             ".cursorrules"
             ".aidigestignore"
@@ -107,8 +105,8 @@ jobs:
             Development files have been automatically removed from this PR to prepare for the main branch.
             
             Removed:
-            - Development directories (docs/dev, _meld, etc.)
-            - AI tool configurations (CLAUDE.md, .cursorrules, etc.)
+            - Development directories (_meld, etc.)
+            - AI tool configurations (.cursorrules, etc.)
             - Test and temporary files
             
             The main branch will receive a clean version suitable for public release.`;
