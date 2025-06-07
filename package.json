@@ -58,6 +58,7 @@
     "lint:ast": "eslint interpreter/**/*.ts core/**/*.ts api/**/*.ts",
     "lint:ast-strict": "eslint interpreter/**/*.ts core/**/*.ts api/**/*.ts --rule 'mlld/require-ast-type-guards: error'",
     "clean": "rimraf dist",
+    "clean:generated": "rm -f core/types/*.js core/types/*.js.map grammar/parser/deps/*.js grammar/deps/*.js",
     "prepublishOnly": "npm run clean && npm run build",
     "bump": "node scripts/bump-version.js",
     "bump:patch": "node scripts/bump-version.js patch",
