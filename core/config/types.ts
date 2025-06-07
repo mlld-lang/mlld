@@ -2,6 +2,11 @@
  * Configuration types for Mlld
  */
 
+// Utility type for deep partial configurations
+export type DeepPartial<T> = T extends object ? {
+  [P in keyof T]?: DeepPartial<T[P]>;
+} : T;
+
 export interface MlldConfig {
   security?: SecurityConfig;
   cache?: CacheConfig;
@@ -55,6 +60,8 @@ export interface CacheConfig {
 
 export interface URLCacheConfig {
   enabled: boolean;
+  defaultTTL?: string; // e.g., "5m", "1h", "7d" 
+  rules?: CacheRule[]; // Cache rules with patterns and TTLs
   immutable?: boolean; // If true (default), cached content never auto-refreshes
   autoRefresh?: URLAutoRefreshConfig; // Opt-in auto-refresh with rules
   storageLocation?: string; // Where to store cached files
