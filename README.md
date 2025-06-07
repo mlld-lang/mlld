@@ -2,6 +2,8 @@
 
 mlld is a modular prompt scripting language.
 
+[Give this to your LLM](llms.txt)
+
 ## Installation
 
 ```bash
