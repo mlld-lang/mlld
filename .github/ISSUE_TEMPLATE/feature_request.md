@@ -4,6 +4,7 @@ about: Suggest an idea for this project
 title: ''
 labels: enhancement
 assignees: ''
+
 ---
 
 **Is your feature request related to a problem? Please describe.**
@@ -18,7 +19,7 @@ A clear and concise description of any alternative solutions or features you've 
 **Example usage**
 If applicable, provide an example of how your feature would be used:
 
-```meld
+```mlld
 # Example syntax for your proposed feature
 @mynewdirective param="value"
 ...

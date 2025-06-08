@@ -4,6 +4,7 @@ about: Create a report to help us improve
 title: ''
 labels: bug
 assignees: ''
+
 ---
 
 **Describe the bug**
@@ -21,7 +22,7 @@ A clear and concise description of what you expected to happen.
 **Example file/code**
 If applicable, add a minimal example file that demonstrates the issue.
 
-```meld
+```mlld
 # Example file content that causes the issue
 @text greeting = "Hello"
 ...
