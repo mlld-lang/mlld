@@ -120,15 +120,33 @@ export class OutputFormatter {
     return lines.join('\n');
   }
 
-  static formatError(error: Error, options: { verbose?: boolean } = {}): string {
+  static formatError(error: unknown, options: { verbose?: boolean } = {}): string {
     const lines: string[] = [];
     
-    lines.push(chalk.red(`Error: ${error.message}`));
-    
-    if (options.verbose && error.stack) {
-      lines.push('');
-      lines.push(chalk.gray('Stack trace:'));
-      lines.push(chalk.gray(error.stack));
+    // Handle different error types
+    if (error instanceof Error) {
+      lines.push(chalk.red(`Error: ${error.message}`));
+      
+      if (options.verbose && error.stack) {
+        lines.push('');
+        lines.push(chalk.gray('Stack trace:'));
+        lines.push(chalk.gray(error.stack));
+      }
+    } else if (error && typeof error === 'object' && 'message' in error) {
+      // Handle error-like objects
+      lines.push(chalk.red(`Error: ${(error as any).message}`));
+      
+      if (options.verbose && 'stack' in error) {
+        lines.push('');
+        lines.push(chalk.gray('Stack trace:'));
+        lines.push(chalk.gray((error as any).stack));
+      }
+    } else if (typeof error === 'string') {
+      // Handle string errors
+      lines.push(chalk.red(`Error: ${error}`));
+    } else {
+      // Handle unknown error types
+      lines.push(chalk.red(`Error: ${String(error)}`));
     }
     
     return lines.join('\n');

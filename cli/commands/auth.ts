@@ -16,11 +16,15 @@ export class AuthCommand {
 
   constructor(_options: AuthOptions = {}) {
     const config: AuthConfig = {
-      clientId: process.env.MLLD_GITHUB_CLIENT_ID,
       serviceName: 'mlld-cli',
       accountName: 'github-token',
       fallbackStorage: true,
     };
+    
+    // Only set clientId if environment variable is defined
+    if (process.env.MLLD_GITHUB_CLIENT_ID) {
+      config.clientId = process.env.MLLD_GITHUB_CLIENT_ID;
+    }
 
     this.authService = new GitHubAuthService(config);
   }
@@ -57,8 +61,9 @@ export class AuthCommand {
         process.exit(1);
       }
     } catch (error) {
-      console.error(chalk.red(`Authentication error: ${error.message}`));
-      if (options.verbose) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(`Authentication error: ${errorMessage}`));
+      if (options.verbose && error instanceof Error && error.stack) {
         console.error(error.stack);
       }
       process.exit(1);
@@ -83,8 +88,9 @@ export class AuthCommand {
       
       console.log(chalk.green('✅ Successfully signed out'));
     } catch (error) {
-      console.error(chalk.red(`Logout failed: ${error.message}`));
-      if (options.verbose) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(`Logout failed: ${errorMessage}`));
+      if (options.verbose && error instanceof Error && error.stack) {
         console.error(error.stack);
       }
       process.exit(1);
@@ -119,8 +125,9 @@ export class AuthCommand {
         console.log(chalk.gray('Run "mlld auth login" to re-authenticate'));
       }
     } catch (error) {
-      console.error(chalk.red(`Status check failed: ${error.message}`));
-      if (options.verbose) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(`Status check failed: ${errorMessage}`));
+      if (options.verbose && error instanceof Error && error.stack) {
         console.error(error.stack);
       }
       process.exit(1);

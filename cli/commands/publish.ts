@@ -12,7 +12,7 @@ import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { OutputFormatter } from '../utils/output';
 import chalk from 'chalk';
 import { Octokit } from '@octokit/rest';
-import { MlldError } from '@core/errors';
+import { MlldError, ErrorSeverity } from '@core/errors';
 import * as yaml from 'js-yaml';
 
 export interface PublishOptions {
@@ -21,6 +21,7 @@ export interface PublishOptions {
   force?: boolean;
   message?: string;
   useGist?: boolean; // Force gist creation even if in git repo
+  useRepo?: boolean; // Force repository publishing (skip interactive prompt)
   org?: string; // Publish on behalf of an organization
 }
 
@@ -60,12 +61,23 @@ export class PublishCommand {
     try {
       console.log(chalk.blue('🚀 Publishing mlld module...\n'));
 
+      // Check for conflicting options
+      if (options.useGist && options.useRepo) {
+        throw new MlldError('Cannot use both --use-gist and --use-repo options', {
+          code: 'CONFLICTING_OPTIONS',
+          severity: ErrorSeverity.Fatal
+        });
+      }
+
       // Get authenticated Octokit instance
       const octokit = await this.authService.getOctokit();
       const user = await this.authService.getGitHubUser();
       
       if (!user) {
-        throw new MlldError('Failed to get GitHub user information');
+        throw new MlldError('Failed to get GitHub user information', {
+          code: 'GITHUB_AUTH_ERROR',
+          severity: ErrorSeverity.Fatal
+        });
       }
 
       // Read and validate module
@@ -84,7 +96,11 @@ export class PublishCommand {
         if (!hasOrgPermission) {
           throw new MlldError(
             `You don't have permission to publish on behalf of organization '${options.org}'.\n` +
-            `Please ensure you're a member of the organization.`
+            `Please ensure you're a member of the organization.`,
+            {
+              code: 'ORG_PERMISSION_ERROR',
+              severity: ErrorSeverity.Fatal
+            }
           );
         }
         
@@ -99,7 +115,11 @@ export class PublishCommand {
           throw new MlldError(
             `Frontmatter author '${metadata.author}' doesn't match your GitHub user '${user.login}'.\n` +
             `If '${metadata.author}' is an organization, you need to be a member to publish.\n` +
-            `Otherwise, update the author field or authenticate as '${metadata.author}'.`
+            `Otherwise, update the author field or authenticate as '${metadata.author}'.`,
+            {
+              code: 'AUTHOR_MISMATCH_ERROR',
+              severity: ErrorSeverity.Fatal
+            }
           );
         }
       }
@@ -114,7 +134,11 @@ export class PublishCommand {
         throw new MlldError(
           'Module imports validation failed:\n' +
           importValidation.errors.map(e => `  • ${e}`).join('\n') +
-          '\n\nOnly published modules from the registry can be imported.'
+          '\n\nOnly published modules from the registry can be imported.',
+          {
+            code: 'IMPORT_VALIDATION_ERROR',
+            severity: ErrorSeverity.Fatal
+          }
         );
       }
 
@@ -125,7 +149,11 @@ export class PublishCommand {
       if (gitInfo.isGitRepo && !gitInfo.isClean && !options.force) {
         throw new MlldError(
           `Uncommitted changes in ${filename}\n` +
-          'Please commit your changes before publishing or use --force to override.'
+          'Please commit your changes before publishing or use --force to override.',
+          {
+            code: 'UNCOMMITTED_CHANGES',
+            severity: ErrorSeverity.Fatal
+          }
         );
       }
 
@@ -162,7 +190,7 @@ export class PublishCommand {
           console.log(chalk.green(`\n✅ Repository is public`));
           
           // Interactive confirmation
-          if (!options.dryRun && !options.force) {
+          if (!options.dryRun && !options.force && !options.useRepo) {
             const rl = readline.createInterface({
               input: process.stdin,
               output: process.stdout,
@@ -181,7 +209,10 @@ export class PublishCommand {
             rl.close();
             
             if (choice.toLowerCase() === 'c') {
-              throw new MlldError('Publication cancelled by user');
+              throw new MlldError('Publication cancelled by user', {
+                code: 'USER_CANCELLED',
+                severity: ErrorSeverity.Info
+              });
             } else if (choice.toLowerCase() === 'g') {
               console.log(chalk.yellow('\n📝 Switching to gist creation...'));
               // Fall through to gist creation
@@ -260,7 +291,11 @@ export class PublishCommand {
             `GitHub organizations cannot create gists. Please use one of these alternatives:\n` +
             `  1. Publish from a public git repository\n` +
             `  2. Remove the --org flag or org author to publish under your personal account\n` +
-            `  3. Create the module in a public repository owned by ${publishingAuthor}`
+            `  3. Create the module in a public repository owned by ${publishingAuthor}`,
+            {
+              code: 'ORG_GIST_ERROR',
+              severity: ErrorSeverity.Fatal
+            }
           );
         }
         
@@ -289,7 +324,10 @@ export class PublishCommand {
           rl.close();
           
           if (choice.toLowerCase() === 'c') {
-            throw new MlldError('Publication cancelled by user');
+            throw new MlldError('Publication cancelled by user', {
+              code: 'USER_CANCELLED',
+              severity: ErrorSeverity.Info
+            });
           }
         }
         
@@ -353,7 +391,10 @@ export class PublishCommand {
       if (options.verbose) {
         console.error(error);
       }
-      throw new MlldError(`Publication failed: ${error.message}`);
+      throw new MlldError(`Publication failed: ${error.message}`, {
+        code: 'PUBLISH_FAILED',
+        severity: ErrorSeverity.Fatal
+      });
     }
   }
 
@@ -482,7 +523,10 @@ export class PublishCommand {
       const mldFiles = files.filter(f => f.endsWith('.mld'));
       
       if (mldFiles.length === 0) {
-        throw new MlldError('No .mld files found in the specified directory');
+        throw new MlldError('No .mld files found in the specified directory', {
+          code: 'NO_MLD_FILES',
+          severity: ErrorSeverity.Fatal
+        });
       }
       
       // Prefer main.mld or index.mld
@@ -501,7 +545,10 @@ export class PublishCommand {
       filename = path.basename(filePath);
       
       if (!filename.endsWith('.mld')) {
-        throw new MlldError('Module file must have .mld extension');
+        throw new MlldError('Module file must have .mld extension', {
+          code: 'INVALID_FILE_EXTENSION',
+          severity: ErrorSeverity.Fatal
+        });
       }
     }
     
@@ -654,7 +701,10 @@ export class PublishCommand {
       if (!metadata.name) {
         metadata.name = await rl.question('Module name (lowercase, hyphens allowed): ');
         if (!metadata.name.match(/^[a-z0-9-]+$/)) {
-          throw new MlldError('Invalid module name. Must be lowercase alphanumeric with hyphens.');
+          throw new MlldError('Invalid module name. Must be lowercase alphanumeric with hyphens.', {
+            code: 'INVALID_MODULE_NAME',
+            severity: ErrorSeverity.Fatal
+          });
         }
       }
 
@@ -685,7 +735,10 @@ export class PublishCommand {
       
       const confirm = await rl.question('\nAdd to file? (y/n): ');
       if (confirm.toLowerCase() !== 'y') {
-        throw new MlldError('Frontmatter setup cancelled');
+        throw new MlldError('Frontmatter setup cancelled', {
+          code: 'USER_CANCELLED',
+          severity: ErrorSeverity.Info
+        });
       }
 
       return metadata;
@@ -871,6 +924,7 @@ export function createPublishCommand() {
         force: flags.force || flags.f,
         message: flags.message || flags.m,
         useGist: flags['use-gist'] || flags.gist || flags.g,
+        useRepo: flags['use-repo'] || flags.repo || flags.r,
         org: flags.org || flags.o,
       };
       

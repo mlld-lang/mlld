@@ -66,6 +66,7 @@ export interface CLIOptions {
   progressStyle?: 'emoji' | 'text';
   showCommandContext?: boolean;
   commandTimeout?: number;
+  _?: string[]; // Remaining args after command
 }
 
 /**
@@ -136,6 +137,12 @@ function parseArgs(args: string[]): CLIOptions {
 
   // Commands that can have subcommands (and should stop parsing)
   const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish'];
+  
+  // Store remaining args after command
+  options._ = [];
+  
+  // Flag to stop parsing when we hit a command with subcommands
+  let stopParsing = false;
 
   // Check for debug-resolution command
   if (args.length > 0 && args[0] === 'debug-resolution') {
@@ -205,6 +212,8 @@ function parseArgs(args: string[]): CLIOptions {
   }
 
   for (let i = 0; i < args.length; i++) {
+    if (stopParsing) break;
+    
     const arg = args[i];
     
     switch (arg) {
@@ -326,10 +335,16 @@ function parseArgs(args: string[]): CLIOptions {
           options.input = arg;
           // If this is a command that can have subcommands, stop parsing here
           if (commandsWithSubcommands.includes(arg)) {
+            // Store remaining args
+            options._ = args.slice(i + 1);
+            stopParsing = true;
             break;
           }
         } else if (!arg.startsWith('-') && options.input && commandsWithSubcommands.includes(options.input)) {
           // This is a subcommand for a command that supports them, stop parsing
+          // Store this arg and remaining args
+          options._ = args.slice(i);
+          stopParsing = true;
           break;
         } else {
           throw new Error(`Unknown option: ${arg}`);
@@ -383,6 +398,8 @@ Options:
   -f, --force          Force publish even with uncommitted changes
   -g, --gist           Create a gist even if in a git repository
   --use-gist           Same as --gist
+  -r, --repo           Use repository (skip interactive prompt)
+  --use-repo           Same as --repo
   -o, --org <name>     Publish on behalf of an organization
   -v, --verbose        Show detailed output
 
@@ -1036,42 +1053,48 @@ export async function main(customArgs?: string[]): Promise<void> {
     
     // Handle registry command
     if (cliOptions.input === 'registry') {
-      await registryCommand(args.slice(1));
+      const cmdArgs = cliOptions._ || [];
+      await registryCommand(cmdArgs);
       return;
     }
     
     // Handle install command
     if (cliOptions.input === 'install' || cliOptions.input === 'i') {
       const installCmd = createInstallCommand();
-      await installCmd.execute(args.slice(1), parseFlags(args));
+      const cmdArgs = cliOptions._ || [];
+      await installCmd.execute(cmdArgs, parseFlags(cmdArgs));
       return;
     }
     
     // Handle ls command
     if (cliOptions.input === 'ls' || cliOptions.input === 'list') {
       const lsCmd = createLsCommand();
-      await lsCmd.execute(args.slice(1), parseFlags(args));
+      const cmdArgs = cliOptions._ || [];
+      await lsCmd.execute(cmdArgs, parseFlags(cmdArgs));
       return;
     }
     
     // Handle info command
     if (cliOptions.input === 'info' || cliOptions.input === 'show') {
       const infoCmd = createInfoCommand();
-      await infoCmd.execute(args.slice(1), parseFlags(args));
+      const cmdArgs = cliOptions._ || [];
+      await infoCmd.execute(cmdArgs, parseFlags(cmdArgs));
       return;
     }
     
     // Handle auth command
     if (cliOptions.input === 'auth') {
       const authCmd = createAuthCommand();
-      await authCmd.execute(args.slice(1), parseFlags(args));
+      const cmdArgs = cliOptions._ || [];
+      await authCmd.execute(cmdArgs, parseFlags(cmdArgs));
       return;
     }
     
     // Handle publish command
     if (cliOptions.input === 'publish') {
       const publishCmd = createPublishCommand();
-      await publishCmd.execute(args.slice(1), parseFlags(args));
+      const cmdArgs = cliOptions._ || [];
+      await publishCmd.execute(cmdArgs, parseFlags(cmdArgs));
       return;
     }
     

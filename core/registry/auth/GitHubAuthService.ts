@@ -7,7 +7,7 @@ import * as keytar from 'keytar';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { MlldError } from '@core/errors';
+import { MlldError, ErrorSeverity } from '@core/errors';
 
 export interface AuthConfig {
   clientId?: string;
@@ -51,7 +51,7 @@ export class GitHubAuthService {
 
   constructor(config: AuthConfig = {}) {
     this.config = {
-      clientId: process.env.MLLD_GITHUB_CLIENT_ID || 'Ov23liUVMKrJ7J2oFa2Z',
+      clientId: process.env.MLLD_GITHUB_CLIENT_ID || 'Ov23liFeqioeJmD9xZOP',
       serviceName: 'mlld-cli',
       accountName: 'github-token',
       fallbackStorage: true,
@@ -80,7 +80,10 @@ export class GitHubAuthService {
   async getOctokit(): Promise<any> {
     const token = await this.getStoredToken();
     if (!token) {
-      throw new MlldError('Not authenticated. Please run: mlld auth login');
+      throw new MlldError('Not authenticated. Please run: mlld auth login', {
+        code: 'AUTH_NOT_AUTHENTICATED',
+        severity: ErrorSeverity.Fatal
+      });
     }
     const { Octokit } = await this.getOctokitModule();
     return new Octokit({ auth: token });
@@ -156,9 +159,10 @@ export class GitHubAuthService {
         return result;
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        error: `Authentication failed: ${error.message}`
+        error: `Authentication failed: ${errorMessage}`
       };
     }
   }
@@ -186,7 +190,11 @@ export class GitHubAuthService {
 
       console.log('✅ Successfully logged out');
     } catch (error) {
-      throw new MlldError(`Logout failed: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new MlldError(`Logout failed: ${errorMessage}`, {
+        code: 'AUTH_LOGOUT_FAILED',
+        severity: ErrorSeverity.Fatal
+      });
     }
   }
 
@@ -249,7 +257,11 @@ export class GitHubAuthService {
           { mode: 0o600 } // Readable only by owner
         );
       } catch (error) {
-        throw new MlldError(`Failed to store authentication token: ${error.message}`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        throw new MlldError(`Failed to store authentication token: ${errorMessage}`, {
+          code: 'AUTH_TOKEN_STORAGE_FAILED',
+          severity: ErrorSeverity.Fatal
+        });
       }
     }
   }
@@ -259,24 +271,38 @@ export class GitHubAuthService {
    * Initiate GitHub OAuth Device Flow
    */
   private async initiateDeviceFlow(): Promise<DeviceFlowResult> {
-    const response = await fetch('https://github.com/login/device/code', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        client_id: this.clientId,
-        scope: 'gist public_repo',
-      }),
-    });
+    try {
+      const response = await fetch('https://github.com/login/device/code', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_id: this.clientId,
+          scope: 'gist public_repo',
+        }),
+      });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new MlldError(`Failed to initiate device flow: ${error}`);
+      if (!response.ok) {
+        const error = await response.text();
+        throw new MlldError(`Failed to initiate device flow: ${error}`, {
+          code: 'AUTH_DEVICE_FLOW_FAILED',
+          severity: ErrorSeverity.Fatal
+        });
+      }
+
+      return await response.json();
+    } catch (error) {
+      if (error instanceof MlldError) {
+        throw error;
+      }
+      throw new MlldError(`Failed to initiate device flow: ${error instanceof Error ? error.message : String(error)}`, {
+        code: 'AUTH_DEVICE_FLOW_ERROR',
+        severity: ErrorSeverity.Fatal,
+        cause: error
+      });
     }
-
-    return await response.json();
   }
 
   /**
@@ -346,9 +372,10 @@ export class GitHubAuthService {
       } catch (error) {
         // Network error - continue polling unless we're close to expiration
         if (Date.now() + interval >= expirationTime) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
           return {
             success: false,
-            error: `Network error during authentication: ${error.message}`,
+            error: `Network error during authentication: ${errorMessage}`,
           };
         }
         // Otherwise continue polling
