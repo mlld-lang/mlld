@@ -110,7 +110,7 @@ const identifier = await interpolate(identifierNodes, env);
 - Field access: `{{user.name}}` or `{{items.0.value}}`
 
 ### Exec Commands
-- `@exec name(params) = @run [command]` - Defines a reusable command
+- `@exec name(params) = @run [(command)]` - Defines a reusable command
 - `@run @name(args)` - Executes the defined command
 - Parameters are referenced with `@param` inside the command definition
 
