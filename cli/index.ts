@@ -134,6 +134,9 @@ function parseArgs(args: string[]): CLIOptions {
     strict: false  // Default to permissive mode
   };
 
+  // Commands that can have subcommands (and should stop parsing)
+  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish'];
+
   // Check for debug-resolution command
   if (args.length > 0 && args[0] === 'debug-resolution') {
     options.debugResolution = true;
@@ -321,6 +324,13 @@ function parseArgs(args: string[]): CLIOptions {
       default:
         if (!arg.startsWith('-') && !options.input) {
           options.input = arg;
+          // If this is a command that can have subcommands, stop parsing here
+          if (commandsWithSubcommands.includes(arg)) {
+            break;
+          }
+        } else if (!arg.startsWith('-') && options.input && commandsWithSubcommands.includes(options.input)) {
+          // This is a subcommand for a command that supports them, stop parsing
+          break;
         } else {
           throw new Error(`Unknown option: ${arg}`);
         }

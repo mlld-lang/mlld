@@ -9,6 +9,8 @@ mlld is a simple scripting language designed to work within markdown and markdow
 - [Directives](./directives/README.md) - Detailed documentation for each directive
 - [Variables](./variables.md) - Working with different variable types
 - [Error Handling](./error-handling.md) - Understanding how errors work in mlld
+- [Modules](./modules.md) - Using and creating mlld modules
+- [Publishing Modules](./publishing-modules.md) - Guide to publishing modules to the registry
 
 ## Getting Started
 
@@ -17,6 +19,8 @@ If you're new to mlld, start with the [Introduction](./introduction.md) to learn
 For CLI usage information, check the [CLI Usage](./cli-usage.md) guide.
 
 If you're integrating mlld into your application, see the [SDK Usage](./sdk-usage.md) documentation.
+
+For sharing your mlld code with others, see the [Publishing Modules](./publishing-modules.md) guide.
 
 ## Implementation Notes
 

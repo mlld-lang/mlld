@@ -158,12 +158,25 @@ def hello():
 
 mlld has a decentralized module system that enables sharing and reusing code across projects.
 
-### Public Modules
+### Using Modules
 
-Share modules publicly via the mlld registry:
+Install and use modules from the registry:
+
+```bash
+# Install specific modules
+mlld install @alice/strings @company/templates
+
+# Install from lock file
+mlld install
+
+# List installed modules
+mlld ls --verbose
+```
+
+Import in your mlld files:
 
 ```mlld
->> Import from public registry (DNS-based, no servers)
+>> Import from public registry
 @import { format, parse } from @alice/strings
 @import { * } from @company/templates
 
@@ -171,7 +184,36 @@ Share modules publicly via the mlld registry:
 >> Lock files ensure reproducible builds
 ```
 
-Public modules are published as GitHub gists and discovered via DNS TXT records. No central servers required.
+### Publishing Modules
+
+Share your mlld code with others:
+
+```bash
+# Authenticate with GitHub (required for publishing)
+mlld auth login
+
+# Publish a module
+mlld publish my-utils.mld
+
+# Publish as organization
+mlld publish my-utils.mld --org my-company
+```
+
+Every module needs frontmatter metadata:
+
+```mlld
+---
+name: my-utils
+description: Helpful utility functions
+author: myusername
+keywords: [utils, text, helpers]
+---
+
+@text trim(str) = @run [echo "{{str}}" | xargs]
+@text uppercase(str) = @run [echo "{{str}}" | tr '[:lower:]' '[:upper:]']
+```
+
+See the [Publishing Modules Guide](docs/publishing-modules.md) for detailed instructions.
 
 ### Private Modules & Custom Resolvers
 
