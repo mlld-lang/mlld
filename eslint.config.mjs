@@ -182,9 +182,9 @@ export default tseslint.config(
         'bin/**',  // Binary wrapper files
         'lib/**',  // External library
         'website/**',  // Website files
-        'grammar/parser/parser.js',  // Generated parser
-        'grammar/parser/parser.ts',  // Generated parser
-        'grammar/parser/deps/**',  // Generated deps
+        'grammar/generated/**',  // Generated parser and deps
+        'grammar/parser/parser.js',  // Legacy location (for safety)
+        'grammar/parser/parser.ts',  // Legacy location (for safety)
         '**/*.d.ts',  // Type declaration files
         '_dev/**',  // Development files
         'logs/**'  // Log files

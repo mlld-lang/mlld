@@ -29,6 +29,9 @@ core/types/*.js.map
 # Grammar generated files
 grammar/parser/parser.js
 grammar/parser/parser.ts
+grammar/parser/parser.cjs
+grammar/parser/grammar-core.*
+grammar/parser/*.js.map
 grammar/generated/*
 !grammar/generated/.gitkeep
 

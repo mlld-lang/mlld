@@ -1,5 +1,6 @@
 const path = require('path');
-const { parse } = require('../../../grammar/parser/parser.js');
+const parser = require('../../../grammar/generated/parser/parser.cjs');
+const parse = parser.parse;
 
 /**
  * Parse a Mlld document using the actual Mlld parser

@@ -20,25 +20,47 @@ The grammar build system (`grammar/build-grammar.mjs`) works as follows:
    - `core/*.peggy` (directive cores)
    - `directives/*.peggy` (directive implementations)
 
-2. **Parser Generation**: Peggy generates parser files with these dependencies:
+2. **Parser Generation**: Peggy generates parser files to `grammar/generated/parser/`:
+   - `parser.js` - JavaScript ESM version
+   - `parser.ts` - TypeScript version with types
+   - `parser.cjs` - CommonJS version
+   - `grammar-core.*` - Core helper files
+   - `deps/` - Generated dependency files
+   
+   These files reference dependencies:
    - `NodeType` imported from `./deps/node-type.js`
    - `DirectiveKind` imported from `./deps/directive-kind.js`
    - `helpers` imported from `./deps/helpers.js`
 
 3. **Helper System**: 
-   - `helpers.js` imports from `grammar-core.js`
+   - Source files in `grammar/deps/` are the originals
+   - Build process generates multiple versions in `grammar/generated/parser/`
    - These are available globally in all grammar rules
-   - **NEVER modify the generated files in `parser/`**
-   - **ONLY modify source files in `deps/`**
+   - **NEVER modify any generated files in `grammar/generated/`**
+   - **ONLY modify source files in `grammar/deps/`**
+
+4. **Directory Structure**:
+   ```
+   grammar/
+   ├── parser/           # Source files only
+   │   └── index.ts     # Parser interface (the ONLY file here)
+   ├── deps/            # Source dependency files
+   ├── generated/       # All generated files (gitignored)
+   │   └── parser/
+   │       ├── parser.js/ts/cjs
+   │       ├── grammar-core.*
+   │       └── deps/
+   └── *.peggy          # Grammar source files
+   ```
 
 ### Critical Rules for Modifications
 
 1. **Never use `peg$imports`**: The helpers, NodeType, and DirectiveKind are available globally, not through `peg$imports`.
 
-2. **Modify TypeScript sources only**: When adding helper functions:
-   - Edit `grammar/deps/grammar-core.ts` (this is the TypeScript source)
-   - The build process compiles it to `grammar-core.js`
-   - Never edit `.js` files or files in `parser/` directly
+2. **Modify source files only**: When adding helper functions:
+   - Edit `grammar/deps/grammar-core.js` (this is the source file)
+   - The build process generates multiple versions in `grammar/generated/parser/`
+   - Never edit any files in `grammar/generated/` or `grammar/parser/` (except `index.ts`)
 
 3. **No initialization blocks in pattern files**: Only `mlld.peggy` can have the `{...}` initialization block at the top.
 
@@ -56,11 +78,11 @@ The grammar build system (`grammar/build-grammar.mjs`) works as follows:
 
 ### Example: Adding a Helper Function
 
-```typescript
-// ✅ CORRECT: Edit grammar/deps/grammar-core.ts
+```javascript
+// ✅ CORRECT: Edit grammar/deps/grammar-core.js (source file)
 export const helpers = {
   // ... existing helpers ...
-  myNewHelper(param: any) {
+  myNewHelper(param) {
     return /* implementation */;
   }
 };
@@ -341,6 +363,90 @@ AtRun
 └─ Other patterns
    └─ Parse error (invalid syntax)
 ```
+
+### Command Parsing Logic Tree
+
+**CRITICAL**: This tree documents the ACTUAL implementation in `patterns/unified-run-content.peggy` as of the current codebase.
+
+```
+@run [(echo '<div>Hello</div>')]
+│
+├─ AtRun (directives/run.peggy)
+│  ├─ "@run" ✓
+│  ├─ _ (whitespace) ✓
+│  └─ UnifiedCommandBrackets
+│     ├─ "[(" ✓
+│     ├─ _ ✓
+│     ├─ UnifiedCommandParts
+│     │  └─ UnifiedCommandToken* (zero or more tokens)
+│     │     │
+│     │     ├─ Token Order (first match wins):
+│     │     │  1. UnifiedCommandVariable      (@varname)
+│     │     │  2. UnifiedCommandQuotedString  ("..." or '...')
+│     │     │  3. UnifiedCommandWord          (unquoted text)
+│     │     │  4. UnifiedCommandSpace         (whitespace)
+│     │     │
+│     │     ├─ Parsing "echo '<div>Hello</div>'":
+│     │     │  │
+│     │     │  ├─ Token 1: "echo"
+│     │     │  │  ├─ Try UnifiedCommandVariable → @ not found ✗
+│     │     │  │  ├─ Try UnifiedCommandQuotedString → No quote at start ✗
+│     │     │  │  └─ Try UnifiedCommandWord → Matches "echo" ✓
+│     │     │  │     └─ UnifiedCommandWordChar checks:
+│     │     │  │        ├─ Not a quote → continue
+│     │     │  │        ├─ Not a space → continue
+│     │     │  │        ├─ Not @ → continue
+│     │     │  │        ├─ Not )] → continue
+│     │     │  │        ├─ Security checks pass → ✓
+│     │     │  │        └─ Returns: Text node "echo"
+│     │     │  │
+│     │     │  ├─ Token 2: " "
+│     │     │  │  ├─ Try UnifiedCommandVariable → @ not found ✗
+│     │     │  │  ├─ Try UnifiedCommandQuotedString → No quote ✗
+│     │     │  │  ├─ Try UnifiedCommandWord → Space stops word ✗
+│     │     │  │  └─ Try UnifiedCommandSpace → Matches " " ✓
+│     │     │  │     └─ Returns: Text node " "
+│     │     │  │
+│     │     │  └─ Token 3: "'<div>Hello</div>'"
+│     │     │     ├─ Try UnifiedCommandVariable → @ not found ✗
+│     │     │     └─ Try UnifiedCommandQuotedString → Matches ✓
+│     │     │        └─ Single quote detected
+│     │     │           └─ UnifiedCommandSingleQuotedContent*
+│     │     │              ├─ No variable interpolation
+│     │     │              ├─ No security checks inside quotes
+│     │     │              └─ Returns: Text node "'<div>Hello</div>'"
+│     │     │
+│     │     └─ Result: Array of 3 Text nodes
+│     │
+│     ├─ _ ✓
+│     └─ ")]" ✓
+│
+└─ Success: Command parsed with quoted content preserved
+```
+
+#### Key Implementation Details
+
+1. **Token-Based Parsing**: Commands are parsed as discrete tokens, not character-by-character
+2. **First-Match Semantics**: Peggy commits to the first successful token match
+3. **Quote Handling**: Quoted strings are recognized as complete tokens BEFORE security checks
+4. **Security Checks**: Only applied to UnifiedCommandWord (unquoted content)
+5. **Variable Interpolation**: 
+   - Double quotes: Variables are expanded (`"Hello @name"` → `"Hello "` + VariableReference + `""`)
+   - Single quotes: No interpolation (`'Hello @name'` → `'Hello @name'`)
+
+#### Why This Works
+
+The token-based approach ensures that:
+- Quotes are recognized at token boundaries, not mid-parse
+- Security checks only apply to unquoted content
+- Shell operators inside quotes are preserved as literal text
+- Variable interpolation respects quote semantics
+
+#### Common Misconceptions
+
+1. **Character-by-character parsing**: The old approach that caused issues
+2. **Security checks everywhere**: Only in unquoted content (UnifiedCommandWordChar)
+3. **Quote consumption**: Quotes are preserved in the output, not consumed
 
 ### @text Directive
 
@@ -748,8 +854,11 @@ grammar/
 ├── patterns/       # Levels 2-5: Reusable patterns
 ├── core/          # Level 6: Directive cores
 ├── directives/    # Level 7: Directive implementations
-├── deps/          # Build dependencies and helpers
-├── parser/        # Generated parser files (DO NOT EDIT)
+├── deps/          # Source dependency files
+├── parser/        # Source interface only
+│   └── index.ts   # Parser wrapper (imports from generated/)
+├── generated/     # All generated files (gitignored)
+│   └── parser/    # Generated parser and deps
 └── README.md      # This comprehensive guide
 ```
 

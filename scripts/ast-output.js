@@ -7,7 +7,8 @@
  */
 
 import fs from 'node:fs/promises';
-import { parse } from '../grammar/parser/parser.js';  // adjust path if needed
+import parser from '../grammar/generated/parser/parser.js';  // Import directly from generated parser
+const parse = parser.parse;
 
 // ---------- CLI parsing ----------
 const argv = process.argv.slice(2);

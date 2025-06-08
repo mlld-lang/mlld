@@ -17,7 +17,8 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { parse } from '../grammar/parser/parser.js';
+import parser from '../grammar/generated/parser/parser.js';
+const parse = parser.parse;
 import { glob } from 'glob';
 import { fileURLToPath } from 'url';
 // Note: Output generation requires compiled interpreter - will be handled post-build

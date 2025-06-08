@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 // ---------- paths ----------
 const ROOT_GRAMMAR = path.join(__dirname, 'mlld.peggy');
-const DIST_DIR = path.join(__dirname, './parser');
+const DIST_DIR = path.join(__dirname, './generated/parser');
 const DIST_PARSER_TS = path.join(DIST_DIR, 'parser.ts');
 const DIST_PARSER_JS = path.join(DIST_DIR, 'parser.js');
 
