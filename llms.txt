@@ -398,6 +398,11 @@ This document processes user data and generates insights.
 @data report = @generateReport(@validUsers, @config)
 @add @report
 
+### 4. You can use @output to target specific locations and to handle conditional output:
+@output @mydefinedcommand(var,othervar) [path/to/file.md]
+@when @variable [ @contains("hi") ] => @output @add "Hello" [path/to/file.md]
+Read more about output in docs/output.md
+
 ## Summary
 
 @add [[Processed {{validUsers.length}} valid users out of {{users.length}} total.]]

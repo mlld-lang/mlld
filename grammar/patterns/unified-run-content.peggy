@@ -211,11 +211,27 @@ ShellCommandLineContent
 // COMMAND CONTENT - With variable interpolation
 // -------------------------------------------------------------
 
-// Command parts for unified syntax - allows @var interpolation
+// Command parts for unified syntax - tokenizes properly
 UnifiedCommandParts
-  = parts:(UnifiedCommandVariable / UnifiedCommandText)* {
-      return parts;
+  = tokens:UnifiedCommandToken* {
+      // Flatten any arrays that might come from quoted strings with variables
+      const flattened = [];
+      for (const token of tokens) {
+        if (Array.isArray(token)) {
+          flattened.push(...token);
+        } else {
+          flattened.push(token);
+        }
+      }
+      return flattened;
     }
+
+// Command tokens - complete units (quoted strings, variables, words)
+UnifiedCommandToken
+  = UnifiedCommandVariable       // Variables first
+  / UnifiedCommandQuotedString   // Complete quoted strings
+  / UnifiedCommandWord           // Unquoted words with spaces
+  / UnifiedCommandSpace          // Explicit spaces between tokens
 
 // Variable in unified command context
 UnifiedCommandVariable
@@ -228,65 +244,142 @@ UnifiedCommandVariable
     }
   / SpecialVariable
 
-// Text segments in unified commands - handle nested brackets
-UnifiedCommandText
-  = chars:UnifiedCommandChar+ {
+// (Removed UnifiedCommandText - now using token-based approach)
+
+// Quoted strings in unified commands - preserve special characters inside quotes
+UnifiedCommandQuotedString
+  = '"' content:UnifiedCommandDoubleQuotedContent* '"' {
+      // For double quotes, we need to handle variable interpolation
+      // Return an array of nodes that can include both text and variable references
+      const nodes = [];
+      let currentText = '"';
+      
+      for (const item of content) {
+        if (typeof item === 'string') {
+          currentText += item;
+        } else if (item.type === NodeType.VariableReference) {
+          // Flush current text if any
+          if (currentText) {
+            nodes.push(helpers.createNode(NodeType.Text, { content: currentText, location: location() }));
+            currentText = '';
+          }
+          // Add the variable reference
+          nodes.push(item);
+        }
+      }
+      
+      // Add closing quote and flush remaining text
+      currentText += '"';
+      if (currentText !== '""') {
+        nodes.push(helpers.createNode(NodeType.Text, { content: currentText, location: location() }));
+      }
+      
+      // If only one text node, return it directly
+      if (nodes.length === 1 && nodes[0].type === NodeType.Text) {
+        return nodes[0];
+      }
+      
+      // Otherwise return array of nodes
+      return nodes;
+    }
+  / "'" content:UnifiedCommandSingleQuotedContent* "'" {
+      // Preserve quotes in the output - no variable interpolation in single quotes
+      const text = "'" + content.join('') + "'";
+      return helpers.createNode(NodeType.Text, { content: text, location: location() });
+    }
+
+// Content inside double quotes - allows variables but no operator checks
+UnifiedCommandDoubleQuotedContent
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      // Variable interpolation inside double quotes - return proper VariableReference node
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / chars:$((!'"' !'@' .)+) { return chars; }
+  / "@" { return '@'; }  // Lone @ without identifier
+
+// Content inside single quotes - no variables, no operator checks
+UnifiedCommandSingleQuotedContent
+  = chars:$(!"'" .)+ { return chars; }
+
+// Unquoted word - apply security checks
+UnifiedCommandWord
+  = chars:UnifiedCommandWordChar+ {
       const content = chars.join('');
       return helpers.createNode(NodeType.Text, { content, location: location() });
     }
 
-// Characters in unified commands - handle nested brackets  
-UnifiedCommandChar
-  = '[' inner:UnifiedCommandInnerContent ']' {
-      // Preserve brackets in commands
-      return '[' + inner + ']';
-    }
-  / &{ 
-      // Security checks for banned operators
+// Characters in unquoted words - with security checks
+UnifiedCommandWordChar
+  = &{ 
+      // Security checks for banned operators (only for unquoted content)
       const pos = peg$currPos;
       const ahead = input.substring(pos, pos + 3);
-      if (ahead.startsWith('&&')) {
-        error(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
-      }
-      if (ahead.startsWith('||')) {
-        error(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
-      }
-      if (ahead.startsWith('>>')) {
-        error(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
-      }
-      if (ahead.startsWith(';&')) {
-        error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
-      }
-      // Check for single character operators
       const char = input[pos];
-      if (char === ';') {
-        error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+      const prev = pos > 0 ? input[pos - 1] : null;
+      
+      // Don't consume quotes - they start new tokens
+      if (char === '"' || char === "'") {
+        return false;
       }
-      if (char === '>' && input[pos + 1] !== '>') {
-        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+      
+      // Don't consume spaces - they are separate tokens
+      if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
+        return false;
       }
-      if (char === '<') {
-        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+      
+      // Don't consume @ - it starts variables
+      if (char === '@') {
+        return false;
       }
-      if (char === '&' && input[pos + 1] !== '&' && input[pos + 1] !== '>') {
-        error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+      
+      // Don't consume )] - it ends the command
+      if (char === ')' && input[pos + 1] === ']') {
+        return false;
       }
+      
+      // Check if this character is escaped
+      const isEscaped = prev === '\\';
+      
+      // Check for banned operators (skip if escaped)
+      if (!isEscaped) {
+        if (ahead.startsWith('&&')) {
+          error(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+        }
+        if (ahead.startsWith('||')) {
+          error(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+        }
+        if (ahead.startsWith('>>')) {
+          error(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
+        }
+        if (char === ';') {
+          error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+        }
+        if (char === '>' && input[pos + 1] !== '>') {
+          error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+        }
+        if (char === '<') {
+          error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+        }
+        if (char === '&' && input[pos + 1] !== '&' && input[pos + 1] !== '>') {
+          error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+        }
+      }
+      // Note: Single pipe | is allowed for command piping
+      
       return true;
-    } !'@' !')]' char:. { return char; }
+    } char:. { return char; }
 
-// Inner content of nested brackets
-UnifiedCommandInnerContent
-  = chars:UnifiedCommandInnerChar* {
-      return chars.join('');
+// Explicit space token
+UnifiedCommandSpace
+  = spaces:[ \t\n\r]+ {
+      return helpers.createNode(NodeType.Text, { content: spaces.join(''), location: location() });
     }
 
-// Characters inside nested brackets
-UnifiedCommandInnerChar
-  = '[' inner:UnifiedCommandInnerContent ']' {
-      // Handle deeply nested brackets
-      return '[' + inner + ']';
-    }
-  / !']' char:. { return char; }
+// (Removed old character-based parsing rules - now using token-based approach)
 
 // -------------------------------------------------------------
 // CODE CONTENT - Without variable interpolation

@@ -19,7 +19,11 @@ describe('Run directive', () => {
       
       // Check structured format
       expect(directiveNode.values.command).toBeDefined();
-      expect(directiveNode.values.command[0].content).toBe('ls -la');
+      // Command is now tokenized into parts
+      expect(directiveNode.values.command).toHaveLength(3); // 'ls', ' ', '-la'
+      expect(directiveNode.values.command[0].content).toBe('ls');
+      expect(directiveNode.values.command[1].content).toBe(' ');
+      expect(directiveNode.values.command[2].content).toBe('-la');
       expect(directiveNode.raw.command).toBe('ls -la');
       expect(directiveNode.meta.isMultiLine).toBe(false);
       
@@ -61,9 +65,14 @@ describe('Run directive', () => {
       
       // Check structured format
       expect(directiveNode.values.command).toBeDefined();
-      expect(directiveNode.values.command).toHaveLength(2);
-      expect(directiveNode.values.command[0].content).toBe('ls -la ');
-      expect(directiveNode.values.command[1].identifier).toBe('directory');
+      // Command is now tokenized: 'ls', ' ', '-la', ' ', '@directory'
+      expect(directiveNode.values.command.length).toBeGreaterThanOrEqual(4);
+      expect(directiveNode.values.command[0].content).toBe('ls');
+      expect(directiveNode.values.command[2].content).toBe('-la');
+      // Find the variable reference
+      const varRef = directiveNode.values.command.find(n => n.type === 'VariableReference');
+      expect(varRef).toBeDefined();
+      expect(varRef.identifier).toBe('directory');
       expect(directiveNode.raw.command).toBe('ls -la @directory');
       
       // Type guard

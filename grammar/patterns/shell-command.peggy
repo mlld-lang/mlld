@@ -162,8 +162,14 @@ ShellCommandName
 
 // Command argument
 ShellCommandArgument
+  = QuotedString        // Parse quoted strings first (no operator checks inside quotes)
+  / ShellVariable       // Then variables
+  / UnquotedWordWithCheck  // Finally unquoted words (with operator checks)
+
+// Unquoted word with operator check
+UnquotedWordWithCheck
   = &{ 
-      // Check ahead for banned operators
+      // Check ahead for banned operators only in unquoted context
       const ahead = input.substring(peg$currPos, peg$currPos + 3);
       if (ahead.startsWith('&&') || ahead.startsWith('||')) {
         error(`Shell operators are not allowed in mlld. Use separate @run commands or @when for control flow.`);
@@ -183,13 +189,7 @@ ShellCommandArgument
         error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
       }
       return true;
-    } arg:(QuotedString / ShellVariable / UnquotedWordWithCheck) {
-      return arg;
-    }
-
-// Unquoted word with operator check
-UnquotedWordWithCheck
-  = word:UnquotedWord {
+    } word:UnquotedWord {
       return helpers.createNode(NodeType.Text, { 
         content: word, 
         location: location() 

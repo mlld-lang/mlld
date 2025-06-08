@@ -853,12 +853,23 @@ export class Environment {
    * This ensures no dangerous operators are present
    */
   private validateAndParseCommand(command: string): string {
-    // Check for dangerous operators that should have been caught by grammar
-    // These are additional safety checks
+    // Create a version of the command with quoted sections removed for operator checking
+    let checkCommand = command;
+    
+    // Remove single-quoted strings (no interpolation, so safe to remove entirely)
+    checkCommand = checkCommand.replace(/'[^']*'/g, '');
+    
+    // Remove double-quoted strings (they may have interpolation but operators inside are literal)
+    checkCommand = checkCommand.replace(/"[^"]*"/g, '');
+    
+    // Also handle escaped characters - they're literal
+    checkCommand = checkCommand.replace(/\\./g, '');
+    
+    // Check for dangerous operators only in the unquoted parts
     const dangerousPatterns = [
       /&&/, // AND operator
-      /\|\|/, // OR operator  
-      /;\s*(?:[^'"]*(?:'[^']*'|"[^"]*")[^'"]*)*[^'"]*$/, // Semicolon (not in quotes)
+      /\|\|/, // OR operator (but single | is allowed for piping) 
+      /;/, // Semicolon
       />\s*[^>]/, // Single redirect
       />>/,  // Append redirect
       /<(?![=<])/, // Input redirect (not <= or <<)
@@ -866,7 +877,7 @@ export class Environment {
     ];
     
     for (const pattern of dangerousPatterns) {
-      if (pattern.test(command)) {
+      if (pattern.test(checkCommand)) {
         throw new Error(`Command contains banned shell operator`);
       }
     }

@@ -17,7 +17,10 @@ describe('Exec directive', () => {
       
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('listFiles');
-      expect(directiveNode.values.command[0].content).toBe('ls -la');
+      // Command is now tokenized
+      expect(directiveNode.values.command).toHaveLength(3); // 'ls', ' ', '-la'
+      expect(directiveNode.values.command[0].content).toBe('ls');
+      expect(directiveNode.values.command[2].content).toBe('-la');
       expect(directiveNode.values.params).toEqual([]);
       expect(directiveNode.raw.identifier).toBe('listFiles');
       expect(directiveNode.raw.command).toBe('ls -la');
