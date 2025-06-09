@@ -148,11 +148,17 @@ async function importFromPath(
     
     const ast = parseResult.ast;
     
-    // Check mlld version compatibility if frontmatter exists
-    if (parseResult.frontmatter) {
-      const requiredVersion = parseResult.frontmatter['mlld-version'] || 
-                             parseResult.frontmatter['mlldVersion'] ||
-                             parseResult.frontmatter['mlld_version'];
+    // Check for frontmatter in the AST and check version compatibility
+    let frontmatterData: Record<string, any> | null = null;
+    if (ast.length > 0 && ast[0].type === 'Frontmatter') {
+      const { parseFrontmatter } = await import('../utils/frontmatter-parser');
+      const frontmatterNode = ast[0] as any;
+      frontmatterData = parseFrontmatter(frontmatterNode.content);
+      
+      // Check mlld version compatibility
+      const requiredVersion = frontmatterData['mlld-version'] || 
+                             frontmatterData['mlldVersion'] ||
+                             frontmatterData['mlld_version'];
       
       if (requiredVersion) {
         if (process.env.MLLD_DEBUG_VERSION) {
@@ -160,8 +166,8 @@ async function importFromPath(
         }
         const versionCheck = checkMlldVersion(requiredVersion);
         if (!versionCheck.compatible) {
-          const moduleName = parseResult.frontmatter.module || 
-                           parseResult.frontmatter.name || 
+          const moduleName = frontmatterData.module || 
+                           frontmatterData.name || 
                            path.basename(resolvedPath);
           
           throw new MlldError(
@@ -200,7 +206,7 @@ async function importFromPath(
     const childVars = childEnv.getCurrentVariables();
     
     // Process module exports (explicit or auto-generated)
-    const { moduleObject, frontmatter } = processModuleExports(childVars, parseResult);
+    const { moduleObject, frontmatter } = processModuleExports(childVars, { frontmatter: frontmatterData });
     
     // Add __meta__ property with frontmatter if available
     if (frontmatter) {
