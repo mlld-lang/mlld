@@ -8,6 +8,7 @@ import { ImmutableCache } from './cache';
 import { PathValidator } from './path';
 import { PolicyManager, PolicyManagerImpl } from './policy';
 import { AuditLogger, AuditEventType } from './audit/AuditLogger';
+import { ILockFileWithCommands } from '@core/registry/ILockFile';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -32,6 +33,8 @@ export class SecurityManager {
   private policyManager: PolicyManager;
   private auditLogger: AuditLogger;
   private hooks: Map<string, SecurityHook[]> = new Map();
+  private lockFile?: ILockFileWithCommands;
+  private globalLockFile?: ILockFileWithCommands;
   
   private constructor(private projectPath: string) {
     // Initialize all security subsystems
@@ -49,28 +52,74 @@ export class SecurityManager {
   }
   
   /**
+   * Set lock files for command approval persistence
+   */
+  setLockFiles(projectLock?: ILockFileWithCommands, globalLock?: ILockFileWithCommands): void {
+    this.lockFile = projectLock;
+    this.globalLockFile = globalLock;
+  }
+
+  /**
    * Pre-execution security check for commands
    */
   async checkCommand(command: string, context?: SecurityContext): Promise<SecurityDecision> {
-    // 1. Check taint level
+    // 1. Check for existing command approval in lock files
+    const existingApproval = await this.findCommandApproval(command);
+    if (existingApproval) {
+      const decision = this.evaluateCommandApproval(existingApproval, command);
+      if (decision) {
+        // Audit the approved command
+        await this.auditLogger.log({
+          type: AuditEventType.COMMAND_EXECUTION,
+          details: {
+            command,
+            approval: existingApproval,
+            context
+          }
+        });
+        return decision;
+      }
+    }
+    
+    // 2. Check taint level
     const taint = this.taintTracker.getTaint(command);
     
-    // 2. Analyze command for dangerous patterns
+    // 3. Analyze command for dangerous patterns
     const analysis = await this.commandAnalyzer.analyze(command, taint);
     
-    // 3. Get effective policy (merged global + project + inline)
+    // 4. Get effective policy (merged global + project + inline)
     const policy = await this.policyManager.getEffectivePolicy(context?.metadata);
     
-    // 4. Evaluate command against policy
+    // 5. Evaluate command against policy
     const decision = this.policyManager.evaluateCommand(command, analysis, policy);
     
-    // 5. Apply taint-based restrictions
+    // 6. Apply taint-based restrictions
     if (taint && taint !== TaintLevel.TRUSTED && decision.allowed) {
       // Tainted commands always require approval unless explicitly trusted
       decision.requiresApproval = true;
     }
     
-    // 6. Audit the check
+    // 7. Handle approval requirement
+    if (decision.requiresApproval && !decision.blocked) {
+      const userDecision = await this.promptCommandApproval(command, analysis, context);
+      if (userDecision.approved) {
+        // Save approval to lock file
+        await this.saveCommandApproval(command, userDecision);
+        return {
+          allowed: true,
+          requiresApproval: false,
+          reason: 'Approved by user'
+        };
+      } else {
+        return {
+          allowed: false,
+          blocked: true,
+          reason: 'Denied by user'
+        };
+      }
+    }
+    
+    // 8. Audit the check
     await this.auditLogger.log({
       type: decision.allowed ? AuditEventType.COMMAND_EXECUTION : AuditEventType.COMMAND_BLOCKED,
       details: {
@@ -82,7 +131,7 @@ export class SecurityManager {
       }
     });
     
-    // 7. Run pre-execution hooks
+    // 9. Run pre-execution hooks
     await this.runHooks('pre-command', { command, decision, context });
     
     return decision;
@@ -286,6 +335,169 @@ export class SecurityManager {
     
     // 6. Auto-approve if policy allows
     return true;
+  }
+  
+  /**
+   * Find command approval in lock files
+   */
+  private async findCommandApproval(command: string): Promise<any> {
+    // Check project lock file first
+    if (this.lockFile) {
+      const approval = await this.lockFile.getCommandApproval(command);
+      if (approval) {
+        return { source: 'project', approval };
+      }
+    }
+    
+    // Check global lock file
+    if (this.globalLockFile) {
+      const approval = await this.globalLockFile.getCommandApproval(command);
+      if (approval) {
+        return { source: 'global', approval };
+      }
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Evaluate existing command approval
+   */
+  private evaluateCommandApproval(existing: any, command: string): SecurityDecision | null {
+    const { source, approval } = existing;
+    
+    // Check if approval is expired
+    if (approval.expiresAt) {
+      const expiryDate = new Date(approval.expiresAt);
+      if (expiryDate < new Date()) {
+        return null; // Expired, need new approval
+      }
+    }
+    
+    // Check trust level
+    if (approval.trust === 'never') {
+      return {
+        allowed: false,
+        blocked: true,
+        reason: `Command blocked by ${source} lock file`
+      };
+    }
+    
+    if (approval.trust === 'always' || approval.trust === 'pattern') {
+      return {
+        allowed: true,
+        requiresApproval: false,
+        reason: `Approved by ${source} lock file`
+      };
+    }
+    
+    // 'once' approvals are consumed on use
+    if (approval.trust === 'once') {
+      // Remove the approval after use
+      this.removeCommandApproval(command, source);
+      return {
+        allowed: true,
+        requiresApproval: false,
+        reason: `One-time approval from ${source} lock file`
+      };
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Prompt user for command approval
+   */
+  private async promptCommandApproval(
+    command: string, 
+    analysis: any,
+    context?: SecurityContext
+  ): Promise<{ approved: boolean; trust: string; ttl?: string }> {
+    // In test/CI mode, deny by default
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      return { approved: false, trust: 'never' };
+    }
+    
+    const readline = await import('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
+    console.log(`\n🔒 Security: Command requires approval`);
+    console.log(`   Command: ${command}`);
+    if (analysis.risks && analysis.risks.length > 0) {
+      console.log(`   Risks detected:`);
+      analysis.risks.forEach((risk: any) => {
+        console.log(`   - ${risk.type}: ${risk.description}`);
+      });
+    }
+    
+    console.log(`\n   Allow this command?`);
+    console.log(`   [y] Yes, this time only`);
+    console.log(`   [a] Always allow this exact command`);
+    console.log(`   [p] Allow pattern (base command)`);
+    console.log(`   [t] Allow for time duration...`);
+    console.log(`   [n] Never (block)\n`);
+    
+    const choice = await new Promise<string>((resolve) => {
+      rl.question('   Choice: ', resolve);
+    });
+    
+    let result: { approved: boolean; trust: string; ttl?: string };
+    
+    switch (choice.toLowerCase()) {
+      case 'y':
+        result = { approved: true, trust: 'once' };
+        break;
+      case 'a':
+        result = { approved: true, trust: 'always' };
+        break;
+      case 'p':
+        result = { approved: true, trust: 'pattern' };
+        break;
+      case 't':
+        console.log('\n   Trust for how long?');
+        console.log('   Examples: 1h, 12h, 1d, 7d, 30d');
+        const duration = await new Promise<string>((resolve) => {
+          rl.question('   Duration: ', resolve);
+        });
+        result = { approved: true, trust: 'always', ttl: duration };
+        break;
+      case 'n':
+      default:
+        result = { approved: false, trust: 'never' };
+        break;
+    }
+    
+    rl.close();
+    return result;
+  }
+  
+  /**
+   * Save command approval to lock file
+   */
+  private async saveCommandApproval(
+    command: string,
+    decision: { approved: boolean; trust: string; ttl?: string }
+  ): Promise<void> {
+    if (!this.lockFile || !decision.approved) return;
+    
+    await this.lockFile.addCommandApproval(command, {
+      trust: decision.trust as any,
+      ttl: decision.ttl
+    });
+  }
+  
+  /**
+   * Remove command approval after one-time use
+   */
+  private async removeCommandApproval(command: string, source: string): Promise<void> {
+    if (source === 'project' && this.lockFile) {
+      await this.lockFile.removeCommandApproval(command);
+    } else if (source === 'global' && this.globalLockFile) {
+      await this.globalLockFile.removeCommandApproval(command);
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { MlldError } from '@core/errors';
+import type { ILockFileWithCommands, CommandApproval } from './ILockFile';
 
 export interface LockEntry {
   resolved: string;           // The resolved path (gist URL or registry path)
@@ -20,6 +21,7 @@ export interface LockFileData {
     mlldVersion?: string;
     createdAt?: string;
     updatedAt?: string;
+    isGlobal?: boolean;
   };
   security?: {
     registries?: Record<string, RegistryEntry>;
@@ -27,6 +29,7 @@ export interface LockFileData {
     approvedImports?: Record<string, any>;
     blockedPatterns?: string[];
     trustedDomains?: string[];
+    approvedCommands?: Record<string, CommandApproval>;
   };
 }
 
@@ -39,7 +42,7 @@ export interface RegistryEntry {
   config?: any;
 }
 
-export class LockFile {
+export class LockFile implements ILockFileWithCommands {
   private data: LockFileData;
   private isDirty: boolean = false;
 
@@ -207,5 +210,68 @@ export class LockFile {
     this.data.security.policies = policy;
     this.isDirty = true;
     await this.save();
+  }
+  
+  // Command approval methods
+  async addCommandApproval(pattern: string, approval: CommandApproval): Promise<void> {
+    if (!this.data.security) {
+      this.data.security = {};
+    }
+    if (!this.data.security.approvedCommands) {
+      this.data.security.approvedCommands = {};
+    }
+    
+    this.data.security.approvedCommands[pattern] = approval;
+    this.isDirty = true;
+    await this.save();
+  }
+  
+  getCommandApproval(pattern: string): CommandApproval | undefined {
+    return this.data.security?.approvedCommands?.[pattern];
+  }
+  
+  findMatchingCommandApproval(command: string): CommandApproval | undefined {
+    const approvals = this.data.security?.approvedCommands || {};
+    
+    // Exact match first
+    if (approvals[command]) {
+      // Check expiry
+      const approval = approvals[command];
+      if (approval.expiresAt) {
+        const expiryDate = new Date(approval.expiresAt);
+        if (expiryDate < new Date()) {
+          return undefined; // Expired
+        }
+      }
+      return approval;
+    }
+    
+    // Pattern matching (simple prefix match for now)
+    for (const [pattern, approval] of Object.entries(approvals)) {
+      if (command.startsWith(pattern)) {
+        // Check expiry
+        if (approval.expiresAt) {
+          const expiryDate = new Date(approval.expiresAt);
+          if (expiryDate < new Date()) {
+            continue; // Skip expired
+          }
+        }
+        return approval;
+      }
+    }
+    
+    return undefined;
+  }
+  
+  getAllCommandApprovals(): Record<string, CommandApproval> {
+    return { ...(this.data.security?.approvedCommands || {}) };
+  }
+  
+  async removeCommandApproval(pattern: string): Promise<void> {
+    if (this.data.security?.approvedCommands) {
+      delete this.data.security.approvedCommands[pattern];
+      this.isDirty = true;
+      await this.save();
+    }
   }
 }
