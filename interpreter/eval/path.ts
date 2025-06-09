@@ -78,7 +78,23 @@ export async function evaluatePath(
     definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
   });
   
-  env.setVariable(identifier, variable);
+  // Convert to Environment's MlldVariable format with TTL/trust metadata
+  const mlldVar: any = {
+    type: 'path',
+    value: variable.value,
+    nodeId: directive.nodeId || '',
+    location: directive.location || { line: 0, column: 0 },
+    metadata: {
+      ...variable.metadata,
+      // Add TTL/trust from security options
+      ...(security?.ttl && { ttl: security.ttl }),
+      ...(security?.trust && { trust: security.trust }),
+      // Store the configured by info
+      configuredBy: identifier
+    }
+  };
+  
+  env.setVariable(identifier, mlldVar);
   
   // Return the resolved path
   return { value: resolvedPath, env };

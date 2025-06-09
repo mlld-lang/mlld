@@ -72,6 +72,45 @@ export async function evaluateRun(
       // Determine taint level based on command nodes
       const taintLevel = determineTaintLevel(commandNodes, env);
       
+      // Extract trust level from directive metadata
+      const trustLevel = directive.meta?.trust as any;
+      
+      // Create security context with trust metadata
+      const securityContext = {
+        file: env.getCurrentFilePath(),
+        line: directive.location?.start?.line,
+        directive: 'run',
+        metadata: {
+          ...(trustLevel && { trust: trustLevel }),
+          ...(directive.meta?.ttl && { ttl: directive.meta.ttl })
+        }
+      };
+      
+      // Check command with security policy
+      const decision = await security.checkCommand(command, securityContext);
+      
+      // Handle security decision
+      if (decision.blocked) {
+        throw new MlldCommandExecutionError(
+          `Security: Command blocked - ${decision.reason}`,
+          directive.location,
+          {
+            command,
+            exitCode: 1,
+            duration: 0,
+            stderr: decision.reason || 'Command blocked by security policy',
+            workingDirectory: env.getBasePath(),
+            directiveType: 'run'
+          }
+        );
+      }
+      
+      // Handle approval requirement
+      if (decision.requiresApproval) {
+        // TODO: Implement approval prompting
+        console.warn(`Command requires approval: ${command}`);
+      }
+      
       // Use command analyzer to check the command
       const securityManager = security as SecurityManager & { commandAnalyzer?: CommandAnalyzer };
       const analyzer = securityManager.commandAnalyzer;
