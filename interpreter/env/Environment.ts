@@ -225,6 +225,18 @@ export class Environment {
   private async initializeProjectLockFile(): Promise<void> {
     const lockFilePath = path.join(this.basePath, 'mlld.lock.json');
     
+    // Skip lock file creation in read-only environments (tests, etc.)
+    try {
+      // Check if we can write to the base path first
+      const testPath = path.join(this.basePath, '.mlld-write-test');
+      await this.fileSystem.writeFile(testPath, 'test');
+      await this.fileSystem.unlink(testPath);
+    } catch (error) {
+      // If we can't write to basePath, skip lock file creation
+      logger.debug('Skipping lock file creation - base path is read-only:', this.basePath);
+      return;
+    }
+    
     // Create lock file if it doesn't exist
     if (!await this.fileSystem.exists(lockFilePath)) {
       const initialData = {
@@ -277,11 +289,19 @@ export class Environment {
       const globalLockPath = path.join(os.homedir(), '.config', 'mlld', 'mlld.lock.json');
       const globalDir = path.dirname(globalLockPath);
       
+      // Skip global lock file creation in test environments
+      if (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true') {
+        logger.debug('Skipping global lock file creation in test environment');
+        return;
+      }
+      
       // Create directory if needed
       try {
         await this.fileSystem.mkdir(globalDir, { recursive: true });
       } catch (error) {
-        // Directory might already exist
+        // Directory might already exist or not accessible
+        logger.debug('Could not create global config directory:', error);
+        return;
       }
       
       // Create global lock file if it doesn't exist
@@ -305,11 +325,16 @@ export class Environment {
           }
         };
         
-        await this.fileSystem.writeFile(
-          globalLockPath,
-          JSON.stringify(initialData, null, 2)
-        );
-        logger.info('Created global lock file at', globalLockPath);
+        try {
+          await this.fileSystem.writeFile(
+            globalLockPath,
+            JSON.stringify(initialData, null, 2)
+          );
+          logger.info('Created global lock file at', globalLockPath);
+        } catch (error) {
+          logger.debug('Could not create global lock file:', error);
+          return;
+        }
       }
       
       this.globalLockFile = new LockFile(globalLockPath);
@@ -1677,7 +1702,7 @@ export class Environment {
     }
     
     // Check if caching is enabled
-    const cacheEnabled = this.urlConfig?.cache.enabled ?? true;
+    const cacheEnabled = this.urlConfig?.cache?.enabled ?? true;
     
     if (cacheEnabled && !forImport) {
       // Check runtime cache for non-imports
@@ -1762,8 +1787,8 @@ export class Environment {
   }
   
   private getURLCacheTTL(url: string): number {
-    if (!this.urlConfig?.cache.rules) {
-      return this.urlConfig?.cache.defaultTTL || 5 * 60 * 1000;
+    if (!this.urlConfig?.cache?.rules) {
+      return this.urlConfig?.cache?.defaultTTL || 5 * 60 * 1000;
     }
     
     // Find matching rule
@@ -1774,7 +1799,7 @@ export class Environment {
     }
     
     // Fall back to default
-    return this.urlConfig.cache.defaultTTL;
+    return this.urlConfig.cache?.defaultTTL || 5 * 60 * 1000;
   }
   
   setURLOptions(options: Partial<typeof this.defaultUrlOptions>): void {

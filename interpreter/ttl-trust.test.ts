@@ -29,8 +29,8 @@ describe('TTL/Trust Enforcement', () => {
     const input = `
 # TTL Test
 
-@path api = "https://api.example.com/data.json"
-@add (30s) @api
+@path api = "https://api.example.com/data.json" (30s)
+@add @api
 `;
     
     const result = await interpret(input, {
@@ -72,8 +72,8 @@ describe('TTL/Trust Enforcement', () => {
     const input = `
 # Import with TTL
 
-@path (5m) config = "https://example.com/config.mld"
-@import { greeting } from @config
+@path config = "https://example.com/config.mld" (5m)
+@import { greeting } from [@config]
 
 @add @greeting
 `;
@@ -105,7 +105,7 @@ describe('TTL/Trust Enforcement', () => {
     const input = `
 # Trust Level Test
 
-@path (trust never) blocked = "https://untrusted.com/data.json"
+@path blocked = "https://untrusted.com/data.json" trust never
 @add @blocked
 `;
     
@@ -135,7 +135,7 @@ describe('TTL/Trust Enforcement', () => {
     const input = `
 # Trust Verify Test
 
-@path (trust verify) api = "http://insecure.com/data.json"
+@path api = "http://insecure.com/data.json" trust verify
 @add @api
 `;
     
@@ -174,7 +174,7 @@ describe('TTL/Trust Enforcement', () => {
     const input = `
 # Special TTL Test
 
-@path (live) liveData = "https://api.example.com/live.txt"
+@path liveData = "https://api.example.com/live.txt" (live)
 @add @liveData
 
 @add @liveData
@@ -210,10 +210,10 @@ describe('TTL/Trust Enforcement', () => {
     const input = `
 # Variable TTL/Trust Test
 
-@text (30s) message = "Cached message"
-@data (5m, trust always) config = { "enabled": true }
-@exec (1h) cmd() = @run [(echo "Cached command")]
-@path (static) docs = "./README.md"
+@text message = "Cached message"
+@data config = { "enabled": true }
+@exec cmd() = @run [(echo "Cached command")] trust always
+@path docs = "./README.md" (static)
 `;
     
     await fileSystem.writeFile('/README.md', '# README Content');

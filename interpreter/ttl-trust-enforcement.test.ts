@@ -19,7 +19,7 @@ describe('TTL/Trust Enforcement', () => {
   
   describe('Variable TTL/Trust Metadata', () => {
     it('should store TTL metadata on path variables', async () => {
-      const code = `@path (24h) config = "./config.json"`;
+      const code = `@path config = "./config.json" (24h)`;
       
       await fileSystem.writeFile('/config.json', '{"test": true}');
       
@@ -44,7 +44,7 @@ describe('TTL/Trust Enforcement', () => {
     });
     
     it('should store both TTL and trust metadata', async () => {
-      const code = `@path (static) resource = "https://cdn.example.com/file.js" trust always`;
+      const code = `@path resource = "https://cdn.example.com/file.js" (static) trust always`;
       
       const result = await interpret(code, { 
         fileSystem, 
@@ -115,7 +115,7 @@ describe('TTL/Trust Enforcement', () => {
     
     it('should respect live TTL (always fetch fresh)', async () => {
       const code = `
-@path (live) api = "https://api.example.com/live-data"
+@path api = "https://api.example.com/live-data" (live)
 @add @api
 @add @api
 `;
@@ -144,7 +144,7 @@ describe('TTL/Trust Enforcement', () => {
     
     it('should respect static TTL (cache forever)', async () => {
       const code = `
-@path (static) resource = "https://cdn.example.com/static.js"
+@path resource = "https://cdn.example.com/static.js" (static)
 @add @resource
 @add @resource
 `;
@@ -173,7 +173,7 @@ describe('TTL/Trust Enforcement', () => {
     
     it('should respect duration-based TTL', async () => {
       const code = `
-@path (5m) api = "https://api.example.com/data"
+@path api = "https://api.example.com/data" (5m)
 @add @api
 `;
       
@@ -219,7 +219,7 @@ describe('TTL/Trust Enforcement', () => {
   describe('Lock File TTL/Trust Recording', () => {
     it('should record TTL in lock file entries', async () => {
       const code = `
-@import (1h) { config } from "./settings.mld"
+@import { config } from "./settings.mld" (1h)
 `;
       
       await fileSystem.writeFile('/test/settings.mld', '@data config = { "theme": "dark" }');
