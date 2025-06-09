@@ -29,12 +29,22 @@ export interface TextNode extends BaseMlldNode {
   formattingMetadata?: FormattingMetadata;
 }
 
+// Field access node - represents a single field/array access in a chain
+export interface FieldAccessNode {
+  type: 'field' | 'numericField' | 'arrayIndex' | 'stringIndex';
+  value: string | number;  // The field name or index value
+  // 'field': .name (value is string)
+  // 'numericField': .123 (value is number) 
+  // 'arrayIndex': [123] (value is number)
+  // 'stringIndex': ["key"] (value is string)
+}
+
 // Variable reference node
 export interface VariableReferenceNode extends BaseMlldNode {
   type: 'VariableReference';
   identifier: string;
   valueType: string;
-  fields?: Array<{ type: 'field' | 'index'; value: string | number }>;
+  fields?: FieldAccessNode[]; // Flat array of field accesses
   format?: string;
 }
 
@@ -61,6 +71,14 @@ export interface CodeFenceNode extends BaseMlldNode {
   type: 'CodeFence';
   language?: string;
   content: string;
+}
+
+// MlldRunBlock node for interpreted code blocks
+export interface MlldRunBlockNode extends BaseMlldNode {
+  type: 'MlldRunBlock';
+  content: MlldNode[];
+  raw: string;
+  error?: string;
 }
 
 // Comment node

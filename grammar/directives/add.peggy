@@ -329,14 +329,15 @@ AtAdd
       
       // Extract command reference info
       const commandRef = invocation.commandRef;
-      const hasArgs = commandRef.args && commandRef.args.length > 0;
+      const hasParentheses = commandRef.args !== null && commandRef.args !== undefined;
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
       const underHeaderValue = underHeader ? underHeader : null;
       
       // Determine if this is a template invocation or exec invocation
-      const isTemplateInvocation = hasArgs && !invocation.withClause;
+      // Template invocation: has parentheses (even if empty) and no withClause
+      const isTemplateInvocation = hasParentheses && !invocation.withClause;
       
       if (isTemplateInvocation) {
         // Handle as template invocation
@@ -381,12 +382,18 @@ AtAdd
           raw.underHeader = underHeaderValue;
         }
         
+        // Create meta object with template information
+        const meta = {
+          isTemplateInvocation: true,
+          argumentCount: commandRef.args ? commandRef.args.length : 0
+        };
+        
         return helpers.createStructuredDirective(
           'add', 
           'addTemplateInvocation', 
           values, 
           raw, 
-          {}, 
+          meta, 
           location(),
           'templateInvocation'
         );

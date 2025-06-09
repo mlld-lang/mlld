@@ -153,9 +153,9 @@ AtData
 DataValue
   = ForeachCommandExpression
   / DirectiveValue
+  / VariableReferenceValue  // Must come before ExecInvocationValue to properly match field access
   / ExecInvocationValue
-  / TemplateValue  
-  / VariableReferenceValue
+  / TemplateValue
   / object:DataObjectLiteral {
       return {
         type: "object",
@@ -315,9 +315,15 @@ VariableReferenceValue
       return {
         type: "variableReference",
         value: node,
-        rawText: "@" + normalizedId + (accessElements ? accessElements.map(f => 
-          f.type === 'dotAccess' ? '.' + f.field : '[' + f.index + ']'
-        ).join('') : '')
+        rawText: "@" + normalizedId + (accessElements ? accessElements.map(f => {
+          if (f.type === 'field' || f.type === 'numericField' || f.type === 'stringIndex') {
+            return '.' + f.value;
+          } else if (f.type === 'arrayIndex') {
+            return '[' + f.value + ']';
+          }
+          // Fallback for any other types
+          return '';
+        }).join('') : '')
       };
     }
 

@@ -16,7 +16,8 @@ import type {
   DotSeparatorNode,
   PathSeparatorNode,
   SectionMarkerNode,
-  ExecInvocation
+  ExecInvocation,
+  BaseMlldNode
 } from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
@@ -36,9 +37,8 @@ export type VariableValue = string | number | boolean | null |
  * Field access types from the AST
  */
 interface FieldAccess {
-  type: 'field' | 'arrayIndex' | 'numericField';
-  name?: string;
-  index?: number;
+  type: 'field' | 'arrayIndex' | 'numericField' | 'stringIndex';
+  value: string | number;
 }
 
 /**
@@ -49,23 +49,20 @@ function accessField(value: unknown, field: FieldAccess): unknown {
     return undefined;
   }
   
-  if (field.type === 'arrayIndex' || field.type === 'numericField') {
+  if (field.type === 'arrayIndex') {
     if (!Array.isArray(value)) {
       return undefined;
     }
-    const index = field.index;
-    if (index === undefined || index < 0 || index >= value.length) {
+    const index = Number(field.value);
+    if (isNaN(index) || index < 0 || index >= value.length) {
       return undefined;
     }
     return value[index];
-  } else if (field.type === 'field') {
+  } else if (field.type === 'field' || field.type === 'stringIndex' || field.type === 'numericField') {
     if (typeof value !== 'object' || Array.isArray(value)) {
       return undefined;
     }
-    const name = field.name;
-    if (!name) {
-      return undefined;
-    }
+    const name = String(field.value);
     return (value as Record<string, unknown>)[name];
   }
   
@@ -103,6 +100,10 @@ function isCodeFence(node: MlldNode): node is CodeFenceNode {
   return node.type === 'CodeFence';
 }
 
+function isMlldRunBlock(node: MlldNode): node is MlldRunBlockNode {
+  return node.type === 'MlldRunBlock';
+}
+
 function isVariableReference(node: MlldNode): node is VariableReferenceNode {
   return node.type === 'VariableReference';
 }
@@ -138,6 +139,16 @@ type FrontmatterData = Record<string, unknown> | null;
 interface DocumentNode extends BaseMlldNode {
   type: 'Document';
   nodes: MlldNode[];
+}
+
+/**
+ * MlldRunBlock node type
+ */
+interface MlldRunBlockNode extends BaseMlldNode {
+  type: 'MlldRunBlock';
+  content: MlldNode[];
+  raw: string;
+  error?: string;
 }
 
 // Use DocumentNode if MlldDocument is not properly defined
@@ -275,6 +286,24 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     };
     env.addNode(codeTextNode);
     return { value: content, env };
+  }
+  
+  if (isMlldRunBlock(node)) {
+    // Handle mlld-run blocks by evaluating their content
+    if (node.error) {
+      // If there was a parse error, output it as text
+      const errorTextNode: TextNode = {
+        type: 'Text',
+        nodeId: `${node.nodeId}-error`,
+        content: `Error in mlld-run block: ${node.error}`
+      };
+      env.addNode(errorTextNode);
+      return { value: node.error, env };
+    }
+    
+    // Evaluate the parsed content
+    const result = await evaluate(node.content, env);
+    return result;
   }
       
   if (isVariableReference(node)) {
