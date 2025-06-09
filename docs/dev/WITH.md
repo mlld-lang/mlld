@@ -1,20 +1,70 @@
 # With Clauses Development Guide
 
-> **Status**: Fully implemented on `feature/with-clause` branch, pending merge to main
+> **Status**: Grammar design updated to support unified tail syntax with TTL/trust integration
 
-This guide covers the technical implementation details for the `with` clause feature in mlld, which provides execution modifiers for `@run` and `@exec` commands.
+This guide covers the technical implementation details for the `with` clause feature in mlld, which provides execution modifiers for directives.
 
 ## Overview
 
-With clauses extend command execution with two main capabilities:
+The `with` clause is part of a unified "tail syntax" system where directives can have modifiers after their main content. All tail keywords except `with` are syntactic sugar that internally create a `with` clause.
+
+### Tail Syntax Design
+
+```mlld
+# Single property syntactic sugar
+@run [cmd] trust always                    # → with { trust: always }
+@run [cmd] pipeline [@transform]           # → with { pipeline: [@transform] }
+@run [cmd] | @filter @formatter           # → with { pipeline: [@filter, @formatter] }
+
+# Multiple properties require with object
+@run [cmd] with { trust: always, pipeline: [@transform] }
+
+# Exec-defined command invocations
+@exec process(data) = @run [(python process.py @data)]
+@run @process(input) trust always          # → with { trust: always }
+@run @process(input) | @validate @save     # → with { pipeline: [@validate, @save] }
+
+# TTL for path/import (special syntax)
+@path url = https://example.com (5d) trust always
+@import [file.mld] (30m) trust verify
+```
+
+### Supported Tail Keywords
+
+- `trust` - Security trust level (always/never/verify)
+- `pipeline` or `|` - Chain of transformations
+- `needs` - Dependency validation
+- `with` - Object containing any combination of the above
+
+### Key Features
+
 1. **Pipelines**: Chain transformations on command output via `@input` variable
 2. **Dependencies**: Validate required packages before execution
+3. **Trust Levels**: Control security for URL fetching and command execution
+4. **TTL (Time To Live)**: Cache duration for URL resources (path/import only)
+
+### Target Design: Unified Tail Modifier Support
+
+**All exec invocations** will support tail modifiers uniformly:
+
+```mlld
+# Target syntax - tail modifiers work everywhere
+@output @generateReport() trust always [report.pdf]     # ✅ Valid
+@text data = @fetchData() | @parse                      # ✅ Valid  
+@add @greeting("World") | @uppercase                    # ✅ Valid
+@when @isReady() => @deploy() trust always              # ✅ Valid
+
+# @run wrapper still works but becomes optional
+@output @run @generateReport() trust always [report.pdf] # ✅ Valid (redundant)
+```
+
+This creates a consistent experience where exec-defined commands are first-class citizens with full modifier support.
 
 ## Grammar Integration
 
 ### AST Extensions
 
-The `with` clause requires extending the Run and Exec directive AST nodes:
+The `with` clause requires extending directive AST nodes to support tail modifiers:
 
 ```typescript
 // In core/types/run.ts
@@ -22,17 +72,27 @@ export interface RunCommandDirectiveNode extends RunDirectiveNode {
   subtype: 'runCommand';
   values: {
     command: ContentNodeArray;
-    withClause?: WithClauseValues; // New optional field
+    withClause?: WithClauseValues; // Normalized tail modifiers
   };
   raw: {
     command: string;
-    withClause?: string; // Raw with clause text
+    withClause?: string; // Raw tail modifier text
   };
   meta: {
     isMultiLine: boolean;
     hasVariables: boolean;
-    withClause?: WithClauseMeta; // Parsed with clause metadata
+    withClause?: WithClauseMeta; // Parsed tail modifier metadata
   };
+}
+
+// For exec invocations (e.g., @run @myCommand())
+export interface RunExecReferenceDirectiveNode extends RunDirectiveNode {
+  subtype: 'runExecReference';
+  values: {
+    commandRef: CommandReference;
+    withClause?: WithClauseValues; // Same tail modifier support
+  };
+  // ... similar structure
 }
 
 // New types for with clause support
@@ -63,46 +123,58 @@ export interface DependencyDeclaration {
 
 ### Grammar Rules
 
-Extend `grammar/directives/run.peggy` and `grammar/directives/exec.peggy`:
+Extend `grammar/directives/run.peggy` to support tail syntax for all @run forms:
 
 ```peggy
-// In run.peggy
-AtRun
-  = DirectiveContext "@run" _ security:(SecurityOptions _)? "[" parts:RunCommandParts "]" 
-    withClause:(_ WithClause)? comment:InlineComment? {
-      // ... existing logic ...
+// In run.peggy - Direct command execution
+AtRunCommand
+  = DirectiveContext "@run" _ "[" parts:RunCommandParts "]" 
+    tail:TailModifiers? comment:InlineComment? {
+      // Convert tail modifiers to withClause
+      const withClause = tail ? normalizeToWithClause(tail) : null;
       
-      // Add with clause processing
-      const withClauseValues = withClause ? withClause[1] : null;
+// In run.peggy - Exec invocation  
+AtRunExecReference
+  = DirectiveContext "@run" _ ref:CommandReference
+    tail:TailModifiers? comment:InlineComment? {
+      // Same tail modifier support
+      const withClause = tail ? normalizeToWithClause(tail) : null;
       
-      return helpers.createStructuredDirective(
-        'run',
-        'runCommand',
-        {
-          command: parts,
-          commandBases: commandBases,
-          ...(withClauseValues ? { withClause: withClauseValues } : {})
-        },
-        {
-          command: rawCommand,
-          commandBases: rawBases,
-          ...(withClauseValues ? { withClause: helpers.stringifyWithClause(withClauseValues) } : {})
-        },
-        {
-          isMultiLine: rawCommand.includes('\n'),
-          commandCount: commandBases.length,
-          hasScriptRunner: false,
-          ...helpers.createSecurityMeta(securityOptions),
-          ...(withClauseValues ? helpers.createWithClauseMeta(withClauseValues) : {}),
-          ...(comment ? { comment } : {})
-        },
-        location(),
-        'command'
-      );
+      // ... create directive with withClause ...
     }
 
-// With clause grammar
-WithClause
+// Unified tail modifiers grammar
+TailModifiers
+  = _ keyword:TailKeyword _ value:TailValue {
+      // Single keyword sugar
+      if (keyword === "with") {
+        return value; // Already an object
+      } else if (keyword === "|") {
+        return { pipeline: value };
+      } else {
+        return { [keyword]: value };
+      }
+    }
+
+TailKeyword
+  = "trust" / "pipeline" / "|" / "needs" / "with"
+
+TailValue  
+  = "{" _ props:WithProperties _ "}" { return props; }      // for 'with'
+  / "[" _ items:TransformerList _ "]" { return items; }     // for 'pipeline'
+  / transformers:PipelineShorthand { return transformers; }   // for '|'
+  / level:TrustLevel { return level; }                        // for 'trust'
+  / deps:DependencyObject { return deps; }                    // for 'needs'
+
+TrustLevel = "always" / "never" / "verify"
+
+PipelineShorthand  
+  = first:CommandReference rest:(_ ref:CommandReference { return ref; })* {
+      return [first, ...rest];
+    }
+
+// Original with clause for object syntax
+WithClause  
   = "with" _ "{" _ clauses:WithClauseBody _ "}" {
       return clauses;
     }
@@ -502,6 +574,52 @@ export class MlldPipelineError extends MlldWithClauseError {
 4. **Phase 4**: Python dependency support
 5. **Phase 5**: Error handling and user experience improvements
 6. **Phase 6**: Performance optimizations and caching
+
+## Comprehensive Examples (Target Design)
+
+### Unified Tail Syntax Across All Contexts
+
+```mlld
+# Define exec commands
+@exec fetchData(url) = @run [(curl @url)]
+@exec processJSON(data) = @run python [(json.loads(@data))]
+@exec deploy(env) = @run [(./scripts/deploy.sh @env)]
+
+# Exec invocations with tail modifiers (no @run wrapper needed)
+@text apiResponse = @fetchData("https://api.example.com") | @validateJSON
+@text config = @loadConfig() trust always
+@text processed = @processJSON(rawData) with { trust: verify, pipeline: [@validate, @transform] }
+
+# In @data assignments  
+@data users = @fetchData("api/users") | @parseJSON @extractArray
+@data settings = { 
+  api: @getEndpoint() trust always,
+  key: @fetchData("api/key") | @decrypt
+}
+
+# In @when conditions
+@when @isProduction => @deploy("prod") trust always
+@when @hasErrors() => @alertTeam() | @formatMessage @sendEmail
+@when @needsAuth() | @isExpired => @authenticate() with { trust: verify }
+
+# In @output directives
+@output @fetchData("api/report") | @generatePDF [report.pdf]
+@output @generateDocs() trust always [docs.md]
+@output @processJSON(data) with { pipeline: [@format, @minify] } [output.json]
+
+# In @add directives
+@add @greeting("World") | @uppercase
+@add foreach @processItem(@items) | @format
+
+# Direct @run commands still support tail modifiers
+@text cmd = @run [(cat config.json)] trust always
+@output @run [(generate-report)] | @format [report.md]
+
+# Path and import with TTL/trust
+@path api = https://internal.api.com/v2 (1h) trust always
+@import { utils } from [https://cdn.example.com/utils.mld] (7d) trust verify
+@import @corp/internal-tools (static) with { trust: always }
+```
 
 ## Integration Points
 
