@@ -26,6 +26,7 @@ Modifiers:
 AtWhen
   = WhenSimpleForm
   / WhenBlockForm
+  / WhenSwitchForm
 
 // -------------------------------------------------------------
 // SIMPLE FORM: @when <condition> => <action>
@@ -48,6 +49,35 @@ WhenSimpleForm
         },
         {
           hasVariables: condition.some(n => n.type === NodeType.VariableReference)
+        },
+        location()
+      );
+    }
+
+// -------------------------------------------------------------
+// SWITCH FORM: @when <expression>: [value => action, ...]
+// -------------------------------------------------------------
+
+WhenSwitchForm
+  = DirectiveContext "@when" _ expression:WhenConditionExpression _ ":" _ "[" _ conditions:WhenConditionList _ "]" {
+      helpers.debug('WhenSwitchForm matched', { expression, conditions });
+      
+      return helpers.createStructuredDirective(
+        'when',
+        'whenSwitch',
+        {
+          expression: expression,
+          conditions: conditions
+        },
+        {
+          expression: helpers.reconstructRawString(expression),
+          conditions: conditions.map(c => ({
+            condition: helpers.reconstructRawString(c.condition),
+            action: c.action ? helpers.reconstructRawString(c.action) : undefined
+          }))
+        },
+        {
+          conditionCount: conditions.length
         },
         location()
       );
@@ -161,6 +191,13 @@ WhenConditionExpression
         location: location() 
       })];
     }
+  / value:StringLiteral {
+      // String literal ("text")
+      return [helpers.createNode(NodeType.Text, { 
+        content: value, 
+        location: location() 
+      })];
+    }
 
 // -------------------------------------------------------------
 // CONDITION LIST AND PAIRS
@@ -168,9 +205,26 @@ WhenConditionExpression
 
 // List of condition => action pairs
 WhenConditionList
-  = first:WhenConditionPair rest:(_ pair:WhenConditionPair { return pair; })* {
+  = first:WhenConditionPair rest:(WhenConditionSeparator pair:WhenConditionPair { return pair; })* {
       return [first, ...rest];
     }
+
+// Separator for condition pairs - whitespace only, with helpful error for commas
+WhenConditionSeparator
+  = _ "," _ {
+      error(
+        'Comma separators are not allowed in @when conditions. ' +
+        'For readability, @when conditions must be separated by whitespace (newlines or spaces) instead of commas.\n' +
+        '💡 Remove the comma and use a newline or space:\n' +
+        '   @when expr: [value1 => action1, value2 => action2]  ❌\n' +
+        '   @when expr: [value1 => action1  value2 => action2]  ✅\n' +
+        '   @when expr: [\n' +
+        '     value1 => action1\n' +
+        '     value2 => action2\n' +
+        '   ]  ✅'
+      );
+    }
+  / _
 
 // Single condition => action pair
 WhenConditionPair
