@@ -130,13 +130,22 @@ WhenModifier
 
 // Condition expression - reuse existing patterns
 WhenConditionExpression
-  = "@" invocation:ExecInvocationWithTail {
+  = "@" id:BaseIdentifier !("(" / TailModifiers) fields:AnyFieldAccess* {
+      // Simple variable reference without parentheses or tail modifiers
+      const loc = location();
+      const node = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, loc);
+      return [node];
+    }
+  / "@" invocation:ExecInvocationWithTail {
       // Exec invocation with tail modifiers
       return [invocation];
     }
   / Variable {
-      // Variable reference from patterns/variables.peggy
-      return [text()];
+      // Other variable forms (special vars, interpolation)
+      return [$1];
     }
   / value:BooleanLiteral {
       // Boolean literal (true/false)
