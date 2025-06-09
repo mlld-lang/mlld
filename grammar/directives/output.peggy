@@ -62,8 +62,8 @@ AtOutput
 
 // Output source types
 OutputSource
-  = OutputExecInvocation
-  / OutputVariable
+  = OutputVariable      // Variable MUST come before exec invocation
+  / OutputExecInvocation
   / OutputCommand  
   / OutputLiteral
 
