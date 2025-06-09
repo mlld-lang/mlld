@@ -206,8 +206,8 @@ export class Environment {
     // Then load global lock file
     await this.loadGlobalLockFile();
     
-    // Now initialize ImportApproval with the lock file
-    this.importApproval = new ImportApproval(this.basePath, this.lockFile);
+    // Now initialize ImportApproval with both lock files
+    this.importApproval = new ImportApproval(this.basePath, this.lockFile, this.globalLockFile);
     
     // Pass lock files to SecurityManager if available
     if (this.securityManager) {
