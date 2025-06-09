@@ -68,6 +68,7 @@ export class Environment {
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
   private urlCacheManager?: URLCache; // URL cache manager
+  private lockFile?: LockFile; // Project lock file
   private globalLockFile?: LockFile; // Global lock file
   private reservedNames: Set<string> = new Set(['INPUT', 'TIME', 'PROJECTPATH', 'DEBUG']); // Reserved variable names
   
@@ -117,7 +118,7 @@ export class Environment {
       
       // Initialize registry manager
       try {
-        this.registryManager = new RegistryManager(basePath);
+        this.registryManager = new RegistryManager(this.basePath);
       } catch (error) {
         console.warn('RegistryManager not available:', error);
       }
@@ -129,7 +130,7 @@ export class Environment {
       try {
         moduleCache = new ModuleCache();
         // Try to load lock file from project root
-        const lockFilePath = path.join(basePath, 'mlld.lock.json');
+        const lockFilePath = path.join(this.basePath, 'mlld.lock.json');
         lockFile = new LockFile(lockFilePath);
         
         // Initialize URL cache manager with a simple cache adapter and lock file
@@ -179,12 +180,12 @@ export class Environment {
       }
       
       // Keep legacy components for backward compatibility
-      this.importApproval = new ImportApproval(basePath);
-      this.immutableCache = new ImmutableCache(basePath);
+      // ImportApproval will be initialized after lock files are loaded
+      this.immutableCache = new ImmutableCache(this.basePath);
       
-      // Load global lock file asynchronously (fire and forget)
-      this.loadGlobalLockFile().catch(error => {
-        logger.debug('Failed to load global lock file:', error);
+      // Auto-create and load lock files
+      this.initializeLockFiles().catch(error => {
+        logger.warn('Failed to initialize lock files:', error);
       });
       
       // Initialize reserved variables
@@ -196,19 +197,136 @@ export class Environment {
   }
   
   /**
+   * Initialize both project and global lock files
+   */
+  private async initializeLockFiles(): Promise<void> {
+    // Initialize project lock file first
+    await this.initializeProjectLockFile();
+    
+    // Then load global lock file
+    await this.loadGlobalLockFile();
+    
+    // Now initialize ImportApproval with the lock file
+    this.importApproval = new ImportApproval(this.basePath, this.lockFile);
+    
+    // Pass lock files to SecurityManager if available
+    if (this.securityManager) {
+      this.securityManager.setLockFiles(
+        this.lockFile as ILockFileWithCommands,
+        this.globalLockFile as ILockFileWithCommands
+      );
+    }
+  }
+  
+  /**
+   * Auto-create project lock file if it doesn't exist
+   */
+  private async initializeProjectLockFile(): Promise<void> {
+    const lockFilePath = path.join(this.basePath, 'mlld.lock.json');
+    
+    // Create lock file if it doesn't exist
+    if (!await this.fileSystem.exists(lockFilePath)) {
+      const initialData = {
+        version: '1.0.0',
+        imports: {},
+        metadata: {
+          mlldVersion: process.env.npm_package_version || 'unknown',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      };
+      
+      try {
+        await this.fileSystem.writeFile(
+          lockFilePath,
+          JSON.stringify(initialData, null, 2)
+        );
+        logger.info('Created new lock file at', lockFilePath);
+      } catch (error) {
+        logger.warn('Could not create lock file:', error);
+        // Continue without lock file - not critical
+        return;
+      }
+    }
+    
+    // Load the lock file
+    try {
+      const lockFile = new LockFile(lockFilePath);
+      
+      // Update the existing references
+      if (this.urlCacheManager) {
+        // URLCache already has the lock file from constructor
+      }
+      if (this.resolverManager) {
+        // ResolverManager already has the lock file from constructor  
+      }
+      
+      // Store reference for other uses
+      this.lockFile = lockFile;
+    } catch (error) {
+      logger.warn('Failed to load lock file:', error);
+    }
+  }
+
+  /**
    * Load global lock file from ~/.config/mlld/mlld.lock.json
    */
   private async loadGlobalLockFile(): Promise<void> {
     try {
       const globalLockPath = path.join(os.homedir(), '.config', 'mlld', 'mlld.lock.json');
-      if (await this.fileSystem.exists(globalLockPath)) {
-        this.globalLockFile = new LockFile(globalLockPath);
-        logger.debug('Loaded global lock file from', globalLockPath);
+      const globalDir = path.dirname(globalLockPath);
+      
+      // Create directory if needed
+      try {
+        await this.fileSystem.mkdir(globalDir, { recursive: true });
+      } catch (error) {
+        // Directory might already exist
       }
+      
+      // Create global lock file if it doesn't exist
+      if (!await this.fileSystem.exists(globalLockPath)) {
+        const initialData = {
+          version: '1.0.0',
+          imports: {},
+          metadata: {
+            mlldVersion: process.env.npm_package_version || 'unknown',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            isGlobal: true
+          },
+          security: {
+            trustedDomains: [
+              'github.com',
+              'raw.githubusercontent.com', 
+              'gist.githubusercontent.com'
+            ],
+            blockedPatterns: []
+          }
+        };
+        
+        await this.fileSystem.writeFile(
+          globalLockPath,
+          JSON.stringify(initialData, null, 2)
+        );
+        logger.info('Created global lock file at', globalLockPath);
+      }
+      
+      this.globalLockFile = new LockFile(globalLockPath);
+      logger.debug('Loaded global lock file from', globalLockPath);
     } catch (error) {
       // Global lock file is optional, so just log and continue
       logger.debug('Could not load global lock file:', error);
     }
+  }
+
+  /**
+   * Get project lock file (from root environment)
+   */
+  getLockFile(): LockFile | undefined {
+    if (this.parent) {
+      return this.parent.getLockFile();
+    }
+    return this.lockFile;
   }
 
   /**

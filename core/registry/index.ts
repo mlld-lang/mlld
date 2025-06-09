@@ -1,5 +1,6 @@
 export { LockFile } from './LockFile';
 export type { LockEntry, LockFileData } from './LockFile';
+export type { ILockFile, ILockFileWithCommands, CommandApproval } from './ILockFile';
 
 export { Cache } from './Cache';
 export type { CacheMetadata } from './Cache';
@@ -18,3 +19,5 @@ export type { StatsEvent, AggregatedStats } from './StatsCollector';
 
 export { RegistryManager } from './RegistryManager';
 export type { RegistryConfig } from './RegistryManager';
+
+export { LockFileResolver } from './LockFileResolver';
