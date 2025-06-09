@@ -98,22 +98,30 @@ export async function evaluateAdd(
         }
         
         if (field.type === 'arrayIndex') {
-          const index = field.index;
+          const index = Number(field.value);
           if (Array.isArray(value)) {
             value = value[index];
           } else {
             throw new Error(`Cannot index non-array value with [${index}]`);
           }
-        } else if (field.type === 'field') {
+        } else if (field.type === 'field' || field.type === 'stringIndex') {
+          const fieldName = String(field.value);
           if (typeof value === 'object' && value !== null) {
             // Handle DataObject type
             if (value.type === 'object' && value.properties) {
-              value = value.properties[field.name];
+              value = value.properties[fieldName];
             } else {
-              value = value[field.name];
+              value = value[fieldName];
             }
           } else {
-            throw new Error(`Cannot access property '${field.name}' on non-object value`);
+            throw new Error(`Cannot access property '${fieldName}' on non-object value`);
+          }
+        } else if (field.type === 'numericField') {
+          const fieldName = String(field.value);
+          if (typeof value === 'object' && value !== null) {
+            value = value[fieldName];
+          } else {
+            throw new Error(`Cannot access numeric property '${fieldName}' on non-object value`);
           }
         }
       }

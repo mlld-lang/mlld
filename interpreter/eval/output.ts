@@ -216,7 +216,7 @@ export async function evaluateOutput(
                 }
                 
                 if (field.type === 'arrayIndex') {
-                  const index = field.index;
+                  const index = Number(field.value);
                   if (Array.isArray(value)) {
                     value = value[index];
                   } else {
@@ -225,8 +225,8 @@ export async function evaluateOutput(
                       directive.location
                     );
                   }
-                } else if (field.type === 'field' || field.type === 'dot') {
-                  const fieldName = field.value || field.name;
+                } else if (field.type === 'field' || field.type === 'stringIndex' || field.type === 'numericField' || field.type === 'dot') {
+                  const fieldName = String(field.value);
                   if (typeof value === 'object' && value !== null) {
                     value = value[fieldName];
                   } else {

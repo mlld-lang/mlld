@@ -105,9 +105,9 @@ The {{name}} Team
       
       expect(result[0].values.arguments).toHaveLength(2);
       expect(result[0].values.arguments[0].type).toBe('VariableReference');
-      expect(result[0].values.arguments[0].value.identifier).toBe('userName');
+      expect(result[0].values.arguments[0].identifier).toBe('userName');
       expect(result[0].values.arguments[1].type).toBe('VariableReference');
-      expect(result[0].values.arguments[1].value.identifier).toBe('userTitle');
+      expect(result[0].values.arguments[1].identifier).toBe('userTitle');
     });
 
     it('should parse template invocation with mixed arguments', async () => {
@@ -116,7 +116,7 @@ The {{name}} Team
       const result = parseResult.ast;
       
       expect(result[0].values.arguments[0].type).toBe('VariableReference');
-      expect(result[0].values.arguments[0].value.identifier).toBe('userName');
+      expect(result[0].values.arguments[0].identifier).toBe('userName');
       expect(result[0].values.arguments[1].type).toBe('Text');
       expect(result[0].values.arguments[1].content).toBe('Welcome to our service');
     });
@@ -155,7 +155,9 @@ The {{name}} Team
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
+      expect(result[0].values.arguments[0].type).toBe('Text');
       expect(result[0].values.arguments[0].content).toBe('Alice');
+      expect(result[0].values.arguments[1].type).toBe('Text');
       expect(result[0].values.arguments[1].content).toBe('Dr.');
     });
 

@@ -34,6 +34,7 @@ import {
   TextNode,
   DirectiveNode,
   CodeFenceNode,
+  MlldRunBlockNode,
   CommentNode,
   VariableReferenceNode,
   LiteralNode,
@@ -58,6 +59,7 @@ export type MlldNode =
   | TextNode 
   | DirectiveNode 
   | CodeFenceNode
+  | MlldRunBlockNode
   | CommentNode
   | VariableReferenceNode
   | LiteralNode

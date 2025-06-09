@@ -218,12 +218,12 @@ export async function evaluateRun(
       
       // Navigate through the field access chain
       for (const field of varRef.fields) {
-        if (field.type === 'field' && typeof value === 'object' && value !== null) {
-          value = (value as Record<string, unknown>)[field.name];
+        if ((field.type === 'field' || field.type === 'stringIndex' || field.type === 'numericField') && typeof value === 'object' && value !== null) {
+          value = (value as Record<string, unknown>)[String(field.value)];
         } else if (field.type === 'arrayIndex' && Array.isArray(value)) {
-          value = value[field.index];
+          value = value[Number(field.value)];
         } else {
-          const fieldName = field.type === 'field' ? field.name : field.index;
+          const fieldName = String(field.value);
           throw new Error(`Cannot access field '${fieldName}' on ${typeof value}`);
         }
       }

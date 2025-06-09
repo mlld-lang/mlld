@@ -79,11 +79,12 @@ export interface ForeachCommandExpression {
 
 /**
  * Field access type for variable references
+ * Note: This is kept for backward compatibility in data structures.
+ * For new code, use FieldAccessNode from primitives.ts
  */
 export interface FieldAccess {
-  type: 'field' | 'index';
-  name?: string;
-  value?: string | number;
+  type: 'field' | 'numericField' | 'arrayIndex' | 'stringIndex';
+  value: string | number;
 }
 
 /**
