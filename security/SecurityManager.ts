@@ -88,7 +88,16 @@ export class SecurityManager {
     const analysis = await this.commandAnalyzer.analyze(command, taint);
     
     // 4. Get effective policy (merged global + project + inline)
-    const policy = await this.policyManager.getEffectivePolicy(context?.metadata);
+    // Map mlld trust level to security trust level if provided
+    let securityMetadata = context?.metadata;
+    if (context?.mlldTrust && !securityMetadata?.trust) {
+      securityMetadata = {
+        ...securityMetadata,
+        trust: this.mapMlldTrustToSecurityTrust(context.mlldTrust)
+      };
+    }
+    
+    const policy = await this.policyManager.getEffectivePolicy(securityMetadata);
     
     // 5. Evaluate command against policy
     const decision = this.policyManager.evaluateCommand(command, analysis, policy);
@@ -318,6 +327,22 @@ export class SecurityManager {
   }
   
   /**
+   * Map mlld trust levels to security policy trust levels
+   */
+  private mapMlldTrustToSecurityTrust(mlldTrust: import('@core/types/primitives').TrustLevel): import('./policy/types').TrustLevel {
+    switch (mlldTrust) {
+      case 'always':
+        return 'high';      // Always trusted = high trust (no approval needed)
+      case 'verify':
+        return 'verify';    // Verify = verify (requires approval)
+      case 'never':
+        return 'block';     // Never = block (not allowed)
+      default:
+        return 'verify';    // Default to verify for safety
+    }
+  }
+
+  /**
    * Check and approve an import
    */
   async approveImport(
@@ -544,6 +569,8 @@ export interface SecurityContext {
     trust?: 'high' | 'medium' | 'low' | 'verify' | 'block';
     requireHash?: boolean;
   };
+  // Raw mlld trust level (before mapping)
+  mlldTrust?: import('@core/types/primitives').TrustLevel;
 }
 
 export interface SecurityDecision {

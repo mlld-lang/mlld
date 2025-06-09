@@ -114,10 +114,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     // Skip tests with known issues
     const skipTests: Record<string, string> = {
       'modules-hash': 'Newline handling issue - hash validation is implemented',
-      'security-ttl-durations': 'Issue #99: TTL/trust security features not implemented',
-      'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
-      'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
-      'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
       'text-url-section': 'Issue #82: URL section support not implemented',
       'text-variable-copy': 'Issue #176: Variable copying with @text copy = @original not supported',
       'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
@@ -268,6 +264,33 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           }
           throw new Error(`Unexpected URL in test: ${url}`);
         };
+      } else if (fixture.name.startsWith('security-')) {
+        // Set up files for security tests
+        if (fixture.name === 'security-trust-levels') {
+          await fileSystem.writeFile('/trusted.mld', '@text trusted = "Trusted content"');
+          await fileSystem.writeFile('/unverified.mld', '@text unverified = "Unverified content"');
+          await fileSystem.writeFile('/blocked.mld', '@text blocked = "Blocked content"');
+          await fileSystem.writeFile('/safe', 'Safe path content');
+        } else if (fixture.name === 'security-ttl-durations') {
+          await fileSystem.writeFile('/config.mld', '@text name = "Project"\n@text greeting = "Hello, World!"');
+          await fileSystem.writeFile('/utils.mld', '@text message = "Utilities loaded"');
+          await fileSystem.writeFile('/helpers.mld', '@text message = "Helpers loaded"');
+          await fileSystem.writeFile('/data.mld', '@text message = "Data loaded"');
+          await fileSystem.writeFile('/templates.mld', '@text message = "Templates loaded"');
+          await fileSystem.writeFile('/docs.md', 'Documentation content');
+          await fileSystem.mkdir('/cache');
+        } else if (fixture.name === 'security-ttl-special') {
+          await fileSystem.writeFile('/config.mld', '@text name = "Project"\n@text version = "1.0.0"');
+          await fileSystem.writeFile('/utils.mld', '@text helpers = "Utils loaded"');
+          await fileSystem.writeFile('/data.mld', '@text info = "Data content"');
+          await fileSystem.writeFile('/docs.md', 'Live documentation');
+          await fileSystem.mkdir('/cache');
+        } else if (fixture.name === 'security-ttl-trust-combined') {
+          await fileSystem.writeFile('/config.mld', '@text name = "Secure Project"\n@text version = "1.0.0"');
+          await fileSystem.writeFile('/utils.mld', '@text message = "Secure utils"');
+          await fileSystem.writeFile('/docs.md', 'Secure documentation');
+          await fileSystem.mkdir('/cache');
+        }
       } else if (fixture.name === 'modules-hash') {
         // Enable test mode to skip actual hash validation
         process.env.MLLD_SKIP_HASH_VALIDATION = 'true';
