@@ -260,6 +260,69 @@ AtAdd
         'template'  // Added source parameter
       );
     }
+  // Variable reference MUST come before exec invocation to match simple @varname first
+  / DirectiveContext "@add" _ security:(SecurityOptions _)? "@" varRef:VariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtAdd matched variable reference', { varRef, headerLevel, underHeader });
+      
+      // Extract variable reference information
+      const id = varRef.identifier;
+      
+      // Extract header level and under header if provided
+      const headerLevelValue = headerLevel ? headerLevel : null;
+      const underHeaderValue = underHeader ? underHeader : null;
+      
+      // Create values object with variable node array
+      const values = {
+        variable: [varRef]
+      };
+      
+      // Add headerLevel and underHeader if present
+      if (headerLevelValue) {
+        values.headerLevel = [helpers.createNode(NodeType.Number, {
+          value: headerLevelValue.value,
+          raw: headerLevelValue.raw,
+          location: location()
+        })];
+      }
+      
+      if (underHeaderValue) {
+        values.underHeader = [helpers.createNode(NodeType.Text, {
+          content: underHeaderValue,
+          raw: underHeaderValue,
+          location: location()
+        })];
+      }
+      
+      // Create raw object with raw variable string
+      const raw = {
+        variable: `@${id}`
+      };
+      
+      // Add headerLevel and underHeader to raw if present
+      if (headerLevelValue) {
+        raw.headerLevel = headerLevelValue.raw;
+      }
+      
+      if (underHeaderValue) {
+        raw.underHeader = underHeaderValue;
+      }
+      
+      // Create meta object with security options
+      const meta = {
+        ...helpers.createSecurityMeta(securityOptions)
+      };
+      
+      return helpers.createStructuredDirective(
+        'add', 
+        'addVariable', 
+        values, 
+        raw, 
+        meta, 
+        location(),
+        'variable'  // Added source parameter
+      );
+    }
   // Exec invocation with tail modifiers - @add @command() | @modifiers
   / DirectiveContext "@add" _ "@" invocation:ExecInvocationWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched exec invocation with tail modifiers', { invocation, headerLevel, underHeader });
@@ -374,68 +437,6 @@ AtAdd
           'exec'
         );
       }
-    }
-  / DirectiveContext "@add" _ security:(SecurityOptions _)? "@" varRef:VariableReference !("(") _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('AtAdd matched variable reference', { varRef, headerLevel, underHeader });
-      
-      // Extract variable reference information
-      const id = varRef.identifier;
-      
-      // Extract header level and under header if provided
-      const headerLevelValue = headerLevel ? headerLevel : null;
-      const underHeaderValue = underHeader ? underHeader : null;
-      
-      // Create values object with variable node array
-      const values = {
-        variable: [varRef]
-      };
-      
-      // Add headerLevel and underHeader if present
-      if (headerLevelValue) {
-        values.headerLevel = [helpers.createNode(NodeType.Number, {
-          value: headerLevelValue.value,
-          raw: headerLevelValue.raw,
-          location: location()
-        })];
-      }
-      
-      if (underHeaderValue) {
-        values.underHeader = [helpers.createNode(NodeType.Text, {
-          content: underHeaderValue,
-          raw: underHeaderValue,
-          location: location()
-        })];
-      }
-      
-      // Create raw object with raw variable string
-      const raw = {
-        variable: `@${id}`
-      };
-      
-      // Add headerLevel and underHeader to raw if present
-      if (headerLevelValue) {
-        raw.headerLevel = headerLevelValue.raw;
-      }
-      
-      if (underHeaderValue) {
-        raw.underHeader = underHeaderValue;
-      }
-      
-      // Create meta object with security options
-      const meta = {
-        ...helpers.createSecurityMeta(securityOptions)
-      };
-      
-      return helpers.createStructuredDirective(
-        'add', 
-        'addVariable', 
-        values, 
-        raw, 
-        meta, 
-        location(),
-        'variable'  // Added source parameter
-      );
     }
   / DirectiveContext "@add" _ security:(SecurityOptions _)? "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       const securityOptions = security ? security[0] : null;

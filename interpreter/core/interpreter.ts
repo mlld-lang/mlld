@@ -15,11 +15,12 @@ import type {
   LiteralNode,
   DotSeparatorNode,
   PathSeparatorNode,
-  SectionMarkerNode
+  SectionMarkerNode,
+  ExecInvocation
 } from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
-import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
+import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable, isExecInvocation } from '@core/types';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
@@ -412,6 +413,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     return { value: resolvedValue, env };
   }
   
+  if (isExecInvocation(node)) {
+    // Import the exec invocation evaluator
+    const { evaluateExecInvocation } = await import('../eval/exec-invocation');
+    return evaluateExecInvocation(node, env);
+  }
+  
   // If we get here, it's an unknown node type
   throw new Error(`Unknown node type: ${node.type}`);
 }
@@ -650,6 +657,15 @@ export async function interpolate(
       } else {
         stringValue = String(value);
       }
+      
+      // Apply context-appropriate escaping
+      const strategy = EscapingStrategyFactory.getStrategy(context);
+      parts.push(strategy.escape(stringValue));
+    } else if (node.type === 'ExecInvocation') {
+      // Handle exec invocation nodes in interpolation
+      const { evaluateExecInvocation } = await import('../eval/exec-invocation');
+      const result = await evaluateExecInvocation(node as ExecInvocation, env);
+      const stringValue = String(result.value);
       
       // Apply context-appropriate escaping
       const strategy = EscapingStrategyFactory.getStrategy(context);

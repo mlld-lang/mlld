@@ -214,6 +214,13 @@ export async function evaluateDataValue(
     return await evaluateForeachCommand(value, env);
   }
   
+  // Handle ExecInvocation nodes
+  if (value && typeof value === 'object' && value.type === 'ExecInvocation') {
+    const { evaluateExecInvocation } = await import('./exec-invocation');
+    const result = await evaluateExecInvocation(value as any, env);
+    return result.value;
+  }
+  
   // Fallback - return the value as-is
   console.warn('Unexpected value type in evaluateDataValue:', value);
   return value;

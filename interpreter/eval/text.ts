@@ -269,6 +269,13 @@ export async function evaluateText(
     // Trim trailing newlines for consistency
     resolvedValue = resolvedValue.replace(/\n+$/, '');
     
+  } else if (directive.source === 'exec' && directive.values?.execInvocation) {
+    // ExecInvocation handling: @text result = @greet() | @uppercase
+    const execInvocation = directive.values.execInvocation;
+    const { evaluateExecInvocation } = await import('./exec-invocation');
+    const result = await evaluateExecInvocation(execInvocation, env);
+    resolvedValue = String(result.value);
+    
   } else if (directive.source === 'commandRef') {
     // Direct command reference: @text result = @greet(args)
     const commandArgs = directive.meta?.commandArgs || directive.values?.commandArgs || [];

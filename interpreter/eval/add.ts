@@ -343,6 +343,18 @@ export async function evaluateAdd(
     // Evaluate foreach and format as text
     content = await evaluateForeachAsText(foreachExpression, env, options);
     
+  } else if (directive.subtype === 'addExecInvocation') {
+    // Handle exec invocation nodes
+    const execInvocation = directive.values?.execInvocation;
+    if (!execInvocation) {
+      throw new Error('Add exec invocation directive missing exec invocation');
+    }
+    
+    // Evaluate the exec invocation
+    const { evaluateExecInvocation } = await import('./exec-invocation');
+    const result = await evaluateExecInvocation(execInvocation, env);
+    content = String(result.value);
+    
   } else {
     throw new Error(`Unsupported add subtype: ${directive.subtype}`);
   }

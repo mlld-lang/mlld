@@ -346,6 +346,18 @@ export async function evaluateRun(
       const code = await interpolate(cmdDef.codeTemplate, tempEnv, InterpolationContext.Default);
       output = await env.executeCode(code, cmdDef.language || 'javascript', argValues, executionContext);
     }
+  } else if (directive.subtype === 'runExecInvocation') {
+    // Handle ExecInvocation nodes in run directive
+    const execInvocation = directive.values?.execInvocation;
+    if (!execInvocation) {
+      throw new Error('Run exec invocation directive missing exec invocation');
+    }
+    
+    // Evaluate the exec invocation
+    const { evaluateExecInvocation } = await import('./exec-invocation');
+    const result = await evaluateExecInvocation(execInvocation, env);
+    output = String(result.value);
+    
   } else {
     throw new Error(`Unsupported run subtype: ${directive.subtype}`);
   }

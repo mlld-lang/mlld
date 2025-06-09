@@ -79,7 +79,7 @@ export async function evaluateOutput(
           break;
           
         case 'variable':
-          if (directive.subtype === 'outputInvocation') {
+          if (directive.subtype === 'outputInvocation' || directive.subtype === 'outputExecInvocation') {
             // @output @template(args) [file.md] or @output @command(args) [file.md]
             // This is a parameterized invocation
             const varName = directive.values.source.identifier?.[0]?.content || directive.values.source.identifier;
@@ -285,6 +285,23 @@ export async function evaluateOutput(
           // Execute the command
           const cmdResult = await evaluate(cmdVariable.value, cmdChildEnv);
           content = String(cmdResult.value || '');
+          break;
+          
+        case 'exec':
+        case 'execInvocation':
+          // @output @command() [file.md] with tail modifiers
+          // Handle ExecInvocation nodes
+          const execInvocationNode = directive.values.source || directive.values.execInvocation;
+          if (execInvocationNode && execInvocationNode.type === 'ExecInvocation') {
+            const { evaluateExecInvocation } = await import('./exec-invocation');
+            const result = await evaluateExecInvocation(execInvocationNode, env);
+            content = String(result.value);
+          } else {
+            throw new MlldOutputError(
+              `Invalid exec invocation source`,
+              directive.location
+            );
+          }
           break;
           
         default:
