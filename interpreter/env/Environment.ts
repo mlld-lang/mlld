@@ -189,11 +189,6 @@ export class Environment {
         logger.warn('Failed to initialize lock files:', error);
       });
       
-      // Load global lock file asynchronously (fire and forget)
-      this.loadGlobalLockFile().catch(error => {
-        logger.debug('Failed to load global lock file:', error);
-      });
-      
       // Initialize reserved variables
       this.initializeReservedVariables();
       
