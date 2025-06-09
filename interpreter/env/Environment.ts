@@ -68,6 +68,7 @@ export class Environment {
   private resolverManager?: ResolverManager; // New resolver system
   private urlCacheManager?: URLCache; // URL cache manager
   private reservedNames: Set<string> = new Set(['INPUT', 'TIME', 'PROJECTPATH', 'DEBUG']); // Reserved variable names
+  private initialNodeCount: number = 0; // Track initial nodes to prevent duplicate merging
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -1242,12 +1243,15 @@ export class Environment {
   // --- Scope Management ---
   
   createChild(newBasePath?: string): Environment {
-    return new Environment(
+    const child = new Environment(
       this.fileSystem,
       this.pathService,
       newBasePath || this.basePath,
       this
     );
+    // Track the current node count so we know which nodes are new in the child
+    child.initialNodeCount = this.nodes.length;
+    return child;
   }
   
   mergeChild(child: Environment): void {
@@ -1258,8 +1262,10 @@ export class Environment {
       this.variables.set(name, variable);
     }
     
-    // Merge child nodes
-    this.nodes.push(...child.nodes);
+    // Only merge nodes that were added to the child environment after its creation
+    // This prevents duplicate nodes when child inherits parent's nodes
+    const newNodes = child.nodes.slice(child.initialNodeCount);
+    this.nodes.push(...newNodes);
   }
   
   // --- Special Variables ---

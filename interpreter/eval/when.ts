@@ -1,14 +1,14 @@
-import type { WhenNode, WhenSimpleNode, WhenBlockNode, WhenConditionPair } from '@core/types/when';
+import type { WhenNode, WhenSimpleNode, WhenBlockNode, WhenSwitchNode, WhenConditionPair } from '@core/types/when';
 import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { MlldConditionError } from '@core/errors';
-import { isWhenSimpleNode, isWhenBlockNode } from '@core/types/when';
+import { isWhenSimpleNode, isWhenBlockNode, isWhenSwitchNode } from '@core/types/when';
 import { evaluate } from '../core/interpreter';
 
 /**
  * Evaluates a @when directive.
- * Handles both simple and block forms.
+ * Handles simple, switch, and block forms.
  */
 export async function evaluateWhen(
   node: WhenNode,
@@ -16,6 +16,8 @@ export async function evaluateWhen(
 ): Promise<EvalResult> {
   if (isWhenSimpleNode(node)) {
     return evaluateWhenSimple(node, env);
+  } else if (isWhenSwitchNode(node)) {
+    return evaluateWhenSwitch(node, env);
   } else if (isWhenBlockNode(node)) {
     return evaluateWhenBlock(node, env);
   }
@@ -43,6 +45,74 @@ async function evaluateWhenSimple(
   
   // Return empty string if condition is false
   return { value: '', env };
+}
+
+/**
+ * Evaluates a switch when directive: @when <expression>: [value => action, ...]
+ * Evaluates the expression once and matches its result against condition values
+ */
+async function evaluateWhenSwitch(
+  node: WhenSwitchNode,
+  env: Environment
+): Promise<EvalResult> {
+  // Evaluate the expression once
+  const expressionResult = await evaluate(node.values.expression, env);
+  const expressionValue = expressionResult.value;
+  
+  // Create a child environment for the switch block
+  const childEnv = env.createChild();
+  
+  try {
+    // Check each condition value against the expression result
+    for (const pair of node.values.conditions) {
+      // Evaluate the condition value
+      const conditionResult = await evaluate(pair.condition, childEnv);
+      const conditionValue = conditionResult.value;
+      
+      // Compare values - handle special cases
+      let matches = false;
+      
+      // Both null/undefined
+      if ((expressionValue === null || expressionValue === undefined) &&
+          (conditionValue === null || conditionValue === undefined)) {
+        matches = true;
+      }
+      // String comparison - case sensitive
+      else if (typeof expressionValue === 'string' && typeof conditionValue === 'string') {
+        matches = expressionValue === conditionValue;
+      }
+      // Boolean comparison
+      else if (typeof expressionValue === 'boolean' && typeof conditionValue === 'boolean') {
+        matches = expressionValue === conditionValue;
+      }
+      // Number comparison
+      else if (typeof expressionValue === 'number' && typeof conditionValue === 'number') {
+        matches = expressionValue === conditionValue;
+      }
+      // Truthy comparison - if condition is boolean literal
+      else if (typeof conditionValue === 'boolean') {
+        matches = isTruthy(expressionValue) === conditionValue;
+      }
+      // Direct equality for other cases
+      else {
+        matches = expressionValue === conditionValue;
+      }
+      
+      if (matches && pair.action) {
+        const actionResult = await evaluate(pair.action, childEnv);
+        // Merge child environment nodes back to parent
+        env.mergeChild(childEnv);
+        // For @when, we don't want to propagate the action's output value to the document
+        // The action should have already done what it needs to do (like @output writing to a file)
+        return { value: '', env };
+      }
+    }
+    
+    // No match found
+    return { value: '', env };
+  } finally {
+    // Child environment goes out of scope
+  }
 }
 
 /**
@@ -112,7 +182,17 @@ async function evaluateWhenBlock(
     // This ensures output nodes created by actions are preserved
     env.mergeChild(childEnv);
     
-    return result;
+    // If the when evaluation produced output content, add it to the document
+    if (result.value && typeof result.value === 'string' && result.value.trim()) {
+      const textNode = {
+        type: 'Text' as const,
+        nodeId: `${node.nodeId || 'when'}-output`,
+        content: result.value
+      };
+      env.addNode(textNode);
+    }
+    
+    return { value: '', env };
   } finally {
     // Child environment goes out of scope
   }

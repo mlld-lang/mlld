@@ -310,17 +310,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       return { value: '', env };
     }
     
-    // Check if this is a built-in function
-    if (node.valueType === 'commandRef') {
-      const { isBuiltinFunction, executeBuiltinFunction } = await import('../eval/builtin-functions');
-      if (isBuiltinFunction(node.identifier)) {
-        // Handle args property safely - it may not exist in the type definition
-        const nodeWithArgs = node as { args?: unknown[] };
-        const args: unknown[] = nodeWithArgs.args || [];
-        const result: unknown = executeBuiltinFunction(node.identifier, args, env);
-        return { value: result, env };
-      }
-    }
+    // Built-in functions removed - use @exec to define custom functions instead
     
     const variable = env.getVariable(node.identifier);
     if (!variable) {
