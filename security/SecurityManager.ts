@@ -6,12 +6,15 @@ import { TaintTracker, TaintLevel } from './taint';
 import { ImportApproval } from './import';
 import { ImmutableCache } from './cache';
 import { PathValidator } from './path';
-// import type { PolicyManager } from './policy';
+import { PolicyManager, PolicyManagerImpl } from './policy';
 // import type { AuditLogger } from './audit';
-// import type { SecurityHook } from './hooks';
 
 interface SecurityHook {
   execute(data: any): Promise<void>;
+}
+
+interface AuditLogger {
+  log(event: any): Promise<void>;
 }
 
 /**
@@ -28,8 +31,8 @@ export class SecurityManager {
   private importApproval: ImportApproval;
   private cache: ImmutableCache;
   private pathValidator: PathValidator;
-  // private policyManager: PolicyManager;
-  // private auditLogger: AuditLogger;
+  private policyManager: PolicyManager;
+  private auditLogger: AuditLogger;
   private hooks: Map<string, SecurityHook[]> = new Map();
   
   private constructor(private projectPath: string) {
@@ -57,11 +60,19 @@ export class SecurityManager {
     // 2. Analyze command for dangerous patterns
     const analysis = await this.commandAnalyzer.analyze(command, taint);
     
-    // 3. Apply security policy
-    const policy = this.policyManager.getPolicy();
-    const decision = policy.evaluateCommand(analysis);
+    // 3. Get effective policy (merged global + project + inline)
+    const policy = await this.policyManager.getEffectivePolicy(context?.metadata);
     
-    // 4. Audit the check
+    // 4. Evaluate command against policy
+    const decision = this.policyManager.evaluateCommand(command, analysis, policy);
+    
+    // 5. Apply taint-based restrictions
+    if (taint && taint !== TaintLevel.TRUSTED && decision.allowed) {
+      // Tainted commands always require approval unless explicitly trusted
+      decision.requiresApproval = true;
+    }
+    
+    // 6. Audit the check
     await this.auditLogger.log({
       type: 'COMMAND_CHECK',
       command,
@@ -71,7 +82,7 @@ export class SecurityManager {
       context
     });
     
-    // 5. Run pre-execution hooks
+    // 7. Run pre-execution hooks
     await this.runHooks('pre-command', { command, decision, context });
     
     return decision;
@@ -80,13 +91,38 @@ export class SecurityManager {
   /**
    * Check path access permissions
    */
-  async checkPath(path: string, operation: 'read' | 'write'): Promise<boolean> {
+  async checkPath(path: string, operation: 'read' | 'write', context?: SecurityContext): Promise<boolean> {
     try {
-      if (operation === 'read') {
-        return this.pathValidator.canRead(path);
-      } else {
-        return this.pathValidator.canWrite(path);
+      // 1. Basic path validation
+      const basicCheck = operation === 'read' 
+        ? this.pathValidator.canRead(path)
+        : this.pathValidator.canWrite(path);
+      
+      if (!basicCheck) {
+        return false;
       }
+      
+      // 2. Policy-based check
+      const policy = await this.policyManager.getEffectivePolicy(context?.metadata);
+      const decision = this.policyManager.evaluatePath(path, operation, policy);
+      
+      // 3. Audit the check
+      await this.auditLogger.log({
+        type: 'PATH_CHECK',
+        path,
+        operation,
+        decision,
+        context
+      });
+      
+      // 4. Handle approval requirement
+      if (decision.requiresApproval) {
+        // TODO: Implement path approval flow
+        console.warn(`Path ${operation} requires approval: ${path}`);
+        return false;
+      }
+      
+      return decision.allowed;
     } catch (error) {
       // Log security violation
       console.error(`Security: Path access denied - ${operation} ${path}`);
@@ -99,6 +135,30 @@ export class SecurityManager {
    */
   trackTaint(value: any, source: TaintSource): void {
     this.taintTracker.mark(value, source);
+  }
+  
+  /**
+   * Check if a resolver is allowed
+   */
+  async checkResolver(resolverName: string, context?: SecurityContext): Promise<boolean> {
+    // 1. Get effective policy
+    const policy = await this.policyManager.getEffectivePolicy(context?.metadata);
+    const decision = this.policyManager.evaluateResolver(resolverName, policy);
+    
+    // 2. Audit the check
+    await this.auditLogger.log({
+      type: 'RESOLVER_CHECK',
+      resolver: resolverName,
+      decision,
+      context
+    });
+    
+    // 3. Handle decision
+    if (!decision.allowed) {
+      console.error(`Resolver blocked by policy: ${resolverName} - ${decision.reason}`);
+    }
+    
+    return decision.allowed;
   }
   
   /**
@@ -128,6 +188,16 @@ export class SecurityManager {
     this.taintTracker = new TaintTracker();
     this.importApproval = new ImportApproval(this.projectPath);
     this.pathValidator = new PathValidator();
+    this.policyManager = new PolicyManagerImpl();
+    
+    // Initialize a simple audit logger
+    this.auditLogger = {
+      log: async (event: any) => {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('[SECURITY AUDIT]', JSON.stringify(event, null, 2));
+        }
+      }
+    };
   }
   
   /**
@@ -181,9 +251,29 @@ export class SecurityManager {
   async approveImport(
     importURL: string,
     content: string,
-    advisories: any[]
+    advisories: any[],
+    context?: SecurityContext
   ): Promise<boolean> {
-    // Show advisories if any
+    // 1. Check import policy
+    const policy = await this.policyManager.getEffectivePolicy(context?.metadata);
+    const decision = this.policyManager.evaluateImport(importURL, policy);
+    
+    // 2. Audit the check
+    await this.auditLogger.log({
+      type: 'IMPORT_CHECK',
+      importURL,
+      decision,
+      advisories,
+      context
+    });
+    
+    // 3. If blocked by policy, deny immediately
+    if (!decision.allowed) {
+      console.error(`Import blocked by policy: ${importURL} - ${decision.reason}`);
+      return false;
+    }
+    
+    // 4. Show advisories if any
     if (advisories.length > 0) {
       const approved = await this.advisoryChecker.promptUserAboutAdvisories(
         advisories,
@@ -194,8 +284,13 @@ export class SecurityManager {
       }
     }
     
-    // Regular import approval
-    return this.importApproval.checkApproval(importURL, content);
+    // 5. Check if approval is required
+    if (decision.requiresApproval) {
+      return this.importApproval.checkApproval(importURL, content);
+    }
+    
+    // 6. Auto-approve if policy allows
+    return true;
   }
 }
 
@@ -204,6 +299,11 @@ export interface SecurityContext {
   line?: number;
   directive?: string;
   user?: string;
+  metadata?: {
+    ttl?: number;
+    trust?: 'high' | 'medium' | 'low' | 'verify' | 'block';
+    requireHash?: boolean;
+  };
 }
 
 export interface SecurityDecision {
