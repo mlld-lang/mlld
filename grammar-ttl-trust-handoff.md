@@ -2,12 +2,13 @@
 
 ## Summary of Work Completed
 
-We've successfully implemented Phase 1 and Phase 2 of the grammar implementation plan for TTL, trust levels, and unified tail modifiers. The grammar now supports:
+We've successfully implemented Phases 1, 2, and 3 of the grammar implementation plan for TTL, trust levels, and unified tail modifiers. The system now supports:
 
 1. **TTL (Time-To-Live)** on `@path` and `@import` directives for URL caching
 2. **Trust levels** (always/never/verify) as part of unified tail modifiers
 3. **Unified tail modifier syntax** where trust, pipeline (|), needs, and with all normalize to `withClause`
 4. **Exec invocations with tail modifiers** - commands defined with `@exec` can now use tail modifiers without requiring `@run` wrapper
+5. **Complete type definitions** - All TypeScript types updated to support new AST structures
 
 ## What Was Changed
 
@@ -28,8 +29,21 @@ We've successfully implemented Phase 1 and Phase 2 of the grammar implementation
 
 ## Current State
 
+### Updated Type Definitions (Phase 3)
+1. `/core/types/run.ts` - Added `trust` property to `WithClause` interface
+2. `/core/types/primitives.ts` - Added `ExecInvocation`, `CommandReference`, and `TTLValue` types
+3. `/core/types/path.ts` - Added `ttl` and `withClause` to `PathValues`
+4. `/core/types/import.ts` - Added `ttl` and `withClause` to `ImportValues`
+5. `/core/types/values.ts` - Updated `ContentNodeArray` to include `ExecInvocation`
+6. `/core/types/data.ts` - Updated `DataValue` to include `ExecInvocation`
+7. `/core/types/guards.ts` - Added `isExecInvocation` and `hasWithClause` type guards
+8. `/core/types/index.ts` - Updated `MlldNode` union to include `ExecInvocation`
+
+## Current State
+
 ### What's Working
 - Grammar compiles successfully
+- Type definitions compile without errors
 - AST generation works correctly for all new syntax:
   ```
   @path api = [https://api.com] (5d) trust always
@@ -39,93 +53,144 @@ We've successfully implemented Phase 1 and Phase 2 of the grammar implementation
   @run [(npm test)] | @filter("error")
   ```
 - All syntax normalizes to `withClause` in the AST
-- 157 tests pass, 9 skipped, ~63 failing (expected due to interpreter not being updated)
+- 157 tests pass, 9 skipped, 63 failing (expected - interpreter needs updating)
 
 ### What Needs to Be Done
 
-## Phase 3: Update Type Definitions
+## Phase 4: Update AST Helpers (NEXT PHASE)
 
-### 1. Update AST Node Types (`/core/types/nodes.ts`)
-Add:
-```typescript
-export interface WithClause {
-  trust?: TrustLevel;
-  pipeline?: PipelineCommand[];
-  needs?: NeedsObject;
-  [key: string]: any; // For other with clause properties
+### What Needs to Be Done
+
+The grammar is generating ExecInvocation nodes, but we need helper functions to work with them properly.
+
+### 1. Update `/grammar/deps/grammar-core.js`
+
+Add these helper functions:
+```javascript
+// Helper to create ExecInvocation nodes
+createExecInvocation(commandRef, withClause, location) {
+  return {
+    type: 'ExecInvocation',
+    nodeId: generateNodeId(),
+    commandRef,
+    withClause: withClause || null,
+    location
+  };
 }
 
-export interface TTLValue {
-  type: 'static' | 'duration';
-  value: number;
-  unit?: 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks';
-  seconds: number; // Normalized value in seconds
+// Helper to extract command name from ExecInvocation
+getExecInvocationName(node) {
+  return node.commandRef?.identifier || node.commandRef?.name;
 }
 
-export interface ExecInvocation {
-  type: 'ExecInvocation';
-  commandRef: CommandReference;
-  withClause?: WithClause;
-}
-```
-
-### 2. Update Directive Types
-- Add `withClause?: WithClause` to all directive types
-- Add `ttl?: TTLValue` to PathDirective and ImportDirective
-- Update values types to include ExecInvocation where applicable
-
-### 3. Update Type Guards (`/core/types/guards.ts`)
-Add type guards for new types:
-```typescript
-export function isExecInvocation(node: any): node is ExecInvocation {
+// Helper to check if a node is an exec invocation
+isExecInvocationNode(node) {
   return node?.type === 'ExecInvocation';
 }
+```
 
-export function hasWithClause(directive: any): directive is { withClause: WithClause } {
-  return directive?.values?.withClause !== undefined;
+### 2. Update `/grammar/deps/helpers.js` (if needed)
+
+Ensure helper functions are exported and available to grammar rules.
+
+### 3. Key Implementation Notes
+
+- ExecInvocation nodes appear in place of variables in many contexts
+- The `commandRef` contains the command name and arguments
+- The `withClause` contains any tail modifiers (normalized)
+- These nodes need special handling in the interpreter
+
+## Phase 5: Update Interpreter (CRITICAL PHASE)
+
+### Overview of Failing Tests
+
+The 63 failing tests are primarily due to:
+1. **Unknown node type: ExecInvocation** - Interpreter doesn't recognize the new node type
+2. **Unsupported add subtype: addExecInvocation** - Add evaluator needs updating
+3. **Template interpolation showing [object Object]** - ExecInvocation nodes in templates
+
+### 1. Update Core Interpreter (`/interpreter/core/interpreter.ts`)
+
+The `interpolate` function needs to handle ExecInvocation nodes:
+```typescript
+if (isExecInvocation(node)) {
+  // Evaluate the exec invocation
+  const result = await evaluateExecInvocation(node, env);
+  return result;
 }
 ```
 
-## Phase 4: Update AST Helpers
+### 2. Create Exec Invocation Evaluator
 
-### 1. Create/Update Helper Functions
-- Add helpers for extracting withClause components
-- Add TTL parsing and normalization helpers
-- Add exec invocation handling helpers
+Create `/interpreter/eval/exec-invocation.ts`:
+```typescript
+export async function evaluateExecInvocation(
+  node: ExecInvocation,
+  env: Environment
+): Promise<string> {
+  // 1. Get the command from environment
+  const commandName = node.commandRef.identifier;
+  const command = env.getVariable(commandName);
+  
+  // 2. Execute the command with arguments
+  const args = node.commandRef.args || [];
+  const result = await executeCommand(command, args, env);
+  
+  // 3. Apply withClause transformations if present
+  if (node.withClause) {
+    return applyWithClause(result, node.withClause, env);
+  }
+  
+  return result;
+}
+```
 
-### 2. Update Grammar Core Helpers (`/grammar/deps/grammar-core.js`)
-Already includes `ttlToSeconds` helper - may need additional helpers for working with withClause.
+### 3. Update Directive Evaluators
 
-## Phase 5: Update Interpreter
+Each evaluator that encounters ExecInvocation nodes needs updating:
 
-### 1. Update Directive Evaluators
-Each evaluator needs to handle `withClause` and apply transformations:
+- `/interpreter/eval/add.ts` - Recognize `addExecInvocation` subtype
+- `/interpreter/eval/text.ts` - Handle ExecInvocation in content
+- `/interpreter/eval/data.ts` - Handle ExecInvocation in data values
+- `/interpreter/eval/when.ts` - Handle ExecInvocation in conditions
+- `/interpreter/eval/output.ts` - Handle ExecInvocation as sources
 
-- `/interpreter/eval/path.ts` - Handle TTL for caching
-- `/interpreter/eval/import.ts` - Handle TTL for module caching
-- `/interpreter/eval/run.ts` - Apply pipeline transformations
-- `/interpreter/eval/add.ts` - Handle exec invocations with pipelines
-- `/interpreter/eval/text.ts` - Handle exec invocations
-- `/interpreter/eval/data.ts` - Handle exec invocations
-- `/interpreter/eval/output.ts` - Handle exec invocations
-- `/interpreter/eval/when.ts` - Handle exec invocations in conditions
+### 4. Implement WithClause Processing
 
-### 2. Implement Pipeline Processing
-Create a pipeline processor that:
-1. Takes initial output
-2. Passes through each pipeline command
-3. Each command receives previous output as `@input`
-4. Returns final transformed output
+Create `/interpreter/eval/with-clause.ts`:
+```typescript
+export async function applyWithClause(
+  input: string,
+  withClause: WithClause,
+  env: Environment
+): Promise<string> {
+  let result = input;
+  
+  // Apply pipeline transformations
+  if (withClause.pipeline) {
+    for (const command of withClause.pipeline) {
+      // Set @input for pipeline command
+      const pipelineEnv = env.createChild();
+      pipelineEnv.setVariable('input', result);
+      result = await executeCommand(command, [], pipelineEnv);
+    }
+  }
+  
+  // Apply trust validation
+  if (withClause.trust) {
+    validateTrust(result, withClause.trust);
+  }
+  
+  return result;
+}
+```
 
-### 3. Implement Trust Validation
-- Create trust validator that checks trust levels
-- Integrate with security manager
-- Handle always/never/verify logic
+### 5. TTL Implementation for Path/Import
 
-### 4. Implement TTL Caching
-- Update URL cache to respect TTL values
-- Update module cache to respect TTL values
-- Handle 'static' TTL (cache forever)
+Update `/interpreter/eval/path.ts` and `/interpreter/eval/import.ts`:
+- Extract TTL from directive values
+- Pass TTL to cache when storing URLs/modules
+- Convert TTL values to seconds for cache expiration
 
 ## Phase 6: Update Test Cases
 
@@ -197,24 +262,51 @@ Rules are ordered specifically to ensure correct matching:
 3. **Specific Tests**: `npm test <file>`
 4. **Fixture Generation**: `npm run build:fixtures`
 
+## Specific Failing Test Examples
+
+To help the next implementer, here are the key failing patterns:
+
+1. **ExecInvocation in templates**:
+   - Test: `text-textTemplateDefinition-simple`
+   - Expected: `Hello, World!`
+   - Actual: `Hello, [object Object]!`
+   - Cause: Template interpolation doesn't handle ExecInvocation nodes
+
+2. **Add directive with exec invocation**:
+   - Test: `text-assignment-add`
+   - Error: `Unsupported add subtype: addExecInvocation`
+   - Cause: Add evaluator doesn't recognize the new subtype
+
+3. **When conditions with exec invocations**:
+   - Test: `when-simple`
+   - Error: `Unknown node type: ExecInvocation`
+   - Cause: When evaluator can't evaluate ExecInvocation conditions
+
+4. **Data values with exec invocations**:
+   - Test: `data-mixed-types`
+   - Error: `Unexpected node type in data value`
+   - Cause: Data evaluator doesn't handle ExecInvocation nodes
+
 ## Known Issues
 
-1. **Test Failures**: ~63 tests failing due to interpreter not handling new AST
-2. **Documentation**: AST.md needs updating with new structures
-3. **Type Definitions**: Not yet updated for new grammar
+1. **Test Failures**: 63 tests failing due to interpreter not handling new AST
+2. **Documentation**: AST.md needs updating with new structures  
+3. **Module Version Checking**: Import evaluator was updated separately to add version checking
 
 ## Resources
 
-- Implementation plan: `/grammar-implementation-plan.md`
+- Implementation plan: `/docs/dev/specs/grammar-implementation-plan.md`
+- Design specs: `/docs/dev/specs/ttl-trust-syntax.md`
+- Context: `/docs/dev/specs/implementation-context.md`
 - AST principles: `/docs/dev/AST.md`
 - Grammar patterns: `/grammar/patterns/`
 - Test cases: `/tests/cases/`
 
 ## Next Steps Priority
 
-1. **Update types** (Phase 3) - Required for TypeScript compilation
-2. **Update interpreter** (Phase 5) - Required for tests to pass
-3. **Create test cases** (Phase 6) - Validate implementation
-4. **Update documentation** (Phase 7) - Help users and future developers
+1. **Phase 4: Update AST Helpers** - Add helper functions for ExecInvocation handling
+2. **Phase 5: Update Interpreter** - Critical for making tests pass
+3. **Phase 6: Create Test Cases** - Validate the implementation
+4. **Phase 7: Update Documentation** - Help users and future developers
 
-The grammar work is complete and tested. The next Claude should start with updating the type definitions to match the new AST structure, then move on to updating the interpreter to handle the new features.
+The grammar and type work is complete. The next Claude should start with Phase 4 (AST helpers), then immediately move to Phase 5 (interpreter updates) to get the tests passing.
