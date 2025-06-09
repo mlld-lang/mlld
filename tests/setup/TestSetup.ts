@@ -17,7 +17,7 @@ export class TestSetup {
   /**
    * Set up test environment before each test
    */
-  static async beforeEach(testType: TestType = 'unit', overrides: Partial<TestEnvironmentConfig> = {}): Promise<Environment> {
+  static async beforeEach(testType: TestType = 'unit', overrides: Partial<TestEnvironmentConfig> = {}): Promise<TestEnvironment> {
     TestSetup.testStartTime = Date.now();
     
     try {
@@ -88,11 +88,11 @@ export class TestSetup {
   /**
    * Create a specific environment type quickly
    */
-  static async createSecurityUnitTestEnv(overrides: Partial<TestEnvironmentConfig> = {}): Promise<Environment> {
+  static async createSecurityUnitTestEnv(overrides: Partial<TestEnvironmentConfig> = {}): Promise<TestEnvironment> {
     return TestSetup.beforeEach('unit', overrides);
   }
 
-  static async createSecurityIntegrationTestEnv(overrides: Partial<TestEnvironmentConfig> = {}): Promise<Environment> {
+  static async createSecurityIntegrationTestEnv(overrides: Partial<TestEnvironmentConfig> = {}): Promise<TestEnvironment> {
     return TestSetup.beforeEach('integration', overrides);
   }
 

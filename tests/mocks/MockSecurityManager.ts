@@ -318,6 +318,13 @@ export class MockSecurityManager {
   }
 
   /**
+   * Check if an import was approved (attempted)
+   */
+  wasImportApproved(url: string): boolean {
+    return this.importApprovals.some(approval => approval.url === url);
+  }
+
+  /**
    * Check if taint was tracked for a specific value
    */
   wasTaintTracked(value: any): boolean {
@@ -391,8 +398,11 @@ export class MockSecurityManager {
   }
 
   private evaluateDefaultPathPolicy(path: string, operation: string, context?: SecurityContext): boolean {
+    // Ensure path is a string
+    const pathStr = String(path);
+    
     // Block paths containing "blocked" for testing
-    if (path.includes('blocked') || path.includes('/etc/') || path.includes('/root/')) {
+    if (pathStr.includes('blocked') || pathStr.includes('/etc/') || pathStr.includes('/root/')) {
       return false;
     }
 

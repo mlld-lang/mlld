@@ -63,8 +63,14 @@ export class TestEnvironment extends Environment {
   private mocks: Map<string, any> = new Map();
   private startTime: number = Date.now();
 
-  constructor(config: TestEnvironmentConfig, environmentOptions: any) {
-    super(environmentOptions);
+  constructor(
+    config: TestEnvironmentConfig, 
+    fileSystem: any, 
+    pathService: any, 
+    basePath: string,
+    environmentOptions: any
+  ) {
+    super(fileSystem, pathService, basePath, undefined, environmentOptions);
     this.testConfig = config;
     this.initializeTestComponents();
   }
@@ -94,19 +100,23 @@ export class TestEnvironment extends Environment {
    * Creates mock or real SecurityManager based on config
    */
   forceSecurityInitialization(): void {
-    if (this.getSecurityManager()) {
-      return; // Already initialized
-    }
-
+    const existingSM = this.getSecurityManager();
+    
     if (this.testConfig.security?.mock) {
-      const mockSM = new MockSecurityManager(this.testConfig.security);
-      this.setSecurityManager(mockSM as any);
-      this.mocks.set('SecurityManager', mockSM);
-    } else {
+      // If we already have a SecurityManager and it's a mock, store it in mocks
+      if (existingSM && existingSM.constructor.name === 'MockSecurityManager') {
+        this.mocks.set('SecurityManager', existingSM);
+      } else {
+        // Create new mock SecurityManager
+        const mockSM = new MockSecurityManager(this.testConfig.security);
+        (this as any).securityManager = mockSM;
+        this.mocks.set('SecurityManager', mockSM);
+      }
+    } else if (!existingSM) {
       try {
         // Force real SecurityManager creation with error propagation
         const sm = SecurityManager.getInstance(this.getBasePath());
-        this.setSecurityManager(sm);
+        (this as any).securityManager = sm;
       } catch (error) {
         throw new Error(`Failed to initialize SecurityManager in test: ${error.message}`);
       }
@@ -225,6 +235,68 @@ export class TestEnvironment extends Environment {
       throw new Error('URL mocking only available with mocked URLCache');
     }
     cache.mockResponse(url, content, ttl);
+  }
+
+  /**
+   * Mock import approval decision
+   */
+  mockImportApproval(url: string, approved: boolean): void {
+    const sm = this.mocks.get('SecurityManager') as MockSecurityManager;
+    if (!sm) {
+      throw new Error('Import mocking only available with mocked SecurityManager');
+    }
+    sm.mockImportDecision(url, approved);
+  }
+
+  /**
+   * Check if an import was approved
+   */
+  wasImportApproved(url: string): boolean {
+    const sm = this.mocks.get('SecurityManager') as MockSecurityManager;
+    if (!sm) {
+      throw new Error('Import verification only available with mocked SecurityManager');
+    }
+    return sm.wasImportApproved(url);
+  }
+
+  /**
+   * Check if a path was security-checked
+   */
+  wasPathChecked(path: string, operation: 'read' | 'write'): boolean {
+    const sm = this.mocks.get('SecurityManager') as MockSecurityManager;
+    if (!sm) {
+      throw new Error('Path verification only available with mocked SecurityManager');
+    }
+    return sm.wasPathChecked(path, operation);
+  }
+
+  /**
+   * Set current file path for context
+   */
+  setCurrentFile(filePath: string): void {
+    // This would set the current file context for security checks
+    (this as any).currentFilePath = filePath;
+  }
+
+  /**
+   * Wrapper for writeFile to expose it in tests
+   */
+  async writeFile(path: string, content: string): Promise<void> {
+    const resolvedPath = await this.resolvePath(path);
+    
+    // NEW: Security check for path access
+    const securityManager = this.getSecurityManager();
+    if (securityManager) {
+      const allowed = await securityManager.checkPath(resolvedPath, 'write');
+      if (!allowed) {
+        const MlldFileSystemError = (await import('@core/errors')).MlldFileSystemError;
+        throw new MlldFileSystemError(`Security: Write access denied for ${path}`);
+      }
+    }
+    
+    // Access the parent's writeFile method via filesystem
+    const fs = (this as any).fileSystem;
+    return await fs.writeFile(resolvedPath, content);
   }
 
   /**

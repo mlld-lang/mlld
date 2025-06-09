@@ -1,6 +1,7 @@
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import { Environment } from '@interpreter/env/Environment';
+import { TestEnvironment } from './TestEnvironment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { SecurityManager } from '@security';
@@ -63,7 +64,7 @@ export class EnvironmentFactory {
   /**
    * Create a test environment with the specified configuration
    */
-  static createTestEnvironment(config: TestEnvironmentConfig = {}): Environment {
+  static createTestEnvironment(config: TestEnvironmentConfig = {}): TestEnvironment {
     const {
       basePath = '/test',
       fileSystem = { type: 'memory' },
@@ -85,12 +86,25 @@ export class EnvironmentFactory {
     const fs = EnvironmentFactory.createFileSystem(fileSystem);
     const pathService = new PathService();
 
-    // Create base environment
-    const env = new Environment(
+    // Create base environment with security options
+    const environmentOptions = {
+      security: {
+        enabled: security.enabled,
+        mock: security.mock,
+        manager: security.mock ? new MockSecurityManager({
+          enabled: security.enabled,
+          allowCommandExecution: security.allowCommandExecution ?? false,
+          defaultTrust: security.defaultTrust ?? 'verify'
+        }) : undefined
+      }
+    };
+
+    const env = new TestEnvironment(
+      config,
       fs,
       pathService,
       basePath,
-      undefined // Always create root environment for security initialization
+      environmentOptions
     );
     
     // Note: URL config is handled inside Environment constructor via urlConfig parameter
@@ -108,7 +122,7 @@ export class EnvironmentFactory {
   /**
    * Create environment for security unit tests (mocked SecurityManager)
    */
-  static createSecurityUnitTest(overrides: Partial<TestEnvironmentConfig> = {}): Environment {
+  static createSecurityUnitTest(overrides: Partial<TestEnvironmentConfig> = {}): TestEnvironment {
     return this.createTestEnvironment({
       security: { enabled: true, mock: true, allowCommandExecution: false },
       cache: { enabled: true, mock: true },
@@ -121,7 +135,7 @@ export class EnvironmentFactory {
   /**
    * Create environment for security integration tests (real SecurityManager)
    */
-  static createSecurityIntegrationTest(overrides: Partial<TestEnvironmentConfig> = {}): Environment {
+  static createSecurityIntegrationTest(overrides: Partial<TestEnvironmentConfig> = {}): TestEnvironment {
     return this.createTestEnvironment({
       security: { enabled: true, mock: false, allowCommandExecution: true },
       cache: { enabled: true, mock: false },
