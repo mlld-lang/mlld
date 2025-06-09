@@ -302,11 +302,22 @@ export async function evaluateAdd(
       
       // Convert argument to string value
       let value: string;
-      if (typeof argValue === 'object' && argValue.type === 'string') {
+      if (typeof argValue === 'object' && argValue.type === 'Text') {
+        // Handle Text nodes from the AST
+        value = argValue.content || '';
+      } else if (typeof argValue === 'object' && argValue.type === 'VariableReference') {
+        // Handle variable references like @userName
+        const varName = argValue.identifier;
+        const variable = env.getVariable(varName);
+        if (!variable) {
+          throw new Error(`Variable not found: ${varName}`);
+        }
+        value = variable.type === 'text' ? variable.value : String(variable.value);
+      } else if (typeof argValue === 'object' && argValue.type === 'string') {
+        // Legacy format support
         value = argValue.value;
       } else if (typeof argValue === 'object' && argValue.type === 'variable') {
-        // Handle variable references like @userName
-        // The value is a VariableReference node
+        // Legacy format - handle variable references
         const varRef = argValue.value;
         const varName = varRef.identifier;
         const variable = env.getVariable(varName);
