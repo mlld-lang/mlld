@@ -21,11 +21,13 @@ export * from './path';
 
 // Export from directories that exist
 // export * from './policy';
-// export * from './audit';
 // export * from './hooks';
 
+// Audit subsystem
+export { AuditLogger, AuditEventType } from './audit/AuditLogger';
+
 // Main security facade
-export { SecurityManager } from './SecurityManager';
+export { SecurityManager, TaintSource } from './SecurityManager';
 
 // Temporary backward compatibility
 // (These will be removed once all imports are updated)

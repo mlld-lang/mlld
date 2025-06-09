@@ -25,6 +25,7 @@ import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
+import { TaintSource } from '@security';
 
 /**
  * Type for variable values
@@ -554,6 +555,8 @@ export async function interpolate(
   context: InterpolationContext = InterpolationContext.Default
 ): Promise<string> {
   const parts: string[] = [];
+  let hasTaintedContent = false;
+  const securityManager = env.getSecurityManager();
   
   for (const node of nodes) {
     if (node.type === 'Text') {
@@ -660,7 +663,14 @@ export async function interpolate(
       
       // Apply context-appropriate escaping
       const strategy = EscapingStrategyFactory.getStrategy(context);
-      parts.push(strategy.escape(stringValue));
+      const escapedValue = strategy.escape(stringValue);
+      parts.push(escapedValue);
+      
+      // Check if this value is tainted
+      if (securityManager) {
+        const taint = securityManager.getTaint(stringValue);
+        if (taint) hasTaintedContent = true;
+      }
     } else if (node.type === 'ExecInvocation') {
       // Handle exec invocation nodes in interpolation
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');
@@ -669,9 +679,23 @@ export async function interpolate(
       
       // Apply context-appropriate escaping
       const strategy = EscapingStrategyFactory.getStrategy(context);
-      parts.push(strategy.escape(stringValue));
+      const escapedValue = strategy.escape(stringValue);
+      parts.push(escapedValue);
+      
+      // Check if this value is tainted
+      if (securityManager) {
+        const taint = securityManager.getTaint(stringValue);
+        if (taint) hasTaintedContent = true;
+      }
     }
   }
   
-  return parts.join('');
+  const result = parts.join('');
+  
+  // Mark result as tainted if any input was tainted
+  if (hasTaintedContent && securityManager) {
+    securityManager.trackTaint(result, TaintSource.MIXED);
+  }
+  
+  return result;
 }

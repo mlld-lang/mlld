@@ -7,14 +7,12 @@ import { ImportApproval } from './import';
 import { ImmutableCache } from './cache';
 import { PathValidator } from './path';
 import { PolicyManager, PolicyManagerImpl } from './policy';
-// import type { AuditLogger } from './audit';
+import { AuditLogger, AuditEventType } from './audit/AuditLogger';
+import * as path from 'path';
+import * as os from 'os';
 
 interface SecurityHook {
   execute(data: any): Promise<void>;
-}
-
-interface AuditLogger {
-  log(event: any): Promise<void>;
 }
 
 /**
@@ -74,12 +72,14 @@ export class SecurityManager {
     
     // 6. Audit the check
     await this.auditLogger.log({
-      type: 'COMMAND_CHECK',
-      command,
-      taint,
-      analysis,
-      decision,
-      context
+      type: decision.allowed ? AuditEventType.COMMAND_EXECUTION : AuditEventType.COMMAND_BLOCKED,
+      details: {
+        command,
+        taint,
+        analysis,
+        decision,
+        context
+      }
     });
     
     // 7. Run pre-execution hooks
@@ -190,14 +190,9 @@ export class SecurityManager {
     this.pathValidator = new PathValidator();
     this.policyManager = new PolicyManagerImpl();
     
-    // Initialize a simple audit logger
-    this.auditLogger = {
-      log: async (event: any) => {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[SECURITY AUDIT]', JSON.stringify(event, null, 2));
-        }
-      }
-    };
+    // Initialize audit logger with system-wide audit log
+    const auditPath = path.join(os.homedir(), '.mlld', 'audit.log');
+    this.auditLogger = new AuditLogger(auditPath);
   }
   
   /**

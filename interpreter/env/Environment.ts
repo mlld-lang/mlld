@@ -10,7 +10,7 @@ import { ImmutableCache } from '@core/security/ImmutableCache';
 import { GistTransformer } from '@core/security/GistTransformer';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
-import { SecurityManager } from '@security';
+import { SecurityManager, TaintSource } from '@security';
 import { RegistryManager, ModuleCache, LockFile } from '@core/registry';
 import { URLCache } from '../cache/URLCache';
 import { 
@@ -637,6 +637,16 @@ export class Environment {
       );
     }
     
+    // NEW: Check for tainted values and propagate taint
+    const securityManager = this.getSecurityManager();
+    if (securityManager && typeof variable.value === 'string') {
+      const taint = securityManager.getTaint(variable.value);
+      if (taint) {
+        // Propagate taint to new variable
+        securityManager.trackTaint(variable.value, taint.source);
+      }
+    }
+    
     this.variables.set(name, variable);
   }
 
@@ -760,8 +770,26 @@ export class Environment {
       }
       return this.fetchURL(pathOrUrl);
     }
+    
     const resolvedPath = await this.resolvePath(pathOrUrl);
-    return this.fileSystem.readFile(resolvedPath);
+    
+    // NEW: Security check for path access
+    const securityManager = this.getSecurityManager();
+    if (securityManager) {
+      const allowed = await securityManager.checkPath(resolvedPath, 'read');
+      if (!allowed) {
+        throw new Error(`Security: Read access denied for ${pathOrUrl}`);
+      }
+    }
+    
+    const content = await this.fileSystem.readFile(resolvedPath);
+    
+    // NEW: Track file content taint
+    if (securityManager) {
+      securityManager.trackTaint(content, TaintSource.FILE_SYSTEM);
+    }
+    
+    return content;
   }
   
   /**
@@ -978,6 +1006,50 @@ export class Environment {
       );
     }
     
+    // NEW: Security check before execution
+    const securityManager = this.getSecurityManager();
+    if (securityManager) {
+      const securityContext = {
+        file: context?.filePath || this.getCurrentFilePath(),
+        line: context?.sourceLocation?.line,
+        directive: context?.directiveType || 'run',
+        metadata: {}
+      };
+      
+      const decision = await securityManager.checkCommand(command, securityContext);
+      
+      if (decision.blocked) {
+        throw new MlldCommandExecutionError(
+          `Security: ${decision.reason}`,
+          context?.sourceLocation,
+          {
+            command,
+            exitCode: 1,
+            duration: Date.now() - startTime,
+            stderr: decision.reason || 'Command blocked by security policy',
+            workingDirectory: await this.getProjectPath(),
+            directiveType: context?.directiveType || 'run'
+          }
+        );
+      }
+      
+      if (decision.requiresApproval && !options?.approved) {
+        // TODO: Implement approval prompting
+        throw new MlldCommandExecutionError(
+          'Command requires approval but approval prompting not yet implemented',
+          context?.sourceLocation,
+          {
+            command,
+            exitCode: 1,
+            duration: Date.now() - startTime,
+            stderr: 'Approval required',
+            workingDirectory: await this.getProjectPath(),
+            directiveType: context?.directiveType || 'run'
+          }
+        );
+      }
+    }
+    
     // Simple progress message without emoji
     if (showProgress) {
       console.log(`Running: ${command}`);
@@ -1016,6 +1088,11 @@ export class Environment {
       
       const duration = Date.now() - startTime;
       const { processed } = this.processOutput(result, maxOutputLines);
+      
+      // NEW: Track output taint
+      if (securityManager) {
+        securityManager.trackTaint(processed, TaintSource.COMMAND_OUTPUT);
+      }
       
       // Temporarily disable timing messages for cleaner output
       // TODO: Revisit progress display design
@@ -1440,6 +1517,23 @@ export class Environment {
     if (GistTransformer.isGistUrl(url)) {
       url = await GistTransformer.transformToRaw(url);
     }
+    
+    // NEW: Use SecurityManager for import resolution
+    const securityManager = this.getSecurityManager();
+    if (forImport && securityManager) {
+      const { resolvedURL, taint, advisories } = await securityManager.resolveImport(url);
+      
+      // Check advisories
+      if (advisories.length > 0) {
+        const proceed = await securityManager.approveImport(url, '', advisories);
+        if (!proceed) {
+          throw new Error(`Import blocked due to security advisories`);
+        }
+      }
+      
+      url = resolvedURL; // Use resolved URL
+    }
+    
     // For imports, check immutable cache first
     if (forImport && this.getImmutableCache()) {
       const cached = await this.getImmutableCache()!.get(url);
@@ -1487,7 +1581,15 @@ export class Environment {
         throw new Error(`Response too large: ${content.length} bytes`);
       }
       
-      // For imports, check approval and cache in immutable cache
+      // NEW: Import approval with content for SecurityManager
+      if (forImport && securityManager) {
+        const approved = await securityManager.approveImport(url, content, []);
+        if (!approved) {
+          throw new Error('Import not approved by user');
+        }
+      }
+      
+      // For imports, check legacy approval and cache in immutable cache
       if (forImport && this.getImportApproval() && !this.approveAllImports) {
         const approved = await this.getImportApproval()!.checkApproval(url, content);
         if (!approved) {
@@ -1503,6 +1605,11 @@ export class Environment {
         if (this.getImmutableCache()) {
           await this.getImmutableCache()!.set(url, content);
         }
+      }
+      
+      // NEW: Track URL content taint
+      if (securityManager) {
+        securityManager.trackTaint(content, TaintSource.NETWORK);
       }
       
       // Cache the response with URL-specific TTL for non-imports
