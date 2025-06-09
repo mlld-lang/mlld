@@ -3,7 +3,7 @@
  */
 import { TypedDirectiveNode } from './base';
 import { ContentNodeArray, VariableNodeArray } from './values';
-import { DirectiveNode, SourceLocation } from './primitives';
+import { DirectiveNode, SourceLocation, ExecInvocation } from './primitives';
 
 /**
  * Data directive raw values
@@ -40,13 +40,14 @@ export interface DataValues {
 }
 
 /**
- * Recursive type for data values - can be primitives, objects, arrays, directives, or foreach expressions
+ * Recursive type for data values - can be primitives, objects, arrays, directives, exec invocations, or foreach expressions
  */
 export type DataValue = 
   | ContentNodeArray // String literals, numbers, booleans represented as content nodes
   | DataObjectValue
   | DataArrayValue
   | DirectiveNode // Nested directive
+  | ExecInvocation // Exec invocation with tail modifiers
   | ForeachCommandExpression; // Foreach command expression
 
 /**

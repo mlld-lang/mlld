@@ -5,6 +5,8 @@ import { DirectiveNode, TypedDirectiveNode } from './base';
 import { ImportValues, ImportWildcardNode, ImportReferenceNode } from './values';
 import { ImportRaw } from './raw';
 import { ImportMeta } from './meta';
+import { TTLValue } from './primitives';
+import { WithClause } from './run';
 
 /**
  * Base Import directive node
@@ -23,6 +25,8 @@ export interface ImportAllDirectiveNode extends ImportDirectiveNode {
   values: {
     imports: [ImportWildcardNode]; // Always a single-item array with '*'
     path: ImportValues['path'];
+    ttl?: TTLValue;
+    withClause?: WithClause;
   };
 }
 
@@ -34,6 +38,8 @@ export interface ImportSelectedDirectiveNode extends ImportDirectiveNode {
   values: {
     imports: ImportReferenceNode[]; // One or more items
     path: ImportValues['path'];
+    ttl?: TTLValue;
+    withClause?: WithClause;
   };
 }
 
@@ -45,5 +51,7 @@ export interface ImportNamespaceDirectiveNode extends ImportDirectiveNode {
   values: {
     imports: [ImportWildcardNode]; // Always a single-item array with '*' and alias
     path: ImportValues['path'];
+    ttl?: TTLValue;
+    withClause?: WithClause;
   };
 }

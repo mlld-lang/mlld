@@ -43,7 +43,8 @@ import {
   FrontmatterNode,
   NewlineNode,
   SectionMarkerNode,
-  SourceLocation
+  SourceLocation,
+  ExecInvocation
 } from './nodes';
 
 /**
@@ -65,7 +66,8 @@ export type MlldNode =
   | ErrorNode
   | FrontmatterNode
   | NewlineNode
-  | SectionMarkerNode;
+  | SectionMarkerNode
+  | ExecInvocation;
 
 // =========================================================================
 // VARIABLE TYPES

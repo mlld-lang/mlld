@@ -3,6 +3,7 @@
  */
 import { DirectiveNode, TypedDirectiveNode } from './base';
 import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
+import { TrustLevel } from './primitives';
 
 /**
  * With clause for pipeline and dependency management
@@ -10,6 +11,8 @@ import { ContentNodeArray, TextNodeArray, VariableNodeArray } from './values';
 export interface WithClause {
   pipeline?: PipelineCommand[];
   needs?: DependencyMap;
+  trust?: TrustLevel;
+  [key: string]: any; // For other with clause properties
 }
 
 /**

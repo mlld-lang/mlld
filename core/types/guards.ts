@@ -11,7 +11,8 @@ import type {
   VariableReferenceNode,
   LiteralNode,
   DotSeparatorNode,
-  PathSeparatorNode
+  PathSeparatorNode,
+  ExecInvocation
 } from './primitives';
 
 // Import the union type
@@ -39,6 +40,7 @@ import {
   isRunDirectiveValue
 } from './data';
 import { ImportWildcardNode } from './values';
+import { WithClause } from './run';
 
 // Define InterpolatableValue for the guard function
 export type InterpolatableValue = Array<TextNode | VariableReferenceNode>;
@@ -223,4 +225,16 @@ function hasNestedDirectiveInDataValue(value: DataValue, kind: string): boolean 
   }
   
   return false;
+}
+
+/**
+ * ExecInvocation type guards
+ */
+
+export function isExecInvocation(node: any): node is ExecInvocation {
+  return node?.type === 'ExecInvocation';
+}
+
+export function hasWithClause(directive: any): directive is { values: { withClause: WithClause } } {
+  return directive?.values?.withClause !== undefined;
 }

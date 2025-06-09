@@ -5,6 +5,8 @@ import { DirectiveNode, TypedDirectiveNode } from './base';
 import { VariableNodeArray, PathNodeArray } from './values';
 import { PathRaw } from './raw';
 import { PathDirectiveMeta } from './meta';
+import { TTLValue } from './primitives';
+import { WithClause } from './run';
 
 /**
  * Path directive values structure
@@ -13,6 +15,8 @@ export interface PathValues {
   // Common to all path directive subtypes
   identifier: VariableNodeArray;
   path: PathNodeArray;
+  ttl?: TTLValue;
+  withClause?: WithClause;
 }
 
 /**
@@ -32,6 +36,8 @@ export interface PathAssignmentDirectiveNode extends PathDirectiveNode {
   values: {
     identifier: VariableNodeArray;
     path: PathNodeArray;
+    ttl?: TTLValue;
+    withClause?: WithClause;
   };
   raw: {
     identifier: string;

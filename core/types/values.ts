@@ -6,8 +6,11 @@ import {
   VariableReferenceNode,
   DotSeparatorNode,
   PathSeparatorNode,
-  BaseMlldNode
+  BaseMlldNode,
+  TTLValue,
+  ExecInvocation
 } from './primitives';
+import { WithClause } from './run';
 
 /**
  * Common node array types that may be shared across directives
@@ -24,8 +27,8 @@ export type PathNodeArray = Array<
 // Array of variable reference nodes
 export type VariableNodeArray = Array<VariableReferenceNode>;
 
-// Array of content nodes (text and variables)
-export type ContentNodeArray = Array<TextNode | VariableReferenceNode>;
+// Array of content nodes (text, variables, and exec invocations)
+export type ContentNodeArray = Array<TextNode | VariableReferenceNode | ExecInvocation>;
 
 /**
  * Import directive values
@@ -33,6 +36,8 @@ export type ContentNodeArray = Array<TextNode | VariableReferenceNode>;
 export interface ImportValues {
   imports: ImportNodeArray;
   path: PathNodeArray;
+  ttl?: TTLValue;
+  withClause?: WithClause;
 }
 
 export type ImportNodeArray = Array<ImportReferenceNode | ImportWildcardNode>;

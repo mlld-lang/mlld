@@ -162,6 +162,9 @@ export interface TTLOption {
   seconds?: number;
 }
 
+// TTLValue is an alias for TTLOption for consistency with grammar
+export type TTLValue = TTLOption;
+
 export type TrustLevel = 'always' | 'verify' | 'never';
 
 // Module reference types
@@ -170,4 +173,19 @@ export interface ModuleReference {
   path?: string[];
   name: string;
   hash?: string;
+}
+
+// Command reference node for exec invocations
+export interface CommandReference extends BaseMlldNode {
+  type: 'CommandReference';
+  identifier: string;
+  args?: VariableReferenceNode[];
+  fields?: Array<{ type: 'field' | 'index'; value: string | number }>;
+}
+
+// Exec invocation node - represents exec-defined command invocations with tail modifiers
+export interface ExecInvocation extends BaseMlldNode {
+  type: 'ExecInvocation';
+  commandRef: CommandReference;
+  withClause?: any; // Will be WithClause type from run.ts
 }
