@@ -5,13 +5,19 @@ import { ConfigLoader } from '@core/config/loader';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { ILockFile, LockEntry } from '@core/registry';
+import { TrustEvaluator, type TrustDecision } from './TrustEvaluator';
+import { ModuleScanner, type CommandSummary } from './ModuleScanner';
+import { ApprovalUI, type ApprovalDecision } from './ApprovalUI';
 
 export class ImportApproval {
   private config: ImportSecurityConfig;
   private configLoader: ConfigLoader;
   private projectPath: string;
+  private trustEvaluator: TrustEvaluator;
+  private moduleScanner: ModuleScanner;
+  private approvalUI: ApprovalUI;
   
-  constructor(projectPath: string, private lockFile?: ILockFile) {
+  constructor(projectPath: string, private lockFile?: ILockFile, private globalLockFile?: ILockFile) {
     this.projectPath = projectPath;
     this.configLoader = new ConfigLoader(projectPath);
     const config = this.configLoader.load();
@@ -20,10 +26,16 @@ export class ImportApproval {
       pinByDefault: true,
       allowed: []
     };
+    
+    // Initialize new approval flow components
+    this.trustEvaluator = new TrustEvaluator(lockFile, globalLockFile, projectPath);
+    this.moduleScanner = new ModuleScanner();
+    this.approvalUI = new ApprovalUI();
   }
 
   /**
    * Check if an import is approved, prompting user if needed
+   * Enhanced with context-aware trust evaluation
    */
   async checkApproval(url: string, content: string): Promise<boolean> {
     // If approval not required, allow all
@@ -41,18 +53,26 @@ export class ImportApproval {
       return true;
     }
 
+    // NEW: Use enhanced trust evaluation
+    const trustDecision = await this.trustEvaluator.evaluateTrust(url, content);
+    
+    // If trusted automatically (e.g., local files), allow
+    if (trustDecision.trusted && !trustDecision.requiresApproval) {
+      return true;
+    }
+    
     // Calculate content hash
     const hash = this.calculateHash(content);
     
     // Check lock file first if available
     if (this.lockFile) {
-      const lockEntry = this.lockFile.getImport(url);
+      const lockEntry = await this.lockFile.getImport(url);
       if (lockEntry) {
         return this.evaluateExistingApproval(url, lockEntry, content, hash);
       }
     }
     
-    // Fall back to config file check
+    // Fall back to config file check for backward compatibility
     const existingApproval = this.config.allowed?.find(entry => entry.url === url);
     
     if (existingApproval) {
@@ -70,8 +90,8 @@ export class ImportApproval {
       }
     }
     
-    // New import, need approval
-    return this.promptForApproval(url, content, hash);
+    // NEW: Enhanced approval flow
+    return this.promptEnhancedApproval(url, content, hash, trustDecision);
   }
 
   private calculateHash(content: string): string {
@@ -394,6 +414,80 @@ export class ImportApproval {
         const configPath = path.join(this.projectPath, 'mlld.config.json');
         await fs.writeFile(configPath, JSON.stringify(config, null, 2));
       }
+    }
+  }
+
+  /**
+   * Enhanced approval flow with context-aware UI and command scanning
+   */
+  private async promptEnhancedApproval(
+    url: string, 
+    content: string, 
+    hash: string, 
+    trustDecision: TrustDecision
+  ): Promise<boolean> {
+    // In test mode, auto-approve without saving
+    if (process.env.MLLD_TEST === '1') {
+      return true;
+    }
+    
+    try {
+      // Scan for commands if needed
+      let commandSummary: CommandSummary | undefined;
+      let securityScore: number | undefined;
+      
+      if (trustDecision.showCommands) {
+        commandSummary = await this.moduleScanner.scanForCommands(content);
+        securityScore = await this.moduleScanner.getSecurityScore(content);
+      }
+      
+      // Use the enhanced approval UI
+      const decision = await this.approvalUI.promptApproval({
+        source: url,
+        content,
+        context: trustDecision.context,
+        commandSummary,
+        securityScore,
+        showCommands: trustDecision.showCommands
+      });
+      
+      // Save decision if approved
+      if (decision.approved && this.lockFile) {
+        const lockEntry: LockEntry = {
+          resolved: url,
+          integrity: `sha256:${hash}`,
+          approvedAt: new Date().toISOString(),
+          approvedBy: process.env.USER || 'unknown',
+          trust: decision.trust as any
+        };
+        
+        if (decision.expiresAt) {
+          lockEntry.expiresAt = decision.expiresAt;
+        }
+        
+        // Extract TTL from trust value if it's time-based
+        if (decision.trust.match(/^\d+[hdw]$/)) {
+          lockEntry.ttl = decision.trust;
+        }
+        
+        await this.lockFile.addImport(url, lockEntry);
+      }
+      
+      // Also save to config for backward compatibility if approved
+      if (decision.approved) {
+        const detectedCommands = commandSummary?.commands || this.detectCommands(content);
+        await this.saveApproval(url, hash, decision.trust === 'always', detectedCommands);
+      }
+      
+      return decision.approved;
+      
+    } catch (error) {
+      console.error('Error during enhanced approval flow:', error);
+      // Fall back to legacy approval
+      return this.promptForApproval(url, content, hash);
+    } finally {
+      // Clean up UI resources
+      this.approvalUI.dispose();
     }
   }
 
