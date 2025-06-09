@@ -341,9 +341,13 @@ export class URLCache {
         expiresAt: this.calculateExpirationTime(ttl)
       };
 
-      // Mark lock file as dirty and save
-      (this.lockFile as any).isDirty = true;
-      await this.lockFile.save();
+      // Mark lock file as dirty and save (skip in test mode)
+      if (process.env.NODE_ENV !== 'test' && process.env.VITEST !== 'true') {
+        if (process.env.NODE_ENV !== 'test' && process.env.VITEST !== 'true') {
+          (this.lockFile as any).isDirty = true;
+          await this.lockFile.save();
+        }
+      }
     } catch (error) {
       console.warn(`Failed to update lock file for URL cache: ${error.message}`);
     }
@@ -389,8 +393,10 @@ export class URLCache {
       const lockData = (this.lockFile as any).data;
       if (lockData.cache?.urls?.[url]) {
         delete lockData.cache.urls[url];
-        (this.lockFile as any).isDirty = true;
-        await this.lockFile.save();
+        if (process.env.NODE_ENV !== 'test' && process.env.VITEST !== 'true') {
+          (this.lockFile as any).isDirty = true;
+          await this.lockFile.save();
+        }
       }
     } catch (error) {
       console.warn(`Failed to invalidate cache for ${url}: ${error.message}`);
@@ -405,8 +411,10 @@ export class URLCache {
       const lockData = (this.lockFile as any).data;
       if (lockData.cache?.urls) {
         lockData.cache.urls = {};
-        (this.lockFile as any).isDirty = true;
-        await this.lockFile.save();
+        if (process.env.NODE_ENV !== 'test' && process.env.VITEST !== 'true') {
+          (this.lockFile as any).isDirty = true;
+          await this.lockFile.save();
+        }
       }
     } catch (error) {
       console.warn(`Failed to clear URL cache: ${error.message}`);

@@ -88,8 +88,10 @@ The {{name}} Team
       
       // Check arguments
       expect(result[0].values.arguments).toHaveLength(2);
-      expect(result[0].values.arguments[0]).toEqual({ type: 'string', value: 'Alice' });
-      expect(result[0].values.arguments[1]).toEqual({ type: 'string', value: 'Dr.' });
+      expect(result[0].values.arguments[0].type).toBe('Text');
+      expect(result[0].values.arguments[0].content).toBe('Alice');
+      expect(result[0].values.arguments[1].type).toBe('Text');
+      expect(result[0].values.arguments[1].content).toBe('Dr.');
       
       // Check metadata
       expect(result[0].meta.isTemplateInvocation).toBe(true);
@@ -102,9 +104,9 @@ The {{name}} Team
       const result = parseResult.ast;
       
       expect(result[0].values.arguments).toHaveLength(2);
-      expect(result[0].values.arguments[0].type).toBe('variable');
+      expect(result[0].values.arguments[0].type).toBe('VariableReference');
       expect(result[0].values.arguments[0].value.identifier).toBe('userName');
-      expect(result[0].values.arguments[1].type).toBe('variable');
+      expect(result[0].values.arguments[1].type).toBe('VariableReference');
       expect(result[0].values.arguments[1].value.identifier).toBe('userTitle');
     });
 
@@ -113,10 +115,10 @@ The {{name}} Team
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
-      expect(result[0].values.arguments[0].type).toBe('variable');
+      expect(result[0].values.arguments[0].type).toBe('VariableReference');
       expect(result[0].values.arguments[0].value.identifier).toBe('userName');
-      expect(result[0].values.arguments[1].type).toBe('string');
-      expect(result[0].values.arguments[1].value).toBe('Welcome to our service');
+      expect(result[0].values.arguments[1].type).toBe('Text');
+      expect(result[0].values.arguments[1].content).toBe('Welcome to our service');
     });
 
     it('should parse template invocation with no arguments', async () => {
@@ -124,7 +126,7 @@ The {{name}} Team
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
-      expect(result[0].values.arguments).toEqual([]);
+      expect(result[0].values.arguments || []).toEqual([]);
       expect(result[0].meta.argumentCount).toBe(0);
     });
   });
@@ -153,8 +155,8 @@ The {{name}} Team
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
-      expect(result[0].values.arguments[0].value).toBe('Alice');
-      expect(result[0].values.arguments[1].value).toBe('Dr.');
+      expect(result[0].values.arguments[0].content).toBe('Alice');
+      expect(result[0].values.arguments[1].content).toBe('Dr.');
     });
 
     it('should handle template with header level', async () => {

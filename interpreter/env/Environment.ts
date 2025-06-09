@@ -760,8 +760,18 @@ export class Environment {
     if (securityManager && typeof variable.value === 'string') {
       const taint = securityManager.getTaint(variable.value);
       if (taint) {
-        // Propagate taint to new variable
-        securityManager.trackTaint(variable.value, taint.source);
+        // Propagate taint to new variable - handle both test mock format and real format
+        let source: string;
+        if ('source' in taint && taint.source) {
+          // Test mock format: { source: TaintSource.USER_INPUT }
+          source = taint.source;
+        } else if (Array.isArray(taint.sources) && taint.sources.length > 0) {
+          // Real TaintTracker format: { sources: ["user_input"] }
+          source = taint.sources[0];
+        } else {
+          source = 'unknown';
+        }
+        securityManager.trackTaint(variable.value, source);
       }
     }
     

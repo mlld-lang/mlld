@@ -55,5 +55,69 @@
         "expiresAt": "2025-06-10T02:54:42.139Z"
       }
     }
+  },
+  "security": {
+    "approvedCommands": {
+      "npm run -s testecho -- \"npm run build output\"": {
+        "trust": "verify"
+      },
+      "npm run -s testecho -- \"npm run test output\"": {
+        "trust": "verify"
+      },
+      "npm run -s testecho -- \"npm run dev output\"": {
+        "trust": "verify"
+      },
+      "npm run -s testecho -- \"npm run build:prod output\"": {
+        "trust": "verify"
+      },
+      "(echo \"hello world\")": {
+        "trust": "verify"
+      },
+      "(date)": {
+        "trust": "verify"
+      },
+      "(echo \"1.0.0\")": {
+        "trust": "verify"
+      },
+      "(echo \"test1\")": {
+        "trust": "verify"
+      },
+      "(echo \"test2\")": {
+        "trust": "verify"
+      },
+      "(echo \"test3\")": {
+        "trust": "verify"
+      },
+      "(echo \"ok\")": {
+        "trust": "verify"
+      },
+      "(nonexistent-command)": {
+        "trust": "verify"
+      },
+      "(echo \"still works\")": {
+        "trust": "verify"
+      },
+      "echo \"Hello, World!\"": {
+        "trust": "verify"
+      },
+      "seq 1 100": {
+        "trust": "verify"
+      },
+      "exit 1": {
+        "trust": "verify"
+      },
+      "echo \"This should still run\"": {
+        "trust": "verify"
+      },
+      "exit 2": {
+        "trust": "verify"
+      },
+      "echo \"This should run\"": {
+        "trust": "verify"
+      },
+      "nonexistent-command": {
+        "trust": "verify"
+      }
+    }
   }
 }

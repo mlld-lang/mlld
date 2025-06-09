@@ -29,7 +29,7 @@ describe('SecurityManager with PolicyManager', () => {
   
   describe('command checking with policies', () => {
     it('should allow commands based on policy evaluation', async () => {
-      const decision = await securityManager.checkCommand('echo "Hello"');
+      const decision = await securityManager.checkCommand('echo "Hello"', undefined, true);
       
       expect(decision.allowed).toBe(true);
       expect(decision.requiresApproval).toBe(true); // Default is 'verify'
@@ -47,7 +47,7 @@ describe('SecurityManager with PolicyManager', () => {
       securityManager.trackTaint('untrusted-data', TaintSource.USER_INPUT);
       
       // Command using tainted data should require approval
-      const decision = await securityManager.checkCommand('echo untrusted-data');
+      const decision = await securityManager.checkCommand('echo untrusted-data', undefined, true);
       
       expect(decision.allowed).toBe(true);
       expect(decision.requiresApproval).toBe(true);

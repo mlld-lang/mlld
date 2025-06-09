@@ -118,7 +118,9 @@ describe('Security Integration', () => {
       const mockCheckPath = vi.fn().mockResolvedValue(false);
       
       mockSecurityManager = {
-        checkPath: mockCheckPath
+        checkPath: mockCheckPath,
+        trackTaint: vi.fn(),
+        getTaint: vi.fn()
       };
       
       vi.spyOn(SecurityManager, 'getInstance').mockReturnValue(mockSecurityManager as any);
