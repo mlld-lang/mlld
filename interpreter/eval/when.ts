@@ -192,7 +192,8 @@ async function evaluateWhenBlock(
       env.addNode(textNode);
     }
     
-    return { value: '', env };
+    // Return the result value so unit tests can verify the output
+    return result;
   } finally {
     // Child environment goes out of scope
   }
