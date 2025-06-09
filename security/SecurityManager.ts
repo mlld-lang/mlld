@@ -441,16 +441,12 @@ export class SecurityManager {
     analysis: any,
     context?: SecurityContext
   ): Promise<{ approved: boolean; trust: string; ttl?: string }> {
-<<<<<<< HEAD
     // In test mode, approve by default for simple commands
     if (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true') {
       return { approved: true, trust: 'verify' };
     }
     
     // In CI mode, deny by default
-=======
-    // In test/CI mode, deny by default
->>>>>>> 795fe58c (feat: implement lock file automation (workstream 11))
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
       return { approved: false, trust: 'never' };
     }
