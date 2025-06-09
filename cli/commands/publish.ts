@@ -14,6 +14,7 @@ import chalk from 'chalk';
 import { Octokit } from '@octokit/rest';
 import { MlldError, ErrorSeverity } from '@core/errors';
 import * as yaml from 'js-yaml';
+import { version as currentMlldVersion } from '@core/version';
 
 export interface PublishOptions {
   verbose?: boolean;
@@ -239,7 +240,7 @@ export class PublishCommand {
                   },
                 },
                 publishedAt: new Date().toISOString(),
-                mlldVersion: metadata.mlldVersion || '>=0.5.0',
+                mlldVersion: metadata.mlldVersion || currentMlldVersion,
                 keywords: metadata.keywords || [],
                 version: metadata.version || '1.0.0',
                 license: metadata.license,
@@ -576,6 +577,17 @@ export class PublishCommand {
       metadata.author = user!.login;
     }
     
+    // Add mlld-version if missing
+    if (!metadata.mlldVersion) {
+      metadata.mlldVersion = currentMlldVersion;
+      console.log(chalk.blue(`\n📌 Adding mlld-version: ${currentMlldVersion}`));
+      
+      // Update the frontmatter in the file
+      content = this.updateFrontmatter(content, metadata);
+      await fs.writeFile(filePath, content, 'utf8');
+      console.log(chalk.green('✅ Updated frontmatter with mlld-version'));
+    }
+    
     return { content, metadata, filename, filePath };
   }
 
@@ -660,7 +672,7 @@ export class PublishCommand {
         metadata.keywords = parsed.keywords;
         metadata.license = parsed.license;
         metadata.repository = parsed.repository;
-        metadata.mlldVersion = parsed.mlldVersion || parsed.mlld_version;
+        metadata.mlldVersion = parsed.mlldVersion || parsed['mlld-version'] || parsed.mlld_version;
       } catch (e) {
         // Invalid YAML, continue with defaults
       }
@@ -759,6 +771,7 @@ export class PublishCommand {
     ];
 
     if (metadata.version) lines.push(`version: ${metadata.version}`);
+    if (metadata.mlldVersion) lines.push(`mlld-version: ${metadata.mlldVersion}`);
     if (metadata.license) lines.push(`license: ${metadata.license}`);
     if (metadata.keywords) lines.push(`keywords: [${metadata.keywords.join(', ')}]`);
     
@@ -771,6 +784,22 @@ export class PublishCommand {
    */
   private addFrontmatter(content: string, metadata: ModuleMetadata): string {
     return this.formatFrontmatter(metadata) + '\n\n' + content;
+  }
+  
+  /**
+   * Update existing frontmatter in content
+   */
+  private updateFrontmatter(content: string, metadata: ModuleMetadata): string {
+    const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+    
+    if (!frontmatterMatch) {
+      // No frontmatter, add it
+      return this.addFrontmatter(content, metadata);
+    }
+    
+    // Replace existing frontmatter
+    const afterFrontmatter = content.substring(frontmatterMatch[0].length);
+    return this.formatFrontmatter(metadata) + afterFrontmatter;
   }
 
   /**

@@ -66,6 +66,10 @@ export interface CLIOptions {
   progressStyle?: 'emoji' | 'text';
   showCommandContext?: boolean;
   commandTimeout?: number;
+  // Import approval options
+  riskyApproveAll?: boolean;
+  yolo?: boolean;
+  y?: boolean;
   _?: string[]; // Remaining args after command
 }
 
@@ -328,6 +332,16 @@ function parseArgs(args: string[]): CLIOptions {
           throw new Error('--command-timeout must be a positive number (milliseconds)');
         }
         break;
+      // Import approval bypass options
+      case '--risky-approve-all':
+        options.riskyApproveAll = true;
+        break;
+      case '--yolo':
+        options.yolo = true;
+        break;
+      case '-y':
+        options.y = true;
+        break;
       // Transformation is always enabled by default
       // No transform flags needed
       default:
@@ -530,6 +544,11 @@ Output Management Options:
   --collect-errors        Collect errors and display summary at end
   --show-command-context  Show source context for command execution errors
   --command-timeout <ms>  Command execution timeout in milliseconds [default: 30000]
+
+Import Approval Options:
+  --risky-approve-all     Automatically approve all imports (use with caution!)
+  --yolo                  Same as --risky-approve-all (shorter alias)
+  -y                      Same as --risky-approve-all (shortest alias)
 
 Configuration:
   Mlld looks for configuration in:
@@ -843,7 +862,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
         showCommandContext: cliOptions.showCommandContext !== undefined ? cliOptions.showCommandContext : outputConfig.showCommandContext,
         timeout: cliOptions.commandTimeout
       },
-      returnEnvironment: true
+      returnEnvironment: true,
+      approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y
     });
 
     // Extract result and environment

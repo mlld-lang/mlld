@@ -4,8 +4,10 @@ import type { EvalResult } from '../core/interpreter';
 import { interpolate, evaluate } from '../core/interpreter';
 import { parse } from '@grammar/parser';
 import * as path from 'path';
-import { VariableRedefinitionError } from '@core/errors';
+import { VariableRedefinitionError, MlldError } from '@core/errors';
 import { HashUtils } from '@core/registry/utils/HashUtils';
+import { checkMlldVersion, formatVersionError } from '@core/utils/version-checker';
+import { version as currentMlldVersion } from '@core/version';
 
 type ContentNodeArray = ContentNode[];
 
@@ -145,6 +147,36 @@ async function importFromPath(
     }
     
     const ast = parseResult.ast;
+    
+    // Check mlld version compatibility if frontmatter exists
+    if (parseResult.frontmatter) {
+      const requiredVersion = parseResult.frontmatter['mlld-version'] || 
+                             parseResult.frontmatter['mlldVersion'] ||
+                             parseResult.frontmatter['mlld_version'];
+      
+      if (requiredVersion) {
+        if (process.env.MLLD_DEBUG_VERSION) {
+          console.log(`[Version Check] Module requires: ${requiredVersion}, Current: ${currentMlldVersion}`);
+        }
+        const versionCheck = checkMlldVersion(requiredVersion);
+        if (!versionCheck.compatible) {
+          const moduleName = parseResult.frontmatter.module || 
+                           parseResult.frontmatter.name || 
+                           path.basename(resolvedPath);
+          
+          throw new MlldError(
+            formatVersionError(moduleName, requiredVersion, currentMlldVersion),
+            { 
+              code: 'VERSION_MISMATCH', 
+              severity: 'error',
+              module: moduleName,
+              requiredVersion,
+              path: resolvedPath
+            }
+          );
+        }
+      }
+    }
     
     // Create a child environment for the imported file
     // For URLs, use the current directory as basePath since URLs don't have directories

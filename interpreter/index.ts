@@ -30,6 +30,7 @@ export interface InterpretOptions {
   outputOptions?: CommandExecutionOptions;
   stdinContent?: string; // Optional stdin content
   returnEnvironment?: boolean; // Return environment with result
+  approveAllImports?: boolean; // Bypass interactive import approval
 }
 
 /**
@@ -125,6 +126,11 @@ export async function interpret(
   // Set stdin content if provided
   if (options.stdinContent !== undefined) {
     env.setStdinContent(options.stdinContent);
+  }
+  
+  // Set import approval bypass if provided
+  if (options.approveAllImports) {
+    env.setApproveAllImports(options.approveAllImports);
   }
   
   // Evaluate the AST

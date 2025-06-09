@@ -79,6 +79,9 @@ export class Environment {
   };
   private collectedErrors: CollectedError[] = [];
   
+  // Import approval bypass flag
+  private approveAllImports: boolean = false;
+  
   // Default URL validation options (used if no config provided)
   private defaultUrlOptions = {
     allowedProtocols: ['http', 'https'],
@@ -1429,13 +1432,18 @@ export class Environment {
       }
       
       // For imports, check approval and cache in immutable cache
-      if (forImport && this.getImportApproval()) {
+      if (forImport && this.getImportApproval() && !this.approveAllImports) {
         const approved = await this.getImportApproval()!.checkApproval(url, content);
         if (!approved) {
           throw new Error('Import not approved by user');
         }
         
         // Store in immutable cache
+        if (this.getImmutableCache()) {
+          await this.getImmutableCache()!.set(url, content);
+        }
+      } else if (forImport && this.approveAllImports) {
+        // Auto-approved, just store in immutable cache
         if (this.getImmutableCache()) {
           await this.getImmutableCache()!.set(url, content);
         }
@@ -1513,6 +1521,13 @@ export class Environment {
   
   setOutputOptions(options: Partial<CommandExecutionOptions>): void {
     this.outputOptions = { ...this.outputOptions, ...options };
+  }
+  
+  /**
+   * Set import approval bypass flag
+   */
+  setApproveAllImports(approve: boolean): void {
+    this.approveAllImports = approve;
   }
   
   private collectError(
