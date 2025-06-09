@@ -80,9 +80,35 @@ async function importFromPath(
     // For URL imports, use the special import flag to trigger approval
     let content: string;
     try {
-      content = isURL
-        ? await env.fetchURL(resolvedPath, true) // true = forImport
-        : await env.readFile(resolvedPath);
+      if (isURL) {
+        // Look for a path variable that might have TTL/trust metadata
+        const allVars = env.getAllVariables();
+        let security: any;
+        let configuredBy: string | undefined;
+        
+        // Find a path variable that matches this URL
+        for (const [name, variable] of allVars) {
+          if (variable.type === 'path' && 
+              variable.value?.resolvedPath === resolvedPath &&
+              variable.metadata?.ttl || variable.metadata?.trust) {
+            security = {
+              ttl: variable.metadata.ttl,
+              trust: variable.metadata.trust
+            };
+            configuredBy = variable.metadata.configuredBy || name;
+            break;
+          }
+        }
+        
+        // Use fetchURLWithSecurity if we have security metadata
+        if (security) {
+          content = await env.fetchURLWithSecurity(resolvedPath, security, configuredBy);
+        } else {
+          content = await env.fetchURL(resolvedPath, true); // true = forImport
+        }
+      } else {
+        content = await env.readFile(resolvedPath);
+      }
     } catch (error) {
       throw new Error(`Failed to read imported file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`);
     }

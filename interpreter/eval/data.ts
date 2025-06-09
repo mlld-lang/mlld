@@ -68,7 +68,24 @@ export async function evaluateData(
       const variable = createComplexDataVariable(varName, dataValue, {
         definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
       });
-      env.setVariable(varName, variable);
+      
+      // Convert to Environment's MlldVariable format with TTL/trust metadata
+      const mlldVar: any = {
+        type: 'data',
+        value: variable.value,
+        nodeId: directive.nodeId || '',
+        location: directive.location || { line: 0, column: 0 },
+        metadata: {
+          ...variable.metadata,
+          // Add TTL/trust from directive meta if present
+          ...(directive.meta?.ttl && { ttl: directive.meta.ttl }),
+          ...(directive.meta?.trust && { trust: directive.meta.trust }),
+          // Store the configured by info
+          configuredBy: varName
+        }
+      };
+      
+      env.setVariable(varName, mlldVar);
     } else {
       // Create a simple data variable for primitive/static values
       // Extract the plain value for simple data
@@ -76,7 +93,24 @@ export async function evaluateData(
       const variable = createDataVariable(varName, plainValue, {
         definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
       });
-      env.setVariable(varName, variable);
+      
+      // Convert to Environment's MlldVariable format with TTL/trust metadata
+      const mlldVar: any = {
+        type: 'data',
+        value: variable.value,
+        nodeId: directive.nodeId || '',
+        location: directive.location || { line: 0, column: 0 },
+        metadata: {
+          ...variable.metadata,
+          // Add TTL/trust from directive meta if present
+          ...(directive.meta?.ttl && { ttl: directive.meta.ttl }),
+          ...(directive.meta?.trust && { trust: directive.meta.trust }),
+          // Store the configured by info
+          configuredBy: varName
+        }
+      };
+      
+      env.setVariable(varName, mlldVar);
     }
   } else {
     // Nested field access - build up the object structure

@@ -129,7 +129,24 @@ export async function evaluateExec(
   const variable = createCommandVariable(identifier, commandDef, {
     definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
   });
-  env.setVariable(identifier, variable);
+  
+  // Convert to Environment's MlldVariable format with TTL/trust metadata
+  const mlldVar: any = {
+    type: 'command',
+    value: variable.value,
+    nodeId: directive.nodeId || '',
+    location: directive.location || { line: 0, column: 0 },
+    metadata: {
+      ...variable.metadata,
+      // Add TTL/trust from directive meta if present
+      ...(directive.meta?.ttl && { ttl: directive.meta.ttl }),
+      ...(directive.meta?.trust && { trust: directive.meta.trust }),
+      // Store the configured by info
+      configuredBy: identifier
+    }
+  };
+  
+  env.setVariable(identifier, mlldVar);
   
   // Return the command definition (no output for variable definitions)
   return { value: commandDef, env };

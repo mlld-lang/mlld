@@ -57,12 +57,20 @@ export async function evaluateAdd(
       // Path variables contain file path info - read the file
       const pathValue = variable.value.resolvedPath;
       const isURL = variable.value.isURL;
-      const security = variable.value.security;
+      
+      // Check for security options on the directive itself first, then fall back to variable's security
+      const directiveSecurity = directive.meta ? {
+        ttl: directive.meta.ttl,
+        trust: directive.meta.trust
+      } : undefined;
+      
+      // Use directive security if available, otherwise use variable's stored security
+      const security = directiveSecurity || variable.value.security;
       
       try {
         if (isURL && security) {
           // Use URL cache with security options
-          value = await env.fetchURLWithSecurity(pathValue, security, varName);
+          value = await env.fetchURLWithSecurity(pathValue, security, directiveSecurity ? 'add-directive' : varName);
         } else {
           // Regular file or URL without security options
           value = await env.readFile(pathValue);

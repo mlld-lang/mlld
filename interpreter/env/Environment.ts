@@ -4,6 +4,7 @@ import type { IPathService } from '@services/fs/IPathService';
 import type { ResolvedURLConfig } from '@core/config/types';
 import { execSync } from 'child_process';
 import * as path from 'path';
+import * as os from 'os';
 import { ImportApproval } from '@core/security/ImportApproval';
 import { ImmutableCache } from '@core/security/ImmutableCache';
 import { GistTransformer } from '@core/security/GistTransformer';
@@ -67,6 +68,7 @@ export class Environment {
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
   private urlCacheManager?: URLCache; // URL cache manager
+  private globalLockFile?: LockFile; // Global lock file
   private reservedNames: Set<string> = new Set(['INPUT', 'TIME', 'PROJECTPATH', 'DEBUG']); // Reserved variable names
   
   // Output management properties
@@ -180,6 +182,11 @@ export class Environment {
       this.importApproval = new ImportApproval(basePath);
       this.immutableCache = new ImmutableCache(basePath);
       
+      // Load global lock file asynchronously (fire and forget)
+      this.loadGlobalLockFile().catch(error => {
+        logger.debug('Failed to load global lock file:', error);
+      });
+      
       // Initialize reserved variables
       this.initializeReservedVariables();
       
@@ -188,6 +195,32 @@ export class Environment {
     }
   }
   
+  /**
+   * Load global lock file from ~/.config/mlld/mlld.lock.json
+   */
+  private async loadGlobalLockFile(): Promise<void> {
+    try {
+      const globalLockPath = path.join(os.homedir(), '.config', 'mlld', 'mlld.lock.json');
+      if (await this.fileSystem.exists(globalLockPath)) {
+        this.globalLockFile = new LockFile(globalLockPath);
+        logger.debug('Loaded global lock file from', globalLockPath);
+      }
+    } catch (error) {
+      // Global lock file is optional, so just log and continue
+      logger.debug('Could not load global lock file:', error);
+    }
+  }
+
+  /**
+   * Get global lock file (from root environment)
+   */
+  getGlobalLockFile(): LockFile | undefined {
+    if (this.parent) {
+      return this.parent.getGlobalLockFile();
+    }
+    return this.globalLockFile;
+  }
+
   /**
    * Reserve module prefixes from resolver configuration
    * This prevents variables from using names that conflict with module prefixes
@@ -702,6 +735,29 @@ export class Environment {
   
   async readFile(pathOrUrl: string): Promise<string> {
     if (this.isURL(pathOrUrl)) {
+      // Look for a path variable that might have TTL/trust metadata
+      const allVars = this.getAllVariables();
+      let security: any;
+      let configuredBy: string | undefined;
+      
+      // Find a path variable that matches this URL
+      for (const [name, variable] of allVars) {
+        if (variable.type === 'path' && 
+            variable.value?.resolvedPath === pathOrUrl &&
+            (variable.metadata?.ttl || variable.metadata?.trust)) {
+          security = {
+            ttl: variable.metadata.ttl,
+            trust: variable.metadata.trust
+          };
+          configuredBy = variable.metadata.configuredBy || name;
+          break;
+        }
+      }
+      
+      // Use fetchURLWithSecurity if we have security metadata
+      if (security) {
+        return this.fetchURLWithSecurity(pathOrUrl, security, configuredBy);
+      }
       return this.fetchURL(pathOrUrl);
     }
     const resolvedPath = await this.resolvePath(pathOrUrl);

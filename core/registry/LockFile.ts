@@ -9,6 +9,8 @@ export interface LockEntry {
   registryVersion?: string;   // Registry version when resolved
   approvedAt: string;         // ISO timestamp
   approvedBy?: string;        // User who approved
+  ttl?: string;              // TTL configuration (e.g., "24h", "static", "live")
+  trust?: string;            // Trust level ("always", "verify", "never")
 }
 
 export interface LockFileData {
