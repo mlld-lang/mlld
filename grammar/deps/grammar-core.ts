@@ -16,6 +16,8 @@ export const NodeType = {
   Frontmatter: 'Frontmatter',
   CommandBase: 'CommandBase',
   Parameter: 'Parameter',
+  ExecInvocation: 'ExecInvocation',
+  CommandReference: 'CommandReference',
 } as const;
 export type NodeTypeKey = keyof typeof NodeType;
 
@@ -553,5 +555,31 @@ export const helpers = {
     }
     
     return parts;
+  },
+
+  /**
+   * Create an ExecInvocation node
+   */
+  createExecInvocation(commandRef: any, withClause: any, location: any) {
+    return this.createNode('ExecInvocation' as NodeTypeKey, {
+      commandRef,
+      withClause: withClause || null,
+      location
+    });
+  },
+
+  /**
+   * Get the command name from an ExecInvocation node
+   */
+  getExecInvocationName(node: any): string | null {
+    if (!node || node.type !== 'ExecInvocation') return null;
+    return node.commandRef?.identifier || node.commandRef?.name;
+  },
+
+  /**
+   * Check if a node is an ExecInvocation
+   */
+  isExecInvocationNode(node: any): boolean {
+    return node?.type === 'ExecInvocation';
   },
 };

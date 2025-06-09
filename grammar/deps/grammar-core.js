@@ -15,6 +15,8 @@ export const NodeType = {
     Frontmatter: 'Frontmatter',
     CommandBase: 'CommandBase',
     Parameter: 'Parameter',
+    ExecInvocation: 'ExecInvocation',
+    CommandReference: 'CommandReference',
 };
 export const DirectiveKind = {
     run: 'run',
@@ -508,5 +510,29 @@ export const helpers = {
             }));
         }
         return parts;
+    },
+    /**
+     * Create an ExecInvocation node
+     */
+    createExecInvocation(commandRef, withClause, location) {
+        return this.createNode('ExecInvocation', {
+            commandRef,
+            withClause: withClause || null,
+            location
+        });
+    },
+    /**
+     * Get the command name from an ExecInvocation node
+     */
+    getExecInvocationName(node) {
+        if (!node || node.type !== 'ExecInvocation')
+            return null;
+        return node.commandRef?.identifier || node.commandRef?.name;
+    },
+    /**
+     * Check if a node is an ExecInvocation
+     */
+    isExecInvocationNode(node) {
+        return node?.type === 'ExecInvocation';
     },
 };
