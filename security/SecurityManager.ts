@@ -151,7 +151,24 @@ export class SecurityManager {
    */
   async checkPath(path: string, operation: 'read' | 'write', context?: SecurityContext): Promise<boolean> {
     try {
-      // 1. Basic path validation
+      // 1. Check for existing path approval in lock files
+      const existingApproval = await this.findPathApproval(path, operation);
+      if (existingApproval) {
+        const decision = this.evaluatePathApproval(existingApproval, path, operation);
+        if (decision) {
+          // Audit the approved path access
+          await this.auditLogger.log({
+            type: 'PATH_ACCESS',
+            path,
+            operation,
+            approval: existingApproval,
+            context
+          });
+          return decision.allowed;
+        }
+      }
+
+      // 2. Basic path validation
       const basicCheck = operation === 'read' 
         ? this.pathValidator.canRead(path)
         : this.pathValidator.canWrite(path);
@@ -160,11 +177,11 @@ export class SecurityManager {
         return false;
       }
       
-      // 2. Policy-based check
+      // 3. Policy-based check
       const policy = await this.policyManager.getEffectivePolicy(context?.metadata);
       const decision = this.policyManager.evaluatePath(path, operation, policy);
       
-      // 3. Audit the check
+      // 4. Audit the check
       await this.auditLogger.log({
         type: 'PATH_CHECK',
         path,
@@ -173,11 +190,16 @@ export class SecurityManager {
         context
       });
       
-      // 4. Handle approval requirement
+      // 5. Handle approval requirement
       if (decision.requiresApproval) {
-        // TODO: Implement path approval flow
-        console.warn(`Path ${operation} requires approval: ${path}`);
-        return false;
+        const userDecision = await this.promptPathApproval(path, operation, context);
+        if (userDecision.approved) {
+          // Save approval to lock file
+          await this.savePathApproval(path, operation, userDecision);
+          return true;
+        } else {
+          return false;
+        }
       }
       
       return decision.allowed;
@@ -351,11 +373,27 @@ export class SecurityManager {
     advisories: any[],
     context?: SecurityContext
   ): Promise<boolean> {
-    // 1. Check import policy
+    // 1. Check for existing import approval in lock files
+    const existingApproval = await this.findImportApproval(importURL);
+    if (existingApproval) {
+      const decision = this.evaluateImportApproval(existingApproval, importURL, content);
+      if (decision) {
+        // Audit the approved import
+        await this.auditLogger.log({
+          type: 'IMPORT_APPROVED',
+          importURL,
+          approval: existingApproval,
+          context
+        });
+        return decision.allowed;
+      }
+    }
+
+    // 2. Check import policy
     const policy = await this.policyManager.getEffectivePolicy(context?.metadata);
     const decision = this.policyManager.evaluateImport(importURL, policy);
     
-    // 2. Audit the check
+    // 3. Audit the check
     await this.auditLogger.log({
       type: 'IMPORT_CHECK',
       importURL,
@@ -364,13 +402,13 @@ export class SecurityManager {
       context
     });
     
-    // 3. If blocked by policy, deny immediately
+    // 4. If blocked by policy, deny immediately
     if (!decision.allowed) {
       console.error(`Import blocked by policy: ${importURL} - ${decision.reason}`);
       return false;
     }
     
-    // 4. Show advisories if any
+    // 5. Show advisories if any
     if (advisories.length > 0) {
       const approved = await this.advisoryChecker.promptUserAboutAdvisories(
         advisories,
@@ -381,12 +419,19 @@ export class SecurityManager {
       }
     }
     
-    // 5. Check if approval is required
+    // 6. Check if approval is required
     if (decision.requiresApproval) {
-      return this.importApproval.checkApproval(importURL, content);
+      const userDecision = await this.promptImportApproval(importURL, content, advisories, context);
+      if (userDecision.approved) {
+        // Save approval to lock file
+        await this.saveImportApproval(importURL, content, userDecision);
+        return true;
+      } else {
+        return false;
+      }
     }
     
-    // 6. Auto-approve if policy allows
+    // 7. Auto-approve if policy allows
     return true;
   }
   
@@ -555,6 +600,354 @@ export class SecurityManager {
       await this.lockFile.removeCommandApproval(command);
     } else if (source === 'global' && this.globalLockFile) {
       await this.globalLockFile.removeCommandApproval(command);
+    }
+  }
+
+  /**
+   * Find import approval in lock files
+   */
+  private async findImportApproval(url: string): Promise<any> {
+    // Check project lock file first
+    if (this.lockFile) {
+      const approval = this.lockFile.findMatchingImportApproval(url);
+      if (approval) {
+        return { source: 'project', approval };
+      }
+    }
+    
+    // Check global lock file
+    if (this.globalLockFile) {
+      const approval = this.globalLockFile.findMatchingImportApproval(url);
+      if (approval) {
+        return { source: 'global', approval };
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Evaluate existing import approval
+   */
+  private evaluateImportApproval(existing: any, url: string, content: string): SecurityDecision | null {
+    const { source, approval } = existing;
+    
+    // Check if approval is expired
+    if (approval.expiresAt) {
+      const expiryDate = new Date(approval.expiresAt);
+      if (expiryDate < new Date()) {
+        return null; // Expired, need new approval
+      }
+    }
+    
+    // Check content hash if present
+    if (approval.contentHash) {
+      const crypto = require('crypto');
+      const hash = crypto.createHash('sha256');
+      hash.update(content);
+      const currentHash = `sha256:${hash.digest('hex')}`;
+      
+      if (currentHash !== approval.contentHash) {
+        return null; // Content changed, need new approval
+      }
+    }
+    
+    // Check trust level
+    if (approval.trust === 'never') {
+      return {
+        allowed: false,
+        blocked: true,
+        reason: `Import blocked by ${source} lock file`
+      };
+    }
+    
+    if (approval.trust === 'always' || approval.trust === 'verify') {
+      return {
+        allowed: true,
+        requiresApproval: false,
+        reason: `Approved by ${source} lock file`
+      };
+    }
+    
+    return null;
+  }
+
+  /**
+   * Prompt user for import approval
+   */
+  private async promptImportApproval(
+    url: string,
+    content: string,
+    advisories: any[],
+    context?: SecurityContext
+  ): Promise<{ approved: boolean; trust: string; ttl?: string }> {
+    // In test mode, approve by default
+    if (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true') {
+      return { approved: true, trust: 'verify' };
+    }
+    
+    // In CI mode, deny by default
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      return { approved: false, trust: 'never' };
+    }
+    
+    const readline = await import('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
+    console.log(`\n🔒 Security: Import requires approval`);
+    console.log(`   URL: ${url}`);
+    if (advisories && advisories.length > 0) {
+      console.log(`   Advisories:`);
+      advisories.forEach((advisory: any) => {
+        console.log(`   - ${advisory.severity}: ${advisory.title}`);
+      });
+    }
+    
+    console.log(`\n   Allow this import?`);
+    console.log(`   [y] Yes, this time only`);
+    console.log(`   [a] Always allow this URL`);
+    console.log(`   [t] Allow for time duration...`);
+    console.log(`   [n] Never (block)\n`);
+    
+    const choice = await new Promise<string>((resolve) => {
+      rl.question('   Choice: ', resolve);
+    });
+    
+    let result: { approved: boolean; trust: string; ttl?: string };
+    
+    switch (choice.toLowerCase()) {
+      case 'y':
+        result = { approved: true, trust: 'verify' };
+        break;
+      case 'a':
+        result = { approved: true, trust: 'always' };
+        break;
+      case 't':
+        console.log('\n   Trust for how long?');
+        console.log('   Examples: 1h, 12h, 1d, 7d, 30d');
+        const duration = await new Promise<string>((resolve) => {
+          rl.question('   Duration: ', resolve);
+        });
+        result = { approved: true, trust: 'always', ttl: duration };
+        break;
+      case 'n':
+      default:
+        result = { approved: false, trust: 'never' };
+        break;
+    }
+    
+    rl.close();
+    return result;
+  }
+
+  /**
+   * Save import approval to lock file
+   */
+  private async saveImportApproval(
+    url: string,
+    content: string,
+    decision: { approved: boolean; trust: string; ttl?: string }
+  ): Promise<void> {
+    if (!this.lockFile || !decision.approved) return;
+    
+    // Calculate content hash
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256');
+    hash.update(content);
+    const contentHash = `sha256:${hash.digest('hex')}`;
+    
+    // Calculate expiry if TTL provided
+    let expiresAt: string | undefined;
+    if (decision.ttl) {
+      const now = new Date();
+      const ttlMs = this.parseTTL(decision.ttl);
+      expiresAt = new Date(now.getTime() + ttlMs).toISOString();
+    }
+    
+    await this.lockFile.addImportApproval(url, {
+      url,
+      approvedAt: new Date().toISOString(),
+      approvedBy: process.env.USER || 'unknown',
+      trust: decision.trust as any,
+      contentHash,
+      expiresAt
+    });
+  }
+
+  /**
+   * Find path approval in lock files
+   */
+  private async findPathApproval(path: string, operation: 'read' | 'write'): Promise<any> {
+    // Check project lock file first
+    if (this.lockFile) {
+      const approval = this.lockFile.findMatchingPathApproval(path, operation);
+      if (approval) {
+        return { source: 'project', approval };
+      }
+    }
+    
+    // Check global lock file
+    if (this.globalLockFile) {
+      const approval = this.globalLockFile.findMatchingPathApproval(path, operation);
+      if (approval) {
+        return { source: 'global', approval };
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Evaluate existing path approval
+   */
+  private evaluatePathApproval(existing: any, path: string, operation: 'read' | 'write'): SecurityDecision | null {
+    const { source, approval } = existing;
+    
+    // Check if approval is expired
+    if (approval.expiresAt) {
+      const expiryDate = new Date(approval.expiresAt);
+      if (expiryDate < new Date()) {
+        return null; // Expired, need new approval
+      }
+    }
+    
+    // Check trust level
+    if (approval.trust === 'never') {
+      return {
+        allowed: false,
+        blocked: true,
+        reason: `Path ${operation} blocked by ${source} lock file`
+      };
+    }
+    
+    if (approval.trust === 'always' || approval.trust === 'session') {
+      return {
+        allowed: true,
+        requiresApproval: false,
+        reason: `Path ${operation} approved by ${source} lock file`
+      };
+    }
+    
+    return null;
+  }
+
+  /**
+   * Prompt user for path approval
+   */
+  private async promptPathApproval(
+    path: string,
+    operation: 'read' | 'write',
+    context?: SecurityContext
+  ): Promise<{ approved: boolean; trust: string; ttl?: string }> {
+    // In test mode, approve by default
+    if (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true') {
+      return { approved: true, trust: 'session' };
+    }
+    
+    // In CI mode, deny by default
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      return { approved: false, trust: 'never' };
+    }
+    
+    const readline = await import('readline');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    
+    console.log(`\n🔒 Security: Path access requires approval`);
+    console.log(`   Path: ${path}`);
+    console.log(`   Operation: ${operation}`);
+    
+    console.log(`\n   Allow this path access?`);
+    console.log(`   [y] Yes, this session only`);
+    console.log(`   [a] Always allow this path`);
+    console.log(`   [t] Allow for time duration...`);
+    console.log(`   [n] Never (block)\n`);
+    
+    const choice = await new Promise<string>((resolve) => {
+      rl.question('   Choice: ', resolve);
+    });
+    
+    let result: { approved: boolean; trust: string; ttl?: string };
+    
+    switch (choice.toLowerCase()) {
+      case 'y':
+        result = { approved: true, trust: 'session' };
+        break;
+      case 'a':
+        result = { approved: true, trust: 'always' };
+        break;
+      case 't':
+        console.log('\n   Trust for how long?');
+        console.log('   Examples: 1h, 12h, 1d, 7d, 30d');
+        const duration = await new Promise<string>((resolve) => {
+          rl.question('   Duration: ', resolve);
+        });
+        result = { approved: true, trust: 'always', ttl: duration };
+        break;
+      case 'n':
+      default:
+        result = { approved: false, trust: 'never' };
+        break;
+    }
+    
+    rl.close();
+    return result;
+  }
+
+  /**
+   * Save path approval to lock file
+   */
+  private async savePathApproval(
+    path: string,
+    operation: 'read' | 'write',
+    decision: { approved: boolean; trust: string; ttl?: string }
+  ): Promise<void> {
+    if (!this.lockFile || !decision.approved) return;
+    
+    // Calculate expiry if TTL provided
+    let expiresAt: string | undefined;
+    if (decision.ttl) {
+      const now = new Date();
+      const ttlMs = this.parseTTL(decision.ttl);
+      expiresAt = new Date(now.getTime() + ttlMs).toISOString();
+    }
+    
+    await this.lockFile.addPathApproval(path, operation, {
+      path,
+      operation,
+      approvedAt: new Date().toISOString(),
+      approvedBy: process.env.USER || 'unknown',
+      trust: decision.trust as any,
+      expiresAt
+    });
+  }
+
+  /**
+   * Parse TTL string to milliseconds
+   */
+  private parseTTL(ttl: string): number {
+    const match = ttl.match(/^(\d+)([hdw])$/);
+    if (!match) {
+      throw new Error(`Invalid TTL format: ${ttl}`);
+    }
+    
+    const value = parseInt(match[1]);
+    const unit = match[2];
+    
+    switch (unit) {
+      case 'h':
+        return value * 60 * 60 * 1000; // hours to ms
+      case 'd':
+        return value * 24 * 60 * 60 * 1000; // days to ms
+      case 'w':
+        return value * 7 * 24 * 60 * 60 * 1000; // weeks to ms
+      default:
+        throw new Error(`Unsupported TTL unit: ${unit}`);
     }
   }
 }

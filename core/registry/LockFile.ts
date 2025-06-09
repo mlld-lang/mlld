@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { MlldError } from '@core/errors';
-import type { ILockFileWithCommands, CommandApproval } from './ILockFile';
+import type { ILockFileWithCommands, CommandApproval, ImportApproval, PathApproval } from './ILockFile';
 
 export interface LockEntry {
   resolved: string;           // The resolved path (gist URL or registry path)
@@ -30,6 +30,8 @@ export interface LockFileData {
     blockedPatterns?: string[];
     trustedDomains?: string[];
     approvedCommands?: Record<string, CommandApproval>;
+    approvedUrls?: Record<string, ImportApproval>;
+    approvedPaths?: Record<string, PathApproval>;
   };
 }
 
@@ -270,6 +272,135 @@ export class LockFile implements ILockFileWithCommands {
   async removeCommandApproval(pattern: string): Promise<void> {
     if (this.data.security?.approvedCommands) {
       delete this.data.security.approvedCommands[pattern];
+      this.isDirty = true;
+      await this.save();
+    }
+  }
+
+  // Import approval methods
+  async addImportApproval(url: string, approval: ImportApproval): Promise<void> {
+    if (!this.data.security) {
+      this.data.security = {};
+    }
+    if (!this.data.security.approvedUrls) {
+      this.data.security.approvedUrls = {};
+    }
+    
+    this.data.security.approvedUrls[url] = approval;
+    this.isDirty = true;
+    await this.save();
+  }
+  
+  getImportApproval(url: string): ImportApproval | undefined {
+    return this.data.security?.approvedUrls?.[url];
+  }
+  
+  findMatchingImportApproval(url: string): ImportApproval | undefined {
+    const approvals = this.data.security?.approvedUrls || {};
+    
+    // Exact match first
+    if (approvals[url]) {
+      const approval = approvals[url];
+      if (approval.expiresAt) {
+        const expiryDate = new Date(approval.expiresAt);
+        if (expiryDate < new Date()) {
+          return undefined; // Expired
+        }
+      }
+      return approval;
+    }
+    
+    // Pattern matching for URL prefixes
+    for (const [pattern, approval] of Object.entries(approvals)) {
+      if (url.startsWith(pattern)) {
+        // Check expiry
+        if (approval.expiresAt) {
+          const expiryDate = new Date(approval.expiresAt);
+          if (expiryDate < new Date()) {
+            continue; // Skip expired
+          }
+        }
+        return approval;
+      }
+    }
+    
+    return undefined;
+  }
+  
+  getAllImportApprovals(): Record<string, ImportApproval> {
+    return { ...(this.data.security?.approvedUrls || {}) };
+  }
+  
+  async removeImportApproval(url: string): Promise<void> {
+    if (this.data.security?.approvedUrls) {
+      delete this.data.security.approvedUrls[url];
+      this.isDirty = true;
+      await this.save();
+    }
+  }
+
+  // Path approval methods
+  async addPathApproval(path: string, operation: 'read' | 'write', approval: PathApproval): Promise<void> {
+    if (!this.data.security) {
+      this.data.security = {};
+    }
+    if (!this.data.security.approvedPaths) {
+      this.data.security.approvedPaths = {};
+    }
+    
+    const key = `${path}:${operation}`;
+    this.data.security.approvedPaths[key] = approval;
+    this.isDirty = true;
+    await this.save();
+  }
+  
+  getPathApproval(path: string, operation: 'read' | 'write'): PathApproval | undefined {
+    const key = `${path}:${operation}`;
+    return this.data.security?.approvedPaths?.[key];
+  }
+  
+  findMatchingPathApproval(path: string, operation: 'read' | 'write'): PathApproval | undefined {
+    const approvals = this.data.security?.approvedPaths || {};
+    
+    // Exact match first
+    const exactKey = `${path}:${operation}`;
+    if (approvals[exactKey]) {
+      const approval = approvals[exactKey];
+      if (approval.expiresAt) {
+        const expiryDate = new Date(approval.expiresAt);
+        if (expiryDate < new Date()) {
+          return undefined; // Expired
+        }
+      }
+      return approval;
+    }
+    
+    // Pattern matching for path prefixes
+    for (const [key, approval] of Object.entries(approvals)) {
+      const [approvalPath, approvalOp] = key.split(':');
+      if (approvalOp === operation && path.startsWith(approvalPath)) {
+        // Check expiry
+        if (approval.expiresAt) {
+          const expiryDate = new Date(approval.expiresAt);
+          if (expiryDate < new Date()) {
+            continue; // Skip expired
+          }
+        }
+        return approval;
+      }
+    }
+    
+    return undefined;
+  }
+  
+  getAllPathApprovals(): Record<string, PathApproval> {
+    return { ...(this.data.security?.approvedPaths || {}) };
+  }
+  
+  async removePathApproval(path: string, operation: 'read' | 'write'): Promise<void> {
+    const key = `${path}:${operation}`;
+    if (this.data.security?.approvedPaths) {
+      delete this.data.security.approvedPaths[key];
       this.isDirty = true;
       await this.save();
     }
