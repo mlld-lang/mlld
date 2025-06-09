@@ -4,6 +4,13 @@ This document describes the comprehensive testing approach for the Mlld project,
 
 ## Test Organization
 
+### Core Testing Approaches
+
+The project uses two complementary testing approaches:
+
+1. **Fixture System**: Automatically generates test fixtures from markdown examples for comprehensive language testing
+2. **Security Testing Framework**: Specialized infrastructure for testing security features with proper mocking and verification
+
 ### Fixture System
 
 The project uses an organized fixture system that automatically generates test fixtures from markdown examples. This approach ensures tests are maintainable and closely match real-world usage.
@@ -30,7 +37,20 @@ tests/
 │   ├── exceptions/         # Generated from exceptions/ test cases
 │   ├── warnings/           # Generated from warnings/ test cases
 │   └── invalid/            # Generated from invalid/ test cases
-└── utils/                  # Test utilities and helpers
+├── utils/                   # Test utilities and helpers
+│   ├── EnvironmentFactory.ts     # Creates consistent test environments
+│   ├── TestEnvironment.ts        # Enhanced environment with verification
+│   └── TTLTestFramework.ts       # TTL/trust enforcement testing
+├── mocks/                   # Mock implementations for security testing
+│   ├── MockSecurityManager.ts    # Security mock with call tracking
+│   ├── MockURLCache.ts           # TTL-aware cache mock
+│   └── MockLockFile.ts           # Lock file mock with verification
+├── setup/                   # Test setup and configuration
+│   ├── TestSetup.ts             # Centralized test setup framework
+│   └── vitest-security-setup.ts # Vitest integration for security tests
+├── unit/                    # Unit tests (using standard vitest config)
+├── integration/             # Integration tests (using security config)
+└── migration/               # Migration examples for new framework
 ```
 
 #### Test Case Format
@@ -43,6 +63,71 @@ Each test case directory typically contains:
 For tests with variants, use naming like:
 - `example-multiline.md` / `expected-multiline.md`
 - `example-with-variables.md` / `expected-with-variables.md`
+
+### Security Testing Framework
+
+The security testing framework provides reliable testing infrastructure specifically designed for mlld's security features. It addresses the challenge that security components often require special setup and verification that isn't needed for general language features.
+
+#### Key Components
+
+1. **EnvironmentFactory**: Creates consistent, configurable test environments with proper security initialization
+2. **TestEnvironment**: Enhanced Environment wrapper with verification capabilities for security operations
+3. **MockSecurityManager**: Comprehensive mock with detailed call tracking and configurable behavior
+4. **MockURLCache & MockLockFile**: TTL-aware mocks with operation verification
+5. **TTLTestFramework**: Specialized framework for testing TTL/trust enforcement end-to-end
+6. **TestSetup**: Centralized setup/teardown framework with proper test isolation
+
+#### Environment Types
+
+- **Security Unit Tests**: Fast tests with mocked security components
+- **Security Integration Tests**: Tests with real security components for integration validation
+- **TTL Tests**: Specialized tests for TTL/trust enforcement with time-sensitive behavior
+- **Lock File Tests**: Tests for lock file operations with persistence simulation
+- **E2E Tests**: Full workflow tests with temporary filesystem
+
+#### Usage Example
+
+```typescript
+import { TestSetup, TestEnvironment } from '../setup/vitest-security-setup';
+
+describe('My Security Feature', () => {
+  let env: TestEnvironment;
+
+  beforeEach(async () => {
+    env = await TestSetup.createSecurityUnitTestEnv();
+  });
+
+  afterEach(async () => {
+    await TestSetup.afterEach();
+  });
+
+  it('should verify security checks', async () => {
+    await env.executeCommand('echo test');
+    
+    // Verify security was checked
+    expect(env.wasCommandChecked('echo test')).toBe(true);
+    
+    // Get detailed verification
+    const verification = await env.verifySecurityCalls();
+    expect(verification.commandChecks).toHaveLength(1);
+  });
+});
+```
+
+#### Running Security Tests
+
+```bash
+# Run all security tests
+npm run test:security
+
+# Run security tests in watch mode
+npm run test:security:watch
+
+# Run security tests with coverage
+npm run test:security:coverage
+```
+
+**Note**: Security tests use a separate vitest configuration (`vitest.security.config.ts`) that provides enhanced setup for security-specific testing. They can also run with the regular `npm test` but may have limited functionality when security setup is not available.
 
 ### Test Types
 
@@ -106,8 +191,10 @@ The fixture generation happens in two phases:
 
 ### Running Tests
 
+#### Core Language Tests (Fixture System)
+
 ```bash
-# Run all tests (excludes examples by default)
+# Run all core tests (excludes examples and security tests by default)
 npm test
 
 # Run specific test directory
@@ -126,7 +213,38 @@ npm run test:watch
 npm run test:examples
 ```
 
-**Note**: Examples are excluded from the default test run because they can include long-running LLM calls via `oneshot` commands. Use `npm run test:examples` to test examples specifically.
+**Note**: Examples are excluded from the default test run because they can include long-running LLM calls via `oneshot` commands.
+
+#### Security Tests (Security Framework)
+
+```bash
+# Run all security tests
+npm run test:security
+
+# Run security tests in watch mode
+npm run test:security:watch
+
+# Run security tests with coverage
+npm run test:security:coverage
+
+# Run specific security test file
+npm run test:security -- tests/unit/testing-infrastructure.test.ts
+```
+
+#### Running All Tests
+
+```bash
+# Run all tests including security framework tests
+npm test
+
+# Run security tests with enhanced setup and verification
+npm run test:security
+
+# Run both with different configurations  
+npm test && npm run test:security
+```
+
+The security framework tests are included in `npm test` but run with basic environment setup. For full security testing capabilities, use `npm run test:security`.
 
 ### Test Structure
 
