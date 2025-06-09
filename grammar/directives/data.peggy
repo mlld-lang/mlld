@@ -66,6 +66,9 @@ AtData
       } else if (value.type === "literalPath") {
         // Literal path content - array of content nodes
         values.value = value.value.parts;
+      } else if (value.type === "execInvocation") {
+        // Exec invocation with potential tail modifiers
+        values.value = value.value;
       } else {
         // For primitive values, ensure it's a ContentNodeArray
         values.value = Array.isArray(value.value) ? value.value : [value.value];
@@ -98,6 +101,13 @@ AtData
         metaObj = { literalPathData: { 
           raw: value.value.raw,
           hasVariables: value.value.parts.some(p => p.type === NodeType.VariableReference)
+        } };
+      } else if (value.type === "execInvocation") {
+        source = 'exec';
+        metaObj = { execInvocationData: {
+          commandName: value.value.commandRef.name,
+          hasArgs: value.value.commandRef.args && value.value.commandRef.args.length > 0,
+          hasTailModifiers: !!value.value.withClause
         } };
       } else if (value.type === "primitive") {
         source = 'literal';
@@ -143,6 +153,7 @@ AtData
 DataValue
   = ForeachCommandExpression
   / DirectiveValue
+  / ExecInvocationValue
   / TemplateValue  
   / VariableReferenceValue
   / object:DataObjectLiteral {
@@ -217,15 +228,19 @@ DirectiveValue
         rawText: "@run [" + rawCommand + "]"
       };
     }
-  / "@run" _ exec:RunExecCore {
+  / "@run" _ "@" invocation:ExecInvocationWithTail {
       const runDirective = helpers.createStructuredDirective(
         'run',
-        'runExec',
-        exec.values,
-        exec.raw,
+        'runExecInvocation',
         {
-          ...exec.meta,
-          isDataValue: true
+          execInvocation: invocation
+        },
+        {
+          execInvocation: invocation.commandRef.name
+        },
+        {
+          isDataValue: true,
+          isExecInvocation: true
         },
         location(),
         'exec'
@@ -234,7 +249,7 @@ DirectiveValue
       return {
         type: "nestedDirective",
         directive: runDirective,
-        rawText: "@run @" + exec.raw.identifier
+        rawText: "@run @" + invocation.commandRef.name
       };
     }
   / "@add" _ content:AddCore {
@@ -278,9 +293,19 @@ DirectiveValue
       };
     }
 
+// Exec invocation with tail modifiers (without @run)
+ExecInvocationValue
+  = !ReservedDirective "@" invocation:ExecInvocationWithTail {
+      return {
+        type: "execInvocation",
+        value: invocation,
+        rawText: "@" + invocation.commandRef.name
+      };
+    }
+
 // Variable reference (including field access) with proper disambiguation
 VariableReferenceValue  
-  = !ReservedDirective "@" id:BaseIdentifier accessElements:AnyFieldAccess* {
+  = !ReservedDirective "@" id:BaseIdentifier !"(" accessElements:AnyFieldAccess* {
       const normalizedId = helpers.normalizePathVar(id);
       const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -348,6 +373,10 @@ DataObjectLiteral
           else if (value.type === "literalPath") {
             result[key] = value.value.parts; // Array of content nodes
           }
+          // Handle exec invocations
+          else if (value.type === "execInvocation") {
+            result[key] = value.value; // Exec invocation node
+          }
           // Handle primitive values
           else {
             result[key] = value.value || value;
@@ -409,6 +438,8 @@ DataArrayLiteral
           return item.value; // Variable reference node
         } else if (item.type === "literalPath") {
           return item.value.parts; // Array of content nodes
+        } else if (item.type === "execInvocation") {
+          return item.value; // Exec invocation node
         } else {
           return item.value || item;
         }

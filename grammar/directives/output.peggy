@@ -62,13 +62,29 @@ AtOutput
 
 // Output source types
 OutputSource
-  = OutputVariable
+  = OutputExecInvocation
+  / OutputVariable
   / OutputCommand  
   / OutputLiteral
 
+// Exec invocation with tail modifiers
+OutputExecInvocation
+  = "@" invocation:ExecInvocationWithTail {
+      helpers.debug('OutputExecInvocation matched', { invocation });
+      
+      return {
+        type: 'exec',
+        subtype: 'outputExecInvocation',
+        values: invocation,
+        raw: {
+          commandName: invocation.commandRef.name
+        }
+      };
+    }
+
 // Variable reference with optional arguments (includes templates and commands)
 OutputVariable
-  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* args:OutputArguments? {
+  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* args:OutputArguments? !("|" / "with" / "trust" / "needs") {
       const hasArgs = args && args.length > 0;
       const isTemplate = hasArgs; // With args, it's a template/command invocation
       

@@ -340,28 +340,42 @@ AtRun
 
 ```
 @run ...
-├─ Language keyword detected (js, python, bash, etc.)?
-│  ├─ YES: "@run language [(code)]"
-│  │  └─ Code execution mode
-│  │     └─ Language specified outside brackets
-│  │        └─ [(code content)]
-│  │           ├─ No @ variable processing in code
-│  │           ├─ Preserve all [brackets]
-│  │           └─ Preserve all quotes
-│  │
-├─ "[(" detected?
-│  ├─ YES: "@run [(command)]"
-│  │  └─ Command execution mode
-│  │     └─ CommandParts with @var interpolation
-│  │        ├─ @var → Variable reference
-│  │        └─ text → Command text segments
-│  │
-├─ "@" detected?
-│  ├─ YES: "@run @command"
-│  │  └─ Command reference (exec)
-│  │
-└─ Other patterns
-   └─ Parse error (invalid syntax)
+├─ Command content
+│  ├─ Language keyword detected (js, python, bash, etc.)?
+│  │  ├─ YES: "@run language [(code)]"
+│  │  │  └─ Code execution mode
+│  │  │     └─ Language specified outside brackets
+│  │  │        └─ [(code content)]
+│  │  │           ├─ No @ variable processing in code
+│  │  │           ├─ Preserve all [brackets]
+│  │  │           └─ Preserve all quotes
+│  │  │
+│  ├─ "[(" detected?
+│  │  ├─ YES: "@run [(command)]"
+│  │  │  └─ Command execution mode
+│  │  │     └─ CommandParts with @var interpolation
+│  │  │        ├─ @var → Variable reference
+│  │  │        └─ text → Command text segments
+│  │  │
+│  ├─ "@" detected?
+│  │  ├─ YES: "@run @command"
+│  │  │  └─ Command reference (exec)
+│  │  │
+│  └─ Other patterns
+│     └─ Parse error (invalid syntax)
+│
+└─ Tail modifier (optional)?
+   ├─ trust <level>
+   ├─ | @cmd @cmd → pipeline
+   ├─ pipeline [...]
+   └─ with { trust: <level>, pipeline: [...], needs: {...} }
+
+Examples:
+- @run [(echo "Hello")]
+- @run [(rm -rf temp/)] trust always
+- @run [(curl api.com)] | @validate @parse
+- @run @deploy(prod) trust always
+- @run [(npm test)] with { needs: { node: { jest: "^29.0.0" } } }
 ```
 
 ### Command Parsing Logic Tree
@@ -448,7 +462,7 @@ The token-based approach ensures that:
 2. **Security checks everywhere**: Only in unquoted content (UnifiedCommandWordChar)
 3. **Quote consumption**: Quotes are preserved in the output, not consumed
 
-### @text Directive
+### @text Directive (Target Design)
 
 ```
 @text name = ...
@@ -465,16 +479,29 @@ The token-based approach ensures that:
 │  │  │  └─ NO: [PathContent]
 │  │  │     └─ [/path/to/@var/file]
 │  │
-├─ "@run" detected?
-│  ├─ YES: RunReference
-│  │  └─ @run directive (see tree above)
+├─ "@" detected?
+│  ├─ YES: Variable, invocation, or @run
+│  │  ├─ @varname → Variable reference (no modifiers)
+│  │  ├─ @command(args) [tail modifiers]
+│  │  │  ├─ Exec invocation with optional modifiers
+│  │  │  └─ Template invocation with optional modifiers
+│  │  └─ @run [...] [tail modifiers]
+│  │     └─ Direct run command
 │  │
 └─ '"' or "'" detected?
    └─ QuotedLiteral
       └─ "simple string" (no interpolation)
+
+Examples:
+- @text greeting = "Hello, world!"
+- @text content = [[Welcome {{user}}!]]
+- @text data = @fetchData() | @parse              # Direct exec with pipeline
+- @text secure = @getSecrets() trust always       # Direct exec with trust
+- @text result = @process() with { trust: verify, pipeline: [@validate] }
+- @text cmd = @run [(echo "test")] | @uppercase  # Direct run with pipeline
 ```
 
-### @data Directive
+### @data Directive (Target Design)
 
 ```
 @data obj = ...
@@ -483,7 +510,8 @@ The token-based approach ensures that:
 │  │  └─ { key: DataValue, ... }
 │  │     └─ DataValue can be:
 │  │        ├─ Primitive: "string", 123, true
-│  │        ├─ @run [...] → Embedded directive
+│  │        ├─ @command(args) [tail modifiers]
+│  │        ├─ @run [...] [tail modifiers]
 │  │        └─ Nested object/array
 │  │
 ├─ "[" detected?
@@ -491,49 +519,86 @@ The token-based approach ensures that:
 │  │  └─ [DataValue, DataValue, ...]
 │  │     └─ Same DataValue options as above
 │  │
-├─ "@run" detected?
-│  ├─ YES: DirectiveValue
-│  │  └─ Execute and use result
+├─ "foreach" detected?
+│  ├─ YES: ForeachExpression with tail modifiers
+│  │  └─ foreach @command(@arrays) [tail modifiers]
+│  │
+├─ "@" detected?
+│  ├─ YES: Variable, invocation, or @run
+│  │  ├─ @varname → Variable reference
+│  │  ├─ @command(args) [tail modifiers]
+│  │  └─ @run [...] [tail modifiers]
 │  │
 └─ Other: PrimitiveValue
    └─ String, number, boolean, null
+
+Examples:
+- @data result = @fetchAPI("api.com") | @parse
+- @data secure = @checkAuth() trust always
+- @data items = foreach @process(@list) | @validate
+- @data config = { 
+    api: @getEndpoint() trust always,
+    data: @fetchData() | @decrypt @parse
+  }
 ```
 
 ### @exec Directive
 
 ```
 @exec name(params) = @run ...
-└─ Must use @run:
-   ├─ @exec cmd(p) = @run [(echo @p)]      - Command
-   ├─ @exec fn(x) = @run js [(return x)]   - Code (language outside brackets)
-   └─ @exec alias() = @run @other          - Reference
+├─ Definition part
+│  └─ Must use @run:
+│     ├─ @exec cmd(p) = @run [(echo @p)]      - Command
+│     ├─ @exec fn(x) = @run js [(return x)]   - Code (language outside brackets)
+│     └─ @exec alias() = @run @other          - Reference
+│
+└─ Tail modifier (optional)?
+   ├─ trust <level> → Applied to the @run definition
+   └─ with { trust: <level>, ... }
+
+Examples:
+- @exec deploy(env) = @run [(./deploy.sh @env)] trust always
+- @exec validate(data) = @run python [(validate(@data))]
+- @exec process(file) = @run [(cat @file)] | @transform
+- @exec secure_op() = @run [(sensitive-command)] with { trust: verify }
 ```
 
 ### @path Directive
 
 ```
 @path var = ...
-├─ "[" detected?
-│  ├─ YES: BracketPath
-│  │  └─ [@var/path/segments]
-│  │
-├─ '"' detected?
-│  ├─ YES: QuotedPath
-│  │  └─ "path with spaces"
-│  │
-└─ No delimiter?
-   └─ UnquotedPath
-      └─ @var/path/segments
+├─ Path value
+│  ├─ "[" detected?
+│  │  ├─ YES: BracketPath
+│  │  │  └─ [@var/path/segments]
+│  │  │
+│  ├─ '"' detected?
+│  │  ├─ YES: QuotedPath
+│  │  │  └─ "path with spaces"
+│  │  │
+│  └─ No delimiter?
+│     └─ UnquotedPath
+│        └─ @var/path/segments
+│
+├─ TTL (optional)?
+│  └─ "(" duration ")"
+│     └─ See unified tail syntax tree
+│
+└─ Tail modifier (optional)?
+   ├─ trust <level>
+   └─ with { trust: <level>, ... }
+
+Examples:
+- @path config = ./config.json
+- @path api = https://api.com/data (5m)
+- @path docs = [https://docs.com/readme.md] (7d) trust always
+- @path secure = @baseUrl/endpoint (1h) with { trust: verify }
 ```
 
 ### @import Directive
 
 ```
 @import ...
-├─ Security options? (optional)
-│  ├─ (TTL): (10d), (30m), (static)
-│  └─ trust: always, verify, never
-│
 ├─ Import pattern?
 │  ├─ { imports } from source → Selective import
 │  │  ├─ { var1, var2 } → Named imports
@@ -542,14 +607,33 @@ The token-based approach ensures that:
 │  │
 │  └─ source (no braces) → Import all (implicit)
 │
-└─ Source types:
-   ├─ @input → Special stdin/pipe input
-   ├─ @author/module → Registry module
-   ├─ @resolver/path/to/mod → Module with path
-   ├─ [@var/path.mld] → Path with variables
-   ├─ [path/to/file.mld] → Local file path
-   ├─ [https://url.com/file] → Remote URL
-   └─ "path/to/file.mld" → Quoted path
+├─ Source types:
+│  ├─ @input → Special stdin/pipe input
+│  ├─ @author/module → Registry module
+│  ├─ @resolver/path/to/mod → Module with path
+│  ├─ [@var/path.mld] → Path with variables
+│  ├─ [path/to/file.mld] → Local file path
+│  ├─ [https://url.com/file] → Remote URL
+│  └─ "path/to/file.mld" → Quoted path
+│
+├─ TTL (optional after source)?
+│  └─ (ttl) → Cache duration
+│     ├─ (5000) → Milliseconds
+│     ├─ (30s) → Seconds
+│     ├─ (5m) → Minutes
+│     ├─ (2h) → Hours
+│     ├─ (7d) → Days
+│     ├─ (2w) → Weeks
+│     └─ (static) → Cache forever
+│
+└─ Tail modifiers (optional)?
+   ├─ trust <level> → Security validation
+   │  ├─ always → Skip validation
+   │  ├─ never → Block entirely
+   │  └─ verify → Full validation (default)
+   │
+   └─ with { ... } → Multiple modifiers
+      └─ { trust: <level>, ... }
 
 Full syntax examples:
 - @import { x, y } from [path/to/file.mld]
@@ -558,17 +642,19 @@ Full syntax examples:
 - @import { * } from [@pathvar/file.mld]
 - @import { data } from @input
 - @import @corp/utils (static) trust verify
+- @import [https://api.com/data.mld] (5m) with { trust: always }
 ```
 
-### @add Directive
+### @add Directive (Target Design)
 
 ```
 @add ...
 ├─ "foreach" detected?
 │  ├─ YES: ForeachExpression
-│  │  └─ foreach @command(@arrays) [with options]
-│  │     └─ Text concatenation mode
-│  │        └─ Default separator: "\n"
+│  │  └─ foreach @command(@arrays) [tail modifiers]
+│  │     ├─ Text concatenation mode
+│  │     ├─ Default separator: "\n"
+│  │     └─ Tail modifiers supported
 │  │
 ├─ "[[" detected?
 │  ├─ YES: TemplateContent
@@ -579,28 +665,38 @@ Full syntax examples:
 │  │  └─ Same logic as @text
 │  │
 ├─ "@" detected?
-│  ├─ YES: VariableReference
-│  │  └─ @varname to output
+│  ├─ YES: Variable or invocation
+│  │  ├─ @varname → Variable reference
+│  │  └─ @command(args) [tail modifiers]
+│  │     ├─ Exec invocation
+│  │     └─ Template invocation
 │  │
 └─ '"' detected?
    └─ LiteralContent
       └─ "text to add"
+
+Examples:
+- @add @greeting("World") | @uppercase
+- @add @fetchData() trust always
+- @add foreach @process(@items) | @validate
+- @add @result    # Variable (no modifiers)
 ```
 
-### @output Directive
+### @output Directive (Target Design)
 
 ```
 @output ...
-├─ "@" variable/command detected?
-│  ├─ YES: Output variable/command result
+├─ "@" detected?
+│  ├─ YES: Variable or invocation output
 │  │  ├─ @output @var [file.md]
-│  │  │  └─ Variable content → file
+│  │  │  └─ Variable content → file (no modifiers)
 │  │  │
-│  │  ├─ @output @template(args) [file.md]
-│  │  │  └─ Template result → file
+│  │  ├─ @output @invocation(args) [tail modifiers] [file.md]
+│  │  │  ├─ Template invocation with optional modifiers
+│  │  │  └─ Exec invocation with optional modifiers
 │  │  │
-│  │  └─ @output @cmd(args) [file.md]
-│  │     └─ Command result → file
+│  │  └─ @output @run [...] [tail modifiers] [file.md]
+│  │     └─ Direct run command with modifiers
 │  │
 │  └─ Followed by "[" path?
 │     └─ [path/to/file.md]
@@ -619,10 +715,206 @@ Full syntax examples:
 └─ Other patterns
    └─ Parse error (invalid syntax)
 
+Examples:
+- @output [report.md]
+- @output @result [output.txt]                    # Variable (no modifiers)
+- @output @formatTemplate(data) | @minify [doc.md]  # Template with pipeline
+- @output @generateReport() trust always [report.pdf]  # Exec with trust
+- @output @process() | @validate @format [data.json]   # Exec with pipeline
+- @output @run [(curl api.com)] trust always [data.json]  # Run with trust
+- @output "Static content" [static.txt]
+
 Usage in @when blocks:
 - @when @condition => @output [file.md]
-- @when @var: [@cond => @output @result [file.md]]
+- @when @hasData => @output @process() | @format [result.md]
+- @when @needsReport => @output @generate() with { trust: verify, pipeline: [@pdf] } [report.pdf]
 ```
+
+### @when Directive (Target Design)
+
+```
+@when ...
+├─ Condition patterns (with tail modifier support)
+│  ├─ Simple: @when @condition => action
+│  │  ├─ @condition → Variable/invocation to test
+│  │  │  ├─ @varname
+│  │  │  └─ @checkCondition() [tail modifiers]
+│  │  └─ action → Directive to execute if truthy
+│  │
+│  ├─ Multi with mode: @when @var mode: [conditions]
+│  │  ├─ first: Execute first matching condition only
+│  │  ├─ any: Execute all matching conditions
+│  │  └─ all: Execute action only if all match
+│  │
+│  └─ Block action: @when @var: [...] => action
+│     └─ Single action for all conditions
+│
+└─ Actions support full directive syntax
+   ├─ Direct exec invocations with tail modifiers
+   │  ├─ @deploy() trust always
+   │  ├─ @notify() | @format @send
+   │  └─ @process() with { trust: verify, pipeline: [@log] }
+   │
+   ├─ @run commands with tail modifiers
+   ├─ @output with tail modifiers
+   ├─ @text assignments
+   └─ Any directive (all support exec tail modifiers)
+
+Examples:
+- @when @isProduction => @deploy() trust always
+- @when @hasData() => @process() | @validate @save  
+- @when @needsAuth() | @isExpired => @authenticate() trust verify
+- @when @results any: [
+    @success => @notify("success") | @format,
+    @warning => @logWarning() trust always,
+    @error => @alertTeam() with { pipeline: [@urgent, @send] }
+  ]
+```
+
+### Exec-Defined Command Invocations (Target Design)
+
+```
+@commandName(args) [tail modifiers] - Unified invocation syntax
+├─ Base invocation
+│  ├─ @commandName → Exec-defined command reference
+│  ├─ (args) → Arguments passed to command
+│  └─ [tail modifiers] → Optional modifiers (same everywhere)
+│
+├─ Tail modifiers (available on ALL exec invocations)
+│  ├─ trust <level>
+│  ├─ | @filter @format
+│  ├─ pipeline [...]
+│  └─ with { trust: <level>, pipeline: [...] }
+│
+└─ Supported contexts (all with full tail modifier support)
+   ├─ @add @greet() | @uppercase
+   ├─ @text message = @format(data) trust always
+   ├─ @data results = foreach @process(@items) | @validate
+   ├─ @when @isReady() => @deploy() trust always
+   └─ @output @generate() | @format @minify [file.md]
+
+Grammar normalization:
+- All exec invocations with tail modifiers → RunExecReference AST node
+- Tail modifiers parsed consistently across all directives
+- Same withClause structure as @run directive
+
+Complete example:
+# Define commands and templates
+@exec fetchAPI(url) = @run [(curl -s @url)]
+@exec processData(json) = @run python [(process_json(@json))]
+@text greeting(name, title) = [[Hello {{title}} {{name}}!]]
+
+# Unified syntax - tail modifiers work everywhere
+@add @greeting("Smith", "Dr.") | @uppercase               # Pipeline on template
+@text secure = @fetchAPI("api.com") trust always          # Trust on exec
+@data results = foreach @processData(@items) | @validate   # Pipeline on foreach
+@when @hasData() => @output @generate() | @format [doc.md] # Pipeline on output
+@output @fetchAPI("api/report") with {                    # Full with clause
+  trust: verify,
+  pipeline: [@validateJSON, @extractData, @format]
+} [report.json]
+
+Examples:
+# Define commands
+@exec fetchData(endpoint) = @run [(curl @endpoint)]
+@exec process(data) = @run python [(process(@data))]
+@exec deploy(env) = @run [(./deploy.sh @env)]
+
+# Use with tail modifiers
+@text apiData = @run @fetchData("api/users") | @validateJSON @extractUsers
+@data config = @run @process(rawConfig) trust always
+@when @isProduction => @run @deploy("prod") with { trust: verify }
+@output @run @generate("report") | @format [report.md]
+```
+
+### Unified Tail Syntax (Target Design)
+
+```
+Tail Modifiers - Available on ALL command executions
+├─ Where tail modifiers apply:
+│  ├─ @run directives
+│  │  ├─ @run [(command)] [tail]
+│  │  └─ @run @execRef(args) [tail]
+│  │
+│  ├─ Exec invocations (anywhere)
+│  │  ├─ @text var = @cmd() [tail]
+│  │  ├─ @data var = @cmd() [tail]
+│  │  ├─ @add @cmd() [tail]
+│  │  ├─ @output @cmd() [tail] [path]
+│  │  ├─ @when @cond() [tail] => action
+│  │  └─ foreach @cmd() [tail]
+│  │
+│  └─ @exec definitions
+│     └─ @exec name() = @run [...] [tail]
+│
+├─ TTL (path/import only - special position)
+│  └─ @path url = source (ttl) [tail]
+│     └─ @import source (ttl) [tail]
+│
+└─ Tail modifier syntax
+   ├─ Single keyword sugar:
+   │  ├─ trust <level> → { trust: <level> }
+   │  ├─ pipeline [...] → { pipeline: [...] }
+   │  ├─ | @cmd @cmd → { pipeline: [@cmd, @cmd] }
+   │  └─ needs {...} → { needs: {...} }
+   │
+   └─ with {...} → Multiple properties
+      ├─ trust: always/never/verify
+      ├─ pipeline: [@cmd1, @cmd2]
+      ├─ needs: { lang: { pkg: ver } }
+      └─ ...future extensions
+
+Grammar implementation:
+1. Parse exec invocations with optional TailModifiers
+2. Convert to normalized AST (same as @run)
+3. Interpreter sees unified structure
+
+Complete examples:
+# All of these support tail modifiers uniformly
+@path api = https://api.com (5d) trust always
+@import [utils.mld] (30m) trust verify
+@exec deploy(env) = @run [(./deploy.sh @env)] trust always
+
+@text data = @fetchAPI("users") | @validateJSON @extract
+@data config = @loadConfig() trust always
+@add @greeting("World") | @uppercase
+@output @generate() | @format @minify [doc.md]
+@when @isReady() => @deploy("prod") trust always
+@data results = foreach @process(@items) | @validate
+```
+
+## Grammar Implementation Strategy
+
+### Target: Unified Exec Invocation Tail Modifiers
+
+To implement tail modifiers on all exec invocations:
+
+1. **Create unified pattern** in `patterns/tail-modifiers.peggy`:
+   ```peggy
+   TailModifiers
+     = _ keyword:TailKeyword _ value:TailValue { 
+         return normalizeToWithClause(keyword, value);
+       }
+   
+   ExecInvocationWithTail
+     = ref:CommandReference tail:TailModifiers? {
+         return { 
+           ...ref,
+           withClause: tail || null
+         };
+       }
+   ```
+
+2. **Update each directive** to use the pattern:
+   - `@add`: Support `ExecInvocationWithTail`
+   - `@text`: RHS uses `ExecInvocationWithTail`
+   - `@data`: RHS and foreach use `ExecInvocationWithTail`
+   - `@output`: Source uses `ExecInvocationWithTail`
+   - `@when`: Conditions can use `ExecInvocationWithTail`
+
+3. **AST normalization**: All exec invocations with tail modifiers produce the same AST structure as `@run` with tail modifiers
+
+4. **Interpreter**: No changes needed - already handles withClause
 
 ## Parse Tree Maintenance
 

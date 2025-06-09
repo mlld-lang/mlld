@@ -24,9 +24,8 @@ AtImport
 
 // Shorthand import: @import [path] or @import @input
 AtImportShorthand
-  = DirectiveContext "@import" _ security:(SecurityOptions _)? path:ImportPath {
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('AtImportShorthand matched', { path, securityOptions });
+  = DirectiveContext "@import" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? {
+      helpers.debug('AtImportShorthand matched', { path, ttl, tail });
       
       // Shorthand always imports all (*)
       const imports = ["*"];
@@ -40,16 +39,25 @@ AtImportShorthand
         path: path.values?.path || path.values?.module || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
       
+      // Add TTL if present
+      if (ttl) {
+        values.ttl = ttl[1]; // Extract from [_, TTLClause]
+      }
+      
+      // Add withClause if tail modifiers present
+      if (tail) {
+        values.withClause = tail;
+      }
+      
       // Create raw object with text segments
       const raw = {
         imports: importsRaw,
         path: path.raw?.path || path.raw?.module || path // Handle string paths like @input
       };
       
-      // Create meta object with path metadata and security
+      // Create meta object with path metadata
       const meta = {
-        path: path.meta || {},
-        ...helpers.createSecurityMeta(securityOptions)
+        path: path.meta || {}
       };
       
       return helpers.createStructuredDirective(
@@ -65,9 +73,8 @@ AtImportShorthand
 
 // Full import with explicit imports list
 AtImportFull
-  = DirectiveContext "@import" _ security:(SecurityOptions _)? "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath {
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('AtImport matched', { imports, path, securityOptions });
+  = DirectiveContext "@import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? {
+      helpers.debug('AtImport matched', { imports, path, ttl, tail });
       
       // Get the raw imports text
       const importsRaw = imports.map(item => {
@@ -103,19 +110,28 @@ AtImportFull
         path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle file, module, and URL paths
       };
       
+      // Add TTL if present
+      if (ttl) {
+        values.ttl = ttl[1]; // Extract from [_, TTLClause]
+      }
+      
+      // Add withClause if tail modifiers present
+      if (tail) {
+        values.withClause = tail;
+      }
+      
       // Create raw object with text segments
       const raw = {
         imports: importsRaw,
         path: path.raw?.path || path.raw?.module || path.raw?.url || path // Handle file, module, and URL paths
       };
       
-      // Create meta object with path metadata and security
+      // Create meta object with path metadata
       const meta = {
         path: path.meta || { 
           isSpecial: typeof path === 'string',
           pathSubtype: path.subtype 
-        },
-        ...helpers.createSecurityMeta(securityOptions)
+        }
       };
       
       return helpers.createStructuredDirective(

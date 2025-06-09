@@ -19,10 +19,9 @@ It is used in the form:
 
 // Primary @path directive - handles bracketed paths using proper abstraction
 AtPath
-  // Quoted string path with security options
-  = DirectiveContext "@path" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ "\"" content:$([^"]*) "\"" {
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('AtPath matched quoted string', { id, content, securityOptions });
+  // Quoted string path with TTL and tail modifiers
+  = DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ "\"" content:$([^"]*) "\"" ttl:(_ TTLClause)? tail:TailModifiers? {
+      helpers.debug('AtPath matched quoted string', { id, content, ttl, tail });
       
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
@@ -30,26 +29,37 @@ AtPath
       // Create path parts
       const pathParts = [helpers.createNode(NodeType.Text, { content, location: location() })];
       
+      // Build values object
+      const values = {
+        identifier: [idNode],
+        path: pathParts
+      };
+      
+      // Add TTL if present
+      if (ttl) {
+        values.ttl = ttl[1]; // Extract from [_, TTLClause]
+      }
+      
+      // Add withClause if tail modifiers present
+      if (tail) {
+        values.withClause = tail;
+      }
+      
       return helpers.createStructuredDirective(
         'path',
         'pathAssignment',
-        {
-          identifier: [idNode],
-          path: pathParts
-        },
+        values,
         {},  // No raw field needed - simple string values provide no debugging benefit
         {
-          path: helpers.createPathMetadata(content, pathParts),
-          ...helpers.createSecurityMeta(securityOptions)
+          path: helpers.createPathMetadata(content, pathParts)
         },
         location(),
         'path'
       );
     }
-  // Bracketed path with security options - semantic parsing
-  / DirectiveContext "@path" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ "[" parts:PathAssignmentParts "]" {
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('AtPath matched bracketed path', { id, parts });
+  // Bracketed path with TTL and tail modifiers - semantic parsing
+  / DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ "[" parts:PathAssignmentParts "]" ttl:(_ TTLClause)? tail:TailModifiers? {
+      helpers.debug('AtPath matched bracketed path', { id, parts, ttl, tail });
       
       // Process special path variables in the parsed content (only @. special case)
       const processedPathParts = [];
@@ -82,24 +92,36 @@ AtPath
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
       
+      // Build values object
+      const values = {
+        identifier: [idNode],
+        path: processedPathParts
+      };
+      
+      // Add TTL if present
+      if (ttl) {
+        values.ttl = ttl[1]; // Extract from [_, TTLClause]
+      }
+      
+      // Add withClause if tail modifiers present
+      if (tail) {
+        values.withClause = tail;
+      }
+      
       return helpers.createStructuredDirective(
         'path',
         'pathAssignment',
-        {
-          identifier: [idNode],
-          path: processedPathParts
-        },
+        values,
         {},  // No raw field needed - can be reconstructed from parts if needed for debugging
         {
-          path: helpers.createPathMetadata(rawString, processedPathParts),
-          ...helpers.createSecurityMeta(securityOptions)
+          path: helpers.createPathMetadata(rawString, processedPathParts)
         },
         location(),
         'path'  // Source parameter
       );
     }
-  / DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? {
-      helpers.debug('AtPath matched normal path', { id, path, security });
+  / DirectiveContext "@path" _ id:BaseIdentifier _ "=" _ path:PathExpression ttl:(_ TTLClause)? tail:TailModifiers? {
+      helpers.debug('AtPath matched normal path', { id, path, ttl, tail });
       
       // Process special path variables
       let processedPath = path.raw.path || path.raw.url;
@@ -123,20 +145,32 @@ AtPath
         }
       }
       
+      // Build values object
+      const values = {
+        identifier: [idNode],
+        path: processedPathParts
+      };
+      
+      // Add TTL if present
+      if (ttl) {
+        values.ttl = ttl[1]; // Extract from [_, TTLClause]
+      }
+      
+      // Add withClause if tail modifiers present
+      if (tail) {
+        values.withClause = tail;
+      }
+      
       return helpers.createStructuredDirective(
         'path',
         'pathAssignment',
-        {
-          identifier: [idNode],
-          path: processedPathParts
-        },
+        values,
         {},  // No raw field needed - values contain all necessary information
         {
           path: {
             ...path.meta,
             pathSubtype: path.subtype // Preserve the specific path type
-          },
-          ...helpers.createSecurityMeta(security)
+          }
         },
         location(),
         'path'  // Source parameter

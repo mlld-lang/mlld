@@ -21,10 +21,10 @@ It can be used in three main forms:
 // Primary @run directive - Supporting both command and code syntax
 // Order matters: most specific patterns first
 AtRun
-  = DirectiveContext "@run" _ security:(SecurityOptions _)? lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets withClause:WithClause? comment:InlineComment? {
+  = DirectiveContext "@run" _ security:(SecurityOptions _)? lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets tail:TailModifiers? comment:InlineComment? {
       // Language + code syntax: @run language [(code)]
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched language + code', { lang, code, securityOptions, withClause });
+      helpers.debug('AtRun matched language + code', { lang, code, securityOptions, tail });
       
       const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
       const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
@@ -57,11 +57,11 @@ AtRun
         ...(comment ? { comment } : {})
       };
       
-      // Add with clause if present
-      if (withClause) {
-        values.withClause = withClause;
-        raw.withClause = withClause;
-        meta.withClause = withClause;
+      // Add withClause from tail if present
+      if (tail) {
+        values.withClause = tail;
+        raw.withClause = tail;
+        meta.withClause = tail;
       }
       
       return helpers.createStructuredDirective(
@@ -74,10 +74,10 @@ AtRun
         'code'
       );
     }
-  / DirectiveContext "@run" _ security:(SecurityOptions _)? content:UnifiedCommandBrackets withClause:WithClause? comment:InlineComment? {
+  / DirectiveContext "@run" _ security:(SecurityOptions _)? content:UnifiedCommandBrackets tail:TailModifiers? comment:InlineComment? {
       // Command syntax: @run [(command)]
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched command', { content, securityOptions, withClause });
+      helpers.debug('AtRun matched command', { content, securityOptions, tail });
       
       const meta = {
         ...content.meta,
@@ -88,11 +88,11 @@ AtRun
       const values = content.values;
       const raw = content.raw;
       
-      // Add with clause if present
-      if (withClause) {
-        values.withClause = withClause;
-        raw.withClause = withClause;
-        meta.withClause = withClause;
+      // Add withClause from tail if present
+      if (tail) {
+        values.withClause = tail;
+        raw.withClause = tail;
+        meta.withClause = tail;
       }
       
       return helpers.createStructuredDirective(
@@ -105,10 +105,10 @@ AtRun
         content.type
       );
     }
-  / DirectiveContext "@run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference withClause:WithClause? comment:InlineComment? {
+  / DirectiveContext "@run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference tail:TailModifiers? comment:InlineComment? {
       // @ detected -> Command reference (exec)
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched command reference', { commandRef, securityOptions, withClause });
+      helpers.debug('AtRun matched command reference', { commandRef, securityOptions, tail });
       
       const values = {
         identifier: commandRef.identifier,
@@ -126,11 +126,11 @@ AtRun
         ...(comment ? { comment } : {})
       };
       
-      // Add with clause if present
-      if (withClause) {
-        values.withClause = withClause;
-        raw.withClause = withClause;
-        meta.withClause = withClause;
+      // Add withClause from tail if present
+      if (tail) {
+        values.withClause = tail;
+        raw.withClause = tail;
+        meta.withClause = tail;
       }
       
       return helpers.createStructuredDirective(

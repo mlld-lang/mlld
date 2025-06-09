@@ -460,36 +460,40 @@ AtText
         sourceType
       );
     }
-  // Command reference - @text id = @cmdRef(args) - but not @run or @add
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@" !("run" _ / "add" _) commandRef:CommandReference {
-      helpers.debug('AtText matched command reference', { id, commandRef });
+  // Exec invocation with tail modifiers - @text name = @command() | @modifiers
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@" !("run" _ / "add" _) invocation:ExecInvocationWithTail {
+      helpers.debug('AtText matched exec invocation with tail modifiers', { id, invocation });
       
       const subtype = 'textAssignment';
-      const sourceType = 'commandRef';
+      const sourceType = 'exec';
+      
+      // Extract command reference info
+      const commandRef = invocation.commandRef;
       
       const meta = { 
         sourceType: sourceType,
         hasVariables: false,
-        isCommandRef: true,
+        isExecInvocation: true,
         commandName: commandRef.name,
-        commandArgs: commandRef.args || []  // Store structured arguments
+        commandArgs: commandRef.args || []
       };
       
-      // Create command reference syntax for content (backward compatibility)
+      // Create command reference syntax for content
       const rawContent = `@${commandRef.name}${
         commandRef.args && commandRef.args.length > 0 ? 
         `(${commandRef.args.map(arg => arg.value || '').join(', ')})` : ''
       }`;
       
+      // Create values object
+      const values = {
+        identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+        execInvocation: invocation
+      };
+      
       return helpers.createStructuredDirective(
         'text',
         subtype,
-          {
-            identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })],
-            commandName: [helpers.createNode(NodeType.Text, { content: commandRef.name, location: location() })],
-            commandArgs: commandRef.args || []  // Store structured arguments in values
-          },
+        values,
         {
           identifier: id,
           content: rawContent
@@ -572,13 +576,15 @@ AtText
         'run'
       );
     }
-  // Command reference with @run - @text id = @run @cmdRef(args)
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ "@" commandRef:CommandReference {
-      helpers.debug('AtText matched @run with command reference', { id, commandRef });
+  // Command reference with @run and tail modifiers - @text id = @run @cmdRef(args) | @transform
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ "@" invocation:ExecInvocationWithTail {
+      helpers.debug('AtText matched @run with exec invocation and tail modifiers', { id, invocation });
       
-      // Use the proper subtype and sourceType
       const subtype = 'textAssignment';
       const sourceType = 'directive';
+      
+      // Extract command reference info
+      const commandRef = invocation.commandRef;
       
       // Create meta object with run information
       const meta = { 
@@ -586,30 +592,25 @@ AtText
         directive: 'run',
         hasVariables: false,
         run: {
-          isCommandRef: true,
+          isExecInvocation: true,
           commandName: commandRef.name,
-          commandArgs: commandRef.args || []  // Store structured arguments
+          commandArgs: commandRef.args || []
         }
       };
       
-      // Create command reference syntax for content (backward compatibility)
-      const rawContent = `@run @${commandRef.name}${
-        commandRef.args && commandRef.args.length > 0 ? 
-        `(${commandRef.args.map(arg => arg.value || '').join(', ')})` : ''
-      }`;
+      // Create values object
+      const values = {
+        identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+        runExecInvocation: invocation
+      };
       
       return helpers.createStructuredDirective(
         'text',
         subtype,
-          {
-            identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-            content: [helpers.createNode(NodeType.Text, { content: rawContent, location: location() })],
-            runCommandName: [helpers.createNode(NodeType.Text, { content: commandRef.name, location: location() })],
-            runCommandArgs: commandRef.args || []  // Store structured arguments in values
-          },
+        values,
         {
           identifier: id,
-          content: rawContent
+          content: `@run @${commandRef.name}`
         },
         meta,
         location(),

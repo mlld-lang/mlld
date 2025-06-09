@@ -130,12 +130,9 @@ WhenModifier
 
 // Condition expression - reuse existing patterns
 WhenConditionExpression
-  = "@" commandRef:CommandReference {
-      // Command reference from patterns/command-reference.peggy
-      return [helpers.createVariableReferenceNode('commandRef', {
-        identifier: commandRef.name,
-        ...(commandRef.args && commandRef.args.length > 0 ? { args: commandRef.args } : {})
-      })];
+  = "@" invocation:ExecInvocationWithTail {
+      // Exec invocation with tail modifiers
+      return [invocation];
     }
   / Variable {
       // Variable reference from patterns/variables.peggy
@@ -189,7 +186,22 @@ WhenActionBlock
 
 // Single directive as action - simplified inline directives
 WhenActionDirective
-  = "@add" _ content:StringLiteral {
+  = "@add" _ "@" invocation:ExecInvocationWithTail {
+      // @add with exec invocation
+      return [helpers.createNode(NodeType.Directive, {
+        kind: 'add',
+        subtype: 'addExecInvocation',
+        values: { 
+          execInvocation: invocation
+        },
+        raw: { 
+          execInvocation: invocation.commandRef.name 
+        },
+        meta: {},
+        location: location()
+      })];
+    }
+  / "@add" _ content:StringLiteral {
       return [helpers.createNode(NodeType.Directive, {
         kind: 'add',
         subtype: 'addTemplate',
