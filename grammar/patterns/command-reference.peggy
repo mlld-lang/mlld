@@ -24,11 +24,14 @@ CommandArgs "command arguments"
 
 CommandArgumentList "command arguments list"
   = first:CommandArgument rest:(_ "," _ arg:CommandArgument { return arg; })* {
-      return [first, ...rest];
+      // Filter out null arguments (from empty raw arguments)
+      const args = [first, ...rest].filter(arg => arg !== null);
+      return args;
     }
 
 CommandArgument "command argument"
-  = str:StringLiteral {
+  = CommandTemplateArgument     // Template arguments [[...]]
+  / str:StringLiteral {
       // Create a Text node directly
       return helpers.createNode(NodeType.Text, {
         content: str,
@@ -39,23 +42,84 @@ CommandArgument "command argument"
       // Return the VariableReference directly
       return varRef;
     }
-  / chars:RawArgChar+ {
-      const content = chars.join('').trim();
+  / EscapedArgument      // Escaped characters in unquoted arguments
+  / RawArgument          // Fallback for unquoted arguments
+
+// Template argument - [[template content]]
+CommandTemplateArgument "command template argument"
+  = "[[" content:CommandTemplateContent* "]]" {
+      return helpers.createNode(NodeType.Text, {
+        content: content.map(c => c.content || c.identifier || '').join(''),
+        isTemplate: true,
+        templateParts: content,
+        location: location()
+      });
+    }
+
+// Content inside template arguments - allows {{var}} interpolation
+CommandTemplateContent
+  = InterpolationVar    // {{var}} syntax
+  / chars:CommandTemplateChar+ {
+      return helpers.createNode(NodeType.Text, {
+        content: chars.join(''),
+        location: location()
+      });
+    }
+
+CommandTemplateChar
+  = !("}}" / "]]") char:. { return char; }
+
+// Escaped argument - supports backslash escaping
+EscapedArgument "escaped argument"
+  = chars:EscapedArgChar+ {
+      const content = chars.join('');
       // If it starts with @, create a VariableReference node
       if (content.startsWith('@')) {
-        return helpers.createNode(NodeType.VariableReference, {
-          identifier: content.substring(1),
-          valueType: 'varIdentifier',
-          location: location()
-        });
-      } else {
-        // Otherwise create a Text node
-        return helpers.createNode(NodeType.Text, {
-          content: content,
-          location: location()
-        });
+        const identifier = content.substring(1);
+        // Only create variable reference if it's a valid identifier
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*/.test(identifier)) {
+          return helpers.createNode(NodeType.VariableReference, {
+            identifier: identifier,
+            valueType: 'varIdentifier',
+            location: location()
+          });
+        }
       }
+      // Otherwise create a Text node
+      return helpers.createNode(NodeType.Text, {
+        content: content,
+        location: location()
+      });
+    }
+
+EscapedArgChar
+  = "\\" char:. { return char; }  // Escaped character
+  / !(["'`,)] / "," / _ "," _ / _ ")") char:. { return char; }  // Regular character
+
+// Raw unquoted argument - basic fallback
+RawArgument "raw argument"
+  = chars:RawArgChar+ {
+      const content = chars.join('').trim();
+      if (!content) return null; // Skip empty arguments
+      
+      // If it starts with @, create a VariableReference node
+      if (content.startsWith('@')) {
+        const identifier = content.substring(1);
+        // Only create variable reference if it's a valid identifier
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*/.test(identifier)) {
+          return helpers.createNode(NodeType.VariableReference, {
+            identifier: identifier,
+            valueType: 'varIdentifier',
+            location: location()
+          });
+        }
+      }
+      // Otherwise create a Text node
+      return helpers.createNode(NodeType.Text, {
+        content: content,
+        location: location()
+      });
     }
 
 RawArgChar
-  = !("," / ")") char:. { return char; }
+  = !(["'`] / "," / ")" / "\\") char:. { return char; }
