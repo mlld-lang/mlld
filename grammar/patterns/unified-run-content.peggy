@@ -356,7 +356,23 @@ UnifiedCommandWordChar
           error(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
         }
         if (char === ';') {
-          error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+          // Check if we're in a shell control structure context
+          // Look for common patterns like "if [ ... ]; then" or "for ... ; do"
+          const beforeSemi = input.substring(Math.max(0, pos - 50), pos);
+          const afterSemi = input.substring(pos + 1, Math.min(input.length, pos + 10));
+          
+          // Allow semicolon in shell control structures
+          const isControlStructure = 
+            (beforeSemi.match(/\bif\s+\[.*\]$/) && afterSemi.trim().startsWith('then')) ||
+            (beforeSemi.match(/\bfor\s+\w+\s+in\s+.*$/) && afterSemi.trim().startsWith('do')) ||
+            (beforeSemi.match(/\bwhile\s+\[.*\]$/) && afterSemi.trim().startsWith('do')) ||
+            (beforeSemi.match(/\buntil\s+\[.*\]$/) && afterSemi.trim().startsWith('do')) ||
+            // Also allow in multiline commands (commands with newlines)
+            (input.substring(0, pos).includes('\n') && input.substring(pos).includes('\n'));
+          
+          if (!isControlStructure) {
+            error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+          }
         }
         if (char === '>' && input[pos + 1] !== '>') {
           error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);

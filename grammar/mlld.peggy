@@ -31,7 +31,8 @@ Start
   = frontmatter:Frontmatter? nodes:(
       LineStartComment
     / Comment
-    / CodeFence
+    / MlldRunFence       /* <— Special mlld-run blocks that are interpreted */
+    / CodeFence          /* <— Regular code blocks that are NOT interpreted */
     / Directive              /* <— first try to match directives */
     / Variable               /* <— Then try to match variables (moved after directives) */
     / InterDirectiveNewline  /* <— then capture newlines between directives */
@@ -175,6 +176,47 @@ Directive
 // -------------------------------------------------------------------------
 // CODE FENCES
 // -------------------------------------------------------------------------
+
+// Special mlld-run fence that gets interpreted
+MlldRunFence
+  = "```" "mlld-run" "\n"
+    content:(!("```" "\n"?) c:. { return c; })*
+    "```" "\n"? {
+      // Parse the content as mlld directives
+      const rawContent = content.join('');
+      helpers.debug('MlldRunFence: Parsing content', { content: rawContent });
+      
+      try {
+        // Parse the inner content as mlld
+        const innerParser = peg$parse;
+        const parsed = innerParser(rawContent, {
+          ...options,
+          startRule: 'Start'
+        });
+        
+        // Return a special node that contains the parsed directives
+        return helpers.createNode(NodeType.MlldRunBlock, {
+          content: parsed,
+          raw: rawContent,
+          location: location()
+        });
+      } catch (e) {
+        // If parsing fails, return an error node
+        return helpers.createNode(NodeType.MlldRunBlock, {
+          content: [],
+          raw: rawContent,
+          error: e.message,
+          location: location()
+        });
+      }
+    }
+  / opener:"```" &{
+      // Check if someone is trying to use more than 3 backticks for mlld-run
+      const rest = input.substring(peg$currPos);
+      return rest.startsWith('`') && rest.match(/^`+mlld-run/);
+    } {
+      error('mlld-run blocks must use exactly 3 backticks (```). Nested backticks are not supported.');
+    }
 
 CodeFence
   = opener:BacktickSequence lang:CodeFenceLangID? "\n"

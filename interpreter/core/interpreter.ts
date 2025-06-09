@@ -303,8 +303,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
                          location.end?.offset === 0;
     if (hasZeroOffset &&
         node.valueType !== 'varInterpolation' &&
-        node.valueType !== 'commandRef') {
+        node.valueType !== 'commandRef' &&
+        node.valueType !== 'varIdentifier') {
       // Skip orphaned parameter references from grammar bug
+      // Note: varIdentifier is excluded because when conditions create these
+      // See issue #217 - this workaround prevents when conditions from working
       return { value: '', env };
     }
     
