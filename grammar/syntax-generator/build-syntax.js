@@ -133,6 +133,9 @@ Prism.languages.mlld = {
 
 // Also highlight .mlld and .mld files
 Prism.languages.mld = Prism.languages.mlld;
+
+// Support for mlld-run code blocks
+Prism.languages['mlld-run'] = Prism.languages.mlld;
 `;
     
     return prismLang;
@@ -177,13 +180,46 @@ Prism.languages.mld = Prism.languages.mlld;
 
   generateMarkdownInjection() {
     // This creates an injection grammar that adds Mlld highlighting to Markdown files
-    // It only activates on lines starting with Mlld directives
+    // It activates on both lines starting with Mlld directives AND mlld-run code blocks
     const injection = {
       scopeName: 'markdown.mlld.injection',
       injectionSelector: 'text.html.markdown, text.html.markdown.source',
       patterns: [
         {
-          // Match any line starting with a Mlld directive
+          // Match mlld-run code blocks
+          begin: '^(```)(mlld-run)\\s*$',
+          end: '^(```)\\s*$',
+          name: 'meta.embedded.block.mlld-run',
+          beginCaptures: {
+            1: { name: 'punctuation.definition.markdown.codeFence' },
+            2: { name: 'fenced_code.block.language.identifier' }
+          },
+          endCaptures: {
+            1: { name: 'punctuation.definition.markdown.codeFence' }
+          },
+          contentName: 'source.mlld.embedded',
+          patterns: [
+            // Apply full mlld syntax within the code block
+            {
+              begin: `^(${this.patterns.directive})`,
+              end: '$',
+              name: 'meta.embedded.line.mlld',
+              beginCaptures: {
+                1: { name: 'keyword.control.directive.mlld' }
+              },
+              patterns: [
+                ...this.generateTextMatePatterns()
+              ]
+            },
+            // Also handle lines that don't start with directives but may contain mlld syntax
+            {
+              match: '^(?!@).*$',
+              name: 'text.plain.mlld'
+            }
+          ]
+        },
+        {
+          // Match any line starting with a Mlld directive (original behavior)
           begin: `^(${this.patterns.directive})`,
           end: '$',
           name: 'meta.embedded.block.mlld',
@@ -454,6 +490,10 @@ if exists("b:mlld_after_loaded")
 endif
 let b:mlld_after_loaded = 1
 
+" Define mlld-run code block region first (highest priority)
+syn region mlldRunCodeBlock start="^\\s*\`\`\`mlld-run\\s*$" end="^\\s*\`\`\`\\s*$" contains=mlldRunContent
+syn region mlldRunContent start="." end="\\ze^\\s*\`\`\`\\s*$" contained contains=mlldComment,mlldDirective,mlldReserved,mlldVariable,mlldString,mlldTemplate,mlldTemplateVar,mlldCommand
+
 " Define our syntax patterns directly
 syn match mlldComment "\\(>>\\|<<\\).*$"
 syn match mlldDirective "^@\\(${this.directives.join('\\|')}\\)\\>"
@@ -473,7 +513,9 @@ hi mlldVariable ctermfg=117 guifg=#87d7ff
 hi mlldString ctermfg=150 guifg=#afd787
 hi mlldTemplate ctermfg=150 guifg=#afd787
 hi mlldTemplateVar ctermfg=214 guifg=#ffaf00
-hi mlldCommand ctermfg=150 guifg=#afd787`;
+hi mlldCommand ctermfg=150 guifg=#afd787
+hi mlldRunCodeBlock ctermfg=242 guifg=#6c6c6c
+hi mlldRunContent ctermfg=255 guifg=#ffffff`;
     
     return vimAfter;
   }

@@ -7,6 +7,10 @@ if exists("b:mlld_after_loaded")
 endif
 let b:mlld_after_loaded = 1
 
+" Define mlld-run code block region first (highest priority)
+syn region mlldRunCodeBlock start="^\s*```mlld-run\s*$" end="^\s*```\s*$" contains=mlldRunContent
+syn region mlldRunContent start="." end="\ze^\s*```\s*$" contained contains=mlldComment,mlldDirective,mlldReserved,mlldVariable,mlldString,mlldTemplate,mlldTemplateVar,mlldCommand
+
 " Define our syntax patterns directly
 syn match mlldComment "\(>>\|<<\).*$"
 syn match mlldDirective "^@\(data\|text\|run\|add\|path\|import\|exec\|when\|output\)\>"
@@ -27,3 +31,5 @@ hi mlldString ctermfg=150 guifg=#afd787
 hi mlldTemplate ctermfg=150 guifg=#afd787
 hi mlldTemplateVar ctermfg=214 guifg=#ffaf00
 hi mlldCommand ctermfg=150 guifg=#afd787
+hi mlldRunCodeBlock ctermfg=242 guifg=#6c6c6c
+hi mlldRunContent ctermfg=255 guifg=#ffffff

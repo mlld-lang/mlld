@@ -1,5 +1,7 @@
->> Test file for syntax highlighting
+# Test file for syntax highlighting and mlld-run blocks
 >> This is a comment
+
+## Regular mlld syntax examples
 
 @text greeting = "Hello, World!"
 @text name = "mlld"
@@ -63,3 +65,35 @@ Hello {{name}}! Welcome to {{project}}.
   @text status = "Active"
 
 @output result to [output.txt]
+
+## mlld-run code block examples
+
+```mlld-run
+@text executable = "This is executable code!"
+@data settings = {"mode": "production"}
+@run [echo "Processing in {{settings.mode}} mode"]
+@add @executable
+```
+
+```mlld-run
+@import { helper } from "./utils.mld"
+@path output = "./results.txt"
+@text result = [[Generated at {{TIME}}]]
+@output @result to @output
+```
+
+## Mixed markdown with mlld-run
+
+This is regular markdown text that should not be highlighted as mlld.
+
+```mlld-run
+@text warning = "⚠️ This code will execute!"
+@when @settings.mode === "production" => @add @warning
+```
+
+More markdown content here.
+
+```mlld
+@text docs = "This is documentation only - will not execute"
+@run [echo "This is just documentation"]
+```
