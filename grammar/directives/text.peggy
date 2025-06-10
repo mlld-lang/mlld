@@ -3,8 +3,35 @@
 
 // Primary @text directive
 AtText
-  // Foreach expression assignment - must come early to avoid misparsing
-  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ foreach:ForeachCommandExpression {
+  // Foreach section expression assignment - NEW pattern for section extraction
+  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ foreach:ForeachSectionExpression {
+      helpers.debug('AtText matched foreach section expression', { id, foreach });
+      
+      const subtype = 'textAssignment';
+      const sourceType = 'foreach-section';
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          foreach: foreach
+        },
+        {
+          identifier: id,
+          foreach: helpers.reconstructRawString([foreach])
+        },
+        {
+          sourceType,
+          hasVariables: true,
+          isTemplateContent: false
+        },
+        location(),
+        sourceType
+      );
+    }
+  // Foreach command expression assignment - existing pattern
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ foreach:ForeachCommandExpression {
       helpers.debug('AtText matched foreach expression', { id, foreach });
       
       const subtype = 'textAssignment';

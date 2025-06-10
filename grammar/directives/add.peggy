@@ -21,8 +21,42 @@ It can be used in these forms:
 
 // Primary @add directive with all variants
 AtAdd
-  // Foreach expression: @add foreach @command(@arrays)
-  = DirectiveContext "@add" _ expr:ForeachCommandExpression {
+  // Foreach section expression: @add foreach [@array.field # section] as [[template]]
+  = DirectiveContext "@add" _ expr:ForeachSectionExpression {
+      helpers.debug('AtAdd matched foreach section expression', { expr });
+      
+      // Extract the inner value from the ForeachSectionExpression
+      const foreachValue = expr.value;
+      
+      // Create values object with foreach section expression
+      const values = {
+        foreach: foreachValue
+      };
+      
+      // Create raw object
+      const raw = {
+        foreach: `foreach [@${foreachValue.arrayVariable}.${foreachValue.pathField} # ${foreachValue.section}] as [[${foreachValue.template.raw.content}]]`
+      };
+      
+      // Create meta object
+      const meta = {
+        isForeachSection: true,
+        arrayVariable: foreachValue.arrayVariable,
+        pathField: foreachValue.pathField
+      };
+      
+      return helpers.createStructuredDirective(
+        'add',
+        'addForeachSection',
+        values,
+        raw,
+        meta,
+        location(),
+        'foreach-section'
+      );
+    }
+  // Foreach command expression: @add foreach @command(@arrays)
+  / DirectiveContext "@add" _ expr:ForeachCommandExpression {
       helpers.debug('AtAdd matched foreach expression', { expr });
       
       // Extract the inner value from the ForeachCommandExpression

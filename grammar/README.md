@@ -519,9 +519,19 @@ Examples:
 │  │  └─ [DataValue, DataValue, ...]
 │  │     └─ Same DataValue options as above
 │  │
-├─ "foreach" detected?
-│  ├─ YES: ForeachExpression with tail modifiers
-│  │  └─ foreach @command(@arrays) [tail modifiers]
+├─ "foreach" detected? → SEMANTIC FORKING
+│  ├─ YES: Foreach pattern analysis
+│  │  │
+│  │  ├─ Look ahead for pattern type:
+│  │  │  ├─ "[@" found? → Section extraction foreach
+│  │  │  │  └─ foreach [@array.field # section] as [[template]]
+│  │  │  │     ├─ Parse section expression with variable/literal section
+│  │  │  │     └─ Apply template to each extracted section
+│  │  │  │
+│  │  │  └─ "@" found? → Command foreach  
+│  │  │     └─ foreach @command(@arrays) [tail modifiers]
+│  │  │        ├─ Traditional parameterized command iteration
+│  │  │        └─ Cartesian product for multiple arrays
 │  │
 ├─ "@" detected?
 │  ├─ YES: Variable, invocation, or @run
@@ -536,10 +546,72 @@ Examples:
 - @data result = @fetchAPI("api.com") | @parse
 - @data secure = @checkAuth() trust always
 - @data items = foreach @process(@list) | @validate
+- @data sections = foreach [@files.path # tldr] as [[### {{files.name}}]]  # NEW
 - @data config = { 
     api: @getEndpoint() trust always,
     data: @fetchData() | @decrypt @parse
   }
+```
+
+### Foreach Section Extraction (NEW Pattern)
+
+```
+foreach [@array.field # section] as [[template]]
+├─ Semantic forking decision:
+│  ├─ "foreach" detected ✓
+│  ├─ Look ahead: "[" found ✓
+│  ├─ Look ahead: "@" after bracket ✓
+│  └─ Look ahead: " # " pattern ✓
+│     └─ SEMANTIC CHOICE: ForeachSectionExpression
+│
+├─ ForeachSectionExpression parsing:
+│  ├─ "foreach" keyword ✓
+│  ├─ _ (whitespace) ✓
+│  ├─ "[" section bracket start ✓
+│  ├─ "@" variable reference start ✓
+│  ├─ array:BaseIdentifier ("files") ✓
+│  ├─ "." field access ✓
+│  ├─ field:BaseIdentifier ("path") ✓
+│  ├─ _ (whitespace) ✓
+│  ├─ "#" section separator ✓
+│  ├─ _ (whitespace) ✓
+│  ├─ section:SectionIdentifier
+│  │  ├─ Literal section: "tldr" → Text node
+│  │  └─ Variable section: "@section" → VariableReference node
+│  ├─ "]" bracket end ✓
+│  ├─ _ (whitespace) ✓
+│  ├─ "as" keyword ✓
+│  ├─ _ (whitespace) ✓
+│  └─ template:TemplateCore
+│     └─ [[...]] → Template with {{var}} interpolation
+│        └─ Array variable name rebound to iteration item
+│
+├─ AST Structure:
+│  ├─ type: "foreach-section"
+│  ├─ arrayVariable: "files" (source array)
+│  ├─ pathField: "path" (field to access for file path)
+│  ├─ section: SectionIdentifier (literal or variable)
+│  ├─ template: TemplateCore (output format)
+│  └─ rebinding: "files" → iteration item context
+│
+└─ Execution semantics:
+   ├─ Resolve @files array
+   ├─ For each item in array:
+   │  ├─ Rebind "files" variable to current item
+   │  ├─ Extract section from item.path
+   │  ├─ Apply template with item context
+   │  └─ Collect result
+   └─ Return array of formatted results
+
+Examples:
+- foreach [@files.path # tldr] as [[### {{files.name}}]]
+  └─ Extract "tldr" section from each file's path, format with name
+
+- foreach [@docs.path # @docs.section] as [[## {{docs.title}}]]
+  └─ Extract variable section from each doc, format with title
+
+- foreach [@modules.file # interface] as [[```{{modules.lang}}\n@add [{{modules.file}} # interface]\n```]]
+  └─ Extract "interface" section, wrap in code blocks by language
 ```
 
 ### @exec Directive

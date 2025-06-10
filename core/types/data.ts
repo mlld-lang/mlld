@@ -48,7 +48,8 @@ export type DataValue =
   | DataArrayValue
   | DirectiveNode // Nested directive
   | ExecInvocation // Exec invocation with tail modifiers
-  | ForeachCommandExpression; // Foreach command expression
+  | ForeachCommandExpression // Foreach command expression: foreach @command(@arrays)
+  | ForeachSectionExpression; // Foreach section expression: foreach [@array.field # section] as [[template]]
 
 /**
  * An object value in a data structure
@@ -75,6 +76,18 @@ export interface ForeachCommandExpression {
   type: 'foreach-command';
   command: CommandReference;
   arrays: VariableReference[];
+}
+
+/**
+ * A foreach section expression for iterating over arrays with section extraction
+ * Usage: foreach [@array.field # section] as [[template]]
+ */
+export interface ForeachSectionExpression {
+  type: 'foreach-section';
+  arrayVariable: string;
+  pathField: string;
+  section: ContentNode; // Can be Text node (literal) or VariableReference node (variable)
+  template: any; // Template core structure from grammar
 }
 
 /**
@@ -189,6 +202,17 @@ export function isForeachCommandExpression(value: DataValue): value is ForeachCo
          !Array.isArray(value) && 
          'type' in value && 
          value.type === 'foreach-command';
+}
+
+/**
+ * Type guard for foreach section expressions
+ */
+export function isForeachSectionExpression(value: DataValue): value is ForeachSectionExpression {
+  return typeof value === 'object' && 
+         value !== null && 
+         !Array.isArray(value) && 
+         'type' in value && 
+         value.type === 'foreach-section';
 }
 
 /**

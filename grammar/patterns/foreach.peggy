@@ -58,6 +58,30 @@ ForeachVariableRef
     }
 
 // -------------------------------------------------------------
+// FOREACH SECTION EXTRACTION (NEW PATTERN)
+// -------------------------------------------------------------
+
+// Foreach with section extraction: foreach [@array.field # section] as [[template]]
+// This pattern enables direct iteration over arrays with section extraction and template application
+// Usage: foreach [@files.path # tldr] as [[### {{files.name}}]]
+ForeachSectionExpression
+  = "foreach" _ "[" _ "@" arrayVar:BaseIdentifier "." pathField:BaseIdentifier _ "#" _ section:SectionIdentifier _ "]" _ "as" _ template:TemplateCore {
+      helpers.debug('ForeachSectionExpression matched', { arrayVar, pathField, section, template });
+      
+      return {
+        type: "foreach-section",
+        value: {
+          type: 'foreach-section',
+          arrayVariable: arrayVar,
+          pathField: pathField,
+          section: section,
+          template: template
+        },
+        rawText: text()
+      };
+    }
+
+// -------------------------------------------------------------
 // FOREACH WITH CLAUSE (OPTIONAL)
 // -------------------------------------------------------------
 

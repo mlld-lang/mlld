@@ -10,7 +10,8 @@ import {
   isVariableReferenceValue,
   isTemplateValue,
   isPrimitiveValue,
-  isForeachCommandExpression
+  isForeachCommandExpression,
+  isForeachSectionExpression
 } from '@core/types/data';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
 import { evaluate, interpolate, resolveVariableValue } from '../core/interpreter';
@@ -94,6 +95,15 @@ export async function evaluateDataValue(
   // Handle objects with type 'foreach-command' (from grammar output)
   if (value && typeof value === 'object' && value.type === 'foreach-command') {
     return await evaluateForeachCommand(value, env);
+  }
+  
+  if (isForeachSectionExpression(value)) {
+    return await evaluateForeachSection(value, env);
+  }
+  
+  // Handle objects with type 'foreach-section' (from grammar output)
+  if (value && typeof value === 'object' && value.type === 'foreach-section') {
+    return await evaluateForeachSection(value, env);
   }
   
   // Handle variable references (with potential field access)
@@ -477,4 +487,149 @@ export async function validateForeachExpression(
   
   // Note: We don't evaluate the arrays here as they might contain variables
   // that aren't defined yet. Full validation happens during lazy evaluation.
+}
+
+/**
+ * Evaluates a ForeachSectionExpression - iterating over arrays with section extraction
+ * Usage: foreach [@array.field # section] as [[template]]
+ */
+export async function evaluateForeachSection(
+  foreachExpr: any,
+  env: Environment
+): Promise<any[]> {
+  const { arrayVariable, pathField, section, template } = foreachExpr.value || foreachExpr;
+  
+  // 1. Resolve the source array variable
+  const arrayVar = env.getVariable(arrayVariable);
+  if (!arrayVar) {
+    throw new Error(`Array variable not found: ${arrayVariable}`);
+  }
+  
+  // 2. Evaluate the array to get items
+  const arrayValue = await evaluateDataValue(arrayVar.value, env);
+  if (!Array.isArray(arrayValue)) {
+    throw new Error(`Variable '${arrayVariable}' must be an array for foreach section extraction, got ${typeof arrayValue}`);
+  }
+  
+  if (arrayValue.length === 0) {
+    return []; // Return empty array for empty input
+  }
+  
+  // 3. Process each item in the array
+  const results: any[] = [];
+  for (let i = 0; i < arrayValue.length; i++) {
+    const item = arrayValue[i];
+    
+    try {
+      // 4. Create child environment with item bound to array variable name
+      const childEnv = env.createChild();
+      childEnv.setParameterVariable(arrayVariable, {
+        type: 'data',
+        name: arrayVariable,
+        value: item,
+        definedAt: null,
+        isFullyEvaluated: true
+      });
+      
+      // 5. Get the path from the item
+      if (!item || typeof item !== 'object') {
+        throw new Error(`Array item ${i + 1} must be an object with '${pathField}' field, got ${typeof item}`);
+      }
+      
+      const pathValue = item[pathField];
+      if (typeof pathValue !== 'string') {
+        throw new Error(`Path field '${pathField}' in array item ${i + 1} must be a string, got ${typeof pathValue}`);
+      }
+      
+      // 6. Resolve section name (can be literal or variable)
+      let sectionName: string;
+      if (section.type === 'Text') {
+        sectionName = section.content;
+      } else if (section.type === 'VariableReference') {
+        // Evaluate section variable in child environment (with current item bound)
+        const sectionValue = await interpolate([section], childEnv);
+        if (typeof sectionValue !== 'string') {
+          throw new Error(`Section variable must resolve to a string, got ${typeof sectionValue}`);
+        }
+        sectionName = sectionValue;
+      } else {
+        throw new Error(`Invalid section type: ${section.type}`);
+      }
+      
+      // 7. Read file and extract section from file
+      const fileContent = await env.readFile(pathValue);
+      
+      // Extract the section using llmxml
+      const { createLLMXML } = await import('llmxml');
+      const llmxml = createLLMXML();
+      let sectionContent: string;
+      try {
+        // getSection expects just the title without the # prefix
+        const titleWithoutHash = sectionName.replace(/^#+\s*/, '');
+        sectionContent = await llmxml.getSection(fileContent, titleWithoutHash, {
+          includeNested: true
+        });
+        // Trim trailing whitespace
+        sectionContent = sectionContent.trimEnd();
+      } catch (error) {
+        // Fallback to basic extraction if llmxml fails
+        sectionContent = extractSectionBasic(fileContent, sectionName);
+      }
+      
+      // 8. Apply template with current item context
+      const templateResult = await interpolate(template.values.content, childEnv);
+      
+      // 9. Combine template with section content
+      const result = templateResult + '\n' + sectionContent;
+      results.push(result);
+      
+    } catch (error) {
+      // Include iteration context in error message
+      const itemInfo = typeof item === 'object' && item !== null 
+        ? Object.keys(item).slice(0, 3).map(k => `${k}: ${JSON.stringify(item[k])}`).join(', ')
+        : String(item);
+      
+      throw new Error(
+        `Error in foreach section iteration ${i + 1} (${itemInfo}): ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+  
+  return results;
+}
+
+/**
+ * Extract a section from markdown content.
+ * Basic fallback implementation when llmxml fails.
+ */
+function extractSectionBasic(content: string, sectionName: string): string {
+  const lines = content.split('\n');
+  const sectionRegex = new RegExp(`^#+\\s+${sectionName}\\s*$`, 'i');
+  
+  let inSection = false;
+  let sectionLevel = 0;
+  const sectionLines: string[] = [];
+  
+  for (const line of lines) {
+    // Check if this line starts our section
+    if (!inSection && sectionRegex.test(line)) {
+      inSection = true;
+      sectionLevel = line.match(/^#+/)?.[0].length || 0;
+      continue; // Skip the header itself
+    }
+    
+    // If we're in the section
+    if (inSection) {
+      // Check if we've hit another header at the same or higher level
+      const headerMatch = line.match(/^(#+)\s+/);
+      if (headerMatch && headerMatch[1].length <= sectionLevel) {
+        // We've left the section
+        break;
+      }
+      
+      sectionLines.push(line);
+    }
+  }
+  
+  return sectionLines.join('\n').trim();
 }

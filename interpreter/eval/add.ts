@@ -374,6 +374,24 @@ export async function evaluateAdd(
     const result = await evaluateExecInvocation(execInvocation, env);
     content = String(result.value);
     
+  } else if (directive.subtype === 'addForeachSection') {
+    // Handle foreach section expressions: @add foreach [@array.field # section] as [[template]]
+    const foreachExpression = directive.values?.foreach;
+    if (!foreachExpression) {
+      throw new Error('Add foreach section directive missing foreach expression');
+    }
+    
+    // Evaluate foreach section expression
+    const { evaluateForeachSection } = await import('./data-value-evaluator');
+    const result = await evaluateForeachSection(foreachExpression, env);
+    
+    // Convert result to string content - should be an array of results
+    if (Array.isArray(result)) {
+      content = result.join('\n\n');
+    } else {
+      content = String(result);
+    }
+    
   } else {
     throw new Error(`Unsupported add subtype: ${directive.subtype}`);
   }

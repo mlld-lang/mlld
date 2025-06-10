@@ -76,6 +76,11 @@ export function parseDataValue(node: ASTDataNode): DataValue {
     return node as any; // Return the foreach command node directly
   }
   
+  // Handle foreach section expressions
+  if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'foreach-section') {
+    return node as any; // Return the foreach section node directly
+  }
+  
   // Handle bare Text nodes (common in simple data values)
   if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'Text') {
     // eslint-disable-next-line mlld/no-ast-string-manipulation
