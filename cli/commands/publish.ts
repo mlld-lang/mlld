@@ -816,6 +816,13 @@ Auto-added by mlld publish command`;
    * Check if user has permission to publish on behalf of an organization
    */
   private async checkOrgPermission(octokit: Octokit, org: string, username: string): Promise<boolean> {
+    // Special case: 'mlld' organization for core modules
+    // Allow specific maintainers to publish as 'mlld' since we don't control that GitHub org
+    if (org === 'mlld') {
+      const allowedMaintainers = ['adamavenir', 'mlld-dev'];
+      return allowedMaintainers.includes(username);
+    }
+    
     try {
       // Check if user is a member of the organization
       const { data: membership } = await octokit.orgs.getMembershipForUser({

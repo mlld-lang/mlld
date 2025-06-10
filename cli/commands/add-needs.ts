@@ -130,7 +130,8 @@ export class AddNeedsCommand {
 
       // Update metadata with detected dependencies
       const oldNeeds = metadata.needs ? [...metadata.needs] : [];
-      metadata.needs = runtimeNeeds;
+      // Use string for single value, array for multiple values
+      metadata.needs = runtimeNeeds.length === 1 ? runtimeNeeds[0] : runtimeNeeds;
       
       if (runtimeNeeds.includes('js') && jsPackages.length > 0) {
         metadata['needs-js'] = {
@@ -170,7 +171,8 @@ export class AddNeedsCommand {
         // Replace existing frontmatter
         const newFrontmatter = yaml.dump(metadata, { 
           sortKeys: false,
-          lineWidth: -1 
+          lineWidth: -1,
+          noArrayIndent: true  // Use compact array format when possible
         }).trim();
         content = content.replace(
           frontmatterMatch[0],
@@ -180,7 +182,8 @@ export class AddNeedsCommand {
         // Add new frontmatter
         const newFrontmatter = yaml.dump(metadata, { 
           sortKeys: false,
-          lineWidth: -1 
+          lineWidth: -1,
+          noArrayIndent: true  // Use compact array format when possible
         }).trim();
         content = `---\n${newFrontmatter}\n---\n\n${content}`;
       }
