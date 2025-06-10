@@ -318,7 +318,10 @@ export class TestEnvironment extends Environment {
     if (!sm) {
       throw new Error('Security verification only available with mocked SecurityManager');
     }
-    return sm.getCommandCheckCount();
+    // Count all types of security operations
+    return sm.getCommandCheckCount() + 
+           sm.getPathCheckCalls().length + 
+           sm.getImportApprovals().length;
   }
 
   /**

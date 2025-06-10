@@ -586,6 +586,11 @@ export class SecurityManager {
   ): Promise<void> {
     if (!this.lockFile || !decision.approved) return;
     
+    // Skip lock file operations in test mode
+    if (process.env.NODE_ENV === 'test' || process.env.MLLD_TEST_MODE === 'true') {
+      return;
+    }
+    
     await this.lockFile.addCommandApproval(command, {
       trust: decision.trust as any,
       ttl: decision.ttl

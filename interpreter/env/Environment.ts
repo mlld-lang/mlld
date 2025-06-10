@@ -5,6 +5,7 @@ import type { ResolvedURLConfig } from '@core/config/types';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
 import { ImportApproval } from '@core/security/ImportApproval';
 import { ImmutableCache } from '@core/security/ImmutableCache';
 import { GistTransformer } from '@core/security/GistTransformer';
@@ -155,6 +156,9 @@ export class Environment {
         const lockFilePath = path.join(this.basePath, 'mlld.lock.json');
         lockFile = new LockFile(lockFilePath);
         
+        // Store reference for other uses
+        this.lockFile = lockFile;
+        
         // Initialize URL cache manager with a simple cache adapter and lock file
         if (moduleCache && lockFile) {
           // Create a cache adapter that URLCache can use
@@ -205,10 +209,12 @@ export class Environment {
       // ImportApproval will be initialized after lock files are loaded
       this.immutableCache = new ImmutableCache(this.basePath);
       
-      // Auto-create and load lock files
-      this.initializeLockFiles().catch(error => {
-        logger.warn('Failed to initialize lock files:', error);
-      });
+      // Auto-create and load lock files (async, fire-and-forget)
+      if (!parent) {
+        this.initializeLockFiles().catch(error => {
+          logger.warn('Failed to initialize lock files:', error);
+        });
+      }
       
       // Initialize reserved variables
       this.initializeReservedVariables();
@@ -246,31 +252,24 @@ export class Environment {
   private async initializeProjectLockFile(): Promise<void> {
     const lockFilePath = path.join(this.basePath, 'mlld.lock.json');
     
-    // Skip lock file creation in read-only environments (tests, etc.)
-    try {
-      // Check if we can write to the base path first
-      const testPath = path.join(this.basePath, '.mlld-write-test');
-      await this.fileSystem.writeFile(testPath, 'test');
-      await this.fileSystem.unlink(testPath);
-    } catch (error) {
-      // If we can't write to basePath, skip lock file creation
-      logger.debug('Skipping lock file creation - base path is read-only:', this.basePath);
-      return;
-    }
-    
     // Create lock file if it doesn't exist
     if (!await this.fileSystem.exists(lockFilePath)) {
       const initialData = {
         version: '1.0.0',
         imports: {},
         metadata: {
-          mlldVersion: process.env.npm_package_version || 'unknown',
+          mlldVersion: process.env.npm_package_version || '1.0.0',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }
       };
       
       try {
+        // Ensure parent directory exists
+        const lockDir = path.dirname(lockFilePath);
+        await this.fileSystem.mkdir(lockDir, { recursive: true }).catch(() => {});
+        
+        // Write lock file to injected file system (works for both test and production)
         await this.fileSystem.writeFile(
           lockFilePath,
           JSON.stringify(initialData, null, 2)
@@ -283,23 +282,8 @@ export class Environment {
       }
     }
     
-    // Load the lock file
-    try {
-      const lockFile = new LockFile(lockFilePath);
-      
-      // Update the existing references
-      if (this.urlCacheManager) {
-        // URLCache already has the lock file from constructor
-      }
-      if (this.resolverManager) {
-        // ResolverManager already has the lock file from constructor  
-      }
-      
-      // Store reference for other uses
-      this.lockFile = lockFile;
-    } catch (error) {
-      logger.warn('Failed to load lock file:', error);
-    }
+    // The LockFile instance was already created in constructor
+    // It will load the file when needed
   }
 
   /**
@@ -310,11 +294,7 @@ export class Environment {
       const globalLockPath = path.join(os.homedir(), '.config', 'mlld', 'mlld.lock.json');
       const globalDir = path.dirname(globalLockPath);
       
-      // Skip global lock file creation in test environments
-      if (process.env.NODE_ENV === 'test' || process.env.VITEST === 'true') {
-        logger.debug('Skipping global lock file creation in test environment');
-        return;
-      }
+      // Note: Global lock file creation is allowed in test environments for testing
       
       // Create directory if needed
       try {
@@ -950,7 +930,7 @@ export class Environment {
     
     // NEW: Security check for path access
     const securityManager = this.getSecurityManager();
-    if (securityManager) {
+    if (securityManager && typeof securityManager.checkPath === 'function') {
       const allowed = await securityManager.checkPath(resolvedPath, 'read');
       if (!allowed) {
         throw new MlldFileSystemError(`Security: Read access denied for ${pathOrUrl}`);

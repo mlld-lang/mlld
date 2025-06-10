@@ -13,7 +13,7 @@ export default defineConfig({
     setupFiles: ['tests/setup.ts'],
     environment: 'node',
     env: {
-      NODE_ENV: 'production'
+      NODE_ENV: 'test'
     },
     globals: true,
     include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],

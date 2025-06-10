@@ -321,20 +321,26 @@ describe('Security Testing Framework', () => {
 
   describe('Test Isolation', () => {
     it('should isolate tests properly', async () => {
-      // Set up first test state
-      env.mockCommandApproval?.('echo first', { allowed: true });
-      await env.executeCommand?.('echo first');
+      // Create a unit test environment with mocked SecurityManager
+      const unitEnv = EnvironmentFactory.createSecurityUnitTest() as TestEnvironment;
       
-      const firstCount = env.getSecurityCheckCount?.() || 0;
+      // Set up first test state
+      unitEnv.mockCommandApproval?.('echo first', { allowed: true });
+      await unitEnv.executeCommand?.('echo first');
+      
+      const firstCount = unitEnv.getSecurityCheckCount?.() || 0;
       expect(firstCount).toBe(1);
       
       // Cleanup and create new environment
-      await TestSetup.afterEach();
-      env = await TestSetup.beforeEach('unit') as TestEnvironment;
+      await EnvironmentFactory.cleanupEnvironment(unitEnv);
+      const newUnitEnv = EnvironmentFactory.createSecurityUnitTest() as TestEnvironment;
       
       // Second test should start fresh
-      const secondCount = env.getSecurityCheckCount?.() || 0;
+      const secondCount = newUnitEnv.getSecurityCheckCount?.() || 0;
       expect(secondCount).toBe(0);
+      
+      // Cleanup the second environment
+      await EnvironmentFactory.cleanupEnvironment(newUnitEnv);
     });
   });
 });

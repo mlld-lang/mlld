@@ -1,20 +1,32 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { TestSetup, TestEnvironment } from '@tests/setup/vitest-security-setup';
 import { interpret } from './index';
+import { SecurityManager } from '@security';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
-import { SecurityManager } from '@security/SecurityManager';
-import { URLCache } from './cache/URLCache';
 
 describe('TTL/Trust Enforcement', () => {
+  let env: TestEnvironment;
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
   
-  beforeEach(() => {
-    fileSystem = new MemoryFileSystem();
-    pathService = new PathService();
+  beforeEach(async () => {
+    env = await TestSetup.createSecurityUnitTestEnv({
+      security: { 
+        enabled: true, 
+        mock: true, 
+        allowCommandExecution: false 
+      },
+      cache: { enabled: true, mock: true }
+    });
     
-    // Reset mocks
-    vi.clearAllMocks();
+    // Extract the file system and path service from the environment for tests that need them
+    fileSystem = env.fileSystem as MemoryFileSystem;
+    pathService = env.pathService as PathService;
+  });
+
+  afterEach(async () => {
+    await TestSetup.afterEach();
   });
   
   describe('Variable TTL/Trust Metadata', () => {
@@ -33,10 +45,7 @@ describe('TTL/Trust Enforcement', () => {
     it('should store trust metadata on path variables', async () => {
       const code = `@path api = "https://api.example.com/data" trust verify`;
       
-      const result = await interpret(code, { 
-        fileSystem, 
-        pathService, 
-        format: 'markdown',
+      const result = await interpret(code, {
         urlConfig: { enabled: true, allowedProtocols: ['https'], allowedDomains: [], blockedDomains: [] }
       });
       
@@ -46,10 +55,7 @@ describe('TTL/Trust Enforcement', () => {
     it('should store both TTL and trust metadata', async () => {
       const code = `@path resource = "https://cdn.example.com/file.js" (static) trust always`;
       
-      const result = await interpret(code, { 
-        fileSystem, 
-        pathService, 
-        format: 'markdown',
+      const result = await interpret(code, {
         urlConfig: { enabled: true, allowedProtocols: ['https'], allowedDomains: [], blockedDomains: [] }
       });
       

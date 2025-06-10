@@ -190,7 +190,7 @@ export class MockSecurityManager {
    * Mock import approval check
    */
   async approveImport(url: string, content: string, advisories: any[] = [], context?: SecurityContext): Promise<boolean> {
-    const result = this.importDecisions.get(url) ?? this.evaluateDefaultImportPolicy(url, content, advisories);
+    const result = this.importDecisions.get(url) ?? this.evaluateDefaultImportPolicy(url, content, advisories, context);
     
     this.importApprovals.push({
       url,
@@ -379,9 +379,9 @@ export class MockSecurityManager {
       };
     }
 
-    // Trust level from context
+    // Trust level from context (handle both mlld and security policy trust levels)
     const trust = context?.metadata?.trust;
-    if (trust === 'block') {
+    if (trust === 'block' || trust === 'never') {
       return { allowed: false, reason: 'Blocked by trust level' };
     }
 
@@ -391,6 +391,11 @@ export class MockSecurityManager {
         requiresApproval: true, 
         reason: 'Requires approval per trust level' 
       };
+    }
+
+    // Handle mlld 'always' trust level
+    if (trust === 'always') {
+      return { allowed: true, reason: 'Allowed by always trust level' };
     }
 
     // Default: allow
@@ -410,7 +415,13 @@ export class MockSecurityManager {
     return true;
   }
 
-  private evaluateDefaultImportPolicy(url: string, content: string, advisories: any[]): boolean {
+  private evaluateDefaultImportPolicy(url: string, content: string, advisories: any[], context?: SecurityContext): boolean {
+    // Check trust level from context first
+    const trust = context?.metadata?.trust;
+    if (trust === 'never' || trust === 'block') {
+      return false;
+    }
+    
     // Block URLs containing "blocked" for testing
     if (url.includes('blocked') || url.includes('malicious')) {
       return false;

@@ -73,7 +73,7 @@ export async function evaluateRun(
       const taintLevel = determineTaintLevel(commandNodes, env);
       
       // Extract trust level from directive metadata
-      const mlldTrustLevel = directive.meta?.trust;
+      const mlldTrustLevel = directive.meta?.trust || directive.values?.withClause?.trust || directive.meta?.withClause?.trust;
       
       // Create security context with trust metadata
       const securityContext = {
@@ -82,7 +82,8 @@ export async function evaluateRun(
         directive: 'run',
         mlldTrust: mlldTrustLevel,
         metadata: {
-          ...(directive.meta?.ttl && { ttl: directive.meta.ttl })
+          ...(directive.values?.ttl && { ttl: directive.values.ttl }),
+          ...(mlldTrustLevel && { trust: mlldTrustLevel })
         }
       };
       

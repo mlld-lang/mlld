@@ -47,10 +47,10 @@ export async function evaluatePath(
   // Interpolate the path (resolve variables)
   const interpolatedPath = await interpolate(pathNodes, env);
   
-  // Extract security options from the directive meta
-  const security: SecurityOptions | undefined = directive.meta ? {
-    ttl: directive.meta.ttl,
-    trust: directive.meta.trust
+  // Extract security options from the directive values (TTL) and withClause (trust)
+  const security: SecurityOptions | undefined = (directive.values?.ttl || directive.values?.withClause?.trust) ? {
+    ttl: directive.values?.ttl,
+    trust: directive.values?.withClause?.trust
   } : undefined;
   
   // Handle special path variables and absolute paths

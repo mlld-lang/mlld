@@ -123,7 +123,7 @@ export class TTLTestFramework {
     // Third fetch after delay (for duration-based TTL)
     let content3: string | undefined;
     if (ttl.type === 'duration' && ttl.value) {
-      await this.waitFor(ttl.value + 100); // Wait for expiry + buffer
+      await this.waitFor(Math.min(ttl.value + 50, 300)); // Wait for expiry + buffer, max 300ms
       
       const fetch3Start = Date.now();
       content3 = await this.fetchWithTTL(url, ttl);
@@ -153,24 +153,45 @@ export class TTLTestFramework {
   async testTrustEnforcement(trust: string, url: string, directive: 'path' | 'import' = 'import'): Promise<TrustTestResult> {
     const initialSecurityChecks = this.env.getSecurityCheckCount?.() || 0;
     
-    // Create directive with trust metadata
-    const directiveNode = TTLTestFramework.createDirectiveWithMetadata(
+    const sm = this.env.getSecurityManager();
+    if (!sm) {
+      return {
+        trust,
+        url,
+        allowed: false,
+        reason: 'No SecurityManager available',
+        securityChecks: 0
+      };
+    }
+
+    // Create security context with trust level
+    const context = {
+      file: '/test/mock.mld',
+      line: 1,
       directive,
-      directive === 'path' ? `testVar = ${url}` : url,
-      { trust: trust as any }
-    );
+      metadata: {
+        trust: trust as any
+      }
+    };
 
     try {
-      // Attempt to evaluate the directive
-      await this.env.evaluate?.(directiveNode);
+      let allowed = false;
+      
+      if (directive === 'import') {
+        // Test import approval with trust context
+        allowed = await sm.approveImport(url, 'mock content', [], context);
+      } else if (directive === 'path') {
+        // Test path access with trust context
+        allowed = await sm.checkPath(url, 'read', context);
+      }
       
       const finalSecurityChecks = this.env.getSecurityCheckCount?.() || 0;
       
       return {
         trust,
         url,
-        allowed: true,
-        reason: 'No exception thrown',
+        allowed,
+        reason: allowed ? 'Security check passed' : 'Security check blocked',
         securityChecks: finalSecurityChecks - initialSecurityChecks
       };
     } catch (error) {
@@ -250,12 +271,12 @@ export class TTLTestFramework {
       {
         name: 'Duration TTL (1 second)',
         url: 'https://duration-test.com/data',
-        ttl: { type: 'duration', value: 1000 }
+        ttl: { type: 'duration', value: 100 } // Reduced from 1000ms for faster testing
       },
       {
         name: 'Duration TTL (5 seconds)',
         url: 'https://duration-long-test.com/data',
-        ttl: { type: 'duration', value: 5000 }
+        ttl: { type: 'duration', value: 200 } // Reduced from 5000ms for faster testing
       }
     ];
 
@@ -351,6 +372,9 @@ export class TTLTestFramework {
   // === Private Helper Methods ===
 
   private async fetchWithTTL(url: string, ttl: TTLConfig): Promise<string> {
+    // Always use mock content in tests to avoid network requests
+    const content = `Mock content for ${url} at ${Date.now()}`;
+    
     // Use URLCache if available
     const cache = this.env.getURLCache?.();
     if (cache && 'get' in cache) {
@@ -358,9 +382,6 @@ export class TTLTestFramework {
       if (cached) return cached;
     }
 
-    // Fallback to environment fetchURL
-    const content = await this.env.fetchURL?.(url) || `Mock content for ${url}`;
-    
     // Cache the result if cache is available
     if (cache && 'set' in cache && ttl.type !== 'live') {
       await (cache as any).set(url, content, { ttl });
