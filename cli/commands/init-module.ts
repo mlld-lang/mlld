@@ -166,7 +166,7 @@ export class InitModuleCommand {
 
       const content = this.generateModuleContent(metadata, patternChoice);
 
-      const outputFile = options.output || `${metadata.name}.mld`;
+      const outputFile = options.output || `${metadata.name}.mld.md`;
       const outputPath = path.resolve(outputFile);
 
       try {
@@ -205,57 +205,66 @@ export class InitModuleCommand {
     switch (patternChoice) {
       case '1':
         moduleContent = `
-# ${metadata.name}
+# @${metadata.author}/${metadata.name}
 
-${metadata.about}
+## tldr
 
-## Usage
+Tell us:
+- what problem it solves
+- why it's useful
 
-\`\`\`mlld
-@import { example } from @${metadata.author}/${metadata.name}
+## export
 
-@run @example("Hello, world!")
+\`\`\`mlld-run
+@exec example(input) = @run [echo "Processing: @input"]
+
+>> Add your mlld code here
 \`\`\`
 
-## Module Interface
+## interface
 
+\`\`\`mlld-run
 @data module = {
-  # Example function that processes input
-  "example": @exec example(input) = @run [echo "Processing: @input"]
-  
-  # Add more functions and data here
-  # See: https://mlld.ai/docs/modules/#module-export-patterns
+  example: @example
 }
+\`\`\`
 `;
         break;
         
       case '2':
         moduleContent = `
-# ${metadata.name}
+# @${metadata.author}/${metadata.name}
 
-${metadata.about}
+## tldr
 
-## Example
+Tell us:
+- what problem it solves  
+- why it's useful
 
+## export
+
+\`\`\`mlld-run
 @text greeting = "Hello from ${metadata.name}!"
-@add @greeting
+\`\`\`
 `;
         break;
         
       case '3':
       default:
         moduleContent = `
-# ${metadata.name}
+# @${metadata.author}/${metadata.name}
 
-${metadata.about}
+## tldr
 
->> Write your mlld module here
+Tell us:
+- what problem it solves
+- why it's useful
 
->> Optional: Create a structured interface. See details:
->> https://mlld.ai/docs/modules/#module-export-patterns
-@data module = {
+## export
 
-}
+\`\`\`mlld-run
+>> Write your mlld code here
+\`\`\`
 `;
         break;
     }
@@ -310,8 +319,8 @@ Project Creation (when target is a directory):
   mlld init                    Initialize project in current directory
   mlld init my-project         Create new project directory 'my-project'
 
-Module Creation (when target ends with .mld):
-  mlld init my-module.mld      Create a new module file interactively
+Module Creation (when target ends with .mld.md or .mld):
+  mlld init my-module.mld.md   Create a new module file interactively
 
 Options:
   -n, --name <name>           Module name (for module creation)
@@ -327,8 +336,8 @@ Options:
 Examples:
   mlld init                   # Initialize mlld project in current directory
   mlld init my-project        # Create new project 'my-project'
-  mlld init utils.mld         # Create new module file interactively
-  mlld init --name utils --about "Utility functions" utils.mld
+  mlld init utils.mld.md      # Create new module file interactively
+  mlld init --name utils --about "Utility functions" utils.mld.md
         `);
         return;
       }
@@ -337,9 +346,13 @@ Examples:
       let moduleName = flags.name || flags.n;
       let outputPath = flags.output || flags.o || args[0];
       
-      if (args[0] && args[0].endsWith('.mld') && !moduleName) {
-        // Extract name from filename: "my-module.mld" -> "my-module"
-        moduleName = path.basename(args[0], '.mld');
+      if (args[0] && (args[0].endsWith('.mld.md') || args[0].endsWith('.mld')) && !moduleName) {
+        // Extract name from filename: "my-module.mld.md" -> "my-module" or "my-module.mld" -> "my-module"
+        if (args[0].endsWith('.mld.md')) {
+          moduleName = path.basename(args[0], '.mld.md');
+        } else {
+          moduleName = path.basename(args[0], '.mld');
+        }
       }
       
       const options: InitModuleOptions = {

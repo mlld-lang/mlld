@@ -26,7 +26,7 @@ mlld install
 
 ### Using Modules
 
-Once installed, import modules in your `.mlld` files:
+Once installed, import modules in your `.mld.md` or `.mld` files:
 
 ```mlld
 @import { formatDate, capitalize } from @alice/utils
@@ -106,9 +106,9 @@ The lock file ensures reproducible builds:
 
 ## CLI Commands
 
-### `mlld init [module-name.mld]`
+### `mlld init [module-name.mld.md]`
 
-Create a new mlld module file with interactive setup.
+Create a new mlld module file with interactive setup. Creates `.mld.md` files by default for better GitHub integration and documentation.
 
 **Options:**
 - `--name <name>`: Module name (skip interactive prompt)
@@ -128,15 +128,15 @@ Create a new mlld module file with interactive setup.
 mlld init
 
 # Create specific module interactively  
-mlld init utils.mld
+mlld init utils.mld.md
 
 # Non-interactive with flags
-mlld init --name utils --author alice --about "Utility functions" utils.mld
+mlld init --name utils --author alice --about "Utility functions" utils.mld.md
 
 # Create with all metadata
 mlld init --name http-client --author myorg --about "HTTP utilities" \
   --keywords "http,api,client" --homepage "https://github.com/myorg/http-client" \
-  http-client.mld
+  http-client.mld.md
 ```
 
 **Output:**
@@ -158,12 +158,12 @@ Module export pattern:
 
 Choice [1]: 1
 
-✨ Module created: utils.mld
+✨ Module created: utils.mld.md
 
 Next steps:
-  1. Edit utils.mld to add your functionality
-  2. Test with: mlld utils.mld
-  3. Publish with: mlld publish utils.mld
+  1. Edit utils.mld.md to add your functionality
+  2. Test with: mlld utils.mld.md
+  3. Publish with: mlld publish utils.mld.md
 ```
 
 ### `mlld add-needs [module-path]`
@@ -184,13 +184,13 @@ Analyze module dependencies and update frontmatter automatically.
 mlld add-needs
 
 # Analyze specific module
-mlld add-needs my-module.mld
+mlld add-needs my-module.mld.md
 
 # Add frontmatter to file without frontmatter
 mlld add-needs --force basic-script.mld
 
 # Verbose output showing detected dependencies
-mlld add-needs --verbose utils.mld
+mlld add-needs --verbose utils.mld.md
 ```
 
 **Output:**
@@ -210,7 +210,7 @@ Detected runtime needs:
     commands: ["curl", "grep", "awk"]
 
 📝 Updating frontmatter...
-✅ Updated utils.mld
+✅ Updated utils.mld.md
 
 Changes:
   needs: [] → ["js", "sh"]
@@ -233,7 +233,7 @@ Publish a module to the mlld registry with automatic metadata handling.
 The publish command now intelligently handles metadata updates:
 
 ```bash
-mlld publish my-module.mld
+mlld publish my-module.mld.md
 ```
 
 **Output:**
@@ -242,7 +242,7 @@ mlld publish my-module.mld
 
 📋 Checking module metadata...
 
-The following metadata will be added to my-module.mld:
+The following metadata will be added to my-module.mld.md:
    • mlld-version: 1.0.0-rc-12
    • author: alice (auto-detected from git)
    • license: CC0 (required for all modules)
@@ -256,7 +256,7 @@ Choose an option:
 Choice [1]: 1
 
 📝 Committing metadata changes...
-✅ Committed: Add mlld-version, author, license to my-module.mld
+✅ Committed: Add mlld-version, author, license to my-module.mld.md
 ✅ Pushed to origin/main
 🚀 Publishing to registry...
 ✅ Published @alice/my-module
@@ -378,24 +378,126 @@ Created: January 15, 2024
 
 ## Module Development
 
+### The `.mld.md` Executable Documentation Format
+
+mlld modules use the `.mld.md` file extension by default, enabling **executable documentation** - files that are simultaneously perfect GitHub markdown documentation and functional mlld modules. This innovative approach combines data, documentation, and code in one file.
+
+#### `mlld-run` vs `mlld` Code Blocks
+
+The key to executable documentation is understanding the difference between these two code block types:
+
+- **`mlld-run` blocks**: Execute as mlld code when the file is processed
+- **`mlld` blocks**: Documentation-only, rendered as syntax-highlighted code on GitHub
+
+**Example `.mld.md` module:**
+
+````markdown
+# @alice/utils
+
+Utility functions for text formatting and dates. Perfect for blogs, documentation, and data processing.
+
+## tldr
+
+```mlld-run
+@import { formatDate, capitalize, greeting } from @alice/utils
+
+@text today = [[Today is {{formatDate(@TIME)}}]]
+@add @today
+```
+
+## export
+
+```mlld-run
+@text formatDate(dateStr) = [[{{dateStr | format("YYYY-MM-DD")}}]]
+@text capitalize(text) = [[{{text | title}}]]
+@text greeting(name) = [[Hello, {{capitalize(@name)}}!]]
+
+@data module = {
+  formatDate: @formatDate,
+  capitalize: @capitalize,
+  greeting: @greeting
+}
+```
+
+## interface
+
+### `formatDate(dateStr)`
+
+Formats a date string to YYYY-MM-DD format.
+
+```mlld
+@text myDate = [[{{formatDate("2024-01-15T10:30:00Z")}}]]
+@add @myDate
+```
+
+Output: `2024-01-15`
+
+### `capitalize(text)`
+
+Capitalizes the first letter of each word.
+
+```mlld
+@text title = [[{{capitalize("hello world")}}]]
+@add @title
+```
+
+Output: `Hello World`
+
+### `greeting(name)`
+
+Creates a personalized greeting message.
+
+```mlld
+@text welcome = [[{{greeting("Alice")}}]]
+@add @welcome
+```
+
+Output: `Hello, Alice!`
+````
+
+**When viewed on GitHub**, this renders as beautiful documentation with syntax highlighting. **When processed by mlld**, only the `mlld-run` blocks execute, making the functions available for import.
+
+#### Benefits of Executable Documentation
+
+1. **Single Source of Truth**: Documentation and code stay in sync because they're in the same file
+2. **Perfect GitHub Integration**: Modules render beautifully on GitHub with proper syntax highlighting
+3. **Live Examples**: Documentation examples can be actual working code that's tested
+4. **Reduced Maintenance**: No need to maintain separate documentation and implementation files
+5. **Better Discovery**: Modules are discoverable both as code repositories and as documentation
+
+#### Best Practices for `.mld.md` Modules
+
+- **Use `mlld-run` blocks for all executable code** (exports, internal functions, data definitions)
+- **Use `mlld` blocks for documentation examples** that show usage but don't execute
+- **Structure with standard sections**: `# @author/module`, `## tldr`, `## export`, `## interface`
+- **Include working examples** in the `## tldr` section to show immediate value
+- **Document each exported function** with usage examples and expected output
+- **Keep the executable code clean** since it will be visible in the documentation
+
 ### Creating Modules
 
 The easiest way to create a new module is with the `mlld init` command:
 
 ```bash
-# Interactive creation
+# Interactive creation (creates .mld.md by default)
 mlld init
 
 # Create specific module
-mlld init utils.mld
+mlld init utils.mld.md
 
 # Non-interactive with metadata
-mlld init --name utils --author alice --about "Utility functions" utils.mld
+mlld init --name utils --author alice --about "Utility functions" utils.mld.md
 ```
 
-This creates a properly structured module file with frontmatter and standard patterns. You can also create modules manually by writing standard mlld code with frontmatter:
+This creates a properly structured `.mld.md` file with:
+- Frontmatter metadata
+- Standard documentation sections (`# @author/module`, `## tldr`, `## export`, `## interface`)
+- `mlld-run` blocks for executable code
+- `mlld` blocks for documentation examples
 
-**alice-utils.mld:**
+You can also create modules manually by writing standard mlld code with frontmatter:
+
+**alice-utils.mld.md:**
 ```mlld
 ---
 name: utils
@@ -427,13 +529,13 @@ Use `mlld add-needs` to automatically detect and add runtime dependencies:
 
 ```bash
 # Analyze and update dependencies
-mlld add-needs utils.mld
+mlld add-needs utils.mld.md
 
 # Force add frontmatter if missing
 mlld add-needs --force legacy-script.mld
 
 # See detailed analysis
-mlld add-needs --verbose utils.mld
+mlld add-needs --verbose utils.mld.md
 ```
 
 This automatically detects JavaScript packages, Python imports, shell commands, and other runtime dependencies in your module.
@@ -550,13 +652,13 @@ The `mlld publish` command handles the entire publishing workflow:
 
 ```bash
 # Publish current module
-mlld publish my-module.mld
+mlld publish my-module.mld.md
 
 # Dry run to see what would be published
-mlld publish --dry-run my-module.mld
+mlld publish --dry-run my-module.mld.md
 
 # Publish as organization
-mlld publish --org mycompany my-module.mld
+mlld publish --org mycompany my-module.mld.md
 ```
 
 The publish command will:
@@ -830,19 +932,19 @@ mlld install @templates/blog
 
 ```bash
 # 1. Create a new module
-mlld init my-utils.mld
+mlld init my-utils.mld.md
 
 # 2. Edit the module (add your functionality)
-# ... edit my-utils.mld ...
+# ... edit my-utils.mld.md ...
 
 # 3. Analyze and add dependencies
-mlld add-needs my-utils.mld
+mlld add-needs my-utils.mld.md
 
 # 4. Test the module locally
-mlld my-utils.mld
+mlld my-utils.mld.md
 
 # 5. Publish when ready
-mlld publish my-utils.mld
+mlld publish my-utils.mld.md
 
 # 6. Install in other projects
 mlld install @alice/my-utils
@@ -856,13 +958,13 @@ mlld registry audit
 
 ```bash
 # Quick dependency re-analysis after code changes
-mlld add-needs --verbose my-utils.mld
+mlld add-needs --verbose my-utils.mld.md
 
 # Test before publishing
-mlld publish --dry-run my-utils.mld
+mlld publish --dry-run my-utils.mld.md
 
 # Publish updates
-mlld publish my-utils.mld
+mlld publish my-utils.mld.md
 ```
 
 ## Best Practices
