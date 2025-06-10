@@ -155,8 +155,8 @@ export class InitModuleCommand {
       }
 
       console.log('\nModule export pattern:');
-      console.log('  1. Structured interface (recommended for reusable modules)');
-      console.log('  2. Simple module (for basic functionality)');
+      console.log('  1. Simple module (recommended - auto-exports all variables)');
+      console.log('  2. Structured interface (advanced - custom export organization)');
       console.log('  3. Empty (I\'ll add content later)');
       
       const patternChoice = await rl.question('\nChoice [1]: ') || '1';
@@ -213,20 +213,17 @@ Tell us:
 - what problem it solves
 - why it's useful
 
-## export
+## docs
+
+More detailed usage examples and documentation.
+
+## module
 
 \`\`\`mlld-run
-@exec example(input) = @run [echo "Processing: @input"]
+@text greeting = "Hello from ${metadata.name}!"
 
 >> Add your mlld code here
-\`\`\`
-
-## interface
-
-\`\`\`mlld-run
-@data module = {
-  example: @example
-}
+>> All variables are automatically exported
 \`\`\`
 `;
         break;
@@ -238,13 +235,27 @@ Tell us:
 ## tldr
 
 Tell us:
-- what problem it solves  
+- what problem it solves
 - why it's useful
 
-## export
+## docs
+
+More detailed usage examples and documentation.
+
+## module
 
 \`\`\`mlld-run
-@text greeting = "Hello from ${metadata.name}!"
+@exec example(input) = @run [echo "Processing: @input"]
+
+>> Add your mlld code here
+
+@data module = {
+  example: @example,
+  // You can also organize exports into namespaces:
+  // commands: {
+  //   example: @example
+  // }
+}
 \`\`\`
 `;
         break;
@@ -260,7 +271,11 @@ Tell us:
 - what problem it solves
 - why it's useful
 
-## export
+## docs
+
+More detailed usage examples and documentation.
+
+## module
 
 \`\`\`mlld-run
 >> Write your mlld code here
