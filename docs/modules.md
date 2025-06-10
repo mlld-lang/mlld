@@ -67,11 +67,9 @@ mlld info @alice/utils
 The mlld module system uses DNS TXT records for module discovery:
 
 1. **Module Reference**: `@username/module` 
-2. **DNS Lookup**: `_mlld.username.public.mlld.ai`
-3. **TXT Record**: Contains metadata and gist information
-4. **Content Fetch**: Downloads from GitHub gist
-5. **Local Cache**: Stores in `~/.mlld/cache/` with SHA-256 hash
-6. **Lock File**: Records exact versions in `mlld.lock.json`
+2. **Content Fetch**: Downloads from GitHub gist
+3. **Local Cache**: Stores in `~/.mlld/cache/` with SHA-256 hash
+4. **Lock File**: Records exact versions in `mlld.lock.json`
 
 ### Cache System
 
@@ -107,6 +105,164 @@ The lock file ensures reproducible builds:
 ```
 
 ## CLI Commands
+
+### `mlld init [module-name.mld]`
+
+Create a new mlld module file with interactive setup.
+
+**Options:**
+- `--name <name>`: Module name (skip interactive prompt)
+- `--author <author>`: Author name  
+- `--about <description>`: Module description
+- `--output <path>`: Output file path
+- `--version <version>`: Module version (default: 1.0.0)
+- `--keywords <keywords>`: Comma-separated keywords
+- `--homepage <url>`: Homepage URL
+- `--skip-git`: Skip git integration
+- `--force`: Overwrite existing files
+
+**Examples:**
+
+```bash
+# Interactive creation (prompts for module name)
+mlld init
+
+# Create specific module interactively  
+mlld init utils.mld
+
+# Non-interactive with flags
+mlld init --name utils --author alice --about "Utility functions" utils.mld
+
+# Create with all metadata
+mlld init --name http-client --author myorg --about "HTTP utilities" \
+  --keywords "http,api,client" --homepage "https://github.com/myorg/http-client" \
+  http-client.mld
+```
+
+**Output:**
+```
+=✨ Creating new mlld module...
+
+Auto-detected repository: https://github.com/alice/my-project
+
+Runtime dependencies:
+  Dependencies will be auto-detected when you publish.
+  For now, specify if you know you'll use external runtimes.
+  Options: js, py, sh (comma-separated, or press Enter for none)
+Needs []: js
+
+Module export pattern:
+  1. Structured interface (recommended for reusable modules)
+  2. Simple module (for basic functionality)  
+  3. Empty (I'll add content later)
+
+Choice [1]: 1
+
+✨ Module created: utils.mld
+
+Next steps:
+  1. Edit utils.mld to add your functionality
+  2. Test with: mlld utils.mld
+  3. Publish with: mlld publish utils.mld
+```
+
+### `mlld add-needs [module-path]`
+
+Analyze module dependencies and update frontmatter automatically.
+
+**Aliases:** `mlld needs`, `mlld deps`
+
+**Options:**
+- `--verbose`: Show detailed dependency analysis
+- `--auto`: Auto-detect mode (default behavior)
+- `--force`: Add frontmatter even if none exists
+
+**Examples:**
+
+```bash
+# Analyze current directory
+mlld add-needs
+
+# Analyze specific module
+mlld add-needs my-module.mld
+
+# Add frontmatter to file without frontmatter
+mlld add-needs --force basic-script.mld
+
+# Verbose output showing detected dependencies
+mlld add-needs --verbose utils.mld
+```
+
+**Output:**
+```
+🔍 Analyzing module dependencies...
+
+Parsing module...
+✅ Analysis complete
+
+Detected runtime needs:
+  needs: ["js", "sh"]
+
+  needs-js:
+    packages: ["axios", "lodash"]
+
+  needs-sh:
+    commands: ["curl", "grep", "awk"]
+
+📝 Updating frontmatter...
+✅ Updated utils.mld
+
+Changes:
+  needs: [] → ["js", "sh"]
+```
+
+### `mlld publish [module-path]`
+
+Publish a module to the mlld registry with automatic metadata handling.
+
+**Options:**
+- `--dry-run`: Show what would be published without publishing
+- `--message <msg>`: Custom pull request message
+- `--force`: Force publish even with uncommitted changes
+- `--gist`: Create a gist even if in git repository
+- `--repo`: Use repository (skip interactive prompt)
+- `--org <name>`: Publish on behalf of an organization
+
+**Enhanced UX for Metadata Changes:**
+
+The publish command now intelligently handles metadata updates:
+
+```bash
+mlld publish my-module.mld
+```
+
+**Output:**
+```
+🚀 Publishing mlld module...
+
+📋 Checking module metadata...
+
+The following metadata will be added to my-module.mld:
+   • mlld-version: 1.0.0-rc-12
+   • author: alice (auto-detected from git)
+   • license: CC0 (required for all modules)
+   • repo: https://github.com/alice/my-project (auto-detected)
+
+⚠️  These changes need to be committed before publishing.
+Choose an option:
+  1. Commit and push changes, then publish
+  2. Cancel and let me commit manually
+
+Choice [1]: 1
+
+📝 Committing metadata changes...
+✅ Committed: Add mlld-version, author, license to my-module.mld
+✅ Pushed to origin/main
+🚀 Publishing to registry...
+✅ Published @alice/my-module
+```
+
+This solves the common issue where publish would add metadata but then fail due to uncommitted changes.
 
 ### `mlld install [modules...]`
 
@@ -224,14 +380,31 @@ Created: January 15, 2024
 
 ### Creating Modules
 
-Create a module by writing standard mlld code with an explicit module export:
+The easiest way to create a new module is with the `mlld init` command:
 
-**alice-utils.mlld:**
+```bash
+# Interactive creation
+mlld init
+
+# Create specific module
+mlld init utils.mld
+
+# Non-interactive with metadata
+mlld init --name utils --author alice --about "Utility functions" utils.mld
+```
+
+This creates a properly structured module file with frontmatter and standard patterns. You can also create modules manually by writing standard mlld code with frontmatter:
+
+**alice-utils.mld:**
 ```mlld
 ---
+name: utils
 author: alice
-description: Utility functions for text formatting and dates
+about: Utility functions for text formatting and dates
 version: 1.0.0
+needs: []
+license: CC0
+mlld-version: 1.0.0-rc-12
 ---
 
 @text formatDate(dateStr) = [[{{dateStr | format("YYYY-MM-DD")}}]]
@@ -247,6 +420,23 @@ version: 1.0.0
   greeting: @greeting
 }
 ```
+
+### Analyzing Dependencies
+
+Use `mlld add-needs` to automatically detect and add runtime dependencies:
+
+```bash
+# Analyze and update dependencies
+mlld add-needs utils.mld
+
+# Force add frontmatter if missing
+mlld add-needs --force legacy-script.mld
+
+# See detailed analysis
+mlld add-needs --verbose utils.mld
+```
+
+This automatically detects JavaScript packages, Python imports, shell commands, and other runtime dependencies in your module.
 
 #### Module Export Patterns
 
@@ -356,8 +546,33 @@ Module frontmatter is always available via the `__meta__` property:
 
 ### Publishing Modules
 
+The `mlld publish` command handles the entire publishing workflow:
+
+```bash
+# Publish current module
+mlld publish my-module.mld
+
+# Dry run to see what would be published
+mlld publish --dry-run my-module.mld
+
+# Publish as organization
+mlld publish --org mycompany my-module.mld
+```
+
+The publish command will:
+
+1. **Validate module** - Check syntax, required fields, and dependencies
+2. **Add metadata** - Automatically add mlld-version, license (CC0), and git info
+3. **Handle git workflow** - Ask permission to commit changes and push
+4. **Create pull request** - Submit to the mlld registry for review
+5. **Provide status** - Show publication URL and next steps
+
+**Traditional Manual Publishing (Advanced):**
+
+For custom workflows, you can still publish manually:
+
 1. **Create a GitHub Gist** with your module code
-2. **Set up DNS TXT record** for discovery
+2. **Set up DNS TXT record** for discovery  
 3. **Register with mlld registry** (if using public registry)
 
 **DNS TXT Record Format:**
@@ -611,20 +826,43 @@ mlld install @templates/blog
 
 ### Development Workflow
 
-**Working with local and published modules:**
+**Complete module development workflow:**
 
 ```bash
-# During development
-mlld install file:./my-module.mlld
+# 1. Create a new module
+mlld init my-utils.mld
 
-# Publish to gist and install
-mlld install @alice/my-module
+# 2. Edit the module (add your functionality)
+# ... edit my-utils.mld ...
 
-# Update all modules
+# 3. Analyze and add dependencies
+mlld add-needs my-utils.mld
+
+# 4. Test the module locally
+mlld my-utils.mld
+
+# 5. Publish when ready
+mlld publish my-utils.mld
+
+# 6. Install in other projects
+mlld install @alice/my-utils
+
+# 7. Maintain and update
 mlld registry update
-
-# Check for issues
 mlld registry audit
+```
+
+**During development iteration:**
+
+```bash
+# Quick dependency re-analysis after code changes
+mlld add-needs --verbose my-utils.mld
+
+# Test before publishing
+mlld publish --dry-run my-utils.mld
+
+# Publish updates
+mlld publish my-utils.mld
 ```
 
 ## Best Practices

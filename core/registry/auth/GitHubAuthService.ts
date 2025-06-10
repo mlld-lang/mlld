@@ -137,6 +137,9 @@ export class GitHubAuthService {
 
       // Start device flow
       console.log('🔐 Starting GitHub authentication...\n');
+      console.log('📄 By publishing to the mlld registry, you agree to license your');
+      console.log('   modules under the CC0 1.0 Universal (CC0 1.0) Public Domain Dedication.');
+      console.log('   Learn more: https://creativecommons.org/public-domain/cc0/\n');
       
       const deviceFlow = await this.initiateDeviceFlow();
       

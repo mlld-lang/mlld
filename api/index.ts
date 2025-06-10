@@ -17,6 +17,9 @@ export { MlldError };
 export { ErrorFormatSelector };
 export type { FormattedErrorResult, ErrorFormatOptions };
 
+// Export utilities
+export { DependencyDetector } from '@core/utils/dependency-detector';
+
 // Export types
 export type { Location, Position } from '@core/types/index';
 

@@ -3,13 +3,14 @@ import * as fs from 'fs/promises';
 import { watch } from 'fs/promises';
 import { existsSync } from 'fs';
 import { createInterface } from 'readline';
-import { initCommand } from './commands/init';
 import { registryCommand } from './commands/registry';
 import { createInstallCommand } from './commands/install';
 import { createLsCommand } from './commands/ls';
 import { createInfoCommand } from './commands/info';
 import { createAuthCommand } from './commands/auth';
 import { createPublishCommand } from './commands/publish';
+import { createInitModuleCommand } from './commands/init-module';
+import { createAddNeedsCommand } from './commands/add-needs';
 import chalk from 'chalk';
 import { version } from '@core/version';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
@@ -140,7 +141,7 @@ function parseArgs(args: string[]): CLIOptions {
   };
 
   // Commands that can have subcommands (and should stop parsing)
-  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish'];
+  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps'];
   
   // Store remaining args after command
   options._ = [];
@@ -442,6 +443,37 @@ Examples:
     return;
   }
   
+  if (command === 'init') {
+    console.log(`
+Usage: mlld init [options] [module-name.mld]
+
+Create a new mlld module file.
+
+Interactive Creation:
+  mlld init                    Prompt for module name and create <name>.mld
+  
+Module Creation:
+  mlld init my-module.mld      Create my-module.mld with interactive setup
+  
+Creates .mld file with YAML frontmatter (author, description, license).
+These files contain mlld code and can be published to the registry.
+
+Options:
+  -n, --name <name>           Module name (skip interactive prompt)
+  -a, --author <author>       Author name
+  -d, --about <description>   Module description
+  -o, --output <path>         Output file path
+  --skip-git                  Skip git integration
+  -f, --force                 Overwrite existing files
+
+Examples:
+  mlld init                   # Prompt for module name, create interactively
+  mlld init utils.mld         # Create utils.mld interactively
+  mlld init --name utils --about "Utility functions" utils.mld
+    `);
+    return;
+  }
+  
   if (command === 'registry') {
     console.log(`
 Usage: mlld registry <subcommand> [options]
@@ -463,6 +495,33 @@ Examples:
   mlld registry info adamavenir/json-utils
   mlld registry update
   mlld registry audit
+    `);
+    return;
+  }
+  
+  if (command === 'add-needs') {
+    console.log(`
+Usage: mlld add-needs [options] [module-path]
+
+Analyze and update module runtime dependencies.
+
+Analyzes your mlld module to detect runtime dependencies (js, py, sh) and
+updates the frontmatter automatically.
+
+Options:
+  -v, --verbose               Show detailed output
+  -a, --auto                  Auto-detect mode (default behavior)
+  -f, --force                 Add frontmatter even if none exists
+
+Examples:
+  mlld add-needs              # Analyze current directory
+  mlld add-needs my-module.mld # Analyze specific module
+  mlld add-needs --force      # Add frontmatter if missing
+  mlld add-needs --verbose    # Show detailed dependency analysis
+
+Aliases:
+  mlld needs                  # Short alias
+  mlld deps                   # Alternative alias
     `);
     return;
   }
@@ -505,14 +564,15 @@ Options:
 Usage: mlld [command] [options] <input-file>
 
 Commands:
-  init                    Create a new Mlld project
+  init                    Create a new mlld module
+  add-needs, needs, deps  Analyze and update module dependencies
   install, i              Install mlld modules
   ls, list               List installed modules
   info, show             Show module details
   auth                    Manage GitHub authentication
   publish                 Publish module to mlld registry
   registry                Manage mlld module registry
-  debug-resolution        Debug variable resolution in a Mlld file
+  debug-resolution        Debug variable resolution in a mlld file
   debug-transform         Debug node transformations through the pipeline
 
 Options:
@@ -1065,11 +1125,6 @@ export async function main(customArgs?: string[]): Promise<void> {
       return;
     }
     
-    // Handle init command
-    if (cliOptions.input === 'init') {
-      await initCommand();
-      return;
-    }
     
     // Handle registry command
     if (cliOptions.input === 'registry') {
@@ -1115,6 +1170,59 @@ export async function main(customArgs?: string[]): Promise<void> {
       const publishCmd = createPublishCommand();
       const cmdArgs = cliOptions._ || [];
       await publishCmd.execute(cmdArgs, parseFlags(cmdArgs));
+      return;
+    }
+    
+    // Handle init/init-module command
+    if (cliOptions.input === 'init' || cliOptions.input === 'init-module') {
+      // Check if the next argument looks like a subcommand or flag
+      const cmdArgs = cliOptions._ || [];
+      const flags = parseFlags(cmdArgs);
+      
+      
+      // Check for help flag first
+      if (flags.help || flags.h) {
+        console.log(`
+Usage: mlld init [options] [module-name.mld]
+
+Create a new mlld module file.
+
+Interactive Creation:
+  mlld init                    Prompt for module name and create <name>.mld
+  
+Module Creation:
+  mlld init my-module.mld      Create my-module.mld with interactive setup
+  
+Creates .mld file with YAML frontmatter (author, description, license).
+These files contain mlld code and can be published to the registry.
+
+Options:
+  -n, --name <name>           Module name (skip interactive prompt)
+  -a, --author <author>       Author name
+  -d, --about <description>   Module description
+  -o, --output <path>         Output file path
+  --skip-git                  Skip git integration
+  -f, --force                 Overwrite existing files
+
+Examples:
+  mlld init                   # Prompt for module name, create interactively
+  mlld init utils.mld         # Create utils.mld interactively
+  mlld init --name utils --about "Utility functions" utils.mld
+        `);
+        return;
+      }
+      
+      // Always use module creation - no workspace/project concept
+      const initModuleCmd = createInitModuleCommand();
+      await initModuleCmd.execute(cmdArgs, flags);
+      return;
+    }
+    
+    // Handle add-needs command
+    if (cliOptions.input === 'add-needs' || cliOptions.input === 'needs' || cliOptions.input === 'deps') {
+      const addNeedsCmd = createAddNeedsCommand();
+      const cmdArgs = cliOptions._ || [];
+      await addNeedsCmd.execute(cmdArgs, parseFlags(cmdArgs));
       return;
     }
     
