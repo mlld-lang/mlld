@@ -139,6 +139,46 @@ Generate structured reports from data:
 @add @rows
 ```
 
+### Section Variable Collection
+
+Dynamically collect multiple sections from files using variable section names:
+
+```mlld
+@data sections = ["introduction", "methodology", "results", "conclusion"]
+@text extractSection(name) = [[Content from {{name}} section]]
+
+# Extract all sections with foreach
+@data allSections = foreach @extractSection(@sections)
+@add @allSections
+
+# Or extract from specific files
+@exec getSection(file, section) = @run [(echo "From @file:")]\n@add [file.md # @section]
+@data files = ["report1.md", "report2.md", "report3.md"]
+@data sections = ["summary", "recommendations"]
+@data extracted = foreach @getSection(@files, @sections)
+```
+
+### Dynamic Documentation Assembly
+
+Build documentation by collecting sections across multiple files:
+
+```mlld
+@data sources = [
+  {"file": "intro.md", "section": "overview"},
+  {"file": "guide.md", "section": "getting-started"},
+  {"file": "api.md", "section": "endpoints"},
+  {"file": "examples.md", "section": "tutorials"}
+]
+
+@text includeSection(source) = [[
+## {{source.section}} 
+@add [{{source.file}} # {{source.section}}]
+]]
+
+@data documentation = foreach @includeSection(@sources)
+@add @documentation
+```
+
 ### Nested Data Processing
 
 Work with complex combinations of parameters:

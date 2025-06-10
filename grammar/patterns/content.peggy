@@ -48,8 +48,30 @@ LiteralContent "Literal content without interpolation"
 
 // SEMANTIC: Path content - knows it's parsing a file path
 SemanticPathContent "Semantic path content with @var interpolation"
-  = '[' parts:PathParts ']' {
-      // Just return the path parts - section handling should be at directive level
+  = '[' pathParts:PathParts _ '#' _ section:SectionIdentifier ']' {
+      // Path with section - create structured response
+      const pathString = helpers.reconstructRawString(pathParts);
+      
+      // Extract section raw content
+      let sectionRaw;
+      if (section.type === 'VariableReference') {
+        sectionRaw = '@' + section.identifier;
+      } else if (typeof section === 'string') {
+        sectionRaw = section;
+      } else {
+        sectionRaw = section.content || section.identifier || '';
+      }
+      
+      return {
+        type: 'sectionPath',
+        parts: pathParts,
+        section: sectionRaw,
+        sectionNodes: Array.isArray(section) ? section : [section],
+        raw: pathString + ' # ' + sectionRaw
+      };
+    }
+  / '[' parts:PathParts ']' {
+      // Regular path without section
       return parts;
     }
 
@@ -343,6 +365,12 @@ SemanticTextContent "Semantic content for @text directive"
 // For paths in path, import, exec, add directives
 WrappedPathContent "Wrapped path content"
   = content:PathStyleInterpolation {
+      // Check if this is a section path from SemanticPathContent
+      if (content && typeof content === 'object' && content.type === 'sectionPath') {
+        // Return the section path structure directly
+        return content;
+      }
+      
       // PathStyleInterpolation already handles brackets
       const rawString = helpers.reconstructRawString(content);
       

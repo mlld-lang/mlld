@@ -661,8 +661,19 @@ Full syntax examples:
 │  │  └─ [[text with {{vars}}]]
 │  │
 ├─ "[" detected?
-│  ├─ YES: PathOrSection
-│  │  └─ Same logic as @text
+│  ├─ YES: PathOrSection (SEMANTIC FORKING)
+│  │  │
+│  │  ├─ Contains " # "? → Section Extraction
+│  │  │  └─ SemanticAddSectionContent
+│  │  │     ├─ [path # literal] → Text section identifier
+│  │  │     └─ [path # @variable] → Variable section identifier
+│  │  │        └─ SectionIdentifier pattern
+│  │  │           ├─ @var → VariableReference node
+│  │  │           └─ literal → Text node
+│  │  │
+│  │  └─ No " # " → Regular Path Content
+│  │     └─ SemanticPathContent
+│  │        └─ [path/with/@vars]
 │  │
 ├─ "@" detected?
 │  ├─ YES: Variable or invocation
@@ -676,6 +687,8 @@ Full syntax examples:
       └─ "text to add"
 
 Examples:
+- @add [file.md # Introduction]        # Literal section
+- @add [file.md # @targetSection]      # Variable section (NEW)
 - @add @greeting("World") | @uppercase
 - @add @fetchData() trust always
 - @add foreach @process(@items) | @validate
