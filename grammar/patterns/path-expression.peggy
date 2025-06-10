@@ -206,12 +206,28 @@ SectionIdentifier "Section name or variable reference"
         ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
     }
-  / BaseIdentifier {  // literal section names (e.g., "Introduction")
+  / '"' content:$(!'"' .)* '"' {  // Double-quoted section names
       return helpers.createNode(NodeType.Text, { 
-        content: text(), 
+        content: content, 
         location: location() 
       });
     }
+  / "'" content:$(!"'" .)* "'" {  // Single-quoted section names
+      return helpers.createNode(NodeType.Text, { 
+        content: content, 
+        location: location() 
+      });
+    }
+  / chars:SectionNameChar+ {  // Unquoted section names
+      return helpers.createNode(NodeType.Text, { 
+        content: chars.join(''), 
+        location: location() 
+      });
+    }
+
+// Characters allowed in unquoted section names - everything except ], quotes, and newlines
+SectionNameChar
+  = ![\]"'\r\n] char:. { return char; }
 
 // -------------------------------------------------------------
 // LEGACY URL HELPER RULES - Keep for backward compatibility

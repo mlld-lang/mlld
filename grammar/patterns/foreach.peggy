@@ -61,24 +61,71 @@ ForeachVariableRef
 // FOREACH SECTION EXTRACTION (NEW PATTERN)
 // -------------------------------------------------------------
 
-// Foreach with section extraction: foreach [@array.field # section] as [[template]]
+// Foreach with section extraction: foreach [path expression] as [[template]]
 // This pattern enables direct iteration over arrays with section extraction and template application
-// Usage: foreach [@files.path # tldr] as [[### {{files.name}}]]
+// Usage examples:
+//   - foreach [@files.path # tldr] as [[### {{files.name}}]]
+//   - foreach [../{{files.path}} # tldr] as [[### {{files.name}}]]
+//   - foreach [@docs.url # @docs.section] as [[## {{docs.title}}]]
 ForeachSectionExpression
-  = "foreach" _ "[" _ "@" arrayVar:BaseIdentifier "." pathField:BaseIdentifier _ "#" _ section:SectionIdentifier _ "]" _ "as" _ template:TemplateCore {
-      helpers.debug('ForeachSectionExpression matched', { arrayVar, pathField, section, template });
+  = "foreach" _ "[" _ pathParts:ForeachPathParts _ "#" _ section:SectionIdentifier _ "]" _ "as" _ template:TemplateCore {
+      helpers.debug('ForeachSectionExpression matched', { pathParts, section, template });
+      
+      // Extract the array variable from the path
+      // This is a simplified extraction - in practice, the interpreter
+      // will need to evaluate the full path expression
+      let arrayVariable = null;
+      let pathField = null;
+      
+      // Try to extract @arrayVar.field pattern if it's a simple case
+      if (pathParts && pathParts.length > 0) {
+        const firstPart = pathParts[0];
+        if (firstPart.type === 'VariableReference' && firstPart.fields && firstPart.fields.length > 0) {
+          arrayVariable = firstPart.identifier;
+          pathField = firstPart.fields[0].value;
+        }
+      }
+      
+      // Extract section raw content
+      let sectionRaw;
+      if (section.type === 'VariableReference') {
+        sectionRaw = '@' + section.identifier;
+      } else if (typeof section === 'string') {
+        sectionRaw = section;
+      } else {
+        sectionRaw = section.content || section.identifier || '';
+      }
       
       return {
         type: "foreach-section",
         value: {
           type: 'foreach-section',
-          arrayVariable: arrayVar,
-          pathField: pathField,
-          section: section,
-          template: template
+          path: pathParts,
+          section: Array.isArray(section) ? section : [section],
+          sectionRaw: sectionRaw,
+          template: template,
+          // Include simplified extraction for backward compatibility
+          ...(arrayVariable ? { arrayVariable } : {}),
+          ...(pathField ? { pathField } : {})
         },
         rawText: text()
       };
+    }
+
+// Path parts for foreach - without context checking
+ForeachPathParts "Path parts for foreach section"
+  = parts:(SpecialVariable / ForeachPathVariable / InterpolationVar / PathTextSegment / PathSeparator)* {
+      return parts;
+    }
+
+// Variable in foreach path context - no VariableContext check needed
+ForeachPathVariable "Variable in foreach path"
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
     }
 
 // -------------------------------------------------------------

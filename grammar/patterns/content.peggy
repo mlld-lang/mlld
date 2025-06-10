@@ -41,9 +41,6 @@ LiteralContent "Literal content without interpolation"
   / "'" content:EscapedSingleStringContent "'" { 
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
-  / "`" content:EscapedBacktickStringContent "`" { 
-      return [helpers.createNode(NodeType.Text, { content, location: location() })];
-    }
 
 
 // SEMANTIC: Path content - knows it's parsing a file path
@@ -73,6 +70,31 @@ SemanticPathContent "Semantic path content with @var interpolation"
   / '[' parts:PathParts ']' {
       // Regular path without section
       return parts;
+    }
+
+// SEMANTIC: Section content for @add directive - shared pattern
+SemanticSectionContent "Semantic section content"
+  = '[' pathParts:PathParts _ '#' _ section:SectionIdentifier ']' {
+      // Path with section - create structured response
+      const pathString = helpers.reconstructRawString(pathParts);
+      
+      // Extract section raw content
+      let sectionRaw;
+      if (section.type === 'VariableReference') {
+        sectionRaw = '@' + section.identifier;
+      } else if (typeof section === 'string') {
+        sectionRaw = section;
+      } else {
+        sectionRaw = section.content || section.identifier || '';
+      }
+      
+      return {
+        type: 'sectionPath',
+        parts: pathParts,
+        section: sectionRaw,
+        sectionNodes: Array.isArray(section) ? section : [section],
+        raw: pathString + ' # ' + sectionRaw
+      };
     }
 
 // Parts that make up a path
@@ -150,6 +172,12 @@ SingleQuotedCommandContent
 // Text inside double quotes
 DoubleQuotedText
   = chars:(!['"@] char:. { return char; })+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
+    }
+
+// Text inside backticks (excluding @ for variable interpolation)
+BacktickTextSegment
+  = chars:(![`@] char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
@@ -284,7 +312,7 @@ InterpolatedTemplateContent "Template content with {{var}} interpolation"
 PathStyleInterpolation "Path interpolation patterns"
   = InterpolatedPathContent  // [content with @var] - all paths must be bracketed
 
-// Template-style interpolation: templates with {{var}} or literal text
+// Template-style interpolation: templates with {{var}}, @var in backticks, or literal text
 TemplateStyleInterpolation "Template interpolation patterns"  
   = rule:InterpolatedTemplateContent {
       helpers.debug('TemplateStyleInterpolation matched InterpolatedTemplateContent', { 
@@ -302,6 +330,14 @@ TemplateStyleInterpolation "Template interpolation patterns"
       return {
         content: rule,
         wrapperType: 'doubleBracket'
+      };
+    }
+  / '`' parts:(UnquotedPathVar / BacktickTextSegment)* '`' {
+      helpers.debug('TemplateStyleInterpolation matched backtick with @var interpolation', { parts });
+      
+      return {
+        content: parts,
+        wrapperType: 'backtick'
       };
     }
   / rule:LiteralOnlyContent {

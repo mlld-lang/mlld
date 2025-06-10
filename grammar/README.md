@@ -488,6 +488,11 @@ The token-based approach ensures that:
 │  │  └─ @run [...] [tail modifiers]
 │  │     └─ Direct run command
 │  │
+├─ "`" detected?
+│  ├─ YES: BacktickTemplate
+│  │  └─ `TemplateContent with @var`
+│  │     └─ @var interpolation (simpler than [[{{var}}]])
+│  │
 └─ '"' or "'" detected?
    └─ QuotedLiteral
       └─ "simple string" (no interpolation)
@@ -495,6 +500,7 @@ The token-based approach ensures that:
 Examples:
 - @text greeting = "Hello, world!"
 - @text content = [[Welcome {{user}}!]]
+- @text link = `[@url.path](@url.name)`           # Backtick with @var interpolation
 - @text data = @fetchData() | @parse              # Direct exec with pipeline
 - @text secure = @getSecrets() trust always       # Direct exec with trust
 - @text result = @process() with { trust: verify, pipeline: [@validate] }

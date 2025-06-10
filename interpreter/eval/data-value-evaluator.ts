@@ -509,18 +509,38 @@ export async function evaluateForeachSection(
   foreachExpr: any,
   env: Environment
 ): Promise<any[]> {
-  const { arrayVariable, pathField, section, template } = foreachExpr.value || foreachExpr;
+  const { arrayVariable, pathField, path, section, template } = foreachExpr.value || foreachExpr;
+  
+  // Handle the new flexible path expressions
+  // If arrayVariable is not set, we need to find it in the path
+  let actualArrayVariable = arrayVariable;
+  let actualPathField = pathField;
+  
+  if (!actualArrayVariable && path) {
+    // Look for a variable reference in the path
+    for (const part of path) {
+      if (part.type === 'VariableReference' && part.fields && part.fields.length > 0) {
+        actualArrayVariable = part.identifier;
+        actualPathField = part.fields[0].value || part.fields[0].field;
+        break;
+      }
+    }
+  }
+  
+  if (!actualArrayVariable) {
+    throw new Error('Cannot determine array variable from foreach section expression');
+  }
   
   // 1. Resolve the source array variable
-  const arrayVar = env.getVariable(arrayVariable);
+  const arrayVar = env.getVariable(actualArrayVariable);
   if (!arrayVar) {
-    throw new Error(`Array variable not found: ${arrayVariable}`);
+    throw new Error(`Array variable not found: ${actualArrayVariable}`);
   }
   
   // 2. Evaluate the array to get items
   const arrayValue = await evaluateDataValue(arrayVar.value, env);
   if (!Array.isArray(arrayValue)) {
-    throw new Error(`Variable '${arrayVariable}' must be an array for foreach section extraction, got ${typeof arrayValue}`);
+    throw new Error(`Variable '${actualArrayVariable}' must be an array for foreach section extraction, got ${typeof arrayValue}`);
   }
   
   if (arrayValue.length === 0) {
@@ -535,37 +555,58 @@ export async function evaluateForeachSection(
     try {
       // 4. Create child environment with item bound to array variable name
       const childEnv = env.createChild();
-      childEnv.setParameterVariable(arrayVariable, {
+      childEnv.setParameterVariable(actualArrayVariable, {
         type: 'data',
-        name: arrayVariable,
+        name: actualArrayVariable,
         value: item,
         definedAt: null,
         isFullyEvaluated: true
       });
       
-      // 5. Get the path from the item
-      if (!item || typeof item !== 'object') {
-        throw new Error(`Array item ${i + 1} must be an object with '${pathField}' field, got ${typeof item}`);
-      }
+      // 5. Get the path value
+      let pathValue: string;
       
-      const pathValue = item[pathField];
-      if (typeof pathValue !== 'string') {
-        throw new Error(`Path field '${pathField}' in array item ${i + 1} must be a string, got ${typeof pathValue}`);
+      if (path) {
+        // For flexible path expressions, evaluate the entire path
+        pathValue = await interpolate(path, childEnv);
+      } else if (actualPathField) {
+        // For simple case, get path from item field
+        if (!item || typeof item !== 'object') {
+          throw new Error(`Array item ${i + 1} must be an object with '${actualPathField}' field, got ${typeof item}`);
+        }
+        
+        pathValue = item[actualPathField];
+        if (typeof pathValue !== 'string') {
+          throw new Error(`Path field '${actualPathField}' in array item ${i + 1} must be a string, got ${typeof pathValue}`);
+        }
+      } else {
+        throw new Error('No path specified for foreach section extraction');
       }
       
       // 6. Resolve section name (can be literal or variable)
       let sectionName: string;
-      if (section.type === 'Text') {
-        sectionName = section.content;
-      } else if (section.type === 'VariableReference') {
+      
+      // Handle section as an array of nodes
+      const sectionNodes = Array.isArray(section) ? section : [section];
+      
+      if (sectionNodes.length === 1 && sectionNodes[0].type === 'Text') {
+        sectionName = sectionNodes[0].content;
+      } else if (sectionNodes.length === 1 && sectionNodes[0].type === 'VariableReference') {
         // Evaluate section variable in child environment (with current item bound)
-        const sectionValue = await interpolate([section], childEnv);
+        const sectionValue = await interpolate(sectionNodes, childEnv);
         if (typeof sectionValue !== 'string') {
           throw new Error(`Section variable must resolve to a string, got ${typeof sectionValue}`);
         }
         sectionName = sectionValue;
+      } else if (sectionNodes.length > 0) {
+        // Multiple nodes - interpolate them all
+        const sectionValue = await interpolate(sectionNodes, childEnv);
+        if (typeof sectionValue !== 'string') {
+          throw new Error(`Section must resolve to a string, got ${typeof sectionValue}`);
+        }
+        sectionName = sectionValue;
       } else {
-        throw new Error(`Invalid section type: ${section.type}`);
+        throw new Error('Section name is required for foreach section extraction');
       }
       
       // 7. Read file and extract section from file

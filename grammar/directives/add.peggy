@@ -35,7 +35,7 @@ AtAdd
       
       // Create raw object
       const raw = {
-        foreach: `foreach [@${foreachValue.arrayVariable}.${foreachValue.pathField} # ${foreachValue.section}] as [[${foreachValue.template.raw.content}]]`
+        foreach: `foreach [@${foreachValue.arrayVariable}.${foreachValue.pathField} # ${foreachValue.sectionRaw}] as [[${foreachValue.template.raw.content}]]`
       };
       
       // Create meta object
@@ -142,7 +142,7 @@ AtAdd
       );
     }
   // Single-bracketed path with section: [path/to/file.md # Section]  
-  / DirectiveContext "@add" _ content:SemanticAddSectionContent rename:AsNewTitle? {
+  / DirectiveContext "@add" _ content:SemanticSectionContent rename:AsNewTitle? {
       helpers.debug('AtAdd matched bracketed path section', { content, rename });
       
       const rawPath = content.raw.split(' # ')[0];
@@ -704,27 +704,4 @@ QuotedStringContent
   = '"' content:$(!'"' .)* '"' { return content; }
   / "'" content:$(!"'" .)* "'" { return content; }
 
-// Semantic content parser for @add directive - follows semantic forking principles
-SemanticAddSectionContent "Semantic section content for @add"
-  = '[' pathParts:PathParts _ '#' _ section:SectionIdentifier ']' {
-      // Path with section - create structured response
-      const pathString = helpers.reconstructRawString(pathParts);
-      
-      // Extract section raw content
-      let sectionRaw;
-      if (section.type === 'VariableReference') {
-        sectionRaw = '@' + section.identifier;
-      } else if (typeof section === 'string') {
-        sectionRaw = section;
-      } else {
-        sectionRaw = section.content || section.identifier || '';
-      }
-      
-      return {
-        type: 'sectionPath',
-        parts: pathParts,
-        section: sectionRaw,
-        sectionNodes: Array.isArray(section) ? section : [section],
-        raw: pathString + ' # ' + sectionRaw
-      };
-    }
+// Removed SemanticAddSectionContent - now using shared SemanticSectionContent from patterns/content.peggy
