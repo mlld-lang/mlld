@@ -675,9 +675,13 @@ export async function interpolate(
         stringValue = String(value);
       }
       
+      
       // Apply context-appropriate escaping
       const strategy = EscapingStrategyFactory.getStrategy(context);
-      parts.push(strategy.escape(stringValue));
+      const escapedValue = strategy.escape(stringValue);
+      
+      
+      parts.push(escapedValue);
     } else if (node.type === 'ExecInvocation') {
       // Handle exec invocation nodes in interpolation
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');
@@ -690,5 +694,7 @@ export async function interpolate(
     }
   }
   
-  return parts.join('');
+  const result = parts.join('');
+  
+  return result;
 }

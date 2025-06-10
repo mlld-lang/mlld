@@ -362,7 +362,7 @@ export async function evaluateImport(
   const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
   
   // Resolve the import path (handles both file paths and URLs)
-  const importPath = await interpolate(pathNodes, env);
+  const importPath = (await interpolate(pathNodes, env)).trim();
   let resolvedPath: string;
   
   // Check if this is a module reference (@prefix/ pattern)

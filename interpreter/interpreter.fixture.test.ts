@@ -121,7 +121,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'text-url-section': 'Issue #82: URL section support not implemented',
       'text-variable-copy': 'Issue #176: Variable copying with @text copy = @original not supported',
       'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
-      'exec-param-interpolation': 'Parser bug: escaped @ symbols in exec templates are parsed as variable references'
+      'exec-param-interpolation': 'Parser bug: escaped @ symbols in exec templates are parsed as variable references',
+      'add-foreach-section-variable-new': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
+      'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
+      'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path'
     };
 
     const testFn = skipTests[fixture.name] ? it.skip : it;

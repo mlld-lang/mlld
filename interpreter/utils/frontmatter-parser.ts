@@ -1,4 +1,5 @@
 import matter from 'gray-matter';
+import * as yaml from 'js-yaml';
 import { MlldParseError } from '@core/errors';
 
 /**
@@ -12,9 +13,16 @@ export function parseFrontmatter(content: string): any {
     // Since we only get the YAML content without delimiters, we need to wrap it
     const fullDocument = `---\n${content}\n---\n`;
     
-    // Use gray-matter to parse the frontmatter
-    // This handles all the edge cases like unquoted @ symbols, arrays, etc.
-    const parsed = matter(fullDocument);
+    // Use gray-matter with custom YAML engine to avoid date parsing
+    // FAILSAFE_SCHEMA only supports strings, arrays, and plain objects (no date conversion)
+    const parsed = matter(fullDocument, {
+      engines: {
+        yaml: {
+          parse: (input: string) => yaml.load(input, { schema: yaml.FAILSAFE_SCHEMA }),
+          stringify: (obj: any) => yaml.dump(obj, { schema: yaml.FAILSAFE_SCHEMA })
+        }
+      }
+    });
     
     // Return the parsed frontmatter data
     return parsed.data || {};
