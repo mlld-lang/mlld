@@ -162,7 +162,7 @@ export class InitModuleCommand {
       const patternChoice = await rl.question('\nChoice [1]: ') || '1';
 
       metadata.license = 'CC0';
-      metadata['mlld-version'] = '*';
+      metadata.mlldVersion = '*';
 
       const content = this.generateModuleContent(metadata, patternChoice);
 
@@ -289,7 +289,7 @@ Tell us:
     }
     if (metadata.homepage) lines.push(`homepage: ${metadata.homepage}`);
     lines.push(`license: ${metadata.license}`);
-    if (metadata['mlld-version']) lines.push(`mlld-version: ${metadata['mlld-version']}`);
+    if (metadata.mlldVersion) lines.push(`mlldVersion: ${metadata.mlldVersion}`);
     
     lines.push('---');
     return lines.join('\n') + '\n';

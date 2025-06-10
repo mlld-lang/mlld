@@ -312,11 +312,17 @@ export class PublishCommand {
               
               registryEntry = {
                 name: metadata.name,
+                author: user.login,
+                version: metadata.version || '1.0.0',
                 about: metadata.about,
-                author: {
-                  name: user.name || user.login,
-                  github: user.login,
-                },
+                needs: metadata.needs || [],
+                repo: metadata.repo,
+                keywords: metadata.keywords || [],
+                bugs: metadata.bugs,
+                homepage: metadata.homepage,
+                license: metadata.license,
+                mlldVersion: metadata.mlldVersion || currentMlldVersion,
+                ownerGithubUserIds: [user.id],
                 source: {
                   type: 'github' as const,
                   url: sourceUrl,
@@ -328,16 +334,8 @@ export class PublishCommand {
                     path: gitInfo.relPath,
                   },
                 },
-                publishedAt: new Date().toISOString(),
-                mlldVersion: metadata.mlldVersion || currentMlldVersion,
-                keywords: metadata.keywords || [],
-                version: metadata.version || '1.0.0',
-                license: metadata.license,
-                needs: metadata.needs,
                 dependencies: this.buildDependenciesObject(metadata),
-                bugs: metadata.bugs,
-                repo: metadata.repo,
-                homepage: metadata.homepage,
+                publishedAt: new Date().toISOString(),
               };
               
               console.log(chalk.green(`\n✅ Using git repository for source`));
@@ -348,11 +346,17 @@ export class PublishCommand {
             
             registryEntry = {
               name: metadata.name,
+              author: user.login,
+              version: metadata.version || '1.0.0',
               about: metadata.about,
-              author: {
-                name: user.name || user.login,
-                github: user.login,
-              },
+              needs: metadata.needs || [],
+              repo: metadata.repo,
+              keywords: metadata.keywords || [],
+              bugs: metadata.bugs,
+              homepage: metadata.homepage,
+              license: metadata.license,
+              mlldVersion: metadata.mlldVersion || '>=0.5.0',
+              ownerGithubUserIds: [user.id],
               source: {
                 type: 'github' as const,
                 url: sourceUrl,
@@ -364,16 +368,8 @@ export class PublishCommand {
                   path: gitInfo.relPath,
                 },
               },
-              publishedAt: new Date().toISOString(),
-              mlldVersion: metadata.mlldVersion || '>=0.5.0',
-              keywords: metadata.keywords || [],
-              version: metadata.version || '1.0.0',
-              license: metadata.license,
-              needs: metadata.needs,
               dependencies: this.buildDependenciesObject(metadata),
-              bugs: metadata.bugs,
-              repo: metadata.repo,
-              homepage: metadata.homepage,
+              publishedAt: new Date().toISOString(),
             };
             
             console.log(chalk.green(`\n✅ Using git repository for source`));
@@ -462,27 +458,25 @@ export class PublishCommand {
         
         registryEntry = {
           name: metadata.name,
+          author: user.login,
+          version: metadata.version || '1.0.0',
           about: metadata.about,
-          author: {
-            name: user.name || user.login,
-            github: user.login,
-          },
+          needs: metadata.needs || [],
+          repo: metadata.repo,
+          keywords: metadata.keywords || [],
+          bugs: metadata.bugs,
+          homepage: metadata.homepage,
+          license: metadata.license,
+          mlldVersion: metadata.mlldVersion || '>=0.5.0',
+          ownerGithubUserIds: [user.id],
           source: {
             type: 'gist' as const,
             url: sourceUrl,
             gistId: gistData.id,
             contentHash: contentHash,
           },
-          publishedAt: new Date().toISOString(),
-          mlldVersion: metadata.mlldVersion || '>=0.5.0',
-          keywords: metadata.keywords || [],
-          version: metadata.version || '1.0.0',
-          license: metadata.license,
-          needs: metadata.needs,
           dependencies: this.buildDependenciesObject(metadata),
-          bugs: metadata.bugs,
-          repo: metadata.repo,
-          homepage: metadata.homepage,
+          publishedAt: new Date().toISOString(),
         };
       }
       
