@@ -43,7 +43,11 @@ function processModuleExports(
   for (const [name, variable] of childVars) {
     // Skip the 'module' variable itself if it exists but isn't data type
     if (name !== 'module') {
-      moduleObject[name] = variable.value;
+      // Preserve variable type information for proper import
+      moduleObject[name] = {
+        __variableType: variable.type,
+        __value: variable.value
+      };
     }
   }
   
@@ -222,10 +226,19 @@ async function importFromPath(
         if (name === '__meta__') continue;
         
         // Create variable for each module export
+        // Check if this is a variable with preserved type information
+        let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
+        let varValue = value;
+        
+        if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
+          varType = value.__variableType;
+          varValue = value.__value;
+        }
+        
         const importedVariable: MlldVariable = {
-          type: 'data',
+          type: varType,
           identifier: name,
-          value: value,
+          value: varValue,
           nodeId: '',
           location: { line: 0, column: 0 },
           metadata: {
@@ -277,10 +290,19 @@ async function importFromPath(
           const targetName = importNode.alias || varName;
           
           // Create imported variable
+          // Check if this is a variable with preserved type information
+          let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
+          let varValue = value;
+          
+          if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
+            varType = value.__variableType;
+            varValue = value.__value;
+          }
+          
           const importedVariable: MlldVariable = {
-            type: 'data',
+            type: varType,
             identifier: targetName,
-            value: value,
+            value: varValue,
             nodeId: '',
             location: { line: 0, column: 0 },
             metadata: {

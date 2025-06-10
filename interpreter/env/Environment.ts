@@ -1071,7 +1071,7 @@ export class Environment {
     context?: CommandExecutionContext
   ): Promise<string> {
     const startTime = Date.now();
-    if (language === 'javascript' || language === 'js' || language === 'node') {
+    if (language === 'javascript' || language === 'js') {
       try {
         // Create a function that captures console.log output
         let output = '';
@@ -1123,6 +1123,74 @@ export class Environment {
           throw codeError;
         }
         throw new Error(`Code execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    } else if (language === 'node' || language === 'nodejs') {
+      try {
+        // Create a temporary Node.js file with parameter injection
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
+        const tmpDir = os.tmpdir();
+        const tmpFile = path.join(tmpDir, `mlld_exec_${Date.now()}.js`);
+        
+        // Build Node.js code with parameters
+        let nodeCode = '';
+        if (params) {
+          // Inject parameters as constants
+          for (const [key, value] of Object.entries(params)) {
+            nodeCode += `const ${key} = ${JSON.stringify(value)};\n`;
+          }
+        }
+        nodeCode += code;
+        
+        // Debug: log the generated code
+        if (process.env.DEBUG_NODE_EXEC) {
+          console.log('Generated Node.js code:');
+          console.log(nodeCode);
+          console.log('Params:', params);
+        }
+        
+        // Write to temp file
+        fs.writeFileSync(tmpFile, nodeCode);
+        
+        try {
+          // Execute Node.js in the directory of the current mlld file
+          const currentDir = this.getCurrentFilePath() 
+            ? path.dirname(this.getCurrentFilePath()!) 
+            : await this.getProjectPath();
+          
+          // Create a custom exec to run with the correct cwd
+          const { execSync } = require('child_process');
+          const result = execSync(`node ${tmpFile}`, {
+            encoding: 'utf8',
+            cwd: currentDir,
+            env: { ...process.env },
+            maxBuffer: 10 * 1024 * 1024, // 10MB limit
+            timeout: 30000
+          });
+          
+          return result.toString().trimEnd();
+        } finally {
+          // Clean up temp file
+          fs.unlinkSync(tmpFile);
+        }
+      } catch (error) {
+        if (context?.sourceLocation) {
+          const codeError = new MlldCommandExecutionError(
+            `Node.js execution failed`,
+            context.sourceLocation,
+            {
+              command: `node code execution`,
+              exitCode: 1,
+              duration: Date.now() - startTime,
+              stderr: error instanceof Error ? error.message : 'Unknown error',
+              workingDirectory: await this.getProjectPath(),
+              directiveType: context.directiveType || 'run'
+            }
+          );
+          throw codeError;
+        }
+        throw new Error(`Node.js execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     } else if (language === 'python' || language === 'py') {
       try {

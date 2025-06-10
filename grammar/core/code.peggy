@@ -146,7 +146,7 @@ CodeLanguage
     
 // Code language identifier for run directive - restricted to known languages
 RunCodeLanguage
-  = language:("javascript" / "js" / "python" / "py" / "bash" / "sh") {
+  = language:("javascript" / "js" / "node" / "nodejs" / "python" / "py" / "bash" / "sh") {
       return language;
     }
 

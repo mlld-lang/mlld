@@ -81,6 +81,11 @@ export function parseDataValue(node: ASTDataNode): DataValue {
     return node as any; // Return the foreach section node directly
   }
   
+  // Handle ExecInvocation nodes - these are valid DataValue types
+  if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'ExecInvocation') {
+    return node; // Return the exec invocation node directly - it's a valid DataValue per data.ts
+  }
+  
   // Handle bare Text nodes (common in simple data values)
   if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'Text') {
     // eslint-disable-next-line mlld/no-ast-string-manipulation
@@ -219,6 +224,11 @@ export function needsEvaluation(value: DataValue): boolean {
   
   // Handle foreach command expressions
   if ((value as any)?.type === 'foreach-command') {
+    return true;
+  }
+  
+  // Handle ExecInvocation expressions
+  if ((value as any)?.type === 'ExecInvocation') {
     return true;
   }
   

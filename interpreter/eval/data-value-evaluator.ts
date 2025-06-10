@@ -228,6 +228,18 @@ export async function evaluateDataValue(
   if (value && typeof value === 'object' && value.type === 'ExecInvocation') {
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(value as any, env);
+    
+    // If the result is a JSON string, try to parse it back into an object/array
+    if (typeof result.value === 'string') {
+      try {
+        const parsed = JSON.parse(result.value);
+        return parsed;
+      } catch {
+        // If JSON parsing fails, return the string as-is
+        return result.value;
+      }
+    }
+    
     return result.value;
   }
   

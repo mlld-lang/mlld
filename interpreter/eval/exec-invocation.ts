@@ -68,19 +68,34 @@ export async function evaluateExecInvocation(
   
   // Handle command arguments
   const args = node.commandRef.args || [];
-  const params = typedDef.parameters || [];
+  const params = typedDef.parameters || typedDef.paramNames || [];
   
-  // Bind arguments to parameters
+  // Evaluate arguments to get their actual values
+  const evaluatedArgs: string[] = [];
+  for (const arg of args) {
+    // Arguments are typically strings, but we need to handle them properly
+    if (typeof arg === 'string') {
+      evaluatedArgs.push(arg);
+    } else if (arg && typeof arg === 'object') {
+      // If it's an object, it might be an AST node - evaluate it
+      const evaluated = await interpolate([arg], env);
+      evaluatedArgs.push(evaluated);
+    } else {
+      evaluatedArgs.push(String(arg));
+    }
+  }
+  
+  // Bind evaluated arguments to parameters
   for (let i = 0; i < params.length; i++) {
     const paramName = params[i];
-    const argValue = args[i];
+    const argValue = evaluatedArgs[i];
     
-    if (argValue) {
+    if (argValue !== undefined) {
       // Set parameter value in the child environment
       execEnv.setVariable(paramName, {
         type: 'text',
         name: paramName,
-        value: String(argValue)
+        value: argValue
       });
     }
   }
@@ -109,10 +124,28 @@ export async function evaluateExecInvocation(
     // Interpolate the code template with parameters
     const code = await interpolate(codeTemplate, execEnv);
     
-    // Execute the code
+    // Build params object for code execution
+    const codeParams: Record<string, any> = {};
+    for (let i = 0; i < params.length; i++) {
+      const paramName = params[i];
+      const argValue = evaluatedArgs[i];
+      if (argValue !== undefined) {
+        codeParams[paramName] = argValue;
+      }
+    }
+    
+    // Debug: log params for Node.js execution
+    if (process.env.DEBUG_NODE_EXEC && (typedDef.language === 'node' || typedDef.language === 'nodejs')) {
+      console.log('Exec invocation params:', params);
+      console.log('Exec invocation evaluatedArgs:', evaluatedArgs);
+      console.log('Exec invocation codeParams:', codeParams);
+    }
+    
+    // Execute the code with parameters
     result = await execEnv.executeCode(
       code,
-      typedDef.language || 'javascript'
+      typedDef.language || 'javascript',
+      codeParams
     );
   } else {
     throw new MlldInterpreterError(`Unknown command type: ${typedDef.type}`);
