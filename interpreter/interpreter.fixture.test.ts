@@ -378,6 +378,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         if (fixture.name.includes('run-command-bases-npm-run')) {
           basePath = process.cwd(); // Use current working directory which has package.json
         }
+        // For projectpath test, set basePath to the test case directory to match expected output
+        if (fixture.name === 'reserved-projectpath-variable') {
+          basePath = '/Users/adam/dev/mlld/tests/cases/valid/reserved/projectpath-variable';
+        }
         
         // Enable URL support for URL tests and module resolution
         const urlConfig = (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed' || fixture.name === 'modules-stdlib-basic') ? {

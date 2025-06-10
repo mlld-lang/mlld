@@ -1258,7 +1258,7 @@ Auto-added by mlld publish command`;
     }
     if (metadata.homepage) lines.push(`homepage: ${metadata.homepage}`);
     lines.push(`license: ${metadata.license}`);  // Always CC0
-    if (metadata.mlldVersion) lines.push(`mlld-version: ${metadata.mlldVersion}`);
+    if (metadata.mlldVersion) lines.push(`mlld-version: "${metadata.mlldVersion}"`);
     
     lines.push('---');
     return lines.join('\n');

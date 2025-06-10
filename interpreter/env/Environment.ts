@@ -18,6 +18,7 @@ import {
   LocalResolver, 
   GitHubResolver, 
   HTTPResolver,
+  ProjectPathResolver,
   convertLockFileToResolverConfigs
 } from '@core/resolvers';
 import { logger } from '@core/utils/logger';
@@ -159,11 +160,33 @@ export class Environment {
         );
         
         // Register built-in resolvers
-        // RegistryResolver should be first to be the primary resolver for @user/module patterns
+        // ProjectPathResolver should be first to handle @PROJECTPATH references
+        this.resolverManager.registerResolver(new ProjectPathResolver(this.fileSystem));
+        // RegistryResolver should be next to be the primary resolver for @user/module patterns
         this.resolverManager.registerResolver(new RegistryResolver());
         this.resolverManager.registerResolver(new LocalResolver(this.fileSystem));
         this.resolverManager.registerResolver(new GitHubResolver());
         this.resolverManager.registerResolver(new HTTPResolver());
+        
+        // Configure built-in registries
+        this.resolverManager.configureRegistries([
+          {
+            prefix: '@PROJECTPATH',
+            resolver: 'projectpath',
+            config: {
+              basePath: this.basePath,
+              readonly: false
+            }
+          },
+          {
+            prefix: '@.',
+            resolver: 'projectpath', 
+            config: {
+              basePath: this.basePath,
+              readonly: false
+            }
+          }
+        ]);
         
         // Load resolver configs from lock file if available
         if (lockFile) {
@@ -270,6 +293,23 @@ export class Environment {
     // Direct assignment for reserved variables during initialization
     this.variables.set('DEBUG', debugVar);
     // Note: lowercase 'debug' is handled in getVariable() to avoid conflicts
+    
+    // Initialize @PROJECTPATH with project root path
+    // This is a lazy variable that computes the project path when first accessed
+    const projectPathVar: MlldVariable = {
+      type: 'text',
+      value: null, // Will be computed dynamically
+      nodeId: '',
+      location: { line: 0, column: 0 },
+      metadata: {
+        isReserved: true,
+        isLazy: true, // Indicates value should be computed on access
+        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+      }
+    };
+    // Direct assignment for reserved variables during initialization
+    this.variables.set('PROJECTPATH', projectPathVar);
+    // Note: lowercase 'projectpath' is handled in getVariable() to avoid conflicts
   }
   
   /**
@@ -642,6 +682,15 @@ export class Environment {
         variable.value = debugData;
         variable.metadata!.isLazy = false; // No longer lazy
       }
+      
+      // Handle lazy PROJECTPATH variable
+      if (name === 'PROJECTPATH' && variable.metadata?.isLazy && variable.value === null) {
+        // For now, use basePath as the project path
+        // TODO: Implement proper project root detection that works synchronously
+        // The async getProjectPath() method exists but can't be used in synchronous getVariable()
+        variable.value = this.basePath;
+        variable.metadata!.isLazy = false; // No longer lazy
+      }
       return variable;
     }
     
@@ -653,6 +702,8 @@ export class Environment {
         return this.variables.get('TIME');
       } else if (name === 'debug' && this.variables.has('DEBUG')) {
         return this.getVariable('DEBUG'); // Recursive call to handle lazy computation
+      } else if (name === 'projectpath' && this.variables.has('PROJECTPATH')) {
+        return this.getVariable('PROJECTPATH'); // Recursive call to handle lazy computation
       }
     }
     

@@ -10,6 +10,11 @@
       "resolved": "registry://@mlld/http",
       "integrity": "sha256:d15b25823303554b2b8571e90e92b9db7ac4f8add4d961e392cff3ead6fe0eab",
       "approvedAt": "2025-06-03T13:45:46.234Z"
+    },
+    "@PROJECTPATH/test-module": {
+      "resolved": "@PROJECTPATH/test-module",
+      "integrity": "sha256:589f373c62eb77ba294eed612a8b3f88a394778f8db40effaa686b812a7f2677",
+      "approvedAt": "2025-06-10T14:00:42.575Z"
     }
   }
 }

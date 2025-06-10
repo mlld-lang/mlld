@@ -205,6 +205,7 @@ export class InitModuleCommand {
     switch (patternChoice) {
       case '1':
         moduleContent = `
+
 # @${metadata.author}/${metadata.name}
 
 ## tldr
@@ -230,6 +231,7 @@ More detailed usage examples and documentation.
         
       case '2':
         moduleContent = `
+
 # @${metadata.author}/${metadata.name}
 
 ## tldr
@@ -263,6 +265,7 @@ More detailed usage examples and documentation.
       case '3':
       default:
         moduleContent = `
+
 # @${metadata.author}/${metadata.name}
 
 ## tldr
@@ -304,7 +307,7 @@ More detailed usage examples and documentation.
     }
     if (metadata.homepage) lines.push(`homepage: ${metadata.homepage}`);
     lines.push(`license: ${metadata.license}`);
-    if (metadata.mlldVersion) lines.push(`mlldVersion: ${metadata.mlldVersion}`);
+    if (metadata.mlldVersion) lines.push(`mlldVersion: "${metadata.mlldVersion}"`);
     
     lines.push('---');
     return lines.join('\n') + '\n';

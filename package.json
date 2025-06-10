@@ -101,6 +101,7 @@
     "commander": "^13.1.0",
     "fs-extra": "^11.3.0",
     "glob": "^11.0.1",
+    "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.0",
     "keytar": "^7.9.0",
     "llmxml": "^1.4.2",
