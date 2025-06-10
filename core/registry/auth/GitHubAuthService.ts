@@ -191,7 +191,6 @@ export class GitHubAuthService {
         }
       }
 
-      console.log('✅ Successfully logged out');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new MlldError(`Logout failed: ${errorMessage}`, {
