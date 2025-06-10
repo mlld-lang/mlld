@@ -31,6 +31,7 @@ export interface InterpretOptions {
   stdinContent?: string; // Optional stdin content
   returnEnvironment?: boolean; // Return environment with result
   approveAllImports?: boolean; // Bypass interactive import approval
+  disableSecurity?: boolean; // Disable security components for testing
 }
 
 /**
@@ -105,7 +106,13 @@ export async function interpret(
   const env = new Environment(
     options.fileSystem,
     options.pathService,
-    options.basePath || process.cwd()
+    options.basePath || process.cwd(),
+    undefined, // no parent
+    {
+      security: {
+        enabled: !options.disableSecurity
+      }
+    }
   );
   
   // Set the current file path if provided (for error reporting)

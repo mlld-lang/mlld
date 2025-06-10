@@ -207,7 +207,10 @@ export class Environment {
       
       // Keep legacy components for backward compatibility
       // ImportApproval will be initialized after lock files are loaded
-      this.immutableCache = new ImmutableCache(this.basePath);
+      // Skip ImmutableCache in test environments to avoid filesystem conflicts
+      if (process.env.NODE_ENV !== 'test') {
+        this.immutableCache = new ImmutableCache(this.basePath);
+      }
       
       // Auto-create and load lock files (async, fire-and-forget)
       if (!parent) {

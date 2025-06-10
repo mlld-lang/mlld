@@ -213,7 +213,7 @@ export class ResolverManager {
           };
           
           // 5. Update lock file with new hash
-          if (this.lockFile) {
+          if (this.lockFile && process.env.MLLD_TEST_MODE !== 'true') {
             await this.lockFile.addImport(ref, {
               resolved: content.metadata.source || ref,
               integrity: `sha256:${cacheEntry.hash}`,

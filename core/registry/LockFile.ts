@@ -71,6 +71,12 @@ export class LockFile implements ILockFileWithCommands {
 
   async save(): Promise<void> {
     if (!this.isDirty) return;
+    
+    // Skip lock file writes in test mode
+    if (process.env.MLLD_TEST_MODE === 'true') {
+      this.isDirty = false; // Reset dirty flag to avoid repeated attempts
+      return;
+    }
 
     const dir = path.dirname(this.filePath);
     await fs.promises.mkdir(dir, { recursive: true });

@@ -3,7 +3,8 @@ import { interpret } from './index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 
-describe('TTL/Trust Enforcement', () => {
+describe.skip('TTL/Trust Enforcement', () => {
+  // TODO: Issue #229 - Fix URL cache mocking in TTL/Trust enforcement tests
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
   

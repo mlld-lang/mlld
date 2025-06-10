@@ -1,63 +1,32 @@
 {
   "version": "1.0.0",
-  "imports": {
-    "@mlld/fs": {
-      "resolved": "registry://@mlld/fs",
-      "integrity": "sha256:bd104eb06c1a5c1751bc2b5be579fc334cdb08b4287a9c1954b2f5b31d747a6d",
-      "approvedAt": "2025-06-01T14:22:08.494Z"
-    },
-    "@mlld/http": {
-      "resolved": "registry://@mlld/http",
-      "integrity": "sha256:d15b25823303554b2b8571e90e92b9db7ac4f8add4d961e392cff3ead6fe0eab",
-      "approvedAt": "2025-06-03T13:45:46.234Z"
-    }
-  },
-  "cache": {
-    "urls": {
-      "https://api.example.com/live-data": {
-        "hash": "f9c7df844233bbfc3da7b86d80e3336679377d431a7fd62d1ab050adb2216ddc",
-        "cachedAt": "2025-06-09T00:41:29.083Z",
-        "ttl": "24h",
-        "trust": "verify",
-        "configuredBy": "api",
-        "expiresAt": "2025-06-10T00:41:29.083Z"
-      },
-      "https://cdn.example.com/static.js": {
-        "hash": "86e87b576cea5448e205ca90b1019382cb1193da0e1116d84bb0fe7b3fec866c",
-        "cachedAt": "2025-06-09T00:41:29.096Z",
-        "ttl": "24h",
-        "trust": "verify",
-        "configuredBy": "resource",
-        "expiresAt": "2025-06-10T00:41:29.096Z"
-      },
-      "https://api.example.com/data": {
-        "hash": "0cfb1d1bded4aeb50e20b4bf7f451e09ed7eceec80830a484caaff3f1499bf72",
-        "cachedAt": "2025-06-09T00:41:29.105Z",
-        "ttl": "5minutes",
-        "trust": "verify",
-        "configuredBy": "api",
-        "expiresAt": "2025-06-09T00:46:29.105Z"
-      },
-      "http://internal.local/data": {
-        "hash": "1450f842f4de703c17d877a01f52fe3b0b3edde0d856d9e79d44f49502ad4f01",
-        "cachedAt": "2025-06-09T00:41:29.272Z",
-        "ttl": "24hours",
-        "trust": "always",
-        "configuredBy": "trusted",
-        "expiresAt": "2025-06-10T00:41:29.272Z"
-      },
-      "https://evil.com/malware": {
-        "hash": "0cfb1d1bded4aeb50e20b4bf7f451e09ed7eceec80830a484caaff3f1499bf72",
-        "cachedAt": "2025-06-09T02:54:42.139Z",
-        "ttl": "24hours",
-        "trust": "verify",
-        "configuredBy": "add-directive",
-        "expiresAt": "2025-06-10T02:54:42.139Z"
-      }
-    }
-  },
+  "imports": {},
   "security": {
     "approvedCommands": {
+      "(echo \"test1\")": {
+        "trust": "verify"
+      },
+      "(echo \"test2\")": {
+        "trust": "verify"
+      },
+      "(echo \"test3\")": {
+        "trust": "verify"
+      },
+      "(echo \"ok\")": {
+        "trust": "verify"
+      },
+      "(nonexistent-command)": {
+        "trust": "verify"
+      },
+      "exit 1": {
+        "trust": "verify"
+      },
+      "echo \"This should run\"": {
+        "trust": "verify"
+      },
+      "nonexistent-command": {
+        "trust": "verify"
+      },
       "npm run -s testecho -- \"npm run build output\"": {
         "trust": "verify"
       },
@@ -79,21 +48,6 @@
       "(echo \"1.0.0\")": {
         "trust": "verify"
       },
-      "(echo \"test1\")": {
-        "trust": "verify"
-      },
-      "(echo \"test2\")": {
-        "trust": "verify"
-      },
-      "(echo \"test3\")": {
-        "trust": "verify"
-      },
-      "(echo \"ok\")": {
-        "trust": "verify"
-      },
-      "(nonexistent-command)": {
-        "trust": "verify"
-      },
       "(echo \"still works\")": {
         "trust": "verify"
       },
@@ -103,19 +57,10 @@
       "seq 1 100": {
         "trust": "verify"
       },
-      "exit 1": {
-        "trust": "verify"
-      },
       "echo \"This should still run\"": {
         "trust": "verify"
       },
       "exit 2": {
-        "trust": "verify"
-      },
-      "echo \"This should run\"": {
-        "trust": "verify"
-      },
-      "nonexistent-command": {
         "trust": "verify"
       },
       "echo \"test\"": {
