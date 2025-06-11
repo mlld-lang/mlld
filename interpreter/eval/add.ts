@@ -47,12 +47,21 @@ export async function evaluateAdd(
     
     // Get the base value using type-safe approach
     let value: any;
+    let originalValue: any; // Keep track of the original value before evaluation
+    let isForeachSection = false; // Track if this came from a foreach-section
+    
     if (isTextVariable(variable)) {
       // Text variables contain string content - use directly
       value = variable.value;
     } else if (isDataVariable(variable)) {
       // Data variables contain structured data
       value = variable.value;
+      originalValue = value; // Store original value for later checking
+      
+      // Check if this is a foreach-section expression
+      if (value && typeof value === 'object' && value.type === 'foreach-section') {
+        isForeachSection = true;
+      }
     } else if (isPathVariable(variable)) {
       // Path variables contain file path info - read the file
       const pathValue = variable.value.resolvedPath;
@@ -123,6 +132,11 @@ export async function evaluateAdd(
     if (hasUnevaluatedDirectives(value)) {
       // Evaluate any embedded directives
       value = await evaluateDataValue(value, env);
+      
+      // After evaluation, check if the original value was a foreach-section
+      if (originalValue && typeof originalValue === 'object' && originalValue.type === 'foreach-section') {
+        isForeachSection = true;
+      }
     }
     
     // Convert final value to string
@@ -131,8 +145,27 @@ export async function evaluateAdd(
     } else if (typeof value === 'number' || typeof value === 'boolean') {
       // For primitives, just convert to string
       content = String(value);
+    } else if (Array.isArray(value)) {
+      // Check if this is from a foreach-section expression
+      if (isForeachSection && value.every(item => typeof item === 'string')) {
+        // Join string array with double newlines for foreach-section results
+        content = value.join('\n\n');
+      } else {
+        // For other arrays, use JSON format (this preserves the original behavior)
+        content = JSON.stringify(value, (key, val) => {
+          // Convert VariableReference nodes to their string representation
+          if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
+            return `@${val.identifier}`;
+          }
+          // Convert nested DataObject types to plain objects
+          if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
+            return val.properties;
+          }
+          return val;
+        }, 2);
+      }
     } else if (value !== null && value !== undefined) {
-      // For objects/arrays, use JSON with custom replacer for VariableReference nodes
+      // For objects, use JSON with custom replacer for VariableReference nodes
       content = JSON.stringify(value, (key, val) => {
         // Convert VariableReference nodes to their string representation
         if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {

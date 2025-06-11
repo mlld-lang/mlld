@@ -214,8 +214,8 @@ export async function evaluateDataValue(
       return await interpolate(value, env);
     }
     
-    // Otherwise it's a regular array that should have been handled above
-    console.warn('Unhandled array in evaluateDataValue:', value);
+    // Otherwise it's a regular array that's already been processed
+    // This can happen when foreach-section returns an array of strings
     return value;
   }
   
@@ -610,7 +610,9 @@ export async function evaluateForeachSection(
       }
       
       // 7. Read file and extract section from file
-      const fileContent = await env.readFile(pathValue);
+      // Resolve the path relative to the current file
+      const resolvedPath = await env.resolvePath(pathValue);
+      const fileContent = await env.readFile(resolvedPath);
       
       // Extract the section using llmxml
       const { createLLMXML } = await import('llmxml');

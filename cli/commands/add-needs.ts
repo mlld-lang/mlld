@@ -31,30 +31,36 @@ export class AddNeedsCommand {
       let filePath: string;
       
       if (stat.isDirectory()) {
-        // Look for .mld files in directory
+        // Look for .mld or .mld.md files in directory
         const files = await fs.readdir(resolvedPath);
-        const mldFiles = files.filter(f => f.endsWith('.mld'));
+        const mldFiles = files.filter(f => f.endsWith('.mld') || f.endsWith('.mld.md'));
         
         if (mldFiles.length === 0) {
-          throw new MlldError('No .mld files found in the specified directory', {
+          throw new MlldError('No .mld or .mld.md files found in the specified directory', {
             code: 'NO_MLD_FILES',
             severity: ErrorSeverity.Fatal
           });
         }
         
-        // Prefer main.mld or index.mld
-        if (mldFiles.includes('main.mld')) {
+        // Prefer main.mld.md, main.mld, index.mld.md, or index.mld
+        if (mldFiles.includes('main.mld.md')) {
+          filePath = path.join(resolvedPath, 'main.mld.md');
+        } else if (mldFiles.includes('main.mld')) {
           filePath = path.join(resolvedPath, 'main.mld');
+        } else if (mldFiles.includes('index.mld.md')) {
+          filePath = path.join(resolvedPath, 'index.mld.md');
         } else if (mldFiles.includes('index.mld')) {
           filePath = path.join(resolvedPath, 'index.mld');
         } else {
-          filePath = path.join(resolvedPath, mldFiles[0]);
+          // Prefer .mld.md over .mld
+          const mldMdFile = mldFiles.find(f => f.endsWith('.mld.md'));
+          filePath = path.join(resolvedPath, mldMdFile || mldFiles[0]);
         }
       } else {
         filePath = resolvedPath;
         
-        if (!filePath.endsWith('.mld')) {
-          throw new MlldError('Module file must have .mld extension', {
+        if (!filePath.endsWith('.mld') && !filePath.endsWith('.mld.md')) {
+          throw new MlldError('Module file must have .mld or .mld.md extension', {
             code: 'INVALID_FILE_EXTENSION',
             severity: ErrorSeverity.Fatal
           });
@@ -249,7 +255,7 @@ Options:
 
 Examples:
   mlld add-needs              # Analyze current directory
-  mlld add-needs my-module.mld # Analyze specific module
+  mlld add-needs my-module.mld.md # Analyze specific module
   mlld add-needs --force      # Add frontmatter if missing
   mlld add-needs --verbose    # Show detailed dependency analysis
 

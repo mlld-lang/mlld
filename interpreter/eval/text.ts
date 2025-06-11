@@ -115,8 +115,8 @@ export async function evaluateText(
   
   let resolvedValue: string;
   
-  // Handle foreach expressions
-  if (directive.subtype === 'textForeach') {
+  // Handle foreach expressions (both command and section types)
+  if (directive.subtype === 'textForeach' || directive.source === 'foreach' || directive.source === 'foreach-section') {
     const foreachExpression = directive.values?.foreach;
     if (!foreachExpression) {
       throw new Error('Text foreach directive missing foreach expression');
@@ -146,8 +146,8 @@ export async function evaluateText(
     // Read the file content or fetch URL (env.readFile handles both)
     resolvedValue = await env.readFile(resolvedPath);
     
-  } else if (directive.source === 'section' && directive.subtype === 'textPathSection') {
-    // Handle section extraction: @text section = [file.md # Section]
+  } else if ((directive.source === 'section' || directive.source === 'directive') && directive.subtype === 'textPathSection') {
+    // Handle section extraction: @text section = [file.md # Section] or @text section = @add [file.md # Section]
     const sectionNodes = directive.values?.sectionTitle;
     const pathNodes = directive.values?.path;
     
@@ -187,8 +187,8 @@ export async function evaluateText(
       resolvedValue = sectionTitle + '\n' + extractSection(fileContent, sectionTitle);
     }
     
-    // Handle rename if present
-    const renameNodes = directive.values?.rename;
+    // Handle rename if present (could be 'rename' or 'newTitle' in the AST)
+    const renameNodes = directive.values?.rename || directive.values?.newTitle;
     if (renameNodes) {
       const newTitle = await interpolate(renameNodes, env);
       // Replace the original section title with the new one

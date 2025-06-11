@@ -14,6 +14,25 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     pathService = new PathService();
   });
   
+  // Helper function to recursively copy directory to virtual filesystem
+  async function copyDirToVFS(srcDir: string, destDir: string) {
+    await fileSystem.mkdir(destDir);
+    const entries = fs.readdirSync(srcDir);
+    
+    for (const entry of entries) {
+      const srcPath = path.join(srcDir, entry);
+      const destPath = path.join(destDir, entry);
+      const stat = fs.statSync(srcPath);
+      
+      if (stat.isFile()) {
+        const content = fs.readFileSync(srcPath, 'utf8');
+        await fileSystem.writeFile(destPath, content);
+      } else if (stat.isDirectory()) {
+        await copyDirToVFS(srcPath, destPath);
+      }
+    }
+  }
+  
   // Helper function to copy example files to virtual filesystem
   async function setupExampleFiles(fixtureName: string) {
     // Extract the base name from the fixture path
@@ -41,6 +60,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'modules-explicit-export': 'modules/explicit-export',
       'modules-auto-export': 'modules/auto-export',
       'modules-metadata': 'modules/metadata',
+      'text-foreach-section-literal': 'text/foreach-section-literal',
+      'text-foreach-section-variable': 'text/foreach-section-variable',
+      'text-foreach-section-backtick': 'text/foreach-section-backtick',
+      'text-foreach-section-path-expression': 'text/foreach-section-path-expression',
     };
     
     // Check if we have a mapping for this fixture
@@ -67,6 +90,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             const content = fs.readFileSync(filePath, 'utf8');
             // Place files at root of virtual filesystem
             await fileSystem.writeFile(`/${file}`, content);
+          } else if (stat.isDirectory()) {
+            // Recursively copy subdirectories
+            await copyDirToVFS(filePath, `/${file}`);
           }
         }
       }

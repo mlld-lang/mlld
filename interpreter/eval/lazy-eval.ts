@@ -59,6 +59,13 @@ export async function evaluateDataValue(
     return await evaluateFull(value, env);
   }
   
+  // Handle foreach section expressions
+  if (value && typeof value === 'object' && value.type === 'foreach-section') {
+    // Import the evaluator from data-value-evaluator
+    const { evaluateForeachSection } = await import('./data-value-evaluator');
+    return await evaluateForeachSection(value, env);
+  }
+  
   // Handle arrays
   if (Array.isArray(value)) {
     const evaluatedArray = [];
@@ -112,8 +119,8 @@ export function hasUnevaluatedDirectives(value: DataValue): boolean {
     return true;
   }
   
-  // Check for foreach command expressions
-  if (value && typeof value === 'object' && value.type === 'foreach-command') {
+  // Check for foreach expressions (both command and section)
+  if (value && typeof value === 'object' && (value.type === 'foreach-command' || value.type === 'foreach-section')) {
     return true;
   }
   

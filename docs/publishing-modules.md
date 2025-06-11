@@ -64,9 +64,11 @@ Every mlld module requires frontmatter metadata:
 ```markdown
 ---
 name: my-utils
-description: Utility functions for text processing
 author: myusername
+about: Utility functions for text processing
+needs: []  # Add "js", "node", "py", "sh" as needed
 keywords: [utils, text, processing]
+license: CC0
 ---
 
 @text trim(str) = @run [echo "{{str}}" | xargs]
@@ -77,15 +79,42 @@ keywords: [utils, text, processing]
 ### Required Metadata
 
 - **name**: Module name (lowercase, hyphens allowed)
-- **description**: Brief description of functionality
 - **author**: Your GitHub username or organization
+- **about**: Brief description of functionality
+- **needs**: Array of runtime dependencies (use `[]` for pure mlld)
+- **license**: Always "CC0" (required by registry)
 
 ### Optional Metadata
 
+- **version**: Semantic version (default: "1.0.0")
 - **keywords**: Array of searchable terms
 - **homepage**: Project website
-- **repository**: Source repository URL
-- **license**: Module license (e.g., MIT, Apache-2.0)
+- **repo**: Source repository URL
+- **bugs**: Issue tracker URL
+- **mlldVersion**: Compatible mlld version
+
+### Runtime Dependencies
+
+The `needs` array declares which runtimes your module requires:
+
+- **`"js"`**: Browser-compatible JavaScript (no Node.js APIs)
+- **`"node"`**: Node.js-specific JavaScript (uses fs, path, process, etc.)
+- **`"py"`**: Python code  
+- **`"sh"`**: Shell commands or scripts
+
+Each runtime can have detailed dependency specifications:
+
+```yaml
+needs: ["node", "py"]
+needs-node:
+  node: ">=18.0.0"
+  packages: ["axios", "lodash"]
+needs-py:
+  python: ">=3.8"
+  packages: ["requests", "pandas"]
+```
+
+The `mlld add-needs` command automatically detects these dependencies.
 
 ## Publishing Workflow
 
@@ -96,10 +125,12 @@ mlld publish my-module.mld
 ```
 
 The publish command:
-1. Validates module metadata
-2. Checks for clean git status (if applicable)
-3. Creates a GitHub gist or uses repository URL
-4. Opens a pull request to the mlld registry
+1. Validates module metadata and syntax
+2. Auto-detects runtime dependencies
+3. Adds missing metadata (author, license, mlldVersion)
+4. Handles git commits if needed
+5. Creates a GitHub gist or uses repository URL
+6. Opens a pull request to the mlld registry
 
 ### Publishing Options
 
@@ -286,8 +317,10 @@ Once installed, import modules in your mlld files:
 ```markdown
 ---
 name: string-utils
-description: Common string manipulation functions
 author: myusername
+about: Common string manipulation functions
+needs: ["sh"]  # Uses shell commands
+license: CC0
 ---
 
 @text trim(str) = @run [echo "{{str}}" | xargs]
@@ -299,9 +332,11 @@ author: myusername
 ```markdown
 ---
 name: github-api
-description: Simple GitHub API client for mlld
 author: myusername
+about: Simple GitHub API client for mlld
+needs: ["sh"]  # Uses curl commands
 keywords: [api, github, rest]
+license: CC0
 ---
 
 @exec get_user(username) = @run [
@@ -334,8 +369,10 @@ Ensure your module has required frontmatter:
 ```yaml
 ---
 name: module-name
-description: Module description
 author: github-username
+about: Module description
+needs: []  # or ["js", "node", "py", "sh"]
+license: CC0
 ---
 ```
 

@@ -222,8 +222,8 @@ export function needsEvaluation(value: DataValue): boolean {
     return true;
   }
   
-  // Handle foreach command expressions
-  if ((value as any)?.type === 'foreach-command') {
+  // Handle foreach expressions (both command and section types)
+  if ((value as any)?.type === 'foreach-command' || (value as any)?.type === 'foreach-section') {
     return true;
   }
   

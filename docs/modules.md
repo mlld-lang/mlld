@@ -669,18 +669,16 @@ The publish command will:
 4. **Create pull request** - Submit to the mlld registry for review
 5. **Provide status** - Show publication URL and next steps
 
-**Traditional Manual Publishing (Advanced):**
+**Publishing Process:**
 
-For custom workflows, you can still publish manually:
+The `mlld publish` command handles everything automatically:
 
-1. **Create a GitHub Gist** with your module code
-2. **Set up DNS TXT record** for discovery  
-3. **Register with mlld registry** (if using public registry)
+1. **Validates** your module metadata and syntax
+2. **Auto-detects** runtime dependencies (js, node, py, sh)
+3. **Creates source** (uses git repository or creates gist)
+4. **Submits PR** to the mlld registry for review
 
-**DNS TXT Record Format:**
-```
-_mlld.alice.public.mlld.ai  TXT  "gist=abc123def456;version=1.0.0;description=Utility functions"
-```
+The registry uses a pull request workflow for quality and security.
 
 ### Module Standards
 
@@ -689,13 +687,42 @@ _mlld.alice.public.mlld.ai  TXT  "gist=abc123def456;version=1.0.0;description=Ut
 - Module names should be lowercase with hyphens
 - Usernames should match your GitHub username
 
+#### Runtime Dependencies
+
+Modules should declare their runtime requirements in the `needs` array:
+
+- **`"js"`**: Browser-compatible JavaScript (no Node.js APIs)
+- **`"node"`**: Node.js-specific JavaScript (uses fs, path, process, etc.)
+- **`"py"`**: Python code execution
+- **`"sh"`**: Shell commands or scripts
+
+Example frontmatter with dependencies:
+```yaml
+---
+name: file-utils
+author: alice
+about: File manipulation utilities
+needs: ["node", "sh"]  # Uses Node.js fs module and shell commands
+needs-node:
+  node: ">=18.0.0"
+  packages: ["glob", "fs-extra"]
+needs-sh:
+  commands: ["find", "grep"]
+license: CC0
+---
+```
+
+The `mlld add-needs` command can automatically detect and update these dependencies.
+
 #### Code Structure
 ```mlld
 ---
+name: utils
 author: alice
 version: 1.0.0
-description: Utility functions for common tasks
-license: MIT
+about: Utility functions for common tasks
+needs: []
+license: CC0
 ---
 
 # Internal helpers (not exported)

@@ -48,8 +48,12 @@ export async function evaluateData(
   const dataValue = parseDataValue(rawValue);
   
   // Validate foreach expressions early to provide immediate feedback
-  if (dataValue && typeof dataValue === 'object' && dataValue.type === 'foreach-command') {
-    await validateForeachExpression(dataValue, env);
+  if (dataValue && typeof dataValue === 'object' && 
+      (dataValue.type === 'foreach-command' || dataValue.type === 'foreach-section')) {
+    // Skip validation for foreach-section as it doesn't need command validation
+    if (dataValue.type === 'foreach-command') {
+      await validateForeachExpression(dataValue, env);
+    }
   }
   
   // Check if this data contains any complex values that need evaluation

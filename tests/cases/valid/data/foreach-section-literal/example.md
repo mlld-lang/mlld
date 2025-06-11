@@ -3,3 +3,4 @@
   {"path": "file.md", "name": "Another File"}
 ]
 @data sections = foreach [@files.path # Section Title] as [[### {{files.name}}]]
+@add @sections

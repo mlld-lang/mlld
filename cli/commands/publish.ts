@@ -933,22 +933,28 @@ Auto-added by mlld publish command`;
     if (stat.isDirectory()) {
       // Look for .mld files in directory
       const files = await fs.readdir(modulePath);
-      const mldFiles = files.filter(f => f.endsWith('.mld'));
+      const mldFiles = files.filter(f => f.endsWith('.mld') || f.endsWith('.mld.md'));
       
       if (mldFiles.length === 0) {
-        throw new MlldError('No .mld files found in the specified directory', {
+        throw new MlldError('No .mld or .mld.md files found in the specified directory', {
           code: 'NO_MLD_FILES',
           severity: ErrorSeverity.Fatal
         });
       }
       
-      // Prefer main.mld or index.mld
-      if (mldFiles.includes('main.mld')) {
+      // Prefer main.mld.md, main.mld, index.mld.md, or index.mld
+      if (mldFiles.includes('main.mld.md')) {
+        filename = 'main.mld.md';
+      } else if (mldFiles.includes('main.mld')) {
         filename = 'main.mld';
+      } else if (mldFiles.includes('index.mld.md')) {
+        filename = 'index.mld.md';
       } else if (mldFiles.includes('index.mld')) {
         filename = 'index.mld';
       } else {
-        filename = mldFiles[0];
+        // Prefer .mld.md over .mld
+        const mldMdFile = mldFiles.find(f => f.endsWith('.mld.md'));
+        filename = mldMdFile || mldFiles[0];
       }
       
       filePath = path.join(modulePath, filename);
@@ -957,8 +963,8 @@ Auto-added by mlld publish command`;
       filePath = modulePath;
       filename = path.basename(filePath);
       
-      if (!filename.endsWith('.mld')) {
-        throw new MlldError('Module file must have .mld extension', {
+      if (!filename.endsWith('.mld') && !filename.endsWith('.mld.md')) {
+        throw new MlldError('Module file must have .mld or .mld.md extension', {
           code: 'INVALID_FILE_EXTENSION',
           severity: ErrorSeverity.Fatal
         });
