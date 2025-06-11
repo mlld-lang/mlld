@@ -5,6 +5,7 @@ import { interpolate } from '../core/interpreter';
 import { createTextVariable, astLocationToSourceLocation } from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
+import { normalizeTemplateContent } from '../utils/blank-line-normalizer';
 
 /**
  * Remove single blank lines but preserve multiple blank lines.

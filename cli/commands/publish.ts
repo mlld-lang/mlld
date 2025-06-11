@@ -894,6 +894,9 @@ Auto-added by mlld publish command`;
       // Check if working tree is clean
       let isClean = true;
       try {
+        // First update the index to avoid false positives
+        execSync('git update-index --refresh', { cwd: gitRoot, stdio: 'ignore' });
+        // Then check for actual changes
         execSync('git diff-index --quiet HEAD --', { cwd: gitRoot });
       } catch {
         isClean = false;
