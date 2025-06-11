@@ -1168,24 +1168,30 @@ Auto-added by mlld publish command`;
         continue;
       }
       
+      const fullModuleName = `@${author}/${moduleName}`;
+      
+      // Skip validation if this is a self-reference (module importing itself in examples)
+      const currentModuleName = `@${publishingAuthor}/${metadata.name}`;
+      if (fullModuleName === currentModuleName) {
+        continue; // Skip self-reference validation
+      }
+      
       try {
         // Check if the module exists in the registry
         const registryUrl = `https://raw.githubusercontent.com/mlld-lang/registry/main/modules.json`;
         const response = await fetch(registryUrl);
         
         if (!response.ok) {
+          // If registry doesn't exist yet (404), that's okay for first module
+          if (response.status === 404) {
+            console.log(chalk.gray('Registry not found (this is normal for first module)'));
+            continue;
+          }
           errors.push(`Could not access registry to validate module ${moduleRef}`);
           continue;
         }
         
         const registry = await response.json() as Record<string, any>;
-        const fullModuleName = `@${author}/${moduleName}`;
-        
-        // Skip validation if this is a self-reference (module importing itself in examples)
-        const currentModuleName = `@${publishingAuthor}/${metadata.name}`;
-        if (fullModuleName === currentModuleName) {
-          continue; // Skip self-reference validation
-        }
         
         if (!(fullModuleName in registry)) {
           errors.push(`Module ${moduleRef} not found in public registry. Only published modules can be imported.`);
