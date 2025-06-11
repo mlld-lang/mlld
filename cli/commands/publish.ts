@@ -1461,31 +1461,39 @@ Auto-added by mlld publish command`;
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
     
-    // Get current modules.json from fork
-    let currentModules: any = {};
-    let modulesFile: any;
+    // Get user's registry.json from their directory in fork
+    const userDir = `modules/${entry.author}`;
+    const registryPath = `${userDir}/registry.json`;
+    let userRegistry: any = {
+      author: entry.author,
+      modules: {}
+    };
+    let registryFile: any;
     
     try {
       const { data } = await octokit.repos.getContent({
         owner: user.login,
         repo: registryRepo,
-        path: 'modules.json',
+        path: registryPath,
       });
       
       if ('content' in data) {
-        modulesFile = data;
-        currentModules = JSON.parse(Buffer.from(data.content, 'base64').toString());
+        registryFile = data;
+        userRegistry = JSON.parse(Buffer.from(data.content, 'base64').toString());
       }
     } catch (error) {
-      // modules.json doesn't exist, that's okay
-      console.log(chalk.gray('Creating new modules.json...'));
+      // User's registry.json doesn't exist yet
+      console.log(chalk.gray(`Creating new registry for @${entry.author}...`));
     }
     
-    // Add or update module entry
+    // Add or update module entry in user's registry
     const moduleId = `@${entry.author}/${entry.name}`;
-    const isUpdate = moduleId in currentModules;
+    const isUpdate = moduleId in (userRegistry.modules || {});
     
-    currentModules[moduleId] = entry;
+    if (!userRegistry.modules) {
+      userRegistry.modules = {};
+    }
+    userRegistry.modules[moduleId] = entry;
     
     // Create branch for PR
     const branchName = `add-${entry.name}-${Date.now()}`;
@@ -1505,16 +1513,37 @@ Auto-added by mlld publish command`;
       sha: ref.object.sha,
     });
     
-    // Update modules.json
-    const updatedContent = JSON.stringify(currentModules, null, 2) + '\n';
+    // First, ensure the user directory exists by creating a README if needed
+    try {
+      await octokit.repos.getContent({
+        owner: user.login,
+        repo: registryRepo,
+        path: userDir,
+        ref: branchName,
+      });
+    } catch {
+      // Directory doesn't exist, create it with a README
+      const readmeContent = `# @${entry.author} modules\n\nModules published by @${entry.author}\n`;
+      await octokit.repos.createOrUpdateFileContents({
+        owner: user.login,
+        repo: registryRepo,
+        path: `${userDir}/README.md`,
+        message: `Create directory for @${entry.author}`,
+        content: Buffer.from(readmeContent).toString('base64'),
+        branch: branchName,
+      });
+    }
+    
+    // Update user's registry.json
+    const updatedContent = JSON.stringify(userRegistry, null, 2) + '\n';
     
     await octokit.repos.createOrUpdateFileContents({
       owner: user.login,
       repo: registryRepo,
-      path: 'modules.json',
+      path: registryPath,
       message: options.message || `${isUpdate ? 'Update' : 'Add'} ${moduleId}`,
       content: Buffer.from(updatedContent).toString('base64'),
-      sha: modulesFile?.sha,
+      sha: registryFile?.sha,
       branch: branchName,
     });
     
@@ -1539,6 +1568,10 @@ ${entry.source.repository ? `- **Path**: \`${entry.source.repository.path}\`` : 
 - **Keywords**: ${entry.keywords.length > 0 ? entry.keywords.join(', ') : 'none'}
 - **License**: ${entry.license || 'Not specified'}
 
+## Changes
+- ${isUpdate ? 'Updates' : 'Creates'} \`${registryPath}\`
+- Module entry for \`${entry.name}\`
+
 ## Validation
 This PR will be automatically validated by the registry workflow to ensure:
 - ✅ Module name matches author
@@ -1546,6 +1579,8 @@ This PR will be automatically validated by the registry workflow to ensure:
 - ✅ Content hash matches
 - ✅ Valid mlld syntax
 ${entry.source.repository ? '- ✅ Git commit exists and is immutable' : ''}
+
+After merge, the build process will update the main \`modules.json\` file.
 
 ${options.message ? `\n## Notes\n${options.message}` : ''}`,
     });
