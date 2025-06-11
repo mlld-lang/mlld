@@ -112,8 +112,18 @@ export async function evaluateExecInvocation(
     // Interpolate the command template with parameters
     const command = await interpolate(commandTemplate, execEnv);
     
-    // Execute the command
-    result = await execEnv.executeCommand(command);
+    // Build environment variables from parameters for shell execution
+    const envVars: Record<string, string> = {};
+    for (let i = 0; i < params.length; i++) {
+      const paramName = params[i];
+      const argValue = evaluatedArgs[i];
+      if (argValue !== undefined) {
+        envVars[paramName] = String(argValue);
+      }
+    }
+    
+    // Execute the command with environment variables
+    result = await execEnv.executeCommand(command, { env: envVars });
   } else if (typedDef.type === 'code') {
     // Execute code with interpolated template
     const codeTemplate = typedDef.codeTemplate || typedDef.code;

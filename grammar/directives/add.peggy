@@ -369,115 +369,62 @@ AtAdd
       const headerLevelValue = headerLevel ? headerLevel : null;
       const underHeaderValue = underHeader ? underHeader : null;
       
-      // Determine if this is a template invocation or exec invocation
-      // Template invocation: has parentheses (even if empty) and no withClause
-      const isTemplateInvocation = hasParentheses && !invocation.withClause;
+      // Create a generic invocation - runtime will determine if it's template or exec
+      const values = {
+        invocation: invocation
+      };
       
-      if (isTemplateInvocation) {
-        // Handle as template invocation
-        const values = {
-          templateName: commandRef.identifier,
-          arguments: commandRef.args || []
-        };
-        
-        // Add headerLevel and underHeader if present
-        if (headerLevelValue) {
-          values.headerLevel = [helpers.createNode(NodeType.Number, {
-            value: headerLevelValue.value,
-            raw: headerLevelValue.raw,
-            location: location()
-          })];
-        }
-        
-        if (underHeaderValue) {
-          values.underHeader = [helpers.createNode(NodeType.Text, {
-            content: underHeaderValue,
-            raw: underHeaderValue,
-            location: location()
-          })];
-        }
-        
-        // Create raw object
-        const raw = {
-          templateName: commandRef.name,
-          arguments: commandRef.args ? commandRef.args.map(arg => {
-            if (arg.type === NodeType.Text) return arg.content;
-            if (arg.type === NodeType.VariableReference) return `@${arg.identifier}`;
-            return arg;
-          }).join(', ') : ''
-        };
-        
-        // Add headerLevel and underHeader to raw if present
-        if (headerLevelValue) {
-          raw.headerLevel = headerLevelValue.raw;
-        }
-        
-        if (underHeaderValue) {
-          raw.underHeader = underHeaderValue;
-        }
-        
-        // Create meta object with template information
-        const meta = {
-          isTemplateInvocation: true,
-          argumentCount: commandRef.args ? commandRef.args.length : 0
-        };
-        
-        return helpers.createStructuredDirective(
-          'add', 
-          'addTemplateInvocation', 
-          values, 
-          raw, 
-          meta, 
-          location(),
-          'templateInvocation'
-        );
-      } else {
-        // Handle as exec invocation with potential tail modifiers
-        const values = {
-          execInvocation: invocation
-        };
-        
-        // Add headerLevel and underHeader if present
-        if (headerLevelValue) {
-          values.headerLevel = [helpers.createNode(NodeType.Number, {
-            value: headerLevelValue.value,
-            raw: headerLevelValue.raw,
-            location: location()
-          })];
-        }
-        
-        if (underHeaderValue) {
-          values.underHeader = [helpers.createNode(NodeType.Text, {
-            content: underHeaderValue,
-            raw: underHeaderValue,
-            location: location()
-          })];
-        }
-        
-        // Create raw object
-        const raw = {
-          execInvocation: commandRef.name
-        };
-        
-        // Add headerLevel and underHeader to raw if present
-        if (headerLevelValue) {
-          raw.headerLevel = headerLevelValue.raw;
-        }
-        
-        if (underHeaderValue) {
-          raw.underHeader = underHeaderValue;
-        }
-        
-        return helpers.createStructuredDirective(
-          'add', 
-          'addExecInvocation', 
-          values, 
-          raw, 
-          {}, 
-          location(),
-          'exec'
-        );
+      // Add headerLevel and underHeader if present
+      if (headerLevelValue) {
+        values.headerLevel = [helpers.createNode(NodeType.Number, {
+          value: headerLevelValue.value,
+          raw: headerLevelValue.raw,
+          location: location()
+        })];
       }
+      
+      if (underHeaderValue) {
+        values.underHeader = [helpers.createNode(NodeType.Text, {
+          content: underHeaderValue,
+          raw: underHeaderValue,
+          location: location()
+        })];
+      }
+      
+      // Create raw object
+      const raw = {
+        invocation: commandRef.name,
+        arguments: commandRef.args ? commandRef.args.map(arg => {
+          if (arg.type === NodeType.Text) return arg.content;
+          if (arg.type === NodeType.VariableReference) return `@${arg.identifier}`;
+          return arg;
+        }).join(', ') : ''
+      };
+      
+      // Add headerLevel and underHeader to raw if present
+      if (headerLevelValue) {
+        raw.headerLevel = headerLevelValue.raw;
+      }
+      
+      if (underHeaderValue) {
+        raw.underHeader = underHeaderValue;
+      }
+      
+      // Create meta object
+      const meta = {
+        hasParentheses: hasParentheses,
+        argumentCount: commandRef.args ? commandRef.args.length : 0
+      };
+      
+      return helpers.createStructuredDirective(
+        'add', 
+        'addInvocation', 
+        values, 
+        raw, 
+        meta, 
+        location(),
+        'invocation'
+      );
     }
   / DirectiveContext "@add" _ security:(SecurityOptions _)? "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       const securityOptions = security ? security[0] : null;

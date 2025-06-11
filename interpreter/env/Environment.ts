@@ -31,6 +31,7 @@ interface CommandExecutionOptions {
   timeout?: number;
   collectErrors?: boolean;
   input?: string;
+  env?: Record<string, string>;
 }
 
 interface CommandExecutionContext {
@@ -1007,7 +1008,7 @@ export class Environment {
       const result = execSync(safeCommand, {
         encoding: 'utf8',
         cwd: workingDirectory,
-        env: { ...process.env },
+        env: { ...process.env, ...(options?.env || {}) },
         maxBuffer: 10 * 1024 * 1024, // 10MB limit
         timeout: timeout || 30000,
         ...(options?.input ? { input: options.input } : {})

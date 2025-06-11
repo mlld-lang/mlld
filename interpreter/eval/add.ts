@@ -337,8 +337,98 @@ export async function evaluateAdd(
       }
     }
     
+  } else if (directive.subtype === 'addInvocation') {
+    // Handle unified invocation - could be template or exec
+    const invocation = directive.values?.invocation;
+    if (!invocation) {
+      throw new Error('Add invocation directive missing invocation');
+    }
+    
+    // Get the invocation name
+    const commandRef = invocation.commandRef;
+    const name = commandRef.name || commandRef.identifier[0]?.content;
+    if (!name) {
+      throw new Error('Add invocation missing name');
+    }
+    
+    // Look up what this invocation refers to
+    const variable = env.getVariable(name);
+    if (!variable) {
+      throw new Error(`Variable not found: ${name}`);
+    }
+    
+    // Handle based on variable type
+    if (variable.type === 'command' || variable.type === 'execCommand') {
+      // This is an exec invocation
+      const { evaluateExecInvocation } = await import('./exec-invocation');
+      const result = await evaluateExecInvocation(invocation, env);
+      content = String(result.value);
+    } else if (variable.type === 'textTemplate') {
+      // Handle as template invocation
+      const template = variable;
+      
+      // Get the arguments from the command reference
+      const args = commandRef.args || [];
+      
+      // Check parameter count
+      if (args.length !== template.params.length) {
+        throw new Error(`Template ${name} expects ${template.params.length} parameters, got ${args.length}`);
+      }
+      
+      // Create a child environment with the template parameters
+      const childEnv = env.createChild();
+      
+      // Bind arguments to parameters
+      for (let i = 0; i < template.params.length; i++) {
+        const paramName = template.params[i];
+        const argValue = args[i];
+        
+        // Convert argument to string value
+        let value: string;
+        if (typeof argValue === 'object' && argValue.type === 'Text') {
+          // Handle Text nodes from the AST
+          value = argValue.content || '';
+        } else if (typeof argValue === 'object' && argValue.type === 'VariableReference') {
+          // Handle variable references like @userName
+          const varName = argValue.identifier;
+          const variable = env.getVariable(varName);
+          if (!variable) {
+            throw new Error(`Variable not found: ${varName}`);
+          }
+          value = variable.type === 'text' ? variable.value : String(variable.value);
+        } else if (typeof argValue === 'object' && argValue.type === 'string') {
+          // Legacy format support
+          value = argValue.value;
+        } else if (typeof argValue === 'object' && argValue.type === 'variable') {
+          // Legacy format - handle variable references
+          const varRef = argValue.value;
+          const varName = varRef.identifier;
+          const variable = env.getVariable(varName);
+          if (!variable) {
+            throw new Error(`Variable not found: ${varName}`);
+          }
+          value = variable.type === 'text' ? variable.value : String(variable.value);
+        } else {
+          value = String(argValue);
+        }
+        
+        // Create a text variable for the parameter
+        childEnv.setVariable(paramName, { type: 'text', identifier: paramName, value });
+      }
+      
+      // Interpolate the template content with the child environment
+      content = await interpolate(template.content, childEnv);
+      
+      // Apply template normalization if the template definition had isTemplateContent and normalization is enabled
+      if (template.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
+        content = normalizeTemplateContent(content, true);
+      }
+    } else {
+      throw new Error(`Variable ${name} is not a template or exec command (type: ${variable.type})`);
+    }
+    
   } else if (directive.subtype === 'addTemplateInvocation') {
-    // Handle parameterized template invocation
+    // Handle old-style template invocation (for backward compatibility)
     const templateNameNodes = directive.values?.templateName;
     if (!templateNameNodes || templateNameNodes.length === 0) {
       throw new Error('Add template invocation missing template name');

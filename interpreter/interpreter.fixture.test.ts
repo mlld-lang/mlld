@@ -64,6 +64,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'text-foreach-section-variable': 'text/foreach-section-variable',
       'text-foreach-section-backtick': 'text/foreach-section-backtick',
       'text-foreach-section-path-expression': 'text/foreach-section-path-expression',
+      'exec-invocation-module': 'exec-invocation-module',
     };
     
     // Check if we have a mapping for this fixture

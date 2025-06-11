@@ -14,10 +14,10 @@ Line 2
 First: foo, Second: bar
 
 ## In data directive
+
 Hello, World!
-
 ## In text template
-Output: Hello from module
 
+Output: Hello from module
 ## Verify regular variable import works
 Hello from module
