@@ -5,7 +5,8 @@ import {
   RegistryConfig, 
   ResolverSecurityPolicy,
   ResolverOptions,
-  ContentInfo
+  ContentInfo,
+  ResolutionContext
 } from '@core/resolvers/types';
 import { MlldResolutionError } from '@core/errors';
 import { logger } from '@core/utils/logger';
@@ -17,6 +18,8 @@ import { HashUtils } from '@core/registry/utils/HashUtils';
  */
 export class ResolverManager {
   private resolvers: Map<string, Resolver> = new Map();
+  private resolversByPriority: Resolver[] = [];
+  private resolverNamesCache: Set<string> = new Set(); // Cache all resolver name variants
   private registries: RegistryConfig[] = [];
   private securityPolicy: ResolverSecurityPolicy;
   private moduleCache?: ModuleCache;
@@ -75,7 +78,17 @@ export class ResolverManager {
     }
 
     this.resolvers.set(resolver.name, resolver);
-    logger.debug(`Registered resolver: ${resolver.name}`);
+    
+    // Add to priority-sorted array
+    this.resolversByPriority.push(resolver);
+    this.resolversByPriority.sort((a, b) => a.capabilities.priority - b.capabilities.priority);
+    
+    // Update resolver names cache with all variants
+    this.resolverNamesCache.add(resolver.name);
+    this.resolverNamesCache.add(resolver.name.toUpperCase());
+    this.resolverNamesCache.add(resolver.name.toLowerCase());
+    
+    logger.debug(`Registered resolver: ${resolver.name} (priority: ${resolver.capabilities.priority})`);
   }
 
   /**
@@ -161,12 +174,20 @@ export class ResolverManager {
     }
 
     // 2. Find matching registry by prefix
-    const { resolver, registry } = await this.findResolver(ref);
+    const { resolver, registry } = await this.findResolver(ref, options?.context);
 
     if (!resolver) {
       throw new MlldResolutionError(
         `No resolver found for reference: ${ref}`,
-        { reference: ref }
+        { reference: ref, context: options?.context }
+      );
+    }
+
+    // Check if resolver supports the requested context
+    if (options?.context && !this.canResolveInContext(resolver, options.context)) {
+      throw new MlldResolutionError(
+        `Resolver '${resolver.name}' does not support ${options.context} operations`,
+        { reference: ref, resolverName: resolver.name, context: options.context }
       );
     }
 
@@ -262,7 +283,7 @@ export class ResolverManager {
       );
     }
 
-    const { resolver, registry } = await this.findResolver(ref);
+    const { resolver, registry } = await this.findResolver(ref, undefined);
 
     if (!resolver) {
       throw new MlldResolutionError(
@@ -308,7 +329,7 @@ export class ResolverManager {
    * List available content under a prefix
    */
   async list(prefix: string, options?: ResolverOptions): Promise<ContentInfo[]> {
-    const { resolver, registry } = await this.findResolver(prefix);
+    const { resolver, registry } = await this.findResolver(prefix, undefined);
 
     if (!resolver || !resolver.list) {
       return [];
@@ -337,6 +358,14 @@ export class ResolverManager {
   }
 
   /**
+   * Get all resolver name variants (for name protection)
+   * Returns a Set for O(1) lookups
+   */
+  getResolverNamesSet(): Set<string> {
+    return new Set(this.resolverNamesCache);
+  }
+
+  /**
    * Get configured registries
    */
   getRegistries(): RegistryConfig[] {
@@ -344,22 +373,75 @@ export class ResolverManager {
   }
 
   /**
+   * Check if a resolver can handle a reference in a given context
+   */
+  canResolveInContext(resolver: Resolver, context: ResolutionContext): boolean {
+    switch (context) {
+      case 'import':
+        return resolver.capabilities.contexts.import;
+      case 'path':
+        return resolver.capabilities.contexts.path;
+      case 'output':
+        return resolver.capabilities.contexts.output;
+      case 'variable':
+        // Variables can use any resolver that supports import context
+        return resolver.capabilities.contexts.import;
+      default:
+        return true;
+    }
+  }
+
+  /**
+   * Get all resolvers that can handle a given context
+   */
+  getResolversForContext(context: ResolutionContext): Resolver[] {
+    return this.resolversByPriority.filter(r => this.canResolveInContext(r, context));
+  }
+
+  /**
+   * Check if a name is a known resolver (for name protection)
+   * O(1) lookup using cached set
+   */
+  isResolverName(name: string): boolean {
+    return this.resolverNamesCache.has(name) || 
+           this.resolverNamesCache.has(name.toUpperCase()) || 
+           this.resolverNamesCache.has(name.toLowerCase());
+  }
+
+  /**
    * Find the appropriate resolver for a reference
    */
-  private async findResolver(ref: string): Promise<{ resolver?: Resolver, registry?: RegistryConfig }> {
-    // Check configured registries first (sorted by prefix length)
+  private async findResolver(ref: string, context?: ResolutionContext): Promise<{ resolver?: Resolver, registry?: RegistryConfig }> {
+    // First, check configured registries (sorted by prefix length)
+    // This ensures that explicit registry configurations take precedence
     for (const registry of this.registries) {
       if (ref.startsWith(registry.prefix)) {
         const resolver = this.resolvers.get(registry.resolver);
-        if (resolver && resolver.canResolve(ref, registry.config)) {
+        if (resolver && resolver.canResolve(ref, registry.config) && 
+            (!context || this.canResolveInContext(resolver, context))) {
           return { resolver, registry };
         }
       }
     }
 
-    // Fallback: Check if any resolver can handle it directly
-    // This allows resolvers to handle patterns like @user/module
-    for (const [name, resolver] of this.resolvers) {
+    // Then check if the reference is a direct resolver name (e.g., @TIME, @DEBUG)
+    // This is for built-in resolvers that don't need registry configuration
+    const resolverName = ref.replace(/^@/, '').split('/')[0];
+    const directResolver = this.resolvers.get(resolverName) || 
+                          this.resolvers.get(resolverName.toUpperCase()) ||
+                          this.resolvers.get(resolverName.toLowerCase());
+    
+    if (directResolver && directResolver.canResolve(ref) && 
+        (!context || this.canResolveInContext(directResolver, context))) {
+      return { resolver: directResolver };
+    }
+
+    // Fallback: Check resolvers by priority
+    const contextResolvers = context ? 
+      this.getResolversForContext(context) : 
+      this.resolversByPriority;
+    
+    for (const resolver of contextResolvers) {
       if (resolver.canResolve(ref)) {
         return { resolver };
       }

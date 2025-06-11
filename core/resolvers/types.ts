@@ -6,6 +6,106 @@ import { TaintLevel } from '@security/taint/TaintTracker';
 export type ResolverType = 'input' | 'output' | 'io';
 
 /**
+ * Resource type - what kind of content this resolver handles
+ */
+export type ResourceType = 'module' | 'file' | 'data' | 'api' | 'function';
+
+/**
+ * Cache strategy options
+ */
+export type CacheStrategy = 'none' | 'memory' | 'persistent';
+
+/**
+ * I/O capabilities - what operations the resolver supports
+ */
+export interface IOCapabilities {
+  read: boolean;
+  write: boolean;
+  list: boolean;
+}
+
+/**
+ * Resource needs - what the resolver requires to function
+ */
+export interface ResourceNeeds {
+  network: boolean;
+  cache: boolean;
+  auth: boolean;
+}
+
+/**
+ * Context support - where the resolver can be used
+ */
+export interface ContextSupport {
+  import: boolean;
+  path: boolean;
+  output: boolean;
+}
+
+/**
+ * Cache configuration
+ */
+export interface CacheConfig {
+  strategy: CacheStrategy;
+  ttl?: TTLOption;
+}
+
+/**
+ * TTL (time-to-live) caching options
+ */
+export interface TTLOption {
+  /**
+   * TTL duration in seconds (0 = no cache, -1 = session cache)
+   */
+  duration: number;
+  
+  /**
+   * Cache key strategy
+   */
+  strategy?: 'static' | 'content' | 'timestamp';
+}
+
+/**
+ * Resolver capabilities - declares what operations are supported
+ */
+export interface ResolverCapabilities {
+  /**
+   * I/O operations supported
+   */
+  io: IOCapabilities;
+  
+  /**
+   * Resource requirements
+   */
+  needs: ResourceNeeds;
+  
+  /**
+   * Contexts where this resolver can be used
+   */
+  contexts: ContextSupport;
+  
+  /**
+   * Type of resource this resolver handles
+   */
+  resourceType: ResourceType;
+  
+  /**
+   * Priority (lower number = higher priority)
+   */
+  priority: number;
+  
+  /**
+   * Cache configuration
+   */
+  cache?: CacheConfig;
+  
+  /**
+   * Optional formats this resolver supports
+   */
+  supportedFormats?: string[];
+}
+
+/**
  * Content returned by a resolver
  */
 export interface ResolverContent {
@@ -71,6 +171,11 @@ export interface Resolver {
    * Type of resolver - determines supported operations
    */
   type: ResolverType;
+
+  /**
+   * Resolver capabilities
+   */
+  capabilities: ResolverCapabilities;
 
   /**
    * Check if this resolver can handle a given reference
@@ -180,6 +285,11 @@ export interface ResolverSecurityPolicy {
 }
 
 /**
+ * Resolution context - where the reference is being used
+ */
+export type ResolutionContext = 'import' | 'path' | 'variable' | 'output';
+
+/**
  * Options for resolver operations
  */
 export interface ResolverOptions {
@@ -202,6 +312,16 @@ export interface ResolverOptions {
    * Additional metadata to include
    */
   metadata?: Record<string, any>;
+
+  /**
+   * Context where the reference is being used
+   */
+  context?: ResolutionContext;
+
+  /**
+   * Requested format (for imports like @import { "iso" as date } from @TIME)
+   */
+  format?: string;
 }
 
 /**

@@ -63,18 +63,65 @@ Each resolver declares its capabilities to determine valid usage contexts:
 
 ```typescript
 interface ResolverCapabilities {
-  supportsImports: boolean;  // Can be used in @import from @resolver
-  supportsPaths: boolean;    // Can be used in [@resolver/path/segments]
-  type: 'function' | 'module' | 'path';
-  ttl?: TTLOption;          // Caching configuration
-  priority: number;         // Resolution priority (lower = higher priority)
+  // I/O operations supported
+  io: {
+    read: boolean;
+    write: boolean;
+    list: boolean;
+  };
+  
+  // Contexts where this resolver can be used
+  contexts: {
+    import: boolean;   // Can be used in @import from @resolver
+    path: boolean;     // Can be used in [@resolver/path/segments]
+    output: boolean;   // Can be used with @output directive
+  };
+  
+  // Content types this resolver can return
+  supportedContentTypes: ('module' | 'data' | 'text')[];
+  
+  // Default content type when used as a bare variable
+  defaultContentType: 'module' | 'data' | 'text';
+  
+  // Resolution priority (lower = higher priority)
+  priority: number;
+  
+  // Caching configuration
+  cache?: CacheConfig;
 }
 ```
 
 **Examples:**
-- `@TIME`: `{ supportsImports: true, supportsPaths: false, type: 'function' }`
-- `@PROJECTPATH`: `{ supportsImports: true, supportsPaths: true, type: 'path' }`
-- `@company`: `{ supportsImports: true, supportsPaths: false, type: 'module' }`
+- `@TIME`: 
+  ```typescript
+  {
+    io: { read: true, write: false, list: false },
+    contexts: { import: true, path: false, output: false },
+    supportedContentTypes: ['text', 'data'],
+    defaultContentType: 'text',  // Returns ISO timestamp as text
+    priority: 1
+  }
+  ```
+- `@PROJECTPATH`: 
+  ```typescript
+  {
+    io: { read: true, write: false, list: true },
+    contexts: { import: true, path: true, output: false },
+    supportedContentTypes: ['text'],  // Path string or file contents
+    defaultContentType: 'text',  // Returns project path as text
+    priority: 1
+  }
+  ```
+- `@company`: 
+  ```typescript
+  {
+    io: { read: true, write: false, list: false },
+    contexts: { import: true, path: false, output: false },
+    supportedContentTypes: ['module'],
+    defaultContentType: 'module',
+    priority: 10
+  }
+  ```
 
 ### Name Protection System
 
@@ -209,29 +256,78 @@ async function resolveAtReference(identifier: string, pathSegments: string[]): P
 }
 ```
 
-### Path vs Import Context
+### Context-Dependent Resolution
 
-The same resolver can behave differently in import vs path contexts:
+Resolvers behave differently based on the context in which they're used:
 
-**Import Context:** `@import { x } from @TIME`
-- Resolver returns virtual module with requested exports
+#### Variable Context
+`@add @TIME` or `@text timestamp = @TIME`
+- Returns the resolver's default value
+- Uses `defaultContentType` from capabilities
+- Examples:
+  - `@TIME` → "2024-01-15T10:30:00Z" (text)
+  - `@PROJECTPATH` → "/Users/adam/dev/mlld" (text)
+  - `@DEBUG` → { variables: {...}, ... } (data)
+
+#### Import Context
+`@import { x } from @TIME`
+- Resolver returns structured content based on requested imports
+- Content type must match what's expected (modules return 'module', etc.)
 - Import evaluation extracts specific variables
-- Result: variables added to environment
 
-**Path Context:** `@add [@PROJECTPATH/file.md]`  
-- Resolver resolves to file content
-- Path evaluation includes the content
-- Result: content added to output
+#### Path Context
+`@add [@PROJECTPATH/file.md]`
+- Resolver resolves the full path and returns file content
+- Content type determined by file type or content
+- Only resolvers with `contexts.path: true` are allowed
 
-**Capability Validation:**
+### Content Type Handling
+
 ```typescript
-function validateResolverUsage(resolver: Resolver, context: 'import' | 'path') {
-  if (context === 'import' && !resolver.capabilities.supportsImports) {
-    throw new Error(`Resolver '${resolver.name}' cannot be used in imports`);
+interface ResolverContent {
+  content: string;
+  contentType: 'module' | 'data' | 'text';  // What kind of content this is
+  metadata?: {
+    source: string;
+    timestamp: Date;
+    // ... other metadata
+  };
+}
+```
+
+**Content Type Detection:**
+```typescript
+// In LocalResolver - supports mixed content types
+async resolve(ref: string, options?: ResolverOptions): Promise<ResolverContent> {
+  const content = await this.readFile(ref);
+  
+  // Detect content type based on file extension or content
+  let contentType: 'module' | 'data' | 'text';
+  if (ref.endsWith('.mld') || ref.endsWith('.mlld')) {
+    contentType = 'module';
+  } else if (ref.endsWith('.json')) {
+    contentType = 'data';
+  } else {
+    // Try to parse as mlld to check for module exports
+    try {
+      const parsed = await parse(content);
+      contentType = hasModuleExports(parsed) ? 'module' : 'text';
+    } catch {
+      contentType = 'text';
+    }
   }
-  if (context === 'path' && !resolver.capabilities.supportsPaths) {
-    throw new Error(`Resolver '${resolver.name}' cannot be used in paths`);
-  }
+  
+  return { content, contentType, ... };
+}
+```
+
+**Content Type Validation:**
+```typescript
+// In import evaluator
+if (isModuleImport && result.contentType !== 'module') {
+  throw new Error(
+    `Cannot import from ${source}: expected module content, got ${result.contentType}`
+  );
 }
 ```
 
@@ -268,13 +364,46 @@ function joinPathSegments(segments: string[]): string {
 The existing ResolverManager is enhanced with:
 
 ```typescript
-class EnhancedResolverManager extends ResolverManager {
-  private resolverCapabilities: Map<string, ResolverCapabilities>;
-  private ttlCacheService: TTLCacheService;
+class ResolverManager {
+  private resolvers: Map<string, Resolver> = new Map();
+  private resolversByPriority: Resolver[] = [];
   
-  registerResolver(resolver: Resolver, capabilities: ResolverCapabilities): void;
-  async resolveForContext(ref: string, context: 'import' | 'path'): Promise<ResolverContent>;
-  checkResolverName(name: string): boolean; // Name protection
+  registerResolver(resolver: Resolver): void {
+    // Validate capabilities
+    if (!resolver.capabilities.supportedContentTypes.length) {
+      throw new Error(`Resolver ${resolver.name} must support at least one content type`);
+    }
+    
+    // Register and sort by priority
+    this.resolvers.set(resolver.name, resolver);
+    this.resolversByPriority.push(resolver);
+    this.resolversByPriority.sort((a, b) => 
+      a.capabilities.priority - b.capabilities.priority
+    );
+  }
+  
+  async resolve(ref: string, options?: ResolverOptions): Promise<ResolutionResult> {
+    const { resolver, registry } = await this.findResolver(ref, options?.context);
+    
+    // Validate context support
+    if (options?.context && !this.canResolveInContext(resolver, options.context)) {
+      throw new Error(
+        `Resolver '${resolver.name}' does not support ${options.context} context`
+      );
+    }
+    
+    // Pass context to resolver for context-dependent behavior
+    const content = await resolver.resolve(ref, { ...registry?.config, ...options });
+    
+    // Validate content type
+    if (!resolver.capabilities.supportedContentTypes.includes(content.contentType)) {
+      throw new Error(
+        `Resolver ${resolver.name} returned unsupported content type: ${content.contentType}`
+      );
+    }
+    
+    return { content, resolverName: resolver.name, ... };
+  }
 }
 ```
 
@@ -344,25 +473,49 @@ Suggestions: Check your COMPANY_API_TOKEN environment variable
 ```typescript
 class TimeResolver implements Resolver {
   name = 'TIME';
-  capabilities = { supportsImports: true, supportsPaths: false, type: 'function' };
+  capabilities = {
+    io: { read: true, write: false, list: false },
+    contexts: { import: true, path: false, output: false },
+    supportedContentTypes: ['text', 'data'],
+    defaultContentType: 'text',
+    priority: 1
+  };
   
-  async resolveForImport(ref: string, requestedFormats: string[]): Promise<ResolverContent> {
-    const now = new Date();
-    const exports: Record<string, string> = {};
-    
-    // requestedFormats contains original format strings, not aliases
-    // e.g., @import { "YYYY-MM-DD" as date } → requestedFormats = ["YYYY-MM-DD"]
-    for (const format of requestedFormats) {
-      exports[format] = this.formatTimestamp(now, format);
+  async resolve(ref: string, options?: ResolverOptions): Promise<ResolverContent> {
+    // Variable context - return ISO timestamp as text
+    if (options?.context === 'variable' || ref === 'TIME') {
+      return {
+        content: new Date().toISOString(),
+        contentType: 'text'
+      };
     }
     
-    return { content: JSON.stringify(exports), /* ... */ };
+    // Import context - return structured data
+    if (options?.context === 'import') {
+      const now = new Date();
+      const exports: Record<string, string> = {};
+      
+      // Extract requested formats from import
+      const formats = options.requestedImports || [];
+      for (const format of formats) {
+        exports[format] = this.formatTimestamp(now, format);
+      }
+      
+      return {
+        content: JSON.stringify(exports),
+        contentType: 'data'
+      };
+    }
+    
+    throw new Error('TIME resolver only supports variable and import contexts');
   }
   
   private formatTimestamp(date: Date, format: string): string {
     switch(format) {
       case 'iso': return date.toISOString();
       case 'unix': return Math.floor(date.getTime() / 1000).toString();
+      case 'YYYY-MM-DD': return date.toISOString().split('T')[0];
+      case 'HH:mm:ss': return date.toTimeString().split(' ')[0];
       default: return this.parseCustomFormat(date, format);
     }
   }
@@ -425,29 +578,60 @@ class InputResolver implements Resolver {
 ```typescript
 class ProjectPathResolver implements Resolver {
   name = 'PROJECTPATH';
-  capabilities = { supportsImports: true, supportsPaths: true, type: 'path' };
+  capabilities = {
+    io: { read: true, write: false, list: true },
+    contexts: { import: true, path: true, output: false },
+    supportedContentTypes: ['text'],  // Can return path or file contents
+    defaultContentType: 'text',
+    priority: 1
+  };
   
-  async resolveForImport(ref: string, requestedFormats: string[]): Promise<ResolverContent> {
-    // Return project path info as JSON
-    const projectPath = await this.findProjectRoot();
-    return {
-      content: JSON.stringify({ projectPath }),
-      contentInfo: { path: '@PROJECTPATH', /* ... */ }
-    };
-  }
-  
-  async resolveForPath(ref: string, pathSegments: string[]): Promise<ResolverContent> {
+  async resolve(ref: string, options?: ResolverOptions): Promise<ResolverContent> {
     const projectRoot = await this.findProjectRoot();
-    const fullPath = path.join(projectRoot, joinPathSegments(pathSegments));
-    return this.readFile(fullPath);
+    
+    // Variable context - return project path as text
+    if (options?.context === 'variable' || ref === 'PROJECTPATH') {
+      return {
+        content: projectRoot,
+        contentType: 'text'
+      };
+    }
+    
+    // Path context - read file contents
+    if (options?.context === 'path' || ref.includes('/')) {
+      const relativePath = ref.replace(/^@PROJECTPATH\//, '').replace(/^@\.\//, '');
+      const fullPath = path.join(projectRoot, relativePath);
+      
+      // Security check
+      if (!fullPath.startsWith(projectRoot)) {
+        throw new Error('Path outside project directory');
+      }
+      
+      const content = await this.fileSystem.readFile(fullPath);
+      return {
+        content,
+        contentType: 'text'  // Could detect based on file type
+      };
+    }
+    
+    // Import context - return project info
+    if (options?.context === 'import') {
+      const exports = {
+        path: projectRoot,
+        absolute: projectRoot,
+        relative: path.relative(process.cwd(), projectRoot),
+        basename: path.basename(projectRoot)
+      };
+      
+      return {
+        content: JSON.stringify(exports),
+        contentType: 'data'
+      };
+    }
   }
   
   private async findProjectRoot(): Promise<string> {
-    // Project root detection:
-    // 1. Directory with mlld.config.json (highest priority)
-    // 2. Directory with package.json  
-    // 3. Git repository root (.git directory)
-    // 4. Directory with pyproject.toml, Cargo.toml, etc.
+    // Project root detection logic...
   }
 }
 ```
@@ -483,6 +667,33 @@ class CompanyResolver {
 }
 ```
 
+## Key Design Principles
+
+### Content Type System
+Resolvers declare what types of content they can return:
+- **module**: mlld files with exportable variables/templates
+- **data**: Structured data (JSON objects/arrays)
+- **text**: Plain text content
+
+This enables:
+- Validation that module imports actually get modules
+- Proper processing based on content type
+- Clear error messages when wrong types are used
+
+### Context-Dependent Resolution
+The same resolver behaves differently based on usage context:
+- **Variable context** (`@TIME`): Returns default value
+- **Import context** (`@import from @TIME`): Returns structured exports
+- **Path context** (`[@./file]`): Resolves full path and returns content
+
+This provides intuitive behavior while maintaining consistency.
+
+### Unified Path/URL Handling
+Files and URLs are treated equally as "paths":
+- No artificial distinction between local files and remote URLs
+- Same resolver can handle both `./file.mld` and `https://example.com/file.mld`
+- Simplifies mental model and implementation
+
 ## Benefits
 
 ### Architectural Consistency
@@ -504,3 +715,4 @@ class CompanyResolver {
 - Clear mental model: @ references → resolvers
 - Comprehensive error messages with resolver attribution
 - Consistent configuration patterns across resolver types
+- Context-aware behavior matches user expectations

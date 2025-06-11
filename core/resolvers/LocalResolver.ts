@@ -3,7 +3,8 @@ import {
   Resolver, 
   ResolverContent, 
   ResolverType,
-  ContentInfo
+  ContentInfo,
+  ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError, MlldFileNotFoundError } from '@core/errors';
 import { TaintLevel } from '@security/taint/TaintTracker';
@@ -47,6 +48,15 @@ export class LocalResolver implements Resolver {
   name = 'local';
   description = 'Resolves modules from local filesystem paths';
   type: ResolverType = 'io';
+  
+  capabilities: ResolverCapabilities = {
+    io: { read: true, write: true, list: true },
+    needs: { network: false, cache: false, auth: false },
+    contexts: { import: true, path: true, output: true },
+    resourceType: 'file',
+    priority: 20, // Lower priority than built-ins and modules
+    cache: { strategy: 'none' } // Local files don't need caching
+  };
 
   constructor(private fileSystem: IFileSystemService) {}
 

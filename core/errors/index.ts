@@ -19,6 +19,8 @@ export { MlldCommandExecutionError } from './MlldCommandExecutionError';
 export type { CommandExecutionDetails } from './MlldCommandExecutionError';
 export { MlldDependencyError } from './MlldDependencyError';
 export { MlldConditionError } from './MlldConditionError';
+export { ResolverError } from './ResolverError';
+export type { ResolverErrorDetails } from './ResolverError';
 
 // Export error message collections
 export * from './messages/index'; 

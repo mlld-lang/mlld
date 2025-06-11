@@ -56,8 +56,37 @@ export async function evaluatePath(
   // Handle special path variables and absolute paths
   let resolvedPath = interpolatedPath;
   
-  // For URLs, no path resolution needed
-  if (isURL || env.isURL(interpolatedPath)) {
+  // Check if this is a resolver reference first
+  const resolverManager = env.getResolverManager();
+  if (resolverManager && interpolatedPath.startsWith('@')) {
+    // Extract potential resolver name from the path
+    const pathParts = interpolatedPath.substring(1).split('/');
+    const potentialResolver = pathParts[0];
+    
+    if (resolverManager.isResolverName(potentialResolver)) {
+      // This is a resolver reference - check if it supports paths
+      const resolver = resolverManager.getResolver(potentialResolver.toUpperCase());
+      if (resolver && !resolver.capabilities.supportsPaths) {
+        const { ResolverError } = await import('@core/errors');
+        throw ResolverError.unsupportedCapability(resolver.name, 'paths', 'path');
+      }
+      
+      // Try to resolve through the resolver system
+      try {
+        const result = await resolverManager.resolve(interpolatedPath, {
+          context: 'path',
+          basePath: env.getBasePath()
+        });
+        resolvedPath = result.content.content;
+      } catch (error) {
+        // If resolution fails, fall back to normal path resolution
+        resolvedPath = await env.resolvePath(interpolatedPath);
+      }
+    } else {
+      // Not a resolver, use normal path resolution
+      resolvedPath = await env.resolvePath(interpolatedPath);
+    }
+  } else if (isURL || env.isURL(interpolatedPath)) {
     // URLs remain as-is
     resolvedPath = interpolatedPath;
   } else {

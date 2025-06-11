@@ -23,6 +23,7 @@ import {
 } from '@core/resolvers';
 import { logger } from '@core/utils/logger';
 import * as shellQuote from 'shell-quote';
+import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 
 interface CommandExecutionOptions {
   showProgress?: boolean;
@@ -69,7 +70,8 @@ export class Environment {
   private stdinContent?: string; // Cached stdin content
   private resolverManager?: ResolverManager; // New resolver system
   private urlCacheManager?: URLCache; // URL cache manager
-  private reservedNames: Set<string> = new Set(['INPUT', 'TIME', 'PROJECTPATH', 'DEBUG']); // Reserved variable names
+  private reservedNames: Set<string> = new Set(); // Now dynamic based on registered resolvers
+  private resolverVariableCache = new Map<string, MlldVariable>(); // Cache for resolver variables
   private initialNodeCount: number = 0; // Track initial nodes to prevent duplicate merging
   
   // Shadow environments for language-specific function injection
@@ -166,11 +168,18 @@ export class Environment {
           lockFile
         );
         
-        // Register built-in resolvers
+        // NOTE: Built-in function resolvers will be registered separately via registerBuiltinResolvers()
+        // This allows the constructor to remain synchronous
+        
+        // Register path resolvers (priority 1)
         // ProjectPathResolver should be first to handle @PROJECTPATH references
         this.resolverManager.registerResolver(new ProjectPathResolver(this.fileSystem));
+        
+        // Register module resolvers (priority 10)
         // RegistryResolver should be next to be the primary resolver for @user/module patterns
         this.resolverManager.registerResolver(new RegistryResolver());
+        
+        // Register file resolvers (priority 20)
         this.resolverManager.registerResolver(new LocalResolver(this.fileSystem));
         this.resolverManager.registerResolver(new GitHubResolver());
         this.resolverManager.registerResolver(new HTTPResolver());
@@ -179,7 +188,7 @@ export class Environment {
         this.resolverManager.configureRegistries([
           {
             prefix: '@PROJECTPATH',
-            resolver: 'projectpath',
+            resolver: 'PROJECTPATH',
             config: {
               basePath: this.basePath,
               readonly: false
@@ -187,7 +196,7 @@ export class Environment {
           },
           {
             prefix: '@.',
-            resolver: 'projectpath', 
+            resolver: 'PROJECTPATH', 
             config: {
               basePath: this.basePath,
               readonly: false
@@ -211,7 +220,8 @@ export class Environment {
       this.importApproval = new ImportApproval(basePath);
       this.immutableCache = new ImmutableCache(basePath);
       
-      // Initialize reserved variables
+      // Initialize reserved variables (these are different from resolvers)
+      // Resolvers handle imports/paths, but these are actual variables
       this.initializeReservedVariables();
       
       // Reserve module prefixes from resolver configuration
@@ -219,6 +229,37 @@ export class Environment {
     }
   }
   
+  /**
+   * Register built-in function resolvers (async initialization)
+   * This should be called after the Environment is constructed
+   */
+  async registerBuiltinResolvers(): Promise<void> {
+    if (!this.resolverManager) {
+      return;
+    }
+
+    // Import and register built-in function resolvers
+    const { TimeResolver, DebugResolver, InputResolver } = await import('@core/resolvers/builtin');
+    
+    // Create InputResolver with current stdin content
+    const inputResolver = new InputResolver(this.stdinContent);
+    
+    // Register the resolvers
+    this.resolverManager.registerResolver(new TimeResolver());
+    this.resolverManager.registerResolver(new DebugResolver());
+    this.resolverManager.registerResolver(inputResolver);
+    
+    // Only reserve names for built-in function resolvers (not file/module resolvers)
+    // Function resolvers are those that provide computed values like TIME, DEBUG, etc.
+    const functionResolvers = ['TIME', 'DEBUG', 'INPUT', 'PROJECTPATH'];
+    for (const name of functionResolvers) {
+      this.reservedNames.add(name);
+      this.reservedNames.add(name.toLowerCase());
+    }
+    
+    logger.debug(`Reserved resolver names: ${Array.from(this.reservedNames).join(', ')}`);
+  }
+
   /**
    * Reserve module prefixes from resolver configuration
    * This prevents variables from using names that conflict with module prefixes
@@ -266,13 +307,9 @@ export class Environment {
     }
     
     // Initialize @TIME with current timestamp
-    // Allow mocking for tests via MLLD_MOCK_TIME environment variable
-    const mockTime = process.env.MLLD_MOCK_TIME;
-    const timeValue = mockTime || new Date().toISOString(); // RFC 3339 format
-    
     const timeVar: MlldVariable = {
       type: 'text',
-      value: timeValue,
+      value: getTimeValue(), // Delegate to utility function
       nodeId: '',
       location: { line: 0, column: 0 },
       metadata: {
@@ -302,15 +339,14 @@ export class Environment {
     // Note: lowercase 'debug' is handled in getVariable() to avoid conflicts
     
     // Initialize @PROJECTPATH with project root path
-    // This is a lazy variable that computes the project path when first accessed
+    // For now, use basePath as the value (tests override this in fixture setup)
     const projectPathVar: MlldVariable = {
       type: 'text',
-      value: null, // Will be computed dynamically
+      value: getProjectPathValue(this.basePath),
       nodeId: '',
       location: { line: 0, column: 0 },
       metadata: {
         isReserved: true,
-        isLazy: true, // Indicates value should be computed on access
         definedAt: { line: 0, column: 0, filePath: '<reserved>' }
       }
     };
@@ -675,51 +711,80 @@ export class Environment {
   }
   
   getVariable(name: string): MlldVariable | undefined {
-    // Check this scope first
+    // FAST PATH: Check local variables first (most common case)
     const variable = this.variables.get(name);
     if (variable) {
-      // Handle lazy DEBUG variable
-      if (name === 'DEBUG' && variable.metadata?.isLazy && variable.value === null) {
-        // Compute debug value on first access
-        // Default to version 3 (markdown format) for user-friendliness
-        const debugData = this.createDebugObject(3);
-        
-        // Update the variable with computed value
-        variable.type = 'text'; // Always return as text
-        variable.value = debugData;
-        variable.metadata!.isLazy = false; // No longer lazy
-      }
-      
-      // Handle lazy PROJECTPATH variable
-      if (name === 'PROJECTPATH' && variable.metadata?.isLazy && variable.value === null) {
-        // For now, use basePath as the project path
-        // TODO: Implement proper project root detection that works synchronously
-        // The async getProjectPath() method exists but can't be used in synchronous getVariable()
-        variable.value = this.basePath;
-        variable.metadata!.isLazy = false; // No longer lazy
-      }
       return variable;
     }
     
-    // Handle lowercase aliases for reserved variables
-    if (!this.parent) { // Only in root environment
-      if (name === 'input' && this.variables.has('INPUT')) {
-        return this.variables.get('INPUT');
-      } else if (name === 'time' && this.variables.has('TIME')) {
-        return this.variables.get('TIME');
-      } else if (name === 'debug' && this.variables.has('DEBUG')) {
-        return this.getVariable('DEBUG'); // Recursive call to handle lazy computation
-      } else if (name === 'projectpath' && this.variables.has('PROJECTPATH')) {
-        return this.getVariable('PROJECTPATH'); // Recursive call to handle lazy computation
-      }
+    // Check parent scope for regular variables
+    const parentVar = this.parent?.getVariable(name);
+    if (parentVar) {
+      return parentVar;
     }
     
-    // Check parent scope
-    return this.parent?.getVariable(name);
+    // SLOW PATH: Only check resolvers if variable not found
+    // and only in root environment (no parent)
+    // Since we enforce name protection at setVariable time,
+    // we know there are no conflicts between variables and resolvers
+    if (!this.parent && this.reservedNames.has(name.toUpperCase())) {
+      const upperName = name.toUpperCase();
+      
+      // Check cache first
+      const cached = this.resolverVariableCache.get(upperName);
+      if (cached) {
+        return cached;
+      }
+      
+      // Create and cache the resolver variable
+      const resolverVar = this.createResolverVariable(upperName);
+      this.resolverVariableCache.set(upperName, resolverVar);
+      return resolverVar;
+    }
+    
+    return undefined;
+  }
+
+  /**
+   * Create a synthetic variable for a resolver reference
+   * This allows resolvers to be used in variable contexts
+   */
+  private createResolverVariable(resolverName: string): MlldVariable {
+    // For resolver variables, we check if there's already a reserved variable
+    // This handles TIME, DEBUG, INPUT, PROJECTPATH which are pre-initialized
+    const existingVar = this.variables.get(resolverName);
+    if (existingVar) {
+      return existingVar;
+    }
+
+    // For other resolvers, return a placeholder that will be resolved during evaluation
+    return {
+      type: 'text',
+      value: `@${resolverName}`, // Placeholder value
+      nodeId: '',
+      location: { line: 0, column: 0 },
+      metadata: {
+        isReserved: true,
+        isResolver: true,
+        resolverName: resolverName,
+        definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+      }
+    };
   }
   
   hasVariable(name: string): boolean {
-    return this.variables.has(name) || (this.parent?.hasVariable(name) ?? false);
+    // FAST PATH: Check local and parent variables first
+    if (this.variables.has(name) || this.parent?.hasVariable(name)) {
+      return true;
+    }
+    
+    // SLOW PATH: Only check resolvers if variable not found in normal scopes
+    // and only in root environment
+    if (!this.parent && this.reservedNames.has(name.toUpperCase())) {
+      return true;
+    }
+    
+    return false;
   }
   
   // --- Frontmatter Support ---
@@ -914,7 +979,15 @@ export class Environment {
       // Only store on root environment
       this.stdinContent = content;
       
-      // Update @INPUT reserved variable with merged content
+      // Update the InputResolver if it exists
+      if (this.resolverManager) {
+        const inputResolver = this.resolverManager.getResolver('INPUT');
+        if (inputResolver && 'setStdinContent' in inputResolver) {
+          (inputResolver as any).setStdinContent(content);
+        }
+      }
+      
+      // Update the @INPUT variable with the new content
       const inputValue = this.createInputValue();
       if (inputValue !== null) {
         const inputVar: MlldVariable = {
@@ -927,10 +1000,9 @@ export class Environment {
             definedAt: { line: 0, column: 0, filePath: '<reserved>' }
           }
         };
-        // Direct assignment to avoid redefinition error since INPUT might already exist
+        // Update the existing INPUT variable
         this.variables.set('INPUT', inputVar);
       }
-      // Note: lowercase 'input' is handled in getVariable() to avoid conflicts
     } else {
       // Delegate to parent
       this.parent.setStdinContent(content);

@@ -389,6 +389,15 @@ export async function evaluateImport(
         return await evaluateInputImport(directive, env);
       }
     }
+    
+    // Check if this is a direct resolver import (e.g., @TIME, @DEBUG, @PROJECTPATH)
+    const resolverManager = env.getResolverManager();
+    if (resolverManager && content.startsWith('@')) {
+      const resolverName = content.substring(1); // Remove @ prefix
+      if (resolverManager.isResolverName(resolverName)) {
+        return await evaluateResolverImport(directive, resolverName, env);
+      }
+    }
   }
   
   // Check if this is a URL path based on the path node structure
@@ -478,6 +487,134 @@ function extractSection(content: string, sectionName: string): string {
   }
   
   return sectionLines.join('\\n').trim();
+}
+
+/**
+ * Evaluate resolver import.
+ * Handles importing data from built-in resolvers like @TIME, @DEBUG, @PROJECTPATH
+ */
+async function evaluateResolverImport(
+  directive: DirectiveNode,
+  resolverName: string,
+  env: Environment
+): Promise<EvalResult> {
+  const resolverManager = env.getResolverManager();
+  if (!resolverManager) {
+    throw new Error('Resolver manager not available');
+  }
+
+  const resolver = resolverManager.getResolver(resolverName.toUpperCase());
+  if (!resolver) {
+    throw new Error(`Resolver '${resolverName}' not found`);
+  }
+
+  // Check if resolver supports imports
+  if (!resolver.capabilities.supportsImports) {
+    const { ResolverError } = await import('@core/errors');
+    throw ResolverError.unsupportedCapability(resolver.name, 'imports', 'import');
+  }
+
+  // Get export data from resolver
+  let exportData: Record<string, any> = {};
+  
+  if ('getExportData' in resolver) {
+    // Handle selected imports with format support
+    if (directive.subtype === 'importSelected') {
+      const imports = directive.values?.imports || [];
+      
+      // For single format import like: @import { "iso" as date } from @TIME
+      if (imports.length === 1) {
+        const importNode = imports[0];
+        const format = importNode.identifier.replace(/^["']|["']$/g, ''); // Remove quotes
+        
+        // Check if this is a format string (quoted)
+        if (importNode.identifier.startsWith('"') || importNode.identifier.startsWith("'")) {
+          exportData = await (resolver as any).getExportData(format);
+          
+          // If no alias provided, use the format as the variable name
+          const varName = importNode.alias || format;
+          const value = exportData[format];
+          
+          if (value !== undefined) {
+            env.setVariable(varName, {
+              type: typeof value === 'string' ? 'text' : 'data',
+              value: value,
+              nodeId: '',
+              location: directive.location || { line: 0, column: 0 },
+              metadata: {
+                isImported: true,
+                importPath: `@${resolverName}`,
+                definedAt: directive.location || { line: 0, column: 0, filePath: env.getCurrentFilePath() }
+              }
+            });
+          } else {
+            throw new Error(`Format '${format}' not supported by resolver '${resolverName}'`);
+          }
+          
+          return { value: undefined, env };
+        }
+      }
+      
+      // Otherwise get all export data for field selection
+      exportData = await (resolver as any).getExportData();
+    } else {
+      // Import all - get all export data
+      exportData = await (resolver as any).getExportData();
+    }
+  } else {
+    // Fallback: create simple export with resolver result
+    const result = await resolver.resolve(`@${resolverName}`);
+    exportData = { value: result.content };
+  }
+
+  // Convert export data to variables
+  const variables: Map<string, MlldVariable> = new Map();
+  
+  for (const [key, value] of Object.entries(exportData)) {
+    variables.set(key, {
+      type: typeof value === 'string' ? 'text' : 'data',
+      value: value,
+      nodeId: '',
+      location: directive.location || { line: 0, column: 0 },
+      metadata: {
+        isImported: true,
+        importPath: `@${resolverName}`,
+        definedAt: directive.location || { line: 0, column: 0, filePath: env.getCurrentFilePath() }
+      }
+    });
+  }
+
+  // Handle variable merging based on import type
+  if (directive.subtype === 'importAll') {
+    // Import all variables
+    for (const [name, variable] of variables) {
+      env.setVariable(name, variable);
+    }
+  } else if (directive.subtype === 'importSelected') {
+    // Import selected variables
+    const imports = directive.values?.imports || [];
+    for (const importNode of imports) {
+      const varName = importNode.identifier;
+      
+      // Skip if already handled as format import
+      if (varName.startsWith('"') || varName.startsWith("'")) {
+        continue;
+      }
+      
+      const variable = variables.get(varName);
+      if (variable) {
+        // Use alias if provided, otherwise use original name
+        const targetName = importNode.alias || varName;
+        env.setVariable(targetName, variable);
+      } else {
+        // Variable not found in export data
+        throw new Error(`Variable '${varName}' not found in resolver '${resolverName}' exports`);
+      }
+    }
+  }
+
+  // Imports are definition directives - they don't produce output
+  return { value: undefined, env };
 }
 
 /**
