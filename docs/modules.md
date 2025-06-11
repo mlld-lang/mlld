@@ -994,6 +994,135 @@ mlld publish --dry-run my-utils.mld.md
 mlld publish my-utils.mld.md
 ```
 
+## Private Modules
+
+mlld supports publishing and using modules from private GitHub repositories, enabling teams to share proprietary code without exposing it publicly.
+
+### Publishing to Private Repositories
+
+When you run `mlld publish` in a private repository where you have write access, mlld detects this and offers you a choice:
+
+```bash
+mlld publish my-module.mld.md
+
+# Output:
+⚠️  Repository is private but you have write access.
+
+Options:
+  [p]     Publish to private repository
+  [g]     Create public gist instead
+  [c]     Cancel
+
+Your choice: p
+```
+
+#### Using the `--private` Flag
+
+Skip the interactive prompt with the `--private` flag:
+
+```bash
+# Publish directly to private repo
+mlld publish my-module.mld.md --private
+
+# Publish to custom directory
+mlld publish my-module.mld.md --private --path lib/mlld-modules
+
+# Also create a registry PR for future public release
+mlld publish my-module.mld.md --private --pr
+```
+
+#### How Private Publishing Works
+
+1. **Module Storage**: Modules are stored in `mlld/modules/` by default (customize with `--path`)
+2. **Manifest File**: A `manifest.json` is created/updated for module discovery
+3. **Git Integration**: Changes are committed and pushed to your repository
+4. **No Registry PR**: By default, no public registry PR is created (add `--pr` to create one)
+
+Example manifest.json:
+```json
+{
+  "@myteam/utils": {
+    "path": "utils.mld.md",
+    "version": "1.0.0",
+    "about": "Internal utility functions",
+    "author": "myteam",
+    "needs": ["js"],
+    "updatedAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+### Using Private Modules
+
+Team members with repository access can import private modules using file paths:
+
+```mlld
+# Import from same repository
+@import { formatData } from "./mlld/modules/utils.mld.md"
+
+# Import from another private repository (must be cloned locally)
+@import { validate } from "../other-private-repo/mlld/modules/validator.mld.md"
+
+# Import using relative paths from module location
+@import { shared } from "../../shared/modules/common.mld.md"
+```
+
+### Private Module Workflows
+
+#### Team Development
+
+1. **Centralized Private Modules Repository**:
+   ```bash
+   # Create a dedicated private repo for team modules
+   git clone git@github.com:myteam/mlld-modules-private.git
+   cd mlld-modules-private
+   
+   # Publish modules to this repo
+   mlld publish utils.mld.md --private
+   mlld publish validators.mld.md --private
+   ```
+
+2. **Per-Project Private Modules**:
+   ```bash
+   # Within your project repository
+   mlld publish src/modules/project-utils.mld.md --private --path src/mlld
+   ```
+
+#### Gradual Open-Sourcing
+
+Use the `--pr` flag to prepare modules for eventual public release:
+
+```bash
+# Publish privately but also create a registry PR
+mlld publish my-module.mld.md --private --pr
+```
+
+This creates:
+- Private module in your repo (immediately usable by your team)
+- Pull request to public registry (review and merge when ready)
+
+### Authentication and Access
+
+Private module access requires:
+- Repository clone access (SSH keys or HTTPS credentials)
+- File system access to the module files
+- No additional mlld-specific authentication
+
+### Limitations
+
+1. **No Registry Discovery**: Private modules don't appear in `mlld search` or registry listings
+2. **Manual Path Management**: Import paths must be maintained manually
+3. **No Automatic Installation**: Team members must clone repositories containing private modules
+4. **Version Management**: Updates require repository pulls, not `mlld install`
+
+### Best Practices for Private Modules
+
+1. **Consistent Structure**: Use a standard directory structure across projects
+2. **Documentation**: Maintain a README listing available private modules
+3. **Access Control**: Use GitHub's repository access controls
+4. **Migration Path**: Plan for eventual open-sourcing with `--pr` flag
+5. **Testing**: Set up CI/CD to test private modules automatically
+
 ## Best Practices
 
 ### For Module Users

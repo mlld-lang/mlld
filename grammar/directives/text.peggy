@@ -487,44 +487,8 @@ AtText
         sourceType
       );
     }
-  // Simple variable reference - @text name = @varname or @var.field.subfield
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@" !("run" _ / "add" _) varId:BaseIdentifier fields:AnyFieldAccess* {
-      helpers.debug('AtText matched simple variable reference with field access', { id, varId, fields });
-      
-      const subtype = 'textAssignment';
-      const sourceType = 'variable';
-      
-      // Create the variable reference node
-      const varRef = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: varId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-      
-      const meta = { 
-        sourceType: sourceType,
-        hasVariables: true,
-        isVariableReference: true,
-        variableName: varId,
-        hasFieldAccess: fields && fields.length > 0
-      };
-      
-      return helpers.createStructuredDirective(
-        'text',
-        subtype,
-        {
-          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          content: [varRef]
-        },
-        {
-          identifier: id,
-          content: `@${varId}${fields ? fields.map(f => f.type === 'field' || f.type === 'numericField' ? `.${f.value}` : `[${f.value}]`).join('') : ''}`
-        },
-        meta,
-        location(),
-        sourceType
-      );
-    }
   // Exec invocation with tail modifiers - @text name = @command() | @modifiers
+  // MUST come before simple variable reference to match function calls
   / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@" !("run" _ / "add" _) invocation:ExecInvocationWithTail {
       helpers.debug('AtText matched exec invocation with tail modifiers', { id, invocation });
       
@@ -561,6 +525,43 @@ AtText
         {
           identifier: id,
           content: rawContent
+        },
+        meta,
+        location(),
+        sourceType
+      );
+    }
+  // Simple variable reference - @text name = @varname or @var.field.subfield
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@" !("run" _ / "add" _) varId:BaseIdentifier fields:AnyFieldAccess* {
+      helpers.debug('AtText matched simple variable reference with field access', { id, varId, fields });
+      
+      const subtype = 'textAssignment';
+      const sourceType = 'variable';
+      
+      // Create the variable reference node
+      const varRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: varId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+      
+      const meta = { 
+        sourceType: sourceType,
+        hasVariables: true,
+        isVariableReference: true,
+        variableName: varId,
+        hasFieldAccess: fields && fields.length > 0
+      };
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          content: [varRef]
+        },
+        {
+          identifier: id,
+          content: `@${varId}${fields ? fields.map(f => f.type === 'field' || f.type === 'numericField' ? `.${f.value}` : `[${f.value}]`).join('') : ''}`
         },
         meta,
         location(),

@@ -422,20 +422,32 @@ Options:
   -r, --repo           Use repository (skip interactive prompt)
   --use-repo           Same as --repo
   -o, --org <name>     Publish on behalf of an organization
+  -p, --private        Publish to private repository (skip prompts)
+  --pr                 Create registry PR for private publish
+  --path <path>        Custom directory for private publish (default: mlld/modules/)
   -v, --verbose        Show detailed output
 
 Git Integration:
   - Automatically detects git repositories
-  - Checks if repository is public (private repos use gists)
+  - Checks if repository is public or private with write access
+  - For private repos: offers choice between private publish or gist
   - Uses commit SHA for immutable references
   - Validates clean working tree (use --force to override)
-  - Falls back to gist creation if not in git repo or repo is private
+  - Falls back to gist creation if no write access
 
 Organization Publishing:
   - Use --org <name> to publish as an organization you're a member of
   - Or set 'author: org-name' in frontmatter (will verify membership)
   - Organizations cannot create gists - must use git repositories
   - Requires membership verification via GitHub API
+
+Private Repository Publishing:
+  - Automatically detected when you have write access to a private repo
+  - Interactive prompt offers choice between private publish or gist
+  - Use --private to skip prompts and publish directly to private repo
+  - Modules stored in mlld/modules/ by default (customize with --path)
+  - Creates local manifest.json for team discovery
+  - Skip registry PR by default (add with --pr for future public release)
 
 Examples:
   mlld publish                    # Publish from git repo or create gist
@@ -445,6 +457,9 @@ Examples:
   mlld publish --force            # Publish with uncommitted changes
   mlld publish --use-gist         # Force gist creation
   mlld publish --org myorg        # Publish as organization 'myorg'
+  mlld publish --private          # Publish to private repo (skip prompts)
+  mlld publish --private --pr     # Private publish + registry PR
+  mlld publish --private --path lib/modules  # Custom directory
     `);
     return;
   }

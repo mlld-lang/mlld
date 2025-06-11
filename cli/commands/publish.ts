@@ -27,6 +27,9 @@ export interface PublishOptions {
   useRepo?: boolean; // Force repository publishing (skip interactive prompt)
   org?: string; // Publish on behalf of an organization
   skipVersionCheck?: boolean; // Skip checking for latest mlld version (dev only)
+  private?: boolean; // Force private repo publishing
+  pr?: boolean; // Create PR even for private publish
+  path?: string; // Custom path for private publish (default: mlld/modules/)
 }
 
 export interface RuntimeDependencies {
@@ -64,6 +67,8 @@ export interface GitInfo {
   relPath?: string;
   isClean?: boolean;
   remoteUrl?: string;
+  gitRoot?: string;
+  hasWriteAccess?: boolean;
 }
 
 export class PublishCommand {
@@ -102,6 +107,13 @@ export class PublishCommand {
       // Check for conflicting options
       if (options.useGist && options.useRepo) {
         throw new MlldError('Cannot use both --use-gist and --use-repo options', {
+          code: 'CONFLICTING_OPTIONS',
+          severity: ErrorSeverity.Fatal
+        });
+      }
+      
+      if (options.private && options.useGist) {
+        throw new MlldError('Cannot use both --private and --use-gist options', {
           code: 'CONFLICTING_OPTIONS',
           severity: ErrorSeverity.Fatal
         });
@@ -273,9 +285,83 @@ export class PublishCommand {
         const isPublicRepo = await this.checkIfRepoIsPublic(octokit, gitInfo.owner!, gitInfo.repo!);
         
         if (!isPublicRepo) {
-          console.log(chalk.yellow('\n⚠️  Repository is private. Switching to gist creation...'));
-          console.log(chalk.gray('Modules must be publicly accessible. Use --use-gist to force gist creation.'));
-          // Fall through to gist creation
+          // Check if user has write access for private repo publishing
+          if (gitInfo.hasWriteAccess && !options.useGist) {
+            console.log(chalk.yellow('\n⚠️  Repository is private but you have write access.'));
+            
+            if (options.private) {
+              // Skip prompt, go straight to private publish
+              const result = await this.publishToPrivateRepo(gitInfo, metadata, content, filename, options);
+              sourceUrl = result.sourceUrl;
+              registryEntry = result.registryEntry;
+              
+              // Handle PR creation for private repos if requested
+              if (options.pr) {
+                console.log(chalk.blue('\n🔀 Creating pull request to registry...'));
+                const prUrl = await this.createRegistryPR(octokit, user, registryEntry, options);
+                console.log(chalk.green(`\n✅ Pull request created: ${prUrl}`));
+              }
+              
+              // Success message for private publishing
+              console.log(chalk.green('\n✅ Module published to private repository!'));
+              console.log(chalk.bold('Module location:'));
+              console.log(`  Path: ${path.join(options.path || 'mlld/modules', filename)}`);
+              console.log(`  Import: @import { ... } from "${sourceUrl}"`);
+              if (!options.pr) {
+                console.log(chalk.gray('\n💡 Tip: Team members with repo access can now import this module directly.'));
+              }
+              return;
+            } else {
+              // Interactive choice
+              const rl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout,
+              });
+              
+              console.log('\nOptions:');
+              console.log('  [p]     Publish to private repository');
+              console.log('  [g]     Create public gist instead');
+              console.log('  [c]     Cancel');
+              
+              const choice = await rl.question('\nYour choice: ');
+              rl.close();
+              
+              if (choice.toLowerCase() === 'p') {
+                const result = await this.publishToPrivateRepo(gitInfo, metadata, content, filename, options);
+                sourceUrl = result.sourceUrl;
+                registryEntry = result.registryEntry;
+                
+                // Handle PR creation for private repos if requested
+                if (options.pr) {
+                  console.log(chalk.blue('\n🔀 Creating pull request to registry...'));
+                  const prUrl = await this.createRegistryPR(octokit, user, registryEntry, options);
+                  console.log(chalk.green(`\n✅ Pull request created: ${prUrl}`));
+                }
+                
+                // Success message for private publishing
+                console.log(chalk.green('\n✅ Module published to private repository!'));
+                console.log(chalk.bold('Module location:'));
+                console.log(`  Path: ${path.join(options.path || 'mlld/modules', filename)}`);
+                console.log(`  Import: @import { ... } from "${sourceUrl}"`);
+                if (!options.pr) {
+                  console.log(chalk.gray('\n💡 Tip: Team members with repo access can now import this module directly.'));
+                }
+                return;
+              } else if (choice.toLowerCase() === 'g') {
+                console.log(chalk.yellow('\n📝 Switching to gist creation...'));
+                // Fall through to gist creation
+              } else {
+                throw new MlldError('Publication cancelled by user', {
+                  code: 'USER_CANCELLED',
+                  severity: ErrorSeverity.Info
+                });
+              }
+            }
+          } else {
+            console.log(chalk.yellow('\n⚠️  Repository is private. Switching to gist creation...'));
+            console.log(chalk.gray('Modules must be publicly accessible. Use --use-gist to force gist creation.'));
+            // Fall through to gist creation
+          }
         } else {
           // Git-native publishing for public repos
           console.log(chalk.green(`\n✅ Repository is public`));
@@ -902,6 +988,16 @@ Auto-added by mlld publish command`;
         isClean = false;
       }
       
+      // Check write access using git push --dry-run
+      let hasWriteAccess = false;
+      try {
+        execSync('git push --dry-run', { cwd: gitRoot, stdio: 'ignore' });
+        hasWriteAccess = true;
+      } catch {
+        // No write access or no remote
+        hasWriteAccess = false;
+      }
+      
       return {
         isGitRepo: true,
         owner,
@@ -911,6 +1007,8 @@ Auto-added by mlld publish command`;
         relPath,
         isClean,
         remoteUrl,
+        gitRoot,
+        hasWriteAccess,
       };
       
     } catch {
@@ -1454,6 +1552,116 @@ ${options.message ? `\n## Notes\n${options.message}` : ''}`,
     
     return pr.html_url;
   }
+
+  /**
+   * Publish module to private repository
+   */
+  private async publishToPrivateRepo(
+    gitInfo: GitInfo,
+    metadata: ModuleMetadata,
+    content: string,
+    filename: string,
+    options: PublishOptions
+  ): Promise<{ sourceUrl: string; registryEntry: any }> {
+    const modulePath = options.path || 'mlld/modules';
+    const fullPath = path.join(gitInfo.gitRoot!, modulePath, filename);
+    
+    console.log(chalk.blue(`\n📁 Publishing to private repository...`));
+    console.log(chalk.gray(`  Path: ${path.join(modulePath, filename)}`));
+    
+    // Create directory structure
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
+    
+    // Write module file
+    await fs.writeFile(fullPath, content, 'utf8');
+    console.log(chalk.green(`✅ Module file written`));
+    
+    // Create/update manifest.json for discovery
+    const manifestPath = path.join(gitInfo.gitRoot!, modulePath, 'manifest.json');
+    let manifest: Record<string, any> = {};
+    
+    try {
+      const manifestContent = await fs.readFile(manifestPath, 'utf8');
+      manifest = JSON.parse(manifestContent);
+    } catch {
+      // Manifest doesn't exist yet
+      console.log(chalk.gray('Creating new manifest.json...'));
+    }
+    
+    const moduleId = `@${metadata.author}/${metadata.name}`;
+    manifest[moduleId] = {
+      path: filename,
+      version: metadata.version || '1.0.0',
+      about: metadata.about,
+      author: metadata.author,
+      needs: metadata.needs || [],
+      updatedAt: new Date().toISOString(),
+    };
+    
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+    console.log(chalk.green(`✅ Manifest updated`));
+    
+    if (!options.dryRun) {
+      // Commit and push
+      try {
+        execSync(`git add "${fullPath}" "${manifestPath}"`, { 
+          cwd: gitInfo.gitRoot!,
+          stdio: 'pipe' 
+        });
+        
+        const commitMessage = options.message || `Add module ${moduleId}`;
+        execSync(`git commit -m "${commitMessage}"`, { 
+          cwd: gitInfo.gitRoot!,
+          stdio: 'pipe' 
+        });
+        
+        console.log(chalk.blue('🔄 Pushing to remote...'));
+        execSync('git push', { 
+          cwd: gitInfo.gitRoot!,
+          stdio: 'pipe' 
+        });
+        
+        console.log(chalk.green('✅ Changes pushed successfully'));
+      } catch (error: any) {
+        throw new MlldError(
+          `Failed to commit/push changes: ${error.message}`,
+          { code: 'GIT_PUSH_FAILED', severity: ErrorSeverity.Fatal }
+        );
+      }
+    }
+    
+    // Build source URL and registry entry for consistency
+    const sourceUrl = path.join(gitInfo.gitRoot!, modulePath, filename);
+    const contentHash = crypto.createHash('sha256').update(content).digest('hex');
+    
+    const registryEntry = {
+      name: metadata.name,
+      author: metadata.author,
+      version: metadata.version || '1.0.0',
+      about: metadata.about,
+      needs: metadata.needs || [],
+      repo: metadata.repo,
+      keywords: metadata.keywords || [],
+      bugs: metadata.bugs,
+      homepage: metadata.homepage,
+      license: metadata.license,
+      mlldVersion: metadata.mlldVersion || currentMlldVersion,
+      source: {
+        type: 'private-repo' as const,
+        path: sourceUrl,
+        contentHash: contentHash,
+        repository: {
+          url: gitInfo.remoteUrl,
+          commit: gitInfo.sha,
+          relativePath: path.join(modulePath, filename),
+        },
+      },
+      dependencies: this.buildDependenciesObject(metadata),
+      publishedAt: new Date().toISOString(),
+    };
+    
+    return { sourceUrl, registryEntry };
+  }
 }
 
 // ============================================================================
@@ -1484,6 +1692,9 @@ export function createPublishCommand() {
         useRepo: flags['use-repo'] || flags.repo || flags.r,
         org: flags.org || flags.o,
         skipVersionCheck: flags['skip-version-check'],
+        private: flags.private || flags.p,
+        pr: flags.pr,
+        path: flags.path,
       };
       
       try {
