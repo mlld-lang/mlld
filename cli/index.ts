@@ -71,6 +71,8 @@ export interface CLIOptions {
   riskyApproveAll?: boolean;
   yolo?: boolean;
   y?: boolean;
+  // Blank line normalization
+  noNormalizeBlankLines?: boolean;
   _?: string[]; // Remaining args after command
 }
 
@@ -343,6 +345,10 @@ function parseArgs(args: string[]): CLIOptions {
       case '-y':
         options.y = true;
         break;
+      // Blank line normalization
+      case '--no-normalize-blank-lines':
+        options.noNormalizeBlankLines = true;
+        break;
       // Transformation is always enabled by default
       // No transform flags needed
       default:
@@ -609,6 +615,9 @@ Import Approval Options:
   --risky-approve-all     Automatically approve all imports (use with caution!)
   --yolo                  Same as --risky-approve-all (shorter alias)
   -y                      Same as --risky-approve-all (shortest alias)
+
+Output Formatting Options:
+  --no-normalize-blank-lines  Disable blank line normalization in output
 
 Configuration:
   Mlld looks for configuration in:
@@ -923,7 +932,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
         timeout: cliOptions.commandTimeout
       },
       returnEnvironment: true,
-      approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y
+      approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
+      normalizeBlankLines: !cliOptions.noNormalizeBlankLines
     });
 
     // Extract result and environment

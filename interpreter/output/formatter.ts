@@ -9,6 +9,7 @@ import { normalizeFinalOutput } from '../utils/blank-line-normalizer';
 export interface FormatOptions {
   format: 'markdown' | 'xml';
   variables?: Map<string, MlldVariable>;
+  normalizeBlankLines?: boolean; // Default: true
 }
 
 /**
@@ -69,8 +70,11 @@ function formatMarkdown(nodes: MlldNode[], options: FormatOptions): string {
   
   let result = parts.join('');
   
-  // Apply final output normalization (handles blank lines and trailing newline)
-  result = normalizeFinalOutput(result);
+  // Apply final output normalization if enabled (default: true)
+  const shouldNormalize = options.normalizeBlankLines !== false;
+  if (shouldNormalize) {
+    result = normalizeFinalOutput(result);
+  }
   
   return result;
 }

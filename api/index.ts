@@ -35,6 +35,8 @@ export interface ProcessOptions {
   fileSystem?: IFileSystemService;
   /** Custom path service implementation */
   pathService?: IPathService;
+  /** Control blank line normalization (default: true) */
+  normalizeBlankLines?: boolean;
 }
 
 /**
@@ -51,7 +53,8 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     basePath,
     format: options?.format || 'markdown',
     fileSystem,
-    pathService
+    pathService,
+    normalizeBlankLines: options?.normalizeBlankLines
   });
 
   return result;

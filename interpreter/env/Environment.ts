@@ -84,6 +84,9 @@ export class Environment {
   // Import approval bypass flag
   private approveAllImports: boolean = false;
   
+  // Blank line normalization flag
+  private normalizeBlankLines: boolean = true;
+  
   // Default URL validation options (used if no config provided)
   private defaultUrlOptions = {
     allowedProtocols: ['http', 'https'],
@@ -1653,6 +1656,20 @@ export class Environment {
    */
   setApproveAllImports(approve: boolean): void {
     this.approveAllImports = approve;
+  }
+  
+  /**
+   * Set blank line normalization flag
+   */
+  setNormalizeBlankLines(normalize: boolean): void {
+    this.normalizeBlankLines = normalize;
+  }
+  
+  /**
+   * Get blank line normalization flag
+   */
+  getNormalizeBlankLines(): boolean {
+    return this.normalizeBlankLines;
   }
   
   private collectError(

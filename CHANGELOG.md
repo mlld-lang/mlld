@@ -5,6 +5,12 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.6]
+Added:
+- Toggle for turning off line normalization:
+   `--no-normalize-blank-lines` CLI flag
+   `normalizeBlankLines: false` in the API
+
 ## [1.1.5]
 Fixed:
 - Publishing a module as an org

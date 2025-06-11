@@ -363,8 +363,8 @@ export async function evaluateText(
     
     resolvedValue = await interpolate(contentNodes, env);
     
-    // Apply template normalization if this is template content
-    if (directive.meta?.isTemplateContent) {
+    // Apply template normalization if this is template content and normalization is enabled
+    if (directive.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
       resolvedValue = normalizeTemplateContent(resolvedValue, true);
     }
   }

@@ -54,8 +54,8 @@ export async function evaluateAdd(
     if (isTextVariable(variable)) {
       // Text variables contain string content - use directly
       value = variable.value;
-      // Check if this variable was created from template content
-      if (variable.meta?.isTemplateContent) {
+      // Check if this variable was created from template content and normalization is enabled
+      if (variable.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
         value = normalizeTemplateContent(value, true);
       }
     } else if (isDataVariable(variable)) {
@@ -323,8 +323,8 @@ export async function evaluateAdd(
     // Interpolate the template
     content = await interpolate(templateNodes, env);
     
-    // Apply template normalization if this is template content
-    if (directive.meta?.isTemplateContent) {
+    // Apply template normalization if this is template content and normalization is enabled
+    if (directive.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
       content = normalizeTemplateContent(content, true);
     }
     
@@ -405,8 +405,8 @@ export async function evaluateAdd(
     // Interpolate the template content with the child environment
     content = await interpolate(template.content, childEnv);
     
-    // Apply template normalization if the template definition had isTemplateContent
-    if (template.meta?.isTemplateContent) {
+    // Apply template normalization if the template definition had isTemplateContent and normalization is enabled
+    if (template.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
       content = normalizeTemplateContent(content, true);
     }
     

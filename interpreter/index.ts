@@ -31,6 +31,7 @@ export interface InterpretOptions {
   stdinContent?: string; // Optional stdin content
   returnEnvironment?: boolean; // Return environment with result
   approveAllImports?: boolean; // Bypass interactive import approval
+  normalizeBlankLines?: boolean; // Control blank line normalization (default: true)
 }
 
 /**
@@ -133,6 +134,11 @@ export async function interpret(
     env.setApproveAllImports(options.approveAllImports);
   }
   
+  // Set blank line normalization flag (default: true)
+  if (options.normalizeBlankLines !== undefined) {
+    env.setNormalizeBlankLines(options.normalizeBlankLines);
+  }
+  
   // Evaluate the AST
   await evaluate(ast, env);
   
@@ -147,7 +153,8 @@ export async function interpret(
   // Format the output
   const output = await formatOutput(nodes, {
     format: options.format || 'markdown',
-    variables: env.getAllVariables()
+    variables: env.getAllVariables(),
+    normalizeBlankLines: options.normalizeBlankLines
   });
   
   // Return environment if requested
