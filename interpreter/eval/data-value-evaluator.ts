@@ -614,7 +614,10 @@ export async function evaluateForeachSection(
       
       // Extract the section using llmxml
       const { createLLMXML } = await import('llmxml');
-      const llmxml = createLLMXML();
+      const llmxml = createLLMXML({
+        verbose: false,
+        warningLevel: 'none' // Suppress llmxml logging
+      });
       let sectionContent: string;
       try {
         // getSection expects just the title without the # prefix
@@ -632,9 +635,19 @@ export async function evaluateForeachSection(
       // 8. Apply template with current item context
       const templateResult = await interpolate(template.values.content, childEnv);
       
-      // 9. Combine template with section content
-      const result = templateResult + '\n' + sectionContent;
-      results.push(result);
+      // 9. Replace the first line (header) of section content with template result
+      // This mimics the behavior of the 'as' clause in @add directive
+      const lines = sectionContent.split('\n');
+      if (lines.length > 0 && lines[0].match(/^#+\s/)) {
+        // Replace the header line with the template result
+        lines[0] = templateResult;
+        const result = lines.join('\n');
+        results.push(result);
+      } else {
+        // If no header found, prepend the template result
+        const result = templateResult + '\n' + sectionContent;
+        results.push(result);
+      }
       
     } catch (error) {
       // Include iteration context in error message

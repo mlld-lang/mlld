@@ -224,7 +224,10 @@ export async function evaluateAdd(
     }
     
     // Extract the section using llmxml
-    const llmxml = createLLMXML();
+    const llmxml = createLLMXML({
+      verbose: false,
+      warningLevel: 'none' // Suppress llmxml logging
+    });
     try {
       // getSection expects just the title without the # prefix
       const titleWithoutHash = sectionTitle.replace(/^#+\s*/, '');
@@ -245,11 +248,30 @@ export async function evaluateAdd(
       // Replace the original section title with the new one
       const lines = content.split('\n');
       if (lines.length > 0 && lines[0].match(/^#+\s/)) {
-        // Extract the heading level from the new title or default to original
-        const newHeadingMatch = newTitle.match(/^(#+)\s/);
-        const newHeadingLevel = newHeadingMatch ? newHeadingMatch[1] : '#';
-        const titleText = newTitle.replace(/^#+\s*/, '');
-        lines[0] = `${newHeadingLevel} ${titleText}`;
+        // Handle three cases:
+        // 1. Just header level: "###" -> change level only
+        // 2. No header level: "Name" -> keep original level, replace text
+        // 3. Full replacement: "### Name" -> replace entire line
+        
+        const newTitleTrimmed = newTitle.trim();
+        const newHeadingMatch = newTitleTrimmed.match(/^(#+)(\s+(.*))?$/);
+        
+        if (newHeadingMatch) {
+          // Case 1: Just header level (e.g., "###")
+          if (!newHeadingMatch[3]) {
+            const originalText = lines[0].replace(/^#+\s*/, '');
+            lines[0] = `${newHeadingMatch[1]} ${originalText}`;
+          } 
+          // Case 3: Full replacement (e.g., "### Name")
+          else {
+            lines[0] = newTitleTrimmed;
+          }
+        } else {
+          // Case 2: No header level (e.g., "Name")
+          const originalLevel = lines[0].match(/^(#+)\s/)?.[1] || '#';
+          lines[0] = `${originalLevel} ${newTitleTrimmed}`;
+        }
+        
         content = lines.join('\n');
       } else {
         // If no heading found, prepend the new title

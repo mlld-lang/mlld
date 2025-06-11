@@ -108,13 +108,24 @@ export class DependencyDetector {
    */
   detectRuntimeNeeds(ast: MlldNode[]): string[] {
     const needs = new Set<string>();
+    let hasNodeDependencies = false;
     
     this.walkAST(ast, (node) => {
       if (node.type === 'Directive') {
         if (node.kind === 'run') {
           const lang = this.extractRunLanguage(node as RunDirective);
-          // Only add language if explicitly specified (not shell commands)
-          if (lang) needs.add(lang);
+          if (lang === 'js') {
+            // Check if the JavaScript code uses Node.js APIs
+            const code = this.extractCode(node as RunDirective);
+            if (this.usesNodeAPIs(code)) {
+              needs.add('node');
+              hasNodeDependencies = true;
+            } else {
+              needs.add('js');
+            }
+          } else if (lang) {
+            needs.add(lang);
+          }
         } else if (node.kind === 'exec') {
           // Check if exec has direct language specification
           const execNode = node as ExecDirective;
@@ -122,14 +133,30 @@ export class DependencyDetector {
           // Check for language in exec directive itself
           if (execNode.meta?.language) {
             const lang = execNode.meta.language.toLowerCase();
-            if (lang === 'js' || lang === 'javascript') needs.add('js');
+            if (lang === 'js' || lang === 'javascript') {
+              const code = this.extractCode(execNode);
+              if (this.usesNodeAPIs(code)) {
+                needs.add('node');
+                hasNodeDependencies = true;
+              } else {
+                needs.add('js');
+              }
+            }
             else if (lang === 'py' || lang === 'python') needs.add('py');
             else if (lang === 'sh' || lang === 'bash' || lang === 'shell') needs.add('sh');
           } else if (execNode.values?.lang && execNode.values.lang.length > 0) {
             const langNode = execNode.values.lang[0];
             if (langNode.type === 'Text') {
               const lang = langNode.content.toLowerCase();
-              if (lang === 'js' || lang === 'javascript') needs.add('js');
+              if (lang === 'js' || lang === 'javascript') {
+                const code = this.extractCode(execNode);
+                if (this.usesNodeAPIs(code)) {
+                  needs.add('node');
+                  hasNodeDependencies = true;
+                } else {
+                  needs.add('js');
+                }
+              }
               else if (lang === 'py' || lang === 'python') needs.add('py');
               else if (lang === 'sh' || lang === 'bash' || lang === 'shell') needs.add('sh');
             }
@@ -143,7 +170,17 @@ export class DependencyDetector {
             this.walkAST(execNode.values.template, (innerNode) => {
               if (innerNode.type === 'Directive' && innerNode.kind === 'run') {
                 const lang = this.extractRunLanguage(innerNode as RunDirective);
-                if (lang) needs.add(lang);
+                if (lang === 'js') {
+                  const code = this.extractCode(innerNode as RunDirective);
+                  if (this.usesNodeAPIs(code)) {
+                    needs.add('node');
+                    hasNodeDependencies = true;
+                  } else {
+                    needs.add('js');
+                  }
+                } else if (lang) {
+                  needs.add(lang);
+                }
               }
             });
           }
@@ -151,11 +188,79 @@ export class DependencyDetector {
       }
     });
     
+    // Remove 'js' if we have 'node' (node is a superset of js)
+    if (hasNodeDependencies) {
+      needs.delete('js');
+    }
+    
     return Array.from(needs).sort();
   }
 
   /**
-   * Detect JavaScript packages from AST
+   * Check if JavaScript code uses Node.js-specific APIs
+   */
+  private usesNodeAPIs(code: string): boolean {
+    // Check for require() calls
+    if (/\brequire\s*\(/.test(code)) {
+      return true;
+    }
+    
+    // Check for Node.js globals
+    const nodeGlobals = [
+      'process', '__dirname', '__filename', 'module', 'exports', 'global',
+      'Buffer', 'setImmediate', 'clearImmediate'
+    ];
+    for (const global of nodeGlobals) {
+      const regex = new RegExp(`\\b${global}\\b`);
+      if (regex.test(code)) {
+        return true;
+      }
+    }
+    
+    // Check for Node.js built-in module imports
+    try {
+      const ast = acorn.parse(code, {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        allowReturnOutsideFunction: true,
+        allowImportExportEverywhere: true
+      });
+      
+      let usesNode = false;
+      walkSimple(ast, {
+        ImportDeclaration: (node: any) => {
+          if (this.nodeBuiltins.has(node.source.value)) {
+            usesNode = true;
+          }
+        },
+        CallExpression: (node: any) => {
+          if (node.callee.name === 'require' && 
+              node.arguments.length > 0 && 
+              node.arguments[0].type === 'Literal' &&
+              this.nodeBuiltins.has(node.arguments[0].value)) {
+            usesNode = true;
+          }
+        }
+      });
+      
+      return usesNode;
+    } catch (error) {
+      // If parsing fails, check with regex
+      for (const builtin of this.nodeBuiltins) {
+        if (code.includes(`require('${builtin}')`) || 
+            code.includes(`require("${builtin}")`) ||
+            code.includes(`from '${builtin}'`) ||
+            code.includes(`from "${builtin}"`)) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  /**
+   * Detect JavaScript packages from AST (works for both JS and Node)
    */
   detectJavaScriptPackages(ast: MlldNode[]): string[] {
     const packages = new Set<string>();
@@ -164,7 +269,7 @@ export class DependencyDetector {
       if (node.type === 'Directive' && (node.kind === 'run' || node.kind === 'exec')) {
         const lang = node.kind === 'run' ? this.extractRunLanguage(node as RunDirective) : null;
         
-        // Only process JavaScript code
+        // Process JavaScript code (both 'js' and code that would be detected as 'node')
         if (lang === 'js' || (node.kind === 'exec' && this.containsJavaScriptRun(node))) {
           const code = this.extractCode(node as RunDirective | ExecDirective);
           if (code) {
@@ -176,6 +281,15 @@ export class DependencyDetector {
     });
     
     return Array.from(packages).sort();
+  }
+
+  /**
+   * Detect Node.js packages from AST
+   */
+  detectNodePackages(ast: MlldNode[]): string[] {
+    // For now, this is the same as detectJavaScriptPackages
+    // In the future, we might want to filter out browser-only packages
+    return this.detectJavaScriptPackages(ast);
   }
 
   /**

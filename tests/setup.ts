@@ -3,6 +3,9 @@
 // Set test environment variable
 process.env.MLLD_TEST = '1';
 
+// Suppress llmxml logging during tests
+process.env.LOG_LEVEL = 'error';
+
 // Mock readline for tests to prevent prompts
 import { vi } from 'vitest';
 

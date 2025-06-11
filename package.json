@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "description": "mlld: a modular prompt scripting language",
   "type": "module",
   "main": "dist/index.cjs",
@@ -104,7 +104,7 @@
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.0",
     "keytar": "^7.9.0",
-    "llmxml": "^1.4.2",
+    "llmxml": "^1.4.3",
     "lodash": "^4.17.21",
     "marked": "^4.0.12",
     "minimatch": "^3.1.2",
