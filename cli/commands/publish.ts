@@ -220,7 +220,7 @@ export class PublishCommand {
 
       // Validate imports reference only public modules
       console.log(chalk.gray('Validating module imports...'));
-      const importValidation = await this.validateImports(content, octokit);
+      const importValidation = await this.validateImports(content, metadata, publishingAuthor, octokit);
       if (!importValidation.valid) {
         throw new MlldError(
           'Module imports validation failed:\n' +
@@ -1046,10 +1046,15 @@ Auto-added by mlld publish command`;
   /**
    * Validate module imports to ensure they reference public modules
    */
-  private async validateImports(content: string, _octokit: Octokit): Promise<{ valid: boolean; errors: string[] }> {
+  private async validateImports(
+    content: string, 
+    metadata: ModuleMetadata,
+    publishingAuthor: string,
+    _octokit: Octokit
+  ): Promise<{ valid: boolean; errors: string[] }> {
     const errors: string[] = [];
     
-    // Find all @import directives that reference modules (start with @)
+    // Find all @import directives that reference modules (start with @) in the entire file
     const importRegex = /@import\s+\{[^}]+\}\s+from\s+(@[a-z0-9-]+\/[a-z0-9-]+)(?:@[a-f0-9]+)?/g;
     const matches = content.matchAll(importRegex);
     
@@ -1074,6 +1079,12 @@ Auto-added by mlld publish command`;
         
         const registry = await response.json() as Record<string, any>;
         const fullModuleName = `@${author}/${moduleName}`;
+        
+        // Skip validation if this is a self-reference (module importing itself in examples)
+        const currentModuleName = `@${publishingAuthor}/${metadata.name}`;
+        if (fullModuleName === currentModuleName) {
+          continue; // Skip self-reference validation
+        }
         
         if (!(fullModuleName in registry)) {
           errors.push(`Module ${moduleRef} not found in public registry. Only published modules can be imported.`);
