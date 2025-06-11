@@ -145,11 +145,23 @@ export class InitModuleCommand {
       console.log('\nRuntime dependencies:');
       console.log(chalk.gray('  Dependencies will be auto-detected when you publish.'));
       console.log(chalk.gray('  For now, specify if you know you\'ll use external runtimes.'));
-      console.log(chalk.gray('  Options: js, py, sh (comma-separated, or press Enter for none)'));
+      console.log(chalk.gray('  Options: js, node, py, sh (comma-separated, or press Enter for none)'));
+      console.log(chalk.gray('  Note: Use "node" for Node.js-specific code, "js" for browser-compatible JavaScript'));
       
       const needsInput = await rl.question('Needs []: ');
       if (needsInput) {
         metadata.needs = needsInput.split(',').map(n => n.trim());
+        
+        // Validate needs values
+        const validNeeds = ['js', 'node', 'py', 'sh'];
+        for (const need of metadata.needs) {
+          if (!validNeeds.includes(need)) {
+            throw new MlldError(`Invalid runtime dependency: "${need}". Valid options are: ${validNeeds.join(', ')}`, {
+              code: 'INVALID_RUNTIME_DEPENDENCY',
+              severity: ErrorSeverity.Fatal
+            });
+          }
+        }
       } else {
         metadata.needs = [];
       }

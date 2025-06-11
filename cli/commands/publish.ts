@@ -44,6 +44,7 @@ export interface ModuleMetadata {
   about: string;  // Renamed from description
   needs: string[];  // Required, empty array for pure mlld
   needsJs?: RuntimeDependencies;
+  needsNode?: RuntimeDependencies;
   needsPy?: RuntimeDependencies;
   needsSh?: RuntimeDependencies;
   bugs?: string;
@@ -637,14 +638,14 @@ export class PublishCommand {
       errors.push(
         'Missing required field: needs\n' +
         '    Add to your frontmatter: needs: [] for pure mlld modules\n' +
-        '    Or specify runtime dependencies: needs: ["js", "py", "sh"]'
+        '    Or specify runtime dependencies: needs: ["js", "node", "py", "sh"]'
       );
     } else {
       // Validate needs values
-      const validNeeds = ['js', 'py', 'sh'];
+      const validNeeds = ['js', 'node', 'py', 'sh'];
       const invalidNeeds = metadata.needs.filter(n => !validNeeds.includes(n));
       if (invalidNeeds.length > 0) {
-        errors.push(`Invalid needs values: ${invalidNeeds.join(', ')}. Valid values are: js, py, sh`);
+        errors.push(`Invalid needs values: ${invalidNeeds.join(', ')}. Valid values are: js, node, py, sh`);
       }
     }
 
@@ -688,6 +689,20 @@ export class PublishCommand {
         if (packages.length > 0) {
           warnings.push(
             `Module declares "js" in needs but missing needs-js details.\n` +
+            `    Detected packages: ${packages.join(', ')}`
+          );
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    if (metadata.needs.includes('node') && !metadata.needsNode) {
+      try {
+        const ast = parseSync(content);
+        const detector = new DependencyDetector();
+        const packages = detector.detectNodePackages(ast);
+        if (packages.length > 0) {
+          warnings.push(
+            `Module declares "node" in needs but missing needs-node details.\n` +
             `    Detected packages: ${packages.join(', ')}`
           );
         }
@@ -1002,6 +1017,9 @@ Auto-added by mlld publish command`;
     if (metadata.needsJs) {
       deps.js = metadata.needsJs;
     }
+    if (metadata.needsNode) {
+      deps.node = metadata.needsNode;
+    }
     if (metadata.needsPy) {
       deps.py = metadata.needsPy;
     }
@@ -1239,6 +1257,11 @@ Auto-added by mlld publish command`;
       lines.push('needs-js:');
       if (metadata.needsJs.node) lines.push(`  node: "${metadata.needsJs.node}"`);
       if (metadata.needsJs.packages) lines.push(`  packages: [${metadata.needsJs.packages.map(p => `"${p}"`).join(', ')}]`);
+    }
+    if (metadata.needs.includes('node') && metadata.needsNode) {
+      lines.push('needs-node:');
+      if (metadata.needsNode.node) lines.push(`  node: "${metadata.needsNode.node}"`);
+      if (metadata.needsNode.packages) lines.push(`  packages: [${metadata.needsNode.packages.map(p => `"${p}"`).join(', ')}]`);
     }
     if (metadata.needs.includes('py') && metadata.needsPy) {
       lines.push('needs-py:');
