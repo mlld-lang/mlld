@@ -1,5 +1,5 @@
 import type { MlldNode, MlldVariable } from '@core/types';
-import { createLLMXML } from 'llmxml';
+import { llmxmlInstance } from '../utils/llmxml-instance';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
 
 /**
@@ -20,15 +20,7 @@ export async function formatOutput(nodes: MlldNode[], options: FormatOptions): P
     const structuredMarkdown = buildStructuredMarkdown(nodes, options);
     
     // Use llmxml to convert markdown to XML
-    const llmxml = createLLMXML({
-      includeTitle: false,  // No redundant title attributes
-      includeHlevel: false, // No need for heading levels either
-      tagFormat: 'SCREAMING_SNAKE', // Maximum clarity!
-      verbose: false,
-      warningLevel: 'none' // Suppress llmxml logging
-    });
-    
-    return await llmxml.toXML(structuredMarkdown);
+    return await llmxmlInstance.toXML(structuredMarkdown);
   }
   
   // Default to plain markdown (just the content)

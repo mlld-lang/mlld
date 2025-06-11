@@ -3,7 +3,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
-import { createLLMXML } from 'llmxml';
+import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 
@@ -257,14 +257,10 @@ export async function evaluateAdd(
     }
     
     // Extract the section using llmxml
-    const llmxml = createLLMXML({
-      verbose: false,
-      warningLevel: 'none' // Suppress llmxml logging
-    });
     try {
       // getSection expects just the title without the # prefix
       const titleWithoutHash = sectionTitle.replace(/^#+\s*/, '');
-      content = await llmxml.getSection(fileContent, titleWithoutHash, {
+      content = await llmxmlInstance.getSection(fileContent, titleWithoutHash, {
         includeNested: true
       });
       // Compact blank lines and trim

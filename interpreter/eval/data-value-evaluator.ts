@@ -615,16 +615,12 @@ export async function evaluateForeachSection(
       const fileContent = await env.readFile(resolvedPath);
       
       // Extract the section using llmxml
-      const { createLLMXML } = await import('llmxml');
-      const llmxml = createLLMXML({
-        verbose: false,
-        warningLevel: 'none' // Suppress llmxml logging
-      });
+      const { llmxmlInstance } = await import('../utils/llmxml-instance');
       let sectionContent: string;
       try {
         // getSection expects just the title without the # prefix
         const titleWithoutHash = sectionName.replace(/^#+\s*/, '');
-        sectionContent = await llmxml.getSection(fileContent, titleWithoutHash, {
+        sectionContent = await llmxmlInstance.getSection(fileContent, titleWithoutHash, {
           includeNested: true
         });
         // Trim trailing whitespace

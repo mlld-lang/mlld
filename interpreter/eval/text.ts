@@ -3,7 +3,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { createTextVariable, astLocationToSourceLocation } from '@core/types';
-import { createLLMXML } from 'llmxml';
+import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 
 /**
@@ -169,14 +169,10 @@ export async function evaluateText(
     const fileContent = await env.readFile(resolvedPath);
     
     // Extract the section using llmxml
-    const llmxml = createLLMXML({
-      verbose: false,
-      warningLevel: 'none' // Suppress llmxml logging
-    });
     try {
       // getSection expects just the title without the # prefix
       const titleWithoutHash = sectionTitle.replace(/^#+\s*/, '');
-      resolvedValue = await llmxml.getSection(fileContent, titleWithoutHash, {
+      resolvedValue = await llmxmlInstance.getSection(fileContent, titleWithoutHash, {
         includeNested: true,
         includeTitle: true // Include the section title in output
       });
