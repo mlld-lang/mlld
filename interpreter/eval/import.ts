@@ -373,8 +373,7 @@ export async function evaluateImport(
     if (content === '@INPUT' || content === '@input') {
       return await evaluateInputImport(directive, env);
     } else if (content === '@stdin') {
-      // Show deprecation warning for @stdin
-      console.warn('⚠️  Warning: @stdin is deprecated. Please use @INPUT or @input instead.');
+      // Silently handle @stdin for backward compatibility
       return await evaluateInputImport(directive, env);
     }
   }
