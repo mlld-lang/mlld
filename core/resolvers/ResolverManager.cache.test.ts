@@ -12,6 +12,18 @@ class TestResolver implements Resolver {
   description = 'Test resolver for cache testing';
   type = 'input' as const;
   
+  capabilities = {
+    io: { read: true, write: false, list: false },
+    needs: { network: false, cache: true, auth: false },
+    contexts: { import: true, path: false, output: false },
+    resourceType: 'module' as const,
+    priority: 10,
+    cache: { 
+      strategy: 'persistent' as const,
+      ttl: { duration: 300 }
+    }
+  };
+  
   private callCount = 0;
   
   canResolve(ref: string): boolean {
@@ -198,6 +210,18 @@ describe('ResolverManager with Cache Integration', () => {
         description = 'Slow test resolver';
         type = 'input' as const;
         private callCount = 0;
+        
+        capabilities = {
+          io: { read: true, write: false, list: false },
+          needs: { network: false, cache: true, auth: false },
+          contexts: { import: true, path: false, output: false },
+          resourceType: 'module' as const,
+          priority: 50,
+          cache: { 
+            strategy: 'memory' as const,
+            ttl: { duration: 300 }
+          }
+        };
         
         canResolve(ref: string): boolean {
           return ref.startsWith('@slow/');

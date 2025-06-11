@@ -2,7 +2,8 @@ import {
   Resolver, 
   ResolverContent, 
   ResolverType,
-  ContentInfo
+  ContentInfo,
+  ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint/TaintTracker';
@@ -60,6 +61,18 @@ export class HTTPResolver implements Resolver {
   name = 'http';
   description = 'Resolves modules from HTTP/HTTPS endpoints';
   type: ResolverType = 'input';
+  
+  capabilities: ResolverCapabilities = {
+    io: { read: true, write: false, list: false },
+    needs: { network: true, cache: true, auth: true },
+    contexts: { import: true, path: true, output: false },
+    resourceType: 'api',
+    priority: 20, // Same as other external resolvers
+    cache: { 
+      strategy: 'persistent',
+      ttl: { duration: 300 } // 5 minutes
+    }
+  };
 
   private readonly cache: Map<string, { 
     content: string; 

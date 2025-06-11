@@ -2,7 +2,8 @@ import {
   Resolver, 
   ResolverContent, 
   ResolverType,
-  ContentInfo
+  ContentInfo,
+  ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint/TaintTracker';
@@ -76,6 +77,18 @@ export class GitHubResolver implements Resolver {
   name = 'github';
   description = 'Resolves modules from GitHub repositories';
   type: ResolverType = 'input';
+  
+  capabilities: ResolverCapabilities = {
+    io: { read: true, write: false, list: true },
+    needs: { network: true, cache: true, auth: true },
+    contexts: { import: true, path: true, output: false },
+    resourceType: 'file', // GitHub resolver handles files, not modules
+    priority: 20, // Same as other file resolvers
+    cache: { 
+      strategy: 'persistent',
+      ttl: { duration: 300 } // 5 minutes
+    }
+  };
 
   private readonly cache: Map<string, { content: string; timestamp: number; etag?: string }> = new Map();
   private readonly defaultCacheTimeout = 300000; // 5 minutes

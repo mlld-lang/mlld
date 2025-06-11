@@ -72,6 +72,41 @@ Access files relative to your project root:
 3. Git repository root (`.git` directory)
 4. Directory with `pyproject.toml`, `Cargo.toml`, etc.
 
+## Content Types
+
+Resolvers return different types of content based on what they're resolving:
+
+### Module Content
+mlld files with exportable variables and templates:
+```mlld
+# utils.mld - module content
+@text greeting = "Hello"
+@exec formatName(name) = @run [echo "Name: {{name}}"]
+@data config = { "version": "1.0.0" }
+```
+
+When imported: `@import { greeting, formatName } from @company/utils`
+
+### Data Content  
+Structured data (JSON objects, arrays):
+```json
+// When @TIME returns data in import context
+{
+  "YYYY-MM-DD": "2024-01-15",
+  "HH:mm:ss": "10:30:45"
+}
+```
+
+### Text Content
+Plain text strings:
+```text
+// When @PROJECTPATH returns the path as text
+/Users/adam/dev/my-project
+
+// When reading a markdown file
+Content of README.md file...
+```
+
 ## Usage Patterns
 
 ### Import Context
@@ -103,6 +138,41 @@ Use path resolvers in file paths (only supported by path-type resolvers):
 @path config = @INPUT/file.json        # ❌ INPUT doesn't support paths
 ```
 
+### Variable Context
+
+When used as a bare variable, resolvers return their default value:
+
+```mlld
+@add @TIME          # → "2024-01-15T10:30:00Z" (current ISO timestamp)
+@add @PROJECTPATH   # → "/Users/adam/dev/my-project" (project root path)
+
+@text now = @TIME   # Store current time in variable
+@text root = @PROJECTPATH  # Store project path in variable
+```
+
+### Context-Dependent Behavior
+
+The same resolver can behave differently based on how it's used:
+
+```mlld
+# @PROJECTPATH as variable - returns the path
+@text projectRoot = @PROJECTPATH
+@add [[Project is at: {{projectRoot}}]]
+# Output: Project is at: /Users/adam/dev/my-project
+
+# @PROJECTPATH in path context - reads file content  
+@add [@PROJECTPATH/README.md]
+# Output: (contents of README.md)
+
+# @TIME as variable - returns ISO timestamp
+@text currentTime = @TIME  
+# currentTime = "2024-01-15T10:30:00Z"
+
+# @TIME in import context - returns structured data
+@import { "YYYY-MM-DD" as date } from @TIME
+# date = "2024-01-15"
+```
+
 ## Resolver Priority
 
 Resolvers are checked in strict priority order:
@@ -125,17 +195,17 @@ Add custom resolvers to `mlld.config.json`:
 {
   "resolvers": {
     "@docs": {
-      "type": "path",
       "command": "mlld-path-resolver",
       "args": ["--base-path", "./documentation"],
       "priority": 100,
       "capabilities": {
-        "supportsImports": true,
-        "supportsPaths": true
+        "io": { "read": true, "write": false, "list": true },
+        "contexts": { "import": true, "path": true, "output": false },
+        "supportedContentTypes": ["module", "data", "text"],
+        "defaultContentType": "text"
       }
     },
     "@company": {
-      "type": "module", 
       "command": "node",
       "args": ["./resolvers/company-modules.js"],
       "priority": 200,
@@ -143,28 +213,46 @@ Add custom resolvers to `mlld.config.json`:
         "API_TOKEN": "${COMPANY_API_TOKEN}"
       },
       "capabilities": {
-        "supportsImports": true,
-        "supportsPaths": false
+        "io": { "read": true, "write": false, "list": false },
+        "contexts": { "import": true, "path": false, "output": false },
+        "supportedContentTypes": ["module"],
+        "defaultContentType": "module"
       }
     }
   }
 }
 ```
 
-### Resolver Types
+### Understanding Resolver Capabilities
 
-#### Path Resolvers
-Map @ prefixes to filesystem locations:
+When creating custom resolvers, you need to declare their capabilities:
 
 ```json
 {
   "@docs": {
-    "type": "path",
-    "command": "mlld-path-resolver", 
-    "args": ["--base-path", "./documentation"]
+    "command": "mlld-path-resolver",
+    "args": ["--base-path", "./documentation"],
+    "priority": 100,
+    "capabilities": {
+      "io": { "read": true, "write": false, "list": true },
+      "contexts": { "import": true, "path": true, "output": false },
+      "supportedContentTypes": ["module", "text"],
+      "defaultContentType": "text"
+    }
   }
 }
 ```
+
+**Capability Fields:**
+- `io`: What operations the resolver supports (read/write/list)
+- `contexts`: Where it can be used (import/path/output)
+- `supportedContentTypes`: What content types it can return
+- `defaultContentType`: What it returns when used as a bare variable
+
+### Resolver Types
+
+#### Path Resolvers
+Map @ prefixes to filesystem locations:
 
 **Usage:**
 ```mlld
@@ -178,10 +266,16 @@ Access private module registries or repositories:
 ```json
 {
   "@company": {
-    "type": "module",
     "command": "node",
     "args": ["./resolvers/company-registry.js"],
-    "env": { "API_TOKEN": "${COMPANY_API_TOKEN}" }
+    "priority": 200,
+    "env": { "API_TOKEN": "${COMPANY_API_TOKEN}" },
+    "capabilities": {
+      "io": { "read": true, "write": false, "list": false },
+      "contexts": { "import": true, "path": false, "output": false },
+      "supportedContentTypes": ["module"],
+      "defaultContentType": "module"
+    }
   }
 }
 ```
@@ -198,10 +292,16 @@ Compute data dynamically:
 ```json
 {
   "@weather": {
-    "type": "function", 
     "command": "python",
     "args": ["./resolvers/weather.py"],
-    "env": { "API_KEY": "${WEATHER_API_KEY}" }
+    "priority": 150,
+    "env": { "API_KEY": "${WEATHER_API_KEY}" },
+    "capabilities": {
+      "io": { "read": true, "write": false, "list": false },
+      "contexts": { "import": true, "path": false, "output": false },
+      "supportedContentTypes": ["data"],
+      "defaultContentType": "data"
+    }
   }
 }
 ```
@@ -219,16 +319,28 @@ Custom resolvers are programs that follow the Model Context Protocol (MCP). Here
 ```javascript
 // company-resolver.js
 class CompanyResolver {
+  // Declare resolver capabilities
+  getCapabilities() {
+    return {
+      io: { read: true, write: false, list: false },
+      contexts: { import: true, path: false, output: false },
+      supportedContentTypes: ['module'],
+      defaultContentType: 'module',
+      priority: 200
+    };
+  }
+  
   async listTools() {
     return [
       {
-        name: "resolveModule",
-        description: "Resolve a company module",
+        name: "resolve",
+        description: "Resolve a company module or variable reference",
         inputSchema: {
           type: "object", 
           properties: {
-            moduleRef: { type: "string" },
-            imports: { type: "array", items: { type: "string" } }
+            reference: { type: "string" },
+            context: { type: "string", enum: ["import", "variable"] },
+            requestedImports: { type: "array", items: { type: "string" } }
           }
         }
       }
@@ -236,17 +348,38 @@ class CompanyResolver {
   }
   
   async callTool(name, args) {
-    if (name === "resolveModule") {
-      // Fetch module from company registry
-      const moduleData = await this.fetchFromRegistry(args.moduleRef);
-      
-      // Extract requested imports
-      const exports = {};
-      for (const importName of args.imports || []) {
-        exports[importName] = moduleData[importName];
+    if (name === "resolve") {
+      // Handle different contexts
+      if (args.context === "variable") {
+        // Return module listing for bare @company reference
+        return {
+          content: "Company module registry",
+          contentType: "text"
+        };
       }
       
-      return { content: JSON.stringify(exports) };
+      // Import context - fetch and parse module
+      const moduleData = await this.fetchFromRegistry(args.reference);
+      
+      // mlld modules should return their exports
+      const exports = {};
+      if (args.requestedImports?.length) {
+        // Specific imports requested
+        for (const importName of args.requestedImports) {
+          if (!(importName in moduleData)) {
+            throw new Error(`Export '${importName}' not found in ${args.reference}`);
+          }
+          exports[importName] = moduleData[importName];
+        }
+      } else {
+        // Import all
+        Object.assign(exports, moduleData);
+      }
+      
+      return {
+        content: JSON.stringify(exports),
+        contentType: "module"
+      };
     }
   }
   
@@ -256,7 +389,15 @@ class CompanyResolver {
     const response = await fetch(`https://modules.company.com/api/${moduleRef}`, {
       headers: { 'Authorization': `Bearer ${apiToken}` }
     });
-    return response.json();
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${moduleRef}: ${response.status}`);
+    }
+    
+    // Parse the mlld content and extract exports
+    const mlldContent = await response.text();
+    // In real implementation, parse mlld and extract module exports
+    return this.parseMlldModule(mlldContent);
   }
 }
 

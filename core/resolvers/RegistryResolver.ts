@@ -2,7 +2,8 @@ import {
   Resolver, 
   ResolverContent, 
   ResolverType,
-  ContentInfo
+  ContentInfo,
+  ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint/TaintTracker';
@@ -68,6 +69,18 @@ export class RegistryResolver implements Resolver {
   name = 'registry';
   description = 'Resolves public modules using GitHub registry at mlld-lang/registry';
   type: ResolverType = 'input';
+  
+  capabilities: ResolverCapabilities = {
+    io: { read: true, write: false, list: true },
+    needs: { network: true, cache: true, auth: false },
+    contexts: { import: true, path: false, output: false },
+    resourceType: 'module',
+    priority: 10, // Higher priority than file resolvers
+    cache: { 
+      strategy: 'persistent',
+      ttl: { duration: 300 } // 5 minutes
+    }
+  };
 
   private readonly cache: Map<string, { content: RegistryFile; timestamp: number }> = new Map();
   private readonly defaultCacheTimeout = 300000; // 5 minutes

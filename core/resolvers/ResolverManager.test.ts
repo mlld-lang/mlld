@@ -11,6 +11,15 @@ class MockResolver implements Resolver {
   description = 'Mock resolver for testing';
   type = 'input' as const;
   
+  capabilities = {
+    io: { read: true, write: false, list: false },
+    needs: { network: false, cache: false, auth: false },
+    contexts: { import: true, path: false, output: false },
+    resourceType: 'module' as const,
+    priority: 50,
+    cache: { strategy: 'none' as const }
+  };
+  
   constructor(private content: string = 'mock content') {}
   
   canResolve(ref: string): boolean {
@@ -151,6 +160,15 @@ describe('ResolverManager', () => {
         description = 'Output only resolver';
         type = 'output' as const;
         
+        capabilities = {
+          io: { read: false, write: true, list: false },
+          needs: { network: false, cache: false, auth: false },
+          contexts: { import: false, path: false, output: true },
+          resourceType: 'file' as const,
+          priority: 50,
+          cache: { strategy: 'none' as const }
+        };
+        
         canResolve(ref: string): boolean {
           return ref.startsWith('@output/');
         }
@@ -182,6 +200,15 @@ describe('ResolverManager', () => {
         name = 'slow';
         description = 'Slow resolver for testing';
         type = 'input' as const;
+        
+        capabilities = {
+          io: { read: true, write: false, list: false },
+          needs: { network: false, cache: false, auth: false },
+          contexts: { import: true, path: false, output: false },
+          resourceType: 'module' as const,
+          priority: 50,
+          cache: { strategy: 'none' as const }
+        };
         
         canResolve(ref: string): boolean {
           return ref.startsWith('@slow/');
@@ -222,6 +249,15 @@ describe('ResolverManager', () => {
         name = 'writer';
         description = 'Write resolver for testing';
         type = 'io' as const;
+        
+        capabilities = {
+          io: { read: true, write: true, list: false },
+          needs: { network: false, cache: false, auth: false },
+          contexts: { import: false, path: false, output: true },
+          resourceType: 'file' as const,
+          priority: 50,
+          cache: { strategy: 'none' as const }
+        };
         
         canResolve(ref: string): boolean {
           return ref.startsWith('@output/');

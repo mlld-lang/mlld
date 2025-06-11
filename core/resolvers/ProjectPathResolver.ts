@@ -3,7 +3,8 @@ import {
   Resolver, 
   ResolverContent, 
   ResolverType,
-  ContentInfo
+  ContentInfo,
+  ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError, MlldFileNotFoundError } from '@core/errors';
 import { TaintLevel } from '@security/taint/TaintTracker';
@@ -29,11 +30,23 @@ export interface ProjectPathResolverConfig {
  * Maps @PROJECTPATH to the project root directory
  */
 export class ProjectPathResolver implements Resolver {
-  name = 'projectpath';
+  name = 'PROJECTPATH';
   description = 'Resolves @PROJECTPATH references to project root files';
   type: ResolverType = 'io';
+  
+  capabilities: ResolverCapabilities = {
+    io: { read: true, write: false, list: false },
+    needs: { network: false, cache: false, auth: false },
+    contexts: { import: true, path: true, output: false },
+    resourceType: 'function', // It's a function that returns the project path
+    priority: 1,
+    cache: { strategy: 'none' }, // Project path is static
+    supportedFormats: ['absolute', 'relative', 'basename']
+  };
 
-  constructor(private fileSystem: IFileSystemService) {}
+  constructor(private fileSystem: IFileSystemService) {
+    // No caching needed - project path is static
+  }
 
   canResolve(ref: string, config?: ProjectPathResolverConfig): boolean {
     // Can resolve if reference starts with @PROJECTPATH or @.
@@ -180,5 +193,48 @@ export class ProjectPathResolver implements Resolver {
       return false;
     }
     return operation === 'read';
+  }
+
+  /**
+   * Get exportable data for imports
+   */
+  async getExportData(format?: string, config?: ProjectPathResolverConfig): Promise<Record<string, any>> {
+    if (!config?.basePath) {
+      throw new MlldResolutionError(
+        'ProjectPathResolver requires basePath in configuration',
+        { reference: '@PROJECTPATH' }
+      );
+    }
+
+    const projectPath = path.resolve(config.basePath);
+    
+    // For specific format imports
+    if (format && this.capabilities.supportedFormats?.includes(format)) {
+      let value: string;
+      switch (format) {
+        case 'absolute':
+          value = projectPath;
+          break;
+        case 'relative':
+          value = path.relative(process.cwd(), projectPath);
+          break;
+        case 'basename':
+          value = path.basename(projectPath);
+          break;
+        default:
+          value = projectPath;
+      }
+
+      return { [format]: value };
+    }
+
+    // For import { * } from @PROJECTPATH
+    return {
+      path: projectPath,
+      absolute: projectPath,
+      relative: path.relative(process.cwd(), projectPath),
+      basename: path.basename(projectPath),
+      dirname: path.dirname(projectPath)
+    };
   }
 }

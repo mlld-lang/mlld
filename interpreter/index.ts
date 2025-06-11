@@ -109,6 +109,9 @@ export async function interpret(
     options.basePath || process.cwd()
   );
   
+  // Register built-in resolvers (async initialization)
+  await env.registerBuiltinResolvers();
+  
   // Set the current file path if provided (for error reporting)
   if (options.filePath) {
     env.setCurrentFilePath(options.filePath);
