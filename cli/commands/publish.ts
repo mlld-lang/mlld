@@ -313,7 +313,7 @@ export class PublishCommand {
               
               registryEntry = {
                 name: metadata.name,
-                author: user.login,
+                author: metadata.author,
                 version: metadata.version || '1.0.0',
                 about: metadata.about,
                 needs: metadata.needs || [],
@@ -347,7 +347,7 @@ export class PublishCommand {
             
             registryEntry = {
               name: metadata.name,
-              author: user.login,
+              author: metadata.author,
               version: metadata.version || '1.0.0',
               about: metadata.about,
               needs: metadata.needs || [],
@@ -459,7 +459,7 @@ export class PublishCommand {
         
         registryEntry = {
           name: metadata.name,
-          author: user.login,
+          author: metadata.author,
           version: metadata.version || '1.0.0',
           about: metadata.about,
           needs: metadata.needs || [],
@@ -1384,7 +1384,7 @@ Auto-added by mlld publish command`;
     }
     
     // Add or update module entry
-    const moduleId = `@${user.login}/${entry.name}`;
+    const moduleId = `@${entry.author}/${entry.name}`;
     const isUpdate = moduleId in currentModules;
     
     currentModules[moduleId] = entry;

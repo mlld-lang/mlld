@@ -6,6 +6,7 @@ import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isIm
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
+import { normalizeTemplateContent } from '../utils/blank-line-normalizer';
 
 /**
  * Remove single blank lines but preserve multiple blank lines.
@@ -53,6 +54,10 @@ export async function evaluateAdd(
     if (isTextVariable(variable)) {
       // Text variables contain string content - use directly
       value = variable.value;
+      // Check if this variable was created from template content
+      if (variable.meta?.isTemplateContent) {
+        value = normalizeTemplateContent(value, true);
+      }
     } else if (isDataVariable(variable)) {
       // Data variables contain structured data
       value = variable.value;
@@ -318,6 +323,11 @@ export async function evaluateAdd(
     // Interpolate the template
     content = await interpolate(templateNodes, env);
     
+    // Apply template normalization if this is template content
+    if (directive.meta?.isTemplateContent) {
+      content = normalizeTemplateContent(content, true);
+    }
+    
     // Handle section extraction if specified
     const sectionNodes = directive.values?.section;
     if (sectionNodes && Array.isArray(sectionNodes)) {
@@ -394,6 +404,11 @@ export async function evaluateAdd(
     
     // Interpolate the template content with the child environment
     content = await interpolate(template.content, childEnv);
+    
+    // Apply template normalization if the template definition had isTemplateContent
+    if (template.meta?.isTemplateContent) {
+      content = normalizeTemplateContent(content, true);
+    }
     
   } else if (directive.subtype === 'addForeach') {
     // Handle foreach expressions for direct output

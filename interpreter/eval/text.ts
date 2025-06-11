@@ -362,6 +362,11 @@ export async function evaluateText(
     }
     
     resolvedValue = await interpolate(contentNodes, env);
+    
+    // Apply template normalization if this is template content
+    if (directive.meta?.isTemplateContent) {
+      resolvedValue = normalizeTemplateContent(resolvedValue, true);
+    }
   }
   
   // Handle append operator
@@ -380,7 +385,9 @@ export async function evaluateText(
   
   // Create and store the variable with location information
   const variable = createTextVariable(identifier, finalValue, {
-    definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
+    definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath()),
+    // Preserve template metadata if this was template content
+    ...(directive.meta?.isTemplateContent ? { isTemplateContent: true } : {})
   });
   env.setVariable(identifier, variable);
   

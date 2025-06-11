@@ -1,6 +1,7 @@
 import type { MlldNode, MlldVariable } from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
+import { normalizeFinalOutput } from '../utils/blank-line-normalizer';
 
 /**
  * Output formatting options
@@ -68,13 +69,8 @@ function formatMarkdown(nodes: MlldNode[], options: FormatOptions): string {
   
   let result = parts.join('');
   
-  // Clean up excessive blank lines (more than 2 consecutive newlines)
-  result = result.replace(/\n{3,}/g, '\n\n');
-  
-  // Ensure the output ends with exactly one newline, but only if there's content
-  if (result.length > 0 && !result.endsWith('\n')) {
-    result = result + '\n';
-  }
+  // Apply final output normalization (handles blank lines and trailing newline)
+  result = normalizeFinalOutput(result);
   
   return result;
 }
