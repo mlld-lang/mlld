@@ -1,34 +1,92 @@
 // OUTPUT DIRECTIVE
-// Implementation of the @output directive for writing content to files
+// Implementation of the @output directive for writing content to various targets
 
 // Main @output directive - supports multiple forms:
-// @output [file.md]                    <- outputs full document content
-// @output @variable [file.md]          <- outputs variable content
-// @output @template(args) [file.md]    <- outputs template result
-// @output @command(args) [file.md]     <- outputs command result  
-// @output "text content" [file.md]     <- outputs literal text
+// Legacy syntax (backward compatible):
+// @output [file.md]                              <- outputs full document
+// @output @variable [file.md]                    <- outputs variable content
+// @output @template(args) [file.md]              <- outputs template result
+// @output @command(args) [file.md]               <- outputs command result  
+// @output "text content" [file.md]               <- outputs literal text
+//
+// New enhanced syntax:
+// @output @variable to "path/to/file.md"         <- file output
+// @output @variable to stdout                    <- standard output
+// @output @variable to stderr                    <- standard error
+// @output @variable to env                       <- environment variable (MLLD_VARIABLE)
+// @output @variable to env:CUSTOM_NAME           <- custom environment variable
+// @output @variable to @resolver/path/file.md    <- resolver output
+// @output @variable to "file.json" as json       <- with format specification
+
 AtOutput
-  = DirectiveContext "@output" _ source:OutputSource _ path:WrappedPathContent {
-      helpers.debug('AtOutput with source matched', { source, path });
+  = DirectiveContext "@output" _ source:OutputSource _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
+      helpers.debug('AtOutput enhanced syntax matched', { source, target, format });
       
       const values = {
         source: source.values,
-        path: path.parts  // Use .parts, not .values
+        target: target
       };
       
       const raw = {
         source: source.raw,
-        path: path.raw
+        target: target.raw
       };
       
       const meta = {
         sourceType: source.type,
-        hasSource: true
+        targetType: target.type,
+        hasSource: true,
+        ...(format ? { format, explicitFormat: true } : {})
+      };
+      
+      // Determine subtype based on target type
+      let subtype = 'outputFile';  // default
+      if (target.type === 'stream') {
+        subtype = 'outputStream';
+      } else if (target.type === 'env') {
+        subtype = 'outputEnv';
+      } else if (target.type === 'resolver') {
+        subtype = 'outputResolver';
+      }
+      
+      return helpers.createStructuredDirective(
+        'output',
+        subtype,
+        values,
+        raw,
+        meta,
+        location()
+      );
+    }
+  // Legacy bracket syntax for backward compatibility
+  / DirectiveContext "@output" _ source:OutputSource _ path:WrappedPathContent {
+      helpers.debug('AtOutput legacy syntax with source matched', { source, path });
+      
+      const values = {
+        source: source.values,
+        target: {
+          type: 'file',
+          path: path.parts,
+          raw: path.raw,
+          meta: path.meta
+        }
+      };
+      
+      const raw = {
+        source: source.raw,
+        target: path.raw
+      };
+      
+      const meta = {
+        sourceType: source.type,
+        targetType: 'file',
+        hasSource: true,
+        legacy: true
       };
       
       return helpers.createStructuredDirective(
         'output',
-        source.subtype,
+        'outputFile',
         values,
         raw,
         meta,
@@ -36,23 +94,63 @@ AtOutput
       );
     }
   / DirectiveContext "@output" _ path:WrappedPathContent {
-      helpers.debug('AtOutput without source matched', { path });
+      helpers.debug('AtOutput legacy syntax without source matched', { path });
       
       const values = {
-        path: path.parts  // Use .parts, not .values
+        target: {
+          type: 'file',
+          path: path.parts,
+          raw: path.raw,
+          meta: path.meta
+        }
       };
       
       const raw = {
-        path: path.raw
+        target: path.raw
       };
       
       const meta = {
-        hasSource: false
+        targetType: 'file',
+        hasSource: false,
+        legacy: true
       };
       
       return helpers.createStructuredDirective(
         'output',
         'outputDocument',
+        values,
+        raw,
+        meta,
+        location()
+      );
+    }
+  // New enhanced syntax for document output
+  / DirectiveContext "@output" _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
+      helpers.debug('AtOutput enhanced syntax without source matched', { target, format });
+      
+      const values = {
+        target: target
+      };
+      
+      const raw = {
+        target: target.raw
+      };
+      
+      const meta = {
+        targetType: target.type,
+        hasSource: false,
+        ...(format ? { format, explicitFormat: true } : {})
+      };
+      
+      // Determine subtype based on target type
+      let subtype = 'outputDocument';
+      if (target.type !== 'file') {
+        subtype = 'output' + target.type.charAt(0).toUpperCase() + target.type.slice(1);
+      }
+      
+      return helpers.createStructuredDirective(
+        'output',
+        subtype,
         values,
         raw,
         meta,

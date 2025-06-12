@@ -5,6 +5,14 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0]
+Added:
+- File output: @output @variable to "path/to/file.ext"
+- Stream output: @output @variable to stdout/stderr
+- Environment variables: @output @variable to env or env:CUSTOM_NAME
+- Format conversion: @output @variable to "file.json" as json
+- Resolver output: @output @variable to @resolver/path (placeholder for future implementation)
+
 ## [1.2.1 - 1.2.2]
 Fixed:
 - Module publishing PR to correct path / structure
