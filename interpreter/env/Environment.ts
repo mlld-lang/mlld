@@ -363,6 +363,10 @@ export class Environment {
     // TODO: Add security toggle from mlld.lock.json when available
     // For now, assume debug is enabled
     
+    
+    // Handle special case: @DEBUG is lazy and computed on access
+    // If we're being called to get the value for @DEBUG variable, we should compute it
+    
     if (version === 1) {
       // Version 1: Full environment as pretty-printed JSON
       // Collect all variables (including from parent scopes)
@@ -757,7 +761,9 @@ export class Environment {
       return existingVar;
     }
 
-    // For other resolvers, return a placeholder that will be resolved during evaluation
+    // For dynamic resolver variables, we need to resolve them with 'variable' context
+    // to get the correct content type and value
+    // This is now handled asynchronously during evaluation
     return {
       type: 'text',
       value: `@${resolverName}`, // Placeholder value
@@ -767,9 +773,98 @@ export class Environment {
         isReserved: true,
         isResolver: true,
         resolverName: resolverName,
+        needsResolution: true, // Flag indicating this needs async resolution
         definedAt: { line: 0, column: 0, filePath: '<resolver>' }
       }
     };
+  }
+  
+  /**
+   * Get a resolver variable with proper async resolution
+   * This handles context-dependent behavior for resolvers like @TIME
+   */
+  async getResolverVariable(name: string): Promise<MlldVariable | undefined> {
+    const upperName = name.toUpperCase();
+    
+    // Check if it's a reserved resolver name
+    if (!this.reservedNames.has(upperName)) {
+      return undefined;
+    }
+    
+    // Special handling for DEBUG variable - compute dynamically
+    if (upperName === 'DEBUG') {
+      const debugValue = this.createDebugObject(2); // Use version 2 by default
+      
+      
+      const debugVar: MlldVariable = {
+        type: 'data',
+        value: debugValue,
+        nodeId: '',
+        location: { line: 0, column: 0 },
+        metadata: {
+          isReserved: true,
+          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        }
+      };
+      return debugVar;
+    }
+    
+    // Check cache first
+    const cached = this.resolverVariableCache.get(upperName);
+    if (cached && !cached.metadata?.needsResolution) {
+      return cached;
+    }
+    
+    // Get the resolver manager
+    const resolverManager = this.getResolverManager();
+    if (!resolverManager) {
+      // Fallback to creating a basic resolver variable
+      return this.createResolverVariable(upperName);
+    }
+    
+    try {
+      // Resolve with 'variable' context to get the appropriate content
+      const resolverContent = await resolverManager.resolve(`@${upperName}`, { context: 'variable' });
+      
+      // Convert content based on contentType
+      let varType: 'text' | 'data' = 'text';
+      let varValue: any = resolverContent.content.content;
+      
+      if (resolverContent.content.contentType === 'data') {
+        varType = 'data';
+        // Parse JSON data if it's a string
+        if (typeof varValue === 'string') {
+          try {
+            varValue = JSON.parse(varValue);
+          } catch {
+            // Keep as string if not valid JSON
+          }
+        }
+      }
+      
+      // Create the resolved variable
+      const resolvedVar: MlldVariable = {
+        type: varType,
+        value: varValue,
+        nodeId: '',
+        location: { line: 0, column: 0 },
+        metadata: {
+          isReserved: true,
+          isResolver: true,
+          resolverName: upperName,
+          definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+        }
+      };
+      
+      // Cache the resolved variable
+      this.resolverVariableCache.set(upperName, resolvedVar);
+      
+      return resolvedVar;
+    } catch (error) {
+      // If resolution fails, return undefined
+      console.warn(`Failed to resolve variable @${upperName}: ${error.message}`);
+      return undefined;
+    }
   }
   
   hasVariable(name: string): boolean {
@@ -856,14 +951,20 @@ export class Environment {
    * Resolve a module reference using the ResolverManager
    * This handles @prefix/ patterns and registry lookups for @user/module
    */
-  async resolveModule(reference: string): Promise<string> {
+  async resolveModule(reference: string, context?: 'import' | 'path' | 'variable'): Promise<{ content: string; contentType: 'module' | 'data' | 'text'; metadata?: any }> {
     const resolverManager = this.getResolverManager();
     if (!resolverManager) {
       throw new Error('ResolverManager not available');
     }
     
-    const result = await resolverManager.resolve(reference);
-    return result.content.content;
+    const result = await resolverManager.resolve(reference, { context });
+    
+    // Return the full content object with content type
+    return {
+      content: result.content.content,
+      contentType: result.content.contentType,
+      metadata: result.content.metadata
+    };
   }
   
   /**

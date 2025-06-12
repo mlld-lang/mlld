@@ -58,15 +58,15 @@ export interface HTTPResolverConfig {
  * Supports authentication and domain restrictions for security
  */
 export class HTTPResolver implements Resolver {
-  name = 'http';
+  name = 'HTTP';
   description = 'Resolves modules from HTTP/HTTPS endpoints';
   type: ResolverType = 'input';
   
   capabilities: ResolverCapabilities = {
     io: { read: true, write: false, list: false },
-    needs: { network: true, cache: true, auth: true },
     contexts: { import: true, path: true, output: false },
-    resourceType: 'api',
+    supportedContentTypes: ['module', 'data', 'text'],
+    defaultContentType: 'text',
     priority: 20, // Same as other external resolvers
     cache: { 
       strategy: 'persistent',
@@ -113,12 +113,14 @@ export class HTTPResolver implements Resolver {
     const cacheKey = url.toString();
     const cached = this.getCached(cacheKey, config.cacheTimeout);
     if (cached) {
+      const contentType = await this.detectContentType(url.pathname, cached.content);
       return {
         content: cached.content,
+        contentType,
         metadata: {
           source: url.toString(),
           timestamp: new Date(),
-          taintLevel: TaintLevel.EXTERNAL,
+          taintLevel: (TaintLevel as any).EXTERNAL,
           mimeType: cached.headers?.['content-type'] || 'text/plain'
         }
       };
@@ -136,12 +138,14 @@ export class HTTPResolver implements Resolver {
         headers
       });
 
+      const contentType = await this.detectContentType(url.pathname, content);
       return {
         content,
+        contentType,
         metadata: {
           source: url.toString(),
           timestamp: new Date(),
-          taintLevel: TaintLevel.EXTERNAL,
+          taintLevel: (TaintLevel as any).EXTERNAL,
           mimeType: headers['content-type'] || 'text/plain',
           size: parseInt(headers['content-length'] || '0', 10) || undefined
         }
@@ -396,5 +400,48 @@ export class HTTPResolver implements Resolver {
     ];
 
     return textTypes.some(type => contentType.toLowerCase().includes(type));
+  }
+
+  /**
+   * Detect content type based on file extension and content
+   */
+  private async detectContentType(filePath: string, content: string): Promise<'module' | 'data' | 'text'> {
+    // Check file extension
+    if (filePath.endsWith('.mld') || filePath.endsWith('.mlld')) {
+      return 'module';
+    }
+    if (filePath.endsWith('.json')) {
+      return 'data';
+    }
+    
+    // Try to detect mlld module content
+    try {
+      const { parse } = await import('@grammar/parser');
+      const result = await parse(content);
+      if (result.success && this.hasModuleExports(result.ast)) {
+        return 'module';
+      }
+    } catch {
+      // Not valid mlld
+    }
+    
+    // Try JSON
+    try {
+      JSON.parse(content);
+      return 'data';
+    } catch {
+      // Not JSON
+    }
+    
+    return 'text';
+  }
+  
+  /**
+   * Check if AST has module exports
+   */
+  private hasModuleExports(ast: any): boolean {
+    // Simple check - if there are any variable definitions, it could be a module
+    // In a real implementation, would need more sophisticated checks
+    return ast && ast.length > 0;
   }
 }

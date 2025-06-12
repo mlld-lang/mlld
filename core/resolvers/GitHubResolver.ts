@@ -74,15 +74,15 @@ export interface GitHubResolverConfig {
  * Supports both public and private repositories (with token)
  */
 export class GitHubResolver implements Resolver {
-  name = 'github';
+  name = 'GITHUB';
   description = 'Resolves modules from GitHub repositories';
   type: ResolverType = 'input';
   
   capabilities: ResolverCapabilities = {
     io: { read: true, write: false, list: true },
-    needs: { network: true, cache: true, auth: true },
     contexts: { import: true, path: true, output: false },
-    resourceType: 'file', // GitHub resolver handles files, not modules
+    supportedContentTypes: ['module', 'data', 'text'],
+    defaultContentType: 'text',
     priority: 20, // Same as other file resolvers
     cache: { 
       strategy: 'persistent',
@@ -128,12 +128,14 @@ export class GitHubResolver implements Resolver {
     const cacheKey = `${config.repository}:${config.branch || 'default'}:${path}`;
     const cached = this.getCached(cacheKey, config.cacheTimeout);
     if (cached) {
+      const contentType = await this.detectContentType(path, cached.content);
       return {
         content: cached.content,
+        contentType,
         metadata: {
           source: `github://${config.repository}/${path}`,
           timestamp: new Date(),
-          taintLevel: config.token ? TaintLevel.PRIVATE : TaintLevel.PUBLIC,
+          taintLevel: config.token ? (TaintLevel as any).PRIVATE : (TaintLevel as any).PUBLIC,
           author: owner
         }
       };
@@ -150,12 +152,14 @@ export class GitHubResolver implements Resolver {
         etag
       });
 
+      const contentType = await this.detectContentType(path, content);
       return {
         content,
+        contentType,
         metadata: {
           source: `github://${config.repository}/${path}`,
           timestamp: new Date(),
-          taintLevel: config.token ? TaintLevel.PRIVATE : TaintLevel.PUBLIC,
+          taintLevel: config.token ? (TaintLevel as any).PRIVATE : (TaintLevel as any).PUBLIC,
           author: owner,
           mimeType: this.getMimeType(path)
         }
@@ -502,5 +506,48 @@ export class GitHubResolver implements Resolver {
     };
 
     return mimeTypes[ext || ''] || 'text/plain';
+  }
+
+  /**
+   * Detect content type based on file extension and content
+   */
+  private async detectContentType(filePath: string, content: string): Promise<'module' | 'data' | 'text'> {
+    // Check file extension
+    if (filePath.endsWith('.mld') || filePath.endsWith('.mlld')) {
+      return 'module';
+    }
+    if (filePath.endsWith('.json')) {
+      return 'data';
+    }
+    
+    // Try to detect mlld module content
+    try {
+      const { parse } = await import('@grammar/parser');
+      const result = await parse(content);
+      if (result.success && this.hasModuleExports(result.ast)) {
+        return 'module';
+      }
+    } catch {
+      // Not valid mlld
+    }
+    
+    // Try JSON
+    try {
+      JSON.parse(content);
+      return 'data';
+    } catch {
+      // Not JSON
+    }
+    
+    return 'text';
+  }
+  
+  /**
+   * Check if AST has module exports
+   */
+  private hasModuleExports(ast: any): boolean {
+    // Simple check - if there are any variable definitions, it could be a module
+    // In a real implementation, would need more sophisticated checks
+    return ast && ast.length > 0;
   }
 }

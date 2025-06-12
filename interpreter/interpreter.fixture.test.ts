@@ -269,6 +269,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         process.env.MLLD_MOCK_TIME = '2024-05-30T14:30:00.000Z';
         // TODO: Debug output contains dynamic paths and environment-specific data
         // This test would need special handling to work across different environments
+      } else if (fixture.name === 'resolver-contexts') {
+        // Mock time for resolver context tests
+        process.env.MLLD_MOCK_TIME = '2024-01-01T00:00:00.000Z';
       } else if (fixture.name === 'text-template') {
         // This test expects a 'variable' to exist with value 'value'
         // But the fixture doesn't define it - skip for now
@@ -658,7 +661,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           delete process.env.MLLD_TEST_MODE;
         }
         if (fixture.name === 'reserved-time-variable' || fixture.name === 'reserved-time-variable-lowercase' || 
-            fixture.name === 'reserved-debug-variable' || fixture.name === 'reserved-debug-variable-lowercase') {
+            fixture.name === 'reserved-debug-variable' || fixture.name === 'reserved-debug-variable-lowercase' ||
+            fixture.name === 'resolver-contexts') {
           delete process.env.MLLD_MOCK_TIME;
         }
         if (fixture.name === 'modules-hash') {

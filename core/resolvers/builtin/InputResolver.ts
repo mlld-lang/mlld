@@ -4,7 +4,7 @@ import {
   ResolverCapabilities,
   ResolverType
 } from '@core/resolvers/types';
-import { ResolverError } from '@core/errors';
+import { ResolverError, ResolverErrorCode } from '@core/errors';
 
 /**
  * Built-in resolver for input data (stdin + environment variables)
@@ -16,15 +16,14 @@ export class InputResolver implements Resolver {
   
   capabilities: ResolverCapabilities = {
     io: { read: true, write: false, list: false },
-    needs: { network: false, cache: false, auth: false },
     contexts: { import: true, path: false, output: false },
-    resourceType: 'function',
+    supportedContentTypes: ['data', 'text'],
+    defaultContentType: 'data',  // Usually JSON from stdin
     priority: 1,
     cache: { 
       strategy: 'memory', // Memory cache for session duration
       ttl: { duration: -1 } // Never expire during session
-    },
-    supportedFormats: ['json', 'text', 'env', 'stdin']
+    }
   };
 
   private inputData: Record<string, any> | null = null;
@@ -39,35 +38,70 @@ export class InputResolver implements Resolver {
     return cleanRef === 'INPUT' || cleanRef.startsWith('INPUT/');
   }
 
-  async resolve(ref: string): Promise<ResolverContent> {
+  async resolve(ref: string, config?: any): Promise<ResolverContent> {
     // Initialize input data if not already done
     if (!this.inputData) {
       await this.initializeInputData();
     }
 
-    // Extract format/field from reference
-    const cleanRef = ref.replace(/^@/, '');
-    const parts = cleanRef.split('/');
-    const field = parts.length > 1 ? parts.slice(1).join('/') : null;
-
-    // Get requested data
-    let result: any;
-    if (field) {
-      // Specific field requested
-      result = this.getFieldValue(field);
-    } else {
-      // All input data
-      result = this.inputData;
+    // Variable context - return all input data as JSON
+    if (!config?.context || config.context === 'variable') {
+      return {
+        content: JSON.stringify(this.inputData, null, 2),
+        contentType: 'data',
+        metadata: {
+          source: 'INPUT',
+          timestamp: new Date()
+        }
+      };
     }
-
-    return {
-      content: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
-      metadata: {
-        source: 'INPUT',
-        timestamp: new Date(),
-        // No hash needed for function resolvers
+    
+    // Import context - return requested fields
+    if (config.context === 'import') {
+      const exports: Record<string, any> = {};
+      const imports = config.requestedImports || [];
+      
+      if (imports.length === 0) {
+        // Import all
+        const exportData = { ...this.inputData };
+        delete exportData._meta;
+        return {
+          content: JSON.stringify(exportData),
+          contentType: 'data',
+          metadata: {
+            source: 'INPUT',
+            timestamp: new Date()
+          }
+        };
       }
-    };
+      
+      // Import specific fields
+      for (const fieldName of imports) {
+        const value = this.getFieldValue(fieldName);
+        if (value !== null) {
+          exports[fieldName] = value;
+        }
+      }
+      
+      return {
+        content: JSON.stringify(exports),
+        contentType: 'data',
+        metadata: {
+          source: 'INPUT',
+          timestamp: new Date()
+        }
+      };
+    }
+    
+    throw new ResolverError(
+      'INPUT resolver only supports variable and import contexts',
+      ResolverErrorCode.UNSUPPORTED_CONTEXT,
+      {
+        resolverName: this.name,
+        context: config?.context,
+        operation: 'resolve'
+      }
+    );
   }
 
   /**
@@ -205,28 +239,6 @@ export class InputResolver implements Resolver {
     return current;
   }
 
-  /**
-   * Get exportable data for imports
-   */
-  async getExportData(field?: string): Promise<Record<string, any>> {
-    // Initialize if needed
-    if (!this.inputData) {
-      await this.initializeInputData();
-    }
-
-    // For specific field imports
-    if (field) {
-      const value = this.getFieldValue(field);
-      return { [field]: value };
-    }
-
-    // For import { * } from @INPUT
-    // Return all top-level fields except metadata
-    const exportData = { ...this.inputData };
-    delete exportData._meta;
-    
-    return exportData;
-  }
 
   /**
    * Update stdin content (for testing or dynamic updates)

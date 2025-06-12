@@ -6,9 +6,9 @@ import { TaintLevel } from '@security/taint/TaintTracker';
 export type ResolverType = 'input' | 'output' | 'io';
 
 /**
- * Resource type - what kind of content this resolver handles
+ * Content type - what kind of content is being returned
  */
-export type ResourceType = 'module' | 'file' | 'data' | 'api' | 'function';
+export type ContentType = 'module' | 'data' | 'text';
 
 /**
  * Cache strategy options
@@ -24,14 +24,6 @@ export interface IOCapabilities {
   list: boolean;
 }
 
-/**
- * Resource needs - what the resolver requires to function
- */
-export interface ResourceNeeds {
-  network: boolean;
-  cache: boolean;
-  auth: boolean;
-}
 
 /**
  * Context support - where the resolver can be used
@@ -75,19 +67,19 @@ export interface ResolverCapabilities {
   io: IOCapabilities;
   
   /**
-   * Resource requirements
-   */
-  needs: ResourceNeeds;
-  
-  /**
    * Contexts where this resolver can be used
    */
   contexts: ContextSupport;
   
   /**
-   * Type of resource this resolver handles
+   * Content types this resolver can return
    */
-  resourceType: ResourceType;
+  supportedContentTypes: ContentType[];
+  
+  /**
+   * Default content type when used as a bare variable
+   */
+  defaultContentType: ContentType;
   
   /**
    * Priority (lower number = higher priority)
@@ -98,11 +90,6 @@ export interface ResolverCapabilities {
    * Cache configuration
    */
   cache?: CacheConfig;
-  
-  /**
-   * Optional formats this resolver supports
-   */
-  supportedFormats?: string[];
 }
 
 /**
@@ -110,6 +97,7 @@ export interface ResolverCapabilities {
  */
 export interface ResolverContent {
   content: string;
+  contentType: ContentType;
   metadata?: {
     source: string;
     timestamp: Date;
@@ -322,6 +310,11 @@ export interface ResolverOptions {
    * Requested format (for imports like @import { "iso" as date } from @TIME)
    */
   format?: string;
+
+  /**
+   * For import context - the requested imports
+   */
+  requestedImports?: string[];
 }
 
 /**

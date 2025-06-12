@@ -64,22 +64,25 @@ export async function evaluatePath(
     const potentialResolver = pathParts[0];
     
     if (resolverManager.isResolverName(potentialResolver)) {
-      // This is a resolver reference - check if it supports paths
-      const resolver = resolverManager.getResolver(potentialResolver.toUpperCase());
-      if (resolver && !resolver.capabilities.supportsPaths) {
-        const { ResolverError } = await import('@core/errors');
-        throw ResolverError.unsupportedCapability(resolver.name, 'paths', 'path');
-      }
-      
-      // Try to resolve through the resolver system
+      // This is a resolver reference - try to resolve it
       try {
-        const result = await resolverManager.resolve(interpolatedPath, {
-          context: 'path',
-          basePath: env.getBasePath()
-        });
-        resolvedPath = result.content.content;
+        const resolverContent = await env.resolveModule(interpolatedPath, 'path');
+        
+        // Validate content type for paths - reject modules
+        if (resolverContent.contentType === 'module') {
+          throw new Error(
+            `Cannot use module as path: ${interpolatedPath} (modules must be imported, not used as paths)`
+          );
+        }
+        
+        // For text/data content, use the content as the path value
+        resolvedPath = resolverContent.content;
       } catch (error) {
-        // If resolution fails, fall back to normal path resolution
+        // If it's a module content type error, re-throw it
+        if (error.message?.includes('Cannot use module as path')) {
+          throw error;
+        }
+        // For other errors, fall back to normal path resolution
         resolvedPath = await env.resolvePath(interpolatedPath);
       }
     } else {
