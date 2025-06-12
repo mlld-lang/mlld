@@ -3,7 +3,6 @@
  * Implements OAuth Device Flow with secure token storage
  */
 
-import * as keytar from 'keytar';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -48,6 +47,7 @@ export class GitHubAuthService {
   private fallbackTokenPath: string;
   private clientId: string;
   private octokitModule: any;
+  private keytarModule: any = undefined;
 
   constructor(config: AuthConfig = {}) {
     this.config = {
@@ -62,6 +62,20 @@ export class GitHubAuthService {
     this.serviceName = this.config.serviceName!;
     this.accountName = this.config.accountName!;
     this.fallbackTokenPath = path.join(os.homedir(), '.mlld', 'auth.json');
+  }
+
+  /**
+   * Dynamically load keytar module (optional dependency)
+   */
+  private async getKeytarModule() {
+    if (this.keytarModule === undefined) {
+      try {
+        this.keytarModule = await import('keytar');
+      } catch {
+        this.keytarModule = null;
+      }
+    }
+    return this.keytarModule;
   }
 
   /**
@@ -176,10 +190,13 @@ export class GitHubAuthService {
   async logout(): Promise<void> {
     try {
       // Remove from keychain
-      try {
-        await keytar.deletePassword(this.serviceName, this.accountName);
-      } catch {
-        // Keychain removal failed, continue to fallback
+      const keytar = await this.getKeytarModule();
+      if (keytar) {
+        try {
+          await keytar.deletePassword(this.serviceName, this.accountName);
+        } catch {
+          // Keychain removal failed, continue to fallback
+        }
       }
 
       // Remove fallback file
@@ -205,11 +222,14 @@ export class GitHubAuthService {
    */
   private async getStoredToken(): Promise<string | null> {
     // Try keychain first
-    try {
-      const token = await keytar.getPassword(this.serviceName, this.accountName);
-      if (token) return token;
-    } catch {
-      // Keychain access failed, try fallback
+    const keytar = await this.getKeytarModule();
+    if (keytar) {
+      try {
+        const token = await keytar.getPassword(this.serviceName, this.accountName);
+        if (token) return token;
+      } catch {
+        // Keychain access failed, try fallback
+      }
     }
 
     // Try fallback storage
@@ -233,11 +253,16 @@ export class GitHubAuthService {
     let storedInKeychain = false;
 
     // Try to store in keychain
-    try {
-      await keytar.setPassword(this.serviceName, this.accountName, token);
-      storedInKeychain = true;
-    } catch (error) {
-      console.warn('⚠️  Could not store token in system keychain, using fallback storage');
+    const keytar = await this.getKeytarModule();
+    if (keytar) {
+      try {
+        await keytar.setPassword(this.serviceName, this.accountName, token);
+        storedInKeychain = true;
+      } catch (error) {
+        console.warn('⚠️  Could not store token in system keychain, using fallback storage');
+      }
+    } else {
+      console.warn('⚠️  Keytar not available, using fallback storage');
     }
 
     // Store in fallback if keychain failed or if fallback is enabled
