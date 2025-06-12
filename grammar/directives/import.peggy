@@ -186,6 +186,7 @@ ImportPath
         }
       };
     }
+  / SpecialVariablePath
   / ModuleReference
   / QuotedPath
   / BracketImportPath
@@ -328,3 +329,26 @@ ImportPathVariable
       }, location());
     }
   / SpecialVariable  // Special vars like @., @TIME, etc.
+
+// Special variable path - handles @. followed by path segments
+SpecialVariablePath
+  = special:SpecialVariable path:(PathTextSegment / PathSeparator)+ {
+      helpers.debug('SpecialVariablePath matched', { special, path });
+      const pathParts = [special, ...path];
+      const rawPath = (special.values?.originalForm || '@' + special.values?.identifier) + helpers.reconstructRawString(path);
+      return {
+        type: 'path',
+        subtype: 'specialPath',
+        values: { 
+          path: pathParts
+        },
+        raw: { 
+          path: rawPath
+        },
+        meta: {
+          isSpecial: true,
+          variable: special.values?.identifier,
+          originalForm: special.values?.originalForm
+        }
+      };
+    }

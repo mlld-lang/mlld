@@ -43,7 +43,11 @@ function processModuleExports(
   for (const [name, variable] of childVars) {
     // Skip the 'module' variable itself if it exists but isn't data type
     if (name !== 'module') {
-      moduleObject[name] = variable.value;
+      // Preserve variable type information for proper import
+      moduleObject[name] = {
+        __variableType: variable.type,
+        __value: variable.value
+      };
     }
   }
   
@@ -248,10 +252,19 @@ async function importFromPath(
         if (name === '__meta__') continue;
         
         // Create variable for each module export
+        // Check if this is a variable with preserved type information
+        let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
+        let varValue = value;
+        
+        if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
+          varType = value.__variableType;
+          varValue = value.__value;
+        }
+        
         const importedVariable: MlldVariable = {
-          type: 'data',
+          type: varType,
           identifier: name,
-          value: value,
+          value: varValue,
           nodeId: '',
           location: { line: 0, column: 0 },
           metadata: {
@@ -303,10 +316,19 @@ async function importFromPath(
           const targetName = importNode.alias || varName;
           
           // Create imported variable
+          // Check if this is a variable with preserved type information
+          let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
+          let varValue = value;
+          
+          if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
+            varType = value.__variableType;
+            varValue = value.__value;
+          }
+          
           const importedVariable: MlldVariable = {
-            type: 'data',
+            type: varType,
             identifier: targetName,
-            value: value,
+            value: varValue,
             nodeId: '',
             location: { line: 0, column: 0 },
             metadata: {
@@ -377,8 +399,7 @@ export async function evaluateImport(
     if (content === '@INPUT' || content === '@input') {
       return await evaluateInputImport(directive, env);
     } else if (content === '@stdin') {
-      // Show deprecation warning for @stdin
-      console.warn('⚠️  Warning: @stdin is deprecated. Please use @INPUT or @input instead.');
+      // Silently handle @stdin for backward compatibility
       return await evaluateInputImport(directive, env);
     }
   }
@@ -388,7 +409,7 @@ export async function evaluateImport(
   const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
   
   // Resolve the import path (handles both file paths and URLs)
-  const importPath = await interpolate(pathNodes, env);
+  const importPath = (await interpolate(pathNodes, env)).trim();
   let resolvedPath: string;
   
   // Check if this is a module reference (@prefix/ pattern)

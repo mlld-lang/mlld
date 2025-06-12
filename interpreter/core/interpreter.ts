@@ -591,11 +591,6 @@ export async function interpolate(
       
       const variable = env.getVariable(varName);
       if (!variable) {
-        // Handle special path variables
-        if (varName === 'PROJECTPATH') {
-          parts.push(`@${varName}`);
-          continue;
-        }
         // TODO: Should we throw in strict mode?
         parts.push(`{{${varName}}}`); // Keep unresolved
         continue;
@@ -682,6 +677,7 @@ export async function interpolate(
       } else {
         stringValue = String(value);
       }
+      
       
       // Apply context-appropriate escaping
       const strategy = EscapingStrategyFactory.getStrategy(context);

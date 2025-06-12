@@ -3,9 +3,10 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
-import { createLLMXML } from 'llmxml';
+import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
+import { normalizeTemplateContent } from '../utils/blank-line-normalizer';
 
 /**
  * Remove single blank lines but preserve multiple blank lines.
@@ -47,12 +48,25 @@ export async function evaluateAdd(
     
     // Get the base value using type-safe approach
     let value: any;
+    let originalValue: any; // Keep track of the original value before evaluation
+    let isForeachSection = false; // Track if this came from a foreach-section
+    
     if (isTextVariable(variable)) {
       // Text variables contain string content - use directly
       value = variable.value;
+      // Check if this variable was created from template content and normalization is enabled
+      if (variable.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
+        value = normalizeTemplateContent(value, true);
+      }
     } else if (isDataVariable(variable)) {
       // Data variables contain structured data
       value = variable.value;
+      originalValue = value; // Store original value for later checking
+      
+      // Check if this is a foreach-section expression
+      if (value && typeof value === 'object' && value.type === 'foreach-section') {
+        isForeachSection = true;
+      }
     } else if (isPathVariable(variable)) {
       // Path variables contain file path info - read the file
       const pathValue = variable.value.resolvedPath;
@@ -131,6 +145,11 @@ export async function evaluateAdd(
     if (hasUnevaluatedDirectives(value)) {
       // Evaluate any embedded directives
       value = await evaluateDataValue(value, env);
+      
+      // After evaluation, check if the original value was a foreach-section
+      if (originalValue && typeof originalValue === 'object' && originalValue.type === 'foreach-section') {
+        isForeachSection = true;
+      }
     }
     
     // Convert final value to string
@@ -139,8 +158,27 @@ export async function evaluateAdd(
     } else if (typeof value === 'number' || typeof value === 'boolean') {
       // For primitives, just convert to string
       content = String(value);
+    } else if (Array.isArray(value)) {
+      // Check if this is from a foreach-section expression
+      if (isForeachSection && value.every(item => typeof item === 'string')) {
+        // Join string array with double newlines for foreach-section results
+        content = value.join('\n\n');
+      } else {
+        // For other arrays, use JSON format (this preserves the original behavior)
+        content = JSON.stringify(value, (key, val) => {
+          // Convert VariableReference nodes to their string representation
+          if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
+            return `@${val.identifier}`;
+          }
+          // Convert nested DataObject types to plain objects
+          if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
+            return val.properties;
+          }
+          return val;
+        }, 2);
+      }
     } else if (value !== null && value !== undefined) {
-      // For objects/arrays, use JSON with custom replacer for VariableReference nodes
+      // For objects, use JSON with custom replacer for VariableReference nodes
       content = JSON.stringify(value, (key, val) => {
         // Convert VariableReference nodes to their string representation
         if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
@@ -232,11 +270,10 @@ export async function evaluateAdd(
     }
     
     // Extract the section using llmxml
-    const llmxml = createLLMXML();
     try {
       // getSection expects just the title without the # prefix
       const titleWithoutHash = sectionTitle.replace(/^#+\s*/, '');
-      content = await llmxml.getSection(fileContent, titleWithoutHash, {
+      content = await llmxmlInstance.getSection(fileContent, titleWithoutHash, {
         includeNested: true
       });
       // Compact blank lines and trim
@@ -253,11 +290,30 @@ export async function evaluateAdd(
       // Replace the original section title with the new one
       const lines = content.split('\n');
       if (lines.length > 0 && lines[0].match(/^#+\s/)) {
-        // Extract the heading level from the new title or default to original
-        const newHeadingMatch = newTitle.match(/^(#+)\s/);
-        const newHeadingLevel = newHeadingMatch ? newHeadingMatch[1] : '#';
-        const titleText = newTitle.replace(/^#+\s*/, '');
-        lines[0] = `${newHeadingLevel} ${titleText}`;
+        // Handle three cases:
+        // 1. Just header level: "###" -> change level only
+        // 2. No header level: "Name" -> keep original level, replace text
+        // 3. Full replacement: "### Name" -> replace entire line
+        
+        const newTitleTrimmed = newTitle.trim();
+        const newHeadingMatch = newTitleTrimmed.match(/^(#+)(\s+(.*))?$/);
+        
+        if (newHeadingMatch) {
+          // Case 1: Just header level (e.g., "###")
+          if (!newHeadingMatch[3]) {
+            const originalText = lines[0].replace(/^#+\s*/, '');
+            lines[0] = `${newHeadingMatch[1]} ${originalText}`;
+          } 
+          // Case 3: Full replacement (e.g., "### Name")
+          else {
+            lines[0] = newTitleTrimmed;
+          }
+        } else {
+          // Case 2: No header level (e.g., "Name")
+          const originalLevel = lines[0].match(/^(#+)\s/)?.[1] || '#';
+          lines[0] = `${originalLevel} ${newTitleTrimmed}`;
+        }
+        
         content = lines.join('\n');
       } else {
         // If no heading found, prepend the new title
@@ -275,6 +331,11 @@ export async function evaluateAdd(
     // Interpolate the template
     content = await interpolate(templateNodes, env);
     
+    // Apply template normalization if this is template content and normalization is enabled
+    if (directive.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
+      content = normalizeTemplateContent(content, true);
+    }
+    
     // Handle section extraction if specified
     const sectionNodes = directive.values?.section;
     if (sectionNodes && Array.isArray(sectionNodes)) {
@@ -284,8 +345,98 @@ export async function evaluateAdd(
       }
     }
     
+  } else if (directive.subtype === 'addInvocation') {
+    // Handle unified invocation - could be template or exec
+    const invocation = directive.values?.invocation;
+    if (!invocation) {
+      throw new Error('Add invocation directive missing invocation');
+    }
+    
+    // Get the invocation name
+    const commandRef = invocation.commandRef;
+    const name = commandRef.name || commandRef.identifier[0]?.content;
+    if (!name) {
+      throw new Error('Add invocation missing name');
+    }
+    
+    // Look up what this invocation refers to
+    const variable = env.getVariable(name);
+    if (!variable) {
+      throw new Error(`Variable not found: ${name}`);
+    }
+    
+    // Handle based on variable type
+    if (variable.type === 'command' || variable.type === 'execCommand') {
+      // This is an exec invocation
+      const { evaluateExecInvocation } = await import('./exec-invocation');
+      const result = await evaluateExecInvocation(invocation, env);
+      content = String(result.value);
+    } else if (variable.type === 'textTemplate') {
+      // Handle as template invocation
+      const template = variable;
+      
+      // Get the arguments from the command reference
+      const args = commandRef.args || [];
+      
+      // Check parameter count
+      if (args.length !== template.params.length) {
+        throw new Error(`Template ${name} expects ${template.params.length} parameters, got ${args.length}`);
+      }
+      
+      // Create a child environment with the template parameters
+      const childEnv = env.createChild();
+      
+      // Bind arguments to parameters
+      for (let i = 0; i < template.params.length; i++) {
+        const paramName = template.params[i];
+        const argValue = args[i];
+        
+        // Convert argument to string value
+        let value: string;
+        if (typeof argValue === 'object' && argValue.type === 'Text') {
+          // Handle Text nodes from the AST
+          value = argValue.content || '';
+        } else if (typeof argValue === 'object' && argValue.type === 'VariableReference') {
+          // Handle variable references like @userName
+          const varName = argValue.identifier;
+          const variable = env.getVariable(varName);
+          if (!variable) {
+            throw new Error(`Variable not found: ${varName}`);
+          }
+          value = variable.type === 'text' ? variable.value : String(variable.value);
+        } else if (typeof argValue === 'object' && argValue.type === 'string') {
+          // Legacy format support
+          value = argValue.value;
+        } else if (typeof argValue === 'object' && argValue.type === 'variable') {
+          // Legacy format - handle variable references
+          const varRef = argValue.value;
+          const varName = varRef.identifier;
+          const variable = env.getVariable(varName);
+          if (!variable) {
+            throw new Error(`Variable not found: ${varName}`);
+          }
+          value = variable.type === 'text' ? variable.value : String(variable.value);
+        } else {
+          value = String(argValue);
+        }
+        
+        // Create a text variable for the parameter
+        childEnv.setVariable(paramName, { type: 'text', identifier: paramName, value });
+      }
+      
+      // Interpolate the template content with the child environment
+      content = await interpolate(template.content, childEnv);
+      
+      // Apply template normalization if the template definition had isTemplateContent and normalization is enabled
+      if (template.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
+        content = normalizeTemplateContent(content, true);
+      }
+    } else {
+      throw new Error(`Variable ${name} is not a template or exec command (type: ${variable.type})`);
+    }
+    
   } else if (directive.subtype === 'addTemplateInvocation') {
-    // Handle parameterized template invocation
+    // Handle old-style template invocation (for backward compatibility)
     const templateNameNodes = directive.values?.templateName;
     if (!templateNameNodes || templateNameNodes.length === 0) {
       throw new Error('Add template invocation missing template name');
@@ -352,6 +503,11 @@ export async function evaluateAdd(
     // Interpolate the template content with the child environment
     content = await interpolate(template.content, childEnv);
     
+    // Apply template normalization if the template definition had isTemplateContent and normalization is enabled
+    if (template.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
+      content = normalizeTemplateContent(content, true);
+    }
+    
   } else if (directive.subtype === 'addForeach') {
     // Handle foreach expressions for direct output
     const foreachExpression = directive.values?.foreach;
@@ -381,6 +537,24 @@ export async function evaluateAdd(
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execInvocation, env);
     content = String(result.value);
+    
+  } else if (directive.subtype === 'addForeachSection') {
+    // Handle foreach section expressions: @add foreach [@array.field # section] as [[template]]
+    const foreachExpression = directive.values?.foreach;
+    if (!foreachExpression) {
+      throw new Error('Add foreach section directive missing foreach expression');
+    }
+    
+    // Evaluate foreach section expression
+    const { evaluateForeachSection } = await import('./data-value-evaluator');
+    const result = await evaluateForeachSection(foreachExpression, env);
+    
+    // Convert result to string content - should be an array of results
+    if (Array.isArray(result)) {
+      content = result.join('\n\n');
+    } else {
+      content = String(result);
+    }
     
   } else {
     throw new Error(`Unsupported add subtype: ${directive.subtype}`);

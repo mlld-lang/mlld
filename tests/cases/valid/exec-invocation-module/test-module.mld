@@ -1,0 +1,12 @@
+@text greeting = "Hello from module"
+
+@exec sayHello() = @run [(echo "Hello, World!")]
+
+@exec greetUser(name) = @run [(echo "Hello, @name!")]
+
+@exec multiLine() = @run [(
+  echo "Line 1"
+  echo "Line 2"
+)]
+
+@exec withParams(first, second) = @run [(echo "First: @first, Second: @second")]

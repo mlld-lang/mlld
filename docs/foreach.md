@@ -1,8 +1,26 @@
 # Foreach
 
-The `foreach` operator enables powerful iteration over arrays by applying parameterized commands or templates to each element. It's designed to solve common use cases like batch LLM operations, multi-model comparisons, and processing collections of data.
+The `foreach` operator enables powerful iteration over arrays with two distinct syntaxes: parameterized commands for complex operations and direct section extraction for documentation workflows.
 
-## Basic Syntax
+## Two Foreach Patterns
+
+### Pattern 1: Parameterized Commands (Traditional)
+
+```mlld
+@data <result> = foreach <parameterized-command>(<arrays>)
+```
+
+Apply exec commands or text templates to arrays with cartesian product support.
+
+### Pattern 2: Section Extraction (NEW)
+
+```mlld
+@data <result> = foreach [@array.field # section] as [[template]]
+```
+
+Extract sections from files and apply templates directly - perfect for documentation assembly.
+
+## Basic Command Syntax
 
 ```mlld
 @data <result> = foreach <parameterized-command>(<arrays>)
@@ -139,6 +157,111 @@ Generate structured reports from data:
 @add @rows
 ```
 
+## Section Extraction Syntax (NEW)
+
+The new section extraction syntax enables direct iteration over file arrays with automatic section extraction and template application.
+
+### Basic Section Extraction
+
+Extract the same section from multiple files:
+
+```mlld
+@data files = [
+  {"path": "guide.md", "name": "User Guide"},
+  {"path": "api.md", "name": "API Reference"},
+  {"path": "tutorial.md", "name": "Tutorial"}
+]
+
+# Extract "introduction" section from each file
+@data intros = foreach [@files.path # introduction] as [[### {{files.name}}]]
+@add @intros
+```
+
+Result: Creates an array with formatted introductions from all three files.
+
+### Variable Section Names
+
+Use dynamic section names stored in the array data:
+
+```mlld
+@data docs = [
+  {"path": "guide.md", "section": "overview", "title": "Overview"},
+  {"path": "api.md", "section": "endpoints", "title": "API Endpoints"},
+  {"path": "faq.md", "section": "troubleshooting", "title": "Troubleshooting"}
+]
+
+# Extract different sections based on array data
+@data sections = foreach [@docs.path # @docs.section] as [[## {{docs.title}}]]
+@add @sections
+```
+
+### Module Documentation Assembly
+
+Perfect for building documentation from module files:
+
+```mlld
+@import [@./scan.mld.md]  # Assume this provides file scanning
+@data modules = @scanFiles("./modules", "*.mld.md")
+
+# Extract tldr sections and format as module index
+@add foreach [@modules.path # tldr] as [[### [{{modules.frontmatter.name}}]({{modules.path}})]]
+```
+
+### All Directive Support
+
+Section extraction works with all foreach-compatible directives:
+
+```mlld
+# Data directive - store results
+@data summaries = foreach [@files.path # summary] as [[{{files.name}}: Summary]]
+
+# Text directive - assign to variable  
+@text content = foreach [@docs.path # @docs.section] as [[## {{docs.title}}]]
+
+# Add directive - direct output
+@add foreach [@modules.path # interface] as [[```{{modules.language}}\n{{content}}\n```]]
+```
+
+### Section Variable Collection (Traditional Method)
+
+For comparison, the traditional method using parameterized commands:
+
+```mlld
+@data sections = ["introduction", "methodology", "results", "conclusion"]
+@text extractSection(name) = [[Content from {{name}} section]]
+
+# Extract all sections with foreach
+@data allSections = foreach @extractSection(@sections)
+@add @allSections
+
+# Or extract from specific files
+@exec getSection(file, section) = @run [(echo "From @file:")]\n@add [file.md # @section]
+@data files = ["report1.md", "report2.md", "report3.md"]
+@data sections = ["summary", "recommendations"]
+@data extracted = foreach @getSection(@files, @sections)
+```
+
+### Dynamic Documentation Assembly (Traditional Method)
+
+Build documentation by collecting sections across multiple files:
+
+```mlld
+@data sources = [
+  {"file": "intro.md", "section": "overview"},
+  {"file": "guide.md", "section": "getting-started"},
+  {"file": "api.md", "section": "endpoints"},
+  {"file": "examples.md", "section": "tutorials"}
+]
+
+@text includeSection(source) = [[
+## {{source.section}} 
+@add [{{source.file}} # {{source.section}}]
+]]
+
+@data documentation = foreach @includeSection(@sources)
+@add @documentation
+```
+
 ### Nested Data Processing
 
 Work with complex combinations of parameters:
@@ -187,15 +310,22 @@ Command failed with exit code 1
 ## Type Safety
 
 ### Input Constraints
+
+**Parameterized Commands:**
 - The command/template must be parameterized (have defined parameters)
 - All inputs must be arrays
 - Parameter count must match array count
 
+**Section Extraction:**
+- Array must contain objects with the specified path field
+- Path field values must be valid file paths
+- Section names must be strings (literal or variable)
+
 ### Output Type
 - Always returns an array
-- Element type depends on the command/template:
-  - `@exec` commands return their output as text
-  - `@text` templates return evaluated text
+- Element type depends on the pattern:
+  - **Parameterized commands**: `@exec` output as text, `@text` templates as evaluated text
+  - **Section extraction**: Template-formatted text with extracted section content
 
 ## Integration with Other Features
 
@@ -223,17 +353,38 @@ Command failed with exit code 1
 
 ## Best Practices
 
+### General
 1. **Start Small**: Test with small arrays before scaling up
-2. **Use Descriptive Names**: Make parameter names clear and meaningful
-3. **Handle Errors**: Consider using `@when` to handle failures gracefully
-4. **Performance Awareness**: Be mindful of cartesian product sizes with multiple arrays
-5. **Type Consistency**: Ensure all array elements are compatible with your command parameters
+2. **Handle Errors**: Consider using `@when` to handle failures gracefully
+3. **Type Consistency**: Ensure all array elements have expected structure
+
+### Parameterized Commands
+4. **Use Descriptive Names**: Make parameter names clear and meaningful
+5. **Performance Awareness**: Be mindful of cartesian product sizes with multiple arrays
+
+### Section Extraction  
+6. **Verify File Structure**: Ensure array objects have the expected path field
+7. **Check Section Existence**: Verify sections exist in target files
+8. **Template Safety**: Use defensive patterns in templates for missing properties
 
 ## Common Pitfalls
 
+### Parameterized Commands
 1. **Parameter Mismatch**: Forgetting to match array count with parameter count
 2. **Large Cartesian Products**: Multiple large arrays can create performance issues
-3. **Missing Error Handling**: Not accounting for individual iteration failures
-4. **Type Assumptions**: Assuming array elements have specific structure without validation
+
+### Section Extraction
+3. **Missing Path Fields**: Array objects without the specified path field
+4. **Invalid File Paths**: Path field values that don't point to valid files
+5. **Nonexistent Sections**: Referencing sections that don't exist in files
+
+### General
+6. **Missing Error Handling**: Not accounting for individual iteration failures
+7. **Type Assumptions**: Assuming array elements have specific structure without validation
+
+## Choosing the Right Pattern
+
+- **Use parameterized commands** for complex operations, cartesian products, or when you need reusable logic
+- **Use section extraction** for documentation workflows, file processing, or when directly working with file arrays
 
 The `foreach` operator makes mlld particularly powerful for batch operations, especially when working with AI models, data processing pipelines, and automation workflows.

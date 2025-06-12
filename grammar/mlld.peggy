@@ -180,8 +180,8 @@ Directive
 // Special mlld-run fence that gets interpreted
 MlldRunFence
   = "```" "mlld-run" "\n"
-    content:(!("```" "\n"?) c:. { return c; })*
-    "```" "\n"? {
+    content:(!("```" ("\n" / !.)) c:. { return c; })*
+    "```" ("\n" / !.) {
       // Parse the content as mlld directives
       const rawContent = content.join('');
       helpers.debug('MlldRunFence: Parsing content', { content: rawContent });
@@ -225,7 +225,7 @@ CodeFence
     }) c:. { return c; })*
     closer:BacktickSequence !{
       return closer.length !== opener.length;
-    } "\n"? {
+    } ("\n" / !.) {
       const rawContent = content.join('');
       const preserveCodeFences = options?.preserveCodeFences !== false;
       const finalContent = preserveCodeFences 

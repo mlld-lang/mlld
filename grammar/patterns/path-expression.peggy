@@ -27,11 +27,24 @@ PathExpression "Any path expression"
 // -------------------------------------------------------------
 
 UnifiedSectionPath "Unified path with section marker"
-  = path:UnifiedPath _ "#" _ section:BaseIdentifier {
+  = path:UnifiedPath _ "#" _ section:SectionIdentifier {
       helpers.debug('UnifiedSectionPath matched', { path, section });
       
       // Determine if this is a URL or file path based on content
       const isUrl = path.values.protocol !== undefined;
+      
+      // Section can be either a Text node (literal) or VariableReference node (from AtVar)
+      const sectionNodes = Array.isArray(section) ? section : [section];
+      
+      // Extract raw content for compatibility
+      let rawSection;
+      if (section.type === 'VariableReference') {
+        rawSection = '@' + section.identifier;
+      } else if (typeof section === 'string') {
+        rawSection = section;
+      } else {
+        rawSection = section.content || section.identifier || '';
+      }
       
       if (isUrl) {
         return {
@@ -41,12 +54,12 @@ UnifiedSectionPath "Unified path with section marker"
             url: path.values.url,
             protocol: path.values.protocol,
             parts: path.values.parts,
-            section: [helpers.createNode(NodeType.Text, { content: section, location: location() })]
+            section: sectionNodes
           },
           raw: { 
             url: path.raw.url || path.raw.path,
             protocol: path.values.protocol,
-            section
+            section: rawSection
           },
           meta: helpers.createUrlMetadata(path.values.protocol, path.values.parts, true)
         };
@@ -56,11 +69,11 @@ UnifiedSectionPath "Unified path with section marker"
           subtype: 'fileSectionPath',
           values: { 
             path: path.values.path,
-            section: [helpers.createNode(NodeType.Text, { content: section, location: location() })]
+            section: sectionNodes
           },
           raw: { 
             path: path.raw.path,
-            section
+            section: rawSection
           },
           meta: {
             ...path.meta,
@@ -177,6 +190,44 @@ URLSegment "URL segment"
         location: location() 
       });
     }
+
+// -------------------------------------------------------------
+// SECTION IDENTIFIER PATTERNS
+// -------------------------------------------------------------
+
+// Section identifier - supports both literal names and variable references
+// Used in: UnifiedSectionPath for dynamic section extraction
+SectionIdentifier "Section name or variable reference"
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      // Variable reference in section context - no VariableContext check needed
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / '"' content:$(!'"' .)* '"' {  // Double-quoted section names
+      return helpers.createNode(NodeType.Text, { 
+        content: content, 
+        location: location() 
+      });
+    }
+  / "'" content:$(!"'" .)* "'" {  // Single-quoted section names
+      return helpers.createNode(NodeType.Text, { 
+        content: content, 
+        location: location() 
+      });
+    }
+  / chars:SectionNameChar+ {  // Unquoted section names
+      return helpers.createNode(NodeType.Text, { 
+        content: chars.join(''), 
+        location: location() 
+      });
+    }
+
+// Characters allowed in unquoted section names - everything except ], quotes, and newlines
+SectionNameChar
+  = ![\]"'\r\n] char:. { return char; }
 
 // -------------------------------------------------------------
 // LEGACY URL HELPER RULES - Keep for backward compatibility

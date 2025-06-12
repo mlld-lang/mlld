@@ -3,8 +3,9 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { createTextVariable, astLocationToSourceLocation } from '@core/types';
-import { createLLMXML } from 'llmxml';
+import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
+import { normalizeTemplateContent } from '../utils/blank-line-normalizer';
 
 /**
  * Remove single blank lines but preserve multiple blank lines.
@@ -115,8 +116,8 @@ export async function evaluateText(
   
   let resolvedValue: string;
   
-  // Handle foreach expressions
-  if (directive.subtype === 'textForeach') {
+  // Handle foreach expressions (both command and section types)
+  if (directive.subtype === 'textForeach' || directive.source === 'foreach' || directive.source === 'foreach-section') {
     const foreachExpression = directive.values?.foreach;
     if (!foreachExpression) {
       throw new Error('Text foreach directive missing foreach expression');
@@ -146,8 +147,8 @@ export async function evaluateText(
     // Read the file content or fetch URL (env.readFile handles both)
     resolvedValue = await env.readFile(resolvedPath);
     
-  } else if (directive.source === 'section' && directive.subtype === 'textPathSection') {
-    // Handle section extraction: @text section = [file.md # Section]
+  } else if ((directive.source === 'section' || directive.source === 'directive') && directive.subtype === 'textPathSection') {
+    // Handle section extraction: @text section = [file.md # Section] or @text section = @add [file.md # Section]
     const sectionNodes = directive.values?.sectionTitle;
     const pathNodes = directive.values?.path;
     
@@ -169,11 +170,10 @@ export async function evaluateText(
     const fileContent = await env.readFile(resolvedPath);
     
     // Extract the section using llmxml
-    const llmxml = createLLMXML();
     try {
       // getSection expects just the title without the # prefix
       const titleWithoutHash = sectionTitle.replace(/^#+\s*/, '');
-      resolvedValue = await llmxml.getSection(fileContent, titleWithoutHash, {
+      resolvedValue = await llmxmlInstance.getSection(fileContent, titleWithoutHash, {
         includeNested: true,
         includeTitle: true // Include the section title in output
       });
@@ -184,18 +184,37 @@ export async function evaluateText(
       resolvedValue = sectionTitle + '\n' + extractSection(fileContent, sectionTitle);
     }
     
-    // Handle rename if present
-    const renameNodes = directive.values?.rename;
+    // Handle rename if present (could be 'rename' or 'newTitle' in the AST)
+    const renameNodes = directive.values?.rename || directive.values?.newTitle;
     if (renameNodes) {
       const newTitle = await interpolate(renameNodes, env);
       // Replace the original section title with the new one
       const lines = resolvedValue.split('\n');
       if (lines.length > 0 && lines[0].match(/^#+\s/)) {
-        // Extract the heading level from the new title or default to original
-        const newHeadingMatch = newTitle.match(/^(#+)\s/);
-        const newHeadingLevel = newHeadingMatch ? newHeadingMatch[1] : '#';
-        const titleText = newTitle.replace(/^#+\s*/, '');
-        lines[0] = `${newHeadingLevel} ${titleText}`;
+        // Handle three cases:
+        // 1. Just header level: "###" -> change level only
+        // 2. No header level: "Name" -> keep original level, replace text
+        // 3. Full replacement: "### Name" -> replace entire line
+        
+        const newTitleTrimmed = newTitle.trim();
+        const newHeadingMatch = newTitleTrimmed.match(/^(#+)(\s+(.*))?$/);
+        
+        if (newHeadingMatch) {
+          // Case 1: Just header level (e.g., "###")
+          if (!newHeadingMatch[3]) {
+            const originalText = lines[0].replace(/^#+\s*/, '');
+            lines[0] = `${newHeadingMatch[1]} ${originalText}`;
+          } 
+          // Case 3: Full replacement (e.g., "### Name")
+          else {
+            lines[0] = newTitleTrimmed;
+          }
+        } else {
+          // Case 2: No header level (e.g., "Name")
+          const originalLevel = lines[0].match(/^(#+)\s/)?.[1] || '#';
+          lines[0] = `${originalLevel} ${newTitleTrimmed}`;
+        }
+        
         resolvedValue = lines.join('\n');
       } else {
         // If no heading found, prepend the new title
@@ -343,6 +362,11 @@ export async function evaluateText(
     }
     
     resolvedValue = await interpolate(contentNodes, env);
+    
+    // Apply template normalization if this is template content and normalization is enabled
+    if (directive.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
+      resolvedValue = normalizeTemplateContent(resolvedValue, true);
+    }
   }
   
   // Handle append operator
@@ -361,7 +385,9 @@ export async function evaluateText(
   
   // Create and store the variable with location information
   const variable = createTextVariable(identifier, finalValue, {
-    definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
+    definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath()),
+    // Preserve template metadata if this was template content
+    ...(directive.meta?.isTemplateContent ? { isTemplateContent: true } : {})
   });
   
   // Convert to Environment's MlldVariable format with TTL/trust metadata

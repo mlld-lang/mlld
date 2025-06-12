@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2025-06-05T21:09:22.545Z
+// Generated from grammar at 2025-06-10T02:54:13.919Z
 
 const Prism = require('prismjs');
 
@@ -62,3 +62,6 @@ Prism.languages.mlld = {
 
 // Also highlight .mlld and .mld files
 Prism.languages.mld = Prism.languages.mlld;
+
+// Support for mlld-run code blocks
+Prism.languages['mlld-run'] = Prism.languages.mlld;

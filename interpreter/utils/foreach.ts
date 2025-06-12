@@ -1,5 +1,5 @@
 import type { Environment } from '../env/Environment';
-import { evaluateForeachCommand } from '../eval/data-value-evaluator';
+import { evaluateForeachCommand, evaluateForeachSection } from '../eval/data-value-evaluator';
 import { interpolate } from '../core/interpreter';
 
 /**
@@ -16,7 +16,7 @@ export interface ForeachOptions {
  * Default options for foreach text formatting
  */
 export const DEFAULT_FOREACH_OPTIONS: ForeachOptions = {
-  separator: '\n==========\n'
+  separator: '\n\n---\n\n'
 };
 
 /**
@@ -32,8 +32,17 @@ export async function evaluateForeachAsText(
   env: Environment,
   options: ForeachOptions = {}
 ): Promise<string> {
-  // Get the raw results from foreach evaluation
-  const results = await evaluateForeachCommand(foreachExpression, env);
+  // Check if it's a section expression or command expression
+  let results: any[];
+  
+  if (foreachExpression.type === 'foreach-section' || 
+      (foreachExpression.value && foreachExpression.value.type === 'foreach-section')) {
+    // Handle foreach section expression
+    results = await evaluateForeachSection(foreachExpression, env);
+  } else {
+    // Handle foreach command expression
+    results = await evaluateForeachCommand(foreachExpression, env);
+  }
   
   // If no results, return empty string
   if (!Array.isArray(results) || results.length === 0) {

@@ -1,6 +1,7 @@
 import type { MlldNode, MlldVariable } from '@core/types';
-import { createLLMXML } from 'llmxml';
+import { llmxmlInstance } from '../utils/llmxml-instance';
 import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
+import { normalizeFinalOutput } from '../utils/blank-line-normalizer';
 
 /**
  * Output formatting options
@@ -8,6 +9,7 @@ import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isIm
 export interface FormatOptions {
   format: 'markdown' | 'xml';
   variables?: Map<string, MlldVariable>;
+  normalizeBlankLines?: boolean; // Default: true
 }
 
 /**
@@ -20,15 +22,7 @@ export async function formatOutput(nodes: MlldNode[], options: FormatOptions): P
     const structuredMarkdown = buildStructuredMarkdown(nodes, options);
     
     // Use llmxml to convert markdown to XML
-    const llmxml = createLLMXML({
-      includeTitle: false,  // No redundant title attributes
-      includeHlevel: false, // No need for heading levels either
-      tagFormat: 'SCREAMING_SNAKE', // Maximum clarity!
-      verbose: false,
-      warningLevel: 'none' // Suppress llmxml logging
-    });
-    
-    return await llmxml.toXML(structuredMarkdown);
+    return await llmxmlInstance.toXML(structuredMarkdown);
   }
   
   // Default to plain markdown (just the content)
@@ -76,12 +70,10 @@ function formatMarkdown(nodes: MlldNode[], options: FormatOptions): string {
   
   let result = parts.join('');
   
-  // Clean up excessive blank lines (more than 2 consecutive newlines)
-  result = result.replace(/\n{3,}/g, '\n\n');
-  
-  // Ensure the output ends with exactly one newline, but only if there's content
-  if (result.length > 0 && !result.endsWith('\n')) {
-    result = result + '\n';
+  // Apply final output normalization if enabled (default: true)
+  const shouldNormalize = options.normalizeBlankLines !== false;
+  if (shouldNormalize) {
+    result = normalizeFinalOutput(result);
   }
   
   return result;

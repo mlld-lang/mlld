@@ -151,7 +151,8 @@ AtData
 
 // Any data value (object, array, primitive, directive, template, variable, literal path)
 DataValue
-  = ForeachCommandExpression
+  = ForeachSectionExpression    // New: foreach [@array.field # section] as [[template]]
+  / ForeachCommandExpression    // Existing: foreach @command(@arrays)
   / DirectiveValue
   / VariableReferenceValue  // Must come before ExecInvocationValue to properly match field access
   / ExecInvocationValue

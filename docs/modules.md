@@ -26,7 +26,7 @@ mlld install
 
 ### Using Modules
 
-Once installed, import modules in your `.mlld` files:
+Once installed, import modules in your `.mld.md` or `.mld` files:
 
 ```mlld
 @import { formatDate, capitalize } from @alice/utils
@@ -67,11 +67,9 @@ mlld info @alice/utils
 The mlld module system uses DNS TXT records for module discovery:
 
 1. **Module Reference**: `@username/module` 
-2. **DNS Lookup**: `_mlld.username.public.mlld.ai`
-3. **TXT Record**: Contains metadata and gist information
-4. **Content Fetch**: Downloads from GitHub gist
-5. **Local Cache**: Stores in `~/.mlld/cache/` with SHA-256 hash
-6. **Lock File**: Records exact versions in `mlld.lock.json`
+2. **Content Fetch**: Downloads from GitHub gist
+3. **Local Cache**: Stores in `~/.mlld/cache/` with SHA-256 hash
+4. **Lock File**: Records exact versions in `mlld.lock.json`
 
 ### Cache System
 
@@ -107,6 +105,164 @@ The lock file ensures reproducible builds:
 ```
 
 ## CLI Commands
+
+### `mlld init [module-name.mld.md]`
+
+Create a new mlld module file with interactive setup. Creates `.mld.md` files by default for better GitHub integration and documentation.
+
+**Options:**
+- `--name <name>`: Module name (skip interactive prompt)
+- `--author <author>`: Author name  
+- `--about <description>`: Module description
+- `--output <path>`: Output file path
+- `--version <version>`: Module version (default: 1.0.0)
+- `--keywords <keywords>`: Comma-separated keywords
+- `--homepage <url>`: Homepage URL
+- `--skip-git`: Skip git integration
+- `--force`: Overwrite existing files
+
+**Examples:**
+
+```bash
+# Interactive creation (prompts for module name)
+mlld init
+
+# Create specific module interactively  
+mlld init utils.mld.md
+
+# Non-interactive with flags
+mlld init --name utils --author alice --about "Utility functions" utils.mld.md
+
+# Create with all metadata
+mlld init --name http-client --author myorg --about "HTTP utilities" \
+  --keywords "http,api,client" --homepage "https://github.com/myorg/http-client" \
+  http-client.mld.md
+```
+
+**Output:**
+```
+=✨ Creating new mlld module...
+
+Auto-detected repository: https://github.com/alice/my-project
+
+Runtime dependencies:
+  Dependencies will be auto-detected when you publish.
+  For now, specify if you know you'll use external runtimes.
+  Options: js, py, sh (comma-separated, or press Enter for none)
+Needs []: js
+
+Module export pattern:
+  1. Structured interface (recommended for reusable modules)
+  2. Simple module (for basic functionality)  
+  3. Empty (I'll add content later)
+
+Choice [1]: 1
+
+✨ Module created: utils.mld.md
+
+Next steps:
+  1. Edit utils.mld.md to add your functionality
+  2. Test with: mlld utils.mld.md
+  3. Publish with: mlld publish utils.mld.md
+```
+
+### `mlld add-needs [module-path]`
+
+Analyze module dependencies and update frontmatter automatically.
+
+**Aliases:** `mlld needs`, `mlld deps`
+
+**Options:**
+- `--verbose`: Show detailed dependency analysis
+- `--auto`: Auto-detect mode (default behavior)
+- `--force`: Add frontmatter even if none exists
+
+**Examples:**
+
+```bash
+# Analyze current directory
+mlld add-needs
+
+# Analyze specific module
+mlld add-needs my-module.mld.md
+
+# Add frontmatter to file without frontmatter
+mlld add-needs --force basic-script.mld
+
+# Verbose output showing detected dependencies
+mlld add-needs --verbose utils.mld.md
+```
+
+**Output:**
+```
+🔍 Analyzing module dependencies...
+
+Parsing module...
+✅ Analysis complete
+
+Detected runtime needs:
+  needs: ["js", "sh"]
+
+  needs-js:
+    packages: ["axios", "lodash"]
+
+  needs-sh:
+    commands: ["curl", "grep", "awk"]
+
+📝 Updating frontmatter...
+✅ Updated utils.mld.md
+
+Changes:
+  needs: [] → ["js", "sh"]
+```
+
+### `mlld publish [module-path]`
+
+Publish a module to the mlld registry with automatic metadata handling.
+
+**Options:**
+- `--dry-run`: Show what would be published without publishing
+- `--message <msg>`: Custom pull request message
+- `--force`: Force publish even with uncommitted changes
+- `--gist`: Create a gist even if in git repository
+- `--repo`: Use repository (skip interactive prompt)
+- `--org <name>`: Publish on behalf of an organization
+
+**Enhanced UX for Metadata Changes:**
+
+The publish command now intelligently handles metadata updates:
+
+```bash
+mlld publish my-module.mld.md
+```
+
+**Output:**
+```
+🚀 Publishing mlld module...
+
+📋 Checking module metadata...
+
+The following metadata will be added to my-module.mld.md:
+   • mlld-version: 1.0.0-rc-12
+   • author: alice (auto-detected from git)
+   • license: CC0 (required for all modules)
+   • repo: https://github.com/alice/my-project (auto-detected)
+
+⚠️  These changes need to be committed before publishing.
+Choose an option:
+  1. Commit and push changes, then publish
+  2. Cancel and let me commit manually
+
+Choice [1]: 1
+
+📝 Committing metadata changes...
+✅ Committed: Add mlld-version, author, license to my-module.mld.md
+✅ Pushed to origin/main
+🚀 Publishing to registry...
+✅ Published @alice/my-module
+```
+
+This solves the common issue where publish would add metadata but then fail due to uncommitted changes.
 
 ### `mlld install [modules...]`
 
@@ -222,16 +378,135 @@ Created: January 15, 2024
 
 ## Module Development
 
+### The `.mld.md` Executable Documentation Format
+
+mlld modules use the `.mld.md` file extension by default, enabling **executable documentation** - files that are simultaneously perfect GitHub markdown documentation and functional mlld modules. This innovative approach combines data, documentation, and code in one file.
+
+#### `mlld-run` vs `mlld` Code Blocks
+
+The key to executable documentation is understanding the difference between these two code block types:
+
+- **`mlld-run` blocks**: Execute as mlld code when the file is processed
+- **`mlld` blocks**: Documentation-only, rendered as syntax-highlighted code on GitHub
+
+**Example `.mld.md` module:**
+
+````markdown
+# @alice/utils
+
+Utility functions for text formatting and dates. Perfect for blogs, documentation, and data processing.
+
+## tldr
+
+```mlld-run
+@import { formatDate, capitalize, greeting } from @alice/utils
+
+@text today = [[Today is {{formatDate(@TIME)}}]]
+@add @today
+```
+
+## export
+
+```mlld-run
+@text formatDate(dateStr) = [[{{dateStr | format("YYYY-MM-DD")}}]]
+@text capitalize(text) = [[{{text | title}}]]
+@text greeting(name) = [[Hello, {{capitalize(@name)}}!]]
+
+@data module = {
+  formatDate: @formatDate,
+  capitalize: @capitalize,
+  greeting: @greeting
+}
+```
+
+## interface
+
+### `formatDate(dateStr)`
+
+Formats a date string to YYYY-MM-DD format.
+
+```mlld
+@text myDate = [[{{formatDate("2024-01-15T10:30:00Z")}}]]
+@add @myDate
+```
+
+Output: `2024-01-15`
+
+### `capitalize(text)`
+
+Capitalizes the first letter of each word.
+
+```mlld
+@text title = [[{{capitalize("hello world")}}]]
+@add @title
+```
+
+Output: `Hello World`
+
+### `greeting(name)`
+
+Creates a personalized greeting message.
+
+```mlld
+@text welcome = [[{{greeting("Alice")}}]]
+@add @welcome
+```
+
+Output: `Hello, Alice!`
+````
+
+**When viewed on GitHub**, this renders as beautiful documentation with syntax highlighting. **When processed by mlld**, only the `mlld-run` blocks execute, making the functions available for import.
+
+#### Benefits of Executable Documentation
+
+1. **Single Source of Truth**: Documentation and code stay in sync because they're in the same file
+2. **Perfect GitHub Integration**: Modules render beautifully on GitHub with proper syntax highlighting
+3. **Live Examples**: Documentation examples can be actual working code that's tested
+4. **Reduced Maintenance**: No need to maintain separate documentation and implementation files
+5. **Better Discovery**: Modules are discoverable both as code repositories and as documentation
+
+#### Best Practices for `.mld.md` Modules
+
+- **Use `mlld-run` blocks for all executable code** (exports, internal functions, data definitions)
+- **Use `mlld` blocks for documentation examples** that show usage but don't execute
+- **Structure with standard sections**: `# @author/module`, `## tldr`, `## export`, `## interface`
+- **Include working examples** in the `## tldr` section to show immediate value
+- **Document each exported function** with usage examples and expected output
+- **Keep the executable code clean** since it will be visible in the documentation
+
 ### Creating Modules
 
-Create a module by writing standard mlld code with an explicit module export:
+The easiest way to create a new module is with the `mlld init` command:
 
-**alice-utils.mlld:**
+```bash
+# Interactive creation (creates .mld.md by default)
+mlld init
+
+# Create specific module
+mlld init utils.mld.md
+
+# Non-interactive with metadata
+mlld init --name utils --author alice --about "Utility functions" utils.mld.md
+```
+
+This creates a properly structured `.mld.md` file with:
+- Frontmatter metadata
+- Standard documentation sections (`# @author/module`, `## tldr`, `## export`, `## interface`)
+- `mlld-run` blocks for executable code
+- `mlld` blocks for documentation examples
+
+You can also create modules manually by writing standard mlld code with frontmatter:
+
+**alice-utils.mld.md:**
 ```mlld
 ---
+name: utils
 author: alice
-description: Utility functions for text formatting and dates
+about: Utility functions for text formatting and dates
 version: 1.0.0
+needs: []
+license: CC0
+mlld-version: 1.0.0-rc-12
 ---
 
 @text formatDate(dateStr) = [[{{dateStr | format("YYYY-MM-DD")}}]]
@@ -247,6 +522,23 @@ version: 1.0.0
   greeting: @greeting
 }
 ```
+
+### Analyzing Dependencies
+
+Use `mlld add-needs` to automatically detect and add runtime dependencies:
+
+```bash
+# Analyze and update dependencies
+mlld add-needs utils.mld.md
+
+# Force add frontmatter if missing
+mlld add-needs --force legacy-script.mld
+
+# See detailed analysis
+mlld add-needs --verbose utils.mld.md
+```
+
+This automatically detects JavaScript packages, Python imports, shell commands, and other runtime dependencies in your module.
 
 #### Module Export Patterns
 
@@ -356,14 +648,37 @@ Module frontmatter is always available via the `__meta__` property:
 
 ### Publishing Modules
 
-1. **Create a GitHub Gist** with your module code
-2. **Set up DNS TXT record** for discovery
-3. **Register with mlld registry** (if using public registry)
+The `mlld publish` command handles the entire publishing workflow:
 
-**DNS TXT Record Format:**
+```bash
+# Publish current module
+mlld publish my-module.mld.md
+
+# Dry run to see what would be published
+mlld publish --dry-run my-module.mld.md
+
+# Publish as organization
+mlld publish --org mycompany my-module.mld.md
 ```
-_mlld.alice.public.mlld.ai  TXT  "gist=abc123def456;version=1.0.0;description=Utility functions"
-```
+
+The publish command will:
+
+1. **Validate module** - Check syntax, required fields, and dependencies
+2. **Add metadata** - Automatically add mlld-version, license (CC0), and git info
+3. **Handle git workflow** - Ask permission to commit changes and push
+4. **Create pull request** - Submit to the mlld registry for review
+5. **Provide status** - Show publication URL and next steps
+
+**Publishing Process:**
+
+The `mlld publish` command handles everything automatically:
+
+1. **Validates** your module metadata and syntax
+2. **Auto-detects** runtime dependencies (js, node, py, sh)
+3. **Creates source** (uses git repository or creates gist)
+4. **Submits PR** to the mlld registry for review
+
+The registry uses a pull request workflow for quality and security.
 
 ### Module Standards
 
@@ -372,13 +687,42 @@ _mlld.alice.public.mlld.ai  TXT  "gist=abc123def456;version=1.0.0;description=Ut
 - Module names should be lowercase with hyphens
 - Usernames should match your GitHub username
 
+#### Runtime Dependencies
+
+Modules should declare their runtime requirements in the `needs` array:
+
+- **`"js"`**: Browser-compatible JavaScript (no Node.js APIs)
+- **`"node"`**: Node.js-specific JavaScript (uses fs, path, process, etc.)
+- **`"py"`**: Python code execution
+- **`"sh"`**: Shell commands or scripts
+
+Example frontmatter with dependencies:
+```yaml
+---
+name: file-utils
+author: alice
+about: File manipulation utilities
+needs: ["node", "sh"]  # Uses Node.js fs module and shell commands
+needs-node:
+  node: ">=18.0.0"
+  packages: ["glob", "fs-extra"]
+needs-sh:
+  commands: ["find", "grep"]
+license: CC0
+---
+```
+
+The `mlld add-needs` command can automatically detect and update these dependencies.
+
 #### Code Structure
 ```mlld
 ---
+name: utils
 author: alice
 version: 1.0.0
-description: Utility functions for common tasks
-license: MIT
+about: Utility functions for common tasks
+needs: []
+license: CC0
 ---
 
 # Internal helpers (not exported)
@@ -611,21 +955,173 @@ mlld install @templates/blog
 
 ### Development Workflow
 
-**Working with local and published modules:**
+**Complete module development workflow:**
 
 ```bash
-# During development
-mlld install file:./my-module.mlld
+# 1. Create a new module
+mlld init my-utils.mld.md
 
-# Publish to gist and install
-mlld install @alice/my-module
+# 2. Edit the module (add your functionality)
+# ... edit my-utils.mld.md ...
 
-# Update all modules
+# 3. Analyze and add dependencies
+mlld add-needs my-utils.mld.md
+
+# 4. Test the module locally
+mlld my-utils.mld.md
+
+# 5. Publish when ready
+mlld publish my-utils.mld.md
+
+# 6. Install in other projects
+mlld install @alice/my-utils
+
+# 7. Maintain and update
 mlld registry update
-
-# Check for issues
 mlld registry audit
 ```
+
+**During development iteration:**
+
+```bash
+# Quick dependency re-analysis after code changes
+mlld add-needs --verbose my-utils.mld.md
+
+# Test before publishing
+mlld publish --dry-run my-utils.mld.md
+
+# Publish updates
+mlld publish my-utils.mld.md
+```
+
+## Private Modules
+
+mlld supports publishing and using modules from private GitHub repositories, enabling teams to share proprietary code without exposing it publicly.
+
+### Publishing to Private Repositories
+
+When you run `mlld publish` in a private repository where you have write access, mlld detects this and offers you a choice:
+
+```bash
+mlld publish my-module.mld.md
+
+# Output:
+⚠️  Repository is private but you have write access.
+
+Options:
+  [p]     Publish to private repository
+  [g]     Create public gist instead
+  [c]     Cancel
+
+Your choice: p
+```
+
+#### Using the `--private` Flag
+
+Skip the interactive prompt with the `--private` flag:
+
+```bash
+# Publish directly to private repo
+mlld publish my-module.mld.md --private
+
+# Publish to custom directory
+mlld publish my-module.mld.md --private --path lib/mlld-modules
+
+# Also create a registry PR for future public release
+mlld publish my-module.mld.md --private --pr
+```
+
+#### How Private Publishing Works
+
+1. **Module Storage**: Modules are stored in `mlld/modules/` by default (customize with `--path`)
+2. **Manifest File**: A `manifest.json` is created/updated for module discovery
+3. **Git Integration**: Changes are committed and pushed to your repository
+4. **No Registry PR**: By default, no public registry PR is created (add `--pr` to create one)
+
+Example manifest.json:
+```json
+{
+  "@myteam/utils": {
+    "path": "utils.mld.md",
+    "version": "1.0.0",
+    "about": "Internal utility functions",
+    "author": "myteam",
+    "needs": ["js"],
+    "updatedAt": "2024-01-15T10:30:00.000Z"
+  }
+}
+```
+
+### Using Private Modules
+
+Team members with repository access can import private modules using file paths:
+
+```mlld
+# Import from same repository
+@import { formatData } from "./mlld/modules/utils.mld.md"
+
+# Import from another private repository (must be cloned locally)
+@import { validate } from "../other-private-repo/mlld/modules/validator.mld.md"
+
+# Import using relative paths from module location
+@import { shared } from "../../shared/modules/common.mld.md"
+```
+
+### Private Module Workflows
+
+#### Team Development
+
+1. **Centralized Private Modules Repository**:
+   ```bash
+   # Create a dedicated private repo for team modules
+   git clone git@github.com:myteam/mlld-modules-private.git
+   cd mlld-modules-private
+   
+   # Publish modules to this repo
+   mlld publish utils.mld.md --private
+   mlld publish validators.mld.md --private
+   ```
+
+2. **Per-Project Private Modules**:
+   ```bash
+   # Within your project repository
+   mlld publish src/modules/project-utils.mld.md --private --path src/mlld
+   ```
+
+#### Gradual Open-Sourcing
+
+Use the `--pr` flag to prepare modules for eventual public release:
+
+```bash
+# Publish privately but also create a registry PR
+mlld publish my-module.mld.md --private --pr
+```
+
+This creates:
+- Private module in your repo (immediately usable by your team)
+- Pull request to public registry (review and merge when ready)
+
+### Authentication and Access
+
+Private module access requires:
+- Repository clone access (SSH keys or HTTPS credentials)
+- File system access to the module files
+- No additional mlld-specific authentication
+
+### Limitations
+
+1. **No Registry Discovery**: Private modules don't appear in `mlld search` or registry listings
+2. **Manual Path Management**: Import paths must be maintained manually
+3. **No Automatic Installation**: Team members must clone repositories containing private modules
+4. **Version Management**: Updates require repository pulls, not `mlld install`
+
+### Best Practices for Private Modules
+
+1. **Consistent Structure**: Use a standard directory structure across projects
+2. **Documentation**: Maintain a README listing available private modules
+3. **Access Control**: Use GitHub's repository access controls
+4. **Migration Path**: Plan for eventual open-sourcing with `--pr` flag
+5. **Testing**: Set up CI/CD to test private modules automatically
 
 ## Best Practices
 

@@ -20,6 +20,7 @@ import {
   LocalResolver, 
   GitHubResolver, 
   HTTPResolver,
+  ProjectPathResolver,
   convertLockFileToResolverConfigs
 } from '@core/resolvers';
 import { logger } from '@core/utils/logger';
@@ -32,6 +33,7 @@ interface CommandExecutionOptions {
   timeout?: number;
   collectErrors?: boolean;
   input?: string;
+  env?: Record<string, string>;
 }
 
 interface CommandExecutionContext {
@@ -96,6 +98,9 @@ export class Environment {
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
+  
+  // Blank line normalization flag
+  private normalizeBlankLines: boolean = true;
   
   // Default URL validation options (used if no config provided)
   private defaultUrlOptions = {
@@ -187,11 +192,33 @@ export class Environment {
         );
         
         // Register built-in resolvers
-        // RegistryResolver should be first to be the primary resolver for @user/module patterns
+        // ProjectPathResolver should be first to handle @PROJECTPATH references
+        this.resolverManager.registerResolver(new ProjectPathResolver(this.fileSystem));
+        // RegistryResolver should be next to be the primary resolver for @user/module patterns
         this.resolverManager.registerResolver(new RegistryResolver());
         this.resolverManager.registerResolver(new LocalResolver(this.fileSystem));
         this.resolverManager.registerResolver(new GitHubResolver());
         this.resolverManager.registerResolver(new HTTPResolver());
+        
+        // Configure built-in registries
+        this.resolverManager.configureRegistries([
+          {
+            prefix: '@PROJECTPATH',
+            resolver: 'projectpath',
+            config: {
+              basePath: this.basePath,
+              readonly: false
+            }
+          },
+          {
+            prefix: '@.',
+            resolver: 'projectpath', 
+            config: {
+              basePath: this.basePath,
+              readonly: false
+            }
+          }
+        ]);
         
         // Load resolver configs from lock file if available
         if (lockFile) {
@@ -450,6 +477,23 @@ export class Environment {
     // Direct assignment for reserved variables during initialization
     this.variables.set('DEBUG', debugVar);
     // Note: lowercase 'debug' is handled in getVariable() to avoid conflicts
+    
+    // Initialize @PROJECTPATH with project root path
+    // This is a lazy variable that computes the project path when first accessed
+    const projectPathVar: MlldVariable = {
+      type: 'text',
+      value: null, // Will be computed dynamically
+      nodeId: '',
+      location: { line: 0, column: 0 },
+      metadata: {
+        isReserved: true,
+        isLazy: true, // Indicates value should be computed on access
+        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+      }
+    };
+    // Direct assignment for reserved variables during initialization
+    this.variables.set('PROJECTPATH', projectPathVar);
+    // Note: lowercase 'projectpath' is handled in getVariable() to avoid conflicts
   }
   
   /**
@@ -842,6 +886,15 @@ export class Environment {
         variable.value = debugData;
         variable.metadata!.isLazy = false; // No longer lazy
       }
+      
+      // Handle lazy PROJECTPATH variable
+      if (name === 'PROJECTPATH' && variable.metadata?.isLazy && variable.value === null) {
+        // For now, use basePath as the project path
+        // TODO: Implement proper project root detection that works synchronously
+        // The async getProjectPath() method exists but can't be used in synchronous getVariable()
+        variable.value = this.basePath;
+        variable.metadata!.isLazy = false; // No longer lazy
+      }
       return variable;
     }
     
@@ -853,6 +906,8 @@ export class Environment {
         return this.variables.get('TIME');
       } else if (name === 'debug' && this.variables.has('DEBUG')) {
         return this.getVariable('DEBUG'); // Recursive call to handle lazy computation
+      } else if (name === 'projectpath' && this.variables.has('PROJECTPATH')) {
+        return this.getVariable('PROJECTPATH'); // Recursive call to handle lazy computation
       }
     }
     
@@ -1254,7 +1309,7 @@ export class Environment {
       const result = execSync(safeCommand, {
         encoding: 'utf8',
         cwd: workingDirectory,
-        env: { ...process.env },
+        env: { ...process.env, ...(options?.env || {}) },
         maxBuffer: 10 * 1024 * 1024, // 10MB limit
         timeout: timeout || 30000,
         ...(options?.input ? { input: options.input } : {})
@@ -1326,7 +1381,7 @@ export class Environment {
     context?: CommandExecutionContext
   ): Promise<string> {
     const startTime = Date.now();
-    if (language === 'javascript' || language === 'js' || language === 'node') {
+    if (language === 'javascript' || language === 'js') {
       try {
         // Create a function that captures console.log output
         let output = '';
@@ -1378,6 +1433,74 @@ export class Environment {
           throw codeError;
         }
         throw new Error(`Code execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    } else if (language === 'node' || language === 'nodejs') {
+      try {
+        // Create a temporary Node.js file with parameter injection
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
+        const tmpDir = os.tmpdir();
+        const tmpFile = path.join(tmpDir, `mlld_exec_${Date.now()}.js`);
+        
+        // Build Node.js code with parameters
+        let nodeCode = '';
+        if (params) {
+          // Inject parameters as constants
+          for (const [key, value] of Object.entries(params)) {
+            nodeCode += `const ${key} = ${JSON.stringify(value)};\n`;
+          }
+        }
+        nodeCode += code;
+        
+        // Debug: log the generated code
+        if (process.env.DEBUG_NODE_EXEC) {
+          console.log('Generated Node.js code:');
+          console.log(nodeCode);
+          console.log('Params:', params);
+        }
+        
+        // Write to temp file
+        fs.writeFileSync(tmpFile, nodeCode);
+        
+        try {
+          // Execute Node.js in the directory of the current mlld file
+          const currentDir = this.getCurrentFilePath() 
+            ? path.dirname(this.getCurrentFilePath()!) 
+            : await this.getProjectPath();
+          
+          // Create a custom exec to run with the correct cwd
+          const { execSync } = require('child_process');
+          const result = execSync(`node ${tmpFile}`, {
+            encoding: 'utf8',
+            cwd: currentDir,
+            env: { ...process.env },
+            maxBuffer: 10 * 1024 * 1024, // 10MB limit
+            timeout: 30000
+          });
+          
+          return result.toString().trimEnd();
+        } finally {
+          // Clean up temp file
+          fs.unlinkSync(tmpFile);
+        }
+      } catch (error) {
+        if (context?.sourceLocation) {
+          const codeError = new MlldCommandExecutionError(
+            `Node.js execution failed`,
+            context.sourceLocation,
+            {
+              command: `node code execution`,
+              exitCode: 1,
+              duration: Date.now() - startTime,
+              stderr: error instanceof Error ? error.message : 'Unknown error',
+              workingDirectory: await this.getProjectPath(),
+              directiveType: context.directiveType || 'run'
+            }
+          );
+          throw codeError;
+        }
+        throw new Error(`Node.js execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     } else if (language === 'python' || language === 'py') {
       try {
@@ -1879,6 +2002,20 @@ export class Environment {
    */
   setApproveAllImports(approve: boolean): void {
     this.approveAllImports = approve;
+  }
+  
+  /**
+   * Set blank line normalization flag
+   */
+  setNormalizeBlankLines(normalize: boolean): void {
+    this.normalizeBlankLines = normalize;
+  }
+  
+  /**
+   * Get blank line normalization flag
+   */
+  getNormalizeBlankLines(): boolean {
+    return this.normalizeBlankLines;
   }
   
   private collectError(

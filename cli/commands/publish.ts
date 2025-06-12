@@ -15,6 +15,8 @@ import { Octokit } from '@octokit/rest';
 import { MlldError, ErrorSeverity } from '@core/errors';
 import * as yaml from 'js-yaml';
 import { version as currentMlldVersion } from '@core/version';
+import { DependencyDetector } from '@core/utils/dependency-detector';
+import { parseSync } from '@grammar/parser';
 
 export interface PublishOptions {
   verbose?: boolean;
@@ -24,16 +26,35 @@ export interface PublishOptions {
   useGist?: boolean; // Force gist creation even if in git repo
   useRepo?: boolean; // Force repository publishing (skip interactive prompt)
   org?: string; // Publish on behalf of an organization
+  skipVersionCheck?: boolean; // Skip checking for latest mlld version (dev only)
+  private?: boolean; // Force private repo publishing
+  pr?: boolean; // Create PR even for private publish
+  path?: string; // Custom path for private publish (default: mlld/modules/)
+}
+
+export interface RuntimeDependencies {
+  node?: string;
+  python?: string;
+  shell?: string;
+  packages?: string[];
+  commands?: string[];
 }
 
 export interface ModuleMetadata {
   name: string;
-  description: string;
   author: string;
   version?: string;
+  about: string;  // Renamed from description
+  needs: string[];  // Required, empty array for pure mlld
+  needsJs?: RuntimeDependencies;
+  needsNode?: RuntimeDependencies;
+  needsPy?: RuntimeDependencies;
+  needsSh?: RuntimeDependencies;
+  bugs?: string;
+  repo?: string;
   keywords?: string[];
-  license?: string;
-  repository?: string;
+  homepage?: string;
+  license: string;  // Always CC0, required
   mlldVersion?: string;
 }
 
@@ -46,6 +67,8 @@ export interface GitInfo {
   relPath?: string;
   isClean?: boolean;
   remoteUrl?: string;
+  gitRoot?: string;
+  hasWriteAccess?: boolean;
 }
 
 export class PublishCommand {
@@ -62,9 +85,35 @@ export class PublishCommand {
     try {
       console.log(chalk.blue('🚀 Publishing mlld module...\n'));
 
+      // Check for latest mlld version (unless skipped)
+      if (!options.skipVersionCheck) {
+        console.log(chalk.gray('Checking mlld version...'));
+        const latestVersion = await this.getLatestMlldVersion();
+        if (latestVersion && this.isNewerVersion(latestVersion, currentMlldVersion)) {
+          throw new MlldError(
+            `You're using mlld v${currentMlldVersion}, but v${latestVersion} is available.\n` +
+            `Please update mlld before publishing:\n` +
+            `  npm install -g mlld@latest\n\n` +
+            `This ensures modules are compatible with the latest features.`,
+            {
+              code: 'OUTDATED_MLLD_VERSION',
+              severity: ErrorSeverity.Fatal
+            }
+          );
+        }
+        console.log(chalk.green(`✅ Using latest mlld version (${currentMlldVersion})`));
+      }
+
       // Check for conflicting options
       if (options.useGist && options.useRepo) {
         throw new MlldError('Cannot use both --use-gist and --use-repo options', {
+          code: 'CONFLICTING_OPTIONS',
+          severity: ErrorSeverity.Fatal
+        });
+      }
+      
+      if (options.private && options.useGist) {
+        throw new MlldError('Cannot use both --private and --use-gist options', {
           code: 'CONFLICTING_OPTIONS',
           severity: ErrorSeverity.Fatal
         });
@@ -83,12 +132,81 @@ export class PublishCommand {
 
       // Read and validate module
       const resolvedPath = path.resolve(modulePath);
-      const { content, metadata, filename, filePath } = await this.readModule(resolvedPath);
+      const { content, metadata, filename, filePath } = await this.readModule(resolvedPath, { verbose: options.verbose });
+      
+      // Check git status before making any auto-changes
+      const initialGitInfo = await this.detectGitInfo(filePath);
+      let needsGitCommit = false;
+      
+      // Run validation phase (but don't write changes yet)
+      console.log(chalk.gray('Running module validation...'));
+      const validationResult = await this.validateModule(metadata, content, user, octokit, filePath, { dryRun: true });
+      if (!validationResult.valid) {
+        throw new MlldError(
+          'Module validation failed:\n' +
+          validationResult.errors.map(e => `  • ${e}`).join('\n'),
+          {
+            code: 'VALIDATION_FAILED',
+            severity: ErrorSeverity.Fatal
+          }
+        );
+      }
+      console.log(chalk.green('✅ Module validation passed'));
+      
+      // Check if validation would make changes to the file
+      const hasAutoChanges = validationResult.updatedContent && validationResult.updatedContent !== content;
+      
+      if (hasAutoChanges && initialGitInfo.isGitRepo && !options.force) {
+        // Show what changes will be made
+        console.log(chalk.blue('\n📝 The following metadata will be automatically added:'));
+        if (validationResult.updatedMetadata) {
+          const changes = this.describeMetadataChanges(metadata, validationResult.updatedMetadata);
+          changes.forEach(change => console.log(chalk.gray(`   ${change}`)));
+        }
+        
+        console.log(chalk.yellow('\n⚠️  These changes need to be committed before publishing.'));
+        console.log(chalk.gray('Choose an option:'));
+        console.log(chalk.gray('  1. Commit and push changes, then publish'));
+        console.log(chalk.gray('  2. Cancel and let me commit manually'));
+        
+        const rl = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+        
+        const choice = await rl.question('\nChoice [1]: ');
+        rl.close();
+        
+        if (choice === '2') {
+          // Apply changes but don't proceed with publishing
+          Object.assign(metadata, validationResult.updatedMetadata);
+          await fs.writeFile(filePath, validationResult.updatedContent!, 'utf8');
+          console.log(chalk.blue(`\n📝 Metadata added to ${path.basename(filePath)}`));
+          console.log(chalk.gray('Please commit your changes and run publish again.'));
+          return;
+        }
+        
+        needsGitCommit = true;
+      }
+      
+      // Apply any fixes from validation
+      if (validationResult.updatedMetadata) {
+        Object.assign(metadata, validationResult.updatedMetadata);
+      }
+      if (validationResult.updatedContent) {
+        // Update the file with validated content
+        await fs.writeFile(filePath, validationResult.updatedContent, 'utf8');
+        
+        if (needsGitCommit) {
+          // Commit the changes
+          await this.commitMetadataChanges(filePath, validationResult.updatedMetadata);
+        }
+      }
       
       // Determine the publishing author (user or org)
       let publishingAuthor = user.login;
       
-      // Check if publishing on behalf of an organization
+      // Check if publishing on behalf of an organization via --org flag
       if (options.org) {
         publishingAuthor = options.org;
         
@@ -106,31 +224,15 @@ export class PublishCommand {
         }
         
         console.log(chalk.green(`✅ Verified permission to publish as @${options.org}`));
-      } else if (metadata.author && metadata.author !== user.login) {
-        // Check if the author field is an org the user belongs to
-        const isOrg = await this.checkOrgPermission(octokit, metadata.author, user.login);
-        if (isOrg) {
-          publishingAuthor = metadata.author;
-          console.log(chalk.green(`✅ Publishing as organization @${metadata.author}`));
-        } else {
-          throw new MlldError(
-            `Frontmatter author '${metadata.author}' doesn't match your GitHub user '${user.login}'.\n` +
-            `If '${metadata.author}' is an organization, you need to be a member to publish.\n` +
-            `Otherwise, update the author field or authenticate as '${metadata.author}'.`,
-            {
-              code: 'AUTHOR_MISMATCH_ERROR',
-              severity: ErrorSeverity.Fatal
-            }
-          );
-        }
+        metadata.author = publishingAuthor;
+      } else if (metadata.author) {
+        // Author was already validated in validateModule
+        publishingAuthor = metadata.author;
       }
-      
-      // Update metadata author to match publishing author
-      metadata.author = publishingAuthor;
 
       // Validate imports reference only public modules
       console.log(chalk.gray('Validating module imports...'));
-      const importValidation = await this.validateImports(content, octokit);
+      const importValidation = await this.validateImports(content, metadata, publishingAuthor, octokit);
       if (!importValidation.valid) {
         throw new MlldError(
           'Module imports validation failed:\n' +
@@ -160,7 +262,7 @@ export class PublishCommand {
 
       console.log(chalk.bold('Module Information:'));
       console.log(`  Name: @${publishingAuthor}/${metadata.name}`);
-      console.log(`  Description: ${metadata.description}`);
+      console.log(`  About: ${metadata.about}`);
       console.log(`  Version: ${metadata.version || '1.0.0'}`);
       
       if (metadata.keywords && metadata.keywords.length > 0) {
@@ -183,9 +285,83 @@ export class PublishCommand {
         const isPublicRepo = await this.checkIfRepoIsPublic(octokit, gitInfo.owner!, gitInfo.repo!);
         
         if (!isPublicRepo) {
-          console.log(chalk.yellow('\n⚠️  Repository is private. Switching to gist creation...'));
-          console.log(chalk.gray('Modules must be publicly accessible. Use --use-gist to force gist creation.'));
-          // Fall through to gist creation
+          // Check if user has write access for private repo publishing
+          if (gitInfo.hasWriteAccess && !options.useGist) {
+            console.log(chalk.yellow('\n⚠️  Repository is private but you have write access.'));
+            
+            if (options.private) {
+              // Skip prompt, go straight to private publish
+              const result = await this.publishToPrivateRepo(gitInfo, metadata, content, filename, options);
+              sourceUrl = result.sourceUrl;
+              registryEntry = result.registryEntry;
+              
+              // Handle PR creation for private repos if requested
+              if (options.pr) {
+                console.log(chalk.blue('\n🔀 Creating pull request to registry...'));
+                const prUrl = await this.createRegistryPR(octokit, user, registryEntry, options);
+                console.log(chalk.green(`\n✅ Pull request created: ${prUrl}`));
+              }
+              
+              // Success message for private publishing
+              console.log(chalk.green('\n✅ Module published to private repository!'));
+              console.log(chalk.bold('Module location:'));
+              console.log(`  Path: ${path.join(options.path || 'mlld/modules', filename)}`);
+              console.log(`  Import: @import { ... } from "${sourceUrl}"`);
+              if (!options.pr) {
+                console.log(chalk.gray('\n💡 Tip: Team members with repo access can now import this module directly.'));
+              }
+              return;
+            } else {
+              // Interactive choice
+              const rl = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout,
+              });
+              
+              console.log('\nOptions:');
+              console.log('  [p]     Publish to private repository');
+              console.log('  [g]     Create public gist instead');
+              console.log('  [c]     Cancel');
+              
+              const choice = await rl.question('\nYour choice: ');
+              rl.close();
+              
+              if (choice.toLowerCase() === 'p') {
+                const result = await this.publishToPrivateRepo(gitInfo, metadata, content, filename, options);
+                sourceUrl = result.sourceUrl;
+                registryEntry = result.registryEntry;
+                
+                // Handle PR creation for private repos if requested
+                if (options.pr) {
+                  console.log(chalk.blue('\n🔀 Creating pull request to registry...'));
+                  const prUrl = await this.createRegistryPR(octokit, user, registryEntry, options);
+                  console.log(chalk.green(`\n✅ Pull request created: ${prUrl}`));
+                }
+                
+                // Success message for private publishing
+                console.log(chalk.green('\n✅ Module published to private repository!'));
+                console.log(chalk.bold('Module location:'));
+                console.log(`  Path: ${path.join(options.path || 'mlld/modules', filename)}`);
+                console.log(`  Import: @import { ... } from "${sourceUrl}"`);
+                if (!options.pr) {
+                  console.log(chalk.gray('\n💡 Tip: Team members with repo access can now import this module directly.'));
+                }
+                return;
+              } else if (choice.toLowerCase() === 'g') {
+                console.log(chalk.yellow('\n📝 Switching to gist creation...'));
+                // Fall through to gist creation
+              } else {
+                throw new MlldError('Publication cancelled by user', {
+                  code: 'USER_CANCELLED',
+                  severity: ErrorSeverity.Info
+                });
+              }
+            }
+          } else {
+            console.log(chalk.yellow('\n⚠️  Repository is private. Switching to gist creation...'));
+            console.log(chalk.gray('Modules must be publicly accessible. Use --use-gist to force gist creation.'));
+            // Fall through to gist creation
+          }
         } else {
           // Git-native publishing for public repos
           console.log(chalk.green(`\n✅ Repository is public`));
@@ -223,11 +399,17 @@ export class PublishCommand {
               
               registryEntry = {
                 name: metadata.name,
-                description: metadata.description,
-                author: {
-                  name: user.name || user.login,
-                  github: user.login,
-                },
+                author: metadata.author,
+                version: metadata.version || '1.0.0',
+                about: metadata.about,
+                needs: metadata.needs || [],
+                repo: metadata.repo,
+                keywords: metadata.keywords || [],
+                bugs: metadata.bugs,
+                homepage: metadata.homepage,
+                license: metadata.license,
+                mlldVersion: metadata.mlldVersion || currentMlldVersion,
+                ownerGithubUserIds: [user.id],
                 source: {
                   type: 'github' as const,
                   url: sourceUrl,
@@ -239,11 +421,8 @@ export class PublishCommand {
                     path: gitInfo.relPath,
                   },
                 },
+                dependencies: this.buildDependenciesObject(metadata),
                 publishedAt: new Date().toISOString(),
-                mlldVersion: metadata.mlldVersion || currentMlldVersion,
-                keywords: metadata.keywords || [],
-                version: metadata.version || '1.0.0',
-                license: metadata.license,
               };
               
               console.log(chalk.green(`\n✅ Using git repository for source`));
@@ -254,11 +433,17 @@ export class PublishCommand {
             
             registryEntry = {
               name: metadata.name,
-              description: metadata.description,
-              author: {
-                name: user.name || user.login,
-                github: user.login,
-              },
+              author: metadata.author,
+              version: metadata.version || '1.0.0',
+              about: metadata.about,
+              needs: metadata.needs || [],
+              repo: metadata.repo,
+              keywords: metadata.keywords || [],
+              bugs: metadata.bugs,
+              homepage: metadata.homepage,
+              license: metadata.license,
+              mlldVersion: metadata.mlldVersion || '>=0.5.0',
+              ownerGithubUserIds: [user.id],
               source: {
                 type: 'github' as const,
                 url: sourceUrl,
@@ -270,11 +455,8 @@ export class PublishCommand {
                   path: gitInfo.relPath,
                 },
               },
+              dependencies: this.buildDependenciesObject(metadata),
               publishedAt: new Date().toISOString(),
-              mlldVersion: metadata.mlldVersion || '>=0.5.0',
-              keywords: metadata.keywords || [],
-              version: metadata.version || '1.0.0',
-              license: metadata.license,
             };
             
             console.log(chalk.green(`\n✅ Using git repository for source`));
@@ -332,42 +514,56 @@ export class PublishCommand {
           }
         }
         
-        if (options.dryRun) {
-          console.log(chalk.cyan('\n✅ Dry run completed - no changes made'));
-          return;
+        let gistData: any = null;
+        
+        if (!options.dryRun) {
+          const gist = await octokit.gists.create({
+            description: `${metadata.name} - ${metadata.about}`,
+            public: true,
+            files: {
+              [filename]: {
+                content: content,
+              },
+            },
+          });
+          
+          console.log(chalk.green(`✅ Gist created: ${gist.data.html_url}`));
+          sourceUrl = gist.data.files[filename]!.raw_url!;
+          gistData = gist.data;
+        } else {
+          // For dry run, create a fake gist URL
+          sourceUrl = `https://gist.githubusercontent.com/${user.login}/DRY_RUN_ID/raw/${filename}`;
+          gistData = { id: 'DRY_RUN_ID' };
+          console.log(chalk.yellow('📝 Would create GitHub gist'));
         }
         
-        const gist = await octokit.gists.create({
-          description: `${metadata.name} - ${metadata.description}`,
-          public: true,
-          files: {
-            [filename]: {
-              content: content,
-            },
-          },
-        });
-        
-        console.log(chalk.green(`✅ Gist created: ${gist.data.html_url}`));
-        sourceUrl = gist.data.files[filename]!.raw_url!;
+        // Auto-populate bugs URL for gist
+        if (!metadata.bugs && !options.dryRun) {
+          metadata.bugs = `${gist.data.html_url}#comments`;
+          console.log(chalk.blue(`📌 Adding bugs URL for gist: ${metadata.bugs}`));
+        }
         
         registryEntry = {
           name: metadata.name,
-          description: metadata.description,
-          author: {
-            name: user.name || user.login,
-            github: user.login,
-          },
+          author: metadata.author,
+          version: metadata.version || '1.0.0',
+          about: metadata.about,
+          needs: metadata.needs || [],
+          repo: metadata.repo,
+          keywords: metadata.keywords || [],
+          bugs: metadata.bugs,
+          homepage: metadata.homepage,
+          license: metadata.license,
+          mlldVersion: metadata.mlldVersion || '>=0.5.0',
+          ownerGithubUserIds: [user.id],
           source: {
             type: 'gist' as const,
             url: sourceUrl,
-            gistId: gist.data.id,
+            gistId: gistData.id,
             contentHash: contentHash,
           },
+          dependencies: this.buildDependenciesObject(metadata),
           publishedAt: new Date().toISOString(),
-          mlldVersion: metadata.mlldVersion || '>=0.5.0',
-          keywords: metadata.keywords || [],
-          version: metadata.version || '1.0.0',
-          license: metadata.license,
         };
       }
       
@@ -400,6 +596,51 @@ export class PublishCommand {
   }
 
   /**
+   * Get the latest published version of mlld from npm
+   */
+  private async getLatestMlldVersion(): Promise<string | null> {
+    try {
+      const response = await fetch('https://registry.npmjs.org/mlld/latest');
+      if (!response.ok) {
+        console.log(chalk.yellow('⚠️  Could not check latest mlld version'));
+        return null;
+      }
+      
+      const data = await response.json();
+      return data.version;
+    } catch (error) {
+      // Don't fail if we can't check the version
+      console.log(chalk.yellow('⚠️  Could not check latest mlld version'));
+      return null;
+    }
+  }
+
+  /**
+   * Compare semantic versions to check if latest is newer
+   */
+  private isNewerVersion(latest: string, current: string): boolean {
+    const parseVersion = (v: string) => {
+      const parts = v.split('-')[0].split('.').map(Number);
+      return {
+        major: parts[0] || 0,
+        minor: parts[1] || 0,
+        patch: parts[2] || 0
+      };
+    };
+    
+    const latestVer = parseVersion(latest);
+    const currentVer = parseVersion(current);
+    
+    if (latestVer.major > currentVer.major) return true;
+    if (latestVer.major < currentVer.major) return false;
+    
+    if (latestVer.minor > currentVer.minor) return true;
+    if (latestVer.minor < currentVer.minor) return false;
+    
+    return latestVer.patch > currentVer.patch;
+  }
+
+  /**
    * Check if a GitHub repository is public
    */
   private async checkIfRepoIsPublic(octokit: Octokit, owner: string, repo: string): Promise<boolean> {
@@ -417,9 +658,266 @@ export class PublishCommand {
   }
 
   /**
+   * Validate module before publishing
+   */
+  private async validateModule(
+    metadata: ModuleMetadata,
+    content: string,
+    user: any,
+    octokit: Octokit,
+    filePath: string,
+    options: { dryRun?: boolean } = {}
+  ): Promise<{
+    valid: boolean;
+    errors: string[];
+    warnings?: string[];
+    updatedMetadata?: Partial<ModuleMetadata>;
+    updatedContent?: string;
+  }> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    let updatedMetadata: Partial<ModuleMetadata> = {};
+    let updatedContent = content;
+    let needsUpdate = false;
+
+    // 1. Validate author field
+    if (metadata.author && metadata.author !== user.login) {
+      // Check if the author is an organization the user belongs to
+      const hasPermission = await this.checkOrgPermission(octokit, metadata.author, user.login);
+      if (!hasPermission) {
+        errors.push(
+          `Author '${metadata.author}' is not valid. You can only publish as:\n` +
+          `    - Your GitHub username: ${user.login}\n` +
+          `    - Organizations you belong to`
+        );
+      }
+    } else if (!metadata.author) {
+      // Auto-set to current user if missing
+      updatedMetadata.author = user.login;
+      needsUpdate = true;
+    }
+
+    // 2. Validate license is CC0
+    if (metadata.license && metadata.license !== 'CC0') {
+      errors.push(
+        `Invalid license '${metadata.license}'. All modules must be CC0 licensed.\n` +
+        `    Please update your frontmatter to: license: CC0`
+      );
+    } else if (!metadata.license) {
+      // Auto-add CC0 if missing
+      updatedMetadata.license = 'CC0';
+      needsUpdate = true;
+    }
+
+    // 3. Validate required fields
+    if (!metadata.name) {
+      errors.push('Missing required field: name');
+    } else if (!metadata.name.match(/^[a-z0-9-]+$/)) {
+      errors.push(`Invalid module name '${metadata.name}'. Must be lowercase alphanumeric with hyphens.`);
+    }
+
+    if (!metadata.about) {
+      errors.push('Missing required field: about');
+    }
+
+    if (!metadata.needs || !Array.isArray(metadata.needs)) {
+      errors.push(
+        'Missing required field: needs\n' +
+        '    Add to your frontmatter: needs: [] for pure mlld modules\n' +
+        '    Or specify runtime dependencies: needs: ["js", "node", "py", "sh"]'
+      );
+    } else {
+      // Validate needs values
+      const validNeeds = ['js', 'node', 'py', 'sh'];
+      const invalidNeeds = metadata.needs.filter(n => !validNeeds.includes(n));
+      if (invalidNeeds.length > 0) {
+        errors.push(`Invalid needs values: ${invalidNeeds.join(', ')}. Valid values are: js, node, py, sh`);
+      }
+    }
+
+    // 4. Validate mlld syntax
+    try {
+      parseSync(content);
+    } catch (parseError: any) {
+      const errorMessage = parseError.message || 'Unknown parse error';
+      const location = parseError.location ? 
+        ` at line ${parseError.location.start.line}, column ${parseError.location.start.column}` : '';
+      errors.push(`Invalid mlld syntax${location}: ${errorMessage}`);
+    }
+
+    // 5. Auto-populate missing fields from git info (unless in dry run)
+    if (!options.dryRun) {
+      const gitInfo = await this.detectGitInfo(filePath);
+      if (gitInfo.isGitRepo && gitInfo.owner && gitInfo.repo) {
+        if (!metadata.repo) {
+          updatedMetadata.repo = `https://github.com/${gitInfo.owner}/${gitInfo.repo}`;
+          needsUpdate = true;
+        }
+        if (!metadata.bugs) {
+          updatedMetadata.bugs = `https://github.com/${gitInfo.owner}/${gitInfo.repo}/issues`;
+          needsUpdate = true;
+        }
+      }
+    }
+
+    // 6. Add mlld version if missing
+    if (!metadata.mlldVersion) {
+      updatedMetadata.mlldVersion = currentMlldVersion;
+      needsUpdate = true;
+    }
+
+    // 7. Check for detailed dependencies consistency
+    if (metadata.needs.includes('js') && !metadata.needsJs) {
+      try {
+        const ast = parseSync(content);
+        const detector = new DependencyDetector();
+        const packages = detector.detectJavaScriptPackages(ast);
+        if (packages.length > 0) {
+          warnings.push(
+            `Module declares "js" in needs but missing needs-js details.\n` +
+            `    Detected packages: ${packages.join(', ')}`
+          );
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    if (metadata.needs.includes('node') && !metadata.needsNode) {
+      try {
+        const ast = parseSync(content);
+        const detector = new DependencyDetector();
+        const packages = detector.detectNodePackages(ast);
+        if (packages.length > 0) {
+          warnings.push(
+            `Module declares "node" in needs but missing needs-node details.\n` +
+            `    Detected packages: ${packages.join(', ')}`
+          );
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    if (metadata.needs.includes('py') && !metadata.needsPy) {
+      try {
+        const ast = parseSync(content);
+        const detector = new DependencyDetector();
+        const packages = detector.detectPythonPackages(ast);
+        if (packages.length > 0) {
+          warnings.push(
+            `Module declares "py" in needs but missing needs-py details.\n` +
+            `    Detected packages: ${packages.join(', ')}`
+          );
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    if (metadata.needs.includes('sh') && !metadata.needsSh) {
+      try {
+        const ast = parseSync(content);
+        const detector = new DependencyDetector();
+        const commands = detector.detectShellCommands(ast);
+        if (commands.length > 0) {
+          warnings.push(
+            `Module declares "sh" in needs but missing needs-sh details.\n` +
+            `    Detected commands: ${commands.join(', ')}`
+          );
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    // Update content if metadata changed
+    if (needsUpdate) {
+      const mergedMetadata = { ...metadata, ...updatedMetadata };
+      updatedContent = this.updateFrontmatter(content, mergedMetadata);
+    }
+
+    // Display warnings
+    if (warnings.length > 0) {
+      console.log(chalk.yellow('\n⚠️  Validation warnings:'));
+      warnings.forEach(w => console.log(chalk.yellow(`   ${w}`)));
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+      updatedMetadata: needsUpdate ? updatedMetadata : undefined,
+      updatedContent: needsUpdate ? updatedContent : undefined
+    };
+  }
+
+  /**
+   * Describe what metadata changes will be made
+   */
+  private describeMetadataChanges(
+    originalMetadata: ModuleMetadata,
+    updatedMetadata: Partial<ModuleMetadata>
+  ): string[] {
+    const changes: string[] = [];
+    
+    for (const [key, value] of Object.entries(updatedMetadata)) {
+      const originalValue = (originalMetadata as any)[key];
+      if (!originalValue) {
+        changes.push(`+ ${key}: ${JSON.stringify(value)}`);
+      } else if (originalValue !== value) {
+        changes.push(`~ ${key}: ${JSON.stringify(originalValue)} → ${JSON.stringify(value)}`);
+      }
+    }
+    
+    return changes;
+  }
+
+  /**
+   * Commit metadata changes to git
+   */
+  private async commitMetadataChanges(
+    filePath: string,
+    updatedMetadata?: Partial<ModuleMetadata>
+  ): Promise<void> {
+    const { execSync } = await import('child_process');
+    const fileName = path.basename(filePath);
+    
+    try {
+      console.log(chalk.blue('\n📝 Committing metadata changes...'));
+      
+      // Add the file
+      execSync(`git add "${filePath}"`, { cwd: path.dirname(filePath) });
+      
+      // Create commit message
+      const changes = updatedMetadata ? Object.keys(updatedMetadata) : ['metadata'];
+      const commitMessage = `Add ${changes.join(', ')} to ${fileName}
+
+Auto-added by mlld publish command`;
+      
+      // Commit
+      execSync(`git commit -m "${commitMessage}"`, { cwd: path.dirname(filePath) });
+      console.log(chalk.green('✅ Changes committed'));
+      
+      // Push if there's a remote
+      try {
+        execSync('git push', { cwd: path.dirname(filePath) });
+        console.log(chalk.green('✅ Changes pushed to remote'));
+      } catch {
+        console.log(chalk.yellow('⚠️  Could not push to remote - you may need to push manually'));
+      }
+      
+    } catch (error: any) {
+      throw new MlldError(
+        `Failed to commit changes: ${error.message}`,
+        { code: 'GIT_COMMIT_FAILED', severity: ErrorSeverity.Fatal }
+      );
+    }
+  }
+
+  /**
    * Check if user has permission to publish on behalf of an organization
    */
   private async checkOrgPermission(octokit: Octokit, org: string, username: string): Promise<boolean> {
+    // Special case: 'mlld' organization for core modules
+    // Allow specific maintainers to publish as 'mlld' since we don't control that GitHub org
+    if (org === 'mlld') {
+      const allowedMaintainers = ['adamavenir', 'mlld-dev'];
+      return allowedMaintainers.includes(username);
+    }
+    
     try {
       // Check if user is a member of the organization
       const { data: membership } = await octokit.orgs.getMembershipForUser({
@@ -482,9 +980,22 @@ export class PublishCommand {
       // Check if working tree is clean
       let isClean = true;
       try {
+        // First update the index to avoid false positives
+        execSync('git update-index --refresh', { cwd: gitRoot, stdio: 'ignore' });
+        // Then check for actual changes
         execSync('git diff-index --quiet HEAD --', { cwd: gitRoot });
       } catch {
         isClean = false;
+      }
+      
+      // Check write access using git push --dry-run
+      let hasWriteAccess = false;
+      try {
+        execSync('git push --dry-run', { cwd: gitRoot, stdio: 'ignore' });
+        hasWriteAccess = true;
+      } catch {
+        // No write access or no remote
+        hasWriteAccess = false;
       }
       
       return {
@@ -496,6 +1007,8 @@ export class PublishCommand {
         relPath,
         isClean,
         remoteUrl,
+        gitRoot,
+        hasWriteAccess,
       };
       
     } catch {
@@ -507,7 +1020,7 @@ export class PublishCommand {
   /**
    * Read module file and parse metadata
    */
-  private async readModule(modulePath: string): Promise<{ 
+  private async readModule(modulePath: string, options?: { verbose?: boolean }): Promise<{ 
     content: string; 
     metadata: ModuleMetadata; 
     filename: string; 
@@ -521,22 +1034,28 @@ export class PublishCommand {
     if (stat.isDirectory()) {
       // Look for .mld files in directory
       const files = await fs.readdir(modulePath);
-      const mldFiles = files.filter(f => f.endsWith('.mld'));
+      const mldFiles = files.filter(f => f.endsWith('.mld') || f.endsWith('.mld.md'));
       
       if (mldFiles.length === 0) {
-        throw new MlldError('No .mld files found in the specified directory', {
+        throw new MlldError('No .mld or .mld.md files found in the specified directory', {
           code: 'NO_MLD_FILES',
           severity: ErrorSeverity.Fatal
         });
       }
       
-      // Prefer main.mld or index.mld
-      if (mldFiles.includes('main.mld')) {
+      // Prefer main.mld.md, main.mld, index.mld.md, or index.mld
+      if (mldFiles.includes('main.mld.md')) {
+        filename = 'main.mld.md';
+      } else if (mldFiles.includes('main.mld')) {
         filename = 'main.mld';
+      } else if (mldFiles.includes('index.mld.md')) {
+        filename = 'index.mld.md';
       } else if (mldFiles.includes('index.mld')) {
         filename = 'index.mld';
       } else {
-        filename = mldFiles[0];
+        // Prefer .mld.md over .mld
+        const mldMdFile = mldFiles.find(f => f.endsWith('.mld.md'));
+        filename = mldMdFile || mldFiles[0];
       }
       
       filePath = path.join(modulePath, filename);
@@ -545,8 +1064,8 @@ export class PublishCommand {
       filePath = modulePath;
       filename = path.basename(filePath);
       
-      if (!filename.endsWith('.mld')) {
-        throw new MlldError('Module file must have .mld extension', {
+      if (!filename.endsWith('.mld') && !filename.endsWith('.mld.md')) {
+        throw new MlldError('Module file must have .mld or .mld.md extension', {
           code: 'INVALID_FILE_EXTENSION',
           severity: ErrorSeverity.Fatal
         });
@@ -571,24 +1090,51 @@ export class PublishCommand {
       console.log(chalk.green('✅ Frontmatter added to ' + filename));
     }
     
-    // Ensure author is set
-    if (!metadata.author) {
-      const user = await this.authService.getGitHubUser();
-      metadata.author = user!.login;
-    }
-    
-    // Add mlld-version if missing
-    if (!metadata.mlldVersion) {
-      metadata.mlldVersion = currentMlldVersion;
-      console.log(chalk.blue(`\n📌 Adding mlld-version: ${currentMlldVersion}`));
+    // Parse and validate basic syntax early
+    try {
+      parseSync(content);
+    } catch (parseError: any) {
+      console.log(chalk.red('❌ Invalid mlld syntax'));
       
-      // Update the frontmatter in the file
-      content = this.updateFrontmatter(content, metadata);
-      await fs.writeFile(filePath, content, 'utf8');
-      console.log(chalk.green('✅ Updated frontmatter with mlld-version'));
+      // Extract useful error information
+      const errorMessage = parseError.message || 'Unknown parse error';
+      const location = parseError.location ? 
+        ` at line ${parseError.location.start.line}, column ${parseError.location.start.column}` : '';
+      
+      throw new MlldError(
+        `Module contains invalid mlld syntax${location}:\n${errorMessage}\n\n` +
+        'Please fix syntax errors before publishing.',
+        { 
+          code: 'INVALID_SYNTAX', 
+          severity: ErrorSeverity.Fatal,
+          sourceLocation: parseError.location
+        }
+      );
     }
     
     return { content, metadata, filename, filePath };
+  }
+
+  /**
+   * Build dependencies object for registry entry
+   */
+  private buildDependenciesObject(metadata: ModuleMetadata): Record<string, any> | undefined {
+    const deps: Record<string, any> = {};
+    
+    if (metadata.needsJs) {
+      deps.js = metadata.needsJs;
+    }
+    if (metadata.needsNode) {
+      deps.node = metadata.needsNode;
+    }
+    if (metadata.needsPy) {
+      deps.py = metadata.needsPy;
+    }
+    if (metadata.needsSh) {
+      deps.sh = metadata.needsSh;
+    }
+    
+    return Object.keys(deps).length > 0 ? deps : undefined;
   }
 
   /**
@@ -601,10 +1147,15 @@ export class PublishCommand {
   /**
    * Validate module imports to ensure they reference public modules
    */
-  private async validateImports(content: string, _octokit: Octokit): Promise<{ valid: boolean; errors: string[] }> {
+  private async validateImports(
+    content: string, 
+    metadata: ModuleMetadata,
+    publishingAuthor: string,
+    _octokit: Octokit
+  ): Promise<{ valid: boolean; errors: string[] }> {
     const errors: string[] = [];
     
-    // Find all @import directives that reference modules (start with @)
+    // Find all @import directives that reference modules (start with @) in the entire file
     const importRegex = /@import\s+\{[^}]+\}\s+from\s+(@[a-z0-9-]+\/[a-z0-9-]+)(?:@[a-f0-9]+)?/g;
     const matches = content.matchAll(importRegex);
     
@@ -617,18 +1168,30 @@ export class PublishCommand {
         continue;
       }
       
+      const fullModuleName = `@${author}/${moduleName}`;
+      
+      // Skip validation if this is a self-reference (module importing itself in examples)
+      const currentModuleName = `@${publishingAuthor}/${metadata.name}`;
+      if (fullModuleName === currentModuleName) {
+        continue; // Skip self-reference validation
+      }
+      
       try {
         // Check if the module exists in the registry
         const registryUrl = `https://raw.githubusercontent.com/mlld-lang/registry/main/modules.json`;
         const response = await fetch(registryUrl);
         
         if (!response.ok) {
+          // If registry doesn't exist yet (404), that's okay for first module
+          if (response.status === 404) {
+            console.log(chalk.gray('Registry not found (this is normal for first module)'));
+            continue;
+          }
           errors.push(`Could not access registry to validate module ${moduleRef}`);
           continue;
         }
         
         const registry = await response.json() as Record<string, any>;
-        const fullModuleName = `@${author}/${moduleName}`;
         
         if (!(fullModuleName in registry)) {
           errors.push(`Module ${moduleRef} not found in public registry. Only published modules can be imported.`);
@@ -648,10 +1211,12 @@ export class PublishCommand {
    * Parse module metadata from content
    */
   private parseMetadata(content: string, filename: string): ModuleMetadata {
-    const metadata: ModuleMetadata = {
+    const metadata: Partial<ModuleMetadata> = {
       name: '',
-      description: '',
       author: '',
+      about: '',
+      license: 'CC0', // Default to CC0
+      // Don't set needs here - let it be undefined so validation catches missing field
     };
     
     // Module name comes from frontmatter 'name' field, NOT from filename
@@ -666,13 +1231,22 @@ export class PublishCommand {
         
         // Frontmatter 'name' field takes precedence
         metadata.name = parsed.name || parsed.module || '';
-        metadata.description = parsed.description || metadata.description;
         metadata.author = parsed.author || metadata.author;
         metadata.version = parsed.version;
+        // Support both 'about' and legacy 'description'
+        metadata.about = parsed.about || parsed.description || metadata.about;
         metadata.keywords = parsed.keywords;
-        metadata.license = parsed.license;
-        metadata.repository = parsed.repository;
+        metadata.homepage = parsed.homepage;
+        metadata.license = parsed.license || 'CC0';
+        metadata.bugs = parsed.bugs;
+        metadata.repo = parsed.repo || parsed.repository;
         metadata.mlldVersion = parsed.mlldVersion || parsed['mlld-version'] || parsed.mlld_version;
+        
+        // Parse dependency fields
+        metadata.needs = parsed.needs; // Don't default to [] here, let validation catch it
+        metadata.needsJs = parsed['needs-js'] || parsed.needsJs;
+        metadata.needsPy = parsed['needs-py'] || parsed.needsPy;
+        metadata.needsSh = parsed['needs-sh'] || parsed.needsSh;
       } catch (e) {
         // Invalid YAML, continue with defaults
       }
@@ -683,15 +1257,15 @@ export class PublishCommand {
       metadata.name = baseName;
     }
     
-    // Extract description from first heading if not in frontmatter
-    if (!metadata.description) {
+    // Extract about from first heading if not in frontmatter
+    if (!metadata.about) {
       const headingMatch = content.match(/^#\s+(.+)$/m);
       if (headingMatch) {
-        metadata.description = headingMatch[1].trim();
+        metadata.about = headingMatch[1].trim();
       }
     }
     
-    return metadata;
+    return metadata as ModuleMetadata;
   }
 
   /**
@@ -720,27 +1294,53 @@ export class PublishCommand {
         }
       }
 
-      // Description
-      if (!metadata.description) {
-        metadata.description = await rl.question('Description: ');
+      // About
+      if (!metadata.about) {
+        metadata.about = await rl.question('About (brief description): ');
       }
 
       // Author (confirm GitHub user)
+      console.log('\nAuthor (must be your GitHub username or an organization you belong to):');
       const authorPrompt = `Author [${githubUser}]: `;
       const authorInput = await rl.question(authorPrompt);
       metadata.author = authorInput || githubUser;
+      
+      // Note: Author validation will happen during the validation phase
+      if (authorInput && authorInput !== githubUser) {
+        console.log(chalk.gray(`Note: Publishing as '${authorInput}' - this will be validated during publishing`));
+      }
+
+      // Runtime dependencies (required)
+      console.log('\nRuntime dependencies (required):');
+      console.log('  - Use empty array [] for pure mlld modules');
+      console.log('  - Options: js, py, sh (comma-separated)');
+      const needsInput = await rl.question('Needs []: ');
+      if (needsInput) {
+        metadata.needs = needsInput.split(',').map(n => n.trim());
+      } else {
+        metadata.needs = [];
+      }
 
       // Optional fields
       const addOptional = await rl.question('\nAdd optional fields? (y/n): ');
       if (addOptional.toLowerCase() === 'y') {
         metadata.version = await rl.question('Version [1.0.0]: ') || '1.0.0';
-        metadata.license = await rl.question('License [MIT]: ') || 'MIT';
         
         const keywordsInput = await rl.question('Keywords (comma-separated): ');
         if (keywordsInput) {
           metadata.keywords = keywordsInput.split(',').map(k => k.trim());
         }
+        
+        const homepageInput = await rl.question('Homepage URL (optional): ');
+        if (homepageInput) {
+          metadata.homepage = homepageInput;
+        }
       }
+      
+      // License is always CC0
+      metadata.license = 'CC0';
+      console.log(chalk.blue('\n📄 License: CC0 (public domain dedication)'));
+      console.log(chalk.gray('   All modules in the mlld registry are CC0 licensed.'));
 
       console.log(chalk.blue('\nI\'ll add this frontmatter to your file:\n'));
       console.log(chalk.gray(this.formatFrontmatter(metadata)));
@@ -760,20 +1360,52 @@ export class PublishCommand {
   }
 
   /**
-   * Format frontmatter for display
+   * Format frontmatter for display with canonical field ordering
    */
   private formatFrontmatter(metadata: ModuleMetadata): string {
-    const lines = [
-      '---',
-      `name: ${metadata.name}`,
-      `description: ${metadata.description}`,
-      `author: ${metadata.author}`,
-    ];
-
+    const lines = ['---'];
+    
+    // Canonical field ordering
+    lines.push(`name: ${metadata.name}`);
+    lines.push(`author: ${metadata.author}`);
     if (metadata.version) lines.push(`version: ${metadata.version}`);
-    if (metadata.mlldVersion) lines.push(`mlld-version: ${metadata.mlldVersion}`);
-    if (metadata.license) lines.push(`license: ${metadata.license}`);
-    if (metadata.keywords) lines.push(`keywords: [${metadata.keywords.join(', ')}]`);
+    lines.push(`about: ${metadata.about}`);
+    
+    // Always include needs (it's required)
+    if (metadata.needs) {
+      lines.push(`needs: [${metadata.needs.map(n => `"${n}"`).join(', ')}]`);
+    }
+    
+    // Include detailed dependencies only for languages in needs
+    if (metadata.needs.includes('js') && metadata.needsJs) {
+      lines.push('needs-js:');
+      if (metadata.needsJs.node) lines.push(`  node: "${metadata.needsJs.node}"`);
+      if (metadata.needsJs.packages) lines.push(`  packages: [${metadata.needsJs.packages.map(p => `"${p}"`).join(', ')}]`);
+    }
+    if (metadata.needs.includes('node') && metadata.needsNode) {
+      lines.push('needs-node:');
+      if (metadata.needsNode.node) lines.push(`  node: "${metadata.needsNode.node}"`);
+      if (metadata.needsNode.packages) lines.push(`  packages: [${metadata.needsNode.packages.map(p => `"${p}"`).join(', ')}]`);
+    }
+    if (metadata.needs.includes('py') && metadata.needsPy) {
+      lines.push('needs-py:');
+      if (metadata.needsPy.python) lines.push(`  python: "${metadata.needsPy.python}"`);
+      if (metadata.needsPy.packages) lines.push(`  packages: [${metadata.needsPy.packages.map(p => `"${p}"`).join(', ')}]`);
+    }
+    if (metadata.needs.includes('sh') && metadata.needsSh) {
+      lines.push('needs-sh:');
+      if (metadata.needsSh.shell) lines.push(`  shell: "${metadata.needsSh.shell}"`);
+      if (metadata.needsSh.commands) lines.push(`  commands: [${metadata.needsSh.commands.map(c => `"${c}"`).join(', ')}]`);
+    }
+    
+    if (metadata.bugs) lines.push(`bugs: ${metadata.bugs}`);
+    if (metadata.repo) lines.push(`repo: ${metadata.repo}`);
+    if (metadata.keywords && metadata.keywords.length > 0) {
+      lines.push(`keywords: [${metadata.keywords.map(k => `"${k}"`).join(', ')}]`);
+    }
+    if (metadata.homepage) lines.push(`homepage: ${metadata.homepage}`);
+    lines.push(`license: ${metadata.license}`);  // Always CC0
+    if (metadata.mlldVersion) lines.push(`mlld-version: "${metadata.mlldVersion}"`);
     
     lines.push('---');
     return lines.join('\n');
@@ -835,31 +1467,39 @@ export class PublishCommand {
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
     
-    // Get current modules.json from fork
-    let currentModules: any = {};
-    let modulesFile: any;
+    // Get user's registry.json from their directory in fork
+    const userDir = `modules/${entry.author}`;
+    const registryPath = `${userDir}/registry.json`;
+    let userRegistry: any = {
+      author: entry.author,
+      modules: {}
+    };
+    let registryFile: any;
     
     try {
       const { data } = await octokit.repos.getContent({
         owner: user.login,
         repo: registryRepo,
-        path: 'modules.json',
+        path: registryPath,
       });
       
       if ('content' in data) {
-        modulesFile = data;
-        currentModules = JSON.parse(Buffer.from(data.content, 'base64').toString());
+        registryFile = data;
+        userRegistry = JSON.parse(Buffer.from(data.content, 'base64').toString());
       }
     } catch (error) {
-      // modules.json doesn't exist, that's okay
-      console.log(chalk.gray('Creating new modules.json...'));
+      // User's registry.json doesn't exist yet
+      console.log(chalk.gray(`Creating new registry for @${entry.author}...`));
     }
     
-    // Add or update module entry
-    const moduleId = `@${user.login}/${entry.name}`;
-    const isUpdate = moduleId in currentModules;
+    // Add or update module entry in user's registry
+    const moduleId = `@${entry.author}/${entry.name}`;
+    const isUpdate = moduleId in (userRegistry.modules || {});
     
-    currentModules[moduleId] = entry;
+    if (!userRegistry.modules) {
+      userRegistry.modules = {};
+    }
+    userRegistry.modules[moduleId] = entry;
     
     // Create branch for PR
     const branchName = `add-${entry.name}-${Date.now()}`;
@@ -879,16 +1519,37 @@ export class PublishCommand {
       sha: ref.object.sha,
     });
     
-    // Update modules.json
-    const updatedContent = JSON.stringify(currentModules, null, 2) + '\n';
+    // First, ensure the user directory exists by creating a README if needed
+    try {
+      await octokit.repos.getContent({
+        owner: user.login,
+        repo: registryRepo,
+        path: userDir,
+        ref: branchName,
+      });
+    } catch {
+      // Directory doesn't exist, create it with a README
+      const readmeContent = `# @${entry.author} modules\n\nModules published by @${entry.author}\n`;
+      await octokit.repos.createOrUpdateFileContents({
+        owner: user.login,
+        repo: registryRepo,
+        path: `${userDir}/README.md`,
+        message: `Create directory for @${entry.author}`,
+        content: Buffer.from(readmeContent).toString('base64'),
+        branch: branchName,
+      });
+    }
+    
+    // Update user's registry.json
+    const updatedContent = JSON.stringify(userRegistry, null, 2) + '\n';
     
     await octokit.repos.createOrUpdateFileContents({
       owner: user.login,
       repo: registryRepo,
-      path: 'modules.json',
+      path: registryPath,
       message: options.message || `${isUpdate ? 'Update' : 'Add'} ${moduleId}`,
       content: Buffer.from(updatedContent).toString('base64'),
-      sha: modulesFile?.sha,
+      sha: registryFile?.sha,
       branch: branchName,
     });
     
@@ -902,7 +1563,7 @@ export class PublishCommand {
       body: `${isUpdate ? 'Updating' : 'Adding new'} module: **${moduleId}**
 
 ## Module Information
-- **Description**: ${entry.description}
+- **About**: ${entry.about}
 - **Version**: ${entry.version}
 - **Source Type**: ${entry.source.type}
 - **Source URL**: ${entry.source.url}
@@ -913,6 +1574,10 @@ ${entry.source.repository ? `- **Path**: \`${entry.source.repository.path}\`` : 
 - **Keywords**: ${entry.keywords.length > 0 ? entry.keywords.join(', ') : 'none'}
 - **License**: ${entry.license || 'Not specified'}
 
+## Changes
+- ${isUpdate ? 'Updates' : 'Creates'} \`${registryPath}\`
+- Module entry for \`${entry.name}\`
+
 ## Validation
 This PR will be automatically validated by the registry workflow to ensure:
 - ✅ Module name matches author
@@ -921,10 +1586,122 @@ This PR will be automatically validated by the registry workflow to ensure:
 - ✅ Valid mlld syntax
 ${entry.source.repository ? '- ✅ Git commit exists and is immutable' : ''}
 
+After merge, the build process will update the main \`modules.json\` file.
+
 ${options.message ? `\n## Notes\n${options.message}` : ''}`,
     });
     
     return pr.html_url;
+  }
+
+  /**
+   * Publish module to private repository
+   */
+  private async publishToPrivateRepo(
+    gitInfo: GitInfo,
+    metadata: ModuleMetadata,
+    content: string,
+    filename: string,
+    options: PublishOptions
+  ): Promise<{ sourceUrl: string; registryEntry: any }> {
+    const modulePath = options.path || 'mlld/modules';
+    const fullPath = path.join(gitInfo.gitRoot!, modulePath, filename);
+    
+    console.log(chalk.blue(`\n📁 Publishing to private repository...`));
+    console.log(chalk.gray(`  Path: ${path.join(modulePath, filename)}`));
+    
+    // Create directory structure
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
+    
+    // Write module file
+    await fs.writeFile(fullPath, content, 'utf8');
+    console.log(chalk.green(`✅ Module file written`));
+    
+    // Create/update manifest.json for discovery
+    const manifestPath = path.join(gitInfo.gitRoot!, modulePath, 'manifest.json');
+    let manifest: Record<string, any> = {};
+    
+    try {
+      const manifestContent = await fs.readFile(manifestPath, 'utf8');
+      manifest = JSON.parse(manifestContent);
+    } catch {
+      // Manifest doesn't exist yet
+      console.log(chalk.gray('Creating new manifest.json...'));
+    }
+    
+    const moduleId = `@${metadata.author}/${metadata.name}`;
+    manifest[moduleId] = {
+      path: filename,
+      version: metadata.version || '1.0.0',
+      about: metadata.about,
+      author: metadata.author,
+      needs: metadata.needs || [],
+      updatedAt: new Date().toISOString(),
+    };
+    
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+    console.log(chalk.green(`✅ Manifest updated`));
+    
+    if (!options.dryRun) {
+      // Commit and push
+      try {
+        execSync(`git add "${fullPath}" "${manifestPath}"`, { 
+          cwd: gitInfo.gitRoot!,
+          stdio: 'pipe' 
+        });
+        
+        const commitMessage = options.message || `Add module ${moduleId}`;
+        execSync(`git commit -m "${commitMessage}"`, { 
+          cwd: gitInfo.gitRoot!,
+          stdio: 'pipe' 
+        });
+        
+        console.log(chalk.blue('🔄 Pushing to remote...'));
+        execSync('git push', { 
+          cwd: gitInfo.gitRoot!,
+          stdio: 'pipe' 
+        });
+        
+        console.log(chalk.green('✅ Changes pushed successfully'));
+      } catch (error: any) {
+        throw new MlldError(
+          `Failed to commit/push changes: ${error.message}`,
+          { code: 'GIT_PUSH_FAILED', severity: ErrorSeverity.Fatal }
+        );
+      }
+    }
+    
+    // Build source URL and registry entry for consistency
+    const sourceUrl = path.join(gitInfo.gitRoot!, modulePath, filename);
+    const contentHash = crypto.createHash('sha256').update(content).digest('hex');
+    
+    const registryEntry = {
+      name: metadata.name,
+      author: metadata.author,
+      version: metadata.version || '1.0.0',
+      about: metadata.about,
+      needs: metadata.needs || [],
+      repo: metadata.repo,
+      keywords: metadata.keywords || [],
+      bugs: metadata.bugs,
+      homepage: metadata.homepage,
+      license: metadata.license,
+      mlldVersion: metadata.mlldVersion || currentMlldVersion,
+      source: {
+        type: 'private-repo' as const,
+        path: sourceUrl,
+        contentHash: contentHash,
+        repository: {
+          url: gitInfo.remoteUrl,
+          commit: gitInfo.sha,
+          relativePath: path.join(modulePath, filename),
+        },
+      },
+      dependencies: this.buildDependenciesObject(metadata),
+      publishedAt: new Date().toISOString(),
+    };
+    
+    return { sourceUrl, registryEntry };
   }
 }
 
@@ -955,6 +1732,10 @@ export function createPublishCommand() {
         useGist: flags['use-gist'] || flags.gist || flags.g,
         useRepo: flags['use-repo'] || flags.repo || flags.r,
         org: flags.org || flags.o,
+        skipVersionCheck: flags['skip-version-check'],
+        private: flags.private || flags.p,
+        pr: flags.pr,
+        path: flags.path,
       };
       
       try {

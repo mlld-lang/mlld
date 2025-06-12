@@ -4,6 +4,7 @@ export const NodeType = {
   Text: 'Text',
   Comment: 'Comment',
   CodeFence: 'CodeFence',
+  MlldRunBlock: 'MlldRunBlock',
   VariableReference: 'VariableReference',
   Directive: 'Directive',
   PathSeparator: 'PathSeparator',

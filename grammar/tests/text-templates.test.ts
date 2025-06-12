@@ -80,22 +80,20 @@ The {{name}} Team
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe('Directive');
       expect(result[0].kind).toBe('add');
-      expect(result[0].subtype).toBe('addTemplateInvocation');
-      expect(result[0].source).toBe('templateInvocation');
+      expect(result[0].subtype).toBe('addInvocation');
+      expect(result[0].source).toBe('invocation');
       
-      // Check template name
-      expect(result[0].values.templateName[0].content).toBe('greetingTemplate');
+      // Check invocation structure
+      const invocation = result[0].values.invocation;
+      expect(invocation).toBeDefined();
+      expect(invocation.commandRef.name).toBe('greetingTemplate');
       
       // Check arguments
-      expect(result[0].values.arguments).toHaveLength(2);
-      expect(result[0].values.arguments[0].type).toBe('Text');
-      expect(result[0].values.arguments[0].content).toBe('Alice');
-      expect(result[0].values.arguments[1].type).toBe('Text');
-      expect(result[0].values.arguments[1].content).toBe('Dr.');
-      
-      // Check metadata
-      expect(result[0].meta.isTemplateInvocation).toBe(true);
-      expect(result[0].meta.argumentCount).toBe(2);
+      expect(invocation.commandRef.args).toHaveLength(2);
+      expect(invocation.commandRef.args[0].type).toBe('Text');
+      expect(invocation.commandRef.args[0].content).toBe('Alice');
+      expect(invocation.commandRef.args[1].type).toBe('Text');
+      expect(invocation.commandRef.args[1].content).toBe('Dr.');
     });
 
     it('should parse template invocation with variable arguments', async () => {
@@ -103,11 +101,12 @@ The {{name}} Team
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
-      expect(result[0].values.arguments).toHaveLength(2);
-      expect(result[0].values.arguments[0].type).toBe('VariableReference');
-      expect(result[0].values.arguments[0].identifier).toBe('userName');
-      expect(result[0].values.arguments[1].type).toBe('VariableReference');
-      expect(result[0].values.arguments[1].identifier).toBe('userTitle');
+      const invocation = result[0].values.invocation;
+      expect(invocation.commandRef.args).toHaveLength(2);
+      expect(invocation.commandRef.args[0].type).toBe('VariableReference');
+      expect(invocation.commandRef.args[0].identifier).toBe('userName');
+      expect(invocation.commandRef.args[1].type).toBe('VariableReference');
+      expect(invocation.commandRef.args[1].identifier).toBe('userTitle');
     });
 
     it('should parse template invocation with mixed arguments', async () => {
@@ -115,10 +114,11 @@ The {{name}} Team
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
-      expect(result[0].values.arguments[0].type).toBe('VariableReference');
-      expect(result[0].values.arguments[0].identifier).toBe('userName');
-      expect(result[0].values.arguments[1].type).toBe('Text');
-      expect(result[0].values.arguments[1].content).toBe('Welcome to our service');
+      const invocation = result[0].values.invocation;
+      expect(invocation.commandRef.args[0].type).toBe('VariableReference');
+      expect(invocation.commandRef.args[0].identifier).toBe('userName');
+      expect(invocation.commandRef.args[1].type).toBe('Text');
+      expect(invocation.commandRef.args[1].content).toBe('Welcome to our service');
     });
 
     it('should parse template invocation with no arguments', async () => {
@@ -126,8 +126,8 @@ The {{name}} Team
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
-      expect(result[0].values.arguments || []).toEqual([]);
-      expect(result[0].meta.argumentCount).toBe(0);
+      const invocation = result[0].values.invocation;
+      expect(invocation.commandRef.args).toEqual([]);
     });
   });
 
@@ -145,7 +145,7 @@ The {{name}} Team
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe('Directive');
       expect(result[0].kind).toBe('add');
-      expect(result[0].subtype).toBe('addTemplateInvocation');
+      expect(result[0].subtype).toBe('addInvocation');
     });
   });
 
@@ -155,10 +155,11 @@ The {{name}} Team
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
-      expect(result[0].values.arguments[0].type).toBe('Text');
-      expect(result[0].values.arguments[0].content).toBe('Alice');
-      expect(result[0].values.arguments[1].type).toBe('Text');
-      expect(result[0].values.arguments[1].content).toBe('Dr.');
+      const invocation = result[0].values.invocation;
+      expect(invocation.commandRef.args[0].type).toBe('Text');
+      expect(invocation.commandRef.args[0].content).toBe('Alice');
+      expect(invocation.commandRef.args[1].type).toBe('Text');
+      expect(invocation.commandRef.args[1].content).toBe('Dr.');
     });
 
     it('should handle template with header level', async () => {

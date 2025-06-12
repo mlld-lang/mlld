@@ -14,6 +14,25 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     pathService = new PathService();
   });
   
+  // Helper function to recursively copy directory to virtual filesystem
+  async function copyDirToVFS(srcDir: string, destDir: string) {
+    await fileSystem.mkdir(destDir);
+    const entries = fs.readdirSync(srcDir);
+    
+    for (const entry of entries) {
+      const srcPath = path.join(srcDir, entry);
+      const destPath = path.join(destDir, entry);
+      const stat = fs.statSync(srcPath);
+      
+      if (stat.isFile()) {
+        const content = fs.readFileSync(srcPath, 'utf8');
+        await fileSystem.writeFile(destPath, content);
+      } else if (stat.isDirectory()) {
+        await copyDirToVFS(srcPath, destPath);
+      }
+    }
+  }
+  
   // Helper function to copy example files to virtual filesystem
   async function setupExampleFiles(fixtureName: string, targetBasePath: string = '/') {
     // Extract the base name from the fixture path
@@ -42,6 +61,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'modules-explicit-export': 'modules/explicit-export',
       'modules-auto-export': 'modules/auto-export',
       'modules-metadata': 'modules/metadata',
+      'text-foreach-section-literal': 'text/foreach-section-literal',
+      'text-foreach-section-variable': 'text/foreach-section-variable',
+      'text-foreach-section-backtick': 'text/foreach-section-backtick',
+      'text-foreach-section-path-expression': 'text/foreach-section-path-expression',
+      'exec-invocation-module': 'exec-invocation-module',
     };
     
     // Check if we have a mapping for this fixture
@@ -75,6 +99,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               const mldPath = path.posix.join(targetBasePath, file.replace('.mlld', '.mld'));
               await fileSystem.writeFile(mldPath, content);
             }
+          } else if (stat.isDirectory()) {
+            // Recursively copy subdirectories
+            await copyDirToVFS(filePath, path.posix.join(targetBasePath, file));
           }
         }
       }
@@ -125,7 +152,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'text-url-section': 'Issue #82: URL section support not implemented',
       'text-variable-copy': 'Issue #176: Variable copying with @text copy = @original not supported',
       'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
-      'exec-param-interpolation': 'Parser bug: escaped @ symbols in exec templates are parsed as variable references'
+      'exec-param-interpolation': 'Parser bug: escaped @ symbols in exec templates are parsed as variable references',
+      'add-foreach-section-variable-new': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
+      'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
+      'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path'
     };
 
     const testFn = skipTests[fixture.name] ? it.skip : it;

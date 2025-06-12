@@ -1,5 +1,19 @@
 # mlld Language Guide for LLMs
 
+## What mlld IS and ISN'T
+
+### mlld IS:
+- 📋 A workflow orchestrator (like Make, but for the AI era)
+- 🎭 A conductor's baton (you conduct, tools play)
+- 📝 Executable documentation (reads like a guide, runs like a script)
+
+### mlld ISN'T:
+- ❌ A programming language (no loops, no recursion, no algorithms)
+- ❌ A template engine (it's not Jinja or Handlebars)
+- ❌ A shell script replacement (it orchestrates shells, doesn't replace them)
+
+If you find yourself wanting programming features, you're thinking about the problem wrong. Step back and ask: "What tool or module could handle this complexity for me?"
+
 ## The mlld Mindset: Orchestration, Not Programming
 
 mlld is NOT a programming language - it's an **orchestration language embedded in Markdown**. This fundamental distinction drives everything about how you should use mlld.
@@ -19,6 +33,16 @@ mlld is NOT a programming language - it's an **orchestration language embedded i
 
 ❌ WRONG: Complex conditionals and loops
 ✅ RIGHT: Simple foreach over data with clear transformations
+
+### The Mental Model Shift
+
+If you're coming from programming, you need to unlearn these reflexes:
+- ❌ "How do I implement this logic?" → ✅ "What tool handles this?"
+- ❌ "I need an if-statement" → ✅ "I need a decision point"
+- ❌ "Let me concatenate these strings" → ✅ "Let me create a template"
+- ❌ "I'll handle the error here" → ✅ "I'll design the flow to handle failures"
+
+Think of mlld like Docker Compose or GitHub Actions - you're declaring what should happen, not programming how it happens.
 
 ## Critical Understanding: mlld is NOT a Template Language
 
@@ -104,33 +128,55 @@ Remember: "Double brackets, double braces"
 @import { parallel, retry } from @mlld/core
 ```
 
-### 9. Conditional Logic
+### 9. Conditional Logic with @when
+
+@when is mlld's decision-making directive. It's NOT an if-statement - it's a routing table.
+
 ```mlld
-# Simple conditional:
+# Simple routing: condition => action
 @when @isProduction => @import { * } from "./prod-config.mld"
 
-# Multiple conditions with strategies:
-# Note: Conditions must be variables or command results, not comparisons
-@exec checkExcellent(score) = @run js [(score > 90 ? "true" : "")]
-@exec checkGood(score) = @run js [(score > 70 ? "true" : "")]
-
-@when first: [
-  @checkExcellent(@score) => @add "Excellent!"
-  @checkGood(@score) => @add "Good job!"
-  true => @add "Keep trying!"
+# True/false branching (explicit is better than implicit)
+@when @hasLicense: [
+  true  => @add [[✅ License verified]]
+  false => @add [[❌ No license found]]
 ]
 
-# Important: @when does NOT support comparison operators like >, <, ==
-# Use boolean variables or commands that return truthy/falsy values
+# Multiple conditions - each evaluated independently
+@when [
+  @hasTests     => @add [[✓ Tests present]]
+  @hasDocuments => @add [[✓ Docs present]]
+  @hasExamples  => @add [[✓ Examples present]]
+]
 
-# Also note: @when any: requires a block action, not individual actions
-# ❌ WRONG:
-# @when @var any: [
-#   @cond1 => @add "Action 1"
-#   @cond2 => @add "Action 2"
-# ]
-# ✅ RIGHT:
-# @when @var any: [...conditions...] => @add "Block action for any match"
+# First-match-wins routing
+@when first: [
+  @isWeekend      => @add [[🏖️ Out of office]]
+  @isPastDeadline => @add [[⏰ Working overtime]]
+  true            => @add [[💼 Regular hours]]
+]
+
+# ALL conditions must be true (single action)
+@when all: [
+  @hasTests
+  @hasDocuments
+  @hasExamples
+] => @add [[✅ All quality checks passed!]]
+
+# ANY condition is true (single action)
+@when any: [
+  @isEmergency
+  @isUrgent
+  @isPriority
+] => @run [(send-alert "@message")]
+```
+
+Important: @when doesn't support inline comparisons. Create helper functions:
+```mlld
+# ❌ WRONG: @when @score > 90 => ...
+# ✅ RIGHT: 
+@exec isHighScore(score) = @run js [(score > 90 ? "true" : "")]
+@when @isHighScore(@score) => @add [[🏆 High score!]]
 ```
 
 ### 10. Iteration with foreach
@@ -305,6 +351,34 @@ While you CAN write JavaScript in mlld, it's best kept simple:
 @data result = @processData(@rawData)
 ```
 
+### 9. No Early Exit
+mlld doesn't have `return` or `exit` - design your flow instead:
+
+```mlld
+# ❌ WRONG: Trying to exit early
+@when @error: [
+  true => @run [(exit 1)]  # This won't work!
+]
+
+# ✅ RIGHT: Use conditional flow
+@when @isValid: [
+  true  => @data continue = true
+  false => @add [[❌ Validation failed]]
+]
+
+@when @continue: [
+  true => @runMainProcess()
+]
+
+# ✅ BETTER: Let the workflow complete naturally
+@data validation = @validate(@input)
+@when @validation.valid: [
+  true  => @processData(@input)
+  false => @add [[Error: {{validation.message}}]]
+]
+# Workflow ends naturally - no forced exit needed
+```
+
 ## Orchestration Patterns
 
 mlld shines when orchestrating external tools and data. Here are patterns that showcase its strengths:
@@ -347,6 +421,121 @@ mlld shines when orchestrating external tools and data. Here are patterns that s
 @data config = @loadConfig(@env)
 
 @when @config.debug => @add [[Debug mode enabled]]
+```
+
+## Workflow Patterns
+
+### Pattern: Step-by-Step Processing
+```mlld
+# Each step produces data for the next
+@data raw = @fetchData(@source)
+@data validated = @validateData(@raw)
+@data processed = @processData(@validated)
+@data report = @generateReport(@processed)
+@add @report
+```
+
+### Pattern: Guarded Execution
+```mlld
+# Only proceed if previous steps succeed
+@data envCheck = @validateEnvironment(["API_KEY", "DB_URL"])
+
+@when @envCheck.valid: [
+  true  => @data canProceed = true
+  false => @add [[❌ {{envCheck.summary}}]]
+]
+
+@when @canProceed: [
+  true => @data results = @runMainProcess()
+]
+```
+
+### Pattern: Module-First Design
+```mlld
+# Don't implement logic - import it
+@import { validateEmail, sanitizeInput } from @company/validators
+@import { sendNotification } from @company/notifications
+
+# Your workflow just orchestrates
+@data cleanEmail = @sanitizeInput(@userEmail)
+@when @validateEmail(@cleanEmail) => @sendNotification(@cleanEmail, @message)
+```
+
+## The Module Philosophy
+
+mlld modules aren't libraries - they're capability providers. Design them like microservices:
+
+### Good Module Design
+```mlld
+---
+module: @myorg/github-utils
+description: GitHub API operations
+---
+
+# Single responsibility: GitHub operations
+@exec getPR(number, repo) = @run [(gh pr view...)]
+@exec listIssues(repo) = @run [(gh issue list...)]
+@exec createRelease(tag, notes) = @run [(gh release create...)]
+
+@data module = {
+  "getPR": @getPR,
+  "listIssues": @listIssues,
+  "createRelease": @createRelease
+}
+```
+
+### Module Anti-Patterns
+```mlld
+# ❌ Kitchen sink module with unrelated functions
+# ❌ Modules that try to be frameworks
+# ❌ Modules with side effects on import
+# ✅ Focused modules that do one thing well
+```
+
+## Reading mlld Code
+
+When reading mlld, look for these patterns:
+
+1. **Section Headers** = Major workflow phases
+   ```
+   ## 📊 Data Collection
+   ## 🔍 Validation  
+   ## 📤 Output Generation
+   ```
+
+2. **@when chains** = Decision trees
+   - Read them like a flowchart
+   - Each branch is a possible path
+
+3. **@data flow** = Follow the data
+   - Each @data assignment transforms or enriches
+   - Variable names tell the story
+
+4. **Module imports** = Available capabilities
+   - Like looking at package.json
+   - Tells you what the workflow can do
+
+Example workflow reading:
+```mlld
+# Looking at imports tells you: "This workflow works with GitHub and sends emails"
+@import { getPR, commentOnPR } from @company/github
+@import { sendAlert } from @company/notifications
+
+# Section headers show the flow: Check → Validate → Notify
+## 🔍 Check PR Status
+@data pr = @getPR(@PR_NUMBER)
+
+## ✅ Validate Changes  
+@when @pr.mergeable: [
+  true  => @data status = "ready"
+  false => @data status = "blocked"
+]
+
+## 📧 Send Notifications
+@when @status: [
+  "ready"   => @commentOnPR(@PR_NUMBER, "Ready to merge!")
+  "blocked" => @sendAlert("PR {{PR_NUMBER}} needs attention")
+]
 ```
 
 ## Best Practices

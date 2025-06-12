@@ -5,67 +5,102 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [10.3.0] - 2025-03-07
+## [1.3.4]
+Added:
+- Made keytar installation optional for npx purposes
 
-### Fixed
-- Fixed compatibility issues when using mlld in ESM environments (projects with "type": "module")
-- Resolved "Dynamic require of 'fs' is not supported" error in ESM contexts
-- Updated module export configuration for proper TypeScript type resolution in both ESM and CommonJS environments
+## [1.3.3]
+I can't remember what I did for 1.3.3 and I forgot to add it to the changelog.
 
-### Improved
-- Enhanced build configuration to better handle Node.js built-in modules 
-- Improved fs-extra imports to use consistent naming patterns
-- Added "type": "commonjs" to package.json for explicit module system declaration
+## [1.3.2]
+Fixed:
+- @when now can supports running exec invocations
 
-## [10.2.5] - 2025-03-06
+## [1.3.1]
+Added:
+- @when now has full support for @output variants added in 1.3.0
 
-### Improved
-- Switched to llmxml 1.4 for nicer formatting of output
+## [1.3.0]
+Added:
+- File output: @output @variable to "path/to/file.ext"
+- Stream output: @output @variable to stdout/stderr
+- Environment variables: @output @variable to env or env:CUSTOM_NAME
+- Format conversion: @output @variable to "file.json" as json
+- Resolver output: @output @variable to @resolver/path (placeholder for future implementation)
 
-## [10.2.4] - 2025-03-06
+## [1.2.1 - 1.2.2]
+Fixed:
+- Module publishing PR to correct path / structure
 
-### Fixed
-- Fixed code fence duplication bug in output formats
-- Updated OutputService to handle code fence nodes correctly without adding extra fence markers
-- Modified unit tests to match the new code fence handling behavior
+## [1.2.0]
+Added: 
+- Private modules! Just like regular modules... but privater!
 
-## [10.2.3] - 2025-03-06
+Fixed:
+- #248: Drop @run requirement for exec invocation in @text
+- #250: Exec functions show as '[command: undefined]' when called
+- #252: Unclear @run requirement for exec function calls
 
-### Fixed
-- Fixed CLI output filename handling to consistently use `.o.{format}` extension pattern
-- Fixed XML format handling to properly identify and use XML format instead of defaulting to markdown
-- Updated filename generation logic to prevent source file overwriting issues
+## [1.1.7]
+Fixed:
+- @data directives storing ExecInvocation nodes were not being evaluated when accessed through @add
 
-## [10.2.2] - 2025-03-06
+## [1.1.6]
+Added:
+- Toggle for turning off line normalization:
+   `--no-normalize-blank-lines` CLI flag
+   `normalizeBlankLines: false` in the API
 
-### Added
-- Improved output filename handling with consistent `.o.{format}` extension pattern
-- Added automatic incremental filename generation when output file exists and user declines overwrite
-- Enhanced XML output format with direct integration with the llmxml library
+## [1.1.5]
+Fixed:
+- Publishing a module as an org
 
-### Fixed
-- Fixed XML output format not generating proper XML tags via CLI and API
-- Fixed potential source file overwriting issues with improved naming conventions
-- Simplified XML conversion to directly leverage the llmxml library without unnecessary fallbacks
-- Improved filename conflict resolution with user prompts and incremental naming
-- Added tests to verify XML output format works correctly, especially with JSON content
-- Fixed TypeScript build error by properly awaiting async llmxml.toXML call
+Added:
+- Newline trimming / normalization by default
 
-## [10.1.2] - 2025-03-06
+## [1.1.1 - 1.1.4] 
+Fixed:
+- Stuff I broke
+- Formatting issues
+- Publishing blocked by overly aggressive validation
 
-### Fixed
-- Fixed critical shell command syntax errors when using commands with special characters like parentheses
-- Fixed multi-line text processing issues in commands, particularly affecting the `llm` command
-- Improved error handling for shell commands to prevent syntax errors from appearing in output
-- Enhanced command execution to safely handle shell special characters and properly preserve multi-line content
+## [1.1.0]
+New:
+- #240 Support for node with `@run node [(...)]`
 
-## [10.1.1] - 2025-03-06
+Fixed:
+- #239 Stopped section-getters repeating headers
+- Foreach / section targeting bugs
+- Made llmxml shut up (copious logging)
 
-### Fixed
-- Fixed issue with global installation failing due to missing `reflect-metadata` dependency
-- Enhanced the bin wrapper script to better resolve dependencies
-- Added dependency verification script that runs on installation
+Added:
+- #238 Support for backtick templates with @var interpolation
 
-## [10.1.0] - Previous Release
+## [1.0.3]
+
+Fixed:
+- #235 Parser choking on EOF after closing backticks
+- #234 Added blank line between frontmatter and h1 in mlld init template
+- #233 Fixed yaml parsing issues by switching to graymatter 
+- Created a resolver for @PROJECTPATH / @. variables to align with switch to resolver pattern
+
+Known issues:
+- #237 @INPUT variable is currently broken by fix for @. / @PROJECTPATH - # 
+- #236 Template parsing fails with nested brackets in double-bracket templates
+
+## [1.0.2]
+
+Added:
+- Foreach section extraction syntax: `foreach [@array.field # section] as [[template]]`
+- Direct iteration over file arrays with section extraction for documentation assembly
+- Support for variable section names: `[@docs.path # @docs.section]`
+
+## [1.0.1]
+
+Added:
+- @add [file.md # @sectionVariable] syntax for variable section references
+- Integration with foreach for collecting multiple sections dynamically
+
+## [1.0.0]
 
 Initial versioned release. 
