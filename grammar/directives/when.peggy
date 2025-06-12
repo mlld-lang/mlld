@@ -333,6 +333,23 @@ WhenActionDirective
         location: location()
       })];
     }
+  / "@run" _ "@" invocation:ExecInvocationWithTail {
+      // @run with exec invocation
+      return [helpers.createNode(NodeType.Directive, {
+        kind: 'run',
+        subtype: 'runExecReference',
+        values: { 
+          execRef: invocation
+        },
+        raw: { 
+          execRef: invocation.commandRef.name 
+        },
+        meta: {
+          hasWithClause: !!invocation.withClause
+        },
+        location: location()
+      })];
+    }
   / "@run" _ "[" command:WhenCommandText "]" {
       // Use simple command parsing for actions
       return [helpers.createNode(NodeType.Directive, {
