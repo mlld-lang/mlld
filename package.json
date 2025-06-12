@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "mlld: a modular prompt scripting language",
   "type": "module",
   "main": "dist/index.cjs",
