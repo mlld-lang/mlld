@@ -249,7 +249,42 @@ WhenActionBlock
 
 // Single directive as action - simplified inline directives
 WhenActionDirective
-  = "@add" _ "@" invocation:ExecInvocationWithTail {
+  = "@output" _ source:WhenOutputSource? _ "to" _ target:WhenOutputTarget {
+      helpers.debug('WhenActionDirective: Enhanced @output matched!');
+      // Enhanced @output syntax in when actions (FIRST to match before bracket syntax)
+      const values = {
+        target: target
+      };
+      
+      const raw = {
+        target: target.raw
+      };
+      
+      let subtype = 'outputDocument';
+      const meta = { 
+        hasSource: false,
+        targetType: target.type,
+        enhanced: true
+      };
+      
+      if (source) {
+        values.source = source.values;
+        raw.source = source.raw;
+        meta.hasSource = true;
+        meta.sourceType = source.type;
+        subtype = source.subtype;
+      }
+      
+      return [helpers.createNode(NodeType.Directive, {
+        kind: 'output',
+        subtype: subtype,
+        values: values,
+        raw: raw,
+        meta: meta,
+        location: location()
+      })];
+    }
+  / "@add" _ "@" invocation:ExecInvocationWithTail {
       // @add with exec invocation
       return [helpers.createNode(NodeType.Directive, {
         kind: 'add',
@@ -315,20 +350,30 @@ WhenActionDirective
       })];
     }
   / "@output" _ source:WhenOutputSource? _ "[" path:WhenPathText "]" {
-      // @output directive for when actions
+      helpers.debug('WhenActionDirective: Bracket @output matched');
+      // Bracket @output syntax in when actions
       const values = {
-        path: [helpers.createNode(NodeType.Text, { 
-          content: path, 
-          location: location() 
-        })]
+        target: {
+          type: 'file',
+          path: [helpers.createNode(NodeType.Text, { 
+            content: path, 
+            location: location() 
+          })],
+          raw: path,
+          meta: { bracketed: true }
+        }
       };
       
       const raw = {
-        path: path
+        target: `[${path}]`
       };
       
       let subtype = 'outputDocument';
-      const meta = { hasSource: false };
+      const meta = { 
+        hasSource: false,
+        targetType: 'file',
+        legacy: true
+      };
       
       if (source) {
         values.source = source.values;
@@ -378,5 +423,31 @@ WhenOutputSource
         subtype: 'outputLiteral',
         values: [helpers.createNode(NodeType.Text, { content: str, location: location() })],
         raw: '"' + str + '"'
+      };
+    }
+
+// Output target for when actions - simplified version supporting stdout/stderr
+WhenOutputTarget
+  = stream:("stdout" / "stderr") {
+      return {
+        type: 'stream',
+        stream: stream,
+        raw: stream
+      };
+    }
+  / "env" varname:(":"  name:BaseIdentifier { return name; })? {
+      return {
+        type: 'env',
+        varname: varname || null,
+        raw: varname ? `env:${varname}` : 'env'
+      };
+    }
+  / str:StringLiteral {
+      // File path as quoted string
+      return {
+        type: 'file',
+        path: [helpers.createNode(NodeType.Text, { content: str, location: location() })],
+        raw: `"${str}"`,
+        meta: { quoted: true }
       };
     }
