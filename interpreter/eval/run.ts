@@ -358,6 +358,18 @@ export async function evaluateRun(
     const result = await evaluateExecInvocation(execInvocation, env);
     output = String(result.value);
     
+  } else if (directive.subtype === 'runExecReference') {
+    // Handle exec reference nodes in run directive (from @when actions)
+    const execRef = directive.values?.execRef;
+    if (!execRef) {
+      throw new Error('Run exec reference directive missing exec reference');
+    }
+    
+    // Evaluate the exec invocation
+    const { evaluateExecInvocation } = await import('./exec-invocation');
+    const result = await evaluateExecInvocation(execRef, env);
+    output = String(result.value);
+    
   } else {
     throw new Error(`Unsupported run subtype: ${directive.subtype}`);
   }
