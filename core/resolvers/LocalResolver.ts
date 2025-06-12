@@ -6,7 +6,8 @@ import {
   ContentInfo,
   ResolverCapabilities
 } from '@core/resolvers/types';
-import { MlldResolutionError, MlldFileNotFoundError } from '@core/errors';
+import { MlldFileNotFoundError } from '@core/errors';
+import { ResolverError } from '@core/errors/ResolverError';
 import { TaintLevel } from '@security/taint/TaintTracker';
 import { IFileSystemService } from '@services/fs/IFileSystemService';
 
@@ -45,15 +46,15 @@ export interface LocalResolverConfig {
  * Provides secure access to local files with path validation
  */
 export class LocalResolver implements Resolver {
-  name = 'local';
+  name = 'LOCAL';
   description = 'Resolves modules from local filesystem paths';
   type: ResolverType = 'io';
   
   capabilities: ResolverCapabilities = {
-    io: { read: true, write: true, list: true },
-    needs: { network: false, cache: false, auth: false },
-    contexts: { import: true, path: true, output: true },
-    resourceType: 'file',
+    io: { read: true, write: false, list: true },
+    contexts: { import: true, path: true, output: false },
+    supportedContentTypes: ['module', 'data', 'text'],
+    defaultContentType: 'text',
     priority: 20, // Lower priority than built-ins and modules
     cache: { strategy: 'none' } // Local files don't need caching
   };
@@ -74,9 +75,9 @@ export class LocalResolver implements Resolver {
    */
   async resolve(ref: string, config?: LocalResolverConfig): Promise<ResolverContent> {
     if (!config?.basePath) {
-      throw new MlldResolutionError(
+      throw new ResolverError(
         'LocalResolver requires basePath in configuration',
-        { reference: ref }
+        { resolverName: 'LocalResolver', operation: 'resolve' }
       );
     }
 
@@ -102,9 +103,9 @@ export class LocalResolver implements Resolver {
     if (config.allowedExtensions) {
       const ext = path.extname(fullPath).toLowerCase();
       if (!config.allowedExtensions.includes(ext)) {
-        throw new MlldResolutionError(
+        throw new ResolverError(
           `File extension '${ext}' not allowed. Allowed: ${config.allowedExtensions.join(', ')}`,
-          { reference: ref, path: fullPath }
+          { resolverName: 'LocalResolver', reference: ref, operation: 'resolve' }
         );
       }
     }
@@ -115,13 +116,17 @@ export class LocalResolver implements Resolver {
       
       // Get file stats for metadata
       const stats = await this.fileSystem.stat(fullPath);
+      
+      // Detect content type
+      const contentType = await this.detectContentType(fullPath, content);
 
       return {
         content,
+        contentType,
         metadata: {
           source: `file://${fullPath}`,
           timestamp: new Date(),  // Use current time since IFileSystemService doesn't provide mtime
-          taintLevel: TaintLevel.LOCAL,
+          taintLevel: (TaintLevel as any).LOCAL,
           size: content.length,  // Calculate size from content
           mimeType: this.getMimeType(fullPath)
         }
@@ -133,9 +138,10 @@ export class LocalResolver implements Resolver {
           fullPath
         );
       }
-      throw new MlldResolutionError(
-        `Failed to read file: ${error.message}`,
-        { reference: ref, path: fullPath, originalError: error }
+      throw ResolverError.resolutionFailed(
+        'LocalResolver',
+        ref,
+        error as Error
       );
     }
   }
@@ -145,16 +151,16 @@ export class LocalResolver implements Resolver {
    */
   async write(ref: string, content: string, config?: LocalResolverConfig): Promise<void> {
     if (!config?.basePath) {
-      throw new MlldResolutionError(
+      throw new ResolverError(
         'LocalResolver requires basePath in configuration',
-        { reference: ref }
+        { resolverName: 'LocalResolver', operation: 'write' }
       );
     }
 
     if (config.readonly) {
-      throw new MlldResolutionError(
+      throw new ResolverError(
         'Cannot write: LocalResolver is configured as read-only',
-        { reference: ref }
+        { resolverName: 'LocalResolver', operation: 'write', reference: ref }
       );
     }
 
@@ -165,9 +171,9 @@ export class LocalResolver implements Resolver {
     if (config.allowedExtensions) {
       const ext = path.extname(fullPath).toLowerCase();
       if (!config.allowedExtensions.includes(ext)) {
-        throw new MlldResolutionError(
+        throw new ResolverError(
           `File extension '${ext}' not allowed. Allowed: ${config.allowedExtensions.join(', ')}`,
-          { reference: ref, path: fullPath }
+          { resolverName: 'LocalResolver', reference: ref, operation: 'resolve' }
         );
       }
     }
@@ -180,9 +186,9 @@ export class LocalResolver implements Resolver {
       // Write the file
       await this.fileSystem.writeFile(fullPath, content);
     } catch (error) {
-      throw new MlldResolutionError(
+      throw new ResolverError(
         `Failed to write file: ${error.message}`,
-        { reference: ref, path: fullPath, originalError: error }
+        { resolverName: 'LocalResolver', reference: ref, operation: 'write', originalError: error as Error }
       );
     }
   }
@@ -354,12 +360,12 @@ export class LocalResolver implements Resolver {
         return normalizedPath;
       }
       // Absolute path outside basePath - security error
-      throw new MlldResolutionError(
+      throw new ResolverError(
         'Path traversal detected: absolute path is outside base directory',
         { 
+          resolverName: 'LocalResolver',
           reference: relativePath,
-          basePath: normalizedBase,
-          resolvedPath: normalizedPath
+          operation: 'resolve'
         }
       );
     }
@@ -373,12 +379,12 @@ export class LocalResolver implements Resolver {
 
     // Security: Ensure the resolved path is within the base path
     if (!normalizedFull.startsWith(normalizedBase)) {
-      throw new MlldResolutionError(
+      throw new ResolverError(
         'Path traversal detected: resolved path is outside base directory',
         { 
+          resolverName: 'LocalResolver',
           reference: relativePath,
-          basePath: normalizedBase,
-          resolvedPath: normalizedFull
+          operation: 'resolve'
         }
       );
     }
@@ -393,9 +399,9 @@ export class LocalResolver implements Resolver {
       
       // maxDepth is the maximum allowed depth, so >= comparison
       if (depth >= config.maxDepth) {
-        throw new MlldResolutionError(
+        throw new ResolverError(
           `Path exceeds maximum depth of ${config.maxDepth}`,
-          { reference: relativePath, depth }
+          { resolverName: 'LocalResolver', reference: relativePath, operation: 'resolve' }
         );
       }
     }
@@ -405,6 +411,53 @@ export class LocalResolver implements Resolver {
     // for basic file systems. This is acceptable for testing environments.
 
     return normalizedFull;
+  }
+
+  /**
+   * Detect content type based on file extension and content
+   */
+  private async detectContentType(filePath: string, content: string): Promise<'module' | 'data' | 'text'> {
+    // Check file extension
+    if (filePath.endsWith('.mld') || filePath.endsWith('.mlld')) {
+      return 'module';
+    }
+    if (filePath.endsWith('.json')) {
+      return 'data';
+    }
+    
+    // Try to detect mlld module content
+    try {
+      const { parse } = await import('@grammar/parser');
+      const result = await parse(content);
+      if (result.success && this.hasModuleExports(result.ast)) {
+        return 'module';
+      }
+    } catch {
+      // Not valid mlld
+    }
+    
+    // Try JSON
+    try {
+      JSON.parse(content);
+      return 'data';
+    } catch {
+      // Not JSON
+    }
+    
+    return 'text';
+  }
+  
+  /**
+   * Check if AST has module exports
+   */
+  private hasModuleExports(ast: any): boolean {
+    // Check if there are any directive nodes (not just text/newlines)
+    if (!ast || !Array.isArray(ast)) return false;
+    
+    return ast.some(node => 
+      node && node.type === 'Directive' && 
+      ['text', 'data', 'exec', 'path'].includes(node.kind)
+    );
   }
 
   /**

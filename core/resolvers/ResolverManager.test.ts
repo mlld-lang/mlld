@@ -66,7 +66,7 @@ describe('ResolverManager', () => {
       const secureManager = new ResolverManager({
         allowCustom: false,
         pathOnlyMode: false,
-        allowedResolvers: ['registry', 'local']
+        allowedResolvers: ['REGISTRY', 'LOCAL']
       });
       
       const registryResolver = new RegistryResolver();
@@ -91,7 +91,7 @@ describe('ResolverManager', () => {
         },
         {
           prefix: '@notes/',
-          resolver: 'local',
+          resolver: 'LOCAL',
           type: 'io',
           config: { basePath: '/notes' }
         }

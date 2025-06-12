@@ -66,15 +66,15 @@ interface RegistryFile {
  * This is the primary resolver for public modules in RC phase
  */
 export class RegistryResolver implements Resolver {
-  name = 'registry';
+  name = 'REGISTRY';
   description = 'Resolves public modules using GitHub registry at mlld-lang/registry';
   type: ResolverType = 'input';
   
   capabilities: ResolverCapabilities = {
-    io: { read: true, write: false, list: true },
-    needs: { network: true, cache: true, auth: false },
+    io: { read: true, write: false, list: false },
     contexts: { import: true, path: false, output: false },
-    resourceType: 'module',
+    supportedContentTypes: ['module'],
+    defaultContentType: 'module',
     priority: 10, // Higher priority than file resolvers
     cache: { 
       strategy: 'persistent',
@@ -105,8 +105,7 @@ export class RegistryResolver implements Resolver {
   async resolve(ref: string, config?: RegistryResolverConfig): Promise<ResolverContent> {
     if (!this.canResolve(ref, config)) {
       throw new MlldResolutionError(
-        `Invalid registry module reference format. Expected @user/module, got: ${ref}`,
-        { reference: ref }
+        `Invalid registry module reference format. Expected @user/module, got: ${ref}`
       );
     }
 
@@ -126,11 +125,7 @@ export class RegistryResolver implements Resolver {
       
       if (!moduleEntry) {
         throw new MlldResolutionError(
-          `Module '${moduleName}' not found in ${user}'s registry`,
-          { 
-            reference: ref,
-            availableModules: Object.keys(registryFile.modules)
-          }
+          `Module '${moduleName}' not found in ${user}'s registry`
         );
       }
 
@@ -142,15 +137,14 @@ export class RegistryResolver implements Resolver {
       // Return the URL as content - the actual fetching will be done by HTTPResolver/GitHubResolver
       return {
         content: sourceUrl,
+        contentType: 'module',
         metadata: {
           source: `registry://${ref}`,
           timestamp: new Date(),
-          taintLevel: TaintLevel.PUBLIC,
+          taintLevel: (TaintLevel as any).PUBLIC,
           author: user,
           mimeType: 'text/plain', // URL is plain text
-          description: moduleEntry.description,
-          sourceUrl: sourceUrl,
-          sourceHash: moduleEntry.source.hash
+          hash: moduleEntry.source.hash
         }
       };
     } catch (error) {
@@ -158,14 +152,7 @@ export class RegistryResolver implements Resolver {
         throw error;
       }
       throw new MlldResolutionError(
-        `Failed to resolve ${ref} from registry: ${error.message}`,
-        { 
-          reference: ref,
-          registryRepo,
-          user,
-          moduleName,
-          originalError: error
-        }
+        `Failed to resolve ${ref} from registry: ${(error as any).message}`
       );
     }
   }

@@ -4,7 +4,7 @@ import {
   ResolverCapabilities,
   ResolverType
 } from '@core/resolvers/types';
-import { ResolverError } from '@core/errors';
+import { ResolverError, ResolverErrorCode } from '@core/errors';
 import * as os from 'os';
 import * as path from 'path';
 
@@ -18,12 +18,11 @@ export class DebugResolver implements Resolver {
   
   capabilities: ResolverCapabilities = {
     io: { read: true, write: false, list: false },
-    needs: { network: false, cache: false, auth: false },
     contexts: { import: true, path: false, output: false },
-    resourceType: 'function',
+    supportedContentTypes: ['data', 'text'],
+    defaultContentType: 'data',  // Returns object by default
     priority: 1,
-    cache: { strategy: 'none' }, // DEBUG info should be fresh
-    supportedFormats: ['full', 'summary', 'markdown', 'json']
+    cache: { strategy: 'none' } // DEBUG info should be fresh
   };
 
   constructor() {
@@ -35,22 +34,86 @@ export class DebugResolver implements Resolver {
     return cleanRef === 'DEBUG' || cleanRef.startsWith('DEBUG/');
   }
 
-  async resolve(ref: string): Promise<ResolverContent> {
-    // Extract format from reference
-    const cleanRef = ref.replace(/^@/, '');
-    const parts = cleanRef.split('/');
-    const format = parts.length > 1 ? parts[1] : 'full';
-
-    // Generate debug info
-    const debugInfo = await this.generateDebugInfo(format);
-
-    return {
-      content: debugInfo,
-      metadata: {
-        source: 'DEBUG',
-        timestamp: new Date()
+  async resolve(ref: string, config?: any): Promise<ResolverContent> {
+    // Variable context - return debug object as data
+    if (!config?.context || config.context === 'variable') {
+      const info = await this.collectDebugInfo();
+      return {
+        content: JSON.stringify(info),
+        contentType: 'data',
+        metadata: {
+          source: 'DEBUG',
+          timestamp: new Date()
+        }
+      };
+    }
+    
+    // Import context - return structured data based on requested imports
+    if (config.context === 'import') {
+      const info = await this.collectDebugInfo();
+      const exports: Record<string, any> = {};
+      const imports = config.requestedImports || ['json', 'reduced', 'markdown'];
+      
+      for (const importName of imports) {
+        switch (importName) {
+          case 'environment':
+            exports.environment = info.environment;
+            break;
+          case 'system':
+            exports.system = info.system;
+            break;
+          case 'process':
+            exports.process = info.process;
+            break;
+          case 'mlld':
+            exports.mlld = info.mlld;
+            break;
+          case 'full':
+            exports.full = info;
+            break;
+          case 'json':
+            exports.json = JSON.stringify(info, null, 2);
+            break;
+          case 'reduced':
+            exports.reduced = JSON.stringify({
+              environment: info.environment,
+              version: info.mlld.version
+            });
+            break;
+          case 'summary':
+            exports.summary = this.formatSummary(info);
+            break;
+          case 'markdown':
+            exports.markdown = this.formatMarkdown(info);
+            break;
+          default:
+            // Try to find nested field
+            const value = this.getNestedValue(info, importName);
+            if (value !== undefined) {
+              exports[importName] = value;
+            }
+        }
       }
-    };
+      
+      return {
+        content: JSON.stringify(exports),
+        contentType: 'data',
+        metadata: {
+          source: 'DEBUG',
+          timestamp: new Date()
+        }
+      };
+    }
+    
+    throw new ResolverError(
+      'DEBUG resolver only supports variable and import contexts',
+      ResolverErrorCode.UNSUPPORTED_CONTEXT,
+      {
+        resolverName: this.name,
+        context: config?.context,
+        operation: 'resolve'
+      }
+    );
   }
 
   /**
@@ -79,22 +142,32 @@ export class DebugResolver implements Resolver {
    * Collect all debug information
    */
   private async collectDebugInfo(): Promise<Record<string, any>> {
-    const cwd = process.cwd();
+    const cwd = (process as any).cwd?.() || '/';
     const projectPath = await this.findProjectRoot(cwd);
     const time = this.getMockedTime() || new Date();
+    
+    // Debug logging
+    // console.log('DebugResolver collectDebugInfo:', { cwd, projectPath });
 
+    const version = await this.getMlldVersion();
+    
     return {
       timestamp: time.toISOString(),
+      version, // Top-level for backward compatibility
       mlld: {
-        version: await this.getMlldVersion(),
+        version,
+        configFile: await this.findConfigFile(projectPath || cwd)
+      },
+      project: {
+        basePath: projectPath || cwd,
         configFile: await this.findConfigFile(projectPath || cwd)
       },
       environment: {
         cwd,
         projectPath,
-        nodeVersion: process.version,
-        platform: process.platform,
-        arch: process.arch,
+        nodeVersion: (process as any).version || 'unknown',
+        platform: (process as any).platform || 'unknown',
+        arch: (process as any).arch || 'unknown',
         user: os.userInfo().username,
         hostname: os.hostname()
       },
@@ -109,11 +182,11 @@ export class DebugResolver implements Resolver {
         loadAvg: os.loadavg()
       },
       process: {
-        pid: process.pid,
-        ppid: process.ppid,
-        argv: process.argv,
-        execPath: process.execPath,
-        memoryUsage: process.memoryUsage()
+        pid: (process as any).pid || 0,
+        ppid: (process as any).ppid || 0,
+        argv: (process as any).argv || [],
+        execPath: (process as any).execPath || '',
+        memoryUsage: (process as any).memoryUsage?.() || {}
       },
       env: this.getFilteredEnv()
     };
@@ -208,7 +281,7 @@ export class DebugResolver implements Resolver {
       `    Free: ${this.formatBytes(info.system.memory.free)}`,
       `    Used: ${this.formatBytes(info.system.memory.used)}`,
       `  Uptime: ${this.formatDuration(info.system.uptime)}`,
-      `  Load Average: ${info.system.loadAvg.map(n => n.toFixed(2)).join(', ')}`,
+      `  Load Average: ${info.system.loadAvg.map((n: number) => n.toFixed(2)).join(', ')}`,
       ``
     ].join('\n'));
 
@@ -240,20 +313,9 @@ export class DebugResolver implements Resolver {
    * Find project root by looking for package.json
    */
   private async findProjectRoot(startPath: string): Promise<string | null> {
-    let currentPath = startPath;
-    
-    while (currentPath !== path.dirname(currentPath)) {
-      try {
-        const packagePath = path.join(currentPath, 'package.json');
-        // Check if package.json exists (would need file system access)
-        // For now, just return the current working directory
-        return currentPath;
-      } catch {
-        currentPath = path.dirname(currentPath);
-      }
-    }
-    
-    return null;
+    // For now, just return the start path as the project root
+    // In a real implementation, this would look for package.json, .git, etc.
+    return startPath;
   }
 
   /**
@@ -358,26 +420,20 @@ export class DebugResolver implements Resolver {
   }
 
   /**
-   * Get exportable data for imports
+   * Get nested value from object using dot notation
    */
-  async getExportData(format?: string): Promise<Record<string, any>> {
-    // For specific format imports
-    if (format && this.capabilities.supportedFormats?.includes(format)) {
-      const result = await this.resolve(`@DEBUG/${format}`);
-      return { [format]: result.content };
+  private getNestedValue(obj: any, path: string): any {
+    const parts = path.split('.');
+    let current = obj;
+    
+    for (const part of parts) {
+      if (current && typeof current === 'object' && part in current) {
+        current = current[part];
+      } else {
+        return undefined;
+      }
     }
-
-    // For import { * } from @DEBUG
-    const info = await this.collectDebugInfo();
-    return {
-      timestamp: info.timestamp,
-      version: info.mlld.version,
-      platform: info.environment.platform,
-      nodeVersion: info.environment.nodeVersion,
-      cwd: info.environment.cwd,
-      projectPath: info.environment.projectPath,
-      memory: info.system.memory,
-      pid: info.process.pid
-    };
+    
+    return current;
   }
 }

@@ -400,6 +400,18 @@ export async function evaluateImport(
     }
   }
   
+  // Also check for resolver imports when path is a VariableReference with isSpecial flag
+  // This handles cases like @import { iso, unix, date } from @TIME
+  if (pathNodes.length >= 1 && pathNodes[0].type === 'VariableReference') {
+    const varRef = pathNodes[0] as any;
+    if (varRef.isSpecial && varRef.identifier) {
+      const resolverManager = env.getResolverManager();
+      if (resolverManager && resolverManager.isResolverName(varRef.identifier)) {
+        return await evaluateResolverImport(directive, varRef.identifier, env);
+      }
+    }
+  }
+  
   // Check if this is a URL path based on the path node structure
   const pathNode = pathNodes[0]; // Assuming single path node for imports
   const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
@@ -430,11 +442,18 @@ export async function evaluateImport(
     if (resolverManager) {
       try {
         // ResolverManager will handle all @prefix/ patterns including @user/module
-        // This returns a URL that we can then fetch
-        const resolvedUrl = await env.resolveModule(moduleRef);
-        resolvedPath = resolvedUrl;
+        const resolverContent = await env.resolveModule(moduleRef, 'import');
         
-        // We'll validate the hash after reading the content
+        // Validate content type for imports
+        if (resolverContent.contentType !== 'module') {
+          throw new Error(
+            `Import target is not a module: ${moduleRef} (content type: ${resolverContent.contentType})`
+          );
+        }
+        
+        // For module imports from resolvers, we already have the content
+        // so we can process it directly instead of going through importFromPath
+        return await importFromResolverContent(directive, moduleRef, resolverContent, env);
       } catch (error) {
         // If resolver fails, let it bubble up with a clear error
         throw new Error(`Failed to resolve module '${moduleRef}': ${error instanceof Error ? error.message : String(error)}`);
@@ -455,6 +474,198 @@ export async function evaluateImport(
   const pathMeta = directive.meta?.path;
   const expectedHash = pathMeta?.hash;
   return importFromPath(directive, resolvedPath, env, expectedHash);
+}
+
+/**
+ * Import from resolver content (already resolved)
+ */
+async function importFromResolverContent(
+  directive: DirectiveNode,
+  ref: string,
+  resolverContent: { content: string; contentType: 'module' | 'data' | 'text'; metadata?: any },
+  env: Environment
+): Promise<EvalResult> {
+  const content = resolverContent.content;
+  
+  // Check for circular imports
+  if (env.isImporting(ref)) {
+    throw new Error(`Circular import detected: ${ref}`);
+  }
+  
+  try {
+    // Mark that we're importing this reference
+    env.beginImport(ref);
+    
+    // Handle section extraction if specified
+    let processedContent = content;
+    const sectionNodes = directive.values?.section;
+    if (sectionNodes && Array.isArray(sectionNodes)) {
+      const section = await interpolate(sectionNodes, env);
+      if (section) {
+        processedContent = extractSection(content, section);
+      }
+    }
+    
+    // Parse the imported content
+    const parseResult = await parse(processedContent);
+    
+    // Check if parsing succeeded
+    if (!parseResult.success) {
+      const parseError = parseResult.error;
+      if (parseError && 'location' in parseError) {
+        throw new Error(
+          `Syntax error in imported module '${ref}' at line ${parseError.location?.start?.line || '?'}: ${parseError.message || 'Unknown parse error'}`
+        );
+      } else {
+        throw new Error(
+          `Failed to parse imported module '${ref}': ${parseError?.message || 'Unknown parse error'}`
+        );
+      }
+    }
+    
+    const ast = parseResult.ast;
+    
+    // Check for frontmatter in the AST and check version compatibility
+    let frontmatterData: Record<string, any> | null = null;
+    if (ast.length > 0 && ast[0].type === 'Frontmatter') {
+      const { parseFrontmatter } = await import('../utils/frontmatter-parser');
+      const frontmatterNode = ast[0] as any;
+      frontmatterData = parseFrontmatter(frontmatterNode.content);
+      
+      // Check mlld version compatibility
+      const requiredVersion = frontmatterData['mlld-version'] || 
+                             frontmatterData['mlldVersion'] ||
+                             frontmatterData['mlld_version'];
+      
+      if (requiredVersion) {
+        const versionCheck = checkMlldVersion(requiredVersion);
+        if (!versionCheck.compatible) {
+          const moduleName = frontmatterData.module || 
+                           frontmatterData.name || 
+                           ref;
+          
+          throw new MlldError(
+            formatVersionError(moduleName, requiredVersion, currentMlldVersion),
+            { 
+              code: 'VERSION_MISMATCH', 
+              severity: 'error',
+              module: moduleName,
+              requiredVersion,
+              path: ref
+            }
+          );
+        }
+      }
+    }
+    
+    // Create a child environment for the imported module
+    // For modules from resolvers, use current directory as basePath
+    const childEnv = env.createChild(env.getBasePath());
+    
+    // Set the current file path for the imported module (for error reporting)
+    childEnv.setCurrentFilePath(ref);
+    
+    // Evaluate the imported module
+    let result: EvalResult;
+    try {
+      result = await evaluate(ast, childEnv);
+    } catch (error) {
+      throw new Error(
+        `Error evaluating imported module '${ref}': ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    
+    // Get variables from child environment
+    const childVars = childEnv.getCurrentVariables();
+    
+    // Process module exports (explicit or auto-generated)
+    const { moduleObject, frontmatter } = processModuleExports(childVars, { frontmatter: frontmatterData });
+    
+    // Add __meta__ property with frontmatter if available
+    if (frontmatter) {
+      moduleObject.__meta__ = frontmatter;
+    }
+    
+    // Handle variable merging based on import type (same as importFromPath)
+    if (directive.subtype === 'importAll') {
+      // Import all properties from the module object
+      for (const [name, value] of Object.entries(moduleObject)) {
+        if (name === '__meta__') continue;
+        
+        let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
+        let varValue = value;
+        
+        if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
+          varType = value.__variableType;
+          varValue = value.__value;
+        }
+        
+        const importedVariable: MlldVariable = {
+          type: varType,
+          identifier: name,
+          value: varValue,
+          nodeId: '',
+          location: { line: 0, column: 0 },
+          metadata: {
+            isImported: true,
+            importPath: ref,
+            definedAt: { line: 0, column: 0, filePath: ref }
+          }
+        };
+        
+        env.declareImportedVariable(name, importedVariable);
+      }
+    } else if (directive.subtype === 'importSelected') {
+      // Import selected variables
+      const selectedVars = directive.values?.selectedVariables;
+      if (selectedVars && Array.isArray(selectedVars)) {
+        for (const varNode of selectedVars) {
+          if (varNode.type === 'SelectedVariable') {
+            const importName = varNode.values?.importName || varNode.content;
+            const alias = varNode.values?.alias;
+            const targetName = alias || importName;
+            
+            if (importName in moduleObject && importName !== '__meta__') {
+              const value = moduleObject[importName];
+              
+              let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
+              let varValue = value;
+              
+              if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
+                varType = value.__variableType;
+                varValue = value.__value;
+              }
+              
+              const importedVariable: MlldVariable = {
+                type: varType,
+                identifier: targetName,
+                value: varValue,
+                nodeId: '',
+                location: { line: 0, column: 0 },
+                metadata: {
+                  isImported: true,
+                  importPath: ref,
+                  originalName: importName !== targetName ? importName : undefined,
+                  definedAt: { line: 0, column: 0, filePath: ref }
+                }
+              };
+              
+              env.declareImportedVariable(targetName, importedVariable);
+            } else {
+              throw new Error(`Variable '${importName}' not found in imported module '${ref}'`);
+            }
+          }
+        }
+      }
+    }
+    
+    return { 
+      type: 'composite',
+      values: []
+    };
+  } finally {
+    env.endImport(ref);
+  }
 }
 
 /**
@@ -509,7 +720,7 @@ async function evaluateResolverImport(
   }
 
   // Check if resolver supports imports
-  if (!resolver.capabilities.supportsImports) {
+  if (!resolver.capabilities.contexts.import) {
     const { ResolverError } = await import('@core/errors');
     throw ResolverError.unsupportedCapability(resolver.name, 'imports', 'import');
   }
@@ -562,9 +773,26 @@ async function evaluateResolverImport(
       exportData = await (resolver as any).getExportData();
     }
   } else {
-    // Fallback: create simple export with resolver result
-    const result = await resolver.resolve(`@${resolverName}`);
-    exportData = { value: result.content };
+    // Fallback: use resolver.resolve with import context
+    const requestedImports = directive.subtype === 'importSelected' 
+      ? (directive.values?.imports || []).map((imp: any) => imp.identifier)
+      : undefined;
+    
+    const result = await resolver.resolve(`@${resolverName}`, {
+      context: 'import',
+      requestedImports
+    });
+    
+    // If content is JSON string (data type), parse it
+    if (result.contentType === 'data' && typeof result.content === 'string') {
+      try {
+        exportData = JSON.parse(result.content);
+      } catch (e) {
+        exportData = { value: result.content };
+      }
+    } else {
+      exportData = { value: result.content };
+    }
   }
 
   // Convert export data to variables

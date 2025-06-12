@@ -341,7 +341,17 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     
     // Built-in functions removed - use @exec to define custom functions instead
     
-    const variable = env.getVariable(node.identifier);
+    let variable = env.getVariable(node.identifier);
+    
+    // Check if this is a resolver variable that needs async resolution
+    if (!variable && env.hasVariable(node.identifier)) {
+      // Try to get it as a resolver variable
+      const resolverVar = await env.getResolverVariable(node.identifier);
+      if (resolverVar) {
+        variable = resolverVar;
+      }
+    }
+    
     if (!variable) {
       // For interpolation variables, return empty if not found
       if (node.valueType === 'varInterpolation') {
@@ -586,7 +596,18 @@ export async function interpolate(
       const varName = node.identifier || node.name;
       if (!varName) continue;
       
-      const variable = env.getVariable(varName);
+      let variable = env.getVariable(varName);
+      
+      // Check if this is a resolver variable that needs async resolution
+      if (!variable && env.hasVariable(varName)) {
+        // Try to get it as a resolver variable
+        const resolverVar = await env.getResolverVariable(varName);
+        if (resolverVar) {
+          variable = resolverVar;
+        }
+      }
+      
+      
       if (!variable) {
         // TODO: Should we throw in strict mode?
         parts.push(`{{${varName}}}`); // Keep unresolved
@@ -601,6 +622,15 @@ export async function interpolate(
       } else if (isDataVariable(variable)) {
         // Handle both simple and complex data variables
         value = await resolveVariableValue(variable, env);
+        
+        // Special handling for lazy reserved variables like DEBUG
+        if (value === null && variable.metadata?.isReserved && variable.metadata?.isLazy) {
+          // Need to resolve this as a resolver variable
+          const resolverVar = await env.getResolverVariable(varName);
+          if (resolverVar && resolverVar.value !== null) {
+            value = resolverVar.value;
+          }
+        }
       } else if (isPathVariable(variable)) {
         // For path variables in interpolation, use the resolved path string
         value = variable.value.resolvedPath;

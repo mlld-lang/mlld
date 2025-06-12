@@ -1,10 +1,24 @@
-import { MlldError } from '@core/errors/MlldError';
+import { MlldError, ErrorSeverity, BaseErrorDetails } from '@core/errors/MlldError';
 import { ResolutionContext } from '@core/resolvers/types';
+
+/**
+ * Error codes for resolver operations
+ */
+export enum ResolverErrorCode {
+  NOT_FOUND = 'E_RESOLVER_NOT_FOUND',
+  UNSUPPORTED_CONTEXT = 'E_RESOLVER_UNSUPPORTED_CONTEXT',
+  UNSUPPORTED_CAPABILITY = 'E_RESOLVER_UNSUPPORTED_CAPABILITY', 
+  READONLY = 'E_RESOLVER_READONLY',
+  INVALID_FORMAT = 'E_RESOLVER_INVALID_FORMAT',
+  RESOLUTION_FAILED = 'E_RESOLVER_RESOLUTION_FAILED',
+  NAME_PROTECTED = 'E_RESOLVER_NAME_PROTECTED',
+  GENERIC = 'E_RESOLVER_ERROR'
+}
 
 /**
  * Error details for resolver operations
  */
-export interface ResolverErrorDetails {
+export interface ResolverErrorDetails extends BaseErrorDetails {
   /**
    * The resolver that generated the error
    */
@@ -52,8 +66,17 @@ export interface ResolverErrorDetails {
 export class ResolverError extends MlldError {
   public readonly details: ResolverErrorDetails;
 
-  constructor(message: string, details: ResolverErrorDetails = {}) {
-    super(message);
+  constructor(
+    message: string, 
+    code: ResolverErrorCode = ResolverErrorCode.GENERIC,
+    details: ResolverErrorDetails = {}
+  ) {
+    super(message, {
+      code,
+      severity: details.originalError ? ErrorSeverity.Fatal : ErrorSeverity.Recoverable,
+      details,
+      cause: details.originalError
+    });
     this.details = details;
     this.name = 'ResolverError';
   }

@@ -7,7 +7,6 @@ import {
   ResolverCapabilities
 } from '@core/resolvers/types';
 import { MlldResolutionError, MlldFileNotFoundError } from '@core/errors';
-import { TaintLevel } from '@security/taint/TaintTracker';
 import { IFileSystemService } from '@services/fs/IFileSystemService';
 
 /**
@@ -36,12 +35,11 @@ export class ProjectPathResolver implements Resolver {
   
   capabilities: ResolverCapabilities = {
     io: { read: true, write: false, list: false },
-    needs: { network: false, cache: false, auth: false },
     contexts: { import: true, path: true, output: false },
-    resourceType: 'function', // It's a function that returns the project path
+    supportedContentTypes: ['text', 'module'],
+    defaultContentType: 'text',
     priority: 1,
-    cache: { strategy: 'none' }, // Project path is static
-    supportedFormats: ['absolute', 'relative', 'basename']
+    cache: { strategy: 'none' } // Project path is static
   };
 
   constructor(private fileSystem: IFileSystemService) {
@@ -54,114 +52,149 @@ export class ProjectPathResolver implements Resolver {
   }
 
   /**
-   * Resolve a @PROJECTPATH reference to project file content
+   * Resolve a @PROJECTPATH reference
    */
   async resolve(ref: string, config?: ProjectPathResolverConfig): Promise<ResolverContent> {
     if (!config?.basePath) {
       throw new MlldResolutionError(
         'ProjectPathResolver requires basePath in configuration',
-        { reference: ref }
+        {}
       );
     }
 
-    // Extract the path after @PROJECTPATH or @.
-    let relativePath: string;
-    if (ref.startsWith('@PROJECTPATH/')) {
-      relativePath = ref.substring('@PROJECTPATH/'.length);
-    } else if (ref.startsWith('@PROJECTPATH')) {
-      relativePath = ref.substring('@PROJECTPATH'.length);
-    } else if (ref.startsWith('@./')) {
-      relativePath = ref.substring('@./'.length);
-    } else if (ref.startsWith('@.')) {
-      relativePath = ref.substring('@.'.length);
-    } else {
-      throw new MlldResolutionError(
-        `Invalid PROJECTPATH reference: ${ref}`,
-        { reference: ref }
-      );
+    // Variable context - return the project path as text
+    if (!config.context || config.context === 'variable') {
+      // If it's just @PROJECTPATH, return the base path
+      if (ref === '@PROJECTPATH' || ref === 'PROJECTPATH') {
+        return {
+          content: config.basePath,
+          contentType: 'text',
+          metadata: {
+            source: 'PROJECTPATH',
+            timestamp: new Date()
+          }
+        };
+      }
     }
 
-    // Remove leading slash if present
-    if (relativePath.startsWith('/')) {
-      relativePath = relativePath.substring(1);
-    }
+    // Path context - read the file content
+    if (config.context === 'path') {
+      // Extract the path after @PROJECTPATH or @.
+      let relativePath: string;
+      if (ref.startsWith('@PROJECTPATH/')) {
+        relativePath = ref.substring('@PROJECTPATH/'.length);
+      } else if (ref.startsWith('@PROJECTPATH')) {
+        relativePath = ref.substring('@PROJECTPATH'.length);
+      } else if (ref.startsWith('@./')) {
+        relativePath = ref.substring('@./'.length);
+      } else if (ref.startsWith('@.')) {
+        relativePath = ref.substring('@.'.length);
+      } else {
+        throw new MlldResolutionError(
+          `Invalid PROJECTPATH reference: ${ref}`,
+          {}
+        );
+      }
 
-    // Resolve full path relative to project root
-    const fullPath = path.resolve(config.basePath, relativePath);
+      // Remove leading slash if present
+      if (relativePath.startsWith('/')) {
+        relativePath = relativePath.substring(1);
+      }
 
-    // Security check: ensure the resolved path is within the project
-    const normalizedBasePath = path.resolve(config.basePath);
-    const normalizedFullPath = path.resolve(fullPath);
-    if (!normalizedFullPath.startsWith(normalizedBasePath)) {
-      throw new MlldResolutionError(
-        `Path outside project directory: ${relativePath}`,
-        { reference: ref, path: fullPath }
-      );
-    }
+      // If no path specified, just return the project path
+      if (!relativePath) {
+        return {
+          content: config.basePath,
+          contentType: 'text',
+          metadata: {
+            source: 'PROJECTPATH',
+            timestamp: new Date()
+          }
+        };
+      }
 
-    // Check if file exists
-    if (!await this.fileSystem.exists(fullPath)) {
-      // Try with .mld extension if no extension provided
-      if (!path.extname(fullPath)) {
-        const withMld = fullPath + '.mld';
-        if (await this.fileSystem.exists(withMld)) {
-          const content = await this.fileSystem.readFile(withMld);
-          const stats = await this.fileSystem.stat(withMld);
-          
-          return {
-            content,
-            contentInfo: {
-              path: withMld,
-              size: stats.size,
-              lastModified: stats.mtime,
-              contentType: 'text/plain',
-              encoding: 'utf-8',
+      // Resolve full path relative to project root
+      const fullPath = path.resolve(config.basePath, relativePath);
+
+      // Security check: ensure the resolved path is within the project
+      const normalizedBasePath = path.resolve(config.basePath);
+      const normalizedFullPath = path.resolve(fullPath);
+      if (!normalizedFullPath.startsWith(normalizedBasePath)) {
+        throw new MlldResolutionError(
+          `Path outside project directory: ${relativePath}`,
+          {}
+        );
+      }
+
+      // Check if file exists
+      if (!await this.fileSystem.exists(fullPath)) {
+        // Try with .mld extension if no extension provided
+        if (!path.extname(fullPath)) {
+          const withMld = fullPath + '.mld';
+          if (await this.fileSystem.exists(withMld)) {
+            const content = await this.fileSystem.readFile(withMld);
+            const contentType = await this.detectContentType(withMld, content);
+            
+            return {
+              content,
+              contentType,
               metadata: {
-                resolver: this.name,
-                source: 'projectpath',
+                source: withMld,
+                timestamp: new Date(),
                 originalRef: ref
               }
-            },
-            taintLevel: TaintLevel.Local
-          };
+            };
+          }
         }
+        
+        throw new MlldFileNotFoundError(
+          `File not found: ${fullPath}`,
+          { path: fullPath }
+        );
       }
-      
-      throw new MlldFileNotFoundError(
-        `File not found: ${fullPath}`,
-        { reference: ref, path: fullPath }
-      );
-    }
 
-    try {
-      // Read the file
-      const content = await this.fileSystem.readFile(fullPath);
-      
-      // Get file stats for metadata
-      const stats = await this.fileSystem.stat(fullPath);
+      try {
+        // Read the file
+        const content = await this.fileSystem.readFile(fullPath);
+        const contentType = await this.detectContentType(fullPath, content);
 
-      return {
-        content,
-        contentInfo: {
-          path: fullPath,
-          size: stats.size,
-          lastModified: stats.mtime,
-          contentType: 'text/plain',
-          encoding: 'utf-8',
+        return {
+          content,
+          contentType,
           metadata: {
-            resolver: this.name,
-            source: 'projectpath',
+            source: fullPath,
+            timestamp: new Date(),
             originalRef: ref
           }
-        },
-        taintLevel: TaintLevel.Local
-      };
-    } catch (error) {
-      throw new MlldFileNotFoundError(
-        `Failed to read file: ${fullPath}`,
-        { reference: ref, path: fullPath, cause: error }
-      );
+        };
+      } catch (error) {
+        throw new MlldFileNotFoundError(
+          `Failed to read file: ${fullPath}`,
+          { path: fullPath }
+        );
+      }
     }
+
+    // Import context - similar to path but validates module content
+    if (config.context === 'import') {
+      // For imports, delegate to path logic but ensure module validation
+      const result = await this.resolve(ref, { ...config, context: 'path' });
+      
+      // Validate that imported content is a module
+      if (result.contentType !== 'module') {
+        throw new MlldResolutionError(
+          `Import target is not a module: ${ref}`,
+          {}
+        );
+      }
+      
+      return result;
+    }
+
+    throw new MlldResolutionError(
+      `PROJECTPATH resolver does not support context: ${config.context}`,
+      {}
+    );
   }
 
   /**
@@ -196,45 +229,50 @@ export class ProjectPathResolver implements Resolver {
   }
 
   /**
-   * Get exportable data for imports
+   * Detect content type based on file extension and content
    */
-  async getExportData(format?: string, config?: ProjectPathResolverConfig): Promise<Record<string, any>> {
-    if (!config?.basePath) {
-      throw new MlldResolutionError(
-        'ProjectPathResolver requires basePath in configuration',
-        { reference: '@PROJECTPATH' }
-      );
+  private async detectContentType(filePath: string, content: string): Promise<'module' | 'data' | 'text'> {
+    // Check file extension
+    if (filePath.endsWith('.mld') || filePath.endsWith('.mlld')) {
+      return 'module';
     }
-
-    const projectPath = path.resolve(config.basePath);
+    if (filePath.endsWith('.json')) {
+      return 'data';
+    }
     
-    // For specific format imports
-    if (format && this.capabilities.supportedFormats?.includes(format)) {
-      let value: string;
-      switch (format) {
-        case 'absolute':
-          value = projectPath;
-          break;
-        case 'relative':
-          value = path.relative(process.cwd(), projectPath);
-          break;
-        case 'basename':
-          value = path.basename(projectPath);
-          break;
-        default:
-          value = projectPath;
+    // Try to detect mlld module content
+    try {
+      const { parse } = await import('@grammar/parser');
+      const result = await parse(content);
+      if (result.success && this.hasModuleExports(result.ast)) {
+        return 'module';
       }
-
-      return { [format]: value };
+    } catch {
+      // Not valid mlld
     }
-
-    // For import { * } from @PROJECTPATH
-    return {
-      path: projectPath,
-      absolute: projectPath,
-      relative: path.relative(process.cwd(), projectPath),
-      basename: path.basename(projectPath),
-      dirname: path.dirname(projectPath)
-    };
+    
+    // Try JSON
+    try {
+      JSON.parse(content);
+      return 'data';
+    } catch {
+      // Not JSON
+    }
+    
+    return 'text';
   }
+  
+  /**
+   * Check if AST has module exports
+   */
+  private hasModuleExports(ast: any): boolean {
+    // Check if there are any directive nodes (not just text/newlines)
+    if (!ast || !Array.isArray(ast)) return false;
+    
+    return ast.some(node => 
+      node && node.type === 'Directive' && 
+      ['text', 'data', 'exec', 'path'].includes(node.kind)
+    );
+  }
+
 }

@@ -213,8 +213,15 @@ export class ResolverManager {
     try {
       // 3. Resolve fresh from source
       const timeoutMs = options?.securityPolicy?.timeout || this.securityPolicy.timeout;
+      
+      // Merge registry config with options
+      const resolverConfig = {
+        ...registry?.config,
+        context: options?.context
+      };
+      
       const content = await this.withTimeout(
-        resolver.resolve(ref, registry?.config),
+        resolver.resolve(ref, resolverConfig),
         timeoutMs || 30000
       );
 

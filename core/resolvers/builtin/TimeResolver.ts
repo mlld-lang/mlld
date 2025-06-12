@@ -4,7 +4,7 @@ import {
   ResolverCapabilities,
   ResolverType
 } from '@core/resolvers/types';
-import { ResolverError } from '@core/errors';
+import { ResolverError, ResolverErrorCode } from '@core/errors';
 
 /**
  * Built-in resolver for time/date values with format support
@@ -16,22 +16,11 @@ export class TimeResolver implements Resolver {
   
   capabilities: ResolverCapabilities = {
     io: { read: true, write: false, list: false },
-    needs: { network: false, cache: false, auth: false },
-    contexts: { import: true, path: false, output: false },
-    resourceType: 'function',
+    contexts: { import: true, path: true, output: false },
+    supportedContentTypes: ['text', 'data'],
+    defaultContentType: 'text',
     priority: 1,
-    cache: { strategy: 'none' }, // TIME is always computed fresh
-    supportedFormats: [
-      'iso',
-      'unix', 
-      'date',
-      'time',
-      'datetime',
-      'YYYY-MM-DD',
-      'HH:mm:ss',
-      'YYYY-MM-DD HH:mm:ss',
-      'custom'
-    ]
+    cache: { strategy: 'none' } // TIME is always computed fresh
   };
 
   constructor() {
@@ -44,29 +33,57 @@ export class TimeResolver implements Resolver {
     return cleanRef === 'TIME' || cleanRef.startsWith('TIME/');
   }
 
-  async resolve(ref: string): Promise<ResolverContent> {
-    // Extract format from reference if provided
-    const cleanRef = ref.replace(/^@/, '');
-    const parts = cleanRef.split('/');
-    const format = parts.length > 1 ? parts.slice(1).join('/') : 'iso';
-
-    // Generate time based on format
-    const now = this.getMockedTime() || new Date();
-    const formattedTime = this.formatTime(now, format);
-
-    return {
-      content: formattedTime,
-      metadata: {
-        source: 'TIME',
-        timestamp: now
+  async resolve(ref: string, config?: any): Promise<ResolverContent> {
+    // Get mocked time if available
+    const currentTime = this.getMockedTime() || new Date();
+    
+    // Variable or path context - return ISO timestamp as text
+    if (!config?.context || config.context === 'variable' || config.context === 'path') {
+      return {
+        content: currentTime.toISOString(),
+        contentType: 'text',
+        metadata: {
+          source: 'TIME',
+          timestamp: currentTime
+        }
+      };
+    }
+    
+    // Import context - return structured data
+    if (config.context === 'import') {
+      const exports: Record<string, string> = {};
+      // If no specific imports requested, provide all common formats
+      const formats = config.requestedImports || ['iso', 'unix', 'date', 'time', 'datetime', 'timestamp'];
+      
+      for (const format of formats) {
+        exports[format] = this.formatTimestamp(currentTime, format);
       }
-    };
+      
+      return {
+        content: JSON.stringify(exports),
+        contentType: 'data',
+        metadata: {
+          source: 'TIME',
+          timestamp: currentTime
+        }
+      };
+    }
+    
+    throw new ResolverError(
+      'TIME resolver only supports variable and import contexts',
+      ResolverErrorCode.UNSUPPORTED_CONTEXT,
+      {
+        resolverName: this.name,
+        context: config?.context,
+        operation: 'resolve'
+      }
+    );
   }
 
   /**
    * Format time according to requested format
    */
-  private formatTime(date: Date, format: string): string {
+  private formatTimestamp(date: Date, format: string): string {
     // Handle named formats
     switch (format.toLowerCase()) {
       case 'iso':
@@ -94,27 +111,28 @@ export class TimeResolver implements Resolver {
    * Format date with custom format string
    */
   private formatCustom(date: Date, format: string): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    const milliseconds = String(date.getMilliseconds()).padStart(3, '0');
+    // Use UTC methods to avoid timezone issues
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    const milliseconds = String(date.getUTCMilliseconds()).padStart(3, '0');
 
     return format
       .replace(/YYYY/g, String(year))
       .replace(/YY/g, String(year).slice(-2))
       .replace(/MM/g, month)
-      .replace(/M/g, String(date.getMonth() + 1))
+      .replace(/M/g, String(date.getUTCMonth() + 1))
       .replace(/DD/g, day)
-      .replace(/D/g, String(date.getDate()))
+      .replace(/D/g, String(date.getUTCDate()))
       .replace(/HH/g, hours)
-      .replace(/H/g, String(date.getHours()))
+      .replace(/H/g, String(date.getUTCHours()))
       .replace(/mm/g, minutes)
-      .replace(/m/g, String(date.getMinutes()))
+      .replace(/m/g, String(date.getUTCMinutes()))
       .replace(/ss/g, seconds)
-      .replace(/s/g, String(date.getSeconds()))
+      .replace(/s/g, String(date.getUTCSeconds()))
       .replace(/SSS/g, milliseconds);
   }
 
@@ -133,27 +151,6 @@ export class TimeResolver implements Resolver {
     return null;
   }
 
-  /**
-   * Get exportable data for imports
-   */
-  async getExportData(format?: string): Promise<Record<string, any>> {
-    // For import { "format" as alias } from @TIME
-    if (format && this.capabilities.supportedFormats?.includes(format)) {
-      const result = await this.resolve(`@TIME/${format}`);
-      return { [format]: result.content };
-    }
-
-    // For import { * } from @TIME - return common formats
-    const commonFormats = ['iso', 'unix', 'date', 'time', 'datetime'];
-    const data: Record<string, string> = {};
-    
-    for (const fmt of commonFormats) {
-      const result = await this.resolve(`@TIME/${fmt}`);
-      data[fmt] = result.content;
-    }
-    
-    return data;
-  }
 
   /**
    * Get default value for when TIME is used as a variable
