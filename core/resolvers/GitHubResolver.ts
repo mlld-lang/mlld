@@ -546,8 +546,12 @@ export class GitHubResolver implements Resolver {
    * Check if AST has module exports
    */
   private hasModuleExports(ast: any): boolean {
-    // Simple check - if there are any variable definitions, it could be a module
-    // In a real implementation, would need more sophisticated checks
-    return ast && ast.length > 0;
+    // Check if there are any directive nodes (not just text/newlines)
+    if (!ast || !Array.isArray(ast)) return false;
+    
+    return ast.some(node => 
+      node && node.type === 'Directive' && 
+      ['text', 'data', 'exec', 'path'].includes(node.kind)
+    );
   }
 }
