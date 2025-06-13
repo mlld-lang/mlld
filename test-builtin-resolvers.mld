@@ -1,0 +1,13 @@
+# Test built-in resolvers
+
+## TIME resolver test
+@import { iso, unix } from @TIME
+@add @iso
+@add @unix
+
+## DEBUG resolver test  
+@data debug = @DEBUG
+@add @debug.mlld.version
+
+## INPUT resolver test
+@import { * } from @INPUT

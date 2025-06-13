@@ -121,6 +121,77 @@ async function importFromPath(
       }
     }
     
+    // Check if this is a JSON file
+    const isJsonFile = resolvedPath.endsWith('.json');
+    
+    // Special handling for JSON files
+    if (isJsonFile) {
+      try {
+        const jsonData = JSON.parse(content);
+        let moduleObject: Record<string, any> = {};
+        
+        // Convert JSON properties to module exports
+        if (typeof jsonData === 'object' && jsonData !== null && !Array.isArray(jsonData)) {
+          moduleObject = jsonData;
+        } else {
+          // Non-object JSON (array, string, number, etc.) - store as 'content'
+          moduleObject = { content: jsonData };
+        }
+        
+        // Handle variable merging based on import type
+        if (directive.subtype === 'importAll') {
+          // Import all properties
+          for (const [name, value] of Object.entries(moduleObject)) {
+            env.setVariable(name, {
+              type: 'data',
+              identifier: name,
+              value: value,
+              nodeId: '',
+              location: { line: 0, column: 0 },
+              metadata: {
+                isImported: true,
+                importPath: resolvedPath,
+                definedAt: { line: 0, column: 0, filePath: resolvedPath }
+              }
+            });
+          }
+        } else if (directive.subtype === 'importSelected') {
+          // Import selected properties
+          const imports = directive.values?.imports || [];
+          for (const importNode of imports) {
+            const varName = importNode.identifier;
+            if (varName in moduleObject) {
+              const targetName = importNode.alias || varName;
+              env.setVariable(targetName, {
+                type: 'data',
+                identifier: targetName,
+                value: moduleObject[varName],
+                nodeId: '',
+                location: { line: 0, column: 0 },
+                metadata: {
+                  isImported: true,
+                  importPath: resolvedPath,
+                  definedAt: { line: 0, column: 0, filePath: resolvedPath }
+                }
+              });
+            } else {
+              const availableExports = Object.keys(moduleObject);
+              throw new Error(
+                `Variable '${varName}' not found in module exports from ${resolvedPath}. ` +
+                `Available exports: ${availableExports.join(', ')}`
+              );
+            }
+          }
+        }
+        
+        return { value: undefined, env };
+      } catch (error) {
+        if (error instanceof SyntaxError) {
+          throw new Error(`Invalid JSON in file '${resolvedPath}': ${error.message}`);
+        }
+        throw error;
+      }
+    }
     
     // Handle section extraction if specified
     let processedContent = content;
@@ -387,15 +458,6 @@ export async function evaluateImport(
       } else if (varRef.identifier === 'stdin') {
         // Silently handle @stdin for backward compatibility
         return await evaluateInputImport(directive, env);
-      }
-    }
-    
-    // Check if this is a direct resolver import (e.g., @TIME, @DEBUG, @PROJECTPATH)
-    const resolverManager = env.getResolverManager();
-    if (resolverManager && content.startsWith('@')) {
-      const resolverName = content.substring(1); // Remove @ prefix
-      if (resolverManager.isResolverName(resolverName)) {
-        return await evaluateResolverImport(directive, resolverName, env);
       }
     }
   }
