@@ -11,6 +11,7 @@ import { createAuthCommand } from './commands/auth';
 import { createPublishCommand } from './commands/publish';
 import { createInitModuleCommand } from './commands/init-module';
 import { createAddNeedsCommand } from './commands/add-needs';
+import { createSetupCommand } from './commands/setup';
 import { envCommand } from './commands/env';
 import chalk from 'chalk';
 import { version } from '@core/version';
@@ -144,7 +145,7 @@ function parseArgs(args: string[]): CLIOptions {
   };
 
   // Commands that can have subcommands (and should stop parsing)
-  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 'env'];
+  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 'setup', 'env'];
   
   // Store remaining args after command
   options._ = [];
@@ -1275,6 +1276,14 @@ Examples:
       const addNeedsCmd = createAddNeedsCommand();
       const cmdArgs = cliOptions._ || [];
       await addNeedsCmd.execute(cmdArgs, parseFlags(cmdArgs));
+      return;
+    }
+    
+    // Handle setup command
+    if (cliOptions.input === 'setup') {
+      const setupCmd = createSetupCommand();
+      const cmdArgs = cliOptions._ || [];
+      await setupCmd.execute(cmdArgs, parseFlags(cmdArgs));
       return;
     }
     
