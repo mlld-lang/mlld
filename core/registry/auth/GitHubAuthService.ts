@@ -100,7 +100,15 @@ export class GitHubAuthService {
       });
     }
     const { Octokit } = await this.getOctokitModule();
-    return new Octokit({ auth: token });
+    return new Octokit({ 
+      auth: token,
+      log: {
+        debug: () => {},
+        info: () => {},
+        warn: console.warn,
+        error: console.error
+      }
+    });
   }
 
   /**
@@ -113,7 +121,15 @@ export class GitHubAuthService {
 
       // Validate token with GitHub API
       const { Octokit } = await this.getOctokitModule();
-      const octokit = new Octokit({ auth: token });
+      const octokit = new Octokit({ 
+        auth: token,
+        log: {
+          debug: () => {},
+          info: () => {},
+          warn: console.warn,
+          error: console.error
+        }
+      });
       await octokit.users.getAuthenticated();
       return true;
     } catch {
@@ -365,7 +381,15 @@ export class GitHubAuthService {
           
           // Get user info
           const { Octokit } = await this.getOctokitModule();
-          const octokit = new Octokit({ auth: data.access_token });
+          const octokit = new Octokit({ 
+            auth: data.access_token,
+            log: {
+              debug: () => {},
+              info: () => {},
+              warn: console.warn,
+              error: console.error
+            }
+          });
           const { data: user } = await octokit.users.getAuthenticated();
           
           return {
