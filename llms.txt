@@ -95,6 +95,7 @@ Remember: "Double brackets, double braces"
 - String literals: `@text msg = "Hello @name"` - @name is NOT interpolated (literal text)
 - Command context: `[(echo "Hello @name")]` - @name IS interpolated (variable value)
 - Template context: `[[Hello {{name}}]]` - {{name}} is interpolated
+- Backtick templates: `` `Hello @name!` `` - @name IS interpolated (simpler syntax)
 
 ### 6. Field Access Rules
 ```mlld
@@ -205,6 +206,13 @@ When you need utility functions, create them with @exec instead of trying to wor
 # For bash operations
 @exec countFiles(dir) = @run [(find @dir -type f | wc -l)]
 @data fileCount = @countFiles("./src")
+
+# Shadow Environment: Make functions available to each other (JavaScript/Node.js only)
+@exec js = { join, capitalize, fileList }  # These can now call each other!
+@run js [(  
+  // Now join() and capitalize() are available here
+  capitalize(join(["hello", "world"], " "))
+)]  # Returns: "Hello world"
 ```
 
 Remember: If you're wishing mlld had a feature, you can probably create it as a helper function!
@@ -220,8 +228,25 @@ Remember: If you're wishing mlld had a feature, you can probably create it as a 
 ### Reserved Variables
 ```mlld
 @add [[Current time: {{TIME}}]]        # Current timestamp
-@add [[Input data: {{INPUT.config}}]]  # Access stdin/env vars
+@add [[Input data: {{INPUT.config}}]]  # Access stdin/env vars  
 @add [[Project root: {{PROJECTPATH}}]] # Project directory
+@add @DEBUG                            # Show extensive debug info
+```
+
+### Environment Variables
+Environment variables require explicit permission in `mlld.lock.json`:
+```json
+{
+  "security": {
+    "allowedEnv": ["NODE_ENV", "API_KEY", "GITHUB_TOKEN"]
+  }
+}
+```
+
+Then access them via @INPUT:
+```mlld
+@import { NODE_ENV, API_KEY } from @INPUT
+@add [[Running in {{NODE_ENV}} mode with API access]]
 ```
 
 
@@ -414,11 +439,11 @@ mlld shines when orchestrating external tools and data. Here are patterns that s
 
 ### Pattern 3: Conditional Workflows
 ```mlld
-# Different actions based on environment
-@data env = @run [(echo $NODE_ENV)]
+# Environment variables via @INPUT (requires mlld.lock.json allowedEnv)
+@import { NODE_ENV, API_KEY } from @INPUT
 
 @exec loadConfig(env) = @run [(cat "./config/@env.json")]
-@data config = @loadConfig(@env)
+@data config = @loadConfig(@NODE_ENV)
 
 @when @config.debug => @add [[Debug mode enabled]]
 ```
@@ -604,6 +629,7 @@ Understanding where different variable syntaxes work is crucial:
 | Context | Syntax | Example | Notes |
 |---------|--------|---------|-------|
 | Templates `[[...]]` | `{{variable}}` | `[[Hello {{name}}!]]` | Double brackets, double braces |
+| Backtick templates | `@variable` | `` `Hello @name!` `` | Simpler template syntax |
 | Commands `[...]` | `@variable` | `[echo "@message"]` | @ prefix for interpolation |
 | JavaScript | Plain names | `[(array.join(sep))]` | Parameters are JS variables |
 | String literals | No interpolation | `"Hello @name"` | @name is literal text |
@@ -611,6 +637,7 @@ Understanding where different variable syntaxes work is crucial:
 
 ### Key Rules:
 - **In templates**: Always use `{{variable}}` or `{{object.field}}`
+- **In backtick templates**: Use `@variable` or `@object.field`
 - **In commands**: Always use `@variable` or `@object.field`
 - **In JavaScript**: Parameters become plain JavaScript variables
 - **String assignments**: Variables are NOT interpolated (they're literals)

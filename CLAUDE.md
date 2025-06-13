@@ -108,16 +108,23 @@ const identifier = await interpolate(identifierNodes, env);
 - `@` symbols in templates are literal characters
 - Directives inside templates are NOT executed - they're literal text
 - Field access: `{{user.name}}` or `{{items.0.value}}`
+- Backtick templates: `` `text with @var interpolation` `` - simpler alternative to `[[text with {{var}}]]`
 
 ### Exec Commands
 - `@exec name(params) = @run [(command)]` - Defines a reusable command
 - `@run @name(args)` - Executes the defined command
 - Parameters are referenced with `@param` inside the command definition
+- Shadow environments: `@exec js = { func1, func2 }` - Makes functions available to call from JS code
+  - Functions can call each other within @run js blocks
+  - Supports js and node (python/sh have grammar support but pending implementation)
 
 ### Import Syntax
 - File imports: `@import { var1, var2 } from "path/to/file.mld"`
 - Import all: `@import { * } from "path/to/file.mld"`
 - Module imports: `@import { func1, func2 } from @author/module`
+- Environment variables: `@import { GITHUB_TOKEN, NODE_ENV } from @INPUT`
+  - Requires variables to be listed in `mlld.lock.json` security.allowedEnv
+  - mlld validates required env vars exist at startup
 - Paths are relative to the importing file's directory
 - Modules use @ prefix for registry modules and private resolvers (no quotes)
 
@@ -152,6 +159,14 @@ const identifier = await interpolate(identifierNodes, env);
 - Modules are cached locally in `.mlld-cache/`
 - Lock file: `mlld.lock.json` ensures reproducible installs
 - Publishing: See `docs/registering-modules.md`
+
+### Environment Variables
+- Manage allowed env vars: `mlld env allow GITHUB_TOKEN NODE_ENV`
+- List allowed vars: `mlld env list` 
+- Remove access: `mlld env remove GITHUB_TOKEN`
+- Stored in `mlld.lock.json` under `security.allowedEnv`
+- Import in files: `@import { GITHUB_TOKEN } from @INPUT`
+- Fail-fast: mlld validates required vars exist at startup
 
 ### With Clauses (when merged from feature branch)
 - Transform output: `@run [cmd] with { pipeline: [@transform1, @transform2] }`
