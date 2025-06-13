@@ -298,6 +298,11 @@ export class PublishCommand {
               // Handle PR creation for private repos if requested
               if (options.pr) {
                 console.log(chalk.blue('\n🔀 Creating pull request to registry...'));
+                console.log(chalk.gray('   This process uses GitHub\'s fork-based workflow:'));
+                console.log(chalk.gray(`   1. Checking/creating your fork: ${user.login}/registry`));
+                console.log(chalk.gray('   2. Creating your author directory if needed'));
+                console.log(chalk.gray('   3. Updating your module entry'));
+                console.log(chalk.gray('   4. Submitting PR to: mlld-lang/registry\n'));
                 const prUrl = await this.createRegistryPR(octokit, user, registryEntry, options);
                 console.log(chalk.green(`\n✅ Pull request created: ${prUrl}`));
               }
@@ -305,7 +310,7 @@ export class PublishCommand {
               // Success message for private publishing
               console.log(chalk.green('\n✅ Module published to private repository!'));
               console.log(chalk.bold('Module location:'));
-              console.log(`  Path: ${path.join(options.path || 'mlld/modules', filename)}`);
+              console.log(`  Path: ${path.join(options.path || 'llm/modules', filename)}`);
               console.log(`  Import: @import { ... } from "${sourceUrl}"`);
               if (!options.pr) {
                 console.log(chalk.gray('\n💡 Tip: Team members with repo access can now import this module directly.'));
@@ -334,6 +339,11 @@ export class PublishCommand {
                 // Handle PR creation for private repos if requested
                 if (options.pr) {
                   console.log(chalk.blue('\n🔀 Creating pull request to registry...'));
+                  console.log(chalk.gray('   This process uses GitHub\'s fork-based workflow:'));
+                  console.log(chalk.gray(`   1. Checking/creating your fork: ${user.login}/registry`));
+                  console.log(chalk.gray('   2. Creating your author directory if needed'));
+                  console.log(chalk.gray('   3. Updating your module entry'));
+                  console.log(chalk.gray('   4. Submitting PR to: mlld-lang/registry\n'));
                   const prUrl = await this.createRegistryPR(octokit, user, registryEntry, options);
                   console.log(chalk.green(`\n✅ Pull request created: ${prUrl}`));
                 }
@@ -341,7 +351,7 @@ export class PublishCommand {
                 // Success message for private publishing
                 console.log(chalk.green('\n✅ Module published to private repository!'));
                 console.log(chalk.bold('Module location:'));
-                console.log(`  Path: ${path.join(options.path || 'mlld/modules', filename)}`);
+                console.log(`  Path: ${path.join(options.path || 'llm/modules', filename)}`);
                 console.log(`  Import: @import { ... } from "${sourceUrl}"`);
                 if (!options.pr) {
                   console.log(chalk.gray('\n💡 Tip: Team members with repo access can now import this module directly.'));
@@ -576,6 +586,11 @@ export class PublishCommand {
 
       // Create pull request to registry
       console.log(chalk.blue('\n🔀 Creating pull request to registry...'));
+      console.log(chalk.gray('   This process uses GitHub\'s fork-based workflow:'));
+      console.log(chalk.gray(`   1. Checking/creating your fork: ${user.login}/registry`));
+      console.log(chalk.gray('   2. Creating your author directory if needed'));
+      console.log(chalk.gray('   3. Updating your module entry'));
+      console.log(chalk.gray('   4. Submitting PR to: mlld-lang/registry\n'));
       const prUrl = await this.createRegistryPR(octokit, user, registryEntry, options);
       
       console.log(chalk.green('\n✅ Module published successfully!\n'));
@@ -1476,6 +1491,8 @@ Auto-added by mlld publish command`;
     };
     let registryFile: any;
     
+    // Check if user's registry exists (404 is normal for first module)
+    let registryExists = false;
     try {
       const { data } = await octokit.repos.getContent({
         owner: user.login,
@@ -1486,10 +1503,17 @@ Auto-added by mlld publish command`;
       if ('content' in data) {
         registryFile = data;
         userRegistry = JSON.parse(Buffer.from(data.content, 'base64').toString());
+        registryExists = true;
+        console.log(chalk.gray(`   ✓ Found existing registry with ${Object.keys(userRegistry.modules || {}).length} modules`));
       }
-    } catch (error) {
-      // User's registry.json doesn't exist yet
-      console.log(chalk.gray(`Creating new registry for @${entry.author}...`));
+    } catch (error: any) {
+      // User's registry.json doesn't exist yet - this is normal
+      if (error.status === 404) {
+        console.log(chalk.green(`   🎉 Publishing your first module. Welcome to mlld!`));
+      } else {
+        // Some other error
+        console.log(chalk.gray(`   ℹ Registry check failed, will create new one`));
+      }
     }
     
     // Add or update module entry in user's registry
@@ -1604,7 +1628,7 @@ ${options.message ? `\n## Notes\n${options.message}` : ''}`,
     filename: string,
     options: PublishOptions
   ): Promise<{ sourceUrl: string; registryEntry: any }> {
-    const modulePath = options.path || 'mlld/modules';
+    const modulePath = options.path || 'llm/modules';
     const fullPath = path.join(gitInfo.gitRoot!, modulePath, filename);
     
     console.log(chalk.blue(`\n📁 Publishing to private repository...`));

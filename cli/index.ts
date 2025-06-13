@@ -11,6 +11,7 @@ import { createAuthCommand } from './commands/auth';
 import { createPublishCommand } from './commands/publish';
 import { createInitModuleCommand } from './commands/init-module';
 import { createAddNeedsCommand } from './commands/add-needs';
+import { envCommand } from './commands/env';
 import chalk from 'chalk';
 import { version } from '@core/version';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
@@ -143,7 +144,7 @@ function parseArgs(args: string[]): CLIOptions {
   };
 
   // Commands that can have subcommands (and should stop parsing)
-  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps'];
+  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 'env'];
   
   // Store remaining args after command
   options._ = [];
@@ -547,6 +548,31 @@ Aliases:
     return;
   }
   
+  if (command === 'env') {
+    console.log(`
+Usage: mlld env <subcommand> [options]
+
+Manage environment variables allowed in @INPUT.
+
+Subcommands:
+  list                    List allowed environment variables
+  allow <name> [...]      Allow environment variable(s) in @INPUT
+  remove <name> [...]     Remove environment variable(s) from allowed list
+  clear                   Clear all allowed environment variables
+
+Examples:
+  mlld env list           # Show currently allowed variables
+  mlld env allow API_KEY  # Allow API_KEY to be accessed via @INPUT
+  mlld env allow HOME USER PATH  # Allow multiple variables
+  mlld env remove API_KEY # Remove API_KEY from allowed list
+  mlld env clear          # Clear all allowed variables
+
+Note: Environment variables are only accessible via @INPUT when explicitly
+allowed. The allowed list is stored in mlld.lock.json.
+    `);
+    return;
+  }
+  
   if (command === 'debug-resolution') {
     console.log(`
 Usage: mlld debug-resolution [options] <input-file>
@@ -587,6 +613,7 @@ Usage: mlld [command] [options] <input-file>
 Commands:
   init                    Create a new mlld module
   add-needs, needs, deps  Analyze and update module dependencies
+  env                     Manage environment variables allowed in @INPUT
   install, i              Install mlld modules
   ls, list               List installed modules
   info, show             Show module details
@@ -1248,6 +1275,13 @@ Examples:
       const addNeedsCmd = createAddNeedsCommand();
       const cmdArgs = cliOptions._ || [];
       await addNeedsCmd.execute(cmdArgs, parseFlags(cmdArgs));
+      return;
+    }
+    
+    // Handle env command
+    if (cliOptions.input === 'env') {
+      const cmdArgs = cliOptions._ || [];
+      await envCommand({ _: cmdArgs });
       return;
     }
     

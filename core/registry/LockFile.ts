@@ -25,6 +25,7 @@ export interface LockFileData {
     approvedImports?: Record<string, any>;
     blockedPatterns?: string[];
     trustedDomains?: string[];
+    allowedEnvVars?: string[];
   };
 }
 
@@ -205,5 +206,49 @@ export class LockFile {
     this.data.security.policies = policy;
     this.isDirty = true;
     await this.save();
+  }
+
+  // Environment variable management methods
+  getAllowedEnvVars(): string[] {
+    return this.data.security?.allowedEnvVars || [];
+  }
+
+  async addAllowedEnvVar(varName: string): Promise<void> {
+    if (!this.data.security) {
+      this.data.security = {};
+    }
+    if (!this.data.security.allowedEnvVars) {
+      this.data.security.allowedEnvVars = [];
+    }
+    
+    // Only add if not already present
+    if (!this.data.security.allowedEnvVars.includes(varName)) {
+      this.data.security.allowedEnvVars.push(varName);
+      this.isDirty = true;
+      await this.save();
+    }
+  }
+
+  async removeAllowedEnvVar(varName: string): Promise<void> {
+    if (this.data.security?.allowedEnvVars) {
+      const index = this.data.security.allowedEnvVars.indexOf(varName);
+      if (index !== -1) {
+        this.data.security.allowedEnvVars.splice(index, 1);
+        this.isDirty = true;
+        await this.save();
+      }
+    }
+  }
+
+  async clearAllowedEnvVars(): Promise<void> {
+    if (this.data.security?.allowedEnvVars) {
+      this.data.security.allowedEnvVars = [];
+      this.isDirty = true;
+      await this.save();
+    }
+  }
+
+  hasAllowedEnvVarsConfigured(): boolean {
+    return (this.data.security?.allowedEnvVars && this.data.security.allowedEnvVars.length > 0) || false;
   }
 }

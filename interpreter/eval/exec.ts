@@ -253,12 +253,29 @@ function createExecWrapper(
       const codeParams: Record<string, any> = {};
       for (let i = 0; i < params.length; i++) {
         const paramName = params[i];
-        const argValue = args[i];
+        let argValue = args[i];
         if (argValue !== undefined) {
+          // Ensure we await any promises in arguments
+          argValue = argValue instanceof Promise ? await argValue : argValue;
+          
+          // Try to parse numeric values
+          if (typeof argValue === 'string') {
+            const numValue = Number(argValue);
+            if (!isNaN(numValue) && argValue.trim() !== '') {
+              // If it's a valid number, use the numeric value
+              argValue = numValue;
+            }
+          }
+          
           codeParams[paramName] = argValue;
         }
       }
       
+      // Debug logging
+      // Note: Don't use console.log in exec functions as it's captured
+      // if (process.env.MLLD_DEBUG) {
+      //   console.log(`Executing ${execName} with:`, { code, params: codeParams });
+      // }
       // Execute the code with parameters
       result = await execEnv.executeCode(
         code,

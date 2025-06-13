@@ -16,5 +16,8 @@
       "integrity": "sha256:589f373c62eb77ba294eed612a8b3f88a394778f8db40effaa686b812a7f2677",
       "approvedAt": "2025-06-10T14:00:42.575Z"
     }
+  },
+  "security": {
+    "allowedEnvVars": []
   }
 }

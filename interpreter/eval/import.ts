@@ -368,13 +368,26 @@ export async function evaluateImport(
   }
   
   // Check for special stdin import (@stdin, @INPUT, or @input)
-  if (pathNodes.length === 1 && pathNodes[0].type === 'Text') {
-    const content = pathNodes[0].content;
-    if (content === '@INPUT' || content === '@input') {
-      return await evaluateInputImport(directive, env);
-    } else if (content === '@stdin') {
-      // Silently handle @stdin for backward compatibility
-      return await evaluateInputImport(directive, env);
+  // Handle cases where the path might have multiple nodes (e.g., VariableReference + newline Text)
+  if (pathNodes.length >= 1) {
+    const firstNode = pathNodes[0];
+    if (firstNode.type === 'Text') {
+      const content = firstNode.content;
+      if (content === '@INPUT' || content === '@input') {
+        return await evaluateInputImport(directive, env);
+      } else if (content === '@stdin') {
+        // Silently handle @stdin for backward compatibility
+        return await evaluateInputImport(directive, env);
+      }
+    } else if (firstNode.type === 'VariableReference') {
+      // Handle case where @INPUT is parsed as a VariableReference
+      const varRef = firstNode as any;
+      if (varRef.identifier === 'INPUT' || varRef.identifier === 'input') {
+        return await evaluateInputImport(directive, env);
+      } else if (varRef.identifier === 'stdin') {
+        // Silently handle @stdin for backward compatibility
+        return await evaluateInputImport(directive, env);
+      }
     }
   }
   
@@ -480,14 +493,16 @@ async function evaluateInputImport(
   const inputVariable = env.getVariable('INPUT');
   let inputData: any = null;
   
-  if (inputVariable) {
+  if (inputVariable && inputVariable.value !== null) {
     // Use the merged @INPUT variable (includes env vars + stdin)
     inputData = inputVariable.value;
   } else {
     // Fallback to raw stdin for legacy @stdin imports or if no @INPUT
     const rawStdinContent = env.getRawStdinContent();
     if (!rawStdinContent) {
-      throw new Error('No input data available. @stdin/@INPUT imports require data to be provided via stdin.');
+      // Check if there are any environment variables available
+      // This ensures @INPUT works even without stdin if env vars are allowed
+      throw new Error('No input data available. @stdin/@INPUT imports require data to be provided via stdin or allowed environment variables.');
     }
     
     // Try to parse raw stdin as JSON

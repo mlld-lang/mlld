@@ -869,18 +869,37 @@ export class Environment {
    * Get environment variables if enabled
    */
   private getEnvironmentVariables(): Record<string, string> {
-    // TODO: Add config support for allow_env_vars (defaults to true for now)
-    const allowEnvVars = true;
+    // Get lock file from root environment
+    let lockFile: LockFile | undefined;
+    let currentEnv: Environment | undefined = this;
     
-    if (!allowEnvVars) {
+    // Walk up to root environment to find lock file
+    while (currentEnv) {
+      if (!currentEnv.parent && currentEnv.resolverManager) {
+        // Try to get lock file from resolver manager (root environment)
+        const resolver = currentEnv.resolverManager as any;
+        if (resolver.lockFile) {
+          lockFile = resolver.lockFile;
+          break;
+        }
+      }
+      currentEnv = currentEnv.parent;
+    }
+    
+    // If no lock file or no allowed vars configured, return empty
+    if (!lockFile || !lockFile.hasAllowedEnvVarsConfigured()) {
       return {};
     }
     
+    // Get allowed environment variable names
+    const allowedVars = lockFile.getAllowedEnvVars();
     const envVars: Record<string, string> = {};
     
-    for (const [key, value] of Object.entries(process.env)) {
+    // Only include allowed environment variables
+    for (const varName of allowedVars) {
+      const value = process.env[varName];
       if (value !== undefined) {
-        envVars[key] = value;
+        envVars[varName] = value;
       }
     }
     
@@ -1146,9 +1165,49 @@ export class Environment {
         }
         
         // Create and execute the function
-        const fn = new Function(...allParamNames, functionBody);
-        let result = fn(...allParamValues);
+        // If we have shadow environment functions (which are async), we need to handle them specially
+        const hasAsyncShadowFunctions = shadowEnv && shadowEnv.size > 0;
+        let result;
         
+        if (hasAsyncShadowFunctions) {
+          // Wrap the code to automatically await shadow function calls
+          // First, identify which parameters are shadow functions
+          const shadowFunctionNames = new Set<string>();
+          if (shadowEnv) {
+            for (const [name] of shadowEnv) {
+              shadowFunctionNames.add(name);
+            }
+          }
+          
+          // Create a wrapper that awaits all shadow function calls
+          const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+          
+          // Transform the function body to await shadow function calls
+          let asyncFunctionBody = functionBody;
+          
+          // Simple regex-based transformation to add await before shadow function calls
+          // This is a simple approach that works for most cases
+          for (const funcName of shadowFunctionNames) {
+            // Match function calls like funcName(...) but not inside strings
+            const regex = new RegExp(`\\b(${funcName})\\s*\\(`, 'g');
+            asyncFunctionBody = asyncFunctionBody.replace(regex, `await $1(`);
+          }
+          
+          // Debug: Log the transformed code
+          // Note: Don't use console.log here as it's captured by the executeCode function
+          // if (process.env.MLLD_DEBUG) {
+          //   console.log('Shadow function transformation:');
+          //   console.log('Original:', functionBody);
+          //   console.log('Transformed:', asyncFunctionBody);
+          // }
+          
+          const fn = new AsyncFunction(...allParamNames, asyncFunctionBody);
+          result = await fn(...allParamValues);
+        } else {
+          // No shadow functions, use regular function
+          const fn = new Function(...allParamNames, functionBody);
+          result = fn(...allParamValues);
+        }
         // Handle promises - await them if returned
         if (result instanceof Promise) {
           result = await result;
@@ -1164,6 +1223,9 @@ export class Environment {
         
         return result !== undefined ? String(result) : '';
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorDetails = `Code execution failed: ${errorMessage}\nCode: ${code}\nParameters: ${JSON.stringify(params || {})}`;
+        
         if (context?.sourceLocation) {
           const codeError = new MlldCommandExecutionError(
             `Code execution failed: ${language}`,
@@ -1172,14 +1234,14 @@ export class Environment {
               command: `${language} code execution`,
               exitCode: 1,
               duration: Date.now() - startTime,
-              stderr: error instanceof Error ? error.message : 'Unknown error',
+              stderr: errorDetails,
               workingDirectory: await this.getProjectPath(),
               directiveType: context.directiveType || 'run'
             }
           );
           throw codeError;
         }
-        throw new Error(`Code execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(errorDetails);
       }
     } else if (language === 'node' || language === 'nodejs') {
       try {

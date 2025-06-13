@@ -180,15 +180,15 @@ mlld publish my-module.mld.md --private --pr
 ```
 
 Private publishing:
-- Stores modules in `mlld/modules/` (or custom path)
+- Stores modules in `llm/modules/` (or custom path)
 - Creates `manifest.json` for team discovery
 - Commits and pushes to your repository
 - No public registry PR by default
 
 Team members import using file paths:
 ```mlld
-@import { utils } from "./mlld/modules/utils.mld.md"
-@import { shared } from "../other-repo/mlld/modules/shared.mld.md"
+@import { utils } from "./llm/modules/utils.mld.md"
+@import { shared } from "../other-repo/llm/modules/shared.mld.md"
 ```
 
 ### Manual Registry Registration

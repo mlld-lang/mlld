@@ -5,6 +5,34 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0]
+Added:
+- Environment variable access control via `mlld.lock.json` security settings
+- New `mlld env` CLI command to manage allowed environment variables:
+  - `mlld env list` - List allowed environment variables and their status
+  - `mlld env allow VAR1 VAR2` - Add variables to allowed list
+  - `mlld env remove VAR1` - Remove from allowed list
+  - `mlld env clear` - Clear all allowed variables
+- Environment variables now accessible through @INPUT when explicitly allowed
+- Private repository publishing for teams:
+  - `mlld publish --private` to skip prompts and publish directly to private repo
+  - `--path` flag to specify custom directory (default: llm/modules/)
+  - `--pr` flag to create registry PR even for private modules
+  - Interactive choice when detecting private repos with write access
+  - Auto-generated manifest.json for team module discovery
+- Improved publishing UX:
+  - Clear explanation of fork-based workflow during publishing
+  - Friendly welcome message for first-time publishers
+  - Better feedback for expected 404 errors during registry operations
+- Shadow environment syntax for @exec: `@exec js = { helperA, helperB }`
+  - Allows injecting helper functions into JavaScript execution contexts
+  - Functions are accessible in all @run js commands within the same scope
+
+Fixed:
+- Shadow environment functions in @exec now properly handle async/await
+- Numeric parameters in @exec functions are now correctly converted from strings
+- Suppressed Octokit debug logging in CLI commands for cleaner output
+
 ## [1.3.4]
 Added:
 - Made keytar installation optional for npx purposes
@@ -74,7 +102,7 @@ Fixed:
 - Made llmxml shut up (copious logging)
 
 Added:
-- #238 Support for backtick templates with @var interpolation
+- #238 Support for backtick templates with @var interpolation like: "@add `my var is @var`"
 
 ## [1.0.3]
 
