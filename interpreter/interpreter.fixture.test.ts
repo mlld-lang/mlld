@@ -152,7 +152,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'exec-param-interpolation': 'Parser bug: escaped @ symbols in exec templates are parsed as variable references',
       'add-foreach-section-variable-new': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
       'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
-      'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path'
+      'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
+      'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet'
     };
 
     const testFn = skipTests[fixture.name] ? it.skip : it;
