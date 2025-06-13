@@ -160,6 +160,21 @@ WhenModifier
 
 // Condition expression - reuse existing patterns
 WhenConditionExpression
+  = NegatedCondition
+  / NonNegatedCondition
+
+// Negated condition with ! prefix
+NegatedCondition
+  = "!" _ condition:NonNegatedCondition {
+      // Wrap the condition in a negation node
+      return [helpers.createNode('Negation', {
+        condition: condition,
+        location: location()
+      })];
+    }
+
+// Non-negated conditions (existing patterns)
+NonNegatedCondition
   = "@" id:BaseIdentifier !("(" / TailModifiers) fields:AnyFieldAccess* {
       // Simple variable reference without parentheses or tail modifiers
       const loc = location();

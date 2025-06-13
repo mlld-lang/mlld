@@ -207,3 +207,9 @@ export interface ExecInvocation extends BaseMlldNode {
   commandRef: CommandReference;
   withClause?: any; // Will be WithClause type from run.ts
 }
+
+// Negation node - represents negation of a condition (!) in @when directives
+export interface NegationNode extends BaseMlldNode {
+  type: 'Negation';
+  condition: BaseMlldNode[];  // The condition being negated
+}

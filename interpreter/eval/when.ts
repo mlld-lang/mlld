@@ -65,8 +65,18 @@ async function evaluateWhenSwitch(
   try {
     // Check each condition value against the expression result
     for (const pair of node.values.conditions) {
+      // Check if this is a negation node
+      let isNegated = false;
+      let actualCondition = pair.condition;
+      
+      if (actualCondition.length === 1 && actualCondition[0].type === 'Negation') {
+        isNegated = true;
+        const negationNode = actualCondition[0] as any;
+        actualCondition = negationNode.condition;
+      }
+      
       // Evaluate the condition value
-      const conditionResult = await evaluate(pair.condition, childEnv);
+      const conditionResult = await evaluate(actualCondition, childEnv);
       const conditionValue = conditionResult.value;
       
       // Compare values - handle special cases
@@ -96,6 +106,11 @@ async function evaluateWhenSwitch(
       // Direct equality for other cases
       else {
         matches = expressionValue === conditionValue;
+      }
+      
+      // Apply negation if needed
+      if (isNegated) {
+        matches = !matches;
       }
       
       if (matches && pair.action) {
@@ -344,6 +359,16 @@ async function evaluateCondition(
   env: Environment,
   variableName?: string
 ): Promise<boolean> {
+  // Check if this is a negation node
+  if (condition.length === 1 && condition[0].type === 'Negation') {
+    const negationNode = condition[0] as any;
+    const innerCondition = negationNode.condition;
+    
+    // Evaluate the inner condition and negate the result
+    const innerResult = await evaluateCondition(innerCondition, env, variableName);
+    return !innerResult;
+  }
+  
   // Create a child environment for condition evaluation
   const childEnv = env.createChild();
   

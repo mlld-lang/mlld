@@ -12,7 +12,8 @@ import type {
   LiteralNode,
   DotSeparatorNode,
   PathSeparatorNode,
-  ExecInvocation
+  ExecInvocation,
+  NegationNode
 } from './primitives';
 
 // Import the union type
@@ -237,4 +238,11 @@ export function isExecInvocation(node: any): node is ExecInvocation {
 
 export function hasWithClause(directive: any): directive is { values: { withClause: WithClause } } {
   return directive?.values?.withClause !== undefined;
+}
+
+/**
+ * Negation type guard
+ */
+export function isNegationNode(node: any): node is NegationNode {
+  return node?.type === 'Negation';
 }

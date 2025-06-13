@@ -27,6 +27,11 @@ Added:
 - Shadow environment syntax for @exec: `@exec js = { helperA, helperB }`
   - Allows injecting helper functions into JavaScript execution contexts
   - Functions are accessible in all @run js commands within the same scope
+- Negation operator (!) for @when conditions:
+  - Simple form: `@when !@variable => @action`
+  - Switch form: `@when @var: [!"value" => @action]`
+  - Block form: `@when @var any: [!@condition1, !@condition2]`
+  - Works with mlld's truthiness rules (false, "", null, 0, "false", empty arrays/objects are falsy)
 
 Fixed:
 - Shadow environment functions in @exec now properly handle async/await
