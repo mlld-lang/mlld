@@ -7,6 +7,7 @@ import {
 } from '@core/resolvers/types';
 import { MlldResolutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint/TaintTracker';
+import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 
 // GitHub API response types
 interface GitHubContentItem {
@@ -40,6 +41,7 @@ interface GitHubRepoInfo {
 export interface GitHubResolverConfig {
   /**
    * GitHub personal access token for authentication
+   * @deprecated Use 'mlld auth login' to store tokens securely instead
    */
   token?: string;
 
@@ -77,6 +79,10 @@ export class GitHubResolver implements Resolver {
   name = 'GITHUB';
   description = 'Resolves modules from GitHub repositories';
   type: ResolverType = 'input';
+
+  constructor() {
+    this.authService = GitHubAuthService.getInstance();
+  }
   
   capabilities: ResolverCapabilities = {
     io: { read: true, write: false, list: true },
@@ -92,6 +98,7 @@ export class GitHubResolver implements Resolver {
 
   private readonly cache: Map<string, { content: string; timestamp: number; etag?: string }> = new Map();
   private readonly defaultCacheTimeout = 300000; // 5 minutes
+  private authService: GitHubAuthService;
 
   /**
    * Check if this resolver can handle the reference
@@ -135,15 +142,18 @@ export class GitHubResolver implements Resolver {
         metadata: {
           source: `github://${config.repository}/${path}`,
           timestamp: new Date(),
-          taintLevel: config.token ? (TaintLevel as any).PRIVATE : (TaintLevel as any).PUBLIC,
+          taintLevel: (await this.getAuthToken(config)) ? (TaintLevel as any).PRIVATE : (TaintLevel as any).PUBLIC,
           author: owner
         }
       };
     }
 
     try {
+      // Get authentication token
+      const token = await this.getAuthToken(config);
+      
       // Fetch from GitHub
-      const { content, etag } = await this.fetchFromGitHub(owner, repo, path, config, cached?.etag);
+      const { content, etag } = await this.fetchFromGitHub(owner, repo, path, config, cached?.etag, token);
       
       // Update cache
       this.cache.set(cacheKey, {
@@ -159,7 +169,7 @@ export class GitHubResolver implements Resolver {
         metadata: {
           source: `github://${config.repository}/${path}`,
           timestamp: new Date(),
-          taintLevel: config.token ? (TaintLevel as any).PRIVATE : (TaintLevel as any).PUBLIC,
+          taintLevel: token ? (TaintLevel as any).PRIVATE : (TaintLevel as any).PUBLIC,
           author: owner,
           mimeType: this.getMimeType(path)
         }
@@ -169,6 +179,12 @@ export class GitHubResolver implements Resolver {
       if (err.status === 404) {
         throw new MlldResolutionError(
           `File not found in repository: ${path}`,
+          { reference: ref, repository: config.repository, path }
+        );
+      }
+      if (err.status === 401 || err.status === 403) {
+        throw new MlldResolutionError(
+          `GitHub authentication required. Run 'mlld auth login' to authenticate`,
           { reference: ref, repository: config.repository, path }
         );
       }
@@ -198,11 +214,12 @@ export class GitHubResolver implements Resolver {
     }
 
     const path = this.buildPath(prefix, config);
-    const branch = await this.resolveBranch(owner, repo, config);
+    const token = await this.getAuthToken(config);
+    const branch = await this.resolveBranch(owner, repo, config, token);
 
     try {
       const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
-      const response = await this.githubFetch(url, config.token);
+      const response = await this.githubFetch(url, token);
       
       if (!response.ok) {
         return [];
@@ -283,8 +300,11 @@ export class GitHubResolver implements Resolver {
       return false;
     }
 
+    // Get authentication token from auth service or config
+    const token = await this.getAuthToken(config);
+    
     // For private repos, we need a token
-    if (config.token) {
+    if (token) {
       return true;
     }
 
@@ -296,6 +316,33 @@ export class GitHubResolver implements Resolver {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Get authentication token from auth service or config fallback
+   */
+  private async getAuthToken(config?: GitHubResolverConfig): Promise<string | null> {
+    try {
+      // First try to get token from auth service
+      const authToken = await this.authService.getStoredToken();
+      if (authToken) {
+        return authToken;
+      }
+    } catch {
+      // Auth service failed, continue to fallback
+    }
+
+    // Fall back to config token (deprecated)
+    if (config?.token) {
+      return config.token;
+    }
+
+    // Fall back to environment variable
+    if (process.env.GITHUB_TOKEN) {
+      return process.env.GITHUB_TOKEN;
+    }
+
+    return null;
   }
 
   /**
@@ -342,17 +389,18 @@ export class GitHubResolver implements Resolver {
     repo: string,
     path: string,
     config: GitHubResolverConfig,
-    etag?: string
+    etag?: string,
+    token?: string | null
   ): Promise<{ content: string; etag?: string }> {
-    const branch = await this.resolveBranch(owner, repo, config);
+    const branch = await this.resolveBranch(owner, repo, config, token);
 
     // Use raw API for better performance if enabled
     if (config.useRawApi !== false) {
       const url = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`;
       const headers: HeadersInit = {};
       
-      if (config.token) {
-        headers['Authorization'] = `token ${config.token}`;
+      if (token) {
+        headers['Authorization'] = `token ${token}`;
       }
       
       if (etag) {
@@ -383,7 +431,7 @@ export class GitHubResolver implements Resolver {
 
     // Fall back to contents API
     const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
-    const response = await this.githubFetch(url, config.token, etag);
+    const response = await this.githubFetch(url, token, etag);
 
     if (response.status === 304) {
       // Not modified, use cache
@@ -424,7 +472,8 @@ export class GitHubResolver implements Resolver {
   private async resolveBranch(
     owner: string,
     repo: string,
-    config: GitHubResolverConfig
+    config: GitHubResolverConfig,
+    token?: string | null
   ): Promise<string> {
     if (config.branch) {
       return config.branch;
@@ -441,7 +490,7 @@ export class GitHubResolver implements Resolver {
     try {
       const response = await this.githubFetch(
         `https://api.github.com/repos/${owner}/${repo}`,
-        config.token
+        token
       );
       
       if (response.ok) {

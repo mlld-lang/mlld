@@ -41,6 +41,7 @@ export interface AuthResult {
 }
 
 export class GitHubAuthService {
+  private static instance: GitHubAuthService | null = null;
   private config: AuthConfig;
   private serviceName: string;
   private accountName: string;
@@ -62,6 +63,16 @@ export class GitHubAuthService {
     this.serviceName = this.config.serviceName!;
     this.accountName = this.config.accountName!;
     this.fallbackTokenPath = path.join(os.homedir(), '.mlld', 'auth.json');
+  }
+
+  /**
+   * Get singleton instance of GitHubAuthService
+   */
+  static getInstance(config?: AuthConfig): GitHubAuthService {
+    if (!GitHubAuthService.instance) {
+      GitHubAuthService.instance = new GitHubAuthService(config);
+    }
+    return GitHubAuthService.instance;
   }
 
   /**
@@ -236,7 +247,7 @@ export class GitHubAuthService {
   /**
    * Get stored authentication token
    */
-  private async getStoredToken(): Promise<string | null> {
+  async getStoredToken(): Promise<string | null> {
     // Try keychain first
     const keytar = await this.getKeytarModule();
     if (keytar) {
