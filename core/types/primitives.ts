@@ -150,7 +150,7 @@ export type DirectiveSubtype =
   | 'dataAssignment'
   | 'pathAssignment'
   | 'runCommand' | 'runExec' | 'runCode'
-  | 'execCode' | 'execCommand'
+  | 'execCode' | 'execCommand' | 'environment'
   | 'outputResolver' | 'outputFile' | 'outputCommand'
   | 'whenSimple' | 'whenBlock';
 

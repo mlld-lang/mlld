@@ -38,6 +38,51 @@ export async function evaluateExec(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
+  // Handle environment declaration first
+  if (directive.subtype === 'environment') {
+    // Handle @exec js = { ... }
+    const identifierNodes = directive.values?.identifier;
+    if (!identifierNodes || !Array.isArray(identifierNodes) || identifierNodes.length === 0) {
+      throw new Error('Exec environment directive missing language identifier');
+    }
+    
+    const identifierNode = identifierNodes[0];
+    let language: string;
+    
+    if (identifierNode.type === 'Text' && 'content' in identifierNode) {
+      language = (identifierNode as TextNode).content;
+    } else {
+      throw new Error('Exec environment language must be a simple string');
+    }
+    
+    const envRefs = directive.values?.environment || [];
+    
+    // Collect functions to inject
+    const shadowFunctions = new Map<string, any>();
+    
+    for (const ref of envRefs) {
+      const funcName = ref.identifier;
+      const funcVar = env.getVariable(funcName);
+      
+      if (!funcVar || funcVar.type !== 'command') {
+        throw new Error(`${funcName} is not a defined exec function`);
+      }
+      
+      // Create wrapper function that calls the mlld exec
+      const wrapper = createExecWrapper(funcName, funcVar, env);
+      shadowFunctions.set(funcName, wrapper);
+    }
+    
+    
+    // Store in environment
+    env.setShadowEnv(language, shadowFunctions);
+    
+    return {
+      value: null,
+      env
+    };
+  }
+  
   // Extract identifier - this is a command name, not content to interpolate
   const identifierNodes = directive.values?.identifier;
   if (!identifierNodes || !Array.isArray(identifierNodes) || identifierNodes.length === 0) {
@@ -133,4 +178,102 @@ export async function evaluateExec(
   
   // Return the command definition (no output for variable definitions)
   return { value: commandDef, env };
+}
+
+/**
+ * Create a wrapper function that bridges JS function calls to mlld exec invocations
+ */
+function createExecWrapper(
+  execName: string, 
+  execVar: any,
+  env: Environment
+): Function {
+  return async function(...args: any[]) {
+    // Get the command definition
+    const definition = execVar.value;
+    
+    // Type guard for command definition
+    const typedDef = definition as any;
+    
+    // Get parameter names from the definition
+    const params = typedDef.paramNames || [];
+    
+    // Create a child environment for parameter substitution
+    const execEnv = env.createChild();
+    
+    // Bind arguments to parameters
+    for (let i = 0; i < params.length; i++) {
+      const paramName = params[i];
+      const argValue = args[i];
+      if (argValue !== undefined) {
+        execEnv.setVariable(paramName, {
+          type: 'text',
+          value: argValue,
+          nodeId: '',
+          location: { line: 0, column: 0 }
+        });
+      }
+    }
+    
+    let result: string;
+    
+    if (typedDef.type === 'command') {
+      // Execute command with interpolated template
+      const commandTemplate = typedDef.commandTemplate || typedDef.command;
+      if (!commandTemplate) {
+        throw new Error(`Command ${execName} has no command template`);
+      }
+      
+      // Interpolate the command template with parameters
+      const command = await interpolate(commandTemplate, execEnv);
+      
+      // Build environment variables from parameters for shell execution
+      const envVars: Record<string, string> = {};
+      for (let i = 0; i < params.length; i++) {
+        const paramName = params[i];
+        const argValue = args[i];
+        if (argValue !== undefined) {
+          envVars[paramName] = String(argValue);
+        }
+      }
+      
+      // Execute the command with environment variables
+      result = await execEnv.executeCommand(command, { env: envVars });
+    } else if (typedDef.type === 'code') {
+      // Execute code with interpolated template
+      const codeTemplate = typedDef.codeTemplate || typedDef.code;
+      if (!codeTemplate) {
+        throw new Error(`Code command ${execName} has no code template`);
+      }
+      
+      // Interpolate the code template with parameters
+      const code = await interpolate(codeTemplate, execEnv);
+      
+      // Build params object for code execution
+      const codeParams: Record<string, any> = {};
+      for (let i = 0; i < params.length; i++) {
+        const paramName = params[i];
+        const argValue = args[i];
+        if (argValue !== undefined) {
+          codeParams[paramName] = argValue;
+        }
+      }
+      
+      // Execute the code with parameters
+      result = await execEnv.executeCode(
+        code,
+        typedDef.language || 'javascript',
+        codeParams
+      );
+    } else {
+      throw new Error(`Unknown command type: ${typedDef.type}`);
+    }
+    
+    // Try to parse result as JSON for better JS integration
+    try {
+      return JSON.parse(result);
+    } catch {
+      return result; // Return as string if not JSON
+    }
+  };
 }

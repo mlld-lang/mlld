@@ -10,6 +10,26 @@ CommaSpace "comma with optional whitespace"
 SemicolonSpace "semicolon with optional whitespace"
   = _ ";" _
 
+// -------------------------------------------------------------
+// ENVIRONMENT VARIABLE LIST
+// -------------------------------------------------------------
+
+// Environment variable list for @exec env = { ... }
+// Parses comma-separated function names without @ prefix
+EnvironmentVarList "environment variable list"
+  = first:EnvironmentVarReference rest:(_ "," _ ref:EnvironmentVarReference { return ref; })* {
+      return [first, ...rest];
+    }
+
+// Variable reference without @ prefix for environment declarations
+EnvironmentVarReference "environment variable reference"  
+  = name:BaseIdentifier {
+      return helpers.createNode(NodeType.VariableReference, {
+        identifier: name,
+        valueType: 'identifier'
+      }, location());
+    }
+
 // For now, we'll add specific list patterns as needed in directives
 // Each directive will need to define its own list parsing using these separators
 // Example pattern for reference:

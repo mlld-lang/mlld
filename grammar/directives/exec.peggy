@@ -18,9 +18,42 @@ by the @run directive. It can be used in these forms:
 // TOP-LEVEL EXEC DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @exec directive - supporting both command and code syntax
+// Primary @exec directive - supporting command, code, and environment syntax
 AtExec
-  = DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  = DirectiveContext "@exec" _ id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" {
+      // Environment declaration syntax: @exec js = { helperA, helperB }
+      helpers.debug('AtExec matched environment declaration', { id, envVars });
+      
+      // Create identifier node
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      
+      // Build values and raw objects
+      const values = {
+        identifier: [identifierNode],
+        environment: envVars
+      };
+      
+      const raw = {
+        identifier: id,
+        environment: envVars.map(v => v.identifier)
+      };
+      
+      // Metadata
+      const metaObj = {
+        environmentCount: envVars.length
+      };
+      
+      return helpers.createStructuredDirective(
+        'exec',
+        'environment',
+        values,
+        raw,
+        metaObj,
+        location(),
+        'environment'
+      );
+    }
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       // Language + code syntax: @exec fn() = @run language [(code)]
       helpers.debug('AtExec matched with language + code', { id, params, lang, code, trust });
       

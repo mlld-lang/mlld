@@ -72,6 +72,9 @@ export class Environment {
   private reservedNames: Set<string> = new Set(['INPUT', 'TIME', 'PROJECTPATH', 'DEBUG']); // Reserved variable names
   private initialNodeCount: number = 0; // Track initial nodes to prevent duplicate merging
   
+  // Shadow environments for language-specific function injection
+  private shadowEnvs: Map<string, Map<string, any>> = new Map();
+  
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
     showProgress: true,
@@ -754,6 +757,26 @@ export class Environment {
     return this.nodes;
   }
   
+  // --- Shadow Environment Management ---
+  
+  /**
+   * Set shadow environment functions for a specific language
+   * @param language The language identifier (js, node, python, etc.)
+   * @param functions Map of function names to their implementations
+   */
+  setShadowEnv(language: string, functions: Map<string, any>): void {
+    this.shadowEnvs.set(language, functions);
+  }
+  
+  /**
+   * Get shadow environment functions for a specific language
+   * @param language The language identifier
+   * @returns Map of function names to implementations, or undefined if not set
+   */
+  getShadowEnv(language: string): Map<string, any> | undefined {
+    return this.shadowEnvs.get(language) || this.parent?.getShadowEnv(language);
+  }
+  
   // --- Capabilities ---
   
   async readFile(pathOrUrl: string): Promise<string> {
@@ -1084,24 +1107,54 @@ export class Environment {
           output += args.map(arg => String(arg)).join(' ') + '\n';
         };
         
-        // Create a function with parameters if provided
-        const paramNames = params ? Object.keys(params) : [];
-        const paramValues = params ? Object.values(params) : [];
+        // Get shadow environment functions for JavaScript
+        const shadowEnv = this.getShadowEnv('js') || this.getShadowEnv('javascript');
+        
+        // Merge shadow environment with provided parameters
+        const allParams = { ...(params || {}) };
+        const allParamNames: string[] = Object.keys(allParams);
+        const allParamValues: any[] = Object.values(allParams);
+        
+        // Add shadow environment functions
+        if (shadowEnv) {
+          for (const [name, func] of shadowEnv) {
+            if (!allParams[name]) { // Don't override explicit parameters
+              allParamNames.push(name);
+              allParamValues.push(func);
+            }
+          }
+        }
         
         // Build the function body
         let functionBody = code;
         
         // Handle return statements properly
-        if (!code.includes('return') && !code.includes(';')) {
-          // Single expression without semicolon - return it
+        // Check if this is likely a complete expression that should be returned
+        const trimmedCode = code.trim();
+        const isExpression = (
+          // Single expression without semicolon
+          (!code.includes('return') && !code.includes(';')) ||
+          // IIFE pattern - starts with ( and ends with )
+          (trimmedCode.startsWith('(') && trimmedCode.endsWith(')')) ||
+          // Arrow function call pattern
+          (trimmedCode.endsWith('()') && !trimmedCode.includes('{'))
+        );
+        
+        if (isExpression) {
+          // This looks like an expression that should be returned
           functionBody = `return ${code}`;
         }
         
         // Create and execute the function
-        const fn = new Function(...paramNames, functionBody);
-        const result = fn(...paramValues);
+        const fn = new Function(...allParamNames, functionBody);
+        let result = fn(...allParamValues);
         
-        // Restore console.log
+        // Handle promises - await them if returned
+        if (result instanceof Promise) {
+          result = await result;
+        }
+        
+        // Restore console.log AFTER awaiting the promise
         console.log = originalLog;
         
         // If there was console output, use that. Otherwise use the result.
@@ -1137,7 +1190,10 @@ export class Environment {
         const tmpDir = os.tmpdir();
         const tmpFile = path.join(tmpDir, `mlld_exec_${Date.now()}.js`);
         
-        // Build Node.js code with parameters
+        // Get shadow environment functions for Node.js
+        const shadowEnv = this.getShadowEnv('node') || this.getShadowEnv('nodejs');
+        
+        // Build Node.js code with parameters and shadow functions
         let nodeCode = '';
         if (params) {
           // Inject parameters as constants
@@ -1145,6 +1201,20 @@ export class Environment {
             nodeCode += `const ${key} = ${JSON.stringify(value)};\n`;
           }
         }
+        
+        // Inject shadow environment functions
+        if (shadowEnv) {
+          nodeCode += '\n// Shadow environment functions\n';
+          for (const [name, func] of shadowEnv) {
+            if (!params || !(name in params)) { // Don't override explicit parameters
+              // Since we can't directly serialize functions, we need to handle this differently
+              // For now, we'll inject them as global functions that call back to mlld
+              nodeCode += `// ${name} is available as a shadow function\n`;
+              // This will be handled by the wrapper creation in exec evaluator
+            }
+          }
+        }
+        
         nodeCode += code;
         
         // Debug: log the generated code
