@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { MlldError } from '@core/errors';
+import type { RegistryConfig } from '@core/resolvers/types';
 
 export interface LockEntry {
   resolved: string;           // The resolved path (gist URL or registry path)
@@ -14,10 +15,23 @@ export interface LockEntry {
 export interface LockFileData {
   version: string;
   imports: Record<string, LockEntry>;
+  modules: Record<string, any>;
+  cache: Record<string, any>;
   metadata?: {
     mlldVersion?: string;
     createdAt?: string;
     updatedAt?: string;
+  };
+  config?: {
+    resolvers?: {
+      registries?: RegistryConfig[];
+    };
+    security?: {
+      allowedDomains?: string[];
+      trustedDomains?: string[];
+      blockedPatterns?: string[];
+      allowedEnv?: string[];
+    };
   };
   security?: {
     registries?: Record<string, RegistryEntry>;
@@ -25,7 +39,7 @@ export interface LockFileData {
     approvedImports?: Record<string, any>;
     blockedPatterns?: string[];
     trustedDomains?: string[];
-    allowedEnvVars?: string[];
+    allowedEnv?: string[];
   };
 }
 
@@ -250,5 +264,26 @@ export class LockFile {
 
   hasAllowedEnvVarsConfigured(): boolean {
     return (this.data.security?.allowedEnvVars && this.data.security.allowedEnvVars.length > 0) || false;
+  }
+
+  // Registry configuration management methods
+  getResolverRegistries(): RegistryConfig[] {
+    if (!this.data.config?.resolvers?.registries) {
+      return [];
+    }
+    return this.data.config.resolvers.registries;
+  }
+
+  async setResolverRegistries(registries: RegistryConfig[]): Promise<void> {
+    if (!this.data.config) {
+      this.data.config = {};
+    }
+    if (!this.data.config.resolvers) {
+      this.data.config.resolvers = {};
+    }
+    
+    this.data.config.resolvers.registries = registries;
+    this.isDirty = true;
+    await this.save();
   }
 }
