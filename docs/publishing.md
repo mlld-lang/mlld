@@ -27,6 +27,9 @@ mlld add-needs my-utils.mld.md
 
 # Publish to registry
 mlld publish my-utils.mld.md
+
+# Or use simplified syntax if configured
+mlld publish @myusername/my-utils
 ```
 
 ## Prerequisites
@@ -145,6 +148,25 @@ For modules not in a git repository or in private repos without write access:
 - Creates a public GitHub gist
 - Useful for quick prototypes
 - No git history required
+
+### Simplified Publish Syntax
+
+If you have configured registries in your `mlld.lock.json`, you can use the simplified publish syntax:
+
+```bash
+# Instead of specifying the file path:
+mlld publish ./llm/modules/my-module.mlld.md
+
+# Use the module reference directly:
+mlld publish @myusername/my-module
+```
+
+This will:
+1. Look up the registry configuration for `@myusername/`
+2. Find the module file based on the configured base path
+3. Select the appropriate publishing method (GitHub, registry, etc.)
+
+Configure registries with `mlld setup` or manually in `mlld.lock.json`.
 
 ### Private Repository Publishing
 

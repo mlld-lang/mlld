@@ -30,6 +30,8 @@
     "package.json"
   ],
   "scripts": {
+    "cli": "node ./dist/cli.cjs",
+    "dev": "npm run cli",
     "build:grammar:core": "npx tsc -p grammar/tsconfig.grammar.json && node grammar/build-grammar.mjs",
     "build:grammar:fixtures": "node ./scripts/build-fixtures.mjs",
     "build:grammar:syntax": "node grammar/syntax-generator/build-syntax-conditional.js",

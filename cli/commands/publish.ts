@@ -17,6 +17,7 @@ import * as yaml from 'js-yaml';
 import { version as currentMlldVersion } from '@core/version';
 import { DependencyDetector } from '@core/utils/dependency-detector';
 import { parseSync } from '@grammar/parser';
+import type { RegistryConfig } from '@core/resolvers/types';
 
 export interface PublishOptions {
   verbose?: boolean;
@@ -79,11 +80,118 @@ export class PublishCommand {
   }
 
   /**
+   * Resolve publish target from @author/module syntax
+   */
+  private async resolvePublishTarget(moduleRef: string): Promise<{
+    filePath: string;
+    publishOptions: {
+      prefix: string;
+      moduleName: string;
+      registry: RegistryConfig;
+    };
+  } | null> {
+    // Check if it's @author/module format
+    const match = moduleRef.match(/^@([a-z0-9-]+)\/([a-z0-9-]+)$/);
+    if (!match) {
+      return null;
+    }
+
+    const [, author, moduleName] = match;
+    const prefix = `@${author}/`;
+
+    // Load lock file to get registry configurations
+    const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
+    try {
+      await fs.access(lockFilePath);
+    } catch {
+      throw new MlldError(
+        'No mlld.lock.json found. Run "mlld setup" to configure registries.',
+        { code: 'NO_LOCK_FILE', severity: ErrorSeverity.Fatal }
+      );
+    }
+
+    const lockData = JSON.parse(await fs.readFile(lockFilePath, 'utf8'));
+    const registries = lockData.config?.resolvers?.registries || [];
+
+    // Find registries that match the prefix, sorted by priority
+    const matchingRegistries = registries
+      .filter((r: RegistryConfig) => r.prefix === prefix)
+      .sort((a: RegistryConfig, b: RegistryConfig) => (a.priority || 999) - (b.priority || 999));
+
+    if (matchingRegistries.length === 0) {
+      throw new MlldError(
+        `No registry configured for prefix '${prefix}'\n` +
+        `Run "mlld setup" to configure a registry for @${author}/`,
+        { code: 'NO_REGISTRY_FOR_PREFIX', severity: ErrorSeverity.Fatal }
+      );
+    }
+
+    // Try each registry in priority order to find the file
+    for (const registry of matchingRegistries) {
+      // Skip non-publishable resolvers
+      if (registry.resolver === 'LOCAL') {
+        continue; // Can't publish to LOCAL resolver
+      }
+
+      // Construct expected file paths
+      const basePath = registry.config?.basePath || '.';
+      const possibleExtensions = ['.mlld.md', '.mld', '.md'];
+
+      for (const ext of possibleExtensions) {
+        const filePath = path.join(basePath, moduleName + ext);
+        if (await fs.access(filePath).then(() => true).catch(() => false)) {
+          return {
+            filePath,
+            publishOptions: {
+              prefix,
+              moduleName,
+              registry
+            }
+          };
+        }
+      }
+    }
+
+    // No file found in any registry path
+    const searchedPaths = matchingRegistries
+      .filter((r: RegistryConfig) => r.resolver !== 'LOCAL')
+      .map((r: RegistryConfig) => path.join(r.config?.basePath || '.', moduleName + '.*'))
+      .join(', ');
+
+    throw new MlldError(
+      `Module '${moduleName}' not found in any configured location for '${prefix}'\n` +
+      `Searched: ${searchedPaths}\n` +
+      `Create the module file first, then run: mlld publish ${moduleRef}`,
+      { code: 'MODULE_FILE_NOT_FOUND', severity: ErrorSeverity.Fatal }
+    );
+  }
+
+  /**
    * Publish a module from the current directory or specified path
    */
   async publish(modulePath: string = '.', options: PublishOptions = {}): Promise<void> {
     try {
       console.log(chalk.blue('Publishing mlld module...\n'));
+
+      // Check if using @author/module syntax
+      const resolvedTarget = await this.resolvePublishTarget(modulePath);
+      if (resolvedTarget) {
+        // Update the module path to the resolved file path
+        modulePath = resolvedTarget.filePath;
+        const { registry } = resolvedTarget.publishOptions;
+
+        // Set options based on registry type
+        if (registry.resolver === 'GITHUB') {
+          options.private = true;
+          // The repository info will be picked up from git info
+          console.log(chalk.gray(`Resolved to private module: ${modulePath}`));
+          console.log(chalk.gray(`Registry: ${registry.resolver} (${registry.config?.repository})\n`));
+        } else if (registry.resolver === 'REGISTRY') {
+          // Public registry publish
+          console.log(chalk.gray(`Resolved to public module: ${modulePath}`));
+          console.log(chalk.gray(`Registry: Public mlld registry\n`));
+        }
+      }
 
       // Check for latest mlld version (unless skipped)
       if (!options.skipVersionCheck) {
@@ -1049,28 +1157,33 @@ Auto-added by mlld publish command`;
     if (stat.isDirectory()) {
       // Look for .mld files in directory
       const files = await fs.readdir(modulePath);
-      const mldFiles = files.filter(f => f.endsWith('.mld') || f.endsWith('.mld.md'));
+      const mldFiles = files.filter(f => f.endsWith('.mld') || f.endsWith('.mld.md') || f.endsWith('.mlld.md'));
       
       if (mldFiles.length === 0) {
-        throw new MlldError('No .mld or .mld.md files found in the specified directory', {
+        throw new MlldError('No .mld, .mld.md, or .mlld.md files found in the specified directory', {
           code: 'NO_MLD_FILES',
           severity: ErrorSeverity.Fatal
         });
       }
       
-      // Prefer main.mld.md, main.mld, index.mld.md, or index.mld
-      if (mldFiles.includes('main.mld.md')) {
+      // Prefer main.mlld.md, main.mld.md, main.mld, index.mlld.md, index.mld.md, or index.mld
+      if (mldFiles.includes('main.mlld.md')) {
+        filename = 'main.mlld.md';
+      } else if (mldFiles.includes('main.mld.md')) {
         filename = 'main.mld.md';
       } else if (mldFiles.includes('main.mld')) {
         filename = 'main.mld';
+      } else if (mldFiles.includes('index.mlld.md')) {
+        filename = 'index.mlld.md';
       } else if (mldFiles.includes('index.mld.md')) {
         filename = 'index.mld.md';
       } else if (mldFiles.includes('index.mld')) {
         filename = 'index.mld';
       } else {
-        // Prefer .mld.md over .mld
+        // Prefer .mlld.md over .mld.md over .mld
+        const mlldMdFile = mldFiles.find(f => f.endsWith('.mlld.md'));
         const mldMdFile = mldFiles.find(f => f.endsWith('.mld.md'));
-        filename = mldMdFile || mldFiles[0];
+        filename = mlldMdFile || mldMdFile || mldFiles[0];
       }
       
       filePath = path.join(modulePath, filename);
@@ -1079,8 +1192,8 @@ Auto-added by mlld publish command`;
       filePath = modulePath;
       filename = path.basename(filePath);
       
-      if (!filename.endsWith('.mld') && !filename.endsWith('.mld.md')) {
-        throw new MlldError('Module file must have .mld or .mld.md extension', {
+      if (!filename.endsWith('.mld') && !filename.endsWith('.mld.md') && !filename.endsWith('.mlld.md')) {
+        throw new MlldError('Module file must have .mld, .mld.md, or .mlld.md extension', {
           code: 'INVALID_FILE_EXTENSION',
           severity: ErrorSeverity.Fatal
         });
