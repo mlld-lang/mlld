@@ -213,6 +213,34 @@ export async function evaluateExecInvocation(
       typedDef.language || 'javascript',
       codeParams
     );
+  } else if (typedDef.type === 'commandRef') {
+    // Handle command reference - recursively invoke the referenced command
+    const refName = typedDef.commandRef;
+    if (!refName) {
+      throw new MlldInterpreterError(`Command reference ${commandName} has no target command`);
+    }
+    
+    // Look up the referenced command
+    const refCommand = env.getVariable(refName);
+    if (!refCommand) {
+      throw new MlldInterpreterError(`Referenced command not found: ${refName}`);
+    }
+    
+    // Create a new invocation node for the referenced command
+    const refInvocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: {
+        identifier: refName,
+        args: evaluatedArgs.map(arg => ({
+          type: 'Text',
+          content: arg
+        }))
+      }
+    };
+    
+    // Recursively evaluate the referenced command
+    const refResult = await evaluateExecInvocation(refInvocation, env);
+    result = refResult.value as string;
   } else {
     throw new MlldInterpreterError(`Unknown command type: ${typedDef.type}`);
   }

@@ -79,6 +79,7 @@ export type MlldNode =
 
 // Export variable types and enums
 export * from './variables';
+export * from './executable';
 
 // Simple variable type enum for the interpreter
 export enum VariableType {
@@ -86,7 +87,8 @@ export enum VariableType {
   DATA = 'data',
   PATH = 'path',
   COMMAND = 'command',
-  IMPORT = 'import'
+  IMPORT = 'import',
+  EXECUTABLE = 'executable'
 }
 
 // Base variable metadata interface
@@ -99,13 +101,17 @@ export interface VariableMetadata {
   isComplex?: boolean;
 }
 
+// Import ExecutableVariable for the union
+import { ExecutableVariable } from './executable';
+
 // Discriminated union for properly typed variables
 export type MlldVariable = 
   | TextVariable
   | DataVariable
   | PathVariable
   | CommandVariable
-  | ImportVariable;
+  | ImportVariable
+  | ExecutableVariable;
 
 // Individual variable types with strong typing
 export interface TextVariable {
@@ -363,6 +369,10 @@ export function isCommandVariable(variable: MlldVariable): variable is CommandVa
 
 export function isImportVariable(variable: MlldVariable): variable is ImportVariable {
   return variable.type === VariableType.IMPORT;
+}
+
+export function isExecutableVariable(variable: MlldVariable): variable is ExecutableVariable {
+  return variable.type === VariableType.EXECUTABLE;
 }
 
 // =========================================================================

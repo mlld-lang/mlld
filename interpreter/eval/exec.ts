@@ -166,6 +166,36 @@ export async function evaluateExec(
       type: 'code'
     };
     
+  } else if (directive.subtype === 'execResolver') {
+    // Handle resolver reference: @exec name(params) = @resolver
+    const resolverNodes = directive.values?.resolver;
+    if (!resolverNodes) {
+      throw new Error('Exec resolver directive missing resolver reference');
+    }
+    
+    // Get the resolver name
+    const resolverName = await interpolate(resolverNodes, env);
+    
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    
+    // Special case: If resolver is "run", this is likely a grammar parsing issue
+    // where "@exec name() = @run [command]" was parsed as execResolver instead of execCommand
+    if (resolverName === 'run') {
+      // Look for command content immediately following in the AST
+      // This is a workaround for a grammar issue
+      throw new Error('Grammar parsing issue: @exec with @run should be parsed as execCommand, not execResolver');
+    }
+    
+    // For now, treat resolver references as command references
+    // TODO: Implement proper resolver handling
+    commandDef = {
+      commandRef: resolverName,
+      paramNames,
+      type: 'commandRef'
+    };
+    
   } else {
     throw new Error(`Unsupported exec subtype: ${directive.subtype}`);
   }
