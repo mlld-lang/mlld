@@ -64,9 +64,9 @@ AtExec
         'environment'
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      // Language + code syntax: @exec fn() = @run language [(code)]
-      helpers.debug('AtExec matched with language + code', { id, params, lang, code, trust });
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      // Command syntax: @exec cmd() = [(command)]
+      helpers.debug('AtExec matched with command', { id, params, content, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -378,8 +378,8 @@ AtExec
         'section'
       );
     }
-  // Resolver executable: @exec name(params) = @resolver/path
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" resolver:$([a-zA-Z0-9_/@-]+) withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  // Resolver executable: @exec name(params) = @resolver/path [{ @payload }]
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" resolver:ResolverPathPattern payload:ExecResolverPayload? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('AtExec matched resolver executable', { id, params, resolver, trust });
       
       // Create identifier node
@@ -395,15 +395,26 @@ AtExec
         resolver: [helpers.createNode(NodeType.Text, { content: resolver, location: location() })]
       };
       
+      // Add payload if present
+      if (payload) {
+        values.payload = payload;
+      }
+      
       const raw = {
         identifier: id,
         params: processedParams.map(p => p.name),
         resolver: resolver
       };
       
+      // Add payload to raw if present
+      if (payload) {
+        raw.payload = payload[0].identifier || payload[0].content;
+      }
+      
       // Metadata
       const metaObj = {
         parameterCount: processedParams.length,
+        hasPayload: !!payload,
         ...helpers.createSecurityMeta({ trust }),
         ...(meta ? { riskLevel: meta } : {})
       };
@@ -469,6 +480,20 @@ ExecParameter
         name: paramName,
         location: location()
       });
+    }
+
+// ResolverPathPattern - matches resolver paths like resolver/api/@endpoint/@parameter
+// Must contain at least one slash to distinguish from simple identifiers like "run"
+ResolverPathPattern
+  = chars:$([a-zA-Z0-9_@-]+ "/" [a-zA-Z0-9_/@-]*) { return chars; }
+
+// ExecResolverPayload - optional payload syntax: { @variable }
+ExecResolverPayload
+  = _ "{" _ "@" varName:BaseIdentifier fields:AnyFieldAccess* _ "}" {
+      return [helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: varName,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location())];
     }
 
 // AsNewTitle pattern for exec section renaming - supports both literals and variables

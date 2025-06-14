@@ -13,7 +13,7 @@ import { VariableMetadata } from './index';
  */
 export interface BaseExecutable {
   /** The type of executable */
-  type: 'command' | 'commandRef' | 'code' | 'template';
+  type: 'command' | 'commandRef' | 'code' | 'template' | 'section' | 'resolver';
   /** Parameter names expected by this executable */
   paramNames: string[];
   /** Original directive type this came from (exec or text) */
@@ -54,8 +54,29 @@ export interface CodeExecutable extends BaseExecutable {
  */
 export interface TemplateExecutable extends BaseExecutable {
   type: 'template';
-  templateContent: MlldNode[];
-  sourceDirective: 'text';
+  template: MlldNode[];
+  sourceDirective: 'text' | 'exec';
+}
+
+/**
+ * Section executable - @exec name(file, section) = [@file # @section]
+ */
+export interface SectionExecutable extends BaseExecutable {
+  type: 'section';
+  pathTemplate: MlldNode[];
+  sectionTemplate: MlldNode[];
+  renameTemplate?: MlldNode[];
+  sourceDirective: 'exec';
+}
+
+/**
+ * Resolver executable - @exec name(params) = @resolver/path { @payload }
+ */
+export interface ResolverExecutable extends BaseExecutable {
+  type: 'resolver';
+  resolverPath: string;
+  payloadTemplate?: MlldNode[];
+  sourceDirective: 'exec';
 }
 
 /**
@@ -65,7 +86,9 @@ export type ExecutableDefinition =
   | CommandExecutable 
   | CommandRefExecutable 
   | CodeExecutable 
-  | TemplateExecutable;
+  | TemplateExecutable
+  | SectionExecutable
+  | ResolverExecutable;
 
 /**
  * Variable that stores an executable definition
@@ -94,6 +117,14 @@ export function isCodeExecutable(def: ExecutableDefinition): def is CodeExecutab
 
 export function isTemplateExecutable(def: ExecutableDefinition): def is TemplateExecutable {
   return def.type === 'template';
+}
+
+export function isSectionExecutable(def: ExecutableDefinition): def is SectionExecutable {
+  return def.type === 'section';
+}
+
+export function isResolverExecutable(def: ExecutableDefinition): def is ResolverExecutable {
+  return def.type === 'resolver';
 }
 
 /**

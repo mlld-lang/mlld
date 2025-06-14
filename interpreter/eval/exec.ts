@@ -1,7 +1,7 @@
 import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
-import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable } from '@core/types/executable';
+import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { createExecutableVariable } from '@core/types/executable';
 import { astLocationToSourceLocation } from '@core/types';
@@ -172,35 +172,38 @@ export async function evaluateExec(
     } satisfies CodeExecutable;
     
   } else if (directive.subtype === 'execResolver') {
-    // Handle resolver reference: @exec name(params) = @resolver
+    // Handle resolver executable: @exec name(params) = @resolver/path { @payload }
     const resolverNodes = directive.values?.resolver;
     if (!resolverNodes) {
-      throw new Error('Exec resolver directive missing resolver reference');
+      throw new Error('Exec resolver directive missing resolver path');
     }
     
-    // Get the resolver name
-    const resolverName = await interpolate(resolverNodes, env);
+    // Get the resolver path (it's a literal string, not interpolated)
+    const resolverPath = await interpolate(resolverNodes, env);
     
     // Get parameter names if any
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
+    // Get payload nodes if present
+    const payloadNodes = directive.values?.payload;
+    
     // Special case: If resolver is "run", this is likely a grammar parsing issue
     // where "@exec name() = @run [command]" was parsed as execResolver instead of execCommand
-    if (resolverName === 'run') {
+    if (resolverPath === 'run') {
       // Look for command content immediately following in the AST
       // This is a workaround for a grammar issue
       throw new Error('Grammar parsing issue: @exec with @run should be parsed as execCommand, not execResolver');
     }
     
-    // For now, treat resolver references as command references
-    // TODO: Implement proper resolver handling
+    // Create resolver executable definition
     executableDef = {
-      type: 'commandRef',
-      commandRef: resolverName,
+      type: 'resolver',
+      resolverPath,
+      payloadTemplate: payloadNodes,
       paramNames,
       sourceDirective: 'exec'
-    } satisfies CommandRefExecutable;
+    } satisfies ResolverExecutable;
     
   } else if (directive.subtype === 'execTemplate') {
     // Handle template exec: @exec name(params) = [[template]]
@@ -222,17 +225,29 @@ export async function evaluateExec(
     } satisfies TemplateExecutable;
     
   } else if (directive.subtype === 'execSection') {
-    // Handle section exec: @exec name(params) = ### Section
+    // Handle section exec: @exec name(file, section) = [@file # @section]
+    const pathNodes = directive.values?.path;
     const sectionNodes = directive.values?.section;
-    if (!sectionNodes) {
-      throw new Error('Exec section directive missing section');
+    if (!pathNodes || !sectionNodes) {
+      throw new Error('Exec section directive missing path or section');
     }
     
     // Get parameter names if any
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
-    throw new Error('Exec section subtype not yet implemented');
+    // Get rename nodes if present
+    const renameNodes = directive.values?.rename;
+    
+    // Create section executable definition
+    executableDef = {
+      type: 'section',
+      pathTemplate: pathNodes,
+      sectionTemplate: sectionNodes,
+      renameTemplate: renameNodes,
+      paramNames,
+      sourceDirective: 'exec'
+    } satisfies SectionExecutable;
     
   } else {
     throw new Error(`Unsupported exec subtype: ${directive.subtype}`);
@@ -347,6 +362,24 @@ function createExecWrapper(
         definition.language || 'javascript',
         codeParams
       );
+    } else if (definition.type === 'template') {
+      // Execute template with interpolated content
+      const templateNodes = definition.template;
+      if (!templateNodes) {
+        throw new Error(`Template ${execName} has no template content`);
+      }
+      
+      // Interpolate the template with parameters
+      result = await interpolate(templateNodes, execEnv);
+    } else if (definition.type === 'section') {
+      // Extract section from file
+      throw new Error(`Section executables cannot be invoked from shadow environments yet`);
+    } else if (definition.type === 'resolver') {
+      // Invoke resolver
+      throw new Error(`Resolver executables cannot be invoked from shadow environments yet`);
+    } else if (definition.type === 'commandRef') {
+      // Handle command references
+      throw new Error(`Command reference executables cannot be invoked from shadow environments yet`);
     } else {
       throw new Error(`Unknown command type: ${definition.type}`);
     }

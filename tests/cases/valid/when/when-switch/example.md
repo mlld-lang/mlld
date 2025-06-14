@@ -1,4 +1,4 @@
-@exec hasEnvVar(name) = @run [test -n "${!{{name}}}"]
+@exec hasEnvVar(name) = [(test -n "${!{{name}}}")]
 
 @when @hasEnvVar("ANTHROPIC_API_KEY"): [
   true => @add "✓ API key configured"

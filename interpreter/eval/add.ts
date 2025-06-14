@@ -523,7 +523,7 @@ export async function evaluateAdd(
  * Extract a section from markdown content.
  * TODO: Replace with llmxml.getSection() once integrated
  */
-function extractSection(content: string, sectionName: string): string {
+export function extractSection(content: string, sectionName: string): string {
   const lines = content.split('\\n');
   const sectionRegex = new RegExp(`^#+\\s+${sectionName}\\s*$`, 'i');
   
