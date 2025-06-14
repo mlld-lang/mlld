@@ -34,7 +34,7 @@ export class AuthCommand {
    */
   async login(options: AuthOptions = {}): Promise<void> {
     try {
-      console.log(chalk.blue('🔐 mlld Authentication\n'));
+      console.log(chalk.blue('mlld Authentication\n'));
 
       // Check if already authenticated
       const currentUser = await this.authService.getGitHubUser();
@@ -50,14 +50,14 @@ export class AuthCommand {
       const result = await this.authService.authenticate();
 
       if (result.success && result.user) {
-        console.log(chalk.green('\n✅ Authentication successful!\n'));
+        console.log(chalk.green('\n✔ Authentication successful!\n'));
         this.displayUserInfo(result.user);
         
         if (options.verbose) {
           console.log(chalk.gray(`Token stored securely in system keychain`));
         }
       } else {
-        console.error(chalk.red(`\n❌ Authentication failed: ${result.error}`));
+        console.error(chalk.red(`\n✘ Authentication failed: ${result.error}`));
         process.exit(1);
       }
     } catch (error) {
@@ -86,7 +86,7 @@ export class AuthCommand {
       
       await this.authService.logout();
       
-      console.log(chalk.green('✅ Successfully signed out'));
+      console.log(chalk.green('✔ Successfully signed out'));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(chalk.red(`Logout failed: ${errorMessage}`));
@@ -113,15 +113,15 @@ export class AuthCommand {
       const currentUser = await this.authService.getGitHubUser();
       
       if (currentUser) {
-        console.log(chalk.green('✅ Authenticated'));
+        console.log(chalk.green('✔ Authenticated'));
         this.displayUserInfo(currentUser);
         
         if (options.verbose) {
-          console.log(chalk.gray('\nToken validation: ✅ Valid'));
+          console.log(chalk.gray('\nToken validation: ✔ Valid'));
           console.log(chalk.gray('GitHub Scopes: gist, public_repo'));
         }
       } else {
-        console.log(chalk.red('❌ Authentication invalid'));
+        console.log(chalk.red('✘ Authentication invalid'));
         console.log(chalk.gray('Run "mlld auth login" to re-authenticate'));
       }
     } catch (error) {

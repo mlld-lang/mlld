@@ -206,14 +206,28 @@ export class Environment {
         
         // Load resolver configs from lock file if available
         if (lockFile) {
-          const registries = lockFile.getRegistries();
-          if (Object.keys(registries).length > 0) {
-            const configs = convertLockFileToResolverConfigs(registries);
-            this.resolverManager.configureRegistries(configs);
+          // Try new config location first
+          const resolverRegistries = lockFile.getResolverRegistries();
+          if (resolverRegistries.length > 0) {
+            logger.debug(`Configuring ${resolverRegistries.length} resolver registries from lock file`);
+            this.resolverManager.configureRegistries(resolverRegistries);
+            logger.debug(`Total registries after configuration: ${this.resolverManager.getRegistries().length}`);
+          } else {
+            // Fall back to legacy location
+            const registries = lockFile.getRegistries();
+            if (Object.keys(registries).length > 0) {
+              logger.debug(`Configuring ${Object.keys(registries).length} legacy registries from lock file`);
+              const configs = convertLockFileToResolverConfigs(registries);
+              this.resolverManager.configureRegistries(configs);
+              logger.debug(`Total registries after legacy configuration: ${this.resolverManager.getRegistries().length}`);
+            }
           }
         }
       } catch (error) {
         console.warn('ResolverManager initialization failed:', error);
+        console.warn('Error stack:', error.stack);
+        // Still assign a basic resolver manager so we don't crash later
+        this.resolverManager = undefined;
       }
       
       // Keep legacy components for backward compatibility
@@ -959,7 +973,18 @@ export class Environment {
     
     const result = await resolverManager.resolve(reference, { context });
     
-    // Return the full content object with content type
+    // Check if result.content exists
+    if (!result || !result.content) {
+      throw new Error(`Resolver returned invalid result for '${reference}': missing content`);
+    }
+    
+    // Check the structure of result.content
+    if (!result.content.content || !result.content.contentType) {
+      console.error('Resolver result structure:', JSON.stringify(result, null, 2));
+      throw new Error(`Resolver returned invalid content structure for '${reference}': missing content or contentType`);
+    }
+    
+    // The result.content is already the resolver's result object
     return {
       content: result.content.content,
       contentType: result.content.contentType,

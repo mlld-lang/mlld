@@ -1,0 +1,7 @@
+# Test Custom Resolver Import
+
+@import { greet, config } from @private/test-private-module
+
+@add @greet
+
+@add [[Module config: {{config.source}} v{{config.version}}]]

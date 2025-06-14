@@ -1,0 +1,165 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import * as os from 'os';
+import { AliasCommand } from '../alias';
+import { existsSync } from 'fs';
+
+// Mock modules
+vi.mock('fs/promises');
+vi.mock('fs');
+vi.mock('os');
+
+describe('AliasCommand', () => {
+  let command: AliasCommand;
+  let mockConsoleLog: any;
+  let mockConsoleError: any;
+
+  beforeEach(() => {
+    command = new AliasCommand();
+    mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    
+    // Mock os.homedir
+    vi.mocked(os.homedir).mockReturnValue('/home/user');
+    
+    // Mock existsSync
+    vi.mocked(existsSync).mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should create a local alias', async () => {
+    const mockLockFile = {
+      getResolverRegistries: vi.fn().mockReturnValue([]),
+      setResolverRegistries: vi.fn().mockResolvedValue(undefined),
+    };
+    
+    // Mock LockFile constructor
+    vi.mock('@core/registry/LockFile', () => ({
+      LockFile: vi.fn().mockImplementation(() => mockLockFile)
+    }));
+
+    await command.createAlias({
+      name: 'shared',
+      path: '../shared-modules',
+      global: false
+    });
+
+    expect(mockLockFile.setResolverRegistries).toHaveBeenCalledWith([
+      {
+        prefix: '@shared/',
+        resolver: 'LOCAL',
+        type: 'input',
+        priority: 20,
+        config: {
+          basePath: '../shared-modules'
+        }
+      }
+    ]);
+
+    expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('✅ Created local alias: @shared/'));
+  });
+
+  it('should create a global alias', async () => {
+    const mockLockFile = {
+      getResolverRegistries: vi.fn().mockReturnValue([]),
+      setResolverRegistries: vi.fn().mockResolvedValue(undefined),
+    };
+    
+    // Mock LockFile constructor
+    vi.mock('@core/registry/LockFile', () => ({
+      LockFile: vi.fn().mockImplementation(() => mockLockFile)
+    }));
+
+    // Mock fs.mkdir
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+
+    await command.createAlias({
+      name: 'desktop',
+      path: '~/Desktop',
+      global: true
+    });
+
+    expect(mockLockFile.setResolverRegistries).toHaveBeenCalledWith([
+      {
+        prefix: '@desktop/',
+        resolver: 'LOCAL',
+        type: 'input',
+        priority: 20,
+        config: {
+          basePath: '/home/user/Desktop'
+        }
+      }
+    ]);
+
+    expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('✅ Created global alias: @desktop/'));
+    expect(vi.mocked(fs.mkdir)).toHaveBeenCalledWith('/home/user/.config/mlld', { recursive: true });
+  });
+
+  it('should validate alias name format', async () => {
+    await expect(command.createAlias({
+      name: 'Invalid-Name',
+      path: './path',
+      global: false
+    })).rejects.toThrow('Alias name must be lowercase alphanumeric with hyphens');
+  });
+
+  it('should require both name and path', async () => {
+    await expect(command.createAlias({
+      name: '',
+      path: './path',
+      global: false
+    })).rejects.toThrow('Both --name and --path are required');
+
+    await expect(command.createAlias({
+      name: 'test',
+      path: '',
+      global: false
+    })).rejects.toThrow('Both --name and --path are required');
+  });
+
+  it('should update existing alias', async () => {
+    const existingRegistry = {
+      prefix: '@shared/',
+      resolver: 'LOCAL',
+      type: 'input',
+      priority: 20,
+      config: {
+        basePath: './old-path'
+      }
+    };
+
+    const mockLockFile = {
+      getResolverRegistries: vi.fn().mockReturnValue([existingRegistry]),
+      setResolverRegistries: vi.fn().mockResolvedValue(undefined),
+    };
+    
+    // Mock LockFile constructor
+    vi.mock('@core/registry/LockFile', () => ({
+      LockFile: vi.fn().mockImplementation(() => mockLockFile)
+    }));
+
+    await command.createAlias({
+      name: 'shared',
+      path: './new-path',
+      global: false
+    });
+
+    expect(mockLockFile.setResolverRegistries).toHaveBeenCalledWith([
+      {
+        prefix: '@shared/',
+        resolver: 'LOCAL',
+        type: 'input',
+        priority: 20,
+        config: {
+          basePath: './new-path'
+        }
+      }
+    ]);
+
+    expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('⚠️  Updated existing alias: @shared/'));
+  });
+});

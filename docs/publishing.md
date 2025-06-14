@@ -34,6 +34,7 @@ mlld publish my-utils.mld.md
 1. **mlld CLI installed**: `npm install -g mlld`
 2. **GitHub account**: Required for authentication
 3. **GitHub authentication**: Run `mlld auth login`
+4. **Initial setup** (optional): Run `mlld setup` to configure resolvers and authentication
 
 ## Creating Your Module
 
@@ -148,6 +149,19 @@ For modules not in a git repository or in private repos without write access:
 ### Private Repository Publishing
 
 For teams using private GitHub repositories:
+
+#### Initial Setup
+
+```bash
+# Set up GitHub authentication and private repository access
+mlld setup --github
+
+# This will:
+# 1. Verify your GitHub authentication
+# 2. Configure your private repository
+# 3. Set up resolver configuration in mlld.lock.json
+# 4. Test repository access
+```
 
 #### Interactive Mode
 

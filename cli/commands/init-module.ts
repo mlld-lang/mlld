@@ -10,6 +10,7 @@ import chalk from 'chalk';
 import { MlldError, ErrorSeverity } from '@core/errors/index';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
 import { execSync } from 'child_process';
+import { existsSync } from 'fs';
 
 export interface InitModuleOptions {
   name?: string;
@@ -31,7 +32,7 @@ export class InitModuleCommand {
   }
 
   async initModule(options: InitModuleOptions = {}): Promise<void> {
-    console.log(chalk.blue('=� Creating new mlld module...\n'));
+    console.log(chalk.blue('Creating new mlld module...\n'));
 
     const rl = readline.createInterface({
       input: process.stdin,
@@ -39,12 +40,237 @@ export class InitModuleCommand {
     });
 
     try {
+      // Check if user provided @resolver/module syntax
+      let resolverPrefix: string | undefined;
+      let resolverPath: string | undefined;
+      let suggestedModuleName = '';
+      
+      if (options.output && options.output.startsWith('@')) {
+        // User provided @resolver/module syntax
+        const match = options.output.match(/^(@[^/]+\/)(.+)$/);
+        if (match) {
+          resolverPrefix = match[1];
+          suggestedModuleName = match[2];
+          
+          // Look up the resolver configuration
+          const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
+          if (existsSync(lockFilePath)) {
+            try {
+              const lockFileContent = await fs.readFile(lockFilePath, 'utf8');
+              const lockData = JSON.parse(lockFileContent);
+              
+              const resolver = lockData.config?.resolvers?.registries?.find(
+                (r: any) => r.prefix === resolverPrefix
+              );
+              
+              if (resolver && resolver.resolver === 'LOCAL' && resolver.config?.basePath) {
+                resolverPath = resolver.config.basePath;
+              } else if (resolver && resolver.resolver === 'GITHUB') {
+                // For GitHub resolver, we'll create locally and remind user to commit/push
+                const { repository, basePath } = resolver.config;
+                console.log(chalk.blue(`\nThis will create a module for GitHub repository: ${repository}`));
+                console.log(chalk.gray(`Remote path: ${basePath || 'modules'}/${suggestedModuleName}.mlld.md`));
+                console.log('');
+                
+                // Check if we're in a git repo that matches
+                try {
+                  const { execSync } = await import('child_process');
+                  const remoteUrl = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
+                  const githubMatch = remoteUrl.match(/github\.com[:/](.+)\.git/);
+                  
+                  if (githubMatch && githubMatch[1] === repository) {
+                    // We're in the right repo!
+                    const localBasePath = basePath || 'modules';
+                    resolverPath = localBasePath;
+                    console.log(chalk.green(`✔ Current repository matches ${repository}`));
+                    console.log(`Module will be created at: ${localBasePath}/${suggestedModuleName}.mlld.md`);
+                    console.log('');
+                  } else {
+                    throw new MlldError(
+                      `You're not in the ${repository} repository.\n` +
+                      `Please clone it first:\n` +
+                      `  git clone https://github.com/${repository}.git\n` +
+                      `  cd ${repository.split('/')[1]}\n` +
+                      `  mlld init ${options.output}`,
+                      { code: 'WRONG_REPOSITORY', severity: ErrorSeverity.Fatal }
+                    );
+                  }
+                } catch (error) {
+                  if (error instanceof MlldError) throw error;
+                  throw new MlldError(
+                    `Not in a git repository. For GitHub modules, you need to:\n` +
+                    `  1. Clone the repository: git clone https://github.com/${repository}.git\n` +
+                    `  2. Run mlld init from inside the repository`,
+                    { code: 'NOT_IN_GIT_REPO', severity: ErrorSeverity.Fatal }
+                  );
+                }
+              } else if (resolver) {
+                throw new MlldError(
+                  `Cannot create modules with ${resolver.resolver} resolver`,
+                  { code: 'INVALID_RESOLVER_TYPE', severity: ErrorSeverity.Fatal }
+                );
+              } else {
+                throw new MlldError(
+                  `No resolver configured for prefix: ${resolverPrefix}`,
+                  { code: 'RESOLVER_NOT_FOUND', severity: ErrorSeverity.Fatal }
+                );
+              }
+            } catch (error) {
+              if (error instanceof MlldError) throw error;
+              // Ignore other errors
+            }
+          } else {
+            throw new MlldError(
+              `No mlld.lock.json found. Run 'mlld setup' to configure resolvers first.`,
+              { code: 'NO_CONFIG', severity: ErrorSeverity.Fatal }
+            );
+          }
+        }
+      } else if (options.output) {
+        // Extract module name from regular filename
+        const basename = path.basename(options.output);
+        // First strip mlld-specific extensions
+        if (basename.endsWith('.mlld.md')) {
+          suggestedModuleName = basename.slice(0, -8);
+        } else if (basename.endsWith('.mld.md')) {
+          suggestedModuleName = basename.slice(0, -7);
+        } else if (basename.endsWith('.mld')) {
+          suggestedModuleName = basename.slice(0, -4);
+        } else {
+          // Strip any other file extension (e.g., .md, .txt, etc.)
+          const extIndex = basename.lastIndexOf('.');
+          if (extIndex > 0) {
+            suggestedModuleName = basename.slice(0, extIndex);
+          } else {
+            suggestedModuleName = basename;
+          }
+        }
+      }
+
+      // Determine where to create the module
+      let outputPath: string;
+      let displayPath: string;
+      
+      // Check for local resolver configuration
+      let localModulesPath = './llm/modules'; // Default
+      const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
+      
+      if (existsSync(lockFilePath)) {
+        try {
+          const lockFileContent = await fs.readFile(lockFilePath, 'utf8');
+          const lockData = JSON.parse(lockFileContent);
+          
+          // Look for LOCAL resolver with @local/ prefix
+          const localResolver = lockData.config?.resolvers?.registries?.find(
+            (r: any) => r.resolver === 'LOCAL' && r.prefix === '@local/'
+          );
+          
+          if (localResolver && localResolver.config?.basePath) {
+            localModulesPath = localResolver.config.basePath;
+          }
+        } catch (error) {
+          // Ignore errors parsing lock file
+        }
+      }
+      
+      // If we have a resolver path, we know exactly where to create it
+      if (resolverPath && resolverPrefix) {
+        const moduleFileName = suggestedModuleName + '.mlld.md';
+        outputPath = path.join(resolverPath, moduleFileName);
+        displayPath = path.relative(process.cwd(), outputPath);
+        
+        console.log(`\nWill create module: ${chalk.cyan(resolverPrefix + suggestedModuleName)}`);
+        console.log(`Location: ${displayPath}`);
+        console.log('');
+        
+        const confirm = await rl.question('Continue? [Y/n]: ') || 'y';
+        if (confirm.toLowerCase() !== 'y' && confirm.toLowerCase() !== 'yes') {
+          console.log(chalk.gray('Module creation cancelled.'));
+          return;
+        }
+        
+        // Ensure directory exists
+        const absolutePath = path.resolve(path.dirname(outputPath));
+        if (!existsSync(absolutePath)) {
+          await fs.mkdir(absolutePath, { recursive: true });
+        }
+      }
+      // If user provided a filename, ask where to create it
+      else if (options.output) {
+        const moduleFileName = suggestedModuleName + '.mlld.md';
+        const option1Path = path.join(localModulesPath, moduleFileName);
+        
+        // For option 2, preserve directory structure if provided
+        let option2Path: string;
+        if (options.output.endsWith('.mlld.md')) {
+          option2Path = options.output;
+        } else if (options.output.endsWith('.mld.md') || options.output.endsWith('.mld')) {
+          option2Path = options.output.replace(/\.mld(\.md)?$/, '.mlld.md');
+        } else {
+          // For any other case, we need to handle directories and extensions
+          const dir = path.dirname(options.output);
+          const base = path.basename(options.output);
+          
+          // Strip any extension from the basename
+          let nameWithoutExt = base;
+          const extIndex = base.lastIndexOf('.');
+          if (extIndex > 0) {
+            nameWithoutExt = base.slice(0, extIndex);
+          }
+          
+          // Reconstruct the path with .mlld.md extension
+          if (dir === '.') {
+            option2Path = nameWithoutExt + '.mlld.md';
+          } else {
+            option2Path = path.join(dir, nameWithoutExt + '.mlld.md');
+          }
+        }
+        
+        console.log('\nCreate new module in:');
+        console.log(`  1. ${path.relative(process.cwd(), option1Path)} (Recommended)`);
+        console.log(`  2. ${path.relative(process.cwd(), option2Path)}`);
+        console.log('');
+        
+        const choice = await rl.question('Choice [1]: ') || '1';
+        
+        if (choice === '1') {
+          outputPath = option1Path;
+          displayPath = path.relative(process.cwd(), outputPath);
+          
+          // Ensure directory exists
+          const absolutePath = path.resolve(path.dirname(outputPath));
+          if (!existsSync(absolutePath)) {
+            await fs.mkdir(absolutePath, { recursive: true });
+          }
+        } else {
+          outputPath = path.resolve(option2Path);
+          displayPath = path.relative(process.cwd(), outputPath);
+          
+          // Ensure directory exists if path includes directories
+          const dir = path.dirname(outputPath);
+          if (dir !== '.' && !existsSync(dir)) {
+            await fs.mkdir(dir, { recursive: true });
+          }
+        }
+      } else {
+        // No output specified, will determine after getting module name
+        outputPath = '';
+        displayPath = '';
+      }
       const metadata: any = {};
 
+      console.log('Modules are lowercase with hyphens allowed\n');
+      
       if (options.name) {
         metadata.name = options.name;
+      } else if (resolverPrefix && suggestedModuleName) {
+        // For @resolver/module syntax, we already have the name
+        metadata.name = suggestedModuleName;
+        console.log(`Module name: ${metadata.name}`);
       } else {
-        metadata.name = await rl.question('Module name (lowercase, hyphens allowed): ');
+        const prompt = suggestedModuleName ? `Module name [${suggestedModuleName}]: ` : 'Module name: ';
+        const input = await rl.question(prompt);
+        metadata.name = input || suggestedModuleName;
       }
       
       if (!metadata.name.match(/^[a-z0-9-]+$/)) {
@@ -57,7 +283,7 @@ export class InitModuleCommand {
       if (options.about) {
         metadata.about = options.about;
       } else {
-        metadata.about = await rl.question('About (brief description): ');
+        metadata.about = await rl.question('About: ');
       }
 
       if (options.author) {
@@ -81,12 +307,11 @@ export class InitModuleCommand {
           }
         }
 
-        console.log('\nAuthor (your GitHub username or organization):');
         if (defaultAuthor) {
           const authorInput = await rl.question(`Author [${defaultAuthor}]: `);
           metadata.author = authorInput || defaultAuthor;
         } else {
-          metadata.author = await rl.question('Author: ');
+          metadata.author = await rl.question('Author (GitHub username or organization): ');
         }
       }
 
@@ -109,7 +334,7 @@ export class InitModuleCommand {
       if (options.keywords) {
         metadata.keywords = options.keywords.split(',').map(k => k.trim());
       } else if (!allRequiredProvided) {
-        const keywordsInput = await rl.question('Keywords (comma-separated, press Enter to skip): ');
+        const keywordsInput = await rl.question('Keywords []: ');
         if (keywordsInput) {
           metadata.keywords = keywordsInput.split(',').map(k => k.trim());
         }
@@ -119,7 +344,7 @@ export class InitModuleCommand {
       if (options.homepage) {
         metadata.homepage = options.homepage;
       } else if (!allRequiredProvided) {
-        const homepageInput = await rl.question('Homepage URL (press Enter to skip): ');
+        const homepageInput = await rl.question('Homepage []: ');
         if (homepageInput) {
           metadata.homepage = homepageInput;
         }
@@ -135,19 +360,14 @@ export class InitModuleCommand {
             const [, owner, repo] = githubMatch;
             metadata.repo = `https://github.com/${owner}/${repo}`;
             metadata.bugs = `https://github.com/${owner}/${repo}/issues`;
-            console.log(chalk.gray(`\nAuto-detected repository: ${metadata.repo}`));
+            console.log(chalk.gray(`Auto-detected repository: ${metadata.repo}`));
           }
         } catch {
           // Not in git repo or no remote
         }
       }
 
-      console.log('\nRuntime dependencies:');
-      console.log(chalk.gray('  Dependencies will be auto-detected when you publish.'));
-      console.log(chalk.gray('  For now, specify if you know you\'ll use external runtimes.'));
-      console.log(chalk.gray('  Options: js, node, py, sh (comma-separated, or press Enter for none)'));
-      console.log(chalk.gray('  Note: Use "node" for Node.js-specific code, "js" for browser-compatible JavaScript'));
-      
+      console.log('\nRuntime dependencies (js, node, py, sh):');
       const needsInput = await rl.question('Needs []: ');
       if (needsInput) {
         metadata.needs = needsInput.split(',').map(n => n.trim());
@@ -166,24 +386,46 @@ export class InitModuleCommand {
         metadata.needs = [];
       }
 
-      console.log('\nModule export pattern:');
-      console.log('  1. Simple module (recommended - auto-exports all variables)');
-      console.log('  2. Structured interface (advanced - custom export organization)');
-      console.log('  3. Empty (I\'ll add content later)');
-      
-      const patternChoice = await rl.question('\nChoice [1]: ') || '1';
+      // Always use simple module pattern
+      const patternChoice = '1';
 
       metadata.license = 'CC0';
       metadata.mlldVersion = '*';
 
       const content = this.generateModuleContent(metadata, patternChoice);
 
-      const outputFile = options.output || `${metadata.name}.mld.md`;
-      const outputPath = path.resolve(outputFile);
+      // Determine output path if not already set
+      if (!outputPath) {
+        // No output was specified, so ask where to create it
+        const moduleFileName = metadata.name + '.mlld.md';
+        const option1Path = path.join(localModulesPath, moduleFileName);
+        const option2Path = path.join('.', moduleFileName);
+        
+        console.log('\nCreate new module in:');
+        console.log(`  1. ${path.relative(process.cwd(), option1Path)} (Recommended)`);
+        console.log(`  2. ${option2Path}`);
+        console.log('');
+        
+        const choice = await rl.question('Choice [1]: ') || '1';
+        
+        if (choice === '1') {
+          outputPath = option1Path;
+          displayPath = path.relative(process.cwd(), outputPath);
+          
+          // Ensure directory exists
+          const absolutePath = path.resolve(path.dirname(outputPath));
+          if (!existsSync(absolutePath)) {
+            await fs.mkdir(absolutePath, { recursive: true });
+          }
+        } else {
+          outputPath = path.resolve(option2Path);
+          displayPath = path.relative(process.cwd(), outputPath);
+        }
+      }
 
       try {
         await fs.access(outputPath);
-        const overwrite = await rl.question(chalk.yellow(`\nFile ${outputFile} already exists. Overwrite? (y/n): `));
+        const overwrite = await rl.question(chalk.yellow(`\nFile ${displayPath} already exists. Overwrite? (y/n): `));
         if (overwrite.toLowerCase() !== 'y') {
           console.log(chalk.gray('Module creation cancelled.'));
           return;
@@ -194,11 +436,24 @@ export class InitModuleCommand {
 
       await fs.writeFile(outputPath, content, 'utf8');
       
-      console.log(chalk.green(`\n Module created: ${outputFile}`));
+      console.log(chalk.green(`\n✔ Module created: ${displayPath}`));
       console.log(chalk.gray('\nNext steps:'));
-      console.log(chalk.gray(`  1. Edit ${outputFile} to add your module functionality`));
-      console.log(chalk.gray(`  2. Test locally: mlld ${outputFile}`));
-      console.log(chalk.gray(`  3. Publish: mlld publish ${outputFile}`));
+      console.log(chalk.gray(`  1. Edit ${displayPath} to add your module functionality`));
+      console.log(chalk.gray(`  2. Test locally: mlld ${displayPath}`));
+      console.log(chalk.gray(`  3. Publish: mlld publish ${displayPath}`));
+      
+      // Check if this was created for a GitHub resolver
+      const isGitHubModule = resolverPrefix && options.output && options.output.startsWith('@') && 
+        resolverPath && !resolverPath.startsWith('.');
+      
+      if (isGitHubModule) {
+        console.log(chalk.gray('\nFor GitHub modules:'));
+        console.log(chalk.gray('  3. Commit and push to GitHub:'));
+        console.log(chalk.gray(`     git add ${displayPath}`));
+        console.log(chalk.gray(`     git commit -m "Add ${metadata.name} module"`));
+        console.log(chalk.gray(`     git push`));
+        console.log(chalk.gray(`  4. Your module will be available at: ${options.output}`));
+      }
       
       if (metadata.needs.length === 0) {
         console.log(chalk.gray('\nNote: Dependencies will be auto-detected when you publish.'));
@@ -212,11 +467,7 @@ export class InitModuleCommand {
   private generateModuleContent(metadata: any, patternChoice: string): string {
     const frontmatter = this.formatFrontmatter(metadata);
     
-    let moduleContent = '';
-    
-    switch (patternChoice) {
-      case '1':
-        moduleContent = `
+    const moduleContent = `
 
 # @${metadata.author}/${metadata.name}
 
@@ -239,65 +490,6 @@ More detailed usage examples and documentation.
 >> All variables are automatically exported
 \`\`\`
 `;
-        break;
-        
-      case '2':
-        moduleContent = `
-
-# @${metadata.author}/${metadata.name}
-
-## tldr
-
-Tell us:
-- what problem it solves
-- why it's useful
-
-## docs
-
-More detailed usage examples and documentation.
-
-## module
-
-\`\`\`mlld-run
-@exec example(input) = @run [echo "Processing: @input"]
-
->> Add your mlld code here
-
-@data module = {
-  example: @example,
-  // You can also organize exports into namespaces:
-  // commands: {
-  //   example: @example
-  // }
-}
-\`\`\`
-`;
-        break;
-        
-      case '3':
-      default:
-        moduleContent = `
-
-# @${metadata.author}/${metadata.name}
-
-## tldr
-
-Tell us:
-- what problem it solves
-- why it's useful
-
-## docs
-
-More detailed usage examples and documentation.
-
-## module
-
-\`\`\`mlld-run
->> Write your mlld code here
-\`\`\`
-`;
-        break;
-    }
     
     return frontmatter + moduleContent.trim() + '\n';
   }
@@ -335,22 +527,22 @@ export function createInitModuleCommand() {
   return {
     name: 'init-module',
     aliases: ['init'],
-    description: 'Create a new mlld module interactively',
+    description: 'Create a new mlld module',
     
     async execute(args: string[], flags: Record<string, any> = {}): Promise<void> {
       // Check for help flag first
       if (flags.help || flags.h) {
         console.log(`
-Usage: mlld init [options] [target]
+Usage: mlld init [options] [module-name]
 
-Create a new mlld project or module.
+Create a new mlld module interactively.
 
-Project Creation (when target is a directory):
-  mlld init                    Initialize project in current directory
-  mlld init my-project         Create new project directory 'my-project'
-
-Module Creation (when target ends with .mld.md or .mld):
-  mlld init my-module.mld.md   Create a new module file interactively
+Examples:
+  mlld init                    Create a new module interactively
+  mlld init test               Create module named 'test'
+  mlld init @local/utils       Create 'utils' in configured @local/ path
+  mlld init @myorg/helper      Create 'helper' in configured @myorg/ path
+  mlld init ./path/to/test     Create module at specific path
 
 Options:
   -n, --name <name>           Module name (for module creation)
@@ -363,25 +555,41 @@ Options:
   --skip-git                  Skip git integration
   -f, --force                 Overwrite existing files
 
-Examples:
-  mlld init                   # Initialize mlld project in current directory
-  mlld init my-project        # Create new project 'my-project'
-  mlld init utils.mld.md      # Create new module file interactively
-  mlld init --name utils --about "Utility functions" utils.mld.md
+More Examples:
+  mlld init --name utils --about "Utility functions"
+  mlld init test --author myorg
+  mlld init ./src/helpers.mlld.md
         `);
         return;
       }
       
-      // Extract module name from .mld filename if provided
+      // Extract module name from filename if provided
       let moduleName = flags.name || flags.n;
-      let outputPath = flags.output || flags.o || args[0];
+      let outputPath = flags.output || flags.o;
       
-      if (args[0] && (args[0].endsWith('.mld.md') || args[0].endsWith('.mld')) && !moduleName) {
-        // Extract name from filename: "my-module.mld.md" -> "my-module" or "my-module.mld" -> "my-module"
-        if (args[0].endsWith('.mld.md')) {
-          moduleName = path.basename(args[0], '.mld.md');
-        } else {
-          moduleName = path.basename(args[0], '.mld');
+      // If first arg is provided and no output flag, treat it as the output/name
+      if (args[0] && !outputPath) {
+        outputPath = args[0];
+        
+        // Extract module name from the filename if not provided via flag
+        if (!moduleName) {
+          const basename = path.basename(args[0]);
+          // First strip mlld-specific extensions
+          if (basename.endsWith('.mlld.md')) {
+            moduleName = basename.slice(0, -8);
+          } else if (basename.endsWith('.mld.md')) {
+            moduleName = basename.slice(0, -7);
+          } else if (basename.endsWith('.mld')) {
+            moduleName = basename.slice(0, -4);
+          } else {
+            // Strip any other file extension (e.g., .md, .txt, etc.)
+            const extIndex = basename.lastIndexOf('.');
+            if (extIndex > 0) {
+              moduleName = basename.slice(0, extIndex);
+            } else {
+              moduleName = basename;
+            }
+          }
         }
       }
       

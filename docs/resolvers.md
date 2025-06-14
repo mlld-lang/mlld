@@ -187,9 +187,28 @@ Higher priority always wins - you cannot override built-in resolvers.
 
 You can create custom resolvers for organization-specific needs.
 
-### Configuration
+### Quick Setup
 
-Add custom resolvers to `mlld.config.json`:
+The easiest way to configure resolvers is using mlld's interactive commands:
+
+```bash
+# Complete setup wizard
+mlld setup
+
+# Set up GitHub private modules
+mlld setup --github
+
+# Set up local directory aliases
+mlld setup --local
+
+# Create specific aliases
+mlld alias --name lib --path ./src/lib
+mlld alias --name shared --path ../shared-modules --global
+```
+
+### Manual Configuration
+
+You can also add custom resolvers manually to `mlld.lock.json`:
 
 ```json
 {
@@ -261,7 +280,7 @@ Map @ prefixes to filesystem locations:
 ```
 
 #### Module Resolvers  
-Access private module registries or repositories:
+Access private module registries or repositories. For GitHub repositories, authenticate first with `mlld auth login`:
 
 ```json
 {

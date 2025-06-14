@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "config": {
+    "resolvers": {
+      "registries": [
+        {
+          "prefix": "@private/",
+          "resolver": "LOCAL",
+          "type": "input",
+          "config": {
+            "basePath": "."
+          }
+        }
+      ]
+    }
+  },
+  "modules": {},
+  "cache": {}
+}

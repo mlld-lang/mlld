@@ -563,6 +563,154 @@ Example workflow reading:
 ]
 ```
 
+## Configuring Custom Resolvers
+
+mlld 1.4+ introduces a resolver system that allows custom path resolution and private modules.
+
+### Quick Setup with CLI Commands
+
+The easiest way to configure resolvers is using mlld's setup commands:
+
+```bash
+# Complete interactive setup wizard
+mlld setup
+
+# Set up GitHub private modules only
+mlld setup --github
+
+# Set up path aliases only  
+mlld setup --local
+
+# Create a specific path alias
+mlld alias --name shared --path ../shared-modules
+
+# Create a global alias (available to all projects)
+mlld alias --name desktop --path ~/Desktop --global
+```
+
+### Manual Path Resolver Configuration
+
+You can also configure custom path prefixes manually in your `mlld.lock.json`:
+
+```json
+// mlld.lock.json
+{
+  "version": "1.0",
+  "config": {
+    "resolvers": {
+      "registries": [
+        {
+          "prefix": "@lib/",
+          "resolver": "LOCAL",
+          "type": "input",
+          "config": {
+            "basePath": "./src/lib"
+          }
+        },
+        {
+          "prefix": "@shared/",
+          "resolver": "LOCAL", 
+          "type": "input",
+          "config": {
+            "basePath": "../shared-modules"
+          }
+        }
+      ]
+    }
+  },
+  "modules": {},
+  "cache": {}
+}
+```
+
+Now you can import using these prefixes:
+```mlld
+@import { utils } from @lib/string-utils
+@import { validate } from @shared/validators
+```
+
+### Private GitHub Module Configuration
+
+Set up private modules using GitHub repositories. First authenticate:
+
+```bash
+# Authenticate with GitHub (uses OAuth device flow)
+mlld auth login
+
+# Check authentication status
+mlld auth status
+```
+
+Then configure your private repository:
+
+```json
+// mlld.lock.json
+{
+  "version": "1.0",
+  "config": {
+    "resolvers": {
+      "registries": [
+        {
+          "prefix": "@myorg/",
+          "resolver": "GITHUB",
+          "type": "input", 
+          "config": {
+            "repository": "myorg/private-mlld-modules",
+            "branch": "main",
+            "basePath": "modules"
+          }
+        }
+      ]
+    }
+  },
+  "modules": {},
+  "cache": {}
+}
+```
+
+Usage:
+```mlld
+# This resolves to: https://github.com/myorg/private-mlld-modules/blob/main/modules/auth/login.mld
+@import { authenticate } from @myorg/auth/login
+
+# Import from specific paths
+@import { helper } from @myorg/utils/strings
+```
+
+### Resolver Types
+
+- **LOCAL**: File system paths (relative or absolute) - called "path aliases" in user-facing commands
+- **HTTP**: Remote URLs (with caching support)
+- **GITHUB**: GitHub repositories (public or private with authentication)
+- **REGISTRY**: mlld module registry
+- **TIME, DEBUG, INPUT, PROJECTPATH**: Built-in variable resolvers
+
+### Configuration Files
+
+- **Project config**: `mlld.lock.json` in project root
+- **Global config**: `~/.config/mlld/mlld.lock.json` (for global aliases and settings)
+- **Old location**: `~/.config/mlld.json` (deprecated)
+
+### Publishing Private Modules
+
+When working with private repositories:
+
+```bash
+# Publish to private repository (interactive prompt)
+mlld publish my-module.mld.md
+
+# Skip prompt, publish directly to private repo
+mlld publish my-module.mld.md --private
+
+# Publish to custom directory in repo
+mlld publish my-module.mld.md --private --path lib/modules
+
+# Also create registry PR for future public release
+mlld publish my-module.mld.md --private --pr
+```
+
+Private modules are stored in your repository and accessed via file paths or GitHub resolver configuration.
+
 ## Best Practices
 
 1. **Keep .mld files readable**: They should make sense as Markdown documents
@@ -572,6 +720,7 @@ Example workflow reading:
 5. **Think orchestration**: mlld excels at coordinating tools and data flows
 6. **Create helpers liberally**: If you need it twice, make it a helper function
 7. **Embrace constraints**: Working with mlld's design leads to cleaner solutions
+8. **Configure resolvers for teams**: Use custom resolvers for shared private modules
 
 ## Example: Well-Structured mlld File
 
