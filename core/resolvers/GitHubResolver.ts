@@ -356,7 +356,14 @@ export class GitHubResolver implements Resolver {
     }
     
     if (ref) {
-      parts.push(ref.replace(/^\/|\/$/g, ''));
+      let modulePath = ref.replace(/^\/|\/$/g, '');
+      
+      // Auto-append .mlld.md extension if no extension is provided
+      if (modulePath && !modulePath.includes('.')) {
+        modulePath += '.mlld.md';
+      }
+      
+      parts.push(modulePath);
     }
     
     return parts.filter(p => p.length > 0).join('/');

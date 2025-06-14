@@ -199,9 +199,15 @@ export class ResolverManager {
       );
     }
 
+    // Strip prefix from reference for resolver operations
+    let resolverRef = ref;
+    if (registry?.prefix && ref.startsWith(registry.prefix)) {
+      resolverRef = ref.slice(registry.prefix.length);
+    }
+
     // Check access if supported
     if (resolver.checkAccess) {
-      const hasAccess = await resolver.checkAccess(ref, 'read', registry?.config);
+      const hasAccess = await resolver.checkAccess(resolverRef, 'read', registry?.config);
       if (!hasAccess) {
         throw new MlldResolutionError(
           `Access denied for reference: ${ref}`,
@@ -221,7 +227,7 @@ export class ResolverManager {
       };
       
       const content = await this.withTimeout(
-        resolver.resolve(ref, resolverConfig),
+        resolver.resolve(resolverRef, resolverConfig),
         timeoutMs || 30000
       );
 
@@ -307,9 +313,15 @@ export class ResolverManager {
       );
     }
 
+    // Strip prefix from reference for resolver operations
+    let resolverRef = ref;
+    if (registry?.prefix && ref.startsWith(registry.prefix)) {
+      resolverRef = ref.slice(registry.prefix.length);
+    }
+
     // Check access if supported
     if (resolver.checkAccess) {
-      const hasAccess = await resolver.checkAccess(ref, 'write', registry?.config);
+      const hasAccess = await resolver.checkAccess(resolverRef, 'write', registry?.config);
       if (!hasAccess) {
         throw new MlldResolutionError(
           `Write access denied for reference: ${ref}`,
@@ -319,7 +331,7 @@ export class ResolverManager {
     }
 
     try {
-      await resolver.write(ref, content, registry?.config);
+      await resolver.write(resolverRef, content, registry?.config);
     } catch (error) {
       throw new MlldResolutionError(
         `Failed to write '${ref}' using ${resolver.name}: ${error.message}`,
@@ -342,8 +354,14 @@ export class ResolverManager {
       return [];
     }
 
+    // Strip prefix from reference for resolver operations
+    let resolverPrefix = prefix;
+    if (registry?.prefix && prefix.startsWith(registry.prefix)) {
+      resolverPrefix = prefix.slice(registry.prefix.length);
+    }
+
     try {
-      return await resolver.list(prefix, registry?.config);
+      return await resolver.list(resolverPrefix, registry?.config);
     } catch (error) {
       logger.warn(`Failed to list content for '${prefix}': ${error.message}`);
       return [];
@@ -424,7 +442,9 @@ export class ResolverManager {
     for (const registry of this.registries) {
       if (ref.startsWith(registry.prefix)) {
         const resolver = this.resolvers.get(registry.resolver);
-        if (resolver && resolver.canResolve(ref, registry.config) && 
+        // Strip prefix from reference before checking canResolve
+        const resolverRef = ref.slice(registry.prefix.length);
+        if (resolver && resolver.canResolve(resolverRef, registry.config) && 
             (!context || this.canResolveInContext(resolver, context))) {
           return { resolver, registry };
         }

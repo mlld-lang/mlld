@@ -1,0 +1,15 @@
+---
+name: test-utils
+author: test
+about: Test private module for resolver verification
+version: 1.0.0
+needs: []
+license: CC0
+---
+
+# Test Private Module (Fixed)
+
+@text greet = "Hello from private module!"
+@data config = { "source": "private", "version": "1.0.0" }
+
+# Auto-export all variables (no explicit module definition to avoid circular refs)

@@ -67,16 +67,18 @@ export class LocalResolver implements Resolver {
    */
   canResolve(ref: string, config?: LocalResolverConfig): boolean {
     // We can handle any reference if we have a valid config
-    return !!config?.basePath;
+    // OR if the reference is an absolute path (for backwards compatibility)
+    return !!config?.basePath || path.isAbsolute(ref);
   }
 
   /**
    * Resolve a reference to local file content
    */
   async resolve(ref: string, config?: LocalResolverConfig): Promise<ResolverContent> {
-    if (!config?.basePath) {
+    // For absolute paths without config, use root as basePath for backwards compatibility
+    if (!config?.basePath && !path.isAbsolute(ref)) {
       throw new ResolverError(
-        'LocalResolver requires basePath in configuration',
+        'LocalResolver requires basePath in configuration for relative paths',
         { resolverName: 'LocalResolver', operation: 'resolve' }
       );
     }
@@ -335,7 +337,7 @@ export class LocalResolver implements Resolver {
    * Extract relative path from reference
    * Assumes the ResolverManager has already matched and removed the prefix
    */
-  private extractRelativePath(ref: string, config: LocalResolverConfig): string {
+  private extractRelativePath(ref: string, config: LocalResolverConfig | undefined): string {
     // Strip common module prefixes like @local/, @notes/, etc.
     // The ResolverManager passes the full reference, so we need to extract the path
     const prefixMatch = ref.match(/^@[^/]+\/(.*)/);
@@ -349,8 +351,10 @@ export class LocalResolver implements Resolver {
   /**
    * Resolve and validate the full filesystem path
    */
-  private async resolveFullPath(relativePath: string, config: LocalResolverConfig): Promise<string> {
-    const normalizedBase = path.resolve(config.basePath);
+  private async resolveFullPath(relativePath: string, config: LocalResolverConfig | undefined): Promise<string> {
+    // If no config and path is absolute, use root as base (for backwards compatibility)
+    const basePath = config?.basePath || '/';
+    const normalizedBase = path.resolve(basePath);
     
     // Check if the path is already absolute and within basePath
     if (path.isAbsolute(relativePath)) {
@@ -418,12 +422,15 @@ export class LocalResolver implements Resolver {
    */
   private async detectContentType(filePath: string, content: string): Promise<'module' | 'data' | 'text'> {
     // Check file extension
-    if (filePath.endsWith('.mld') || filePath.endsWith('.mlld')) {
+    // Only .mlld.md files are formal modules
+    if (filePath.endsWith('.mlld.md')) {
       return 'module';
     }
     if (filePath.endsWith('.json')) {
       return 'data';
     }
+    // Note: .mld and .mlld files are treated as 'text' since they're not formal modules
+    // They can still be imported, but they're not packaged modules
     
     // Try to detect mlld module content
     try {

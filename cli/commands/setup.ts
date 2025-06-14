@@ -42,7 +42,7 @@ export class SetupCommand {
       return;
     }
 
-    console.log(chalk.blue('🚀 mlld Setup - Project Configuration Wizard\n'));
+    console.log(chalk.blue('mlld Setup - Project Configuration Wizard\n'));
 
     const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
     const lockFile = new LockFile(lockFilePath);
@@ -51,7 +51,7 @@ export class SetupCommand {
     const hasExistingConfig = existsSync(lockFilePath);
     if (hasExistingConfig && !options.force) {
       const shouldUpdate = await this.promptYesNo(
-        'mlld.lock.json already exists. Update existing configuration?',
+        'mlld.lock.json already exists. Update resolver configuration?',
         true
       );
       if (!shouldUpdate) {
@@ -76,11 +76,11 @@ export class SetupCommand {
         setupType = 'basic';
       } else {
         // Interactive selection
-        console.log('What would you like to set up?');
+        console.log('What do you need?');
         console.log('  1. Private GitHub modules');
-        console.log('  2. Local module directories');
-        console.log('  3. Both GitHub and local modules');
-        console.log('  4. Just create basic mlld.lock.json');
+        console.log('  2. Path aliases for local modules');
+        console.log('  3. BOTH GitHub and path aliases');
+        console.log('  4. Just a basic mlld.lock.json');
         console.log('');
 
         const choice = await rl.question('Choose an option [1-4]: ');
@@ -138,7 +138,7 @@ export class SetupCommand {
       // Save configuration
       await this.saveConfiguration(lockFile, resolverRegistries, hasExistingConfig);
 
-      console.log(chalk.green('\n✅ Setup complete!'));
+      console.log(chalk.green('\n✔ Setup complete!'));
       
       if (setupType !== 'basic') {
         console.log(chalk.gray('\nYou can now import modules like:'));
@@ -164,7 +164,7 @@ export class SetupCommand {
   }
 
   private async setupGitHubResolver(rl: readline.Interface): Promise<any | null> {
-    console.log(chalk.blue('\n📁 GitHub Module Configuration'));
+    console.log(chalk.blue('\nPrivate GitHub Modules'));
     console.log('');
 
     // Auto-detect repository from git remote if available
@@ -176,7 +176,6 @@ export class SetupCommand {
       const githubMatch = remoteUrl.match(/github\.com[:/]([^/]+)\/([^.]+)/);
       if (githubMatch) {
         [, defaultOwner, defaultRepo] = githubMatch;
-        console.log(chalk.gray(`Auto-detected repository: ${defaultOwner}/${defaultRepo}`));
       }
     } catch {
       // Not in git repo or no remote
@@ -184,8 +183,8 @@ export class SetupCommand {
 
     // Get repository information
     const ownerPrompt = defaultOwner ? 
-      `GitHub organization or username [${defaultOwner}]: ` : 
-      'GitHub organization or username: ';
+      `GitHub account [${defaultOwner}]: ` : 
+      'GitHub account: ';
     const owner = (await rl.question(ownerPrompt)) || defaultOwner;
     
     if (!owner) {
@@ -195,7 +194,7 @@ export class SetupCommand {
 
     const repoPrompt = defaultRepo ? 
       `Repository name [${defaultRepo}]: ` : 
-      'Repository name for your private modules: ';
+      'Repository name: ';
     const repo = (await rl.question(repoPrompt)) || defaultRepo;
     
     if (!repo) {
@@ -206,41 +205,64 @@ export class SetupCommand {
     const repository = `${owner}/${repo}`;
 
     // Get branch
-    const branch = (await rl.question('Branch to use [main]: ')) || 'main';
+    const branch = (await rl.question('Branch [main]: ')) || 'main';
 
     // Get base path
-    const basePath = (await rl.question('Base path within repository [modules]: ')) || 'modules';
+    const basePath = (await rl.question('Base path [llm/modules]: ')) || 'llm/modules';
 
-    // Get prefix
-    const defaultPrefix = `@${owner}/`;
-    const prefix = (await rl.question(`Module prefix [${defaultPrefix}]: `)) || defaultPrefix;
+    // Get prefix - be smart about suggesting @private/ for individuals
+    let defaultPrefix: string;
+    
+    // Check if the owner is an organization
+    let isOrganization = false;
+    try {
+      const octokit = await this.authService.getOctokit();
+      const { data: ownerData } = await octokit.users.getByUsername({ username: owner });
+      isOrganization = ownerData.type === 'Organization';
+    } catch (error) {
+      // If we can't determine, assume it's not an org
+      // This could happen if the owner doesn't exist yet or is private
+    }
+    
+    if (isOrganization) {
+      defaultPrefix = `@${owner}/`;
+      console.log(chalk.gray(`Detected organization account: ${owner}`));
+    } else {
+      defaultPrefix = '@private/';
+      console.log(chalk.gray(`Using @private/ prefix for personal modules (recommended)`));
+    }
+    
+    let prefix = (await rl.question(`Prefix [${defaultPrefix}]: `)) || defaultPrefix;
+    
+    // Normalize prefix format
+    prefix = this.normalizePrefix(prefix);
 
     // Check authentication and repository access
-    console.log(chalk.blue('\n🔐 Verifying GitHub access...'));
+    console.log(chalk.blue('\nVerifying GitHub access...'));
     
     const isAuthenticated = await this.authService.isAuthenticated();
     if (!isAuthenticated) {
-      console.log(chalk.yellow('⚠️  Not authenticated with GitHub.'));
+      console.log(chalk.yellow('Not authenticated with GitHub.'));
       const shouldAuth = await this.promptYesNo('Would you like to authenticate now?', true);
       if (shouldAuth) {
         const authResult = await this.authService.authenticate();
         if (!authResult.success) {
-          console.log(chalk.red('❌ Authentication failed. Skipping GitHub setup.'));
+          console.log(chalk.red('✘ Authentication failed. Skipping GitHub setup.'));
           return null;
         }
       } else {
-        console.log(chalk.yellow('⚠️  GitHub setup requires authentication. Skipping.'));
+        console.log(chalk.yellow('GitHub setup requires authentication. Skipping.'));
         return null;
       }
     }
 
     const user = await this.authService.getGitHubUser();
     if (user) {
-      console.log(chalk.green(`✅ Authenticated as @${user.login}`));
+      console.log(chalk.green(`✔ Authenticated as @${user.login}`));
     }
 
     // Verify repository access
-    console.log(chalk.blue('🔍 Verifying repository access...'));
+    console.log(chalk.blue('Verifying repository access...'));
     const githubResolver = new GitHubResolver();
     const hasAccess = await githubResolver.checkAccess('', 'read', {
       repository,
@@ -249,9 +271,9 @@ export class SetupCommand {
     });
 
     if (hasAccess) {
-      console.log(chalk.green(`✅ Repository access confirmed: ${repository}`));
+      console.log(chalk.green(`✔ Repository access confirmed: ${repository}`));
     } else {
-      console.log(chalk.yellow(`⚠️  Could not verify access to ${repository}`));
+      console.log(chalk.yellow(`Could not verify access to ${repository}`));
       console.log(chalk.gray('This may be normal for private repositories or if the repository doesn\'t exist yet.'));
       const shouldContinue = await this.promptYesNo('Continue with setup?', true);
       if (!shouldContinue) {
@@ -273,45 +295,93 @@ export class SetupCommand {
   }
 
   private async setupLocalResolver(rl: readline.Interface): Promise<any | null> {
-    console.log(chalk.blue('\n📁 Local Module Configuration'));
+    console.log('');
+    console.log('---');
+    console.log('');
+    console.log(chalk.blue('Path Alias Configuration'));
     console.log('');
 
-    // Get local path
-    const defaultPath = './src/mlld-modules';
-    const localPath = (await rl.question(`Path to your local modules [${defaultPath}]: `)) || defaultPath;
+    // Get local path - default to llm/modules
+    const defaultPath = './llm/modules';
+    const localPath = (await rl.question(`Local path [${defaultPath}]: `)) || defaultPath;
 
     // Get prefix
     const defaultPrefix = '@local/';
-    const prefix = (await rl.question(`Module prefix [${defaultPrefix}]: `)) || defaultPrefix;
+    let prefix = (await rl.question(`Prefix [${defaultPrefix}]: `)) || defaultPrefix;
+    
+    // Normalize prefix format
+    prefix = this.normalizePrefix(prefix);
 
     // Check if path exists and offer to create it
     const absolutePath = path.resolve(localPath);
     const pathExists = existsSync(absolutePath);
     
     if (!pathExists) {
-      console.log(chalk.yellow(`⚠️  Directory ${localPath} does not exist.`));
+      console.log(chalk.yellow(`Directory ${localPath} does not exist.`));
       const shouldCreate = await this.promptYesNo('Would you like to create it?', true);
       if (shouldCreate) {
         try {
           await fs.mkdir(absolutePath, { recursive: true });
-          console.log(chalk.green(`✅ Created directory: ${localPath}`));
+          console.log(chalk.green(`✔ Created directory: ${localPath}`));
           
-          // Create a sample module
-          const samplePath = path.join(absolutePath, 'example.mld');
-          const sampleContent = `@text greeting = "Hello from local modules!"
-@text info = "This is an example local module"`;
+          // Create a sample module with proper .mlld.md format
+          const samplePath = path.join(absolutePath, 'example.mlld.md');
+          const sampleContent = `---
+name: example
+author: local
+about: Example module from path alias
+version: 1.0.0
+needs: []
+license: CC0
+---
+
+# @local/example
+
+A sample module to demonstrate loading from a path alias.
+
+## tldr
+
+\`\`\`mlld-run
+@import { greeting, info } from @local/example
+
+@add [[{{greeting}}]]
+@add [[{{info}}]]
+\`\`\`
+
+## export
+
+\`\`\`mlld-run
+@text greeting = "Hello from path alias!"
+@text info = "This module was loaded from a path alias"
+
+@data module = {
+  greeting: @greeting,
+  info: @info
+}
+\`\`\`
+
+## interface
+
+### \`greeting\`
+
+A friendly greeting message.
+
+### \`info\`
+
+Information about this module.
+`;
           await fs.writeFile(samplePath, sampleContent);
-          console.log(chalk.gray(`📝 Created sample module: ${path.join(localPath, 'example.mld')}`));
+          console.log(chalk.gray(`Created sample module: ${path.join(localPath, 'example.mlld.md')}`));
         } catch (error) {
-          console.log(chalk.red(`❌ Failed to create directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
+          console.log(chalk.red(`✘ Failed to create directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
           return null;
         }
       } else {
-        console.log(chalk.yellow('⚠️  Local setup requires the directory to exist. Skipping.'));
+        console.log(chalk.yellow('Local setup requires the directory to exist. Skipping.'));
         return null;
       }
     } else {
-      console.log(chalk.green(`✅ Directory exists: ${localPath}`));
+      console.log(chalk.green(`✔ Directory exists: ${localPath}`));
     }
 
     return {
@@ -355,16 +425,16 @@ export class SetupCommand {
       await lockFile.save();
     }
 
-    console.log(chalk.green(`\n✅ Configuration saved to mlld.lock.json`));
+    console.log(chalk.green(`\n✔ Configuration saved to mlld.lock.json`));
   }
 
   private async checkConfiguration(): Promise<void> {
-    console.log(chalk.blue('🔍 mlld Configuration Check\n'));
+    console.log(chalk.blue('mlld Configuration Check\n'));
 
     const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
     
     if (!existsSync(lockFilePath)) {
-      console.log(chalk.yellow('❌ No mlld.lock.json found'));
+      console.log(chalk.yellow('✘ No mlld.lock.json found'));
       console.log(chalk.gray('Run "mlld setup" to create configuration'));
       return;
     }
@@ -373,12 +443,12 @@ export class SetupCommand {
     const resolverRegistries = lockFile.getResolverRegistries();
 
     if (resolverRegistries.length === 0) {
-      console.log(chalk.yellow('⚠️  No resolvers configured'));
+      console.log(chalk.yellow('No resolvers configured'));
       console.log(chalk.gray('Run "mlld setup" to add module sources'));
       return;
     }
 
-    console.log(chalk.green('✅ Configuration found'));
+    console.log(chalk.green('✔ Configuration found'));
     console.log(`\nConfigured resolvers:`);
 
     for (const registry of resolverRegistries) {
@@ -393,15 +463,15 @@ export class SetupCommand {
         const isAuthenticated = await this.authService.isAuthenticated();
         if (isAuthenticated) {
           const user = await this.authService.getGitHubUser();
-          console.log(chalk.green(`    Authentication: ✅ @${user?.login}`));
+          console.log(chalk.green(`    Authentication: ✔ @${user?.login}`));
         } else {
-          console.log(chalk.yellow(`    Authentication: ❌ Not authenticated`));
+          console.log(chalk.yellow(`    Authentication: ✘ Not authenticated`));
         }
       } else if (registry.resolver === 'LOCAL') {
         const localPath = registry.config.basePath;
         const pathExists = existsSync(path.resolve(localPath));
         console.log(`    Path: ${localPath}`);
-        console.log(`    Exists: ${pathExists ? chalk.green('✅') : chalk.red('❌')}`);
+        console.log(`    Exists: ${pathExists ? chalk.green('✔') : chalk.red('✘')}`);
       }
     }
 
@@ -409,7 +479,7 @@ export class SetupCommand {
   }
 
   private async addResolver(): Promise<void> {
-    console.log(chalk.blue('➕ Add New Resolver\n'));
+    console.log(chalk.blue('Add New Resolver\n'));
 
     const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
     const lockFile = new LockFile(lockFilePath);
@@ -462,7 +532,7 @@ export class SetupCommand {
           await lockFile.setResolverRegistries(existingRegistries);
         }
 
-        console.log(chalk.green(`\n✅ Resolver added: ${newResolver.prefix}`));
+        console.log(chalk.green(`\n✔ Resolver added: ${newResolver.prefix}`));
       }
     } finally {
       rl.close();
@@ -489,6 +559,23 @@ export class SetupCommand {
     } finally {
       rl.close();
     }
+  }
+
+  private normalizePrefix(prefix: string): string {
+    // Remove any leading/trailing whitespace
+    prefix = prefix.trim();
+    
+    // Ensure it starts with @
+    if (!prefix.startsWith('@')) {
+      prefix = '@' + prefix;
+    }
+    
+    // Ensure it ends with /
+    if (!prefix.endsWith('/')) {
+      prefix = prefix + '/';
+    }
+    
+    return prefix;
   }
 }
 
@@ -520,7 +607,7 @@ authentication, and project configuration.
 
 Options:
   --github              Set up GitHub private modules only
-  --local               Set up local module directory only
+  --local               Set up path alias only
   --basic               Create basic mlld.lock.json only
   --force               Overwrite existing configuration
   --check               Check current configuration status
@@ -530,7 +617,7 @@ Options:
 Examples:
   mlld setup                    # Interactive setup wizard
   mlld setup --github           # Set up GitHub modules only
-  mlld setup --local            # Set up local modules only
+  mlld setup --local            # Set up path alias only
   mlld setup --check            # Check current configuration
   mlld setup --add-resolver     # Add a new module source
 

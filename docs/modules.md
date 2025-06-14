@@ -110,6 +110,14 @@ The lock file ensures reproducible builds:
 
 Create a new mlld module file with interactive setup. Creates `.mld.md` files by default for better GitHub integration and documentation.
 
+**Location-Aware Creation:**
+If you have a local module directory configured (via `mlld setup --local`), the init command will prompt you to create the module there:
+```
+Create module in llm/modules? [Y/n] (Lets you @import @local/modulename)
+```
+
+This makes your module immediately available for import without additional configuration.
+
 **Options:**
 - `--name <name>`: Module name (skip interactive prompt)
 - `--author <author>`: Author name  
@@ -764,21 +772,26 @@ The default public registry is `public.mlld.ai`:
 
 You can configure custom registries for private or organizational use:
 
-**mlld.config.json:**
+**mlld.lock.json:**
 ```json
 {
-  "registries": {
-    "work": {
-      "type": "dns",
-      "domain": "modules.company.com",
-      "priority": 1
-    },
-    "local": {
-      "type": "filesystem", 
-      "path": "./local-modules",
-      "priority": 2
+  "version": "1.0",
+  "config": {
+    "registries": {
+      "work": {
+        "type": "dns",
+        "domain": "modules.company.com",
+        "priority": 1
+      },
+      "local": {
+        "type": "filesystem", 
+        "path": "./local-modules",
+        "priority": 2
+      }
     }
-  }
+  },
+  "modules": {},
+  "cache": {}
 }
 ```
 
@@ -1123,6 +1136,288 @@ Private module access requires:
 4. **Migration Path**: Plan for eventual open-sourcing with `--pr` flag
 5. **Testing**: Set up CI/CD to test private modules automatically
 
+## Custom Resolver Configuration
+
+mlld 1.4+ introduces a resolver system that enables custom module resolution strategies beyond the default registry.
+
+### Quick Setup with mlld Commands
+
+The easiest way to configure resolvers is using the interactive setup commands:
+
+#### Setting Up Directory Aliases
+
+```bash
+# Interactive setup for local directories
+mlld setup --local
+
+# Or create aliases directly
+mlld alias --name shared --path ../shared-modules
+mlld alias --name lib --path ./src/lib
+
+# Global aliases (available to all projects)
+mlld alias --name desktop --path ~/Desktop --global
+```
+
+#### Setting Up Private GitHub Modules
+
+```bash
+# Authenticate first
+mlld auth login
+
+# Interactive GitHub setup
+mlld setup --github
+
+# Or complete setup wizard
+mlld setup
+```
+
+### Manual Configuration
+
+You can also configure resolvers manually by editing `mlld.lock.json`:
+
+#### Configuring Path Resolvers
+
+Create custom path prefixes that map to specific directories in your project:
+
+```json
+// mlld.lock.json
+{
+  "version": "1.0",
+  "config": {
+    "resolvers": {
+      "registries": [
+        {
+          "prefix": "@lib/",
+          "resolver": "LOCAL",
+          "type": "input",
+          "config": {
+            "basePath": "./src/lib"
+          }
+        },
+        {
+          "prefix": "@components/",
+          "resolver": "LOCAL",
+          "type": "input",
+          "config": {
+            "basePath": "./src/components/mlld"
+          }
+        },
+        {
+          "prefix": "@shared/",
+          "resolver": "LOCAL",
+          "type": "input", 
+          "config": {
+            "basePath": "../shared-modules"
+          }
+        }
+      ]
+    }
+  },
+  "modules": {},
+  "cache": {}
+}
+```
+
+Usage in your mlld files:
+```mlld
+# Resolves to ./src/lib/string-utils.mld
+@import { slugify, truncate } from @lib/string-utils
+
+# Resolves to ./src/components/mlld/header.mld
+@import { renderHeader } from @components/header
+
+# Resolves to ../shared-modules/validators.mld
+@import { validateEmail } from @shared/validators
+```
+
+### GitHub Resolver for Private Modules
+
+Configure private GitHub repositories as module sources. Requires authentication via `mlld auth login`.
+
+**Note:** The GitHub resolver uses secure token storage via keytar (system keychain) when available, with file-based fallback for environments without keychain access.
+
+```json
+// mlld.lock.json
+{
+  "version": "1.0",
+  "config": {
+    "resolvers": {
+      "registries": [
+        {
+          "prefix": "@myorg/",
+          "resolver": "GITHUB",
+          "type": "input",
+          "config": {
+            "repository": "myorg/private-mlld-modules",
+            "branch": "main",
+            "basePath": "modules"
+          }
+        },
+        {
+          "prefix": "@partner/",
+          "resolver": "GITHUB",
+          "type": "input",
+          "config": {
+            "repository": "partner-org/shared-modules",
+            "branch": "production",
+            "basePath": "mlld"
+          }
+        }
+      ]
+    }
+  },
+  "modules": {},
+  "cache": {}
+}
+```
+
+Usage:
+```mlld
+# Resolves to: https://github.com/myorg/private-mlld-modules/blob/main/modules/auth/jwt.mld
+@import { generateToken, verifyToken } from @myorg/auth/jwt
+
+# Nested paths work naturally
+@import { formatCurrency } from @myorg/utils/finance/currency
+
+# Import from partner organization
+@import { processOrder } from @partner/ecommerce/orders
+```
+
+### HTTP Resolver for Remote Modules
+
+Configure HTTP endpoints for module resolution:
+
+```json
+{
+  "resolvers": {
+    "registries": [
+      {
+        "prefix": "@cdn/",
+        "resolver": "HTTP",
+        "type": "input",
+        "config": {
+          "baseUrl": "https://cdn.example.com/mlld-modules",
+          "headers": {
+            "Authorization": "Bearer ${CDN_TOKEN}"
+          },
+          "cache": {
+            "enabled": true,
+            "ttl": 3600
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+### Resolver Priority
+
+When multiple resolvers could handle a path, they're tried in order:
+
+```json
+{
+  "resolvers": {
+    "registries": [
+      {
+        "prefix": "@utils/",
+        "resolver": "LOCAL",
+        "type": "input",
+        "priority": 1,  // Checked first
+        "config": { "basePath": "./local-utils" }
+      },
+      {
+        "prefix": "@utils/",
+        "resolver": "GITHUB", 
+        "type": "input",
+        "priority": 2,  // Fallback if not found locally
+        "config": { "repository": "myorg/utils" }
+      }
+    ]
+  }
+}
+```
+
+### Environment Variables in Configuration
+
+Use environment variables for sensitive configuration:
+
+```json
+{
+  "resolvers": {
+    "registries": [
+      {
+        "prefix": "@private/",
+        "resolver": "GITHUB",
+        "type": "input",
+        "config": {
+          "repository": "${GITHUB_ORG}/${GITHUB_REPO}",
+          "branch": "${GITHUB_BRANCH:-main}"  // Default to 'main'
+        }
+      }
+    ]
+  }
+}
+```
+
+### Complete Example Configuration
+
+Here's a comprehensive configuration showing multiple resolver types:
+
+```json
+// mlld.lock.json
+{
+  "version": "1.0",
+  "config": {
+    "resolvers": {
+      "registries": [
+        // Local development modules
+        {
+          "prefix": "@dev/",
+          "resolver": "LOCAL",
+          "type": "input",
+          "config": {
+            "basePath": "./dev-modules"
+          }
+      },
+      // Team's private GitHub modules
+      {
+        "prefix": "@team/",
+        "resolver": "GITHUB",
+        "type": "input",
+        "config": {
+          "repository": "mycompany/mlld-modules-private",
+          "branch": "main",
+          "basePath": "modules"
+        }
+      },
+      // Public CDN modules
+      {
+        "prefix": "@cdn/",
+        "resolver": "HTTP",
+        "type": "input",
+        "config": {
+          "baseUrl": "https://modules.example.com",
+          "cache": {
+            "enabled": true,
+            "ttl": 86400  // 24 hours
+          }
+        }
+      },
+      // Default registry (no prefix needed)
+      {
+        "prefix": "@",
+        "resolver": "REGISTRY",
+        "type": "input",
+        "config": {
+          "registryUrl": "https://public.mlld.ai"
+        }
+      }
+    ]
+  }
+}
+```
+
 ## Best Practices
 
 ### For Module Users
@@ -1131,6 +1426,7 @@ Private module access requires:
 2. **Security**: Regularly run `mlld registry audit`
 3. **Updates**: Use `mlld registry outdated` to check for updates
 4. **Testing**: Test modules in isolation before using in production
+5. **Resolver Configuration**: Keep resolver config in version control for team consistency
 
 ### For Module Authors
 

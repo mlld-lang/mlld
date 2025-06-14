@@ -83,7 +83,7 @@ export class PublishCommand {
    */
   async publish(modulePath: string = '.', options: PublishOptions = {}): Promise<void> {
     try {
-      console.log(chalk.blue('🚀 Publishing mlld module...\n'));
+      console.log(chalk.blue('Publishing mlld module...\n'));
 
       // Check for latest mlld version (unless skipped)
       if (!options.skipVersionCheck) {
@@ -101,7 +101,7 @@ export class PublishCommand {
             }
           );
         }
-        console.log(chalk.green(`✅ Using latest mlld version (${currentMlldVersion})`));
+        console.log(chalk.green(`✔ Using latest mlld version (${currentMlldVersion})`));
       }
 
       // Check for conflicting options
@@ -151,20 +151,20 @@ export class PublishCommand {
           }
         );
       }
-      console.log(chalk.green('✅ Module validation passed'));
+      console.log(chalk.green('✔ Module validation passed'));
       
       // Check if validation would make changes to the file
       const hasAutoChanges = validationResult.updatedContent && validationResult.updatedContent !== content;
       
       if (hasAutoChanges && initialGitInfo.isGitRepo && !options.force) {
         // Show what changes will be made
-        console.log(chalk.blue('\n📝 The following metadata will be automatically added:'));
+        console.log(chalk.blue('\nNote: The following metadata will be automatically added:'));
         if (validationResult.updatedMetadata) {
           const changes = this.describeMetadataChanges(metadata, validationResult.updatedMetadata);
           changes.forEach(change => console.log(chalk.gray(`   ${change}`)));
         }
         
-        console.log(chalk.yellow('\n⚠️  These changes need to be committed before publishing.'));
+        console.log(chalk.yellow('\nWarning:  These changes need to be committed before publishing.'));
         console.log(chalk.gray('Choose an option:'));
         console.log(chalk.gray('  1. Commit and push changes, then publish'));
         console.log(chalk.gray('  2. Cancel and let me commit manually'));
@@ -181,7 +181,7 @@ export class PublishCommand {
           // Apply changes but don't proceed with publishing
           Object.assign(metadata, validationResult.updatedMetadata);
           await fs.writeFile(filePath, validationResult.updatedContent!, 'utf8');
-          console.log(chalk.blue(`\n📝 Metadata added to ${path.basename(filePath)}`));
+          console.log(chalk.blue(`\nNote: Metadata added to ${path.basename(filePath)}`));
           console.log(chalk.gray('Please commit your changes and run publish again.'));
           return;
         }
@@ -223,7 +223,7 @@ export class PublishCommand {
           );
         }
         
-        console.log(chalk.green(`✅ Verified permission to publish as @${options.org}`));
+        console.log(chalk.green(`✔ Verified permission to publish as @${options.org}`));
         metadata.author = publishingAuthor;
       } else if (metadata.author) {
         // Author was already validated in validateModule
@@ -287,7 +287,7 @@ export class PublishCommand {
         if (!isPublicRepo) {
           // Check if user has write access for private repo publishing
           if (gitInfo.hasWriteAccess && !options.useGist) {
-            console.log(chalk.yellow('\n⚠️  Repository is private but you have write access.'));
+            console.log(chalk.yellow('\nWarning:  Repository is private but you have write access.'));
             
             if (options.private) {
               // Skip prompt, go straight to private publish
@@ -297,23 +297,23 @@ export class PublishCommand {
               
               // Handle PR creation for private repos if requested
               if (options.pr) {
-                console.log(chalk.blue('\n🔀 Creating pull request to registry...'));
+                console.log(chalk.blue('\nBranch: Creating pull request to registry...'));
                 console.log(chalk.gray('   This process uses GitHub\'s fork-based workflow:'));
                 console.log(chalk.gray(`   1. Checking/creating your fork: ${user.login}/registry`));
                 console.log(chalk.gray('   2. Creating your author directory if needed'));
                 console.log(chalk.gray('   3. Updating your module entry'));
                 console.log(chalk.gray('   4. Submitting PR to: mlld-lang/registry\n'));
                 const prUrl = await this.createRegistryPR(octokit, user, registryEntry, options);
-                console.log(chalk.green(`\n✅ Pull request created: ${prUrl}`));
+                console.log(chalk.green(`\n✔ Pull request created: ${prUrl}`));
               }
               
               // Success message for private publishing
-              console.log(chalk.green('\n✅ Module published to private repository!'));
+              console.log(chalk.green('\n✔ Module published to private repository!'));
               console.log(chalk.bold('Module location:'));
               console.log(`  Path: ${path.join(options.path || 'llm/modules', filename)}`);
               console.log(`  Import: @import { ... } from "${sourceUrl}"`);
               if (!options.pr) {
-                console.log(chalk.gray('\n💡 Tip: Team members with repo access can now import this module directly.'));
+                console.log(chalk.gray('\nTip: Team members with repo access can now import this module directly.'));
               }
               return;
             } else {
@@ -328,7 +328,7 @@ export class PublishCommand {
               console.log('  [g]     Create public gist instead');
               console.log('  [c]     Cancel');
               
-              const choice = await rl.question('\nYour choice: ');
+              const choice = await rl.question('\nChoice: ');
               rl.close();
               
               if (choice.toLowerCase() === 'p') {
@@ -338,27 +338,27 @@ export class PublishCommand {
                 
                 // Handle PR creation for private repos if requested
                 if (options.pr) {
-                  console.log(chalk.blue('\n🔀 Creating pull request to registry...'));
+                  console.log(chalk.blue('\nBranch: Creating pull request to registry...'));
                   console.log(chalk.gray('   This process uses GitHub\'s fork-based workflow:'));
                   console.log(chalk.gray(`   1. Checking/creating your fork: ${user.login}/registry`));
                   console.log(chalk.gray('   2. Creating your author directory if needed'));
                   console.log(chalk.gray('   3. Updating your module entry'));
                   console.log(chalk.gray('   4. Submitting PR to: mlld-lang/registry\n'));
                   const prUrl = await this.createRegistryPR(octokit, user, registryEntry, options);
-                  console.log(chalk.green(`\n✅ Pull request created: ${prUrl}`));
+                  console.log(chalk.green(`\n✔ Pull request created: ${prUrl}`));
                 }
                 
                 // Success message for private publishing
-                console.log(chalk.green('\n✅ Module published to private repository!'));
+                console.log(chalk.green('\n✔ Module published to private repository!'));
                 console.log(chalk.bold('Module location:'));
                 console.log(`  Path: ${path.join(options.path || 'llm/modules', filename)}`);
                 console.log(`  Import: @import { ... } from "${sourceUrl}"`);
                 if (!options.pr) {
-                  console.log(chalk.gray('\n💡 Tip: Team members with repo access can now import this module directly.'));
+                  console.log(chalk.gray('\nTip: Team members with repo access can now import this module directly.'));
                 }
                 return;
               } else if (choice.toLowerCase() === 'g') {
-                console.log(chalk.yellow('\n📝 Switching to gist creation...'));
+                console.log(chalk.yellow('\nNote: Switching to gist creation...'));
                 // Fall through to gist creation
               } else {
                 throw new MlldError('Publication cancelled by user', {
@@ -368,13 +368,13 @@ export class PublishCommand {
               }
             }
           } else {
-            console.log(chalk.yellow('\n⚠️  Repository is private. Switching to gist creation...'));
+            console.log(chalk.yellow('\nWarning:  Repository is private. Switching to gist creation...'));
             console.log(chalk.gray('Modules must be publicly accessible. Use --use-gist to force gist creation.'));
             // Fall through to gist creation
           }
         } else {
           // Git-native publishing for public repos
-          console.log(chalk.green(`\n✅ Repository is public`));
+          console.log(chalk.green(`\n✔ Repository is public`));
           
           // Interactive confirmation
           if (!options.dryRun && !options.force && !options.useRepo) {
@@ -383,7 +383,7 @@ export class PublishCommand {
               output: process.stdout,
             });
             
-            console.log(chalk.blue(`\n📦 Publishing @${publishingAuthor}/${metadata.name} from ${gitInfo.owner}/${gitInfo.repo}`));
+            console.log(chalk.blue(`\nPackage: Publishing @${publishingAuthor}/${metadata.name} from ${gitInfo.owner}/${gitInfo.repo}`));
             console.log(chalk.gray(`   Source: ${gitInfo.relPath} @ ${gitInfo.sha?.substring(0, 8)}`));
             console.log(chalk.gray(`   This will create a pull request to the mlld registry\n`));
             
@@ -392,7 +392,7 @@ export class PublishCommand {
             console.log('  [g]     Publish as gist instead');
             console.log('  [c]     Cancel');
             
-            const choice = await rl.question('\nYour choice: ');
+            const choice = await rl.question('\nChoice: ');
             rl.close();
             
             if (choice.toLowerCase() === 'c') {
@@ -401,7 +401,7 @@ export class PublishCommand {
                 severity: ErrorSeverity.Info
               });
             } else if (choice.toLowerCase() === 'g') {
-              console.log(chalk.yellow('\n📝 Switching to gist creation...'));
+              console.log(chalk.yellow('\nNote: Switching to gist creation...'));
               // Fall through to gist creation
             } else {
               // Continue with git repo publishing
@@ -435,7 +435,7 @@ export class PublishCommand {
                 publishedAt: new Date().toISOString(),
               };
               
-              console.log(chalk.green(`\n✅ Using git repository for source`));
+              console.log(chalk.green(`\n✔ Using git repository for source`));
             }
           } else {
             // Skip confirmation with --use-gist or --force
@@ -469,7 +469,7 @@ export class PublishCommand {
               publishedAt: new Date().toISOString(),
             };
             
-            console.log(chalk.green(`\n✅ Using git repository for source`));
+            console.log(chalk.green(`\n✔ Using git repository for source`));
           }
         }
       }
@@ -492,7 +492,7 @@ export class PublishCommand {
           );
         }
         
-        console.log(chalk.yellow('\n📝 Preparing to create GitHub gist...'));
+        console.log(chalk.yellow('\nNote: Preparing to create GitHub gist...'));
         
         // Interactive confirmation for gist creation
         if (!options.dryRun && !options.force) {
@@ -513,7 +513,7 @@ export class PublishCommand {
           console.log('  [Enter] Confirm and create gist');
           console.log('  [c]     Cancel');
           
-          const choice = await rl.question('\nYour choice: ');
+          const choice = await rl.question('\nChoice: ');
           rl.close();
           
           if (choice.toLowerCase() === 'c') {
@@ -537,20 +537,20 @@ export class PublishCommand {
             },
           });
           
-          console.log(chalk.green(`✅ Gist created: ${gist.data.html_url}`));
+          console.log(chalk.green(`✔ Gist created: ${gist.data.html_url}`));
           sourceUrl = gist.data.files[filename]!.raw_url!;
           gistData = gist.data;
         } else {
           // For dry run, create a fake gist URL
           sourceUrl = `https://gist.githubusercontent.com/${user.login}/DRY_RUN_ID/raw/${filename}`;
           gistData = { id: 'DRY_RUN_ID' };
-          console.log(chalk.yellow('📝 Would create GitHub gist'));
+          console.log(chalk.yellow('Note: Would create GitHub gist'));
         }
         
         // Auto-populate bugs URL for gist
         if (!metadata.bugs && !options.dryRun) {
           metadata.bugs = `${gist.data.html_url}#comments`;
-          console.log(chalk.blue(`📌 Adding bugs URL for gist: ${metadata.bugs}`));
+          console.log(chalk.blue(`Pinned: Adding bugs URL for gist: ${metadata.bugs}`));
         }
         
         registryEntry = {
@@ -578,14 +578,14 @@ export class PublishCommand {
       }
       
       if (options.dryRun) {
-        console.log(chalk.cyan('\n✅ Dry run completed - no changes made'));
+        console.log(chalk.cyan('\n✔ Dry run completed - no changes made'));
         console.log('\nWould create PR with:');
         console.log(JSON.stringify(registryEntry, null, 2));
         return;
       }
 
       // Create pull request to registry
-      console.log(chalk.blue('\n🔀 Creating pull request to registry...'));
+      console.log(chalk.blue('\nBranch: Creating pull request to registry...'));
       console.log(chalk.gray('   This process uses GitHub\'s fork-based workflow:'));
       console.log(chalk.gray(`   1. Checking/creating your fork: ${user.login}/registry`));
       console.log(chalk.gray('   2. Creating your author directory if needed'));
@@ -593,7 +593,7 @@ export class PublishCommand {
       console.log(chalk.gray('   4. Submitting PR to: mlld-lang/registry\n'));
       const prUrl = await this.createRegistryPR(octokit, user, registryEntry, options);
       
-      console.log(chalk.green('\n✅ Module published successfully!\n'));
+      console.log(chalk.green('\n✔ Module published successfully!\n'));
       console.log(chalk.bold('Next steps:'));
       console.log(`  1. Your pull request: ${chalk.cyan(prUrl)}`);
       console.log(`  2. Once merged, install with: ${chalk.cyan(`mlld install @${publishingAuthor}/${metadata.name}`)}`);
@@ -617,7 +617,7 @@ export class PublishCommand {
     try {
       const response = await fetch('https://registry.npmjs.org/mlld/latest');
       if (!response.ok) {
-        console.log(chalk.yellow('⚠️  Could not check latest mlld version'));
+        console.log(chalk.yellow('Warning:  Could not check latest mlld version'));
         return null;
       }
       
@@ -625,7 +625,7 @@ export class PublishCommand {
       return data.version;
     } catch (error) {
       // Don't fail if we can't check the version
-      console.log(chalk.yellow('⚠️  Could not check latest mlld version'));
+      console.log(chalk.yellow('Warning:  Could not check latest mlld version'));
       return null;
     }
   }
@@ -846,7 +846,7 @@ export class PublishCommand {
 
     // Display warnings
     if (warnings.length > 0) {
-      console.log(chalk.yellow('\n⚠️  Validation warnings:'));
+      console.log(chalk.yellow('\nWarning:  Validation warnings:'));
       warnings.forEach(w => console.log(chalk.yellow(`   ${w}`)));
     }
 
@@ -891,7 +891,7 @@ export class PublishCommand {
     const fileName = path.basename(filePath);
     
     try {
-      console.log(chalk.blue('\n📝 Committing metadata changes...'));
+      console.log(chalk.blue('\nNote: Committing metadata changes...'));
       
       // Add the file
       execSync(`git add "${filePath}"`, { cwd: path.dirname(filePath) });
@@ -904,14 +904,14 @@ Auto-added by mlld publish command`;
       
       // Commit
       execSync(`git commit -m "${commitMessage}"`, { cwd: path.dirname(filePath) });
-      console.log(chalk.green('✅ Changes committed'));
+      console.log(chalk.green('✔ Changes committed'));
       
       // Push if there's a remote
       try {
         execSync('git push', { cwd: path.dirname(filePath) });
-        console.log(chalk.green('✅ Changes pushed to remote'));
+        console.log(chalk.green('✔ Changes pushed to remote'));
       } catch {
-        console.log(chalk.yellow('⚠️  Could not push to remote - you may need to push manually'));
+        console.log(chalk.yellow('Warning:  Could not push to remote - you may need to push manually'));
       }
       
     } catch (error: any) {
@@ -1102,14 +1102,14 @@ Auto-added by mlld publish command`;
       // Write back to file
       console.log(chalk.blue('\nAdding frontmatter to your file...'));
       await fs.writeFile(filePath, content, 'utf8');
-      console.log(chalk.green('✅ Frontmatter added to ' + filename));
+      console.log(chalk.green('✔ Frontmatter added to ' + filename));
     }
     
     // Parse and validate basic syntax early
     try {
       parseSync(content);
     } catch (parseError: any) {
-      console.log(chalk.red('❌ Invalid mlld syntax'));
+      console.log(chalk.red('✘ Invalid mlld syntax'));
       
       // Extract useful error information
       const errorMessage = parseError.message || 'Unknown parse error';
@@ -1354,7 +1354,7 @@ Auto-added by mlld publish command`;
       
       // License is always CC0
       metadata.license = 'CC0';
-      console.log(chalk.blue('\n📄 License: CC0 (public domain dedication)'));
+      console.log(chalk.blue('\nFile: License: CC0 (public domain dedication)'));
       console.log(chalk.gray('   All modules in the mlld registry are CC0 licensed.'));
 
       console.log(chalk.blue('\nI\'ll add this frontmatter to your file:\n'));
@@ -1509,7 +1509,7 @@ Auto-added by mlld publish command`;
     } catch (error: any) {
       // User's registry.json doesn't exist yet - this is normal
       if (error.status === 404) {
-        console.log(chalk.green(`   🎉 Publishing your first module. Welcome to mlld!`));
+        console.log(chalk.green(`   ✔ Publishing your first module. Welcome to mlld!`));
       } else {
         // Some other error
         console.log(chalk.gray(`   ℹ Registry check failed, will create new one`));
@@ -1604,11 +1604,11 @@ ${entry.source.repository ? `- **Path**: \`${entry.source.repository.path}\`` : 
 
 ## Validation
 This PR will be automatically validated by the registry workflow to ensure:
-- ✅ Module name matches author
-- ✅ Source URL is accessible
-- ✅ Content hash matches
-- ✅ Valid mlld syntax
-${entry.source.repository ? '- ✅ Git commit exists and is immutable' : ''}
+- ✔ Module name matches author
+- ✔ Source URL is accessible
+- ✔ Content hash matches
+- ✔ Valid mlld syntax
+${entry.source.repository ? '- ✔ Git commit exists and is immutable' : ''}
 
 After merge, the build process will update the main \`modules.json\` file.
 
@@ -1631,7 +1631,7 @@ ${options.message ? `\n## Notes\n${options.message}` : ''}`,
     const modulePath = options.path || 'llm/modules';
     const fullPath = path.join(gitInfo.gitRoot!, modulePath, filename);
     
-    console.log(chalk.blue(`\n📁 Publishing to private repository...`));
+    console.log(chalk.blue(`\nDirectory: Publishing to private repository...`));
     console.log(chalk.gray(`  Path: ${path.join(modulePath, filename)}`));
     
     // Create directory structure
@@ -1639,7 +1639,7 @@ ${options.message ? `\n## Notes\n${options.message}` : ''}`,
     
     // Write module file
     await fs.writeFile(fullPath, content, 'utf8');
-    console.log(chalk.green(`✅ Module file written`));
+    console.log(chalk.green(`✔ Module file written`));
     
     // Create/update manifest.json for discovery
     const manifestPath = path.join(gitInfo.gitRoot!, modulePath, 'manifest.json');
@@ -1664,7 +1664,7 @@ ${options.message ? `\n## Notes\n${options.message}` : ''}`,
     };
     
     await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
-    console.log(chalk.green(`✅ Manifest updated`));
+    console.log(chalk.green(`✔ Manifest updated`));
     
     if (!options.dryRun) {
       // Commit and push
@@ -1680,13 +1680,13 @@ ${options.message ? `\n## Notes\n${options.message}` : ''}`,
           stdio: 'pipe' 
         });
         
-        console.log(chalk.blue('🔄 Pushing to remote...'));
+        console.log(chalk.blue('Pushing to remote...'));
         execSync('git push', { 
           cwd: gitInfo.gitRoot!,
           stdio: 'pipe' 
         });
         
-        console.log(chalk.green('✅ Changes pushed successfully'));
+        console.log(chalk.green('✔ Changes pushed successfully'));
       } catch (error: any) {
         throw new MlldError(
           `Failed to commit/push changes: ${error.message}`,

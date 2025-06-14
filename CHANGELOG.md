@@ -7,36 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.4.0]
 Added:
-- Environment variable access control via `mlld.lock.json` security settings
-- New `mlld env` CLI command to manage allowed environment variables:
-  - `mlld env list` - List allowed environment variables and their status
-  - `mlld env allow VAR1 VAR2` - Add variables to allowed list
-  - `mlld env remove VAR1` - Remove from allowed list
-  - `mlld env clear` - Clear all allowed variables
-- Environment variables now accessible through @INPUT when explicitly allowed
-- Private repository publishing for teams:
-  - `mlld publish --private` to skip prompts and publish directly to private repo
-  - `--path` flag to specify custom directory (default: llm/modules/)
-  - `--pr` flag to create registry PR even for private modules
-  - Interactive choice when detecting private repos with write access
-  - Auto-generated manifest.json for team module discovery
-- Improved publishing UX:
-  - Clear explanation of fork-based workflow during publishing
-  - Friendly welcome message for first-time publishers
-  - Better feedback for expected 404 errors during registry operations
-- Shadow environment syntax for @exec: `@exec js = { helperA, helperB }`
-  - Allows injecting helper functions into JavaScript execution contexts
-  - Functions are accessible in all @run js commands within the same scope
-- Negation operator (!) for @when conditions:
-  - Simple form: `@when !@variable => @action`
-  - Switch form: `@when @var: [!"value" => @action]`
-  - Block form: `@when @var any: [!@condition1, !@condition2]`
-  - Works with mlld's truthiness rules (false, "", null, 0, "false", empty arrays/objects are falsy)
+- **New Resolver Architecture** - Complete overhaul of how mlld loads files and modules:
+  - Pluggable resolver system for extensible file/module loading
+  - Built-in resolvers: TIME, DEBUG, INPUT, PROJECTPATH, LOCAL, GITHUB, HTTP, REGISTRY
+  - Content type detection for proper handling of different file formats
+  - Private module support via GitHub and local directory resolvers
+  - JSON import support: `@import { key } from "./data.json"`
+- **New CLI Commands**:
+  - `mlld setup` - Interactive configuration wizard for resolvers and authentication
+  - `mlld alias` - Create path aliases for module imports
+  - `mlld auth` - GitHub authentication management (login/logout/status)
+  - `mlld env` - Manage allowed environment variables
+- **Private Modules**:
+  - GitHub resolver for private repositories with secure authentication
+  - Enhanced `mlld publish` with `--private` flag and custom `--path` support
+  - Path aliases map prefixes to local paths (e.g., `@shared/` → `../shared-modules`)
+  - Location-aware `mlld init` prompts to use configured module directories
+- **Environment Variables**:
+  - Access control via `mlld.lock.json` security settings
+  - Import allowed variables through @INPUT: `@import { API_KEY } from @INPUT`
+  - Manage with `mlld env allow/remove/list`
+- **Shadow Environments** for @exec: `@exec js = { helperA, helperB }`
+  - Inject helper functions into JavaScript execution contexts
+- **Negation Operator** for @when conditions:
+  - `@when !@variable => @action`
+  - Works with all @when forms (simple, switch, block)
+- **Configuration Updates**:
+  - Global config moved to `~/.config/mlld/mlld.lock.json`
+  - Resolver registry configuration with priority support
+  - Secure token storage using keytar (system keychain)
 
 Fixed:
+- **@PROJECTPATH variable** - Now correctly resolves to project root directory
+- **Import error messages** - Much clearer error messages for import failures
+- **Content type detection** - Consistent handling of .mld, .json, and other file types
 - Shadow environment functions in @exec now properly handle async/await
 - Numeric parameters in @exec functions are now correctly converted from strings
 - Suppressed Octokit debug logging in CLI commands for cleaner output
+
+Breaking Changes:
+- None expected, but this is a major architectural change. Please report any issues!
 
 ## [1.3.4]
 Added:

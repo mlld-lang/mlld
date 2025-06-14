@@ -50,8 +50,8 @@ export class ConfigLoader {
   private cachedConfig?: MlldConfig;
 
   constructor(projectPath?: string) {
-    // Global config location: ~/.config/mlld.json
-    this.globalConfigPath = path.join(os.homedir(), '.config', 'mlld.json');
+    // Global config location: ~/.config/mlld/mlld.lock.json
+    this.globalConfigPath = path.join(os.homedir(), '.config', 'mlld', 'mlld.lock.json');
     
     // Project config location: <project>/mlld.config.json
     this.projectConfigPath = projectPath 

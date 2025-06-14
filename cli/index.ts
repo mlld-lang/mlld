@@ -12,6 +12,7 @@ import { createPublishCommand } from './commands/publish';
 import { createInitModuleCommand } from './commands/init-module';
 import { createAddNeedsCommand } from './commands/add-needs';
 import { createSetupCommand } from './commands/setup';
+import { createAliasCommand } from './commands/alias';
 import { envCommand } from './commands/env';
 import chalk from 'chalk';
 import { version } from '@core/version';
@@ -664,7 +665,7 @@ Output Formatting Options:
 
 Configuration:
   Mlld looks for configuration in:
-  1. ~/.config/mlld.json (global/user config)
+  1. ~/.config/mlld/mlld.lock.json (global/user config)
   2. mlld.config.json (project config)
   
   CLI options override configuration file settings.
@@ -1284,6 +1285,14 @@ Examples:
       const setupCmd = createSetupCommand();
       const cmdArgs = cliOptions._ || [];
       await setupCmd.execute(cmdArgs, parseFlags(cmdArgs));
+      return;
+    }
+    
+    // Handle alias command
+    if (cliOptions.input === 'alias') {
+      const aliasCmd = createAliasCommand();
+      const cmdArgs = cliOptions._ || [];
+      await aliasCmd.execute(cmdArgs, parseFlags(cmdArgs));
       return;
     }
     

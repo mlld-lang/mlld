@@ -675,48 +675,50 @@ async function importFromResolverContent(
           }
         };
         
-        env.declareImportedVariable(name, importedVariable);
+        env.setVariable(name, importedVariable);
       }
     } else if (directive.subtype === 'importSelected') {
-      // Import selected variables
-      const selectedVars = directive.values?.selectedVariables;
-      if (selectedVars && Array.isArray(selectedVars)) {
-        for (const varNode of selectedVars) {
-          if (varNode.type === 'SelectedVariable') {
-            const importName = varNode.values?.importName || varNode.content;
-            const alias = varNode.values?.alias;
-            const targetName = alias || importName;
-            
-            if (importName in moduleObject && importName !== '__meta__') {
-              const value = moduleObject[importName];
-              
-              let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
-              let varValue = value;
-              
-              if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
-                varType = value.__variableType;
-                varValue = value.__value;
-              }
-              
-              const importedVariable: MlldVariable = {
-                type: varType,
-                identifier: targetName,
-                value: varValue,
-                nodeId: '',
-                location: { line: 0, column: 0 },
-                metadata: {
-                  isImported: true,
-                  importPath: ref,
-                  originalName: importName !== targetName ? importName : undefined,
-                  definedAt: { line: 0, column: 0, filePath: ref }
-                }
-              };
-              
-              env.declareImportedVariable(targetName, importedVariable);
-            } else {
-              throw new Error(`Variable '${importName}' not found in imported module '${ref}'`);
-            }
+      // Import selected variables - use same structure as importFromPath
+      const imports = directive.values?.imports || [];
+      for (const importNode of imports) {
+        const varName = importNode.identifier;
+        
+        // Check if the variable exists in the module object
+        if (varName in moduleObject && varName !== '__meta__') {
+          const value = moduleObject[varName];
+          // Use alias if provided, otherwise use original name
+          const targetName = importNode.alias || varName;
+          
+          let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
+          let varValue = value;
+          
+          if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
+            varType = value.__variableType;
+            varValue = value.__value;
           }
+          
+          const importedVariable: MlldVariable = {
+            type: varType,
+            identifier: targetName,
+            value: varValue,
+            nodeId: '',
+            location: { line: 0, column: 0 },
+            metadata: {
+              isImported: true,
+              importPath: ref,
+              originalName: varName !== targetName ? varName : undefined,
+              definedAt: { line: 0, column: 0, filePath: ref }
+            }
+          };
+          
+          env.setVariable(targetName, importedVariable);
+        } else {
+          // Variable not found in module exports
+          const availableExports = Object.keys(moduleObject).filter(k => k !== '__meta__');
+          throw new Error(
+            `Variable '${varName}' not found in module exports from ${ref}. ` +
+            `Available exports: ${availableExports.join(', ')}`
+          );
         }
       }
     }

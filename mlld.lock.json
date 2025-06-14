@@ -1,23 +1,38 @@
 {
-  "version": "1.0.0",
-  "imports": {
-    "@mlld/fs": {
-      "resolved": "registry://@mlld/fs",
-      "integrity": "sha256:bd104eb06c1a5c1751bc2b5be579fc334cdb08b4287a9c1954b2f5b31d747a6d",
-      "approvedAt": "2025-06-01T14:22:08.494Z"
-    },
-    "@mlld/http": {
-      "resolved": "registry://@mlld/http",
-      "integrity": "sha256:d15b25823303554b2b8571e90e92b9db7ac4f8add4d961e392cff3ead6fe0eab",
-      "approvedAt": "2025-06-03T13:45:46.234Z"
-    },
-    "@PROJECTPATH/test-module": {
-      "resolved": "@PROJECTPATH/test-module",
-      "integrity": "sha256:589f373c62eb77ba294eed612a8b3f88a394778f8db40effaa686b812a7f2677",
-      "approvedAt": "2025-06-10T14:00:42.575Z"
+  "version": "1.0",
+  "config": {
+    "resolvers": {
+      "registries": [
+        {
+          "prefix": "@adam/",
+          "resolver": "GITHUB",
+          "type": "input",
+          "priority": 10,
+          "config": {
+            "repository": "adamavenir/private-modules",
+            "branch": "main",
+            "basePath": "llm/modules"
+          }
+        },
+        {
+          "prefix": "@local/",
+          "resolver": "LOCAL",
+          "type": "input",
+          "priority": 20,
+          "config": {
+            "basePath": "./llm/modules"
+          }
+        }
+      ]
     }
   },
-  "security": {
-    "allowedEnvVars": []
+  "modules": {},
+  "cache": {},
+  "imports": {
+    "@private/test-private-module-fixed": {
+      "resolved": "file:///Users/adam/dev/mlld-resolvers/test-resolver/test-private-module-fixed.mld",
+      "integrity": "sha256:bf6641bf5f484ac2142cf731072c912f1d9fa3ce8e7b4eb5af5d7810eaee95ab",
+      "approvedAt": "2025-06-13T22:35:24.807Z"
+    }
   }
 }

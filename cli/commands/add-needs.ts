@@ -23,7 +23,7 @@ export class AddNeedsCommand {
    */
   async addNeeds(modulePath: string = '.', options: AddNeedsOptions = {}): Promise<void> {
     try {
-      console.log(chalk.blue('🔍 Analyzing module dependencies...\n'));
+      console.log(chalk.blue('Analyzing module dependencies...\n'));
 
       // Resolve module path
       const resolvedPath = path.resolve(modulePath);
@@ -89,7 +89,7 @@ export class AddNeedsCommand {
       const pyPackages = detector.detectPythonPackages(ast);
       const shCommands = detector.detectShellCommands(ast);
 
-      console.log(chalk.green('✅ Analysis complete\n'));
+      console.log(chalk.green('✔ Analysis complete\n'));
 
       // Display detected dependencies
       console.log(chalk.bold('Detected runtime needs:'));
@@ -171,7 +171,7 @@ export class AddNeedsCommand {
       }
 
       // Update the file
-      console.log(chalk.blue('\n📝 Updating frontmatter...'));
+      console.log(chalk.blue('\nUpdating frontmatter...'));
       
       if (frontmatterMatch) {
         // Replace existing frontmatter
@@ -197,7 +197,7 @@ export class AddNeedsCommand {
       // Write back to file
       await fs.writeFile(filePath, content, 'utf8');
       
-      console.log(chalk.green(`✅ Updated ${path.basename(filePath)}`));
+      console.log(chalk.green(`✔ Updated ${path.basename(filePath)}`));
       
       if (options.verbose) {
         console.log(chalk.gray('\nChanges:'));

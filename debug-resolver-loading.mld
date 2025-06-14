@@ -1,0 +1,2 @@
+@import { module } from @private/test-module
+@add @module
