@@ -243,40 +243,7 @@ AtText
         sourceType
       );
     }
-  // Parameterized template definition - must come before regular template to match params
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "(" _ params:TextParameterList? _ ")" _ "=" _ "@add" _ template:TemplateCore {
-      helpers.debug('AtText matched parameterized template definition', { id, params, template });
-      
-      // Process parameters
-      const processedParams = params || [];
-      
-      // Create meta object with parameter info
-      const meta = { 
-        sourceType: 'template',
-        hasVariables: template.meta.hasVariables,
-        isTemplateContent: true,
-        isParameterized: true,
-        parameterCount: processedParams.length
-      };
-      
-      return helpers.createStructuredDirective(
-        'text',
-        'textTemplateDefinition',
-        {
-          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          params: processedParams,
-          content: template.values.content
-        },
-        {
-          identifier: id,
-          params: processedParams.map(p => p.name),
-          content: template.raw.content
-        },
-        meta,
-        location(),
-        'template'
-      );
-    }
+  // Parameterized template definition removed - moved to @exec directive
   // Template content (including [[...]]) - must come before other patterns to avoid misparsing
   / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
       // Use both variables and template syntax for detection
@@ -722,21 +689,7 @@ AtText
 // HELPER RULES
 // -------------------------------------------------------------
 
-// Helper rules for text template parameters
-// Using standard list pattern from patterns/lists.peggy
-TextParameterList
-  = first:TextParameter rest:(CommaSpace param:TextParameter { return param; })* {
-      return [first, ...rest];
-    }
-
-TextParameter
-  = paramName:BaseIdentifier {
-      // Create a proper Parameter node to match exec directive
-      return helpers.createNode(NodeType.Parameter, {
-        name: paramName,
-        location: location()
-      });
-    }
+// Text parameter rules removed - parameterized templates moved to @exec directive
 
 // AsNewTitle is imported from add.peggy
 
