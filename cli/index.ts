@@ -418,9 +418,13 @@ Examples:
   
   if (command === 'publish') {
     console.log(`
-Usage: mlld publish [options] [module-path]
+Usage: mlld publish [options] <module-path|@author/module>
 
 Publish a module to the mlld registry.
+
+Arguments:
+  module-path          File path to module (e.g., ./my-module.mld)
+  @author/module       Module reference (e.g., @adam/utils)
 
 Options:
   -n, --dry-run        Show what would be published without actually publishing
@@ -450,6 +454,12 @@ Organization Publishing:
   - Organizations cannot create gists - must use git repositories
   - Requires membership verification via GitHub API
 
+Module Reference Publishing:
+  - Use @author/module syntax to publish without specifying file path
+  - Automatically finds the module file based on registry configuration
+  - Selects the appropriate registry based on prefix and priority
+  - Example: mlld publish @adam/utils finds and publishes utils module
+
 Private Repository Publishing:
   - Automatically detected when you have write access to a private repo
   - Interactive prompt offers choice between private publish or gist
@@ -459,6 +469,8 @@ Private Repository Publishing:
   - Skip registry PR by default (add with --pr for future public release)
 
 Examples:
+  mlld publish @adam/utils        # Publish using module reference
+  mlld publish @mlld/http         # Publish to public registry
   mlld publish                    # Publish from git repo or create gist
   mlld publish my-module.mld      # Publish specific file
   mlld publish ./modules/utils    # Publish from directory

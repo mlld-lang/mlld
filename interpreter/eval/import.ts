@@ -21,34 +21,42 @@ function processModuleExports(
   // Extract frontmatter if present
   const frontmatter = parseResult.frontmatter || null;
   
-  // Look for explicit module export
-  const moduleVar = childVars.get('module');
-  
-  if (moduleVar && moduleVar.type === 'data') {
-    // Use explicit module export
-    // Handle DataObject type that might have type/properties structure
-    let moduleValue = moduleVar.value;
-    if (moduleValue && typeof moduleValue === 'object' && 
-        moduleValue.type === 'object' && moduleValue.properties) {
-      moduleValue = moduleValue.properties;
-    }
-    return {
-      moduleObject: moduleValue,
-      frontmatter
-    };
-  }
-  
-  // Auto-generate module export with all top-level variables
+  // Always start with auto-export of all top-level variables
   const moduleObject: Record<string, any> = {};
+  
+  // First, add all top-level variables with type preservation
   for (const [name, variable] of childVars) {
-    // Skip the 'module' variable itself if it exists but isn't data type
+    // Skip the 'module' variable itself
     if (name !== 'module') {
       // Preserve variable type information for proper import
       moduleObject[name] = {
         __variableType: variable.type,
         __value: variable.value
       };
+      
+      // For textTemplate variables, preserve additional metadata
+      if (variable.type === 'textTemplate') {
+        moduleObject[name].__params = (variable as any).params;
+        moduleObject[name].__content = (variable as any).content;
+      }
     }
+  }
+  
+  // Then, if there's an explicit module export, add it as a structured export
+  const moduleVar = childVars.get('module');
+  if (moduleVar && moduleVar.type === 'data') {
+    // Handle DataObject type that might have type/properties structure
+    let moduleValue = moduleVar.value;
+    if (moduleValue && typeof moduleValue === 'object' && 
+        moduleValue.type === 'object' && moduleValue.properties) {
+      moduleValue = moduleValue.properties;
+    }
+    
+    // Add the module structured export (this enables @module.something access)
+    moduleObject.module = {
+      __variableType: 'data',
+      __value: moduleValue
+    };
   }
   
   return {
@@ -689,9 +697,11 @@ async function importFromResolverContent(
           // Use alias if provided, otherwise use original name
           const targetName = importNode.alias || varName;
           
-          let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
+          // Default to 'data' type, but this will be overridden by the actual type from __variableType
+          let varType: 'text' | 'data' | 'path' | 'command' | 'import' | 'textTemplate' = 'data';
           let varValue = value;
           
+          // Extract the actual variable type from the module export
           if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
             varType = value.__variableType;
             varValue = value.__value;
@@ -710,6 +720,12 @@ async function importFromResolverContent(
               definedAt: { line: 0, column: 0, filePath: ref }
             }
           };
+          
+          // For textTemplate, restore additional fields
+          if (varType === 'textTemplate' && value && typeof value === 'object') {
+            (importedVariable as any).params = value.__params;
+            (importedVariable as any).content = value.__content;
+          }
           
           env.setVariable(targetName, importedVariable);
         } else {
