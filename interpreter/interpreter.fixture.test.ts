@@ -136,6 +136,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     const isWarningFixture = !!fixture.expectedWarning;
     const isValidFixture = !isErrorFixture && !isWarningFixture;
     
+    // Check for null AST in valid fixtures - this indicates a grammar parsing failure
+    if (isValidFixture && fixture.ast === null) {
+      throw new Error(`Valid fixture '${fixture.name}' has null AST - this indicates the grammar failed to parse the input:\n${fixture.input}`);
+    }
+    
     // For fixtures without expected output, run as smoke tests
     const isSmokeTest = isValidFixture && (fixture.expected === null || fixture.expected === undefined);
     

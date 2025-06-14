@@ -33,6 +33,7 @@ export interface InterpretOptions {
   approveAllImports?: boolean; // Bypass interactive import approval
   normalizeBlankLines?: boolean; // Control blank line normalization (default: true)
   devMode?: boolean; // Enable development mode with local fallback
+  enableTrace?: boolean; // Enable directive trace for debugging (default: true)
 }
 
 /**
@@ -146,6 +147,11 @@ export async function interpret(
   // Set dev mode if provided
   if (options.devMode) {
     env.setDevMode(options.devMode);
+  }
+  
+  // Set trace enabled (default: true)
+  if (options.enableTrace !== undefined) {
+    env.setTraceEnabled(options.enableTrace);
   }
   
   // Evaluate the AST

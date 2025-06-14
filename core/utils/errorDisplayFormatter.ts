@@ -135,6 +135,14 @@ export class ErrorDisplayFormatter {
       parts.push(detailsDisplay);
     }
 
+    // Add directive trace if available
+    if (error.details?.directiveTrace && error.details.directiveTrace.length > 0) {
+      const { DirectiveTraceFormatter } = await import('./DirectiveTraceFormatter');
+      const traceFormatter = new DirectiveTraceFormatter();
+      const trace = traceFormatter.format(error.details.directiveTrace, useColors);
+      parts.push('\n' + trace);
+    }
+
     // Add suggestion if available
     if (error.details?.suggestion) {
       const suggestion = useColors 

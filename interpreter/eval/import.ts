@@ -224,16 +224,24 @@ async function importFromPath(
     // Check if parsing succeeded
     if (!parseResult.success) {
       const parseError = parseResult.error;
-      if (parseError && 'location' in parseError) {
-        // Include location information if available
-        throw new Error(
-          `Syntax error in imported file '${resolvedPath}' at line ${parseError.location?.start?.line || '?'}: ${parseError.message || 'Unknown parse error'}`
-        );
-      } else {
-        throw new Error(
-          `Failed to parse imported file '${resolvedPath}': ${parseError?.message || 'Unknown parse error'}`
-        );
-      }
+      
+      // Create an error that preserves the import context
+      const errorMessage = parseError && 'location' in parseError
+        ? `Syntax error in imported file '${resolvedPath}' at line ${parseError.location?.start?.line || '?'}: ${parseError.message || 'Unknown parse error'}`
+        : `Failed to parse imported file '${resolvedPath}': ${parseError?.message || 'Unknown parse error'}`;
+      
+      const importError = new Error(errorMessage);
+      
+      // Add parse error details to the error for trace enhancement
+      (importError as any).importParseError = {
+        file: path.basename(resolvedPath, '.mld'),
+        line: parseError?.location?.start?.line || '?',
+        message: parseError?.message || 'Unknown parse error'
+      };
+      
+      // Preserve the current trace context - the import directive is already on the stack
+      // The error will be caught by evaluateDirective and enhanced with the trace
+      throw importError;
     }
     
     const ast = parseResult.ast;

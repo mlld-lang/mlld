@@ -14,11 +14,14 @@ export enum ErrorSeverity {
 
 import { SourceLocation } from '@core/types';
 
+import type { DirectiveTrace } from '@core/types/trace';
+
 /**
  * Base interface for Mlld error details.
  * Specific error types should extend this.
  */
 export interface BaseErrorDetails {
+  directiveTrace?: DirectiveTrace[]; // Optional directive trace
   [key: string]: any; // Allow arbitrary context
 }
 
