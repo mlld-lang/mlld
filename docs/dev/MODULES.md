@@ -131,48 +131,52 @@ The project was migrated from CommonJS to ESM. Key changes:
 
 ### Overview
 
-Mlld modules use a standardized export pattern to control what functionality is exposed to importers. This pattern provides clarity, flexibility, and proper encapsulation.
+Mlld modules use a dual export pattern that provides both flat access to individual exports and optional structured access through a module object. This design maximizes flexibility while preserving type information.
 
-### The `@data module` Pattern
+### How Module Exports Work
 
-Every Mlld module should define a `@data module` variable that explicitly declares its exports:
+#### 1. Automatic Flat Export (Always Active)
+
+**All top-level variables are automatically exported individually**, preserving their types:
 
 ```mlld
----
-author: username
-description: Module description
-version: 1.0.0
----
+# In module.mld
+@text greeting = "Hello"
+@text sayHello(name) = @add [[Hello, {{name}}!]]
+@exec build() = @run [npm run build]
 
-# Internal implementation
-@text _helper(x) = [[internal: {{x}}]]
+# These are ALL automatically available for import:
+# - greeting (type: text)
+# - sayHello (type: textTemplate) 
+# - build (type: command)
+```
 
-# Public functions
-@exec doSomething(param) = @run [echo "@param"]
-@text formatText(text) = [[Formatted: {{text}}]]
+#### 2. Optional Structured Export
 
-# Explicit module export
+The `@data module` pattern creates an **additional** structured export (not a replacement):
+
+```mlld
+# In module.mld
+@text greeting = "Hello"
+@text sayHello(name) = @add [[Hello, {{name}}!]]
+@exec build() = @run [npm run build]
+
+# Optional: Create a structured interface
 @data module = {
-  doSomething: @doSomething,
-  formatText: @formatText
-  # Note: _helper is not exported
+  greeting: @greeting,
+  sayHello: @sayHello,
+  build: @build
 }
 ```
 
-### Auto-Generated Exports
-
-If a module doesn't define `@data module`, the system automatically generates one containing all top-level variables:
-
+This enables **both** import styles:
 ```mlld
-# Module without explicit export
-@text foo = "bar"
-@exec baz(x) = @run [echo "@x"]
+# Direct imports (from flat export)
+@import { greeting, sayHello } from @user/module
 
-# System generates:
-# module = {
-#   foo: @foo,
-#   baz: @baz
-# }
+# Structured import (if @data module is defined)
+@import { module } from @user/module
+# Then use: @module.greeting, @module.sayHello()
 ```
 
 ### Export Pattern Behaviors
@@ -241,15 +245,32 @@ When imported, modules have this structure:
 
 ### Import Behavior
 
-1. **With explicit `@data module`**: Only the variables/functions included in the module object are accessible
-2. **Without `@data module`**: All top-level variables are accessible (auto-generated flat structure)
-3. **Frontmatter metadata**: Always accessible via `__meta__` property
+1. **All top-level variables** are always accessible for import
+2. **With `@data module`**: An additional `module` export is available for structured access
+3. **Without `@data module`**: Only the flat exports are available
+4. **Frontmatter metadata**: Always accessible via `__meta__` property
+
+### Type Preservation
+
+The module system preserves variable types through the export/import process:
+
+```mlld
+# In module.mld
+@text greeting = "Hello"                    # Type: text
+@text greet(name) = @add [[Hi {{name}}!]]  # Type: textTemplate (invokable)
+@exec build() = @run [make]                # Type: command (invokable)
+@data config = { port: 3000 }              # Type: data
+@path srcDir = "./src"                     # Type: path
+
+# When imported, all types are preserved
+# textTemplate and command types remain invokable
+```
 
 ### Best Practices
 
-1. **Always define `@data module`** for explicit control over exports
-2. **Use underscore prefix** for internal helpers (e.g., `@text _internal`)
-3. **Organize nested exports** for logical grouping (e.g., `auth.login`, `auth.logout`)
+1. **Use `@data module`** to provide a clean, structured API alongside flat exports
+2. **Use underscore prefix** for internal helpers (e.g., `@text _internal`) - but note they're still exported
+3. **Organize with named objects** for logical grouping without hiding flat exports
 4. **Include frontmatter** with author, description, and version
 5. **Document exports** with comments explaining usage
 
@@ -257,43 +278,65 @@ When imported, modules have this structure:
 
 The module import system:
 1. Fetches and parses the module content
-2. Looks for a variable named exactly `module` with type `data`
-3. If found, uses that as the export object
-4. If not found, collects all top-level variables into a flat object
-5. Adds `__meta__` property with frontmatter data
-6. Makes the resulting object available to importers
+2. **Always exports all top-level variables** with type preservation
+3. If a `@data module` variable exists, adds it as an additional structured export
+4. Adds `__meta__` property with frontmatter data
+5. Makes the resulting object available to importers
 
-#### Processing Logic
+#### Technical Implementation
 
 The `processModuleExports` function in `interpreter/eval/import.ts`:
 
-1. **Check for explicit module export:**
-   ```typescript
-   const moduleVar = childVars.get('module');
-   if (moduleVar && moduleVar.type === 'data') {
-     // Use this as the definitive export
-   }
-   ```
-
-2. **Auto-generate if no explicit module:**
+1. **Always export all top-level variables with type info:**
    ```typescript
    const moduleObject: Record<string, any> = {};
+   
+   // First, add all top-level variables with type preservation
    for (const [name, variable] of childVars) {
      if (name !== 'module') {
-       moduleObject[name] = variable.value;
+       moduleObject[name] = {
+         __variableType: variable.type,
+         __value: variable.value,
+         // For textTemplate, preserve params and content
+         ...(variable.type === 'textTemplate' ? {
+           __params: variable.params,
+           __content: variable.content
+         } : {})
+       };
      }
    }
    ```
 
-3. **Add metadata:**
+2. **Add structured export if defined:**
    ```typescript
-   if (frontmatter) {
-     moduleObject.__meta__ = frontmatter;
+   const moduleVar = childVars.get('module');
+   if (moduleVar && moduleVar.type === 'data') {
+     // Add the module as an additional structured export
+     moduleObject.module = {
+       __variableType: 'data',
+       __value: moduleValue
+     };
+   }
+   ```
+
+3. **Import side reconstructs proper variable types:**
+   ```typescript
+   // Extract the actual variable type from the module export
+   if (value && typeof value === 'object' && '__variableType' in value) {
+     varType = value.__variableType;
+     varValue = value.__value;
+     
+     // For textTemplate, restore additional fields
+     if (varType === 'textTemplate') {
+       importedVariable.params = value.__params;
+       importedVariable.content = value.__content;
+     }
    }
    ```
 
 This design enables:
-- **Explicit control** with `@data module`
-- **Flexible patterns** with named export objects
-- **Zero configuration** with auto-generation
+- **Universal access** to all top-level exports
+- **Type preservation** including invokable types (textTemplate, command)
+- **Optional structure** with `@data module` for organization
+- **Backward compatibility** with existing modules
 - **Always available metadata** via `__meta__`

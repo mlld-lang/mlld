@@ -56,10 +56,12 @@ describe('Import Content Type Validation', () => {
 
     it('should accept module imports with explicit export', async () => {
       await fileSystem.writeFile('/module.mld', `
-@text internal = "Not exported"
+@text internal = "Internal value"
+@text api = "Public API"
+@text version = "1.0.0"
 @data module = {
-  api: "Public API",
-  version: "1.0.0"
+  api: @api,
+  version: @version
 }
 `);
       
