@@ -1,5 +1,5 @@
 @exec messageTemplate(user, action) = [[{{user}} {{action}} successfully!]]
-@exec getVersion = @run [(echo "v1.2.3")]
+@exec getVersion = [(echo "v1.2.3")]
 
 @data testAllFixes = {
   message: @add @messageTemplate("Alice", "logged in"),

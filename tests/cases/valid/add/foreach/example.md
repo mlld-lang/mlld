@@ -2,7 +2,7 @@
 
 @data questions = ["What is your name?", "Where are you from?", "What do you do?"]
 
-@exec ask(q) = @run [(echo "Answer to: @q")]
+@exec ask(q) = [(echo "Answer to: @q")]
 
 ## Direct foreach output
 

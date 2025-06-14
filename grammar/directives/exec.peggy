@@ -64,9 +64,10 @@ AtExec
         'environment'
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      // Command syntax: @exec cmd() = [(command)]
-      helpers.debug('AtExec matched with command', { id, params, content, trust });
+  // Code executable: @exec name(params) = js [(code)]
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      // Code syntax: @exec fn() = language [(code)]
+      helpers.debug('AtExec matched with code', { id, params, lang, code, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -126,6 +127,64 @@ AtExec
         metaObj,
         location(),
         'code'
+      );
+    }
+  // Command executable: @exec name(params) = [(command)]
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      // Command syntax: @exec cmd() = [(command)]
+      helpers.debug('AtExec matched with command', { id, params, content, trust });
+      
+      // Create identifier node
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      
+      // Process parameters
+      const processedParams = params || [];
+      
+      // Build values and raw objects
+      const values = {
+        identifier: [identifierNode],
+        params: processedParams,
+        command: content.values.command,
+        commandBases: content.values.commandBases
+      };
+      
+      const raw = {
+        identifier: id,
+        params: processedParams.map(p => p.name),  // Extract parameter names for raw field
+        command: content.raw.command,
+        commandBases: content.raw.commandBases
+      };
+      
+      // Metadata
+      const metaObj = {
+        ...content.meta,
+        parameterCount: processedParams.length,
+        ...helpers.createSecurityMeta({ trust }),
+        ...(meta ? { riskLevel: meta } : {})
+      };
+      
+      // Add metadata if present
+      if (meta) {
+        values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
+        raw.metadata = meta;
+        metaObj.metadata = { type: meta };
+      }
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        metaObj.withClause = withClause;
+      }
+      
+      return helpers.createStructuredDirective(
+        'exec',
+        'execCommand',
+        values,
+        raw,
+        metaObj,
+        location(),
+        'command'
       );
     }
   / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {

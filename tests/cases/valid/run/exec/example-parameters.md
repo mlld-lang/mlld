@@ -1,2 +1,2 @@
-@exec greetCommand(param) = @run [(echo "Hello, @param!")]
+@exec greetCommand(param) = [(echo "Hello, @param!")]
 @run @greetCommand("World")

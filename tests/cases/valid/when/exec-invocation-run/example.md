@@ -2,8 +2,8 @@
 
 Test that @when actions can use @run with exec command invocations.
 
-@exec greet(name) = @run [(echo "Hello, @name!")]
-@exec capitalize(text) = @run [(echo "@text" | tr '[:lower:]' '[:upper:]')]
+@exec greet(name) = [(echo "Hello, @name!")]
+@exec capitalize(text) = [(echo "@text" | tr '[:lower:]' '[:upper:]')]
 
 @text condition = "true"
 

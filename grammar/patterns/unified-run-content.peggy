@@ -397,7 +397,7 @@ UnifiedCodeChar
       // Preserve brackets in code
       return '[' + inner + ']';
     }
-  / !')]' char:. { return char; }
+  / !(']') char:. { return char; }
 
 // Inner content for code brackets
 UnifiedCodeInnerContent

@@ -2,7 +2,7 @@
 
 Test that @when actions can use @add with exec command invocations.
 
-@exec formatHeader(title) = @run [(echo "=== @title ===")]
+@exec formatHeader(title) = [(echo "=== @title ===")]
 @exec getVersion() = [[v1.2.3]]
 
 @text showHeader = "true"

@@ -1,6 +1,6 @@
 @run javascript [(Promise.resolve("Simple promise"))]
 
-@run javascript [((async () => "Async IIFE")())]
+@run javascript [(async () => "Async IIFE")())]
 
 @run javascript [(
 (async () => {

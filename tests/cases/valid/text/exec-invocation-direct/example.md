@@ -1,8 +1,8 @@
 # Test exec invocation without @run
 
-@exec greet() = @run [(echo "Hello, direct exec!")]
-@exec withParam(name) = @run [(echo "Hello, @name!")]
-@exec multiArg(a, b) = @run [(echo "@a and @b")]
+@exec greet() = [(echo "Hello, direct exec!")]
+@exec withParam(name) = [(echo "Hello, @name!")]
+@exec multiArg(a, b) = [(echo "@a and @b")]
 
 ## Direct exec invocation in text
 @text result1 = @greet()

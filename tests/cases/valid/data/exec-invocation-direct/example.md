@@ -1,8 +1,8 @@
 # Test exec invocation in data directive
 
-@exec getValue() = @run [(echo "42")]
-@exec getJSON() = @run [(echo '{"status": "ok", "value": 123}')]
-@exec withParam(key) = @run [(echo "{\"key\": \"$key\", \"timestamp\": 1234567890}")]
+@exec getValue() = [(echo "42")]
+@exec getJSON() = [(echo '{"status": "ok", "value": 123}')]
+@exec withParam(key) = [(echo "{\"key\": \"$key\", \"timestamp\": 1234567890}")]
 
 ## Direct exec in data
 @data numValue = @getValue()
