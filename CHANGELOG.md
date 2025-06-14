@@ -37,6 +37,16 @@ Added:
 - **Negation Operator** for @when conditions:
   - `@when !@variable => @action`
   - Works with all @when forms (simple, switch, block)
+- **mlld Stacktrace** - Shows execution context when errors occur:
+  - Directive execution path with file:line locations
+  - Failed imports show parse errors inline
+  - Unified error display in bordered box
+- **Unified Executable Syntax** - Simplified and added @exec definitions:
+  - Direct syntax without @run prefix: `@exec greet(name) = [(echo "Hello, @name!")]`
+  - Template executables: `@exec greeting(name) = [[Hello {{name}}!]]` or `` `Hello @name!` ``
+  - Section executables: `@exec getSection(file, section, newheader) = [@file # @section] as @newheader`
+  - Resolver executables: `@exec fetch(path) = @resolver/api/@path` 
+  - Code executables: `@exec calc(x) = js [(return @x * 2)]` (drops @run requirement)
 - **Configuration Updates**:
   - Global config moved to `~/.config/mlld/mlld.lock.json`
   - Resolver registry configuration with priority support
@@ -48,7 +58,6 @@ Fixed:
 - **Content type detection** - Consistent handling of .mld, .json, and other file types
 - Shadow environment functions in @exec now properly handle async/await
 - Numeric parameters in @exec functions are now correctly converted from strings
-- Suppressed Octokit debug logging in CLI commands for cleaner output
 
 Breaking Changes:
 - None expected, but this is a major architectural change. Please report any issues!

@@ -436,7 +436,7 @@ async function invokeParameterizedCommand(
   // Handle template executables
   if (definition.type === 'template') {
     // Execute text template with bound parameters
-    const text = await interpolate(definition.templateContent, childEnv);
+    const text = await interpolate(definition.template, childEnv);
     return text;
   } else if (definition.type === 'command') {
     // Execute command template with bound parameters
