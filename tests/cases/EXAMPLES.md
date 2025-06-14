@@ -173,6 +173,35 @@ Output: Hello from module
 Hello from module
 ```
 
+#### Example.o Variant
+
+**Input:**
+```mlld
+# Test exec invocation from module imports
+
+## Direct invocation
+Hello, World!
+
+## With parameter
+Hello, Alice!
+
+## Multi-line command
+Line 1
+Line 2
+
+## Multiple parameters
+First: foo, Second: bar
+
+## In data directive
+
+Hello, World!
+## In text template
+
+Output: Hello from module
+## Verify regular variable import works
+Hello from module
+```
+
 ### Valid Exec parameterized command
 
 **Input:**
@@ -226,21 +255,6 @@ Variable TIME: 2024-01-01T00:00:00.000Z
 Import TIME - ISO: 2024-01-01T00:00:00.000Z, Date: 2024-01-01
 ## DEBUG as variable (returns data)
 Debug basePath: /
-```
-
-#### Example.o Variant
-
-**Input:**
-```mlld
-# Test Resolver Context-Dependent Behavior
-
-## TIME as variable (returns text)
-
-Variable TIME: 1704067200000
-## TIME as import (returns data with multiple formats)
-Import TIME - ISO: +055969-09-28T00:00:00.000Z, Date: 55969-09-28
-## DEBUG as variable (returns data)
-Debug basePath: /Users/adam/dev/mlld-resolvers/tests/cases/valid/resolver-contexts
 ```
 
 ## Warnings
