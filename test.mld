@@ -6,6 +6,6 @@ name: test-dev-mode
 
 Testing import from private module:
 
-@import { confidence } from @private/confidence
+@import { confidence } from @adam/confidence
 
 @add @confidence

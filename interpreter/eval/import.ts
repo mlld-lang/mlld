@@ -517,8 +517,8 @@ export async function evaluateImport(
         // so we can process it directly instead of going through importFromPath
         return await importFromResolverContent(directive, moduleRef, resolverContent, env);
       } catch (error) {
-        // If resolver fails, let it bubble up with a clear error
-        throw new Error(`Failed to resolve module '${moduleRef}': ${error instanceof Error ? error.message : String(error)}`);
+        // If resolver fails, let the original error bubble up so dev mode can handle it
+        throw error;
       }
     } else {
       // No ResolverManager available

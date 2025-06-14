@@ -90,13 +90,26 @@ export class LocalResolver implements Resolver {
     // Validate and resolve the full path
     let fullPath = await this.resolveFullPath(relativePath, config);
     
-    // If no extension and the file doesn't exist, try with .mld extension
+    // If no extension and the file doesn't exist, try with .mlld.md, .mld, or .md extensions
     if (!path.extname(fullPath)) {
       const existsAsIs = await this.fileSystem.exists(fullPath);
       if (!existsAsIs) {
-        const withMld = fullPath + '.mld';
-        if (await this.fileSystem.exists(withMld)) {
-          fullPath = withMld;
+        // Try .mlld.md first (mlld module format)
+        const withMlldMd = fullPath + '.mlld.md';
+        if (await this.fileSystem.exists(withMlldMd)) {
+          fullPath = withMlldMd;
+        } else {
+          // Try .mld as fallback
+          const withMld = fullPath + '.mld';
+          if (await this.fileSystem.exists(withMld)) {
+            fullPath = withMld;
+          } else {
+            // Try .md as final fallback
+            const withMd = fullPath + '.md';
+            if (await this.fileSystem.exists(withMd)) {
+              fullPath = withMd;
+            }
+          }
         }
       }
     }
@@ -304,13 +317,23 @@ export class LocalResolver implements Resolver {
       const relativePath = this.extractRelativePath(ref, config);
       const fullPath = await this.resolveFullPath(relativePath, config);
 
-      // If no extension and the file doesn't exist, try with .mld extension
+      // If no extension and the file doesn't exist, try with .mlld.md, .mld, or .md extensions
       if (operation === 'read' && !path.extname(fullPath)) {
         const existsAsIs = await this.fileSystem.exists(fullPath);
         if (!existsAsIs) {
-          // Try with .mld extension
+          // Try .mlld.md first (mlld module format)
+          const withMlldMd = fullPath + '.mlld.md';
+          if (await this.fileSystem.exists(withMlldMd)) {
+            return true;
+          }
+          // Try .mld as fallback
           const withMld = fullPath + '.mld';
           if (await this.fileSystem.exists(withMld)) {
+            return true;
+          }
+          // Try .md as final fallback
+          const withMd = fullPath + '.md';
+          if (await this.fileSystem.exists(withMd)) {
             return true;
           }
         }
