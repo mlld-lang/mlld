@@ -61,17 +61,11 @@ This document captures the current state of the mlld codebase after an agent acc
    - Tests written for old architecture need updating
    - Specific failures identified and understood
 
-### Current Issues (5 failures / 586 passed)
+### All Tests Now Passing! ✅ (591 passed / 27 skipped)
 
-#### Alias Command Test Failures (3 failures) 
-- Tests fail with "Cannot read properties of undefined (reading 'prefix')"
-- Issue at line 79 in alias.test.ts
-- Likely related to mock setup or test configuration
-
-#### ProjectPathResolver Context Behavior Tests (2 failures)
-- "ProjectPathResolver requires basePath in configuration"
-- Tests not providing required basePath config
-- Need to update test setup
+#### Previously Fixed Issues:
+- **Alias Command Test Failures** - Fixed by properly mocking LockFile and updating test expectations
+- **ProjectPathResolver Context Behavior Tests** - Fixed by updating resolver to handle prefix-stripped references
 
 ### Fixed Issues ✅
 

@@ -47,8 +47,9 @@ export class ProjectPathResolver implements Resolver {
   }
 
   canResolve(ref: string, config?: ProjectPathResolverConfig): boolean {
-    // Can resolve if reference starts with @PROJECTPATH or @.
-    return ref.startsWith('@PROJECTPATH') || ref.startsWith('@.');
+    // Can resolve if reference starts with @PROJECTPATH or @. 
+    // OR if we have a config (which means prefix was stripped)
+    return ref.startsWith('@PROJECTPATH') || ref.startsWith('@.') || !!config;
   }
 
   /**
@@ -90,10 +91,8 @@ export class ProjectPathResolver implements Resolver {
       } else if (ref.startsWith('@.')) {
         relativePath = ref.substring('@.'.length);
       } else {
-        throw new MlldResolutionError(
-          `Invalid PROJECTPATH reference: ${ref}`,
-          {}
-        );
+        // With prefix stripping, we might just get the path directly
+        relativePath = ref;
       }
 
       // Remove leading slash if present
