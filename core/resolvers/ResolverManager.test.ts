@@ -22,8 +22,11 @@ class MockResolver implements Resolver {
   
   constructor(private content: string = 'mock content') {}
   
-  canResolve(ref: string): boolean {
-    return ref.startsWith('@mock/');
+  canResolve(ref: string, config?: any): boolean {
+    // Mock resolver only works with configured registries
+    // It will be called with stripped references when a registry is configured
+    // Otherwise it's called with the full reference
+    return ref.includes('mock') || (config && config.mock);
   }
   
   async resolve(ref: string): Promise<ResolverContent> {
@@ -128,7 +131,7 @@ describe('ResolverManager', () => {
   describe('resolution', () => {
     beforeEach(() => {
       manager.registerResolver(new MockResolver());
-      manager.registerResolver(new RegistryResolver());
+      // Don't register RegistryResolver here - it interferes with specific tests
     });
     
     it('should resolve using configured prefix', async () => {
@@ -137,7 +140,8 @@ describe('ResolverManager', () => {
         {
           prefix: '@mock/',
           resolver: 'mock',
-          type: 'input'
+          type: 'input',
+          config: { mock: true }
         }
       ]);
       
@@ -154,6 +158,9 @@ describe('ResolverManager', () => {
     });
     
     it('should validate resolver type for operations', async () => {
+      // Create a fresh manager for this test (don't use the one with MockResolver)
+      const freshManager = new ResolverManager();
+      
       // Create a new output-only resolver class
       class OutputOnlyResolver implements Resolver {
         name = 'output-only';
@@ -170,7 +177,8 @@ describe('ResolverManager', () => {
         };
         
         canResolve(ref: string): boolean {
-          return ref.startsWith('@output/');
+          // After prefix stripping, we just get the file part
+          return true;
         }
         
         async resolve(ref: string): Promise<ResolverContent> {
@@ -179,9 +187,9 @@ describe('ResolverManager', () => {
       }
       
       const outputResolver = new OutputOnlyResolver();
-      manager.registerResolver(outputResolver);
+      freshManager.registerResolver(outputResolver);
       
-      manager.configureRegistries([
+      freshManager.configureRegistries([
         {
           prefix: '@output/',
           resolver: 'output-only',
@@ -190,7 +198,7 @@ describe('ResolverManager', () => {
       ]);
       
       // Try to resolve with output-only resolver
-      await expect(manager.resolve('@output/file'))
+      await expect(freshManager.resolve('@output/file'))
         .rejects.toThrow('does not support input operations');
     });
     

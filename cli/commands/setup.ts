@@ -403,26 +403,28 @@ Information about this module.
     // Update resolver registries
     await lockFile.setResolverRegistries(resolverRegistries);
 
-    // If this is a new file, add some basic configuration
+    // If this is a new file, add some basic security configuration
     if (!hasExistingConfig) {
-      // Add basic security configuration
-      const currentConfig = lockFile.getConfig();
-      const newConfig = {
-        ...currentConfig,
-        security: {
-          allowedDomains: [
-            'raw.githubusercontent.com',
-            'gist.githubusercontent.com',
-            'api.github.com'
-          ],
-          ...currentConfig.security
-        }
-      };
+      // Set basic security domains for GitHub operations
+      const currentTrustedDomains = lockFile.getTrustedDomains();
+      const defaultDomains = [
+        'raw.githubusercontent.com',
+        'gist.githubusercontent.com',
+        'api.github.com'
+      ];
       
-      // Update the lock file data manually since there's no setConfig method
-      (lockFile as any).data.config = newConfig;
-      (lockFile as any).isDirty = true;
-      await lockFile.save();
+      // Add default domains if not already present
+      const needsUpdate = defaultDomains.some(domain => !currentTrustedDomains.includes(domain));
+      if (needsUpdate) {
+        const mergedDomains = [...new Set([...currentTrustedDomains, ...defaultDomains])];
+        // Update the lock file data manually since there's no setTrustedDomains method
+        (lockFile as any).data.security = {
+          ...(lockFile as any).data.security,
+          trustedDomains: mergedDomains
+        };
+        (lockFile as any).isDirty = true;
+        await lockFile.save();
+      }
     }
 
     console.log(chalk.green(`\n✔ Configuration saved to mlld.lock.json`));
