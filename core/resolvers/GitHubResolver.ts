@@ -8,6 +8,8 @@ import {
 import { MlldResolutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint/TaintTracker';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // GitHub API response types
 interface GitHubContentItem {
@@ -69,6 +71,17 @@ export interface GitHubResolverConfig {
    * Cache timeout in milliseconds
    */
   cacheTimeout?: number;
+
+  /**
+   * The prefix used to reference this resolver (e.g., "@private/")
+   * Used for helpful error messages
+   */
+  prefix?: string;
+
+  /**
+   * Resolution context (import, path, variable)
+   */
+  context?: string;
 }
 
 /**
@@ -177,10 +190,29 @@ export class GitHubResolver implements Resolver {
     } catch (error) {
       const err = error as { status?: number; message?: string };
       if (err.status === 404) {
-        throw new MlldResolutionError(
-          `File not found in repository: ${path}`,
-          { reference: ref, repository: config.repository, path }
-        );
+        // Check if the file exists locally
+        const localPath = this.getLocalPath(ref, config);
+        const localExists = localPath && fs.existsSync(localPath);
+        
+        if (localExists) {
+          // Extract the prefix from the original reference
+          const prefix = config.prefix || '@private/';
+          
+          throw new MlldResolutionError(
+            `Module '${prefix}${ref}' not found in repository ${config.repository}.\n` +
+            `However, a local version exists at: ${localPath}\n\n` +
+            `To test locally before publishing:\n` +
+            `  @import { something } from @local/${ref}\n\n` +
+            `Ready to publish? Run:\n` +
+            `  mlld publish ${localPath} --prefix ${prefix}`,
+            { reference: ref, repository: config.repository, path, hasLocal: true }
+          );
+        } else {
+          throw new MlldResolutionError(
+            `File not found in repository: ${path}`,
+            { reference: ref, repository: config.repository, path }
+          );
+        }
       }
       if (err.status === 401 || err.status === 403) {
         throw new MlldResolutionError(
@@ -609,5 +641,18 @@ export class GitHubResolver implements Resolver {
       node && node.type === 'Directive' && 
       ['text', 'data', 'exec', 'path'].includes(node.kind)
     );
+  }
+
+  /**
+   * Get the local path where this module might exist
+   */
+  private getLocalPath(ref: string, config: GitHubResolverConfig): string | null {
+    if (!config.basePath) return null;
+    
+    // Build the same path that would be used in the repository
+    const modulePath = this.buildPath(ref, config);
+    
+    // Check relative to current working directory
+    return path.join(process.cwd(), modulePath);
   }
 }
