@@ -122,8 +122,9 @@ export class ResolverManager {
   async resolve(ref: string, options?: ResolverOptions): Promise<ResolutionResult> {
     const startTime = Date.now();
 
-    // 1. Check if we have a hash for this module in lock file
-    if (this.lockFile && this.moduleCache) {
+    // 1. Check if we have a hash for this module in lock file (skip for local files)
+    const isLocal = ref.startsWith('@local/') || ref.startsWith('local://');
+    if (this.lockFile && this.moduleCache && !isLocal) {
       const lockEntry = this.lockFile.getImport(ref);
       if (lockEntry?.integrity) {
         // Extract hash from integrity (format: "sha256:hash")
@@ -139,6 +140,7 @@ export class ResolverManager {
               return {
                 content: {
                   content: cached.content,
+                  contentType: cached.contentType || 'module', // Default to module if not stored
                   metadata: {
                     source: cached.metadata?.source || ref,
                     timestamp: cached.metadata?.timestamp || new Date(),
@@ -243,8 +245,8 @@ export class ResolverManager {
         timeoutMs || 30000
       );
 
-      // 4. Cache the content if cache is available
-      if (this.moduleCache && content.content) {
+      // 4. Cache the content if cache is available (but skip local files)
+      if (this.moduleCache && content.content && resolver.name !== 'LOCAL') {
         try {
           const cacheEntry = await this.moduleCache.store(
             content.content,

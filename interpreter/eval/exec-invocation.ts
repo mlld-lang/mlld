@@ -41,12 +41,68 @@ export async function evaluateExecInvocation(
     throw new MlldInterpreterError(`Command not found: ${commandName}`);
   }
   
-  // Ensure it's an exec command
-  if (command.type !== 'command') {
-    throw new MlldInterpreterError(`Variable ${commandName} is not a command (type: ${command.type})`);
+  // Ensure it's an exec command or text template
+  if (command.type !== 'command' && command.type !== 'textTemplate') {
+    throw new MlldInterpreterError(`Variable ${commandName} is not a command or template (type: ${command.type})`);
   }
   
-  // Get the command definition
+  // Handle text templates differently
+  if (command.type === 'textTemplate') {
+    // Text template handling
+    const templateContent = command.content || [];
+    const templateParams = command.params || [];
+    
+    // Create a child environment for parameter substitution
+    const execEnv = env.createChild();
+    
+    // Bind arguments to parameters
+    const args = node.commandRef.args || [];
+    const evaluatedArgs: string[] = [];
+    
+    // Evaluate arguments
+    for (const arg of args) {
+      if (typeof arg === 'string') {
+        evaluatedArgs.push(arg);
+      } else if (arg && typeof arg === 'object') {
+        const evaluated = await interpolate([arg], env);
+        evaluatedArgs.push(evaluated);
+      } else {
+        evaluatedArgs.push(String(arg));
+      }
+    }
+    
+    // Bind evaluated arguments to parameters
+    for (let i = 0; i < templateParams.length; i++) {
+      const paramName = templateParams[i];
+      const argValue = evaluatedArgs[i];
+      
+      if (argValue !== undefined) {
+        execEnv.setVariable(paramName, {
+          type: 'text',
+          name: paramName,
+          value: argValue
+        });
+      }
+    }
+    
+    // Interpolate the template with the bound parameters
+    const result = await interpolate(templateContent, execEnv);
+    
+    // Apply withClause transformations if present
+    if (node.withClause) {
+      return applyWithClause(result, node.withClause, env);
+    }
+    
+    return {
+      value: result,
+      env,
+      stdout: result,
+      stderr: '',
+      exitCode: 0
+    };
+  }
+  
+  // Get the command definition for regular commands
   const definition = command.value;
   if (!definition || typeof definition !== 'object') {
     throw new MlldInterpreterError(`Command ${commandName} has invalid definition`);
