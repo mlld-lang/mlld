@@ -76,6 +76,8 @@ export interface CLIOptions {
   y?: boolean;
   // Blank line normalization
   noNormalizeBlankLines?: boolean;
+  // Development mode
+  dev?: boolean;
   _?: string[]; // Remaining args after command
 }
 
@@ -351,6 +353,10 @@ function parseArgs(args: string[]): CLIOptions {
       // Blank line normalization
       case '--no-normalize-blank-lines':
         options.noNormalizeBlankLines = true;
+        break;
+      // Development mode
+      case '--dev':
+        options.dev = true;
         break;
       // Transformation is always enabled by default
       // No transform flags needed
@@ -977,7 +983,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       },
       returnEnvironment: true,
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
-      normalizeBlankLines: !cliOptions.noNormalizeBlankLines
+      normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
+      devMode: cliOptions.dev
     });
 
     // Extract result and environment

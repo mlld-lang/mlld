@@ -32,6 +32,7 @@ export interface InterpretOptions {
   returnEnvironment?: boolean; // Return environment with result
   approveAllImports?: boolean; // Bypass interactive import approval
   normalizeBlankLines?: boolean; // Control blank line normalization (default: true)
+  devMode?: boolean; // Enable development mode with local fallback
 }
 
 /**
@@ -140,6 +141,11 @@ export async function interpret(
   // Set blank line normalization flag (default: true)
   if (options.normalizeBlankLines !== undefined) {
     env.setNormalizeBlankLines(options.normalizeBlankLines);
+  }
+  
+  // Set dev mode if provided
+  if (options.devMode) {
+    env.setDevMode(options.devMode);
   }
   
   // Evaluate the AST

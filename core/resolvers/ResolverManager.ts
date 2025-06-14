@@ -12,6 +12,8 @@ import { MlldResolutionError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { ModuleCache, LockFile } from '@core/registry';
 import { HashUtils } from '@core/registry/utils/HashUtils';
+import { hasUncommittedChanges, getGitStatus } from '@core/utils/gitStatus';
+import * as path from 'path';
 
 /**
  * Manages resolver registration, routing, and execution
@@ -25,6 +27,7 @@ export class ResolverManager {
   private moduleCache?: ModuleCache;
   private lockFile?: LockFile;
   private offlineMode: boolean = false;
+  private devMode: boolean = false;
 
   constructor(
     securityPolicy?: ResolverSecurityPolicy,
@@ -61,6 +64,14 @@ export class ResolverManager {
    */
   setLockFile(lockFile: LockFile): void {
     this.lockFile = lockFile;
+  }
+
+  /**
+   * Set development mode - enables local fallback
+   */
+  setDevMode(devMode: boolean): void {
+    this.devMode = devMode;
+    logger.debug(`Development mode: ${devMode}`);
   }
 
   /**
@@ -223,7 +234,8 @@ export class ResolverManager {
       // Merge registry config with options
       const resolverConfig = {
         ...registry?.config,
-        context: options?.context
+        context: options?.context,
+        prefix: registry?.prefix
       };
       
       const content = await this.withTimeout(
@@ -264,6 +276,29 @@ export class ResolverManager {
 
       const resolutionTime = Date.now() - startTime;
 
+      // Check for dirty state if not using LOCAL resolver
+      if (resolver.name !== 'LOCAL' && registry?.config?.basePath) {
+        // Add .mlld.md extension if not present
+        let fileName = resolverRef;
+        if (!fileName.includes('.')) {
+          fileName += '.mlld.md';
+        }
+        const localPath = path.join(process.cwd(), registry.config.basePath, fileName);
+        
+        // Check if local file exists and has uncommitted changes
+        const gitStatus = await getGitStatus(localPath);
+        if (gitStatus === 'modified' || gitStatus === 'untracked') {
+          const statusEmoji = gitStatus === 'modified' ? '📝' : '🆕';
+          const statusText = gitStatus === 'modified' ? 'modified' : 'untracked';
+          
+          console.warn(`\n${statusEmoji} Local ${statusText} version detected for ${registry.prefix}${resolverRef}`);
+          console.warn(`   Remote: Using ${resolver.name} resolver`);
+          console.warn(`   Local:  ${localPath}`);
+          console.warn(`   Hint:   Use --dev flag to test with local version`);
+          console.warn(`           mlld run myfile.mld --dev\n`);
+        }
+      }
+
       return {
         content,
         resolverName: resolver.name,
@@ -271,6 +306,45 @@ export class ResolverManager {
         resolutionTime
       };
     } catch (error) {
+      // In dev mode, if the error indicates a local file exists, try LOCAL resolver
+      if (this.devMode && error instanceof MlldResolutionError) {
+        const errorData = (error as any).data;
+        if (errorData?.hasLocal) {
+          logger.info(`Dev mode: Falling back to local version of ${ref}`);
+          
+          // Find LOCAL resolver
+          const localResolver = this.resolvers.get('LOCAL');
+          if (localResolver) {
+            try {
+              // Extract the module name from the reference
+              const moduleName = resolverRef;
+              
+              // Try to resolve using LOCAL resolver
+              const localContent = await localResolver.resolve(moduleName, {
+                basePath: registry?.config?.basePath || process.cwd()
+              });
+              
+              // Log warning about using local version
+              console.warn(`⚠️  Using local version of ${registry?.prefix || ''}${ref} (not yet published)`);
+              console.warn(`   Local: ${errorData.path || moduleName}`);
+              console.warn(`   To publish: mlld publish ${errorData.path || moduleName} --prefix ${registry?.prefix || ''}`);
+              
+              const resolutionTime = Date.now() - startTime;
+              
+              return {
+                content: localContent,
+                resolverName: 'LOCAL (dev fallback)',
+                matchedPrefix: registry?.prefix,
+                resolutionTime
+              };
+            } catch (localError) {
+              // If local resolution also fails, throw the original error
+              logger.debug(`Local fallback failed: ${localError.message}`);
+            }
+          }
+        }
+      }
+      
       if (error instanceof MlldResolutionError) {
         throw error;
       }

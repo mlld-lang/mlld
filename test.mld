@@ -1,0 +1,11 @@
+---
+name: test-dev-mode
+---
+
+# Testing Dev Mode
+
+Testing import from private module:
+
+@import { confidence } from @private/confidence
+
+@add @confidence

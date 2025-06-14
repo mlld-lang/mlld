@@ -93,6 +93,9 @@ export class Environment {
   // Blank line normalization flag
   private normalizeBlankLines: boolean = true;
   
+  // Development mode flag
+  private devMode: boolean = false;
+  
   // Default URL validation options (used if no config provided)
   private defaultUrlOptions = {
     allowedProtocols: ['http', 'https'],
@@ -2001,6 +2004,24 @@ export class Environment {
    */
   getNormalizeBlankLines(): boolean {
     return this.normalizeBlankLines;
+  }
+  
+  /**
+   * Set development mode flag
+   */
+  setDevMode(devMode: boolean): void {
+    this.devMode = devMode;
+    // Pass to resolver manager if it exists
+    if (this.resolverManager) {
+      this.resolverManager.setDevMode(devMode);
+    }
+  }
+  
+  /**
+   * Get development mode flag
+   */
+  getDevMode(): boolean {
+    return this.devMode;
   }
   
   private collectError(
