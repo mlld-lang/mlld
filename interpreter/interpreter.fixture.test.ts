@@ -161,7 +161,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
       'when-exec-conditions': 'Grammar bug: @exec name() = @run [...] is parsed as execResolver instead of execCommand',
       'when-when-switch': 'Grammar bug: @exec name() = @run [...] is parsed as execResolver instead of execCommand',
-      'add-exec-invocation': 'Grammar bug: @exec name() = @run [...] is parsed as execResolver instead of execCommand',
+      'add-exec-invocation': 'Grammar bug: @exec name() = @run [...] is parsed as execResolver instead of execCommand'
     };
 
     const testFn = skipTests[fixture.name] ? it.skip : it;

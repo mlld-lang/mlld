@@ -62,6 +62,9 @@ Fixed:
 Breaking Changes:
 - None expected, but this is a major architectural change. Please report any issues!
 
+Breaking Changes:
+- None expected, but this is a major architectural change. Please report any issues!
+
 ## [1.3.4]
 Added:
 - Made keytar installation optional for npx purposes

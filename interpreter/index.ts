@@ -153,7 +153,6 @@ export async function interpret(
   if (options.enableTrace !== undefined) {
     env.setTraceEnabled(options.enableTrace);
   }
-  
   // Evaluate the AST
   await evaluate(ast, env);
   

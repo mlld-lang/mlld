@@ -795,7 +795,6 @@ async function importFromResolverContent(
           };
           (importedVariable as any).params = value.__params || [];
         }
-        
         env.setVariable(name, importedVariable);
       }
     } else if (directive.subtype === 'importSelected') {
