@@ -13,7 +13,7 @@ import {
   isForeachCommandExpression,
   isForeachSectionExpression
 } from '@core/types/data';
-import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
+import { isTextVariable, isDataVariable, isPathVariable, isImportVariable, isExecutableVariable } from '@core/types';
 import { evaluate, interpolate, resolveVariableValue } from '../core/interpreter';
 import { accessField } from '../utils/field-access';
 import { 
@@ -113,9 +113,9 @@ export async function evaluateDataValue(
       throw new Error(`Variable not found: ${value.identifier}`);
     }
     
-    // For command variables, return the variable itself (for lazy execution)
-    // This preserves the command for later execution rather than executing it now
-    if (variable.type === 'command') {
+    // For executable variables, return the variable itself (for lazy execution)
+    // This preserves the executable for later execution rather than executing it now
+    if (variable.type === 'executable') {
       return variable;
     }
     
@@ -127,7 +127,7 @@ export async function evaluateDataValue(
       result = await resolveVariableValue(variable, env);
     } else if (isPathVariable(variable)) {
       result = variable.value.resolvedPath;
-    } else if (isCommandVariable(variable)) {
+    } else if (isExecutableVariable(variable)) {
       result = variable; // Already handled above but included for completeness
     } else if (isImportVariable(variable)) {
       result = variable.value;
@@ -326,7 +326,7 @@ export async function evaluateForeachCommand(
     throw new Error(`Command not found: ${command.identifier}`);
   }
   
-  if (!isCommandVariable(cmdVariable) && cmdVariable.type !== 'textTemplate') {
+  if (!isExecutableVariable(cmdVariable)) {
     throw new Error(`Variable '${command.identifier}' cannot be used with foreach. Expected an @exec command or @text template with parameters, but got type: ${cmdVariable.type}`);
   }
   
@@ -352,12 +352,10 @@ export async function evaluateForeachCommand(
   }
   
   // 4. Check parameter count matches array count
-  // For text templates, params are directly on the variable, not on .value
-  const paramCount = cmdVariable.type === 'textTemplate' 
-    ? (cmdVariable.params?.length || 0)
-    : (cmdVariable.value.paramNames?.length || cmdVariable.value.params?.length || 0);
+  const definition = cmdVariable.value;
+  const paramCount = definition.paramNames?.length || 0;
   if (evaluatedArrays.length !== paramCount) {
-    const paramType = cmdVariable.type === 'textTemplate' ? 'Text template' : 'Command';
+    const paramType = definition.sourceDirective === 'text' ? 'Text template' : 'Command';
     throw new Error(`${paramType} '${command.identifier}' expects ${paramCount} parameter${paramCount !== 1 ? 's' : ''}, but foreach is passing ${evaluatedArrays.length} array${evaluatedArrays.length !== 1 ? 's' : ''}`);
   }
   
@@ -372,10 +370,7 @@ export async function evaluateForeachCommand(
     try {
       // Create argument map for parameter substitution
       const argMap: Record<string, any> = {};
-      // For text templates, params are directly on the variable, not on .value
-      const params = cmdVariable.type === 'textTemplate'
-        ? (cmdVariable.params || [])
-        : (cmdVariable.value.paramNames || cmdVariable.value.params || []);
+      const params = definition.paramNames || [];
       params.forEach((param: string, index: number) => {
         argMap[param] = tuple[index];
       });
@@ -385,10 +380,7 @@ export async function evaluateForeachCommand(
       results.push(result);
     } catch (error) {
       // Include iteration context in error message
-      // For text templates, params are directly on the variable, not on .value
-      const params = cmdVariable.type === 'textTemplate'
-        ? (cmdVariable.params || [])
-        : (cmdVariable.value.paramNames || cmdVariable.value.params || []);
+      const params = definition.paramNames || [];
       const iterationContext = params.map((param: string, index: number) => 
         `${param}: ${JSON.stringify(tuple[index])}`
       ).join(', ');
@@ -439,27 +431,27 @@ async function invokeParameterizedCommand(
     }
   }
   
-  // Handle text templates differently - they don't have a .value property
-  if (cmdVariable.type === 'textTemplate') {
+  const definition = cmdVariable.value;
+  
+  // Handle template executables
+  if (definition.type === 'template') {
     // Execute text template with bound parameters
-    const text = await interpolate(cmdVariable.content, childEnv);
+    const text = await interpolate(definition.templateContent, childEnv);
     return text;
-  }
-  
-  // For exec commands, use the .value property
-  const commandDef = cmdVariable.value;
-  
-  if (commandDef.type === 'command') {
+  } else if (definition.type === 'command') {
     // Execute command template with bound parameters
-    const command = await interpolate(commandDef.commandTemplate, childEnv);
+    const command = await interpolate(definition.commandTemplate, childEnv);
     return await childEnv.executeCommand(command);
-  } else if (commandDef.type === 'code') {
+  } else if (definition.type === 'code') {
     // Execute code template with bound parameters
-    const code = await interpolate(commandDef.codeTemplate, childEnv);
+    const code = await interpolate(definition.codeTemplate, childEnv);
     // Pass argMap as parameters for bash/shell to convert to environment variables
-    return await childEnv.executeCode(code, commandDef.language, argMap);
+    return await childEnv.executeCode(code, definition.language, argMap);
+  } else if (definition.type === 'commandRef') {
+    // TODO: Handle command references - for now throw error
+    throw new Error(`Command reference execution in foreach not yet implemented`);
   } else {
-    throw new Error(`Unsupported command type: ${commandDef.type}`);
+    throw new Error(`Unsupported executable type: ${definition.type}`);
   }
 }
 
@@ -483,17 +475,15 @@ export async function validateForeachExpression(
     throw new Error(`Command not found: ${command.identifier}`);
   }
   
-  if (!isCommandVariable(cmdVariable) && cmdVariable.type !== 'textTemplate') {
+  if (!isExecutableVariable(cmdVariable)) {
     throw new Error(`Variable '${command.identifier}' cannot be used with foreach. Expected an @exec command or @text template with parameters, but got type: ${cmdVariable.type}`);
   }
   
   // 2. Validate array count matches parameter count
-  // For text templates, params are directly on the variable, not on .value
-  const paramCount = cmdVariable.type === 'textTemplate' 
-    ? (cmdVariable.params?.length || 0)
-    : (cmdVariable.value.paramNames?.length || cmdVariable.value.params?.length || 0);
+  const definition = cmdVariable.value;
+  const paramCount = definition.paramNames?.length || 0;
   if (arrays.length !== paramCount) {
-    const paramType = cmdVariable.type === 'textTemplate' ? 'Text template' : 'Command';
+    const paramType = definition.sourceDirective === 'text' ? 'Text template' : 'Command';
     throw new Error(`${paramType} '${command.identifier}' expects ${paramCount} parameter${paramCount !== 1 ? 's' : ''}, but foreach is passing ${arrays.length} array${arrays.length !== 1 ? 's' : ''}`);
   }
   

@@ -6,7 +6,6 @@ import type {
   MlldDocument, 
   MlldVariable, 
   FrontmatterNode, 
-  CommandVariable,
   DataVariable,
   VariableReferenceNode,
   CodeFenceNode,
@@ -21,7 +20,7 @@ import type {
 } from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
-import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable, isExecInvocation } from '@core/types';
+import { isTextVariable, isDataVariable, isPathVariable, isExecutableVariable, isImportVariable, isExecInvocation } from '@core/types';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
@@ -552,7 +551,7 @@ export async function resolveVariableValue(variable: MlldVariable, env: Environm
     return variable.value;
   }
   
-  if (isCommandVariable(variable)) {
+  if (isExecutableVariable(variable)) {
     return variable.value;
   }
   

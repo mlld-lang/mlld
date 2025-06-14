@@ -150,17 +150,17 @@ async function executeCommandVariable(
   env: Environment,
   stdinInput?: string
 ): Promise<string> {
-  // Handle both wrapped command variables and direct command/code definitions
+  // Handle both wrapped executable variables and direct definitions
   let execDef: any;
   
-  if (commandVar && commandVar.type === 'command' && commandVar.value) {
-    // This is a wrapped command variable
+  if (commandVar && commandVar.type === 'executable' && commandVar.value) {
+    // This is a wrapped executable variable
     execDef = commandVar.value;
-  } else if (commandVar && (commandVar.type === 'command' || commandVar.type === 'code') && (commandVar.commandTemplate || commandVar.codeTemplate)) {
-    // This is a direct command or code definition
+  } else if (commandVar && (commandVar.type === 'command' || commandVar.type === 'code' || commandVar.type === 'template') && (commandVar.commandTemplate || commandVar.codeTemplate || commandVar.templateContent)) {
+    // This is a direct executable definition
     execDef = commandVar;
   } else {
-    throw new Error(`Cannot execute non-command variable in pipeline: ${JSON.stringify(commandVar)}`);
+    throw new Error(`Cannot execute non-executable variable in pipeline: ${JSON.stringify(commandVar)}`);
   }
   
   // Create environment with parameter bindings
@@ -212,7 +212,14 @@ async function executeCommandVariable(
     
     const result = await env.executeCode(code, execDef.language || 'javascript', params);
     return result;
+  } else if (execDef.type === 'template' && execDef.templateContent) {
+    // Interpolate template
+    const { interpolate } = await import('../core/interpreter');
+    const { InterpolationContext } = await import('../core/interpolation-context');
+    
+    const result = await interpolate(execDef.templateContent, execEnv, InterpolationContext.Default);
+    return result;
   }
   
-  throw new Error(`Unsupported command type in pipeline: ${execDef.type}`);
+  throw new Error(`Unsupported executable type in pipeline: ${execDef.type}`);
 }

@@ -1,8 +1,10 @@
 import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
+import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
-import { createCommandVariable, astLocationToSourceLocation } from '@core/types';
+import { createExecutableVariable } from '@core/types/executable';
+import { astLocationToSourceLocation } from '@core/types';
 
 /**
  * Extract parameter names from the params array.
@@ -64,7 +66,7 @@ export async function evaluateExec(
       const funcName = ref.identifier;
       const funcVar = env.getVariable(funcName);
       
-      if (!funcVar || funcVar.type !== 'command') {
+      if (!funcVar || funcVar.type !== 'executable') {
         throw new Error(`${funcName} is not a defined exec function`);
       }
       
@@ -102,7 +104,7 @@ export async function evaluateExec(
     throw new Error('Exec directive identifier must be a simple command name');
   }
   
-  let commandDef;
+  let executableDef: ExecutableDefinition;
   
   if (directive.subtype === 'execCommand') {
     // Check if this is a command reference
@@ -117,12 +119,13 @@ export async function evaluateExec(
       const paramNames = extractParamNames(params);
       
       // Store the reference definition
-      commandDef = {
+      executableDef = {
+        type: 'commandRef',
         commandRef: refName,
         commandArgs: args,
         paramNames,
-        type: 'commandRef'
-      };
+        sourceDirective: 'exec'
+      } satisfies CommandRefExecutable;
     } else {
       // Handle regular command definition
       const commandNodes = directive.values?.command;
@@ -137,11 +140,12 @@ export async function evaluateExec(
       const paramNames = extractParamNames(params);
       
       // Store the command template (not interpolated yet)
-      commandDef = {
+      executableDef = {
+        type: 'command',
         commandTemplate: commandNodes,
         paramNames,
-        type: 'command'
-      };
+        sourceDirective: 'exec'
+      } satisfies CommandExecutable;
     }
     
   } else if (directive.subtype === 'execCode') {
@@ -159,12 +163,13 @@ export async function evaluateExec(
     const language = directive.meta?.language || 'javascript';
     
     // Store the code template (not interpolated yet)
-    commandDef = {
+    executableDef = {
+      type: 'code',
       codeTemplate: codeNodes,
       language,
       paramNames,
-      type: 'code'
-    };
+      sourceDirective: 'exec'
+    } satisfies CodeExecutable;
     
   } else if (directive.subtype === 'execResolver') {
     // Handle resolver reference: @exec name(params) = @resolver
@@ -190,24 +195,51 @@ export async function evaluateExec(
     
     // For now, treat resolver references as command references
     // TODO: Implement proper resolver handling
-    commandDef = {
+    executableDef = {
+      type: 'commandRef',
       commandRef: resolverName,
       paramNames,
-      type: 'commandRef'
-    };
+      sourceDirective: 'exec'
+    } satisfies CommandRefExecutable;
+    
+  } else if (directive.subtype === 'execTemplate') {
+    // Handle template exec: @exec name(params) = [[template]]
+    const templateNodes = directive.values?.template;
+    if (!templateNodes) {
+      throw new Error('Exec template directive missing template');
+    }
+    
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    
+    throw new Error('Exec template subtype not yet implemented');
+    
+  } else if (directive.subtype === 'execSection') {
+    // Handle section exec: @exec name(params) = ### Section
+    const sectionNodes = directive.values?.section;
+    if (!sectionNodes) {
+      throw new Error('Exec section directive missing section');
+    }
+    
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    
+    throw new Error('Exec section subtype not yet implemented');
     
   } else {
     throw new Error(`Unsupported exec subtype: ${directive.subtype}`);
   }
   
-  // Create and store the command variable
-  const variable = createCommandVariable(identifier, commandDef, {
+  // Create and store the executable variable
+  const variable = createExecutableVariable(identifier, executableDef, {
     definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
   });
   env.setVariable(identifier, variable);
   
-  // Return the command definition (no output for variable definitions)
-  return { value: commandDef, env };
+  // Return the executable definition (no output for variable definitions)
+  return { value: executableDef, env };
 }
 
 /**
@@ -215,18 +247,15 @@ export async function evaluateExec(
  */
 function createExecWrapper(
   execName: string, 
-  execVar: any,
+  execVar: { type: 'executable'; value: ExecutableDefinition },
   env: Environment
 ): Function {
   return async function(...args: any[]) {
-    // Get the command definition
+    // Get the executable definition
     const definition = execVar.value;
     
-    // Type guard for command definition
-    const typedDef = definition as any;
-    
     // Get parameter names from the definition
-    const params = typedDef.paramNames || [];
+    const params = definition.paramNames || [];
     
     // Create a child environment for parameter substitution
     const execEnv = env.createChild();
@@ -247,9 +276,9 @@ function createExecWrapper(
     
     let result: string;
     
-    if (typedDef.type === 'command') {
+    if (definition.type === 'command') {
       // Execute command with interpolated template
-      const commandTemplate = typedDef.commandTemplate || typedDef.command;
+      const commandTemplate = definition.commandTemplate;
       if (!commandTemplate) {
         throw new Error(`Command ${execName} has no command template`);
       }
@@ -269,9 +298,9 @@ function createExecWrapper(
       
       // Execute the command with environment variables
       result = await execEnv.executeCommand(command, { env: envVars });
-    } else if (typedDef.type === 'code') {
+    } else if (definition.type === 'code') {
       // Execute code with interpolated template
-      const codeTemplate = typedDef.codeTemplate || typedDef.code;
+      const codeTemplate = definition.codeTemplate;
       if (!codeTemplate) {
         throw new Error(`Code command ${execName} has no code template`);
       }
@@ -309,11 +338,11 @@ function createExecWrapper(
       // Execute the code with parameters
       result = await execEnv.executeCode(
         code,
-        typedDef.language || 'javascript',
+        definition.language || 'javascript',
         codeParams
       );
     } else {
-      throw new Error(`Unknown command type: ${typedDef.type}`);
+      throw new Error(`Unknown command type: ${definition.type}`);
     }
     
     // Try to parse result as JSON for better JS integration

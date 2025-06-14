@@ -15,7 +15,7 @@ import type { EvalResult } from '../core/interpreter';
 import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
-import { isTextVariable, isCommandVariable } from '@core/types';
+import { isTextVariable, isExecutableVariable } from '@core/types';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 
@@ -269,17 +269,18 @@ async function evaluateInvocationSource(
       return await childEnv.interpolate(templateContent);
     }
     
-  } else if (isCommandVariable(variable)) {
-    // It's a command - execute it with arguments
-    const commandNode = variable.value;
+  } else if (isExecutableVariable(variable)) {
+    // It's an executable - need to invoke it properly
+    const definition = variable.value;
     
     // Create a child environment for parameter substitution
     const childEnv = env.createChild();
     
     // Bind parameters if any
-    if (variable.params && variable.params.length > 0) {
-      for (let i = 0; i < variable.params.length && i < args.length; i++) {
-        const paramName = variable.params[i];
+    const params = definition.paramNames || [];
+    if (params.length > 0) {
+      for (let i = 0; i < params.length && i < args.length; i++) {
+        const paramName = params[i];
         const argValue = await evaluateDataValue(args[i], env);
         childEnv.setVariable(paramName, {
           type: 'text',
@@ -288,13 +289,28 @@ async function evaluateInvocationSource(
       }
     }
     
-    // Execute the command
-    const result = await evaluate(commandNode, childEnv);
-    return String(result.value || '');
+    // Execute based on the type
+    let result: string;
+    if (definition.type === 'template') {
+      result = await interpolate(definition.templateContent, childEnv);
+    } else if (definition.type === 'command') {
+      const command = await interpolate(definition.commandTemplate, childEnv);
+      result = await childEnv.executeCommand(command);
+    } else if (definition.type === 'code') {
+      const code = await interpolate(definition.codeTemplate, childEnv);
+      result = await childEnv.executeCode(code, definition.language || 'javascript');
+    } else {
+      throw new MlldOutputError(
+        `Unsupported executable type: ${definition.type}`,
+        directive.location
+      );
+    }
+    
+    return String(result || '');
     
   } else {
     throw new MlldOutputError(
-      `Variable ${varName} is not a template or command`,
+      `Variable ${varName} is not a template or executable`,
       directive.location
     );
   }

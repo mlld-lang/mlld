@@ -1,6 +1,8 @@
 import type { ExecInvocation, WithClause } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
+import type { ExecutableDefinition } from '@core/types/executable';
+import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError } from '@core/errors';
@@ -36,104 +38,31 @@ export async function evaluateExecInvocation(
   }
   
   // Look up the command in the environment
-  const command = env.getVariable(commandName);
-  if (!command) {
+  const variable = env.getVariable(commandName);
+  if (!variable) {
     throw new MlldInterpreterError(`Command not found: ${commandName}`);
   }
   
-  // Ensure it's an exec command or text template
-  if (command.type !== 'command' && command.type !== 'textTemplate') {
-    throw new MlldInterpreterError(`Variable ${commandName} is not a command or template (type: ${command.type})`);
+  // Ensure it's an executable variable
+  if (variable.type !== 'executable') {
+    throw new MlldInterpreterError(`Variable ${commandName} is not executable (type: ${variable.type})`);
   }
   
-  // Handle text templates differently
-  if (command.type === 'textTemplate') {
-    // Text template handling
-    const templateContent = command.content || [];
-    const templateParams = command.params || [];
-    
-    // Create a child environment for parameter substitution
-    const execEnv = env.createChild();
-    
-    // Bind arguments to parameters
-    const args = node.commandRef.args || [];
-    const evaluatedArgs: string[] = [];
-    
-    // Evaluate arguments
-    for (const arg of args) {
-      if (typeof arg === 'string') {
-        evaluatedArgs.push(arg);
-      } else if (arg && typeof arg === 'object') {
-        const evaluated = await interpolate([arg], env);
-        evaluatedArgs.push(evaluated);
-      } else {
-        evaluatedArgs.push(String(arg));
-      }
-    }
-    
-    // Bind evaluated arguments to parameters
-    for (let i = 0; i < templateParams.length; i++) {
-      const paramName = templateParams[i];
-      const argValue = evaluatedArgs[i];
-      
-      if (argValue !== undefined) {
-        execEnv.setVariable(paramName, {
-          type: 'text',
-          name: paramName,
-          value: argValue
-        });
-      }
-    }
-    
-    // Interpolate the template with the bound parameters
-    const result = await interpolate(templateContent, execEnv);
-    
-    // Apply withClause transformations if present
-    if (node.withClause) {
-      return applyWithClause(result, node.withClause, env);
-    }
-    
-    return {
-      value: result,
-      env,
-      stdout: result,
-      stderr: '',
-      exitCode: 0
-    };
-  }
-  
-  // Get the command definition for regular commands
-  const definition = command.value;
-  if (!definition || typeof definition !== 'object') {
-    throw new MlldInterpreterError(`Command ${commandName} has invalid definition`);
-  }
-  
-  // Type guard for command definition
-  const typedDef = definition as { 
-    type: string; 
-    commandTemplate?: any[]; 
-    codeTemplate?: any[]; 
-    language?: string; 
-    command?: any[]; 
-    code?: any[];
-    parameters?: string[];
-  };
+  const definition = variable.value as ExecutableDefinition;
   
   // Create a child environment for parameter substitution
   const execEnv = env.createChild();
   
   // Handle command arguments
   const args = node.commandRef.args || [];
-  const params = typedDef.parameters || typedDef.paramNames || [];
+  const params = definition.paramNames || [];
   
   // Evaluate arguments to get their actual values
   const evaluatedArgs: string[] = [];
   for (const arg of args) {
-    // Arguments are typically strings, but we need to handle them properly
     if (typeof arg === 'string') {
       evaluatedArgs.push(arg);
     } else if (arg && typeof arg === 'object') {
-      // If it's an object, it might be an AST node - evaluate it
       const evaluated = await interpolate([arg], env);
       evaluatedArgs.push(evaluated);
     } else {
@@ -147,7 +76,6 @@ export async function evaluateExecInvocation(
     const argValue = evaluatedArgs[i];
     
     if (argValue !== undefined) {
-      // Set parameter value in the child environment
       execEnv.setVariable(paramName, {
         type: 'text',
         name: paramName,
@@ -158,15 +86,15 @@ export async function evaluateExecInvocation(
   
   let result: string;
   
-  if (typedDef.type === 'command') {
-    // Execute command with interpolated template
-    const commandTemplate = typedDef.commandTemplate || typedDef.command;
-    if (!commandTemplate) {
-      throw new MlldInterpreterError(`Command ${commandName} has no command template`);
-    }
-    
+  // Handle template executables
+  if (isTemplateExecutable(definition)) {
+    // Interpolate the template with the bound parameters
+    result = await interpolate(definition.templateContent, execEnv);
+  }
+  // Handle command executables
+  else if (isCommandExecutable(definition)) {
     // Interpolate the command template with parameters
-    const command = await interpolate(commandTemplate, execEnv);
+    const command = await interpolate(definition.commandTemplate, execEnv);
     
     // Build environment variables from parameters for shell execution
     const envVars: Record<string, string> = {};
@@ -180,15 +108,11 @@ export async function evaluateExecInvocation(
     
     // Execute the command with environment variables
     result = await execEnv.executeCommand(command, { env: envVars });
-  } else if (typedDef.type === 'code') {
-    // Execute code with interpolated template
-    const codeTemplate = typedDef.codeTemplate || typedDef.code;
-    if (!codeTemplate) {
-      throw new MlldInterpreterError(`Code command ${commandName} has no code template`);
-    }
-    
+  }
+  // Handle code executables
+  else if (isCodeExecutable(definition)) {
     // Interpolate the code template with parameters
-    const code = await interpolate(codeTemplate, execEnv);
+    const code = await interpolate(definition.codeTemplate, execEnv);
     
     // Build params object for code execution
     const codeParams: Record<string, any> = {};
@@ -200,22 +124,16 @@ export async function evaluateExecInvocation(
       }
     }
     
-    // Debug: log params for Node.js execution
-    if (process.env.DEBUG_NODE_EXEC && (typedDef.language === 'node' || typedDef.language === 'nodejs')) {
-      console.log('Exec invocation params:', params);
-      console.log('Exec invocation evaluatedArgs:', evaluatedArgs);
-      console.log('Exec invocation codeParams:', codeParams);
-    }
-    
     // Execute the code with parameters
     result = await execEnv.executeCode(
       code,
-      typedDef.language || 'javascript',
+      definition.language || 'javascript',
       codeParams
     );
-  } else if (typedDef.type === 'commandRef') {
-    // Handle command reference - recursively invoke the referenced command
-    const refName = typedDef.commandRef;
+  }
+  // Handle command reference executables
+  else if (isCommandRefExecutable(definition)) {
+    const refName = definition.commandRef;
     if (!refName) {
       throw new MlldInterpreterError(`Command reference ${commandName} has no target command`);
     }
@@ -242,7 +160,7 @@ export async function evaluateExecInvocation(
     const refResult = await evaluateExecInvocation(refInvocation, env);
     result = refResult.value as string;
   } else {
-    throw new MlldInterpreterError(`Unknown command type: ${typedDef.type}`);
+    throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
   }
   
   // Apply withClause transformations if present

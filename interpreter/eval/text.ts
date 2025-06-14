@@ -1,8 +1,10 @@
 import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
+import type { TemplateExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { createTextVariable, astLocationToSourceLocation } from '@core/types';
+import { createExecutableVariable } from '@core/types/executable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { normalizeTemplateContent } from '../utils/blank-line-normalizer';
@@ -98,17 +100,19 @@ export async function evaluateText(
       return '';
     }).filter(Boolean);
 
-    // Store the template definition
-    const templateDef = {
-      type: 'textTemplate' as const,
-      name: identifier,
-      identifier,
-      params,
-      content: directive.values?.content || [],
-      value: '' // Templates don't have a direct value
+    // Create template executable definition
+    const templateDef: TemplateExecutable = {
+      type: 'template',
+      templateContent: directive.values?.content || [],
+      paramNames: params,
+      sourceDirective: 'text'
     };
     
-    env.setVariable(identifier, templateDef);
+    // Create and store the executable variable
+    const variable = createExecutableVariable(identifier, templateDef, {
+      definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
+    });
+    env.setVariable(identifier, variable);
     
     // Templates are definition directives, no output
     return { value: '', env };
@@ -306,7 +310,7 @@ export async function evaluateText(
     
     // Look up the command definition
     const cmdVar = env.getVariable(commandName);
-    if (!cmdVar || cmdVar.type !== 'command') {
+    if (!cmdVar || cmdVar.type !== 'executable') {
       throw new Error(`Command '${commandName}' not found`);
     }
     
