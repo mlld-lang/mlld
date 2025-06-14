@@ -1,4 +1,4 @@
-@text greetingTemplate(name, title) = @add [[
+@exec greetingTemplate(name, title) = [[
 Hello {{title}} {{name}}!
 Welcome back, {{name}}!
 ]]

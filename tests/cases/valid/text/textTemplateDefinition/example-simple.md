@@ -1,2 +1,2 @@
-@text greeting(name) = @add [[Hello, {{name}}!]]
+@exec greeting(name) = [[Hello, {{name}}!]]
 @add @greeting("World")

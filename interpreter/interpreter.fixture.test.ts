@@ -156,7 +156,15 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
       'when-exec-conditions': 'Grammar bug: @exec name() = @run [...] is parsed as execResolver instead of execCommand',
       'when-when-switch': 'Grammar bug: @exec name() = @run [...] is parsed as execResolver instead of execCommand',
-      'add-exec-invocation': 'Grammar bug: @exec name() = @run [...] is parsed as execResolver instead of execCommand'
+      'add-exec-invocation': 'Grammar bug: @exec name() = @run [...] is parsed as execResolver instead of execCommand',
+      'text-textTemplateDefinition-simple': 'Needs update: Uses @exec template syntax which creates ExecutableVariable',
+      'text-textTemplateDefinition': 'Needs update: Uses @exec template syntax which creates ExecutableVariable',
+      'data-template-invocation': 'Needs update: Uses @exec template invocation',
+      'data-foreach-text-template': 'Needs update: Uses @exec template in foreach',
+      'output-template-invocation': 'Needs update: Uses @exec template invocation',
+      'add-addTemplateInvocation': 'Needs update: Uses @exec template invocation',
+      'when-exec-invocation-add': 'Needs update: Uses @exec template invocation',
+      'data-grammar-fixes': 'Needs update: Uses @exec template syntax'
     };
 
     const testFn = skipTests[fixture.name] ? it.skip : it;

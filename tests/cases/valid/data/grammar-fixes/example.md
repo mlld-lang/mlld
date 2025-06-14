@@ -1,4 +1,4 @@
-@text messageTemplate(user, action) = @add [[{{user}} {{action}} successfully!]]
+@exec messageTemplate(user, action) = [[{{user}} {{action}} successfully!]]
 @exec getVersion = @run [(echo "v1.2.3")]
 
 @data testAllFixes = {

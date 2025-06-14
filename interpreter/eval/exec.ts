@@ -213,7 +213,13 @@ export async function evaluateExec(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
-    throw new Error('Exec template subtype not yet implemented');
+    // Create template executable definition
+    executableDef = {
+      type: 'template',
+      template: templateNodes,
+      paramNames,
+      sourceDirective: 'exec'
+    } satisfies TemplateExecutable;
     
   } else if (directive.subtype === 'execSection') {
     // Handle section exec: @exec name(params) = ### Section

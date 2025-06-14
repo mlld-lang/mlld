@@ -13,5 +13,5 @@ The syntax `@text codecat(dir) = @run [(...)]` is invalid. For parameterized com
 
 **Alternative for text templates:**
 ```mlld
-@text greeting(name) = @add [[Hello {{name}}!]]
+@exec greeting(name) = [[Hello {{name}}!]]
 ```

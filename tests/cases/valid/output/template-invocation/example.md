@@ -1,6 +1,6 @@
 # Output with Parameterized Text Template
 
-@text greet(name,title) = @add [[## {{title}}
+@exec greet(name,title) = [[## {{title}}
 
 Hello, {{name}}! Welcome to mlld.]]
 

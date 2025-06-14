@@ -3,8 +3,8 @@
 @data names = ["Alice", "Bob", "Charlie"]
 @data greetings = ["Hello", "Hi", "Hey"]
 
-@text greeting(name) = @add [[{{name}}, welcome to the team!]]
-@text custom_greeting(greet, name) = @add [[{{greet}}, {{name}}! Nice to see you.]]
+@exec greeting(name) = [[{{name}}, welcome to the team!]]
+@exec custom_greeting(greet, name) = [[{{greet}}, {{name}}! Nice to see you.]]
 
 # Single parameter text template
 @data welcomes = foreach @greeting(@names)
