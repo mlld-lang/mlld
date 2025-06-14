@@ -8,6 +8,7 @@ import {
 import { MlldResolutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint/TaintTracker';
 import { GitHubAuthService } from '@core/registry/auth/GitHubAuthService';
+import { logger } from '@core/utils/logger';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -198,19 +199,33 @@ export class GitHubResolver implements Resolver {
           // Extract the prefix from the original reference
           const prefix = config.prefix || '@private/';
           
+          logger.debug(`GitHubResolver: Module ${ref} not found in repo, but local version exists at ${localPath}`);
+          
           throw new MlldResolutionError(
             `Module '${prefix}${ref}' not found in repository ${config.repository}.\n` +
             `However, a local version exists at: ${localPath}\n\n` +
             `To test locally before publishing:\n` +
             `  @import { something } from @local/${ref}\n\n` +
             `Ready to publish? Run:\n` +
-            `  mlld publish ${localPath} --prefix ${prefix}`,
-            { reference: ref, repository: config.repository, path, hasLocal: true }
+            `  mlld publish ${localPath}`,
+            { 
+              code: 'MODULE_NOT_FOUND_BUT_LOCAL_EXISTS',
+              details: { 
+                reference: ref, 
+                repository: config.repository, 
+                path, 
+                hasLocal: true, 
+                localPath 
+              }
+            }
           );
         } else {
           throw new MlldResolutionError(
             `File not found in repository: ${path}`,
-            { reference: ref, repository: config.repository, path }
+            { 
+              code: 'FILE_NOT_FOUND', 
+              details: { reference: ref, repository: config.repository, path } 
+            }
           );
         }
       }

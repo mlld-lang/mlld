@@ -27,6 +27,11 @@ Added:
   - Access control via `mlld.lock.json` security settings
   - Import allowed variables through @INPUT: `@import { API_KEY } from @INPUT`
   - Manage with `mlld env allow/remove/list`
+- **Developer Mode (`--dev` flag)**:
+  - Test modules with their final import paths before publishing
+  - Automatic fallback to local versions when modules aren't found in repositories
+  - Smart error messages guide developers to use `@local/` imports or publish their modules
+  - Detects uncommitted changes and suggests using dev mode for testing
 - **Shadow Environments** for @exec: `@exec js = { helperA, helperB }`
   - Inject helper functions into JavaScript execution contexts
 - **Negation Operator** for @when conditions:

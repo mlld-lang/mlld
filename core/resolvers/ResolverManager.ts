@@ -308,8 +308,9 @@ export class ResolverManager {
     } catch (error) {
       // In dev mode, if the error indicates a local file exists, try LOCAL resolver
       if (this.devMode && error instanceof MlldResolutionError) {
-        const errorData = (error as any).data;
-        if (errorData?.hasLocal) {
+        const errorDetails = (error as any).details;
+        logger.debug(`Dev mode check: devMode=${this.devMode}, hasLocal=${errorDetails?.hasLocal}, error=${error.message}`);
+        if (errorDetails?.hasLocal) {
           logger.info(`Dev mode: Falling back to local version of ${ref}`);
           
           // Find LOCAL resolver
@@ -325,9 +326,9 @@ export class ResolverManager {
               });
               
               // Log warning about using local version
-              console.warn(`⚠️  Using local version of ${registry?.prefix || ''}${ref} (not yet published)`);
-              console.warn(`   Local: ${errorData.path || moduleName}`);
-              console.warn(`   To publish: mlld publish ${errorData.path || moduleName} --prefix ${registry?.prefix || ''}`);
+              console.warn(`⚠️  Using local version of ${ref} (not yet published)`);
+              console.warn(`   Local: ${errorDetails.localPath || errorDetails.path || moduleName}`);
+              console.warn(`   To publish: mlld publish ${errorDetails.localPath || errorDetails.path || moduleName}`);
               
               const resolutionTime = Date.now() - startTime;
               

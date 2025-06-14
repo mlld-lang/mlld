@@ -54,7 +54,7 @@ export class MlldResolutionError extends MlldError {
   ) {
     super(message, {
       code: options.code,
-      severity: options.severity || ErrorSeverity.Recoverable,
+      severity: options.severity || ErrorSeverity.Fatal,
       details: options.details,
       sourceLocation: options.sourceLocation,
       cause: options.cause,
