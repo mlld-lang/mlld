@@ -4,14 +4,14 @@ import { parse } from '@grammar/parser';
 describe('Parameterized Text Templates', () => {
   describe('Template Definition', () => {
     it('should parse basic parameterized template definition', async () => {
-      const input = '@text greetingTemplate(name, title) = @add [[Hello {{title}} {{name}}!]]';
+      const input = '@exec greetingTemplate(name, title) = [[Hello {{title}} {{name}}!]]';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe('Directive');
-      expect(result[0].kind).toBe('text');
-      expect(result[0].subtype).toBe('textTemplateDefinition');
+      expect(result[0].kind).toBe('exec');
+      expect(result[0].subtype).toBe('execTemplate');
       expect(result[0].source).toBe('template');
       
       // Check parameters
@@ -23,13 +23,12 @@ describe('Parameterized Text Templates', () => {
       expect(result[0].raw.params).toEqual(['name', 'title']);
       
       // Check metadata
-      expect(result[0].meta.isParameterized).toBe(true);
       expect(result[0].meta.parameterCount).toBe(2);
       expect(result[0].meta.hasVariables).toBe(true);
     });
 
     it('should handle template with no parameters', async () => {
-      const input = '@text staticTemplate() = @add [[Static content here]]';
+      const input = '@exec staticTemplate() = [[Static content here]]';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
@@ -38,7 +37,7 @@ describe('Parameterized Text Templates', () => {
     });
 
     it('should handle multiline template with parameter reuse', async () => {
-      const input = `@text emailTemplate(name, subject) = @add [[
+      const input = `@exec emailTemplate(name, subject) = [[
 Subject: {{subject}}
 
 Dear {{name}},
@@ -58,7 +57,7 @@ The {{name}} Team
       expect(result[0].values.params[1].name).toBe('subject');
       
       // Count how many times each parameter is used
-      const content = result[0].values.content;
+      const content = result[0].values.template;
       const nameRefs = content.filter(node => 
         node.type === 'VariableReference' && node.identifier === 'name'
       );

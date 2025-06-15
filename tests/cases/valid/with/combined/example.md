@@ -1,6 +1,6 @@
 # Combined Pipeline and Needs Test
 
-@exec format() = @run [(sed 's/^/> /')]
+@exec format() = [(sed 's/^/> /')]
 
 @run [(npm --version)] with {
   pipeline: [@format],

@@ -1,6 +1,6 @@
 import type { MlldNode, MlldVariable } from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
-import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
+import { isTextVariable, isDataVariable, isPathVariable, isExecutableVariable, isImportVariable } from '@core/types';
 import { normalizeFinalOutput } from '../utils/blank-line-normalizer';
 
 /**
@@ -124,7 +124,7 @@ function getVariableValue(variable: MlldVariable): string {
     return JSON.stringify(variable.value, null, 2);
   } else if (isPathVariable(variable)) {
     return variable.value.resolvedPath;
-  } else if (isCommandVariable(variable)) {
+  } else if (isExecutableVariable(variable)) {
     return JSON.stringify(variable.value);
   } else if (isImportVariable(variable)) {
     return JSON.stringify(variable.value);

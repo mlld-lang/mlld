@@ -2,7 +2,7 @@
 
 @data items = ["apple", "banana", "cherry"]
 
-@exec describe(item) = @run [(echo "This is a @item")]
+@exec describe(item) = [(echo "This is a @item")]
 
 ## With template formatting
 

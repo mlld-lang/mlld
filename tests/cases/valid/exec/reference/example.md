@@ -1,3 +1,3 @@
-@exec echo (text) = @run [(echo "@text")]
-@exec greet (name) = @run [(echo "Hello, @name!")]
+@exec echo (text) = [(echo "@text")]
+@exec greet (name) = [(echo "Hello, @name!")]
 @run @greet("World")

@@ -2,6 +2,7 @@ import type { MlldNode, MlldVariable, SourceLocation, DirectiveNode } from '@cor
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import type { ResolvedURLConfig } from '@core/config/types';
+import type { DirectiveTrace } from '@core/types/trace';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { ImportApproval } from '@core/security/ImportApproval';
@@ -95,6 +96,10 @@ export class Environment {
   
   // Development mode flag
   private devMode: boolean = false;
+  
+  // Directive trace for debugging
+  private directiveTrace: DirectiveTrace[] = [];
+  private traceEnabled: boolean = true; // Default to enabled
   
   // Default URL validation options (used if no config provided)
   private defaultUrlOptions = {
@@ -2146,7 +2151,77 @@ export class Environment {
     );
     // Share import stack with parent to detect circular imports across scopes
     child.importStack = this.importStack;
+    // Inherit trace settings
+    child.traceEnabled = this.traceEnabled;
+    child.directiveTrace = this.directiveTrace; // Share trace with parent
     return child;
+  }
+  
+  // --- Directive Trace (for debugging) ---
+  
+  /**
+   * Push a directive onto the trace stack
+   */
+  pushDirective(
+    directive: string,
+    varName?: string,
+    location?: SourceLocation
+  ): void {
+    if (!this.traceEnabled) return;
+    
+    const fileName = this.currentFilePath ? path.basename(this.currentFilePath) : 'unknown';
+    const lineNumber = location?.start?.line || 'unknown';
+    
+    this.directiveTrace.push({
+      directive,
+      varName,
+      location: `${fileName}:${lineNumber}`,
+      depth: this.directiveTrace.length
+    });
+  }
+  
+  /**
+   * Pop a directive from the trace stack
+   */
+  popDirective(): void {
+    if (!this.traceEnabled) return;
+    this.directiveTrace.pop();
+  }
+  
+  /**
+   * Get a copy of the current directive trace
+   */
+  getDirectiveTrace(): DirectiveTrace[] {
+    return [...this.directiveTrace];
+  }
+  
+  /**
+   * Mark the last directive in the trace as failed
+   */
+  markLastDirectiveFailed(errorMessage: string): void {
+    if (this.directiveTrace.length > 0) {
+      const lastEntry = this.directiveTrace[this.directiveTrace.length - 1];
+      lastEntry.failed = true;
+      lastEntry.errorMessage = errorMessage;
+    }
+  }
+  
+  /**
+   * Set whether tracing is enabled
+   */
+  setTraceEnabled(enabled: boolean): void {
+    this.traceEnabled = enabled;
+    // Clear trace when disabling
+    if (!enabled) {
+      this.directiveTrace = [];
+    }
+  }
+  
+  /**
+   * Check if tracing is enabled
+   */
+  isTraceEnabled(): boolean {
+    return this.traceEnabled;
   }
   
   private getImportApproval(): ImportApproval | undefined {

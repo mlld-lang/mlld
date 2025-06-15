@@ -1,5 +1,5 @@
-@text greeting(name) = @add [[Hello, {{name}}!]]
-@text farewell(name, when) = @add [[Goodbye {{name}}, see you {{when}}!]]
+@exec greeting(name) = [[Hello, {{name}}!]]
+@exec farewell(name, when) = [[Goodbye {{name}}, see you {{when}}!]]
 
 @data messages = {
   welcome: @add @greeting("Alice"),

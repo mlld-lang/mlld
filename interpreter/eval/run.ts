@@ -1,13 +1,14 @@
-import type { DirectiveNode, TextNode, MlldNode, VariableReference, CommandVariable, WithClause } from '@core/types';
+import type { DirectiveNode, TextNode, MlldNode, VariableReference, WithClause } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
+import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
 import { interpolate, resolveVariableValue } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint';
 import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
 import type { SecurityManager } from '@security/SecurityManager';
-import { isCommandVariable, createTextVariable } from '@core/types';
+import { isExecutableVariable, createTextVariable } from '@core/types';
 import { executePipeline } from './pipeline';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 
@@ -164,7 +165,7 @@ export async function evaluateRun(
     }
     
     // Check if this is a field access pattern (e.g., @http.get)
-    let cmdVar: CommandVariable;
+    let execVar: ExecutableVariable;
     
     if (identifierNode.type === 'VariableReference' && (identifierNode as VariableReference).fields && (identifierNode as VariableReference).fields.length > 0) {
       // Handle field access (e.g., @http.get)
@@ -189,19 +190,19 @@ export async function evaluateRun(
         }
       }
       
-      // The resolved value could be a command object directly or a string reference
-      if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'command') {
-        // Direct command object
-        cmdVar = value as CommandVariable;
+      // The resolved value could be an executable object directly or a string reference
+      if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'executable') {
+        // Direct executable object
+        execVar = value as ExecutableVariable;
       } else if (typeof value === 'string') {
-        // String reference to a command  
+        // String reference to an executable  
         const variable = env.getVariable(value);
-        if (!variable || !isCommandVariable(variable)) {
-          throw new Error(`Command variable not found: ${value}`);
+        if (!variable || !isExecutableVariable(variable)) {
+          throw new Error(`Executable variable not found: ${value}`);
         }
-        cmdVar = variable;
+        execVar = variable;
       } else {
-        throw new Error(`Field access did not resolve to a command: ${typeof value}, got: ${JSON.stringify(value)}`);
+        throw new Error(`Field access did not resolve to an executable: ${typeof value}, got: ${JSON.stringify(value)}`);
       }
     } else {
       // Handle simple command reference (original behavior)
@@ -211,20 +212,20 @@ export async function evaluateRun(
       }
       
       const variable = env.getVariable(commandName);
-      if (!variable || !isCommandVariable(variable)) {
-        throw new Error(`Command variable not found: ${commandName}`);
+      if (!variable || !isExecutableVariable(variable)) {
+        throw new Error(`Executable variable not found: ${commandName}`);
       }
-      cmdVar = variable;
+      execVar = variable;
     }
     
-    const cmdDef = cmdVar.value;
+    const definition = execVar.value;
     
     // Get arguments from the run directive
     const args = directive.values?.args || [];
     const argValues: Record<string, string> = {};
     
     // Map parameter names to argument values
-    const paramNames = cmdDef.paramNames as string[] | undefined;
+    const paramNames = definition.paramNames as string[] | undefined;
     if (paramNames && paramNames.length > 0) {
       for (let i = 0; i < paramNames.length; i++) {
         const paramName = paramNames[i];
@@ -260,7 +261,7 @@ export async function evaluateRun(
       }
     }
     
-    if (cmdDef.type === 'command' && 'commandTemplate' in cmdDef) {
+    if (definition.type === 'command' && 'commandTemplate' in definition) {
       // Create a temporary environment with parameter values
       const tempEnv = env.createChild();
       for (const [key, value] of Object.entries(argValues)) {
@@ -269,7 +270,7 @@ export async function evaluateRun(
       
       // TODO: Remove this workaround when issue #51 is fixed
       // Strip leading '[' from first command segment if present
-      const cleanTemplate = cmdDef.commandTemplate.map((seg: MlldNode, idx: number) => {
+      const cleanTemplate = definition.commandTemplate.map((seg: MlldNode, idx: number) => {
         if (idx === 0 && seg.type === 'Text' && 'content' in seg && seg.content.startsWith('[')) {
           return { ...seg, content: seg.content.substring(1) };
         }
@@ -307,16 +308,16 @@ export async function evaluateRun(
       // Pass context for exec command errors too
       output = await env.executeCommand(command, undefined, executionContext);
       
-    } else if (cmdDef.type === 'commandRef') {
+    } else if (definition.type === 'commandRef') {
       // This command references another command
-      const refCmdVar = env.getVariable(cmdDef.commandRef);
-      if (!refCmdVar || !isCommandVariable(refCmdVar)) {
-        throw new Error(`Referenced command not found: ${cmdDef.commandRef}`);
+      const refExecVar = env.getVariable(definition.commandRef);
+      if (!refExecVar || !isExecutableVariable(refExecVar)) {
+        throw new Error(`Referenced executable not found: ${definition.commandRef}`);
       }
       
       // Check for circular references
-      if (callStack.includes(cmdDef.commandRef)) {
-        const cycle = [...callStack, cmdDef.commandRef].join(' -> ');
+      if (callStack.includes(definition.commandRef)) {
+        const cycle = [...callStack, definition.commandRef].join(' -> ');
         throw new Error(`Circular command reference detected: ${cycle}`);
       }
       
@@ -325,26 +326,36 @@ export async function evaluateRun(
         ...directive,
         values: {
           ...directive.values,
-          identifier: [{ type: 'Text', content: cmdDef.commandRef }],
-          args: cmdDef.commandArgs
+          identifier: [{ type: 'Text', content: definition.commandRef }],
+          args: definition.commandArgs
         }
       };
       
       // Recursively evaluate the referenced command with updated call stack
-      // Note: We don't add cmdDef.commandRef here because it will be added 
+      // Note: We don't add definition.commandRef here because it will be added 
       // at the beginning of the runExec case when processing refDirective
       const result = await evaluateRun(refDirective, env, callStack);
       output = result.value;
       
-    } else if (cmdDef.type === 'code') {
+    } else if (definition.type === 'code') {
       // Interpolate the code template with parameters
       const tempEnv = env.createChild();
       for (const [key, value] of Object.entries(argValues)) {
         tempEnv.setParameterVariable(key, createTextVariable(key, value));
       }
       
-      const code = await interpolate(cmdDef.codeTemplate, tempEnv, InterpolationContext.Default);
-      output = await env.executeCode(code, cmdDef.language || 'javascript', argValues, executionContext);
+      const code = await interpolate(definition.codeTemplate, tempEnv, InterpolationContext.Default);
+      output = await env.executeCode(code, definition.language || 'javascript', argValues, executionContext);
+    } else if (definition.type === 'template') {
+      // Handle template executables
+      const tempEnv = env.createChild();
+      for (const [key, value] of Object.entries(argValues)) {
+        tempEnv.setParameterVariable(key, createTextVariable(key, value));
+      }
+      
+      output = await interpolate(definition.templateContent, tempEnv, InterpolationContext.Default);
+    } else {
+      throw new Error(`Unsupported executable type: ${definition.type}`);
     }
   } else if (directive.subtype === 'runExecInvocation') {
     // Handle ExecInvocation nodes in run directive

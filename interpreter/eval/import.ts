@@ -34,8 +34,15 @@ function processModuleExports(
         __value: variable.value
       };
       
-      // For textTemplate variables, preserve additional metadata
-      if (variable.type === 'textTemplate') {
+      // For executable variables, preserve the ExecutableDefinition structure
+      if (variable.type === 'executable') {
+        const execVar = variable as any;
+        moduleObject[name].__definition = execVar.definition;
+        moduleObject[name].__params = execVar.params;
+        moduleObject[name].__content = execVar.content;
+      }
+      // For legacy textTemplate variables, preserve additional metadata
+      else if (variable.type === 'textTemplate') {
         moduleObject[name].__params = (variable as any).params;
         moduleObject[name].__content = (variable as any).content;
       }
@@ -217,16 +224,24 @@ async function importFromPath(
     // Check if parsing succeeded
     if (!parseResult.success) {
       const parseError = parseResult.error;
-      if (parseError && 'location' in parseError) {
-        // Include location information if available
-        throw new Error(
-          `Syntax error in imported file '${resolvedPath}' at line ${parseError.location?.start?.line || '?'}: ${parseError.message || 'Unknown parse error'}`
-        );
-      } else {
-        throw new Error(
-          `Failed to parse imported file '${resolvedPath}': ${parseError?.message || 'Unknown parse error'}`
-        );
-      }
+      
+      // Create an error that preserves the import context
+      const errorMessage = parseError && 'location' in parseError
+        ? `Syntax error in imported file '${resolvedPath}' at line ${parseError.location?.start?.line || '?'}: ${parseError.message || 'Unknown parse error'}`
+        : `Failed to parse imported file '${resolvedPath}': ${parseError?.message || 'Unknown parse error'}`;
+      
+      const importError = new Error(errorMessage);
+      
+      // Add parse error details to the error for trace enhancement
+      (importError as any).importParseError = {
+        file: path.basename(resolvedPath, '.mld'),
+        line: parseError?.location?.start?.line || '?',
+        message: parseError?.message || 'Unknown parse error'
+      };
+      
+      // Preserve the current trace context - the import directive is already on the stack
+      // The error will be caught by evaluateDirective and enhanced with the trace
+      throw importError;
     }
     
     const ast = parseResult.ast;
@@ -306,12 +321,17 @@ async function importFromPath(
         
         // Create variable for each module export
         // Check if this is a variable with preserved type information
-        let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
+        let varType: 'text' | 'data' | 'path' | 'command' | 'import' | 'executable' = 'data';
         let varValue = value;
         
         if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
           varType = value.__variableType;
           varValue = value.__value;
+          
+          // Handle backward compatibility: convert textTemplate to executable
+          if (varType === 'textTemplate') {
+            varType = 'executable';
+          }
         }
         
         const importedVariable: MlldVariable = {
@@ -326,6 +346,34 @@ async function importFromPath(
             definedAt: { line: 0, column: 0, filePath: resolvedPath }
           }
         };
+        
+        // For executable variables, restore the full structure
+        if (varType === 'executable' && value && typeof value === 'object') {
+          if ('__definition' in value) {
+            (importedVariable as any).definition = value.__definition;
+          } else {
+            // Legacy textTemplate: create text type definition
+            (importedVariable as any).definition = {
+              type: 'text',
+              params: value.__params || [],
+              content: value.__content || []
+            };
+          }
+          (importedVariable as any).params = value.__params || [];
+          (importedVariable as any).content = value.__content || [];
+        }
+        // For legacy command variables, convert to executable
+        else if (varType === 'command' && value && typeof value === 'object') {
+          varType = 'executable';
+          importedVariable.type = varType;
+          (importedVariable as any).definition = {
+            type: 'command',
+            params: value.__params || [],
+            command: value.__value || value.__command || []
+          };
+          (importedVariable as any).params = value.__params || [];
+        }
+        
         env.setVariable(name, importedVariable);
       }
       
@@ -370,12 +418,17 @@ async function importFromPath(
           
           // Create imported variable
           // Check if this is a variable with preserved type information
-          let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
+          let varType: 'text' | 'data' | 'path' | 'command' | 'import' | 'executable' = 'data';
           let varValue = value;
           
           if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
             varType = value.__variableType;
             varValue = value.__value;
+            
+            // Handle backward compatibility: convert textTemplate to executable
+            if (varType === 'textTemplate') {
+              varType = 'executable';
+            }
           }
           
           const importedVariable: MlldVariable = {
@@ -390,6 +443,34 @@ async function importFromPath(
               definedAt: { line: 0, column: 0, filePath: resolvedPath }
             }
           };
+          
+          // For executable variables, restore the full structure
+          if (varType === 'executable' && value && typeof value === 'object') {
+            if ('__definition' in value) {
+              (importedVariable as any).definition = value.__definition;
+            } else {
+              // Legacy textTemplate: create text type definition
+              (importedVariable as any).definition = {
+                type: 'text',
+                params: value.__params || [],
+                content: value.__content || []
+              };
+            }
+            (importedVariable as any).params = value.__params || [];
+            (importedVariable as any).content = value.__content || [];
+          }
+          // For legacy command variables, convert to executable
+          else if (varType === 'command' && value && typeof value === 'object') {
+            varType = 'executable';
+            importedVariable.type = varType;
+            (importedVariable as any).definition = {
+              type: 'command',
+              params: value.__params || [],
+              command: value.__value || value.__command || []
+            };
+            (importedVariable as any).params = value.__params || [];
+          }
+          
           env.setVariable(targetName, importedVariable);
         } else {
           // Variable not found in module exports
@@ -662,12 +743,17 @@ async function importFromResolverContent(
       for (const [name, value] of Object.entries(moduleObject)) {
         if (name === '__meta__') continue;
         
-        let varType: 'text' | 'data' | 'path' | 'command' | 'import' = 'data';
+        let varType: 'text' | 'data' | 'path' | 'command' | 'import' | 'executable' = 'data';
         let varValue = value;
         
         if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
           varType = value.__variableType;
           varValue = value.__value;
+          
+          // Handle backward compatibility: convert textTemplate to executable
+          if (varType === 'textTemplate') {
+            varType = 'executable';
+          }
         }
         
         const importedVariable: MlldVariable = {
@@ -683,6 +769,32 @@ async function importFromResolverContent(
           }
         };
         
+        // For executable variables, restore the full structure
+        if (varType === 'executable' && value && typeof value === 'object') {
+          if ('__definition' in value) {
+            (importedVariable as any).definition = value.__definition;
+          } else {
+            // Legacy textTemplate: create text type definition
+            (importedVariable as any).definition = {
+              type: 'text',
+              params: value.__params || [],
+              content: value.__content || []
+            };
+          }
+          (importedVariable as any).params = value.__params || [];
+          (importedVariable as any).content = value.__content || [];
+        }
+        // For legacy command variables, convert to executable
+        else if (varType === 'command' && value && typeof value === 'object') {
+          varType = 'executable';
+          importedVariable.type = varType;
+          (importedVariable as any).definition = {
+            type: 'command',
+            params: value.__params || [],
+            command: value.__value || value.__command || []
+          };
+          (importedVariable as any).params = value.__params || [];
+        }
         env.setVariable(name, importedVariable);
       }
     } else if (directive.subtype === 'importSelected') {
@@ -698,13 +810,18 @@ async function importFromResolverContent(
           const targetName = importNode.alias || varName;
           
           // Default to 'data' type, but this will be overridden by the actual type from __variableType
-          let varType: 'text' | 'data' | 'path' | 'command' | 'import' | 'textTemplate' = 'data';
+          let varType: 'text' | 'data' | 'path' | 'command' | 'import' | 'executable' = 'data';
           let varValue = value;
           
           // Extract the actual variable type from the module export
           if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
             varType = value.__variableType;
             varValue = value.__value;
+            
+            // Handle backward compatibility: convert textTemplate to executable
+            if (varType === 'textTemplate') {
+              varType = 'executable';
+            }
           }
           
           const importedVariable: MlldVariable = {
@@ -721,8 +838,35 @@ async function importFromResolverContent(
             }
           };
           
-          // For textTemplate, restore additional fields
-          if (varType === 'textTemplate' && value && typeof value === 'object') {
+          // For executable variables, restore the full structure
+          if (varType === 'executable' && value && typeof value === 'object') {
+            if ('__definition' in value) {
+              (importedVariable as any).definition = value.__definition;
+            } else {
+              // Legacy textTemplate: create text type definition
+              (importedVariable as any).definition = {
+                type: 'text',
+                params: value.__params || [],
+                content: value.__content || []
+              };
+            }
+            (importedVariable as any).params = value.__params || [];
+            (importedVariable as any).content = value.__content || [];
+          }
+          // For legacy command variables, convert to executable
+          else if (varType === 'command' && value && typeof value === 'object') {
+            varType = 'executable';
+            importedVariable.type = varType;
+            (importedVariable as any).definition = {
+              type: 'command',
+              params: value.__params || [],
+              command: value.__value || value.__command || []
+            };
+            (importedVariable as any).params = value.__params || [];
+          }
+          // Legacy textTemplate handling for backward compatibility
+          else if (varType === 'textTemplate' && value && typeof value === 'object') {
+            // This shouldn't happen anymore due to conversion above, but keeping for safety
             (importedVariable as any).params = value.__params;
             (importedVariable as any).content = value.__content;
           }

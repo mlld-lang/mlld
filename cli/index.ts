@@ -996,7 +996,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       returnEnvironment: true,
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
-      devMode: cliOptions.dev
+      devMode: cliOptions.dev,
+      enableTrace: true // Enable directive trace for better error debugging
     });
 
     // Extract result and environment
@@ -1147,14 +1148,42 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
     }
   } else if (error instanceof Error) {
     logger.error('An unexpected error occurred:', error);
-    console.error(chalk.red(`Unexpected Error: ${error.message}`));
+    
+    // Check for mlld trace on regular errors
+    if ((error as any).mlldTrace) {
+      const { DirectiveTraceFormatter } = await import('@core/utils/DirectiveTraceFormatter');
+      const formatter = new DirectiveTraceFormatter();
+      
+      // Check if this is an import error that's already shown in the trace
+      const hasImportError = (error as any).mlldTrace.some((t: any) => t.failed);
+      
+      // Format with error message for non-import errors
+      const trace = formatter.format(
+        (error as any).mlldTrace, 
+        true, 
+        hasImportError ? undefined : error.message
+      );
+      
+      // Show the formatted error box
+      const fileName = path.basename(options.input || 'unknown');
+      console.error(`\nThere was an error running ${fileName}\n`);
+      console.error(trace);
+      console.error('');
+    } else {
+      // No trace, show the error normally
+      console.error('\n  ⎿  ' + chalk.red('Error: ') + error.message);
+    }
+    
     const cause = error.cause;
     if (cause instanceof Error) {
         console.error(chalk.red(`  Cause: ${cause.message}`));
     }
-    if (error.stack) {
-      console.error(chalk.gray(error.stack));
-    }
+    
+    // Only show stack trace in verbose mode (for now we'll skip it)
+    // TODO: Add --verbose flag support
+    // if (error.stack && options.verbose) {
+    //   console.error(chalk.gray(error.stack));
+    // }
   } else {
     logger.error('An unknown error occurred:', { error });
     console.error(chalk.red(`Unknown Error: ${String(error)}`));

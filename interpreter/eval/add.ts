@@ -2,7 +2,7 @@ import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
-import { isTextVariable, isDataVariable, isPathVariable, isCommandVariable, isImportVariable } from '@core/types';
+import { isTextVariable, isDataVariable, isPathVariable, isExecutableVariable, isImportVariable } from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
@@ -88,9 +88,9 @@ export async function evaluateAdd(
     } else if (isImportVariable(variable)) {
       // Import variables contain imported data
       value = variable.value;
-    } else if (isCommandVariable(variable)) {
-      // Command variables - should probably not be used directly in add
-      throw new Error(`Cannot add command variable directly. Commands need to be executed first.`);
+    } else if (isExecutableVariable(variable)) {
+      // Executable variables - should probably not be used directly in add
+      throw new Error(`Cannot add executable variable directly. Executables need to be invoked first.`);
     } else {
       throw new Error(`Unknown variable type in add evaluator: ${(variable as any).type}`);
     }
@@ -358,73 +358,13 @@ export async function evaluateAdd(
     }
     
     // Handle based on variable type
-    if (variable.type === 'command' || variable.type === 'execCommand') {
-      // This is an exec invocation
+    if (variable.type === 'executable') {
+      // This is an executable invocation - use exec-invocation handler
       const { evaluateExecInvocation } = await import('./exec-invocation');
       const result = await evaluateExecInvocation(invocation, env);
       content = String(result.value);
-    } else if (variable.type === 'textTemplate') {
-      // Handle as template invocation
-      const template = variable;
-      
-      // Get the arguments from the command reference
-      const args = commandRef.args || [];
-      
-      // Check parameter count
-      if (args.length !== template.params.length) {
-        throw new Error(`Template ${name} expects ${template.params.length} parameters, got ${args.length}`);
-      }
-      
-      // Create a child environment with the template parameters
-      const childEnv = env.createChild();
-      
-      // Bind arguments to parameters
-      for (let i = 0; i < template.params.length; i++) {
-        const paramName = template.params[i];
-        const argValue = args[i];
-        
-        // Convert argument to string value
-        let value: string;
-        if (typeof argValue === 'object' && argValue.type === 'Text') {
-          // Handle Text nodes from the AST
-          value = argValue.content || '';
-        } else if (typeof argValue === 'object' && argValue.type === 'VariableReference') {
-          // Handle variable references like @userName
-          const varName = argValue.identifier;
-          const variable = env.getVariable(varName);
-          if (!variable) {
-            throw new Error(`Variable not found: ${varName}`);
-          }
-          value = variable.type === 'text' ? variable.value : String(variable.value);
-        } else if (typeof argValue === 'object' && argValue.type === 'string') {
-          // Legacy format support
-          value = argValue.value;
-        } else if (typeof argValue === 'object' && argValue.type === 'variable') {
-          // Legacy format - handle variable references
-          const varRef = argValue.value;
-          const varName = varRef.identifier;
-          const variable = env.getVariable(varName);
-          if (!variable) {
-            throw new Error(`Variable not found: ${varName}`);
-          }
-          value = variable.type === 'text' ? variable.value : String(variable.value);
-        } else {
-          value = String(argValue);
-        }
-        
-        // Create a text variable for the parameter
-        childEnv.setVariable(paramName, { type: 'text', identifier: paramName, value });
-      }
-      
-      // Interpolate the template content with the child environment
-      content = await interpolate(template.content, childEnv);
-      
-      // Apply template normalization if the template definition had isTemplateContent and normalization is enabled
-      if (template.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
-        content = normalizeTemplateContent(content, true);
-      }
     } else {
-      throw new Error(`Variable ${name} is not a template or exec command (type: ${variable.type})`);
+      throw new Error(`Variable ${name} is not executable (type: ${variable.type})`);
     }
     
   } else if (directive.subtype === 'addTemplateInvocation') {
@@ -439,24 +379,29 @@ export async function evaluateAdd(
     
     // Look up the template
     const template = env.getVariable(templateName);
-    if (!template || template.type !== 'textTemplate') {
+    if (!template || template.type !== 'executable') {
       throw new Error(`Template not found: ${templateName}`);
+    }
+    
+    const definition = template.value;
+    if (definition.type !== 'template') {
+      throw new Error(`Variable ${templateName} is not a template`);
     }
     
     // Get the arguments
     const args = directive.values?.arguments || [];
     
     // Check parameter count
-    if (args.length !== template.params.length) {
-      throw new Error(`Template ${templateName} expects ${template.params.length} parameters, got ${args.length}`);
+    if (args.length !== definition.paramNames.length) {
+      throw new Error(`Template ${templateName} expects ${definition.paramNames.length} parameters, got ${args.length}`);
     }
     
     // Create a child environment with the template parameters
     const childEnv = env.createChild();
     
     // Bind arguments to parameters
-    for (let i = 0; i < template.params.length; i++) {
-      const paramName = template.params[i];
+    for (let i = 0; i < definition.paramNames.length; i++) {
+      const paramName = definition.paramNames[i];
       const argValue = args[i];
       
       // Convert argument to string value
@@ -493,10 +438,10 @@ export async function evaluateAdd(
     }
     
     // Interpolate the template content with the child environment
-    content = await interpolate(template.content, childEnv);
+    content = await interpolate(definition.templateContent, childEnv);
     
-    // Apply template normalization if the template definition had isTemplateContent and normalization is enabled
-    if (template.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
+    // Apply template normalization if normalization is enabled
+    if (env.getNormalizeBlankLines()) {
       content = normalizeTemplateContent(content, true);
     }
     
@@ -578,7 +523,7 @@ export async function evaluateAdd(
  * Extract a section from markdown content.
  * TODO: Replace with llmxml.getSection() once integrated
  */
-function extractSection(content: string, sectionName: string): string {
+export function extractSection(content: string, sectionName: string): string {
   const lines = content.split('\\n');
   const sectionRegex = new RegExp(`^#+\\s+${sectionName}\\s*$`, 'i');
   

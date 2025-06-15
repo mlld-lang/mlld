@@ -1,5 +1,5 @@
-@exec getConfig = @run [(echo '{"env":"prod","version":"2.0"}')]
-@exec transform(data) = @run [(echo "{{data}}" | sed 's/prod/production/g')]
+@exec getConfig = [(echo '{"env":"prod","version":"2.0"}')]
+@exec transform(data) = [(echo "{{data}}" | sed 's/prod/production/g')]
 
 @data config = @getConfig()
 @data transformed = @transform(@config)

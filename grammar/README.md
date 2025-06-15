@@ -620,25 +620,77 @@ Examples:
   └─ Extract "interface" section, wrap in code blocks by language
 ```
 
-### @exec Directive
+### @exec Directive (Updated: Unified Executable Syntax)
 
 ```
-@exec name(params) = @run ...
-├─ Definition part
-│  └─ Must use @run:
-│     ├─ @exec cmd(p) = @run [(echo @p)]      - Command
-│     ├─ @exec fn(x) = @run js [(return x)]   - Code (language outside brackets)
-│     └─ @exec alias() = @run @other          - Reference
+@exec name(params) = ...
+├─ RHS semantic forking (no @run required):
+│  │
+│  ├─ Language keyword detected (js, python, bash, etc.)?
+│  │  ├─ YES: "@exec fn(x) = js [(code)]"
+│  │  │  └─ Code execution mode
+│  │  │     └─ Language specified before brackets
+│  │  │        └─ [(code content)]
+│  │  │           ├─ @param references allowed
+│  │  │           ├─ No @ variable processing in code
+│  │  │           └─ Preserve all brackets and quotes
+│  │  │
+│  ├─ "[(" detected?
+│  │  ├─ YES: "@exec cmd(p) = [(command)]"
+│  │  │  └─ Command execution mode
+│  │  │     └─ CommandParts with @param interpolation
+│  │  │        ├─ @param → Parameter reference
+│  │  │        └─ text → Command text segments
+│  │  │
+│  ├─ "[[" detected?
+│  │  ├─ YES: "@exec greeting(name) = [[template]]"
+│  │  │  └─ Template executable
+│  │  │     └─ [[text with {{param}}]]
+│  │  │        └─ {{param}} interpolation in templates
+│  │  │
+│  ├─ "`" detected?
+│  │  ├─ YES: "@exec msg(name) = `template`"
+│  │  │  └─ Backtick template executable
+│  │  │     └─ `text with @param`
+│  │  │        └─ @param interpolation (simpler syntax)
+│  │  │
+│  ├─ "[" with " # " pattern?
+│  │  ├─ YES: "@exec getSection(file, section) = [@file # @section]"
+│  │  │  └─ Section executable
+│  │  │     ├─ [@param # literal] → Extract literal section
+│  │  │     ├─ [@param # @param2] → Extract variable section
+│  │  │     └─ Optional: as @newheader → Rename section
+│  │  │
+│  ├─ "@" with "/" pattern?
+│  │  ├─ YES: "@exec fetch(endpoint, payload) = @resolver/api/@endpoint { @payload }"
+│  │  │  └─ Resolver executable
+│  │  │     ├─ Resolver path must contain "/"
+│  │  │     ├─ Path segments can include @param references
+│  │  │     └─ Optional: { @payload } → JSON payload
+│  │  │
+│  ├─ "@" without "/"?
+│  │  ├─ YES: "@exec alias() = @other"
+│  │  │  └─ Command reference (to another exec)
+│  │  │
+│  └─ "{" detected?
+│     └─ "@exec js = { helperA, helperB }"
+│        └─ Environment declaration (shadow functions)
 │
 └─ Tail modifier (optional)?
-   ├─ trust <level> → Applied to the @run definition
-   └─ with { trust: <level>, ... }
+   ├─ trust <level> → Security level
+   └─ with { trust: <level>, ... } → Extended modifiers
 
 Examples:
-- @exec deploy(env) = @run [(./deploy.sh @env)] trust always
-- @exec validate(data) = @run python [(validate(@data))]
-- @exec process(file) = @run [(cat @file)] | @transform
-- @exec secure_op() = @run [(sensitive-command)] with { trust: verify }
+- @exec deploy(env) = [(./deploy.sh @env)] trust always
+- @exec validate(data) = python [(validate(@data))]
+- @exec greet(name) = [[Hello {{name}}!]]
+- @exec greet2(name) = `Hello @name!`
+- @exec getIntro(file) = [@file # Introduction]
+- @exec getSection(file, section) = [@file # @section] as "Summary"
+- @exec fetchUser(id) = @resolver/api/users/@id
+- @exec postData(endpoint, data) = @resolver/api/@endpoint { @data }
+- @exec process(file) = [(cat @file)] | @transform
+- @exec js = { formatDate, parseJSON }
 ```
 
 ### @path Directive

@@ -124,7 +124,7 @@ describe('Output Format Tests', () => {
       expect(result).toContain('**Type**: path');
       
       expect(result).toContain('<CMD>');
-      expect(result).toContain('**Type**: command');
+      expect(result).toContain('**Type**: executable');
     });
   });
 });

@@ -8,10 +8,10 @@ The syntax `@text codecat(dir) = @run [(...)]` is invalid. For parameterized com
 
 **Correct syntax:**
 ```mlld
-@exec codecat(dir) = @run [(find @dir -type f -name "*.js" -exec cat {} \;)]
+@exec codecat(dir) = [(find @dir -type f -name "*.js" -exec cat {} \;)]
 ```
 
 **Alternative for text templates:**
 ```mlld
-@text greeting(name) = @add [[Hello {{name}}!]]
+@exec greeting(name) = [[Hello {{name}}!]]
 ```

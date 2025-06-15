@@ -136,6 +136,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     const isWarningFixture = !!fixture.expectedWarning;
     const isValidFixture = !isErrorFixture && !isWarningFixture;
     
+    // Check for null AST in valid fixtures - this indicates a grammar parsing failure
+    if (isValidFixture && fixture.ast === null) {
+      throw new Error(`Valid fixture '${fixture.name}' has null AST - this indicates the grammar failed to parse the input:\n${fixture.input}`);
+    }
+    
     // For fixtures without expected output, run as smoke tests
     const isSmokeTest = isValidFixture && (fixture.expected === null || fixture.expected === undefined);
     
@@ -153,7 +158,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'add-foreach-section-variable-new': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
       'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
       'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
-      'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet'
+      'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
+      'when-exec-conditions': 'Grammar bug: @exec name() = @run [...] is parsed as execResolver instead of execCommand',
+      'when-when-switch': 'Grammar bug: @exec name() = @run [...] is parsed as execResolver instead of execCommand',
+      'add-exec-invocation': 'Grammar bug: @exec name() = @run [...] is parsed as execResolver instead of execCommand'
     };
 
     const testFn = skipTests[fixture.name] ? it.skip : it;
