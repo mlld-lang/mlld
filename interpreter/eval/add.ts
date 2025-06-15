@@ -438,7 +438,12 @@ export async function evaluateAdd(
     }
     
     // Interpolate the template content with the child environment
-    content = await interpolate(definition.templateContent, childEnv);
+    // Use definition.template for modern executables, definition.templateContent for legacy
+    const templateNodes = definition.template || definition.templateContent;
+    if (!templateNodes) {
+      throw new Error(`Template ${templateName} has no template content`);
+    }
+    content = await interpolate(templateNodes, childEnv);
     
     // Apply template normalization if normalization is enabled
     if (env.getNormalizeBlankLines()) {

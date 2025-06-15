@@ -55,9 +55,15 @@ async function evaluateWhenSwitch(
   node: WhenSwitchNode,
   env: Environment
 ): Promise<EvalResult> {
-  // Evaluate the expression once
-  const expressionResult = await evaluate(node.values.expression, env);
-  const expressionValue = expressionResult.value;
+  // Evaluate the expression once without producing output
+  // For simple text nodes, extract the value directly
+  let expressionValue: any;
+  if (node.values.expression.length === 1 && node.values.expression[0].type === 'Text') {
+    expressionValue = node.values.expression[0].content;
+  } else {
+    const expressionResult = await evaluate(node.values.expression, env);
+    expressionValue = expressionResult.value;
+  }
   
   // Create a child environment for the switch block
   const childEnv = env.createChild();
@@ -75,9 +81,16 @@ async function evaluateWhenSwitch(
         actualCondition = negationNode.condition;
       }
       
-      // Evaluate the condition value
-      const conditionResult = await evaluate(actualCondition, childEnv);
-      const conditionValue = conditionResult.value;
+      // Evaluate the condition value without producing output
+      // For simple text nodes, extract the value directly
+      let conditionValue: any;
+      if (actualCondition.length === 1 && actualCondition[0].type === 'Text') {
+        conditionValue = actualCondition[0].content;
+      } else {
+        // For more complex conditions, evaluate them
+        const conditionResult = await evaluate(actualCondition, childEnv);
+        conditionValue = conditionResult.value;
+      }
       
       // Compare values - handle special cases
       let matches = false;
@@ -114,7 +127,11 @@ async function evaluateWhenSwitch(
       }
       
       if (matches && pair.action) {
-        const actionResult = await evaluate(pair.action, childEnv);
+        // Handle action which might be an array of nodes
+        const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
+        for (const actionNode of actionNodes) {
+          await evaluate(actionNode, childEnv);
+        }
         // Merge child environment nodes back to parent
         env.mergeChild(childEnv);
         // For @when, we don't want to propagate the action's output value to the document
