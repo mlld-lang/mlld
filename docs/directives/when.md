@@ -134,7 +134,7 @@ Example:
 # Screen sharing is enabled
 ```
 
-### 3. Bare Form (No Modifier)
+### 3. Bare Form (No Modifier) 
 
 The bare form without a modifier has two behaviors:
 
@@ -149,6 +149,8 @@ This is unique to the bare form - it executes ALL matching conditions:
   @condition3 => @add "Action 3"
 ]
 ```
+
+**Known Issue**: Currently, switch statements may execute conditions multiple times and in unexpected order. Use `first:` modifier for predictable single-match behavior.
 
 Example:
 ```mlld
@@ -270,20 +272,37 @@ Values are considered truthy/falsy as follows:
 
 **Falsy values:**
 - `""` (empty string)
-- `"false"` (case-insensitive)
-- `"0"`
+- `false` (boolean false)
 - `null` or `undefined`
-- `[]` (empty array)
-- `{}` (empty object)
-- Command with non-zero exit code
-- Command with empty stdout
+- `0` (number zero)
 
 **Truthy values:**
-- Any non-empty string (except "false" and "0")
-- Numbers (except 0)
-- Arrays with elements
-- Objects with properties
-- Command with exit code 0 and non-empty stdout
+- `"true"` (string literal)
+- `true` (boolean true)
+- Any non-empty string (including `"false"` and `"0"` - these are truthy strings!)
+- Any non-zero number
+- Arrays (empty or with elements)
+- Objects (empty or with properties)
+- Command execution results that return non-empty strings
+
+**Important Notes:**
+- String values `"false"` and `"0"` are **truthy** because they are non-empty strings
+- In switch statements (`@when @var: [...]`), values are compared for equality, not truthiness
+- Empty arrays and objects are currently truthy (may change in future versions)
+
+### Negation with `!`
+
+The `!` operator negates the truthiness of a value:
+
+```mlld
+@text hasFeature = ""
+@when !@hasFeature => @add "Feature is disabled"
+# Output: Feature is disabled (empty string is falsy, !falsy is truthy)
+
+@text isDisabled = "false"  
+@when !@isDisabled => @add "Not disabled"
+# No output (string "false" is truthy, !truthy is falsy)
+```
 
 ## Common Patterns
 

@@ -46,7 +46,7 @@ Added:
   - Template executables: `@exec greeting(name) = [[Hello {{name}}!]]` or `` `Hello @name!` ``
   - Section executables: `@exec getSection(file, section, newheader) = [@file # @section] as @newheader`
   - Resolver executables: `@exec fetch(path) = @resolver/api/@path` 
-  - Code executables: `@exec calc(x) = js [(return @x * 2)]` (drops @run requirement)
+  - Code executables: `@exec calc(x) = js [(return x * 2)]` (drops @run requirement)
 - **Configuration Updates**:
   - Global config moved to `~/.config/mlld/mlld.lock.json`
   - Resolver registry configuration with priority support
