@@ -33,7 +33,7 @@ AtWhen
 // -------------------------------------------------------------
 
 WhenSimpleForm
-  = DirectiveContext "@when" _ condition:WhenConditionExpression _ "=>" _ action:WhenAction {
+  = DirectiveContext "@when" _ condition:WhenSimpleCondition _ "=>" _ action:WhenAction {
       helpers.debug('WhenSimpleForm matched', { condition, action });
       
       return helpers.createStructuredDirective(
@@ -157,6 +157,56 @@ WhenModifier
 // -------------------------------------------------------------
 // CONDITION EXPRESSIONS
 // -------------------------------------------------------------
+
+// Simple condition for @when simple form - no literals allowed
+WhenSimpleCondition
+  = NegatedSimpleCondition
+  / NonNegatedSimpleCondition
+
+// Negated simple condition with ! prefix
+NegatedSimpleCondition
+  = "!" _ condition:NonNegatedSimpleCondition {
+      // Wrap the condition in a negation node
+      return [helpers.createNode('Negation', {
+        condition: condition,
+        location: location()
+      })];
+    }
+
+// Non-negated simple conditions (no literals)
+NonNegatedSimpleCondition
+  = "@" id:BaseIdentifier !("(" / TailModifiers) fields:AnyFieldAccess* {
+      // Simple variable reference without parentheses or tail modifiers
+      const loc = location();
+      const node = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, loc);
+      return [node];
+    }
+  / "@" invocation:ExecInvocationWithTail {
+      // Exec invocation with tail modifiers
+      return [invocation];
+    }
+  / Variable {
+      // Other variable forms (special vars, interpolation)
+      return [$1];
+    }
+  // Deliberately exclude literals - these will cause parse errors with helpful message
+  / value:(BooleanLiteral / NullLiteral / StringLiteral) {
+      error(
+        '@when directive requires a variable reference, not a literal value.\n' +
+        'Use a variable instead:\n' +
+        '   @when true => ...  (incorrect)\n' +
+        '   @text condition = "true"\n' +
+        '   @when @condition => ...  (correct)\n\n' +
+        'For switch-style conditions with literal values, use:\n' +
+        '   @when @variable: [\n' +
+        '     true => ...\n' +
+        '     false => ...\n' +
+        '   ]'
+      );
+    }
 
 // Condition expression - reuse existing patterns
 WhenConditionExpression

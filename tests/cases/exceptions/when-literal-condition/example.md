@@ -2,8 +2,6 @@
 
 The @when directive requires a variable to evaluate, not a literal value.
 
-<!-- SKIP: Grammar currently accepts literals in @when. See issue #260 -->
-
 ## Invalid: Using literal true
 @when true => @add "This is invalid syntax"
 

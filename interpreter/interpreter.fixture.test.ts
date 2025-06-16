@@ -158,8 +158,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
       'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
       'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
-      'when-exec-invocation-add': 'Issue #260: @when directive accepts literal values (should require variables)',
-      'when-truthiness-edge-cases': 'Issue #260: @when directive accepts literal values (should require variables)'
     };
 
     const testFn = skipTests[fixture.name] ? it.skip : it;
