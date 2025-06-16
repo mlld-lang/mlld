@@ -1,6 +1,6 @@
-@exec hasEnvVar(name) = [(test -n "${!{{name}}}")]
+@text configKey = "ANTHROPIC_API_KEY"
 
-@when @hasEnvVar("ANTHROPIC_API_KEY"): [
-  true => @add "✓ API key configured"
-  false => @output "ERROR: Missing ANTHROPIC_API_KEY" [stderr]
+@when @configKey: [
+  "ANTHROPIC_API_KEY" => @add "✓ API key configured"
+  "" => @add "ERROR: Missing API key"
 ]

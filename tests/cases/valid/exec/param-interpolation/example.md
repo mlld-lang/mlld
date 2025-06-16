@@ -10,7 +10,7 @@ This test verifies that @param syntax works consistently in exec functions acros
 
 @exec greet (name) = [(echo "Hello, @name!")]
 @exec greetQuoted (name) = [(echo "Greetings, '@name'")]
-@exec greetSpecial (name) = [(echo "Welcome @name (special: $\@name)")]
+@exec greetSpecial (name) = [(echo "Welcome @name (special: \$@name)")]
 
 Direct calls:
 @run @greet("Alice")
@@ -19,11 +19,11 @@ Direct calls:
 
 ## Code Template Tests
 
-@exec jsGreet (name) = @run javascript [(
+@exec jsGreet (name) = javascript [(
   console.log(`JS says hello to ${name}!`);
 )]
 
-@exec bashGreet (name) = @run bash [(
+@exec bashGreet (name) = bash [(
   echo "Bash says hi to $name!"
 )]
 

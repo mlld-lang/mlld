@@ -1,3 +1,6 @@
-Current time: 12:30 PM
-User: test-user
+Current time: 
+12:30 PM
+User: 
+test-user
+
 Welcome, Alice!

@@ -10,13 +10,16 @@ This test verifies that @param syntax works consistently in exec functions acros
 
 Direct calls:
 Hello, Alice!
+
 Greetings, 'Bob's Place'
-Welcome Charlie & Co. (special: $@name)
+
+Welcome Charlie & Co. (special: $Charlie & Co.)
 
 ## Code Template Tests
 
 Direct calls:
 JS says hello to David!
+
 Bash says hi to Eve!
 
 ## Foreach Tests
