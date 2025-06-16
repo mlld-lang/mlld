@@ -115,8 +115,8 @@ Remember: "Double brackets, double braces"
 @exec greet(name) = @run [(echo "Hello @name")]
 @run @greet("Alice")
 
-# For templates, use @text:
-@text welcome(name, role) = [[Welcome {{name}}, our new {{role}}!]]
+# For templates, use @exec:
+@exec welcome(name, role) = [[Welcome {{name}}, our new {{role}}!]]
 @add @welcome("Bob", "developer")
 ```
 
@@ -133,18 +133,24 @@ Remember: "Double brackets, double braces"
 
 @when is mlld's decision-making directive. It's NOT an if-statement - it's a routing table.
 
+**Quick Reference:**
+- **`@when @var: [...]`** - Evaluates ALL conditions independently, fires action for each true condition
+- **`@when @var first: [...]`** - Classic switch (stops at first match)
+- **`@when @var all: [...] => action`** - Executes action if ALL conditions are true
+- **`@when @var any: [...] => action`** - Executes action if ANY condition is true
+
 ```mlld
 # Simple routing: condition => action
 @when @isProduction => @import { * } from "./prod-config.mld"
 
-# True/false branching (explicit is better than implicit)
-@when @hasLicense: [
+# Switch-style branching with first: (stops at first match)
+@when @hasLicense first: [
   true  => @add [[✅ License verified]]
   false => @add [[❌ No license found]]
 ]
 
-# Multiple conditions - each evaluated independently
-@when [
+# Bare form: ALL matching conditions execute (powerful feature!)
+@when @status: [
   @hasTests     => @add [[✓ Tests present]]
   @hasDocuments => @add [[✓ Docs present]]
   @hasExamples  => @add [[✓ Examples present]]
@@ -183,7 +189,7 @@ Important: @when doesn't support inline comparisons. Create helper functions:
 ### 10. Iteration with foreach
 ```mlld
 @data names = ["Alice", "Bob", "Charlie"]
-@text greetTemplate(name) = [[Hello, {{name}}!]]
+@exec greetTemplate(name) = [[Hello, {{name}}!]]
 @data greetings = foreach @greetTemplate(@names)
 >> greetings = ["Hello, Alice!", "Hello, Bob!", "Hello, Charlie!"]
 ```
@@ -345,7 +351,7 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 # Attempting to build strings piece by piece
 
 ✅ RIGHT: Use templates
-@text greeting(name, time) = [[Good {{time}}, {{name}}!]]
+@exec greeting(name, time) = [[Good {{time}}, {{name}}!]]
 @add @greeting("Alice", "morning")
 ```
 
@@ -747,7 +753,7 @@ This document processes user data and generates insights.
 
 ## Data Processing
 
-@text status(phase) = [[✓ Completed: {{phase}}]]
+@exec status(phase) = [[✓ Completed: {{phase}}]]
 
 ### 1. Fetch User Data
 @data users = @fetchData(@config.apiEndpoint)

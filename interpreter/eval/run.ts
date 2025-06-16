@@ -353,7 +353,7 @@ export async function evaluateRun(
         tempEnv.setParameterVariable(key, createTextVariable(key, value));
       }
       
-      output = await interpolate(definition.templateContent, tempEnv, InterpolationContext.Default);
+      output = await interpolate(definition.template, tempEnv, InterpolationContext.Default);
     } else {
       throw new Error(`Unsupported executable type: ${definition.type}`);
     }

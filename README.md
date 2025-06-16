@@ -209,8 +209,8 @@ author: myusername
 keywords: [utils, text, helpers]
 ---
 
-@text trim(str) = @run [echo "{{str}}" | xargs]
-@text uppercase(str) = @run [echo "{{str}}" | tr '[:lower:]' '[:upper:]']
+@exec trim(str) = [(echo "@str" | xargs)]
+@exec uppercase(str) = [(echo "@str" | tr '[:lower:]' '[:upper:]')]
 ```
 
 See the [Publishing Modules Guide](docs/publishing-modules.md) for detailed instructions.

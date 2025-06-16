@@ -75,13 +75,13 @@ Add content with variable interpolation:
 
 ## Template Functions
 
-Use template functions defined with @text:
+Use template functions defined with @exec:
 
 ```mlld
-@text greet(name) = @add [[Hello, {{name}}!]]
+@exec greet(name) = [[Hello, {{name}}!]]
 @add @greet("World")
 
-@text message(user, action) = @add [[{{user}} {{action}} successfully!]]
+@exec message(user, action) = [[{{user}} {{action}} successfully!]]
 @add @message("Alice", "logged in")
 ```
 

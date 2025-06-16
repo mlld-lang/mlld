@@ -1,10 +1,8 @@
 import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
-import type { TemplateExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { createTextVariable, astLocationToSourceLocation } from '@core/types';
-import { createExecutableVariable } from '@core/types/executable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { normalizeTemplateContent } from '../utils/blank-line-normalizer';
@@ -88,34 +86,12 @@ export async function evaluateText(
     throw new Error('Text directive identifier must be a simple variable name');
   }
   
-  // Handle parameterized text templates
+  // DEPRECATED: Parameterized text templates are now created with @exec
   if (directive.subtype === 'textTemplateDefinition') {
-    // Extract parameter names from Parameter nodes
-    const params = (directive.values?.params || []).map(p => {
-      if (typeof p === 'string') {
-        return p;
-      } else if (p.type === 'Parameter') {
-        return p.name;
-      }
-      return '';
-    }).filter(Boolean);
-
-    // Create template executable definition
-    const templateDef: TemplateExecutable = {
-      type: 'template',
-      templateContent: directive.values?.content || [],
-      paramNames: params,
-      sourceDirective: 'text'
-    };
-    
-    // Create and store the executable variable
-    const variable = createExecutableVariable(identifier, templateDef, {
-      definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
-    });
-    env.setVariable(identifier, variable);
-    
-    // Templates are definition directives, no output
-    return { value: '', env };
+    throw new Error(
+      'Parameterized templates with @text are deprecated. ' +
+      'Use @exec instead: @exec ' + identifier + '(' + (directive.values?.params || []).map(p => p.name || p).join(', ') + ') = [[...]]'
+    );
   }
   
   let resolvedValue: string;

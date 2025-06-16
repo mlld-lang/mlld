@@ -1,0 +1,1 @@
+Parse error: @when directive requires a variable reference, not a literal value

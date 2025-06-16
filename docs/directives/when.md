@@ -8,6 +8,12 @@ The `@when` directive offers flexible conditional logic with multiple evaluation
 
 ## Syntax Forms
 
+### Quick Reference
+- **`@when @var: [...]`** - Evaluates ALL conditions independently, fires action for each true condition
+- **`@when @var first: [...]`** - Classic switch (stops at first match)
+- **`@when @var all: [...] => action`** - Executes action if ALL conditions are true
+- **`@when @var any: [...] => action`** - Executes action if ANY condition is true
+
 ### 1. Simple Form (One-line)
 
 The simplest form evaluates a single condition and executes an action if true:
@@ -150,7 +156,7 @@ This is unique to the bare form - it executes ALL matching conditions:
 ]
 ```
 
-**Known Issue**: Currently, switch statements may execute conditions multiple times and in unexpected order. Use `first:` modifier for predictable single-match behavior.
+**Important**: This is NOT a switch statement - it intentionally executes ALL matching conditions. For switch-like behavior (stop at first match), use the `first:` modifier.
 
 Example:
 ```mlld
@@ -272,6 +278,8 @@ Values are considered truthy/falsy as follows:
 
 **Falsy values:**
 - `""` (empty string)
+- `"false"` (string literal "false", case-insensitive)
+- `"0"` (string literal "0")
 - `false` (boolean false)
 - `null` or `undefined`
 - `0` (number zero)
@@ -279,14 +287,14 @@ Values are considered truthy/falsy as follows:
 **Truthy values:**
 - `"true"` (string literal)
 - `true` (boolean true)
-- Any non-empty string (including `"false"` and `"0"` - these are truthy strings!)
+- Any non-empty string (except `"false"` and `"0"`)
 - Any non-zero number
 - Arrays (empty or with elements)
 - Objects (empty or with properties)
 - Command execution results that return non-empty strings
 
 **Important Notes:**
-- String values `"false"` and `"0"` are **truthy** because they are non-empty strings
+- String values `"false"` and `"0"` are **falsy** (special cases)
 - In switch statements (`@when @var: [...]`), values are compared for equality, not truthiness
 - Empty arrays and objects are currently truthy (may change in future versions)
 

@@ -299,6 +299,28 @@ WhenActionDirective
         location: location()
       })];
     }
+  // @add with simple variable reference (MUST come before exec invocation)
+  / "@add" _ "@" id:BaseIdentifier !("(") !TailModifiers fields:AnyFieldAccess* {
+      // @add with simple variable
+      const varRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+      
+      return [helpers.createNode(NodeType.Directive, {
+        kind: 'add',
+        subtype: 'addVariable',
+        values: { 
+          variable: [varRef]
+        },
+        raw: { 
+          variable: '@' + id
+        },
+        meta: {},
+        location: location()
+      })];
+    }
+  // @add with exec invocation (function call with parentheses or tail modifiers)
   / "@add" _ "@" invocation:ExecInvocationWithTail {
       // @add with exec invocation
       return [helpers.createNode(NodeType.Directive, {
