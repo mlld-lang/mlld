@@ -40,7 +40,8 @@ Added:
 - **mlld Stacktrace** - Shows execution context when errors occur:
   - Directive execution path with file:line locations
   - Failed imports show parse errors inline
-  - Unified error display in bordered box
+  - Error display in bordered box
+  - (More work on this intended)
 - **Unified Executable Syntax** - Simplified and added @exec definitions:
   - Direct syntax without @run prefix: `@exec greet(name) = [(echo "Hello, @name!")]`
   - Template executables: `@exec greeting(name) = [[Hello {{name}}!]]` or `` `Hello @name!` ``
@@ -58,9 +59,12 @@ Fixed:
 - **Content type detection** - Consistent handling of .mld, .json, and other file types
 - Shadow environment functions in @exec now properly handle async/await
 - Numeric parameters in @exec functions are now correctly converted from strings
+- **@when directive grammar bug** - Fixed parsing of `@add @variable` inside @when actions (#258)
+- **@run with template executables** - Fixed "nodes is not iterable" error when using @run with @exec template functions
+- **Truthiness documentation** - Clarified that strings "false" and "0" are falsy in @when conditions (matching existing behavior)
 
-Breaking Changes:
-- None expected, but this is a major architectural change. Please report any issues!
+Changed:
+- **@text deprecation** - Parameterized templates must now use `@exec` instead of `@text`. Using `@text name(params)` now throws an error directing to use `@exec`
 
 Breaking Changes:
 - None expected, but this is a major architectural change. Please report any issues!
