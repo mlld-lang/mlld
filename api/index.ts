@@ -37,6 +37,8 @@ export interface ProcessOptions {
   pathService?: IPathService;
   /** Control blank line normalization (default: true) */
   normalizeBlankLines?: boolean;
+  /** Use prettier for markdown formatting (default: false) */
+  useMarkdownFormatter?: boolean;
 }
 
 /**
@@ -54,7 +56,8 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     format: options?.format || 'markdown',
     fileSystem,
     pathService,
-    normalizeBlankLines: options?.normalizeBlankLines
+    normalizeBlankLines: options?.normalizeBlankLines,
+    useMarkdownFormatter: options?.useMarkdownFormatter
   });
 
   return result;

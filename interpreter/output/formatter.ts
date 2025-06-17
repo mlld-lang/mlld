@@ -1,7 +1,8 @@
 import type { MlldNode, MlldVariable } from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { isTextVariable, isDataVariable, isPathVariable, isExecutableVariable, isImportVariable } from '@core/types';
-import { normalizeFinalOutput } from '../utils/blank-line-normalizer';
+import { formatMarkdown } from '../utils/markdown-formatter';
+import { normalizeOutputBlankLines } from '../utils/blank-line-normalizer';
 
 /**
  * Output formatting options
@@ -9,7 +10,8 @@ import { normalizeFinalOutput } from '../utils/blank-line-normalizer';
 export interface FormatOptions {
   format: 'markdown' | 'xml';
   variables?: Map<string, MlldVariable>;
-  normalizeBlankLines?: boolean; // Default: true
+  useMarkdownFormatter?: boolean; // Default: false - use prettier for formatting
+  normalizeBlankLines?: boolean; // Default: true - normalize blank lines
 }
 
 /**
@@ -19,61 +21,62 @@ export interface FormatOptions {
 export async function formatOutput(nodes: MlldNode[], options: FormatOptions): Promise<string> {
   if (options.format === 'xml') {
     // Build structured markdown for llmxml
-    const structuredMarkdown = buildStructuredMarkdown(nodes, options);
+    const structuredMarkdown = await buildStructuredMarkdown(nodes, options);
     
     // Use llmxml to convert markdown to XML
     return await llmxmlInstance.toXML(structuredMarkdown);
   }
   
   // Default to plain markdown (just the content)
-  return formatMarkdown(nodes, options);
+  return formatMarkdownNodes(nodes, options);
 }
 
 /**
- * Format as markdown (concatenate text nodes)
+ * Format as markdown (process all node types)
  */
-function formatMarkdown(nodes: MlldNode[], options: FormatOptions): string {
+async function formatMarkdownNodes(nodes: MlldNode[], options: FormatOptions): Promise<string> {
   const parts: string[] = [];
   
-  // Track consecutive single newlines
-  let consecutiveNewlines = 0;
-  let pendingContent = '';
-  
   for (const node of nodes) {
-    if (node.type === 'Text') {
-      // Check if this is just a single newline
-      // eslint-disable-next-line mlld/no-ast-string-manipulation
-      if (node.content === '\n') {
-        consecutiveNewlines++;
-        pendingContent += '\n';
-      } else {
-        // If we had pending newlines, add them
-        if (pendingContent) {
-          parts.push(pendingContent);
-        }
-        
-        // Reset tracking
-        consecutiveNewlines = 0;
-        pendingContent = '';
-        
-        // Add the actual content
+    switch (node.type) {
+      case 'Text':
         // eslint-disable-next-line mlld/no-ast-string-manipulation
         parts.push(node.content);
-      }
+        break;
+      case 'Newline':
+        parts.push('\n');
+        break;
+      case 'CodeFence':
+        // Reconstruct code fence with proper formatting
+        const fence = '```';
+        const lang = (node as any).language || '';
+        const content = (node as any).content || '';
+        parts.push(`${fence}${lang}\n${content}\n${fence}`);
+        break;
+      // Other node types can be added as needed
     }
-  }
-  
-  // Handle any trailing newlines
-  if (pendingContent) {
-    parts.push(pendingContent);
   }
   
   let result = parts.join('');
   
-  // Apply final output normalization if enabled (default: true)
-  const shouldNormalize = options.normalizeBlankLines !== false;
-  if (shouldNormalize) {
-    result = normalizeFinalOutput(result);
+  // Use prettier for formatting if enabled (default: false for now)
+  const useFormatter = options.useMarkdownFormatter === true;
+  if (useFormatter) {
+    result = await formatMarkdown(result);
+  } else {
+    // Apply the original normalization when not using prettier
+    // Apply final output normalization if enabled (default: true)
+    const shouldNormalize = options.normalizeBlankLines !== false;
+    if (shouldNormalize) {
+      // Trim leading and trailing whitespace
+      result = result.trim();
+      // Normalize multiple blank lines to max 2 newlines (1 blank line)
+      result = normalizeOutputBlankLines(result);
+      // Ensure single trailing newline if there's content
+      if (result.length > 0) {
+        result += '\n';
+      }
+    }
   }
   
   return result;
@@ -82,7 +85,7 @@ function formatMarkdown(nodes: MlldNode[], options: FormatOptions): string {
 /**
  * Build structured markdown for XML conversion
  */
-function buildStructuredMarkdown(nodes: MlldNode[], options: FormatOptions): string {
+async function buildStructuredMarkdown(nodes: MlldNode[], options: FormatOptions): Promise<string> {
   const parts: string[] = [];
   
   // Add document header
@@ -104,7 +107,7 @@ function buildStructuredMarkdown(nodes: MlldNode[], options: FormatOptions): str
   }
   
   // Add content section
-  const content = formatMarkdown(nodes, options);
+  const content = await formatMarkdownNodes(nodes, options);
   if (content.trim()) {
     parts.push('## Content');
     parts.push('');

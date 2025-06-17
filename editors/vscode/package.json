@@ -2,7 +2,7 @@
   "name": "mlld-vscode",
   "displayName": "mlld",
   "description": "Language support for mlld - A modular prompt scripting language",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "andyet",
   "repository": {
     "type": "git",
@@ -108,5 +108,7 @@
     "jest": "^29.0.0",
     "ts-jest": "^29.0.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
 }

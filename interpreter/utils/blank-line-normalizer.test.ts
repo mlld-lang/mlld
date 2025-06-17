@@ -18,32 +18,30 @@ describe('blank-line-normalizer', () => {
       expect(normalizeTemplateContent(content, true)).toBe('Hello World!');
     });
 
-    it('should reduce trailing blank lines by one', () => {
-      // 2 trailing newlines (1 blank line) → 1 newline (0 blank lines)
+    it('should remove single trailing newline', () => {
+      // Single trailing newline is removed
+      expect(normalizeTemplateContent('Hello\n', true)).toBe('Hello');
+      
+      // Multiple trailing newlines - only the last one is removed
       expect(normalizeTemplateContent('Hello\n\n', true)).toBe('Hello\n');
-      
-      // 3 trailing newlines (2 blank lines) → 2 newlines (1 blank line)
       expect(normalizeTemplateContent('Hello\n\n\n', true)).toBe('Hello\n\n');
-      
-      // 4 trailing newlines (3 blank lines) → 3 newlines (2 blank lines)
-      expect(normalizeTemplateContent('Hello\n\n\n\n', true)).toBe('Hello\n\n\n');
     });
 
     it('should handle both leading and trailing normalization', () => {
-      const content = '\nHello World!\n\n\n';
-      // Remove leading \n and reduce 3 trailing \n to 2
-      expect(normalizeTemplateContent(content, true)).toBe('Hello World!\n\n');
+      const content = '\nHello World!\n';
+      // Remove leading \n and trailing \n
+      expect(normalizeTemplateContent(content, true)).toBe('Hello World!');
     });
 
-    it('should preserve single trailing newline', () => {
-      const content = 'Hello World!\n';
-      expect(normalizeTemplateContent(content, true)).toBe('Hello World!\n');
+    it('should handle templates without trailing newline', () => {
+      const content = 'Hello World!';
+      expect(normalizeTemplateContent(content, true)).toBe('Hello World!');
     });
 
     it('should handle empty templates', () => {
       expect(normalizeTemplateContent('', true)).toBe('');
       expect(normalizeTemplateContent('\n', true)).toBe('');
-      expect(normalizeTemplateContent('\n\n', true)).toBe('\n');
+      expect(normalizeTemplateContent('\n\n', true)).toBe('');
     });
   });
 

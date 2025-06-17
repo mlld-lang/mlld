@@ -205,12 +205,15 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
         lastValue = result.value;
         lastResult = result;
         
-        // Add text nodes to output if they're top-level and not inline comments
-        if (isText(n)) {
+        // Add ALL nodes to output to preserve document structure
+        // Directives that produce output (like @add) will add their own nodes
+        // Everything else gets added as-is
+        if (!isDirective(n)) {
           // Skip inline comments (lines starting with >> or <<)
-          if (!n.content.trimStart().match(/^(>>|<<)/)) {
-            env.addNode(n);
+          if (isText(n) && n.content.trimStart().match(/^(>>|<<)/)) {
+            continue;
           }
+          env.addNode(n);
         }
       }
     } else {
@@ -220,12 +223,15 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
         lastValue = result.value;
         lastResult = result;
         
-        // Add text nodes to output if they're top-level and not inline comments
-        if (isText(n)) {
+        // Add ALL nodes to output to preserve document structure
+        // Directives that produce output (like @add) will add their own nodes
+        // Everything else gets added as-is
+        if (!isDirective(n)) {
           // Skip inline comments (lines starting with >> or <<)
-          if (!n.content.trimStart().match(/^(>>|<<)/)) {
-            env.addNode(n);
+          if (isText(n) && n.content.trimStart().match(/^(>>|<<)/)) {
+            continue;
           }
+          env.addNode(n);
         }
       }
     }
@@ -252,13 +258,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
   }
   
   if (isNewline(node)) {
-    // Preserve newlines in output
-    const newlineTextNode: TextNode = {
-      type: 'Text',
-      nodeId: `${node.nodeId || 'newline'}-text`,
-      content: '\n'
-    };
-    env.addNode(newlineTextNode);
+    // Newline nodes are already added by the array processing logic
     return { value: '\n', env };
   }
   
@@ -276,15 +276,8 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
   }
   
   if (isCodeFence(node)) {
-    // Handle markdown code fences as text content
-    const content = node.content;
-    const codeTextNode: TextNode = {
-      type: 'Text',
-      nodeId: `${node.nodeId}-text`,
-      content: content
-    };
-    env.addNode(codeTextNode);
-    return { value: content, env };
+    // Code fence nodes are already added by the array processing logic
+    return { value: node.content, env };
   }
   
   if (isMlldRunBlock(node)) {
