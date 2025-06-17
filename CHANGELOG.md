@@ -5,28 +5,16 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.4.1] - 2024-12-17
+## [1.4.1]
 
 ### Added
-- **VSCode Extension 0.3.0** - Major update with Language Server Protocol integration:
-  - Full LSP implementation providing intelligent language features
-  - Smart autocomplete for all directives, variables, and module imports
-  - Context-aware completions for foreach operations and with clauses
-  - Resolver-aware completions (TIME formats, INPUT environment variables)
-  - Real-time syntax validation using the actual mlld parser
-  - Hover information and go-to-definition for variables
-  - Multi-file analysis with import tracking
-  - Improved TextMate grammar synchronized with mlld parser
-- **Markdown Formatting** - Integrated prettier for consistent markdown output:
-  - Enabled by default for clean, standardized output formatting
-  - Use `--no-format` flag to disable and preserve exact spacing
-  - Automatic normalization of whitespace and line breaks
-  - Consistent code block and list formatting
+- **VSCode Extension 0.3.0**: LSP implementation with autocomplete, syntax validation, hover info, go-to-definition
+- **Markdown formatting**: prettier integration (default on, `--no-format` to disable)
 
 ### Fixed
-- Language server command added to CLI for editor integration
-- Template normalization bug where leading/trailing newlines weren't being properly removed
-- Fixed `variable.meta` vs `variable.metadata` mismatch in add evaluator
+- `mlld language-server` command added to CLI
+- Template normalization for leading/trailing newlines
+- `variable.metadata` property access in add evaluator
 
 ## [1.4.0]
 Added:
