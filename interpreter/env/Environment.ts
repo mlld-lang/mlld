@@ -3,6 +3,7 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import type { ResolvedURLConfig } from '@core/config/types';
 import type { DirectiveTrace } from '@core/types/trace';
+import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { ImportApproval } from '@core/security/ImportApproval';
@@ -22,6 +23,7 @@ import {
   ProjectPathResolver,
   convertLockFileToResolverConfigs
 } from '@core/resolvers';
+import { PathMatcher } from '@core/resolvers/utils/PathMatcher';
 import { logger } from '@core/utils/logger';
 import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
@@ -101,6 +103,10 @@ export class Environment {
   private directiveTrace: DirectiveTrace[] = [];
   private traceEnabled: boolean = true; // Default to enabled
   
+  // Fuzzy matching for local files
+  private localFileFuzzyMatch: FuzzyMatchConfig | boolean = true; // Default enabled
+  private pathMatcher?: PathMatcher;
+  
   // Default URL validation options (used if no config provided)
   private defaultUrlOptions = {
     allowedProtocols: ['http', 'https'],
@@ -121,7 +127,12 @@ export class Environment {
     // Inherit reserved names from parent environment
     if (parent) {
       this.reservedNames = new Set(parent.reservedNames);
+      // Inherit fuzzy match configuration from parent
+      this.localFileFuzzyMatch = parent.localFileFuzzyMatch;
     }
+    
+    // Initialize PathMatcher for fuzzy file matching
+    this.pathMatcher = new PathMatcher(fileSystem);
     
     // Initialize security components for root environment only
     if (!parent) {
@@ -1698,7 +1709,95 @@ export class Environment {
     if (path.isAbsolute(inputPath)) {
       return inputPath;
     }
-    return path.resolve(this.basePath, inputPath);
+    
+    // Check if fuzzy matching is enabled for local files
+    const fuzzyEnabled = typeof this.localFileFuzzyMatch === 'boolean' 
+      ? this.localFileFuzzyMatch 
+      : this.localFileFuzzyMatch.enabled !== false;
+    
+    // Debug log
+    if (process.env.DEBUG_FUZZY) {
+      console.log(`resolvePath called with: ${inputPath}, fuzzyEnabled: ${fuzzyEnabled}`);
+    }
+    
+    if (fuzzyEnabled && this.pathMatcher) {
+      // Try fuzzy matching for local files
+      const matchResult = await this.pathMatcher.findMatch(
+        inputPath,
+        this.basePath,
+        typeof this.localFileFuzzyMatch === 'object' ? this.localFileFuzzyMatch : undefined
+      );
+      
+      if (matchResult.path) {
+        if (process.env.DEBUG_FUZZY) {
+          console.log(`Fuzzy match found: ${matchResult.path}`);
+        }
+        return matchResult.path;
+      }
+      
+      // If no match found with fuzzy matching, check with extensions
+      if (!path.extname(inputPath)) {
+        const extensions = ['.mlld.md', '.mld', '.md'];
+        let allSuggestions: string[] = [];
+        
+        for (const ext of extensions) {
+          const pathWithExt = inputPath + ext;
+          const extMatchResult = await this.pathMatcher.findMatch(
+            pathWithExt,
+            this.basePath,
+            typeof this.localFileFuzzyMatch === 'object' ? this.localFileFuzzyMatch : undefined
+          );
+          
+          if (extMatchResult.path) {
+            return extMatchResult.path;
+          }
+          
+          // Collect suggestions from each extension attempt
+          if (extMatchResult.suggestions) {
+            allSuggestions.push(...extMatchResult.suggestions);
+          }
+        }
+        
+        // If we collected any suggestions, throw error with them
+        if (allSuggestions.length > 0) {
+          // Remove duplicates and take top 3
+          const uniqueSuggestions = [...new Set(allSuggestions)].slice(0, 3);
+          const suggestions = uniqueSuggestions
+            .map(s => `  - ${s}`)
+            .join('\n');
+          throw new Error(`File not found: ${inputPath}\n\nDid you mean:\n${suggestions}`);
+        }
+      }
+      
+      // If still no match and we have suggestions, throw error here
+      // This ensures fuzzy matching suggestions are included
+      if (matchResult.suggestions && matchResult.suggestions.length > 0) {
+        const suggestions = matchResult.suggestions
+          .slice(0, 3)
+          .map(s => `  - ${s}`)
+          .join('\n');
+        throw new Error(`File not found: ${inputPath}\n\nDid you mean:\n${suggestions}`);
+      }
+      
+      // If we have candidates (ambiguous matches), throw error
+      if (matchResult.candidates && matchResult.candidates.length > 1) {
+        const candidates = matchResult.candidates
+          .map(c => `  - ${c.path} (${c.matchType} match, confidence: ${c.confidence})`)
+          .join('\n');
+        throw new Error(`Ambiguous file match for: ${inputPath}\n\nMultiple files match:\n${candidates}`);
+      }
+    }
+    
+    // Fall back to standard path resolution, but check if the file exists
+    const resolvedPath = path.resolve(this.basePath, inputPath);
+    
+    // If fuzzy matching is enabled but didn't find anything, check if the file exists
+    // If not, throw an error with better messaging
+    if (fuzzyEnabled && !await this.fileSystem.exists(resolvedPath)) {
+      throw new Error(`File not found: ${inputPath}`);
+    }
+    
+    return resolvedPath;
   }
   
   // --- Scope Management ---
@@ -2002,6 +2101,13 @@ export class Environment {
    */
   setNormalizeBlankLines(normalize: boolean): void {
     this.normalizeBlankLines = normalize;
+  }
+  
+  /**
+   * Set fuzzy matching configuration for local file imports
+   */
+  setLocalFileFuzzyMatch(config: FuzzyMatchConfig | boolean): void {
+    this.localFileFuzzyMatch = config;
   }
   
   /**

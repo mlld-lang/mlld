@@ -2,6 +2,9 @@
 
 repo: github.com/mlld-lang/mlld
 
+## Agents
+Agents dispatched with the 'Task' tool can sometimes perform work you did not intend and the results can be counterproductive or even destructive. Please do not send agents on tasks without having a discussion with me first.
+
 ## Style Guide
 - **Name convention**: Always write "mlld" in all lowercase when referring to the language (not "MLLD", "Mlld", or "MllD")
 

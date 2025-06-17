@@ -98,30 +98,6 @@ The @when directive requires a variable to evaluate, not a literal value.
 @when @myCondition => @add "This is valid syntax"
 ```
 
-#### Example.o Variant
-
-**Input:**
-```mlld
-# When Directive with Literal Condition
-
-The @when directive requires a variable to evaluate, not a literal value.
-
-## Invalid: Using literal true
-This is invalid syntax
-
-## Invalid: Using literal false  
-
-## Invalid: Using literal null
-This too is invalid
-
-## Invalid: Using literal string
-String literals are not allowed
-
-## Valid: Using a variable
-
-This is valid syntax
-```
-
 ## Valid
 
 ### Valid Examples
@@ -198,6 +174,35 @@ This is valid syntax
 
 **Expected Output:**
 ```markdown
+# Test exec invocation from module imports
+
+## Direct invocation
+Hello, World!
+
+## With parameter
+Hello, Alice!
+
+## Multi-line command
+Line 1
+Line 2
+
+## Multiple parameters
+First: foo, Second: bar
+
+## In data directive
+
+Hello, World!
+## In text template
+
+Output: Hello from module
+## Verify regular variable import works
+Hello from module
+```
+
+#### Example.o Variant
+
+**Input:**
+```mlld
 # Test exec invocation from module imports
 
 ## Direct invocation

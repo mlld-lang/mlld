@@ -1,0 +1,280 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { interpret } from './index';
+import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
+import { PathService } from '@services/fs/PathService';
+
+describe('Fuzzy Local File Imports', () => {
+  let fileSystem: MemoryFileSystem;
+  let pathService: PathService;
+  
+  beforeEach(async () => {
+    fileSystem = new MemoryFileSystem();
+    pathService = new PathService();
+    
+    // Set up test file structure
+    await fileSystem.writeFile('/My-Utils.mld', '@text greeting = "Hello from utils"');
+    await fileSystem.writeFile('/test_config.json', '{"debug": true}');
+    await fileSystem.writeFile('/My Important File.md', '# Important Content');
+    await fileSystem.writeFile('/sub-folder/nested-file.mld', '@data value = 42');
+    
+    // Create directory structure with spaces
+    await fileSystem.mkdir('/My Projects');
+    await fileSystem.writeFile('/My Projects/README.md', '# Project README');
+    await fileSystem.writeFile('/My Projects/Todo List.mld', '@text tasks = "Tasks to do"');
+  });
+
+  describe('Case-insensitive imports', () => {
+    it('should import files with different case', async () => {
+      const source = '@import { greeting } from "./my-utils.mld"\n@add @greeting';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('Hello from utils');
+    });
+
+    it('should handle uppercase variations', async () => {
+      const source = '@import { greeting } from "./MY-UTILS.MLD"\n@add @greeting';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('Hello from utils');
+    });
+  });
+
+  describe('Whitespace normalization', () => {
+    it('should import files with spaces using dashes', async () => {
+      const source = '@import { tasks } from "./my-projects/todo-list"\n@add @tasks';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('Tasks to do');
+    });
+
+    it('should import files with spaces using underscores', async () => {
+      const source = '@add [./my_important_file.md]';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('# Important Content');
+    });
+
+    it('should handle nested paths with mixed separators', async () => {
+      const source = '@import { value } from "./sub_folder/nested-file"\n@add [[Value: {{value}}]]';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('Value: 42');
+    });
+  });
+
+  describe('Extension inference', () => {
+    it('should find .mld files without extension', async () => {
+      const source = '@import { greeting } from "./my-utils"\n@add @greeting';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('Hello from utils');
+    });
+
+    it('should find .md files without extension', async () => {
+      const source = '@add [./my-important-file]';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('# Important Content');
+    });
+    
+    it('should fail when extension is wrong even with correct name', async () => {
+      // File is .mld but we ask for .md
+      const source = '@import { greeting } from "./My-Utils.md"';
+      
+      await expect(interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      })).rejects.toThrow(/File not found/);
+    });
+  });
+
+  describe('Error handling', () => {
+    it('should provide suggestions for near matches', async () => {
+      const source = '@import { greeting } from "./my-utilz"';
+      
+      await expect(interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      })).rejects.toThrow(/Did you mean:[\s\S]*My-Utils\.mld/);
+    });
+
+    it('should show multiple matches when ambiguous', async () => {
+      // Create files that differ only in case
+      await fileSystem.writeFile('/Test-File.mld', '@text a = "A"');
+      await fileSystem.writeFile('/test-file.mld', '@text b = "B"');
+      
+      // Both files match with case-insensitive matching
+      const source = '@import { a } from "./TEST-FILE"';
+      
+      await expect(interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      })).rejects.toThrow(/Did you mean.*Test-File\.mld.*test-file\.mld/s);
+    });
+  });
+
+  describe('Configuration', () => {
+    it('should respect disabled fuzzy matching', async () => {
+      const source = '@import { greeting } from "./my-utils"';
+      
+      await expect(interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/',
+        localFileFuzzyMatch: false
+      })).rejects.toThrow(/Failed to read imported file/);
+    });
+
+    it('should respect case-sensitive configuration', async () => {
+      const source = '@import { greeting } from "./my-utils"';
+      
+      await expect(interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/',
+        localFileFuzzyMatch: {
+          enabled: true,
+          caseInsensitive: false,
+          normalizeWhitespace: true
+        }
+      })).rejects.toThrow(/File not found/);
+    });
+
+    it('should work with case-correct but normalized whitespace', async () => {
+      const source = '@import { greeting } from "./My_Utils"\n@add @greeting';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/',
+        localFileFuzzyMatch: {
+          enabled: true,
+          caseInsensitive: false,
+          normalizeWhitespace: true
+        }
+      });
+      
+      expect(result.trim()).toBe('Hello from utils');
+    });
+  });
+
+  describe('Integration with @add directive', () => {
+    it('should fuzzy match files in @add', async () => {
+      const source = '@add [./my-projects/readme]';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('# Project README');
+    });
+  });
+  
+  describe('Integration with @text directive', () => {
+    it('should fuzzy match files in @text assignments', async () => {
+      const source = '@text content = [./MY_IMPORTANT_FILE.MD]\n@add @content';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('# Important Content');
+    });
+    
+    it('should fuzzy match files with section extraction', async () => {
+      await fileSystem.writeFile('/Guide.md', '# Guide\n\n## Setup\n\nInstall steps here\n\n## Usage\n\nHow to use');
+      
+      const source = '@text section = [./guide # Setup]\n@add @section';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('## Setup\n\nInstall steps here');
+    });
+  });
+
+  describe('Integration with @path directive', () => {
+    it('should fuzzy match files in @path assignments', async () => {
+      const source = '@path doc = "./my-important-file"\n@add @doc';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('# Important Content');
+    });
+    
+    it('should fuzzy match directories in @path assignments', async () => {
+      const source = '@path folder = "./my_projects"\n@text content = [@folder/readme.md]\n@add @content';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('# Project README');
+    });
+  });
+  
+  describe('Integration with relative paths', () => {
+    it('should work with current directory notation', async () => {
+      const source = '@import { greeting } from "./My-Utils"\n@add @greeting';
+      
+      const result = await interpret(source, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      expect(result.trim()).toBe('Hello from utils');
+    });
+  });
+});

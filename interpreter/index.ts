@@ -4,6 +4,7 @@ import { evaluate } from './core/interpreter';
 import { formatOutput } from './output/formatter';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
+import type { FuzzyMatchConfig } from '@core/resolvers/types';
 
 import type { ResolvedURLConfig } from '@core/config/types';
 
@@ -35,6 +36,7 @@ export interface InterpretOptions {
   devMode?: boolean; // Enable development mode with local fallback
   enableTrace?: boolean; // Enable directive trace for debugging (default: true)
   useMarkdownFormatter?: boolean; // Use prettier for markdown formatting (default: true)
+  localFileFuzzyMatch?: FuzzyMatchConfig | boolean; // Fuzzy matching for local file imports (default: true)
 }
 
 /**
@@ -154,6 +156,12 @@ export async function interpret(
   if (options.enableTrace !== undefined) {
     env.setTraceEnabled(options.enableTrace);
   }
+  
+  // Set fuzzy matching for local files (default: true)
+  if (options.localFileFuzzyMatch !== undefined) {
+    env.setLocalFileFuzzyMatch(options.localFileFuzzyMatch);
+  }
+  
   // Evaluate the AST
   await evaluate(ast, env);
   

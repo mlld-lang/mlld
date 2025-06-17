@@ -4,12 +4,14 @@ import {
   ResolverContent, 
   ResolverType,
   ContentInfo,
-  ResolverCapabilities
+  ResolverCapabilities,
+  FuzzyMatchConfig
 } from '@core/resolvers/types';
 import { MlldFileNotFoundError } from '@core/errors';
 import { ResolverError } from '@core/errors/ResolverError';
 import { TaintLevel } from '@security/taint/TaintTracker';
 import { IFileSystemService } from '@services/fs/IFileSystemService';
+import { PathMatcher } from '@core/resolvers/utils/PathMatcher';
 
 /**
  * Configuration for LocalResolver
@@ -39,6 +41,11 @@ export interface LocalResolverConfig {
    * Maximum directory depth to traverse
    */
   maxDepth?: number;
+
+  /**
+   * Fuzzy matching configuration
+   */
+  fuzzyMatch?: FuzzyMatchConfig;
 }
 
 /**
@@ -59,7 +66,11 @@ export class LocalResolver implements Resolver {
     cache: { strategy: 'none' } // Local files don't need caching
   };
 
-  constructor(private fileSystem: IFileSystemService) {}
+  private pathMatcher: PathMatcher;
+
+  constructor(private fileSystem: IFileSystemService) {
+    this.pathMatcher = new PathMatcher(fileSystem);
+  }
 
   /**
    * Check if this resolver can handle the reference
@@ -87,27 +98,113 @@ export class LocalResolver implements Resolver {
     // The ResolverManager will have already matched the prefix
     const relativePath = this.extractRelativePath(ref, config);
     
-    // Validate and resolve the full path
-    let fullPath = await this.resolveFullPath(relativePath, config);
+    // First check for path traversal attempts (security check before fuzzy matching)
+    if (relativePath.includes('..') || path.isAbsolute(relativePath)) {
+      // Validate through resolveFullPath which has security checks
+      try {
+        const securePath = await this.resolveFullPath(relativePath, config);
+        // If it passes security checks, we can proceed
+      } catch (error) {
+        // Security error - re-throw it
+        throw error;
+      }
+    }
     
-    // If no extension and the file doesn't exist, try with .mlld.md, .mld, or .md extensions
-    if (!path.extname(fullPath)) {
-      const existsAsIs = await this.fileSystem.exists(fullPath);
-      if (!existsAsIs) {
-        // Try .mlld.md first (mlld module format)
-        const withMlldMd = fullPath + '.mlld.md';
-        if (await this.fileSystem.exists(withMlldMd)) {
-          fullPath = withMlldMd;
-        } else {
-          // Try .mld as fallback
-          const withMld = fullPath + '.mld';
-          if (await this.fileSystem.exists(withMld)) {
-            fullPath = withMld;
+    // Use fuzzy matching if enabled (default: true)
+    const fuzzyConfig = config?.fuzzyMatch !== undefined ? config.fuzzyMatch : true;
+    const fuzzyEnabled = typeof fuzzyConfig === 'boolean' ? fuzzyConfig : fuzzyConfig.enabled !== false;
+    
+    let fullPath: string;
+    
+    if (fuzzyEnabled && config?.basePath) {
+      // Try fuzzy matching
+      const matchResult = await this.pathMatcher.findMatch(
+        relativePath,
+        config.basePath,
+        typeof fuzzyConfig === 'object' ? fuzzyConfig : undefined,
+        config.maxDepth
+      );
+      
+      if (matchResult.candidates && matchResult.candidates.length > 1) {
+        // Ambiguous match - throw error with all candidates
+        const candidatePaths = matchResult.candidates
+          .map(c => `  - ${path.relative(config.basePath, c.path)} (${c.matchType} match)`)
+          .join('\n');
+        
+        throw new ResolverError(
+          `Ambiguous path '${relativePath}' matches multiple files:\n${candidatePaths}\n\nPlease use a more specific path.`,
+          { resolverName: 'LocalResolver', reference: ref, operation: 'resolve' }
+        );
+      }
+      
+      if (matchResult.path) {
+        fullPath = matchResult.path;
+      } else {
+        // No fuzzy match found - try with extensions
+        fullPath = await this.resolveFullPath(relativePath, config);
+        
+        // If no extension and the file doesn't exist, try with .mlld.md, .mld, or .md extensions
+        if (!path.extname(fullPath)) {
+          const existsAsIs = await this.fileSystem.exists(fullPath);
+          if (!existsAsIs) {
+            // Try with extensions using fuzzy matching
+            const extensions = ['.mlld.md', '.mld', '.md'];
+            let foundWithExtension = false;
+            
+            for (const ext of extensions) {
+              const pathWithExt = relativePath + ext;
+              const extMatchResult = await this.pathMatcher.findMatch(
+                pathWithExt,
+                config.basePath,
+                typeof fuzzyConfig === 'object' ? fuzzyConfig : undefined,
+                config.maxDepth
+              );
+              
+              if (extMatchResult.path) {
+                fullPath = extMatchResult.path;
+                foundWithExtension = true;
+                break;
+              }
+            }
+            
+            if (!foundWithExtension && matchResult.suggestions && matchResult.suggestions.length > 0) {
+              // Provide helpful suggestions
+              const suggestions = matchResult.suggestions
+                .slice(0, 3)
+                .map(s => `  - ${s}`)
+                .join('\n');
+              
+              throw new MlldFileNotFoundError(
+                `File not found: ${relativePath}\n\nDid you mean:\n${suggestions}`,
+                fullPath
+              );
+            }
+          }
+        }
+      }
+    } else {
+      // Fuzzy matching disabled - use original logic
+      fullPath = await this.resolveFullPath(relativePath, config);
+      
+      // If no extension and the file doesn't exist, try with .mlld.md, .mld, or .md extensions
+      if (!path.extname(fullPath)) {
+        const existsAsIs = await this.fileSystem.exists(fullPath);
+        if (!existsAsIs) {
+          // Try .mlld.md first (mlld module format)
+          const withMlldMd = fullPath + '.mlld.md';
+          if (await this.fileSystem.exists(withMlldMd)) {
+            fullPath = withMlldMd;
           } else {
-            // Try .md as final fallback
-            const withMd = fullPath + '.md';
-            if (await this.fileSystem.exists(withMd)) {
-              fullPath = withMd;
+            // Try .mld as fallback
+            const withMld = fullPath + '.mld';
+            if (await this.fileSystem.exists(withMld)) {
+              fullPath = withMld;
+            } else {
+              // Try .md as final fallback
+              const withMd = fullPath + '.md';
+              if (await this.fileSystem.exists(withMd)) {
+                fullPath = withMd;
+              }
             }
           }
         }
@@ -217,7 +314,30 @@ export class LocalResolver implements Resolver {
     }
 
     const relativePath = this.extractRelativePath(prefix, config);
-    const fullPath = await this.resolveFullPath(relativePath, config);
+    
+    // Use fuzzy matching if enabled (default: true)
+    const fuzzyConfig = config?.fuzzyMatch !== undefined ? config.fuzzyMatch : true;
+    const fuzzyEnabled = typeof fuzzyConfig === 'boolean' ? fuzzyConfig : fuzzyConfig.enabled !== false;
+    
+    let fullPath: string;
+    
+    if (fuzzyEnabled) {
+      // Try to find the directory with fuzzy matching
+      const matchResult = await this.pathMatcher.findMatch(
+        relativePath,
+        config.basePath,
+        typeof fuzzyConfig === 'object' ? fuzzyConfig : undefined,
+        config.maxDepth
+      );
+      
+      if (!matchResult.path) {
+        return [];
+      }
+      
+      fullPath = matchResult.path;
+    } else {
+      fullPath = await this.resolveFullPath(relativePath, config);
+    }
 
     try {
       const stats = await this.fileSystem.stat(fullPath);
@@ -315,42 +435,78 @@ export class LocalResolver implements Resolver {
 
     try {
       const relativePath = this.extractRelativePath(ref, config);
-      const fullPath = await this.resolveFullPath(relativePath, config);
-
-      // If no extension and the file doesn't exist, try with .mlld.md, .mld, or .md extensions
-      if (operation === 'read' && !path.extname(fullPath)) {
-        const existsAsIs = await this.fileSystem.exists(fullPath);
-        if (!existsAsIs) {
-          // Try .mlld.md first (mlld module format)
-          const withMlldMd = fullPath + '.mlld.md';
-          if (await this.fileSystem.exists(withMlldMd)) {
-            return true;
-          }
-          // Try .mld as fallback
-          const withMld = fullPath + '.mld';
-          if (await this.fileSystem.exists(withMld)) {
-            return true;
-          }
-          // Try .md as final fallback
-          const withMd = fullPath + '.md';
-          if (await this.fileSystem.exists(withMd)) {
+      
+      // Use fuzzy matching if enabled (default: true)
+      const fuzzyConfig = config?.fuzzyMatch !== undefined ? config.fuzzyMatch : true;
+      const fuzzyEnabled = typeof fuzzyConfig === 'boolean' ? fuzzyConfig : fuzzyConfig.enabled !== false;
+      
+      if (fuzzyEnabled && operation === 'read') {
+        // Try fuzzy matching for read operations
+        const matchResult = await this.pathMatcher.findMatch(
+          relativePath,
+          config.basePath,
+          typeof fuzzyConfig === 'object' ? fuzzyConfig : undefined,
+          config.maxDepth
+        );
+        
+        if (matchResult.path) {
+          return true;
+        }
+        
+        // Try with extensions
+        const extensions = ['.mlld.md', '.mld', '.md'];
+        for (const ext of extensions) {
+          const pathWithExt = relativePath + ext;
+          const extMatchResult = await this.pathMatcher.findMatch(
+            pathWithExt,
+            config.basePath,
+            typeof fuzzyConfig === 'object' ? fuzzyConfig : undefined,
+            config.maxDepth
+          );
+          
+          if (extMatchResult.path) {
             return true;
           }
         }
-      }
-
-      // For write operations, check directory access
-      if (operation === 'write') {
-        const dir = path.dirname(fullPath);
-        // Check if directory exists
-        const dirExists = await this.fileSystem.exists(dir);
-        return dirExists;
+        
+        return false;
       } else {
-        // For read operations, check file exists
-        return await this.fileSystem.exists(fullPath);
-      }
+        // Fuzzy matching disabled or write operation - use original logic
+        const fullPath = await this.resolveFullPath(relativePath, config);
 
-      return true;
+        // If no extension and the file doesn't exist, try with .mlld.md, .mld, or .md extensions
+        if (operation === 'read' && !path.extname(fullPath)) {
+          const existsAsIs = await this.fileSystem.exists(fullPath);
+          if (!existsAsIs) {
+            // Try .mlld.md first (mlld module format)
+            const withMlldMd = fullPath + '.mlld.md';
+            if (await this.fileSystem.exists(withMlldMd)) {
+              return true;
+            }
+            // Try .mld as fallback
+            const withMld = fullPath + '.mld';
+            if (await this.fileSystem.exists(withMld)) {
+              return true;
+            }
+            // Try .md as final fallback
+            const withMd = fullPath + '.md';
+            if (await this.fileSystem.exists(withMd)) {
+              return true;
+            }
+          }
+        }
+
+        // For write operations, check directory access
+        if (operation === 'write') {
+          const dir = path.dirname(fullPath);
+          // Check if directory exists
+          const dirExists = await this.fileSystem.exists(dir);
+          return dirExists;
+        } else {
+          // For read operations, check file exists
+          return await this.fileSystem.exists(fullPath);
+        }
+      }
     } catch {
       return false;
     }

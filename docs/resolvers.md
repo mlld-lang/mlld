@@ -268,6 +268,65 @@ When creating custom resolvers, you need to declare their capabilities:
 - `supportedContentTypes`: What content types it can return
 - `defaultContentType`: What it returns when used as a bare variable
 
+### Fuzzy Path Matching
+
+Local path resolvers support smart fuzzy matching by default, making it easier to reference files without worrying about exact capitalization or spacing:
+
+#### Case-Insensitive Matching
+```mlld
+# All of these reference the same file: ~/Desktop/My Projects/Todo List.md
+@import { tasks } from @desktop/my-projects/todo-list
+@import { tasks } from @desktop/MY-PROJECTS/TODO-LIST
+@import { tasks } from @desktop/My-Projects/Todo-List
+```
+
+#### Whitespace Normalization
+Spaces, dashes, and underscores are treated as interchangeable:
+```mlld
+# File: ~/Desktop/My Important File.md
+@add @desktop/my-important-file     # spaces → dashes
+@add @desktop/my_important_file     # spaces → underscores
+@add @desktop/My-Important-File     # original spacing preserved
+```
+
+#### Ambiguity Resolution
+When multiple files match, mlld shows all possibilities:
+```
+Error: Ambiguous path 'test-file' matches multiple files:
+  - test-file.md (exact match)
+  - test_file.md (whitespace match)
+  - TEST_FILE.md (fuzzy match)
+
+Please use a more specific path.
+```
+
+#### Configuration
+Control fuzzy matching behavior in your resolver config:
+```json
+{
+  "@desktop": {
+    "prefix": "@desktop/",
+    "resolver": "LOCAL",
+    "type": "input",
+    "config": {
+      "basePath": "~/Desktop",
+      "fuzzyMatch": {
+        "enabled": true,         // default: true
+        "caseInsensitive": true, // default: true
+        "normalizeWhitespace": true // default: true
+      }
+    }
+  }
+}
+```
+
+Or disable entirely:
+```json
+{
+  "fuzzyMatch": false  // Exact matches only
+}
+```
+
 ### Resolver Types
 
 #### Path Resolvers
