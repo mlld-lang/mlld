@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2025-06-10T02:54:13.919Z
+// Generated from grammar at 2025-06-17T04:34:39.648Z
 
 const Prism = require('prismjs');
 
@@ -42,7 +42,7 @@ Prism.languages.mlld = {
     greedy: true
   },
   'reserved-variable': {
-    pattern: /@(INPUT|TIME|PROJECTPATH|input|time|projectpath|Input|Time|ProjectPath|STDIN|stdin|Stdin)\b/,
+    pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\b/,
     alias: 'builtin'
   },
   'variable': {
