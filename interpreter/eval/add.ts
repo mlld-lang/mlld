@@ -55,7 +55,7 @@ export async function evaluateAdd(
       // Text variables contain string content - use directly
       value = variable.value;
       // Check if this variable was created from template content and normalization is enabled
-      if (variable.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
+      if ((variable.metadata as any)?.isTemplateContent && env.getNormalizeBlankLines()) {
         value = normalizeTemplateContent(value, true);
       }
     } else if (isDataVariable(variable)) {

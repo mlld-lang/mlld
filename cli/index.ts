@@ -14,6 +14,7 @@ import { createAddNeedsCommand } from './commands/add-needs';
 import { createSetupCommand } from './commands/setup';
 import { createAliasCommand } from './commands/alias';
 import { envCommand } from './commands/env';
+import { languageServerCommand } from './commands/language-server';
 import chalk from 'chalk';
 import { version } from '@core/version';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
@@ -78,6 +79,8 @@ export interface CLIOptions {
   noNormalizeBlankLines?: boolean;
   // Development mode
   dev?: boolean;
+  // Disable prettier formatting
+  noFormat?: boolean;
   _?: string[]; // Remaining args after command
 }
 
@@ -358,6 +361,10 @@ function parseArgs(args: string[]): CLIOptions {
       case '--dev':
         options.dev = true;
         break;
+      // Disable prettier formatting
+      case '--no-format':
+        options.noFormat = true;
+        break;
       // Transformation is always enabled by default
       // No transform flags needed
       default:
@@ -626,6 +633,44 @@ Options:
     `);
     return;
   }
+  
+  if (command === 'language-server' || command === 'lsp') {
+    console.log(`
+Usage: mlld language-server
+
+Start the mlld Language Server for editor integration.
+
+The mlld language server implements the Language Server Protocol (LSP) to provide
+intelligent features for mlld files in any LSP-compatible editor.
+
+Features:
+  - Syntax validation and error reporting
+  - Autocomplete for directives, variables, and file paths
+  - Hover information showing variable types and values
+  - Go-to-definition for variables and imports
+  - Import resolution and multi-file analysis
+  - Real-time diagnostics as you type
+
+Editor Integration:
+  - VSCode: Install the mlld extension (editors/vscode)
+  - Neovim: Configure LSP client to use 'mlld language-server'
+  - Other editors: Configure your LSP client to run this command
+
+Configuration:
+  The language server can be configured through your editor's LSP settings:
+  - mlldLanguageServer.maxNumberOfProblems: Maximum diagnostics per file
+  - mlldLanguageServer.enableAutocomplete: Enable/disable completions
+  - mlldLanguageServer.projectPath: Override project path detection
+
+Note: This command requires the 'vscode-languageserver' package to be installed.
+If not installed, run: npm install --save-dev vscode-languageserver
+
+Examples:
+  mlld language-server        # Start the language server
+  mlld lsp                    # Short alias
+    `);
+    return;
+  }
 
   console.log(`
 Usage: mlld [command] [options] <input-file>
@@ -640,6 +685,7 @@ Commands:
   auth                    Manage GitHub authentication
   publish                 Publish module to mlld registry
   registry                Manage mlld module registry
+  language-server, lsp    Start the mlld language server for editor integration
   debug-resolution        Debug variable resolution in a mlld file
   debug-transform         Debug node transformations through the pipeline
 
@@ -680,6 +726,7 @@ Import Approval Options:
 
 Output Formatting Options:
   --no-normalize-blank-lines  Disable blank line normalization in output
+  --no-format                 Disable prettier markdown formatting (preserve original spacing)
 
 Configuration:
   Mlld looks for configuration in:
@@ -997,7 +1044,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
       devMode: cliOptions.dev,
-      enableTrace: true // Enable directive trace for better error debugging
+      enableTrace: true, // Enable directive trace for better error debugging
+      useMarkdownFormatter: !cliOptions.noFormat
     });
 
     // Extract result and environment
@@ -1348,6 +1396,12 @@ Examples:
     if (cliOptions.input === 'env') {
       const cmdArgs = cliOptions._ || [];
       await envCommand({ _: cmdArgs });
+      return;
+    }
+    
+    // Handle language-server command
+    if (cliOptions.input === 'language-server' || cliOptions.input === 'lsp') {
+      await languageServerCommand();
       return;
     }
     

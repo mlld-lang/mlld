@@ -20,6 +20,8 @@ const externalDependencies = [
   'minimatch',
   'winston',
   'yargs',
+  'vscode-languageserver/node',
+  'vscode-languageserver',
   
   // Node.js built-ins
   'fs',

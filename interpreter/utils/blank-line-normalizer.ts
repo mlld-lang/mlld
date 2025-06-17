@@ -7,8 +7,8 @@
  * 
  * Rules:
  * 1. Remove the first newline immediately after [[ opening
- * 2. Preserve extra trailing blank lines but reduce by one
- *    (2 blank lines → 1, 3 → 2, etc.)
+ * 2. Remove a single trailing newline before ]] closing
+ *    (but preserve intentional blank lines)
  * 
  * @param content The template content to normalize
  * @param isTemplate Whether this is inside double brackets [[...]]
@@ -26,17 +26,11 @@ export function normalizeTemplateContent(content: string, isTemplate: boolean = 
     normalized = normalized.slice(1);
   }
   
-  // Rule 2: Handle trailing blank lines
-  // Count trailing newlines
-  const trailingNewlines = normalized.match(/\n+$/);
-  if (trailingNewlines) {
-    const count = trailingNewlines[0].length;
-    // If more than 1 newline, reduce by 1
-    // 2 newlines (1 blank line) → 1 newline (0 blank lines) 
-    // 3 newlines (2 blank lines) → 2 newlines (1 blank line)
-    if (count > 1) {
-      normalized = normalized.slice(0, -count) + '\n'.repeat(count - 1);
-    }
+  // Rule 2: Remove a single trailing newline before ]]
+  // This is because the newline before ]] is usually just formatting,
+  // not intended as part of the output
+  if (normalized.endsWith('\n')) {
+    normalized = normalized.slice(0, -1);
   }
   
   return normalized;

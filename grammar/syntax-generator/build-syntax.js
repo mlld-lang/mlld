@@ -17,14 +17,16 @@ class MlldSyntaxGenerator {
     this.patterns = {
       directive: `@(${this.directives.join('|')})\\b`,
       variable: '@\\w+',
-      reservedVariable: '@(INPUT|TIME|PROJECTPATH|input|time|projectpath|Input|Time|ProjectPath|STDIN|stdin|Stdin)\\b',
+      reservedVariable: '@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b',
       projectPathShort: '@\\.',
+      negationOperator: '!@',
       fieldAccess: '\\.(\\w+|\\d+)',
       templateBlock: '\\[\\[([^\\]\\]]|\\](?!\\]))*\\]\\]',
       templateVar: '\\{\\{[^}]+\\}\\}',
+      backtickTemplate: '`[^`]*`',
       pathBrackets: '\\[[^\\]]+\\]',
       commandBrackets: '\\[\\(([^\\)]|\\)(?!\\]))*\\)\\]',
-      languageKeyword: '\\b(javascript|js|python|py|bash|sh)\\b',
+      languageKeyword: '\\b(javascript|js|node|nodejs|python|py|bash|sh)\\b',
       string: '"[^"]*"',
       comment: '(>>|<<).*$',
       operators: '\\b(from|as|foreach|with|to)\\b',
@@ -366,8 +368,35 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         ]
       },
       {
+        // Backtick templates
+        name: 'string.template.backtick.mlld',
+        begin: '`',
+        end: '`',
+        beginCaptures: {
+          0: { name: 'punctuation.definition.template.backtick.begin.mlld' }
+        },
+        endCaptures: {
+          0: { name: 'punctuation.definition.template.backtick.end.mlld' }
+        },
+        patterns: [
+          {
+            name: 'variable.language.reserved.mlld',
+            match: this.patterns.reservedVariable
+          },
+          {
+            name: 'variable.other.mlld',
+            match: this.patterns.variable
+          }
+        ]
+      },
+      {
         name: 'string.quoted.double.mlld',
         match: this.patterns.string
+      },
+      {
+        // Negation operator
+        name: 'keyword.operator.logical.mlld',
+        match: this.patterns.negationOperator
       },
       {
         name: 'variable.other.member.mlld',

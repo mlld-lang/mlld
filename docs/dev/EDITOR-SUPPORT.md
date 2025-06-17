@@ -164,10 +164,25 @@ Editor integration:
 - Vim: `editors/vim/syntax/`
 - Website: `website/src/prism-mlld.js`
 
+## Language Server
+
+mlld now includes a Language Server Protocol (LSP) implementation for advanced IDE features:
+
+```bash
+# Start the language server
+mlld language-server
+```
+
+See [LANGUAGE-SERVER.md](./LANGUAGE-SERVER.md) for detailed documentation on:
+- Installation and setup
+- Editor integration guides
+- Available features
+- Configuration options
+
 ## Future Improvements
 
 1. **Semantic Highlighting** - Use AST for context-aware highlighting
-2. **Language Server** - Full IDE support with hover, completion
+2. **Enhanced Language Server** - Additional features like formatting, refactoring
 3. **Theme Generator** - Consistent themes across all editors
 4. **Live Preview** - Real-time highlighting in web playground
 

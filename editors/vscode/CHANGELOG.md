@@ -2,6 +2,31 @@
 
 All notable changes to the "mlld-vscode" extension will be documented in this file.
 
+## [0.3.0] - 2024-12-17
+
+### Added
+- Full Language Server Protocol (LSP) integration
+- Intelligent autocomplete for:
+  - All directives (@text, @data, @path, @run, @exec, @add, @import, @when, @output)
+  - Reserved variables (@PROJECTPATH, @., @TIME, @INPUT, @DEBUG)
+  - Module imports from registries (@author/module)
+  - Resolver-aware completions (TIME formats, INPUT env vars)
+  - Foreach syntax support
+  - With clause completions (pipeline, needs)
+- Real-time syntax validation
+- Hover information for variables
+- Go-to-definition functionality
+- Multi-file analysis with import tracking
+
+### Changed
+- Extension now uses the mlld language server for intelligent features
+- Improved TextMate grammar synchronized with actual mlld parser
+
+## [0.2.0] - 2024-XX-XX
+
+### Added
+- Additional syntax highlighting patterns
+
 ## [0.1.0] - 2024-01-XX
 
 ### Initial Release

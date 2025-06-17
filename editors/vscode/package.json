@@ -2,7 +2,7 @@
   "name": "mlld-vscode",
   "displayName": "mlld",
   "description": "Language support for mlld - A modular prompt scripting language",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "publisher": "andyet",
   "repository": {
     "type": "git",
@@ -56,7 +56,9 @@
       {
         "scopeName": "markdown.mlld.injection",
         "path": "./syntaxes/mlld-markdown.injection.json",
-        "injectTo": ["text.html.markdown"]
+        "injectTo": [
+          "text.html.markdown"
+        ]
       }
     ],
     "snippets": [
@@ -106,5 +108,7 @@
     "jest": "^29.0.0",
     "ts-jest": "^29.0.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
 }

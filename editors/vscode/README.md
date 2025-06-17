@@ -18,11 +18,16 @@ This extension provides rich language support for mlld, a modular prompt scripti
 - Embedded code block highlighting (JavaScript, Shell)
 - Comment highlighting with `>>` prefix
 
-### Language Features (Coming Soon)
-- **Autocomplete**: Path completion, variable completion, section headers
+### Language Features (Powered by Language Server)
+- **Intelligent Autocomplete**: 
+  - Directives, variables, and reserved variables
+  - Module imports with registry support
+  - Context-aware completions (foreach, with clauses)
+  - File paths and section headers
 - **Go to Definition**: Navigate to variable declarations
-- **Hover Information**: See variable values and types
-- **Error Checking**: Real-time syntax validation using the MLLD parser
+- **Hover Information**: See variable types and sources
+- **Error Checking**: Real-time syntax validation using the mlld parser
+- **Multi-file Analysis**: Tracks imports and variable usage across files
 
 ## Supported Directives
 
@@ -46,7 +51,16 @@ This extension contributes the following settings:
 
 - The shorthand syntax `[file.md # Section]` is not yet supported
 
+## Requirements
+
+- mlld CLI must be installed: `npm install -g mlld`
+- For language server features: `npm install --save-dev vscode-languageserver`
+
 ## Release Notes
+
+### 0.3.0
+
+Added full Language Server Protocol support with intelligent features
 
 ### 0.1.0
 

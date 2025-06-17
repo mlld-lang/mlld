@@ -37,7 +37,7 @@
             },
             {
               "name": "variable.language.reserved.mlld",
-              "match": "@(INPUT|TIME|PROJECTPATH|input|time|projectpath|Input|Time|ProjectPath|STDIN|stdin|Stdin)\\b"
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b"
             },
             {
               "name": "variable.language.reserved.mlld",
@@ -45,7 +45,7 @@
             },
             {
               "name": "keyword.other.language.mlld",
-              "match": "\\b(javascript|js|python|py|bash|sh)\\b"
+              "match": "\\b(javascript|js|node|nodejs|python|py|bash|sh)\\b"
             },
             {
               "name": "string.template.mlld",
@@ -103,7 +103,7 @@
               "patterns": [
                 {
                   "name": "variable.language.reserved.mlld",
-                  "match": "@(INPUT|TIME|PROJECTPATH|input|time|projectpath|Input|Time|ProjectPath|STDIN|stdin|Stdin)\\b"
+                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b"
                 },
                 {
                   "name": "variable.other.mlld",
@@ -132,7 +132,7 @@
                 },
                 {
                   "name": "variable.language.reserved.mlld",
-                  "match": "@(INPUT|TIME|PROJECTPATH|input|time|projectpath|Input|Time|ProjectPath|STDIN|stdin|Stdin)\\b"
+                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b"
                 },
                 {
                   "name": "variable.other.mlld",
@@ -170,8 +170,37 @@
               ]
             },
             {
+              "name": "string.template.backtick.mlld",
+              "begin": "`",
+              "end": "`",
+              "beginCaptures": {
+                "0": {
+                  "name": "punctuation.definition.template.backtick.begin.mlld"
+                }
+              },
+              "endCaptures": {
+                "0": {
+                  "name": "punctuation.definition.template.backtick.end.mlld"
+                }
+              },
+              "patterns": [
+                {
+                  "name": "variable.language.reserved.mlld",
+                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b"
+                },
+                {
+                  "name": "variable.other.mlld",
+                  "match": "@\\w+"
+                }
+              ]
+            },
+            {
               "name": "string.quoted.double.mlld",
               "match": "\"[^\"]*\""
+            },
+            {
+              "name": "keyword.operator.logical.mlld",
+              "match": "!@"
             },
             {
               "name": "variable.other.member.mlld",
@@ -225,7 +254,7 @@
         },
         {
           "name": "variable.language.reserved.mlld",
-          "match": "@(INPUT|TIME|PROJECTPATH|input|time|projectpath|Input|Time|ProjectPath|STDIN|stdin|Stdin)\\b"
+          "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b"
         },
         {
           "name": "variable.language.reserved.mlld",
@@ -233,7 +262,7 @@
         },
         {
           "name": "keyword.other.language.mlld",
-          "match": "\\b(javascript|js|python|py|bash|sh)\\b"
+          "match": "\\b(javascript|js|node|nodejs|python|py|bash|sh)\\b"
         },
         {
           "name": "string.template.mlld",
@@ -291,7 +320,7 @@
           "patterns": [
             {
               "name": "variable.language.reserved.mlld",
-              "match": "@(INPUT|TIME|PROJECTPATH|input|time|projectpath|Input|Time|ProjectPath|STDIN|stdin|Stdin)\\b"
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b"
             },
             {
               "name": "variable.other.mlld",
@@ -320,7 +349,7 @@
             },
             {
               "name": "variable.language.reserved.mlld",
-              "match": "@(INPUT|TIME|PROJECTPATH|input|time|projectpath|Input|Time|ProjectPath|STDIN|stdin|Stdin)\\b"
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b"
             },
             {
               "name": "variable.other.mlld",
@@ -358,8 +387,37 @@
           ]
         },
         {
+          "name": "string.template.backtick.mlld",
+          "begin": "`",
+          "end": "`",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.template.backtick.begin.mlld"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.template.backtick.end.mlld"
+            }
+          },
+          "patterns": [
+            {
+              "name": "variable.language.reserved.mlld",
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b"
+            },
+            {
+              "name": "variable.other.mlld",
+              "match": "@\\w+"
+            }
+          ]
+        },
+        {
           "name": "string.quoted.double.mlld",
           "match": "\"[^\"]*\""
+        },
+        {
+          "name": "keyword.operator.logical.mlld",
+          "match": "!@"
         },
         {
           "name": "variable.other.member.mlld",

@@ -5,6 +5,17 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1]
+
+### Added
+- **VSCode Extension 0.3.0**: LSP implementation with autocomplete, syntax validation, hover info, go-to-definition
+- **Markdown formatting**: prettier integration (default on, `--no-format` to disable)
+
+### Fixed
+- `mlld language-server` command added to CLI
+- Template normalization for leading/trailing newlines
+- `variable.metadata` property access in add evaluator
+
 ## [1.4.0]
 Added:
 - **New Resolver Architecture** - Complete overhaul of how mlld loads files and modules:

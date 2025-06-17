@@ -34,6 +34,7 @@ export interface InterpretOptions {
   normalizeBlankLines?: boolean; // Control blank line normalization (default: true)
   devMode?: boolean; // Enable development mode with local fallback
   enableTrace?: boolean; // Enable directive trace for debugging (default: true)
+  useMarkdownFormatter?: boolean; // Use prettier for markdown formatting (default: true)
 }
 
 /**
@@ -168,6 +169,7 @@ export async function interpret(
   const output = await formatOutput(nodes, {
     format: options.format || 'markdown',
     variables: env.getAllVariables(),
+    useMarkdownFormatter: options.useMarkdownFormatter,
     normalizeBlankLines: options.normalizeBlankLines
   });
   
