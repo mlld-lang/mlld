@@ -10,7 +10,7 @@ import { normalizeOutputBlankLines } from '../utils/blank-line-normalizer';
 export interface FormatOptions {
   format: 'markdown' | 'xml';
   variables?: Map<string, MlldVariable>;
-  useMarkdownFormatter?: boolean; // Default: false - use prettier for formatting
+  useMarkdownFormatter?: boolean; // Default: true - use prettier for formatting
   normalizeBlankLines?: boolean; // Default: true - normalize blank lines
 }
 
@@ -59,8 +59,8 @@ async function formatMarkdownNodes(nodes: MlldNode[], options: FormatOptions): P
   
   let result = parts.join('');
   
-  // Use prettier for formatting if enabled (default: false for now)
-  const useFormatter = options.useMarkdownFormatter === true;
+  // Use prettier for formatting if enabled (default: true)
+  const useFormatter = options.useMarkdownFormatter !== false;
   if (useFormatter) {
     result = await formatMarkdown(result);
   } else {

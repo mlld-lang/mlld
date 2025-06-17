@@ -506,7 +506,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               format: 'markdown',
               basePath,
               urlConfig,
-              stdinContent
+              stdinContent,
+              useMarkdownFormatter: false // Disable prettier for tests
             });
             // If we get here, the test should fail because we expected an error
             expect.fail('Expected interpretation to throw an error, but it succeeded');
@@ -625,7 +626,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             format: 'markdown',
             basePath,
             urlConfig,
-            stdinContent
+            stdinContent,
+            useMarkdownFormatter: false // Disable prettier for tests to maintain exact output
           });
           
           if (isValidFixture && !isSmokeTest) {

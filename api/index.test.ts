@@ -51,7 +51,7 @@ describe('Mlld API', () => {
         pathService,
         basePath: '/'
       });
-      expect(result.trim()).toBe('# Test Content\nThis is a test file.');
+      expect(result.trim()).toBe('# Test Content\n\nThis is a test file.');
     });
 
     it('should handle data directives', async () => {
@@ -112,7 +112,7 @@ describe('Mlld API', () => {
         pathService,
         basePath: '/'
       });
-      expect(result.trim()).toBe('## Section Two\nContent 2');
+      expect(result.trim()).toBe('## Section Two\n\nContent 2');
     });
 
     it('should handle run directive', async () => {

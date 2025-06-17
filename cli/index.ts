@@ -79,6 +79,8 @@ export interface CLIOptions {
   noNormalizeBlankLines?: boolean;
   // Development mode
   dev?: boolean;
+  // Disable prettier formatting
+  noFormat?: boolean;
   _?: string[]; // Remaining args after command
 }
 
@@ -358,6 +360,10 @@ function parseArgs(args: string[]): CLIOptions {
       // Development mode
       case '--dev':
         options.dev = true;
+        break;
+      // Disable prettier formatting
+      case '--no-format':
+        options.noFormat = true;
         break;
       // Transformation is always enabled by default
       // No transform flags needed
@@ -720,6 +726,7 @@ Import Approval Options:
 
 Output Formatting Options:
   --no-normalize-blank-lines  Disable blank line normalization in output
+  --no-format                 Disable prettier markdown formatting (preserve original spacing)
 
 Configuration:
   Mlld looks for configuration in:
@@ -1037,7 +1044,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
       devMode: cliOptions.dev,
-      enableTrace: true // Enable directive trace for better error debugging
+      enableTrace: true, // Enable directive trace for better error debugging
+      useMarkdownFormatter: !cliOptions.noFormat
     });
 
     // Extract result and environment

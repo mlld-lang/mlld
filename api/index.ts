@@ -37,7 +37,7 @@ export interface ProcessOptions {
   pathService?: IPathService;
   /** Control blank line normalization (default: true) */
   normalizeBlankLines?: boolean;
-  /** Use prettier for markdown formatting (default: false) */
+  /** Use prettier for markdown formatting (default: true) */
   useMarkdownFormatter?: boolean;
 }
 
