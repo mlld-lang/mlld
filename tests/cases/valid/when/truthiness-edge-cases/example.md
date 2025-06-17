@@ -14,6 +14,7 @@ Test comprehensive truthiness behavior in @when directives.
 
 >> Truthy values should trigger
 @when @isEnabled => @add "String 'true' is truthy"
+
 @when @hasFeature => @add "Boolean true is truthy"
 
 >> Falsy values should NOT trigger
@@ -33,9 +34,13 @@ Test comprehensive truthiness behavior in @when directives.
 
 >> Negating falsy values should trigger
 @when !@hasLicense => @add "No license (string 'false')"
+
 @when !@isValid => @add "Not valid (boolean false)"
+
 @when !@nothing => @add "Not null"
+
 @when !@empty => @add "Not empty"
+
 @when !@zero => @add "Not zero"
 
 ## 3. Switch with String/Boolean Equivalence
