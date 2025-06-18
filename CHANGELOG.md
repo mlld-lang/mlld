@@ -13,11 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `@JSON` / `@json` - Pretty-print JSON or convert markdown structures to JSON
   - `@CSV` / `@csv` - Convert JSON/markdown tables to CSV format
   - `@MD` / `@md` - Format markdown using prettier
-  - Transformers can be chained in pipelines: `@run [cmd] | @json | @csv`
+  - Transformers can be chained in pipelines: `@run [(cmd)] | @json | @csv`
+  - Both uppercase (canonical) and lowercase (convenience) forms available
 - **Smart Pipeline Parameter Handling**: Pipelines now intelligently pass data to multi-parameter functions
   - Single parameter functions continue to work as before (pass @INPUT as first param)
   - Multi-parameter functions with JSON input auto-destructure: `{"name": "Smith", "title": "Dr."}` → `@greet` maps to name="Smith", title="Dr."
   - Non-JSON input falls back to first parameter with empty strings for missing params
+  - @INPUT variable available in each pipeline step with the piped data
 - **Enhanced JavaScript Error Handling**: JavaScript/Node.js errors now properly integrate with mlld's error system
   - Error messages are preserved and shown in context
   - Stack traces included for debugging
@@ -29,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Empty string parameter binding in pipelines
 - Parameter binding when fewer arguments than parameters
 - Pipeline syntax validation (only executables allowed after pipe operator)
+- Module path resolution in built-in transformer imports
+- isCommandVariable import in interpreter for executable variable handling
+
+### Documentation
+- Added `docs/pipeline.md` - Comprehensive pipeline documentation
+- Added `docs/transformers.md` - Built-in transformer reference
+- Added `docs/SECURITY.md` - Security considerations for mlld usage
+- Updated `docs/input-variables.md` with pipeline @INPUT documentation
+- Updated `llms.txt` with pipeline and transformer information
 
 ## [1.4.1]
 
