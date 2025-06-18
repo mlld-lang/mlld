@@ -14,7 +14,11 @@
   "city": "NYC"
 }
 
-## Chain with other commands
+## Chain with other transformers
 {
   "items": [
     1,
+    2,
+    3
+  ]
+}

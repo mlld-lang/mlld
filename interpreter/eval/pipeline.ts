@@ -146,7 +146,13 @@ async function resolveCommandReference(
       return null;
     }
     
-    // Resolve the base variable value
+    // For executable variables (like transformers), return the variable itself
+    // For other types, we might need to resolve field access
+    if (baseVar.type === 'executable') {
+      return baseVar;
+    }
+    
+    // Resolve the base variable value for non-executables
     let value = await resolveVariableValue(baseVar, env);
     
     // Navigate through field access if present
@@ -163,7 +169,7 @@ async function resolveCommandReference(
       }
     }
     
-    // Return the resolved command variable
+    // Return the resolved value
     return value;
   }
   

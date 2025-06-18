@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.4.2] - In Progress
 
 ### Added
+- **Built-in Transformers**: Common data format transformers are now built into mlld
+  - `@XML` / `@xml` - Convert content to SCREAMING_SNAKE_CASE XML using llmxml
+  - `@JSON` / `@json` - Pretty-print JSON or convert markdown structures to JSON
+  - `@CSV` / `@csv` - Convert JSON/markdown tables to CSV format
+  - `@MD` / `@md` - Format markdown using prettier
+  - Transformers can be chained in pipelines: `@run [cmd] | @json | @csv`
 - **Smart Pipeline Parameter Handling**: Pipelines now intelligently pass data to multi-parameter functions
   - Single parameter functions continue to work as before (pass @INPUT as first param)
   - Multi-parameter functions with JSON input auto-destructure: `{"name": "Smith", "title": "Dr."}` → `@greet` maps to name="Smith", title="Dr."
@@ -22,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JavaScript return values now properly parsed from JSON (fixes falsy value handling in @when)
 - Empty string parameter binding in pipelines
 - Parameter binding when fewer arguments than parameters
+- Pipeline syntax validation (only executables allowed after pipe operator)
 
 ## [1.4.1]
 

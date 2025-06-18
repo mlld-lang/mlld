@@ -14,6 +14,6 @@ city: NYC
 @text converted = @run [(echo "@mdContent")] | @JSON
 @add @converted
 
-## Chain with other commands
-@text result = @run [(echo '{"items":[1,2,3]}')] | @json | @run [(head -n 3)]
+## Chain with other transformers
+@text result = @run [(echo '{"items":[1,2,3]}')] | @json
 @add @result

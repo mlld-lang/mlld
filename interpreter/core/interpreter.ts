@@ -20,7 +20,7 @@ import type {
 } from '@core/types';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
-import { isTextVariable, isDataVariable, isPathVariable, isExecutableVariable, isImportVariable, isExecInvocation } from '@core/types';
+import { isTextVariable, isDataVariable, isPathVariable, isExecutableVariable, isImportVariable, isExecInvocation, isCommandVariable } from '@core/types';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
@@ -632,6 +632,9 @@ export async function interpolate(
       } else if (isImportVariable(variable)) {
         // Import variables contain imported data - use their value
         value = variable.value;
+      } else if (isExecutableVariable(variable)) {
+        // Executables (like transformers) don't interpolate - they need to be invoked
+        value = `[executable: ${variable.name}]`;
       } else {
         // This should never happen with proper typing
         const varType = (variable as MlldVariable).type;
