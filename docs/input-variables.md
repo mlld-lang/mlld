@@ -130,6 +130,58 @@ Environment variable access is enabled by default. Future versions will support 
 - All variables passed to mlld are accessible - be mindful of sensitive data
 - Environment variables can be used in shell commands - standard shell injection precautions apply
 
+## @INPUT in Pipelines
+
+When using pipelines, an `@INPUT` variable is created in each step containing the previous command's output. This works alongside stdin passing for Unix compatibility.
+
+### How It Works
+
+```mlld
+@exec showInput() = [[
+Received via @INPUT: {{INPUT}}
+]]
+
+@text result = @run [(echo "Hello, World!")] | @showInput
+@add @result
+```
+
+Output:
+```
+Received via @INPUT: Hello, World!
+```
+
+### Smart Parameter Binding
+
+When piping to functions without providing arguments, mlld intelligently handles the data:
+
+**Single parameter functions** - @INPUT passed as the parameter:
+```mlld
+@exec uppercase(text) = @run js [(text.toUpperCase())]
+@text result = @run [(echo "hello")] | @uppercase
+# uppercase receives: text = "hello"
+```
+
+**Multi-parameter functions with JSON** - Automatically destructured:
+```mlld
+@exec greet(name, title) = [[Hello {{title}} {{name}}!]]
+@text result = @run [(echo '{"name": "Smith", "title": "Dr."}')] | @greet
+# greet receives: name = "Smith", title = "Dr."
+```
+
+**Multi-parameter functions with non-JSON** - Passed as first parameter:
+```mlld
+@text result = @run [(echo "Alice")] | @greet
+# greet receives: name = "Alice", title = ""
+```
+
+### Pipeline Environment
+
+Each pipeline step runs in a child environment where:
+- @INPUT contains the piped data
+- Parameters are bound from smart parameter handling
+- Parent scope variables remain accessible
+- Built-in transformers (@XML, @JSON, etc.) are available
+
 ## Best Practices
 
 1. **Use descriptive variable names**: `API_KEY` vs `KEY`

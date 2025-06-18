@@ -1,0 +1,119 @@
+# Pipelines
+
+mlld supports Unix-style pipelines for chaining commands and transformations together. The pipeline operator `|` passes the output of one command as input to the next.
+
+## Basic Syntax
+
+Use the `|` operator to chain commands:
+
+```mlld
+@text result = @run [(echo "hello world")] | @uppercase
+@add @result
+```
+
+Output:
+```
+HELLO WORLD
+```
+
+## How Pipelines Work
+
+1. **Output flows left to right**: Each command's output becomes stdin for the next
+2. **@INPUT variable created**: Each step gets an @INPUT variable with the piped data
+3. **Smart parameter binding**: Functions without arguments get intelligent parameter handling
+4. **Child environments**: Each step runs in a child environment with parent access
+5. **Synchronous execution**: Steps execute in order, waiting for each to complete
+
+## Smart Parameter Handling
+
+When piping to multi-parameter functions, mlld intelligently handles JSON data:
+
+```mlld
+@exec process(items, filter) = [[
+Processing {{items}} with filter {{filter}}
+]]
+
+@text result = @run [(echo '{"items": [1,2,3], "filter": "active"}')] | @process
+@add @result
+```
+
+Output:
+```
+Processing [1,2,3] with filter active
+```
+
+### How It Works
+
+- If the input is valid JSON matching parameter names, values are destructured
+- Parameters are matched by name from the JSON object
+- Non-matching or non-JSON input goes to the first parameter
+
+## Pipeline Components
+
+### Sources (Left Side)
+- `@run [command]` - Execute shell commands
+- Variable references - Use existing variables
+- Imported functions - From modules
+
+### Transformers (Right Side)
+- Built-in transformers (@XML, @JSON, @CSV, @MD)
+- User-defined @exec functions
+- Imported functions
+
+## Examples
+
+### Multi-Step Pipeline
+```mlld
+@text result = @run [(cat data.json)] | @json | @uppercase | @md
+@add @result
+```
+
+### With Functions
+```mlld
+@exec addHeader(content) = [[# Report
+{{content}}]]
+
+@text report = @run [(cat stats.txt)] | @addHeader | @md
+@add @report
+```
+
+### JSON Processing
+```mlld
+@exec extractName(data) = [[Name: {{data.user.name}}]]
+
+@text info = @run [(curl -s api.example.com/user)] | @extractName
+@add @info
+```
+
+## Alternative Syntax
+
+The pipeline operator is syntactic sugar for the `with` clause:
+
+```mlld
+# These are equivalent:
+@text result1 = @run [(echo "hello")] | @uppercase
+
+@text result2 = @run [(echo "hello")] with { pipeline: [@uppercase] }
+```
+
+## Error Handling
+
+Pipeline errors include context about which step failed:
+
+```mlld
+# Error will show "Pipeline step 2 failed"
+@text data = @run [(cat data.json)] | @invalidTransformer
+```
+
+## Best Practices
+
+1. **Keep pipelines simple**: 2-3 steps is usually enough
+2. **Use meaningful names**: Name your @exec functions clearly
+3. **Handle errors early**: Validate data before transforming
+4. **Test incrementally**: Build pipelines step by step
+
+## See Also
+
+- [Transformers](transformers.md) - Built-in transformation functions
+- [Exec Commands](exec.md) - Creating reusable functions
+- [With Clauses](with.md) - Advanced pipeline control

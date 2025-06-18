@@ -23,14 +23,18 @@ All three features follow the same two-phase approach:
 
 ### Environment Management
 
-Each feature creates child environments for isolated execution:
+All pipeline features use child environments with parent access:
 
 ```typescript
-// Common pattern across all three features
-const childEnv = env.createChild();
-// Bind variables, execute in isolation
-const result = await evaluate(node, childEnv);
+// Pipeline steps create child environments
+const pipelineEnv = env.createChild();
+// Set @INPUT for pipeline data
+pipelineEnv.setVariable('INPUT', inputVar);
+// Child can access parent variables
+const result = await evaluate(node, pipelineEnv);
 ```
+
+This enables access to variables and functions defined in parent scopes.
 
 ### Lazy Evaluation
 
@@ -46,6 +50,65 @@ Features are stored as complex variables and evaluated only when accessed:
 // with pipelines execute in sequence
 @run [cmd] with { pipeline: [@t1, @t2] } // Transformers run on demand
 ```
+
+### Error Context
+
+All features preserve source location for precise error reporting:
+- Parser attaches location to AST nodes
+- Evaluators pass location through to errors
+- Errors show exact position in source file
+
+## Built-in Transformers
+
+As of version 1.4.2, mlld includes built-in transformers that integrate seamlessly with the pipeline system.
+
+### Architecture
+
+**File**: `interpreter/builtin/transformers.ts`
+
+Transformers are implemented as special executable variables with metadata:
+
+```typescript
+interface TransformerDefinition {
+  name: string;              // lowercase alias
+  uppercase: string;         // canonical UPPERCASE name
+  description: string;       // for help/documentation
+  implementation: (input: string) => Promise<string> | string;
+}
+```
+
+### Registration
+
+Built-in transformers are registered in the root Environment:
+
+```typescript
+// In Environment constructor
+if (!parent) {
+  this.initializeBuiltinTransformers();
+}
+
+// Creates both UPPERCASE and lowercase versions
+// @XML and @xml both work identically
+```
+
+### Pipeline Integration
+
+Transformers work as executable variables in pipelines:
+
+```typescript
+// Special handling in pipeline.ts
+if (commandVar?.metadata?.isBuiltinTransformer) {
+  const result = await commandVar.metadata.transformerImplementation(input);
+  return String(result);
+}
+```
+
+### Available Transformers
+
+1. **@XML / @xml** - Uses llmxml for SCREAMING_SNAKE_CASE conversion
+2. **@JSON / @json** - Pretty-prints JSON with 2-space indentation
+3. **@CSV / @csv** - Converts JSON arrays to CSV format
+4. **@MD / @md** - Formats markdown using prettier
 
 ### Error Context
 

@@ -646,6 +646,49 @@ export class MlldPipelineError extends MlldWithClauseError {
 }
 ```
 
+## Built-in Transformers Integration
+
+As of version 1.4.2, mlld includes built-in transformers that work seamlessly with pipelines:
+
+### Using Built-in Transformers
+
+```mlld
+# Basic transformer usage
+@text formatted = @run [(cat data.json)] | @JSON
+@text xmlData = @run [(cat report.md)] | @XML
+
+# Chaining transformers
+@text result = @run [(curl api.com/users)] | @json | @csv
+
+# With custom functions
+@exec addSummary(data) = [[
+# Summary
+Total items: {{data.length}}
+
+{{INPUT}}
+]]
+
+@text report = @run [(cat data.json)] | @json | @addSummary | @md
+```
+
+### Transformer Implementation
+
+Built-in transformers are registered as special executable variables with metadata:
+
+```typescript
+// In Environment.ts
+if (commandVar?.metadata?.isBuiltinTransformer) {
+  const result = await commandVar.metadata.transformerImplementation(input);
+  return String(result);
+}
+```
+
+Both uppercase (canonical) and lowercase (convenience) versions are available:
+- `@XML` / `@xml` - llmxml SCREAMING_SNAKE_CASE conversion
+- `@JSON` / `@json` - JSON formatting
+- `@CSV` / `@csv` - CSV conversion
+- `@MD` / `@md` - Markdown formatting with prettier
+
 ## Security Considerations
 
 - Validate all dependency declarations before checking

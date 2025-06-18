@@ -277,6 +277,60 @@ author: Your Name
 @text readme = [https://example.com/README.md]
 ```
 
+## Pipelines and Transformers
+
+### Pipeline Operator |
+
+mlld supports Unix-style pipelines for chaining commands:
+
+```mlld
+# Basic pipeline
+@text result = @run [(echo "hello world")] | @uppercase
+@add @result  # HELLO WORLD
+
+# Multi-step pipeline  
+@text data = @run [(cat data.json)] | @json | @uppercase | @csv
+```
+
+### How Pipelines Work
+- Output flows left to right (stdin)
+- Each step gets an @INPUT variable with the piped data
+- Functions without arguments get smart parameter handling
+- Each step runs in a child environment
+
+### Smart Parameter Handling
+
+Single parameter functions automatically receive @INPUT:
+```mlld
+@exec double(n) = @run js [(n * 2)]
+@text result = @run [(echo "5")] | @double  # n = "5"
+```
+
+Multi-parameter functions with JSON get automatic destructuring:
+```mlld
+@exec greet(name, age) = [[{{name}} is {{age}} years old]]
+@text result = @run [(echo '{"name":"Alice","age":30}')] | @greet
+# name = "Alice", age = 30
+```
+
+### Built-in Transformers
+
+mlld includes transformers for common formats (both UPPERCASE and lowercase):
+
+- **@XML / @xml** - Convert to SCREAMING_SNAKE_CASE XML (using llmxml)
+- **@JSON / @json** - Format/validate JSON with proper indentation  
+- **@CSV / @csv** - Convert JSON arrays to CSV format
+- **@MD / @md** - Format markdown using prettier
+
+```mlld
+# API to CSV pipeline
+@text users = @run [(curl api.com/users)] | @json | @csv
+
+# Chain with custom functions
+@exec addTotal(data) = [[Total: {{data.length}} items\n{{INPUT}}]]
+@text report = @run [(cat data.json)] | @json | @addTotal | @md
+```
+
 ## Philosophy: Simplicity in Files, Complexity in Modules
 
 mlld's design philosophy centers on keeping `.mld` files simple and readable while abstracting complexity into reusable modules. Instead of adding language features, we encourage using modules:
