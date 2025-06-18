@@ -292,7 +292,7 @@ async function evaluateInvocationSource(
     // Execute based on the type
     let result: string;
     if (definition.type === 'template') {
-      result = await interpolate(definition.templateContent, childEnv);
+      result = await interpolate(definition.template, childEnv);
     } else if (definition.type === 'command') {
       const command = await interpolate(definition.commandTemplate, childEnv);
       result = await childEnv.executeCommand(command);
