@@ -126,11 +126,28 @@ export async function evaluateExecInvocation(
     }
     
     // Execute the code with parameters
-    result = await execEnv.executeCode(
+    const codeResult = await execEnv.executeCode(
       code,
       definition.language || 'javascript',
       codeParams
     );
+    
+    // If the result looks like JSON (from return statement), parse it
+    if (typeof codeResult === 'string' && 
+        (codeResult.startsWith('"') || codeResult.startsWith('{') || codeResult.startsWith('[') || 
+         codeResult === 'null' || codeResult === 'true' || codeResult === 'false' ||
+         /^-?\d+(\.\d+)?$/.test(codeResult))) {
+      try {
+        const parsed = JSON.parse(codeResult);
+        // Keep the parsed value as the result
+        result = parsed;
+      } catch {
+        // Not valid JSON, use as-is
+        result = codeResult;
+      }
+    } else {
+      result = codeResult;
+    }
   }
   // Handle command reference executables
   else if (isCommandRefExecutable(definition)) {
@@ -283,7 +300,9 @@ export async function evaluateExecInvocation(
   return {
     value: result,
     env,
-    stdout: result,
+    // For stdout, convert the parsed value back to string for backward compatibility
+    // but preserve the actual value in the value field for truthiness checks
+    stdout: typeof result === 'string' ? result : String(result),
     stderr: '',
     exitCode: 0
   };

@@ -408,7 +408,12 @@ async function evaluateCondition(
     if (result.exitCode !== undefined && result.exitCode !== 0) {
       return false;
     }
-    // Then check stdout - trim whitespace
+    // If we have a parsed value (from exec functions with return values), use that
+    // This handles the case where JSON stringified empty string '""' should be falsy
+    if (result.value !== undefined && result.value !== result.stdout) {
+      return isTruthy(result.value);
+    }
+    // Otherwise check stdout - trim whitespace
     return isTruthy(result.stdout.trim());
   }
   
