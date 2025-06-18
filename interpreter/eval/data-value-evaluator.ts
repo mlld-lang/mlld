@@ -436,7 +436,7 @@ async function invokeParameterizedCommand(
   // Handle template executables
   if (definition.type === 'template') {
     // Execute text template with bound parameters
-    const text = await interpolate(definition.template, childEnv);
+    const text = await interpolate(definition.templateContent, childEnv);
     return text;
   } else if (definition.type === 'command') {
     // Execute command template with bound parameters
@@ -446,7 +446,24 @@ async function invokeParameterizedCommand(
     // Execute code template with bound parameters
     const code = await interpolate(definition.codeTemplate, childEnv);
     // Pass argMap as parameters for bash/shell to convert to environment variables
-    return await childEnv.executeCode(code, definition.language, argMap);
+    const codeResult = await childEnv.executeCode(code, definition.language, argMap);
+    
+    // If the result looks like JSON (from return statement), parse it
+    if (typeof codeResult === 'string' && 
+        (codeResult.startsWith('"') || codeResult.startsWith('{') || codeResult.startsWith('[') || 
+         codeResult === 'null' || codeResult === 'true' || codeResult === 'false' ||
+         /^-?\d+(\.\d+)?$/.test(codeResult))) {
+      try {
+        const parsed = JSON.parse(codeResult);
+        // Return the parsed value directly for data context
+        return parsed;
+      } catch {
+        // Not valid JSON, use as-is
+        return codeResult;
+      }
+    }
+    
+    return codeResult;
   } else if (definition.type === 'commandRef') {
     // TODO: Handle command references - for now throw error
     throw new Error(`Command reference execution in foreach not yet implemented`);

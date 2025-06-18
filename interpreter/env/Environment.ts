@@ -27,6 +27,7 @@ import { PathMatcher } from '@core/resolvers/utils/PathMatcher';
 import { logger } from '@core/utils/logger';
 import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
+import { builtinTransformers, createTransformerVariable } from '../builtin/transformers';
 
 interface CommandExecutionOptions {
   showProgress?: boolean;
@@ -257,6 +258,9 @@ export class Environment {
       // Resolvers handle imports/paths, but these are actual variables
       this.initializeReservedVariables();
       
+      // Initialize built-in transformers
+      this.initializeBuiltinTransformers();
+      
       // Reserve module prefixes from resolver configuration
       this.reserveModulePrefixes();
     }
@@ -386,6 +390,37 @@ export class Environment {
     // Direct assignment for reserved variables during initialization
     this.variables.set('PROJECTPATH', projectPathVar);
     // Note: lowercase 'projectpath' is handled in getVariable() to avoid conflicts
+  }
+  
+  /**
+   * Initialize built-in transformers (JSON, XML, CSV, MD)
+   * Only called for root environment (non-child)
+   */
+  private initializeBuiltinTransformers(): void {
+    
+    for (const transformer of builtinTransformers) {
+      // Create uppercase canonical version
+      const upperVar = createTransformerVariable(
+        transformer.uppercase,
+        transformer.implementation,
+        transformer.description,
+        true
+      );
+      this.variables.set(transformer.uppercase, upperVar);
+      
+      // Create lowercase alias for ergonomics
+      const lowerVar = createTransformerVariable(
+        transformer.name,
+        transformer.implementation,
+        transformer.description,
+        false
+      );
+      this.variables.set(transformer.name, lowerVar);
+      
+      // Reserve both names
+      this.reservedNames.add(transformer.uppercase);
+      this.reservedNames.add(transformer.name);
+    }
   }
   
   /**
@@ -1334,133 +1369,8 @@ export class Environment {
     context?: CommandExecutionContext
   ): Promise<string> {
     const startTime = Date.now();
-    if (language === 'javascript' || language === 'js') {
-      try {
-        // Create a function that captures console.log output
-        let output = '';
-        const originalLog = console.log;
-        console.log = (...args: any[]) => {
-          output += args.map(arg => String(arg)).join(' ') + '\n';
-        };
-        
-        // Get shadow environment functions for JavaScript
-        const shadowEnv = this.getShadowEnv('js') || this.getShadowEnv('javascript');
-        
-        // Merge shadow environment with provided parameters
-        const allParams = { ...(params || {}) };
-        const allParamNames: string[] = Object.keys(allParams);
-        const allParamValues: any[] = Object.values(allParams);
-        
-        // Add shadow environment functions
-        if (shadowEnv) {
-          for (const [name, func] of shadowEnv) {
-            if (!allParams[name]) { // Don't override explicit parameters
-              allParamNames.push(name);
-              allParamValues.push(func);
-            }
-          }
-        }
-        
-        // Build the function body
-        let functionBody = code;
-        
-        // Handle return statements properly
-        // Check if this is likely a complete expression that should be returned
-        const trimmedCode = code.trim();
-        const isExpression = (
-          // Single expression without semicolon
-          (!code.includes('return') && !code.includes(';')) ||
-          // IIFE pattern - starts with ( and ends with )
-          (trimmedCode.startsWith('(') && trimmedCode.endsWith(')')) ||
-          // Arrow function call pattern
-          (trimmedCode.endsWith('()') && !trimmedCode.includes('{'))
-        );
-        
-        if (isExpression) {
-          // This looks like an expression that should be returned
-          functionBody = `return ${code}`;
-        }
-        
-        // Create and execute the function
-        // If we have shadow environment functions (which are async), we need to handle them specially
-        const hasAsyncShadowFunctions = shadowEnv && shadowEnv.size > 0;
-        let result;
-        
-        if (hasAsyncShadowFunctions) {
-          // Wrap the code to automatically await shadow function calls
-          // First, identify which parameters are shadow functions
-          const shadowFunctionNames = new Set<string>();
-          if (shadowEnv) {
-            for (const [name] of shadowEnv) {
-              shadowFunctionNames.add(name);
-            }
-          }
-          
-          // Create a wrapper that awaits all shadow function calls
-          const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-          
-          // Transform the function body to await shadow function calls
-          let asyncFunctionBody = functionBody;
-          
-          // Simple regex-based transformation to add await before shadow function calls
-          // This is a simple approach that works for most cases
-          for (const funcName of shadowFunctionNames) {
-            // Match function calls like funcName(...) but not inside strings
-            const regex = new RegExp(`\\b(${funcName})\\s*\\(`, 'g');
-            asyncFunctionBody = asyncFunctionBody.replace(regex, `await $1(`);
-          }
-          
-          // Debug: Log the transformed code
-          // Note: Don't use console.log here as it's captured by the executeCode function
-          // if (process.env.MLLD_DEBUG) {
-          //   console.log('Shadow function transformation:');
-          //   console.log('Original:', functionBody);
-          //   console.log('Transformed:', asyncFunctionBody);
-          // }
-          
-          const fn = new AsyncFunction(...allParamNames, asyncFunctionBody);
-          result = await fn(...allParamValues);
-        } else {
-          // No shadow functions, use regular function
-          const fn = new Function(...allParamNames, functionBody);
-          result = fn(...allParamValues);
-        }
-        // Handle promises - await them if returned
-        if (result instanceof Promise) {
-          result = await result;
-        }
-        
-        // Restore console.log AFTER awaiting the promise
-        console.log = originalLog;
-        
-        // If there was console output, use that. Otherwise use the result.
-        if (output) {
-          return output.replace(/\n+$/, '');
-        }
-        
-        return result !== undefined ? String(result) : '';
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        const errorDetails = `Code execution failed: ${errorMessage}\nCode: ${code}\nParameters: ${JSON.stringify(params || {})}`;
-        
-        if (context?.sourceLocation) {
-          const codeError = new MlldCommandExecutionError(
-            `Code execution failed: ${language}`,
-            context.sourceLocation,
-            {
-              command: `${language} code execution`,
-              exitCode: 1,
-              duration: Date.now() - startTime,
-              stderr: errorDetails,
-              workingDirectory: await this.getProjectPath(),
-              directiveType: context.directiveType || 'run'
-            }
-          );
-          throw codeError;
-        }
-        throw new Error(errorDetails);
-      }
-    } else if (language === 'node' || language === 'nodejs') {
+    if (language === 'javascript' || language === 'js' || language === 'node' || language === 'nodejs') {
+      // Unified handling for all JavaScript variants
       try {
         // Create a temporary Node.js file with parameter injection
         const fs = require('fs');
@@ -1469,8 +1379,12 @@ export class Environment {
         const tmpDir = os.tmpdir();
         const tmpFile = path.join(tmpDir, `mlld_exec_${Date.now()}.js`);
         
-        // Get shadow environment functions for Node.js
-        const shadowEnv = this.getShadowEnv('node') || this.getShadowEnv('nodejs');
+        // Get shadow environment functions for JavaScript/Node.js
+        const shadowEnv = this.getShadowEnv(language) || 
+                        this.getShadowEnv('js') || 
+                        this.getShadowEnv('javascript') || 
+                        this.getShadowEnv('node') || 
+                        this.getShadowEnv('nodejs');
         
         // Build Node.js code with parameters and shadow functions
         let nodeCode = '';
@@ -1494,17 +1408,41 @@ export class Environment {
           }
         }
         
-        nodeCode += code;
+        // Wrap the code to capture return values
+        const wrappedCode = `
+${nodeCode}
+// mlld return value capture
+(async () => {
+  try {
+    const __mlld_result = await (async () => {
+${code}
+    })();
+    
+    // If there's a return value, output it as JSON
+    if (__mlld_result !== undefined) {
+      // Use a special marker to distinguish return values from regular output
+      console.log('__MLLD_RETURN__:' + JSON.stringify(__mlld_result));
+    }
+  } catch (err) {
+    // Output error with special marker
+    console.error('__MLLD_ERROR__:' + err.message);
+    if (err.stack) {
+      console.error(err.stack);
+    }
+    process.exit(1);
+  }
+})();
+`;
         
         // Debug: log the generated code
         if (process.env.DEBUG_NODE_EXEC) {
           console.log('Generated Node.js code:');
-          console.log(nodeCode);
+          console.log(wrappedCode);
           console.log('Params:', params);
         }
         
         // Write to temp file
-        fs.writeFileSync(tmpFile, nodeCode);
+        fs.writeFileSync(tmpFile, wrappedCode);
         
         try {
           // Execute Node.js in the directory of the current mlld file
@@ -1514,36 +1452,110 @@ export class Environment {
           
           // Create a custom exec to run with the correct cwd
           const { execSync } = require('child_process');
+          
+          // Determine mlld's node_modules path
+          let mlldNodeModules: string | undefined;
+          
+          // First check if we're in development (mlld source directory)
+          const devNodeModules = path.join(process.cwd(), 'node_modules');
+          if (fs.existsSync(devNodeModules) && fs.existsSync(path.join(process.cwd(), 'package.json'))) {
+            const packageJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+            if (packageJson.name === 'mlld') {
+              mlldNodeModules = devNodeModules;
+            }
+          }
+          
+          // If not in dev, try to find mlld's installation directory
+          if (!mlldNodeModules) {
+            try {
+              // Get the path to mlld's main module
+              const mlldPath = require.resolve('mlld/package.json');
+              mlldNodeModules = path.join(path.dirname(mlldPath), 'node_modules');
+            } catch {
+              // If that fails, try common global install locations
+              const possiblePaths = [
+                '/opt/homebrew/lib/node_modules/mlld/node_modules',
+                '/usr/local/lib/node_modules/mlld/node_modules',
+                '/usr/lib/node_modules/mlld/node_modules',
+                path.join(process.env.HOME || '', '.npm-global/lib/node_modules/mlld/node_modules')
+              ];
+              
+              for (const p of possiblePaths) {
+                if (fs.existsSync(p)) {
+                  mlldNodeModules = p;
+                  break;
+                }
+              }
+            }
+          }
+          
+          // Build the NODE_PATH
+          const existingNodePath = process.env.NODE_PATH || '';
+          const nodePaths = existingNodePath ? existingNodePath.split(path.delimiter) : [];
+          if (mlldNodeModules && !nodePaths.includes(mlldNodeModules)) {
+            nodePaths.unshift(mlldNodeModules);
+          }
+          
           const result = execSync(`node ${tmpFile}`, {
             encoding: 'utf8',
             cwd: currentDir,
-            env: { ...process.env },
+            env: { 
+              ...process.env,
+              NODE_PATH: nodePaths.join(path.delimiter)
+            },
             maxBuffer: 10 * 1024 * 1024, // 10MB limit
             timeout: 30000
           });
           
-          return result.toString().trimEnd();
+          // Process the output to separate return value from stdout
+          const output = result.toString();
+          const lines = output.split('\n');
+          const returnLineIndex = lines.findIndex(line => line.startsWith('__MLLD_RETURN__:'));
+          
+          if (returnLineIndex !== -1) {
+            // Found a return value
+            const returnLine = lines[returnLineIndex];
+            const jsonStr = returnLine.substring('__MLLD_RETURN__:'.length);
+            
+            // Remove the return line from output
+            lines.splice(returnLineIndex, 1);
+            const stdoutOnly = lines.join('\n').trimEnd();
+            
+            // Store the stdout separately if needed for debugging
+            if (stdoutOnly && process.env.DEBUG_NODE_EXEC) {
+              console.log('Node.js stdout (excluding return):', stdoutOnly);
+            }
+            
+            // Return the JSON string (will be parsed by data evaluator if needed)
+            return jsonStr;
+          } else {
+            // No return value, just use stdout as before
+            return output.trimEnd();
+          }
         } finally {
           // Clean up temp file
           fs.unlinkSync(tmpFile);
         }
       } catch (error) {
-        if (context?.sourceLocation) {
-          const codeError = new MlldCommandExecutionError(
-            `Node.js execution failed`,
-            context.sourceLocation,
-            {
-              command: `node code execution`,
-              exitCode: 1,
-              duration: Date.now() - startTime,
-              stderr: error instanceof Error ? error.message : 'Unknown error',
-              workingDirectory: await this.getProjectPath(),
-              directiveType: context.directiveType || 'run'
-            }
-          );
-          throw codeError;
-        }
-        throw new Error(`Node.js execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        
+        // Create a proper MlldError for JavaScript/Node.js errors
+        throw new MlldCommandExecutionError(
+          `JavaScript error: ${errorMessage}`,
+          context?.sourceLocation,
+          {
+            command: `node code execution`,
+            exitCode: 1,
+            duration: Date.now() - startTime,
+            stderr: errorMessage,
+            stdout: '',
+            workingDirectory: await this.getProjectPath(),
+            directiveType: context?.directiveType || 'exec',
+            // Include stack for debugging if available
+            ...(errorStack && { errorStack })
+          }
+        );
       }
     } else if (language === 'python' || language === 'py') {
       try {

@@ -397,9 +397,8 @@ Please review this PR:
 ```
 
 **How it works:**
-- DNS TXT records map `@user/module` to GitHub gists
+- Registry records map `@user/module` to GitHub gists and private modules
 - Content is cached locally and identified by SHA-256 hash
-- No central servers - fully decentralized
 - Lock files ensure reproducible builds
 
 ### Private Module Resolvers

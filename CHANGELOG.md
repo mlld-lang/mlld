@@ -5,6 +5,24 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - In Progress
+
+### Added
+- **Smart Pipeline Parameter Handling**: Pipelines now intelligently pass data to multi-parameter functions
+  - Single parameter functions continue to work as before (pass @INPUT as first param)
+  - Multi-parameter functions with JSON input auto-destructure: `{"name": "Smith", "title": "Dr."}` → `@greet` maps to name="Smith", title="Dr."
+  - Non-JSON input falls back to first parameter with empty strings for missing params
+- **Enhanced JavaScript Error Handling**: JavaScript/Node.js errors now properly integrate with mlld's error system
+  - Error messages are preserved and shown in context
+  - Stack traces included for debugging
+  - Works in pipelines and shows full execution context
+
+### Fixed
+- Template executable property naming consistency (`template` vs `templateContent`)
+- JavaScript return values now properly parsed from JSON (fixes falsy value handling in @when)
+- Empty string parameter binding in pipelines
+- Parameter binding when fewer arguments than parameters
+
 ## [1.4.1]
 
 ### Added
@@ -16,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mlld language-server` command added to CLI
 - Template normalization for leading/trailing newlines
 - `variable.metadata` property access in add evaluator
+- JavaScript/Node.js exec functions now support `return` statements - returned values are captured as JSON instead of requiring `console.log(JSON.stringify(...))`
 
 ## [1.4.0]
 Added:

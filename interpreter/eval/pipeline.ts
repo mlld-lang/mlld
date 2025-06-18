@@ -53,14 +53,43 @@ export async function executePipeline(
       
       // Check if this is a direct command definition that expects parameters
       if (args.length === 0) {
-        if (commandVar.paramNames && commandVar.paramNames.length > 0) {
-          // Command expects parameters, pass @INPUT as the first argument
-          args = [{ type: 'Text', content: currentOutput }];
-        } else if (commandVar.type === 'command' && commandVar.commandTemplate) {
-          // Direct command definition, check if it has parameters
-          const cmdDef = commandVar;
-          if (cmdDef.paramNames && cmdDef.paramNames.length > 0) {
+        // Get the actual parameter names from the executable definition
+        let paramNames: string[] | undefined;
+        if (commandVar && commandVar.type === 'executable' && commandVar.value) {
+          paramNames = commandVar.value.paramNames;
+        } else if (commandVar && commandVar.paramNames) {
+          paramNames = commandVar.paramNames;
+        }
+        
+        if (paramNames && paramNames.length > 0) {
+          // Single parameter - pass @INPUT directly
+          if (paramNames.length === 1) {
             args = [{ type: 'Text', content: currentOutput }];
+          } 
+          // Multiple parameters - try smart JSON destructuring
+          else {
+            try {
+              const parsed = JSON.parse(currentOutput);
+              if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+                // Map JSON object properties to parameters by name
+                args = paramNames.map(name => {
+                  const value = parsed[name];
+                  const content = value !== undefined ? 
+                    (typeof value === 'string' ? value : JSON.stringify(value)) : 
+                    '';
+                  return {
+                    type: 'Text',
+                    content
+                  };
+                });
+              } else {
+                // Not an object, just pass as first parameter
+                args = [{ type: 'Text', content: currentOutput }];
+              }
+            } catch {
+              // Not JSON, pass as first parameter
+              args = [{ type: 'Text', content: currentOutput }];
+            }
           }
         }
       }
@@ -150,6 +179,19 @@ async function executeCommandVariable(
   env: Environment,
   stdinInput?: string
 ): Promise<string> {
+  // Check if this is a built-in transformer with direct implementation
+  if (commandVar && commandVar.metadata?.isBuiltinTransformer && commandVar.metadata?.transformerImplementation) {
+    try {
+      const result = await commandVar.metadata.transformerImplementation(stdinInput || '');
+      return String(result);
+    } catch (error) {
+      throw new MlldCommandExecutionError(
+        `Transformer ${commandVar.name} failed: ${error.message}`,
+        commandVar.location
+      );
+    }
+  }
+  
   // Handle both wrapped executable variables and direct definitions
   let execDef: any;
   
@@ -167,14 +209,15 @@ async function executeCommandVariable(
   const execEnv = env.createChild();
   
   // Bind parameters if any
-  if (execDef.paramNames && args.length > 0) {
-    for (let i = 0; i < execDef.paramNames.length && i < args.length; i++) {
+  if (execDef.paramNames) {
+    for (let i = 0; i < execDef.paramNames.length; i++) {
       const paramName = execDef.paramNames[i];
-      const argValue = args[i];
+      const argValue = i < args.length ? args[i] : null;
       
       // Convert argument to text variable
-      const textValue = typeof argValue === 'string' ? argValue :
-                       argValue.content ? argValue.content : String(argValue);
+      const textValue = argValue === null ? '' :
+                       typeof argValue === 'string' ? argValue :
+                       argValue.content !== undefined ? argValue.content : String(argValue);
       
       execEnv.setParameterVariable(paramName, createTextVariable(paramName, textValue));
     }
