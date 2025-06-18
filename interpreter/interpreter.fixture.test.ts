@@ -126,20 +126,88 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     fixtureFiles : 
     fixtureFiles.filter(f => !f.includes('/examples/'));
   
-  // Create a test for each fixture
+  // Separate fixtures into categories for better reporting
+  const invalidFixtures: Array<{ file: string; fixture: any; issue: string }> = [];
+  const validFixturesToTest: Array<{ file: string; fixture: any }> = [];
+  
+  // Debug: Check if examples are included
+  console.log('Total filtered fixtures:', filteredFixtures.length);
+  console.log('Include examples:', includeExamples);
+  
   filteredFixtures.forEach(fixtureFile => {
     const fixturePath = path.join(fixturesDir, fixtureFile);
     const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
     
+    // Check for fixtures in wrong directories or with parsing issues
+    const isInValidDir = fixtureFile.includes('valid/');
+    const isInInvalidDir = fixtureFile.includes('invalid/');
+    const isInExceptionsDir = fixtureFile.includes('exceptions/');
+    const hasParseError = fixture.parseError !== null && fixture.parseError !== undefined;
+    const hasNullAST = fixture.ast === null;
+    const hasExpectedError = !!fixture.expectedError;
+    
+    // Detect fixtures that are in the wrong place or have issues
+    if (isInValidDir && (hasParseError || hasNullAST)) {
+      // Debug specific examples
+      if (fixture.name === 'llm-interface') {
+        console.log('llm-interface debug:', {
+          hasParseError,
+          hasNullAST,
+          parseError: fixture.parseError
+        });
+      }
+      invalidFixtures.push({
+        file: fixtureFile,
+        fixture,
+        issue: hasParseError ? 'Parse error in valid directory' : 'Null AST in valid directory'
+      });
+    } else if ((isInInvalidDir || isInExceptionsDir) && !hasExpectedError && !hasParseError) {
+      invalidFixtures.push({
+        file: fixtureFile,
+        fixture,
+        issue: 'No error in error directory'
+      });
+    } else {
+      validFixturesToTest.push({ file: fixtureFile, fixture });
+    }
+  });
+  
+  // Debug log invalid fixtures
+  console.log('Invalid fixtures found:', invalidFixtures.length);
+  if (invalidFixtures.length > 0) {
+    console.log('First few invalid fixtures:');
+    invalidFixtures.slice(0, 5).forEach(({ file, fixture, issue }) => {
+      console.log(`  - ${fixture.name}: ${issue}`);
+    });
+  }
+  
+  // Report invalid fixtures in a separate describe block
+  if (invalidFixtures.length > 0) {
+    describe('Invalid Test Fixtures (need fixing)', () => {
+      invalidFixtures.forEach(({ file, fixture, issue }) => {
+        // Use regular it() with explicit failure instead of it.fail()
+        it(`INVALID: ${fixture.name} - ${issue}`, () => {
+          const details = {
+            file,
+            issue,
+            parseError: fixture.parseError || undefined,
+            hasNullAST: fixture.ast === null,
+            input: fixture.input?.substring(0, 200) + (fixture.input?.length > 200 ? '...' : '')
+          };
+          
+          console.error('Invalid fixture detected:', JSON.stringify(details, null, 2));
+          throw new Error(`Test fixture "${fixture.name}" has issues: ${issue}`);
+        });
+      });
+    });
+  }
+  
+  // Create tests for valid fixtures
+  validFixturesToTest.forEach(({ file: fixtureFile, fixture }) => {
     // Handle different fixture types
     const isErrorFixture = !!fixture.expectedError || !!fixture.parseError;
     const isWarningFixture = !!fixture.expectedWarning;
     const isValidFixture = !isErrorFixture && !isWarningFixture;
-    
-    // Check for null AST in valid fixtures - this indicates a grammar parsing failure
-    if (isValidFixture && fixture.ast === null) {
-      throw new Error(`Valid fixture '${fixture.name}' has null AST - this indicates the grammar failed to parse the input:\n${fixture.input}`);
-    }
     
     // For fixtures without expected output, run as smoke tests
     const isSmokeTest = isValidFixture && (fixture.expected === null || fixture.expected === undefined);
@@ -679,6 +747,34 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // Restore original fetch
         (global as any).fetch = originalFetch;
       }
+    });
+  });
+  
+  // Summary report after all tests
+  describe('Test Fixture Summary', () => {
+    it('should report fixture health', () => {
+      const totalFixtures = filteredFixtures.length;
+      const invalidCount = invalidFixtures.length;
+      const validCount = validFixturesToTest.length;
+      
+      console.log('\n=== Test Fixture Health Report ===');
+      console.log(`Total fixtures: ${totalFixtures}`);
+      console.log(`Valid fixtures: ${validCount}`);
+      console.log(`Invalid fixtures: ${invalidCount}`);
+      
+      if (invalidCount > 0) {
+        console.log('\nInvalid fixtures that need attention:');
+        invalidFixtures.forEach(({ file, fixture, issue }) => {
+          console.log(`  - ${fixture.name} (${file}): ${issue}`);
+        });
+        console.log('\nThese fixtures may represent:');
+        console.log('  1. Features that ARE implemented but have grammar changes');
+        console.log('  2. Tests in wrong directories');
+        console.log('  3. Missing expected error definitions');
+      }
+      
+      // This test always passes - it's just for reporting
+      expect(true).toBe(true);
     });
   });
 });
