@@ -42,10 +42,10 @@ jobs:
           # trigger_phrase: "/claude"
           
           # Optional: Trigger when specific user is assigned to an issue
-          # assignee_trigger: "claude-bot"
+          assignee_trigger: "mlld-dev"
           
           # Optional: Allow Claude to run specific commands
-          # allowed_tools: "Bash(npm install),Bash(npm run build),Bash(npm run test:*),Bash(npm run lint:*)"
+          allowed_tools: "Bash(npm install),Bash(npm run build),Bash(npm run test:*),Bash(npm test*),Bash(mlld*),Bash(npm run mlld*),Bash(npm run ast*)"
           
           # Optional: Add custom instructions for Claude to customize its behavior for your project
           # custom_instructions: |
