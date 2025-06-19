@@ -797,6 +797,33 @@ async function importFromResolverContent(
         }
         env.setVariable(name, importedVariable);
       }
+    } else if (directive.subtype === 'importNamespace') {
+      // Import entire module under a namespace alias
+      const imports = directive.values?.imports || [];
+      const importNode = imports[0]; // Should be single wildcard with alias
+      const alias = importNode?.alias;
+      
+      if (!alias) {
+        throw new Error('Namespace import missing alias');
+      }
+      
+      // Create namespace variable with the module object
+      const namespaceVariable: MlldVariable = {
+        type: 'data',
+        identifier: alias,
+        value: moduleObject,
+        nodeId: '',
+        location: { line: 0, column: 0 },
+        metadata: {
+          isImported: true,
+          importPath: ref,
+          isNamespace: true,
+          definedAt: { line: 0, column: 0, filePath: ref }
+        }
+      };
+      
+      env.setVariable(alias, namespaceVariable);
+      
     } else if (directive.subtype === 'importSelected') {
       // Import selected variables - use same structure as importFromPath
       const imports = directive.values?.imports || [];
