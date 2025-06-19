@@ -85,10 +85,16 @@ AtImportFull
         }
       }).join(", ");
       
-      // Determine subtype (importAll or importSelected)
+      // Determine subtype (importAll, importNamespace, or importSelected)
       let subtype;
-      if (imports.length === 1 && imports[0] === '*') {
-        subtype = 'importAll';
+      if (imports.length === 1) {
+        if (imports[0] === '*') {
+          subtype = 'importAll';
+        } else if (typeof imports[0] === 'object' && imports[0].original === '*' && imports[0].alias) {
+          subtype = 'importNamespace';
+        } else {
+          subtype = 'importSelected';
+        }
       } else {
         subtype = 'importSelected';
       }
@@ -293,9 +299,14 @@ ShortHash
 
 // Using standard list pattern from patterns/lists.peggy
 ImportsList
-  = "*" {
-      // * means import all variables with their original names - cannot be aliased
-      return ["*"];
+  = "*" alias:(" as " aliasName:BaseIdentifier { return aliasName; })? {
+      if (alias) {
+        // * as alias means import all variables under a namespace alias
+        return [{ original: "*", alias: alias }];
+      } else {
+        // * means import all variables with their original names
+        return ["*"];
+      }
     }
   / first:ImportItem rest:(CommaSpace item:ImportItem { return item; })* {
       return [first, ...rest];
