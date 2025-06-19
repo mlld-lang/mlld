@@ -1,0 +1,149 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { existsSync } from 'fs';
+import { RunCommand } from './run';
+import { MlldError } from '@core/errors/index';
+
+// Mock modules
+vi.mock('fs/promises');
+vi.mock('fs');
+vi.mock('@interpreter/index');
+vi.mock('@core/registry/LockFile');
+
+describe('RunCommand', () => {
+  let runCommand: RunCommand;
+  const mockCwd = '/test/project';
+  
+  beforeEach(() => {
+    runCommand = new RunCommand();
+    vi.spyOn(process, 'cwd').mockReturnValue(mockCwd);
+    vi.clearAllMocks();
+  });
+  
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  
+  describe('getScriptDirectory', () => {
+    it('should return default directory when no lock file exists', async () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      
+      const dir = await (runCommand as any).getScriptDirectory();
+      expect(dir).toBe('llm/run');
+    });
+    
+    it('should read script directory from lock file', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      
+      // Mock LockFile
+      const mockLockFile = {
+        data: {
+          config: {
+            scriptDir: 'custom/scripts'
+          }
+        }
+      };
+      
+      vi.doMock('@core/registry/LockFile', () => ({
+        LockFile: vi.fn().mockImplementation(() => mockLockFile)
+      }));
+      
+      const dir = await (runCommand as any).getScriptDirectory();
+      expect(dir).toBe('custom/scripts');
+    });
+  });
+  
+  describe('listScripts', () => {
+    it('should return empty array when directory does not exist', async () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      
+      const scripts = await runCommand.listScripts();
+      expect(scripts).toEqual([]);
+    });
+    
+    it('should list .mld files without extension', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(fs.readdir).mockResolvedValue([
+        'script1.mld',
+        'script2.mld',
+        'readme.txt',
+        'data.json'
+      ] as any);
+      
+      const scripts = await runCommand.listScripts();
+      expect(scripts).toEqual(['script1', 'script2']);
+    });
+  });
+  
+  describe('findScript', () => {
+    it('should find script with .mld extension', async () => {
+      vi.mocked(existsSync).mockImplementation((path) => {
+        return path.toString().endsWith('test-script.mld');
+      });
+      
+      const scriptPath = await runCommand.findScript('test-script');
+      expect(scriptPath).toContain('test-script.mld');
+    });
+    
+    it('should find script with exact name', async () => {
+      vi.mocked(existsSync).mockImplementation((path) => {
+        return path.toString() === path.join(path.resolve('llm/run'), 'exact.mld');
+      });
+      
+      const scriptPath = await runCommand.findScript('exact.mld');
+      expect(scriptPath).toContain('exact.mld');
+    });
+    
+    it('should return null when script not found', async () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      
+      const scriptPath = await runCommand.findScript('nonexistent');
+      expect(scriptPath).toBeNull();
+    });
+  });
+  
+  describe('run', () => {
+    it('should throw error when script not found with no available scripts', async () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      vi.mocked(fs.readdir).mockResolvedValue([]);
+      
+      await expect(runCommand.run('missing')).rejects.toThrow(MlldError);
+      await expect(runCommand.run('missing')).rejects.toThrow(/No scripts found/);
+    });
+    
+    it('should throw error with available scripts list', async () => {
+      vi.mocked(existsSync).mockImplementation((p) => {
+        const pathStr = p.toString();
+        if (pathStr.endsWith('/llm/run')) return true;
+        if (pathStr.endsWith('missing.mld')) return false;
+        return false;
+      });
+      
+      vi.mocked(fs.readdir).mockResolvedValue(['available1.mld', 'available2.mld'] as any);
+      
+      await expect(runCommand.run('missing')).rejects.toThrow(/Available scripts:\n  available1\n  available2/);
+    });
+    
+    it('should successfully run a script', async () => {
+      const mockInterpret = vi.fn().mockResolvedValue('Script output');
+      vi.doMock('@interpreter/index', () => ({
+        interpret: mockInterpret
+      }));
+      
+      vi.mocked(existsSync).mockImplementation((p) => {
+        return p.toString().endsWith('hello.mld');
+      });
+      
+      vi.mocked(fs.readFile).mockResolvedValue('@add "Hello World"');
+      
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      
+      await runCommand.run('hello');
+      
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Running'));
+      expect(mockInterpret).toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith('Script output');
+    });
+  });
+});

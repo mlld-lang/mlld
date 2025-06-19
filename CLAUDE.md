@@ -23,6 +23,7 @@ npm run build        # Build the project
 npm test <dir>       # Run tests for a specific section of code
 npm test <file_path> # Run specific test file (e.g. npm test cli/priority-cli.test.ts)
 npm run ast -- '<mlld syntax>'  # Shows AST for any valid mlld syntax
+mlld run <script>    # Run mlld script from script directory (default: llm/run/)
 ```
 
 ## Generated Files (Gitignored)

@@ -135,8 +135,11 @@ export class SetupCommand {
         }
       }
 
+      // Ask about script directory for all setup types
+      const scriptDir = await this.setupScriptDirectory(rl, lockFile);
+
       // Save configuration
-      await this.saveConfiguration(lockFile, resolverRegistries, hasExistingConfig);
+      await this.saveConfiguration(lockFile, resolverRegistries, hasExistingConfig, scriptDir);
 
       console.log(chalk.green('\n✔ Setup complete!'));
       
@@ -395,13 +398,77 @@ Information about this module.
     };
   }
 
+  private async setupScriptDirectory(rl: readline.Interface, lockFile: LockFile): Promise<string> {
+    console.log('');
+    console.log('---');
+    console.log('');
+    console.log(chalk.blue('Script Directory Configuration'));
+    console.log('');
+    
+    // Get current script directory from lock file
+    const lockData = (lockFile as any).data;
+    const currentScriptDir = lockData.config?.scriptDir || 'llm/run';
+    
+    // Get script directory path
+    const defaultDir = 'llm/run';
+    const scriptDir = (await rl.question(`Script directory [${currentScriptDir}]: `)) || currentScriptDir;
+    
+    // Check if directory exists and offer to create it
+    const absolutePath = path.resolve(scriptDir);
+    const pathExists = existsSync(absolutePath);
+    
+    if (!pathExists) {
+      console.log(chalk.yellow(`Directory ${scriptDir} does not exist.`));
+      const shouldCreate = await this.promptYesNo('Would you like to create it?', true);
+      if (shouldCreate) {
+        try {
+          await fs.mkdir(absolutePath, { recursive: true });
+          console.log(chalk.green(`✔ Created directory: ${scriptDir}`));
+          
+          // Create a sample script
+          const samplePath = path.join(absolutePath, 'hello.mld');
+          const sampleContent = `# Hello Script
+
+A simple mlld script example.
+
+@text greeting = "Hello from mlld script!"
+@text timestamp = [[Script run at: {{TIME}}]]
+
+@add @greeting
+@add @timestamp
+`;
+          await fs.writeFile(samplePath, sampleContent);
+          console.log(chalk.gray(`Created sample script: ${path.join(scriptDir, 'hello.mld')}`));
+        } catch (error) {
+          console.log(chalk.red(`✘ Failed to create directory: ${error instanceof Error ? error.message : 'Unknown error'}`));
+        }
+      }
+    } else {
+      console.log(chalk.green(`✔ Directory exists: ${scriptDir}`));
+    }
+    
+    return scriptDir;
+  }
+
   private async saveConfiguration(
     lockFile: LockFile, 
     resolverRegistries: any[], 
-    hasExistingConfig: boolean
+    hasExistingConfig: boolean,
+    scriptDir?: string
   ): Promise<void> {
     // Update resolver registries
     await lockFile.setResolverRegistries(resolverRegistries);
+    
+    // Save script directory configuration
+    if (scriptDir) {
+      const lockData = (lockFile as any).data;
+      if (!lockData.config) {
+        lockData.config = {};
+      }
+      lockData.config.scriptDir = scriptDir;
+      (lockFile as any).isDirty = true;
+      await lockFile.save();
+    }
 
     // If this is a new file, add some basic security configuration
     if (!hasExistingConfig) {
@@ -605,7 +672,7 @@ export function createSetupCommand() {
 Usage: mlld setup [options]
 
 Interactive configuration wizard for mlld projects. Sets up module resolvers,
-authentication, and project configuration.
+authentication, script directory, and project configuration.
 
 Options:
   --github              Set up GitHub private modules only
@@ -627,8 +694,9 @@ The setup wizard will:
 1. Check for existing mlld.lock.json
 2. Configure GitHub authentication (if needed)
 3. Set up module resolvers (GitHub, local, or both)
-4. Verify repository access and permissions
-5. Create sample configurations and files
+4. Configure script directory for 'mlld run' command
+5. Verify repository access and permissions
+6. Create sample configurations and files
 
 For private GitHub modules, you'll need to authenticate first:
   mlld auth login

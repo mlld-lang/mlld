@@ -16,6 +16,7 @@ import { createAliasCommand } from './commands/alias';
 import { envCommand } from './commands/env';
 import { languageServerCommand } from './commands/language-server';
 import { testCommand } from './commands/test';
+import { createRunCommand } from './commands/run';
 import chalk from 'chalk';
 import { version } from '@core/version';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
@@ -152,7 +153,7 @@ function parseArgs(args: string[]): CLIOptions {
   };
 
   // Commands that can have subcommands (and should stop parsing)
-  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 'setup', 'env', 'test'];
+  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 'setup', 'env', 'test', 'run'];
   
   // Store remaining args after command
   options._ = [];
@@ -717,6 +718,7 @@ Commands:
   auth                    Manage GitHub authentication
   publish                 Publish module to mlld registry
   registry                Manage mlld module registry
+  run                     Run mlld scripts from script directory
   test                    Run mlld tests
   language-server, lsp    Start the mlld language server for editor integration
   debug-resolution        Debug variable resolution in a mlld file
@@ -1447,6 +1449,14 @@ Examples:
     if (cliOptions.input === 'test') {
       const cmdArgs = cliOptions._ || [];
       await testCommand(cmdArgs);
+      return;
+    }
+    
+    // Handle run command
+    if (cliOptions.input === 'run') {
+      const runCmd = createRunCommand();
+      const cmdArgs = cliOptions._ || [];
+      await runCmd.execute(cmdArgs, parseFlags(cmdArgs));
       return;
     }
     

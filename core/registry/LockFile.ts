@@ -32,6 +32,7 @@ export interface LockFileData {
       blockedPatterns?: string[];
       allowedEnv?: string[];
     };
+    scriptDir?: string;
   };
   security?: {
     registries?: Record<string, RegistryEntry>;

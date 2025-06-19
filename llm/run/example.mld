@@ -1,0 +1,20 @@
+# Example Script
+
+This is an example mlld script that can be run with `mlld run example`.
+
+@text title = "Example Script Output"
+@text timestamp = [[Generated at: {{TIME}}]]
+
+@add [[## {{title}}]]
+@add [[]]
+@add @timestamp
+@add [[]]
+
+@add [[### Sample Tasks:]]
+@add [[- Build the project]]
+@add [[- Run tests]]
+@add [[- Deploy to production]]
+
+@text message = "Script completed successfully!"
+@add [[]]
+@add @message
