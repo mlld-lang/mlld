@@ -5,7 +5,7 @@ import { interpolate } from '../core/interpreter';
 import { createTextVariable, astLocationToSourceLocation } from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
-import { normalizeTemplateContent } from '../utils/blank-line-normalizer';
+// Template normalization now handled in grammar - no longer needed here
 
 /**
  * Remove single blank lines but preserve multiple blank lines.
@@ -364,10 +364,8 @@ export async function evaluateText(
     
     resolvedValue = await interpolate(contentNodes, env);
     
-    // Apply template normalization if this is template content and normalization is enabled
-    if (directive.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
-      resolvedValue = normalizeTemplateContent(resolvedValue, true);
-    }
+    // Template normalization is now handled in the grammar at parse time
+    // The AST already has normalized content
   }
   
   // Handle append operator

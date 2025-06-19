@@ -1,5 +1,5 @@
 @exec getConfig = [(echo '{"env":"prod","version":"2.0"}')]
-@exec transform(data) = sh [(echo "@data" | sed "s/prod/production/g")]
+@exec transform(data) = sh [(echo "$data" | sed "s/prod/production/g")]
 
 @data config = @getConfig()
 @data transformed = @transform(@config)
@@ -14,4 +14,4 @@
 @add [[Transformed: {{transformed}}]]
 @add [[Nested Original: {{nested.original}}]]
 @add [[Nested Processed: {{nested.processed}}]]
-@add [[Array Length: {{nested.array.length}}]]
+@add [[Array: {{nested.array}}]]

@@ -72,7 +72,19 @@ export async function evaluateExec(
       
       // Create wrapper function that calls the mlld exec
       const wrapper = createExecWrapper(funcName, funcVar, env);
-      shadowFunctions.set(funcName, wrapper);
+      
+      // For JavaScript shadow functions, create a synchronous wrapper when possible
+      let effectiveWrapper = wrapper;
+      if (language === 'js' || language === 'javascript') {
+        // Only create sync wrapper for JavaScript code (not commands or other types)
+        if (funcVar.value.type === 'code' && 
+            (funcVar.value.language === 'javascript' || funcVar.value.language === 'js')) {
+          effectiveWrapper = createSyncJsWrapper(funcName, funcVar.value, env);
+        }
+      }
+      
+      // Store the wrapper (sync for JS when possible, async otherwise)
+      shadowFunctions.set(funcName, effectiveWrapper);
     }
     
     
@@ -261,6 +273,86 @@ export async function evaluateExec(
   
   // Return the executable definition (no output for variable definitions)
   return { value: executableDef, env };
+}
+
+/**
+ * Create a synchronous wrapper for JavaScript shadow functions
+ * This allows simple JS expressions to be called without await
+ */
+function createSyncJsWrapper(
+  funcName: string,
+  definition: CodeExecutable,
+  env: Environment
+): Function {
+  return function(...args: any[]) {
+    // Get parameter names from the definition
+    const params = definition.paramNames || [];
+    
+    // Create a child environment for parameter substitution
+    const execEnv = env.createChild();
+    
+    // Build params object for code execution
+    const codeParams: Record<string, any> = {};
+    for (let i = 0; i < params.length; i++) {
+      const paramName = params[i];
+      let argValue = args[i];
+      if (argValue !== undefined) {
+        // Try to parse numeric values (same logic as async wrapper)
+        if (typeof argValue === 'string') {
+          const numValue = Number(argValue);
+          if (!isNaN(numValue) && argValue.trim() !== '') {
+            // If it's a valid number, use the numeric value
+            argValue = numValue;
+          }
+        }
+        codeParams[paramName] = argValue;
+      }
+    }
+    
+    // Get the code template
+    const codeTemplate = definition.codeTemplate;
+    if (!codeTemplate) {
+      throw new Error(`Function ${funcName} has no code template`);
+    }
+    
+    // For synchronous execution, we need to evaluate the code directly
+    // Since this is for 'js' (not 'node'), we can use the in-process execution
+    let code: string;
+    try {
+      // Simple interpolation for Text nodes
+      code = codeTemplate.map(node => {
+        if (node.type === 'Text') {
+          return node.content;
+        }
+        // For now, only support simple text templates
+        throw new Error(`Synchronous shadow functions only support simple code templates`);
+      }).join('');
+    } catch (error) {
+      throw new Error(`Cannot create synchronous wrapper for ${funcName}: ${error.message}`);
+    }
+    
+    // Create and execute a synchronous function
+    const paramNames = Object.keys(codeParams);
+    const paramValues = Object.values(codeParams);
+    
+    // Build function body
+    let functionBody = code;
+    const trimmedCode = code.trim();
+    
+    // Check if this is an expression that should be returned
+    const isExpression = (
+      (!code.includes('return') && !code.includes(';')) ||
+      (trimmedCode.startsWith('(') && trimmedCode.endsWith(')'))
+    );
+    
+    if (isExpression) {
+      functionBody = `return (${functionBody})`;
+    }
+    
+    // Create and execute the function
+    const fn = new Function(...paramNames, functionBody);
+    return fn(...paramValues);
+  };
 }
 
 /**

@@ -14,6 +14,7 @@ import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/e
 import { SecurityManager } from '@security';
 import { RegistryManager, ModuleCache, LockFile } from '@core/registry';
 import { URLCache } from '../cache/URLCache';
+import { astLocationToSourceLocation } from '@core/types';
 import { 
   ResolverManager, 
   RegistryResolver,
@@ -1369,8 +1370,96 @@ export class Environment {
     context?: CommandExecutionContext
   ): Promise<string> {
     const startTime = Date.now();
-    if (language === 'javascript' || language === 'js' || language === 'node' || language === 'nodejs') {
-      // Unified handling for all JavaScript variants
+    if (language === 'javascript' || language === 'js') {
+      // In-process JavaScript execution with shadow environment support
+      try {
+        // Create a function that captures console.log output
+        let output = '';
+        const originalLog = console.log;
+        console.log = (...args: any[]) => {
+          output += args.map(arg => String(arg)).join(' ') + '\n';
+        };
+        
+        // Get shadow environment functions for JavaScript
+        const shadowEnv = this.getShadowEnv('js') || this.getShadowEnv('javascript');
+        
+        // Merge shadow environment with provided parameters
+        const allParams = { ...(params || {}) };
+        const allParamNames: string[] = Object.keys(allParams);
+        const allParamValues: any[] = Object.values(allParams);
+        
+        // Add shadow environment functions
+        if (shadowEnv) {
+          for (const [name, func] of shadowEnv) {
+            if (!allParams[name]) { // Don't override explicit parameters
+              allParamNames.push(name);
+              allParamValues.push(func);
+            }
+          }
+        }
+        
+        // Build the function body
+        let functionBody = code;
+        
+        // Handle return statements properly
+        // Check if this is likely a complete expression that should be returned
+        const trimmedCode = code.trim();
+        const isExpression = (
+          // Single expression without semicolon
+          (!code.includes('return') && !code.includes(';')) ||
+          // IIFE pattern - starts with ( and ends with )
+          (trimmedCode.startsWith('(') && trimmedCode.endsWith(')')) ||
+          // Arrow function call pattern
+          (trimmedCode.endsWith('()') && !trimmedCode.includes('{'))
+        );
+        
+        // For single expressions, wrap in return statement
+        if (isExpression) {
+          functionBody = `return (${functionBody})`;
+        }
+        
+        // Create a function with dynamic parameters
+        const fn = new Function(...allParamNames, functionBody);
+        
+        // Execute the function
+        let result = fn(...allParamValues);
+        
+        // Handle promises - await them if returned
+        if (result instanceof Promise) {
+          result = await result;
+        }
+        
+        // Restore console.log
+        console.log = originalLog;
+        
+        // Format the result
+        if (result !== undefined && result !== null) {
+          output = String(result);
+        }
+        
+        // Return the captured output
+        return output.trim();
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        const codeError = new MlldCommandExecutionError(
+          error instanceof Error ? error.message : 'JavaScript execution failed',
+          'js',
+          code,
+          error instanceof Error ? error : undefined,
+          {
+            duration,
+            output: '',
+            stderr: error instanceof Error ? error.stack || error.message : 'Unknown error',
+            location: astLocationToSourceLocation(
+              { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+              this.getCurrentFilePath()
+            )
+          }
+        );
+        throw codeError;
+      }
+    } else if (language === 'node' || language === 'nodejs') {
+      // Node.js subprocess execution (no shadow environment support)
       try {
         // Create a temporary Node.js file with parameter injection
         const fs = require('fs');
@@ -1379,32 +1468,12 @@ export class Environment {
         const tmpDir = os.tmpdir();
         const tmpFile = path.join(tmpDir, `mlld_exec_${Date.now()}.js`);
         
-        // Get shadow environment functions for JavaScript/Node.js
-        const shadowEnv = this.getShadowEnv(language) || 
-                        this.getShadowEnv('js') || 
-                        this.getShadowEnv('javascript') || 
-                        this.getShadowEnv('node') || 
-                        this.getShadowEnv('nodejs');
-        
-        // Build Node.js code with parameters and shadow functions
+        // Build Node.js code with parameters
         let nodeCode = '';
         if (params) {
           // Inject parameters as constants
           for (const [key, value] of Object.entries(params)) {
             nodeCode += `const ${key} = ${JSON.stringify(value)};\n`;
-          }
-        }
-        
-        // Inject shadow environment functions
-        if (shadowEnv) {
-          nodeCode += '\n// Shadow environment functions\n';
-          for (const [name, func] of shadowEnv) {
-            if (!params || !(name in params)) { // Don't override explicit parameters
-              // Since we can't directly serialize functions, we need to handle this differently
-              // For now, we'll inject them as global functions that call back to mlld
-              nodeCode += `// ${name} is available as a shadow function\n`;
-              // This will be handled by the wrapper creation in exec evaluator
-            }
           }
         }
         

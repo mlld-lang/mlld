@@ -3,7 +3,7 @@
 Test that @when actions support exec invocations with tail modifiers like trust.
 
 @data isTrue = true
-@exec transform(text) = [(echo "@text" | tr '[:lower:)]' '[:upper:]')]
+@exec transform(text) = [(echo "@text" | tr '[:lower:]' '[:upper:]')]
 
 @text hasData = "true"
 
