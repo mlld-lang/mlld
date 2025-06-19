@@ -9,7 +9,11 @@ import { MlldError } from '@core/errors/index';
 vi.mock('fs/promises');
 vi.mock('fs');
 vi.mock('@interpreter/index');
-vi.mock('@core/registry/LockFile');
+vi.mock('@core/registry/LockFile', () => ({
+  LockFile: vi.fn().mockImplementation(() => ({
+    data: {}
+  }))
+}));
 
 describe('RunCommand', () => {
   let runCommand: RunCommand;
@@ -36,20 +40,19 @@ describe('RunCommand', () => {
     it('should read script directory from lock file', async () => {
       vi.mocked(existsSync).mockReturnValue(true);
       
-      // Mock LockFile
-      const mockLockFile = {
+      // Mock the LockFile module
+      const { LockFile } = await import('@core/registry/LockFile');
+      vi.mocked(LockFile).mockImplementation(() => ({
         data: {
           config: {
             scriptDir: 'custom/scripts'
           }
         }
-      };
+      } as any));
       
-      vi.doMock('@core/registry/LockFile', () => ({
-        LockFile: vi.fn().mockImplementation(() => mockLockFile)
-      }));
-      
-      const dir = await (runCommand as any).getScriptDirectory();
+      // Create a new instance to test
+      const testCommand = new RunCommand();
+      const dir = await (testCommand as any).getScriptDirectory();
       expect(dir).toBe('custom/scripts');
     });
   });
@@ -71,7 +74,9 @@ describe('RunCommand', () => {
         'data.json'
       ] as any);
       
-      const scripts = await runCommand.listScripts();
+      // Create a new instance to avoid issues with mocked LockFile
+      const testCommand = new RunCommand();
+      const scripts = await testCommand.listScripts();
       expect(scripts).toEqual(['script1', 'script2']);
     });
   });
@@ -87,8 +92,9 @@ describe('RunCommand', () => {
     });
     
     it('should find script with exact name', async () => {
-      vi.mocked(existsSync).mockImplementation((path) => {
-        return path.toString() === path.join(path.resolve('llm/run'), 'exact.mld');
+      vi.mocked(existsSync).mockImplementation((p) => {
+        const pathStr = p.toString();
+        return pathStr.endsWith('exact.mld') && pathStr.includes('llm/run');
       });
       
       const scriptPath = await runCommand.findScript('exact.mld');
@@ -106,7 +112,7 @@ describe('RunCommand', () => {
   describe('run', () => {
     it('should throw error when script not found with no available scripts', async () => {
       vi.mocked(existsSync).mockReturnValue(false);
-      vi.mocked(fs.readdir).mockResolvedValue([]);
+      vi.mocked(fs.readdir).mockRejectedValue(new Error('ENOENT'));
       
       await expect(runCommand.run('missing')).rejects.toThrow(MlldError);
       await expect(runCommand.run('missing')).rejects.toThrow(/No scripts found/);
@@ -115,21 +121,25 @@ describe('RunCommand', () => {
     it('should throw error with available scripts list', async () => {
       vi.mocked(existsSync).mockImplementation((p) => {
         const pathStr = p.toString();
-        if (pathStr.endsWith('/llm/run')) return true;
-        if (pathStr.endsWith('missing.mld')) return false;
+        if (pathStr.includes('llm/run') && !pathStr.includes('missing')) return true;
         return false;
       });
       
       vi.mocked(fs.readdir).mockResolvedValue(['available1.mld', 'available2.mld'] as any);
       
-      await expect(runCommand.run('missing')).rejects.toThrow(/Available scripts:\n  available1\n  available2/);
+      try {
+        await runCommand.run('missing');
+        expect.fail('Should have thrown an error');
+      } catch (error) {
+        expect(error).toBeInstanceOf(MlldError);
+        expect(error.message).toMatch(/Available scripts:\n  available1\n  available2/);
+      }
     });
     
     it('should successfully run a script', async () => {
-      const mockInterpret = vi.fn().mockResolvedValue('Script output');
-      vi.doMock('@interpreter/index', () => ({
-        interpret: mockInterpret
-      }));
+      // Mock the interpret function before importing
+      const { interpret } = await import('@interpreter/index');
+      vi.mocked(interpret).mockResolvedValue('Script output');
       
       vi.mocked(existsSync).mockImplementation((p) => {
         return p.toString().endsWith('hello.mld');
@@ -142,8 +152,10 @@ describe('RunCommand', () => {
       await runCommand.run('hello');
       
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Running'));
-      expect(mockInterpret).toHaveBeenCalled();
+      expect(interpret).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith('Script output');
+      
+      consoleSpy.mockRestore();
     });
   });
 });

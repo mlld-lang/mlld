@@ -31,7 +31,7 @@ export class RunCommand {
       const lockFile = new LockFile(lockFilePath);
       // Check if scriptDir is configured in the lock file
       const lockData = (lockFile as any).data;
-      if (lockData.config?.scriptDir) {
+      if (lockData && lockData.config?.scriptDir) {
         this.scriptDir = lockData.config.scriptDir;
       }
     }
@@ -53,8 +53,8 @@ export class RunCommand {
       return files
         .filter(file => file.endsWith('.mld'))
         .map(file => path.basename(file, '.mld'));
-    } catch (error) {
-      cliLogger.error('Failed to list scripts', { error });
+    } catch (error: any) {
+      cliLogger.error('Failed to list scripts', { error: error?.message || error });
       return [];
     }
   }
@@ -88,15 +88,19 @@ export class RunCommand {
         const scriptDir = await this.getScriptDirectory();
         throw new MlldError(
           `No scripts found. Create scripts in the ${scriptDir} directory.`,
-          ErrorSeverity.Error,
-          'SCRIPT_NOT_FOUND'
+          {
+            code: 'SCRIPT_NOT_FOUND',
+            severity: ErrorSeverity.Fatal
+          }
         );
       }
       
       throw new MlldError(
         `Script "${scriptName}" not found.\n\nAvailable scripts:\n  ${availableScripts.join('\n  ')}`,
-        ErrorSeverity.Error,
-        'SCRIPT_NOT_FOUND'
+        {
+          code: 'SCRIPT_NOT_FOUND',
+          severity: ErrorSeverity.Fatal
+        }
       );
     }
     
@@ -131,9 +135,11 @@ export class RunCommand {
       }
       throw new MlldError(
         `Failed to run script: ${error instanceof Error ? error.message : String(error)}`,
-        ErrorSeverity.Error,
-        'SCRIPT_EXECUTION_ERROR',
-        { cause: error }
+        {
+          code: 'SCRIPT_EXECUTION_ERROR',
+          severity: ErrorSeverity.Fatal,
+          cause: error
+        }
       );
     }
   }
