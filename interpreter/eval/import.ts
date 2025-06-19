@@ -80,10 +80,23 @@ function createNamespaceVariable(
   moduleObject: Record<string, any>, 
   importPath: string
 ): MlldVariable {
+  // Unwrap the module object values for clean namespace access
+  const unwrappedObject: Record<string, any> = {};
+  
+  for (const [key, value] of Object.entries(moduleObject)) {
+    if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
+      // Unwrap the wrapped variable format
+      unwrappedObject[key] = value.__value;
+    } else {
+      // Keep the value as-is for non-wrapped values
+      unwrappedObject[key] = value;
+    }
+  }
+  
   return {
     type: 'data',
     identifier: alias,
-    value: moduleObject,
+    value: unwrappedObject,
     nodeId: '',
     location: { line: 0, column: 0 },
     metadata: {
