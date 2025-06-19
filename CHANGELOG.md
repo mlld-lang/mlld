@@ -5,16 +5,20 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.4.4]
+## [1.4.5]
 
 ### Added
-- Check for reserved words when publishing
 - **mlld run Command**: Execute mlld scripts from a configured directory
   - Run scripts by name: `mlld run script-name` (without .mld extension)
   - List available scripts: `mlld run` (no arguments)
   - Script directory configured in `mlld.lock.json` via `mlld setup`
   - Default script directory: `llm/run/`
   - Helpful error messages showing available scripts when script not found
+
+## [1.4.4]
+
+### Added
+- Check for reserved words when publishing
 
 ## [1.4.3]
 

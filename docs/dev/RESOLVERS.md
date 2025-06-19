@@ -226,6 +226,22 @@ class ResolverCacheKeyStrategy implements CacheKeyStrategy {
 - Custom resolvers declare TTL needs in configuration
 - URL-specific caching logic separated from generic TTL service
 
+### Resolution Architecture
+
+mlld uses a dual-mechanism approach for resolver lookup, optimized for performance:
+
+1. **Direct Resolver Lookup** - For built-in resolvers (TIME, DEBUG, INPUT, PROJECTPATH)
+   - These are always available as part of the core
+   - Registered directly by name in ResolverManager
+   - Fast lookup without registry overhead
+
+2. **Registry-Based Lookup** - For configured prefixes and custom resolvers
+   - Maps prefixes like `@company/`, `@local/`, `@docs/` to resolver instances
+   - Allows multiple prefixes to use the same resolver (e.g., both `@.` and `@PROJECTPATH`)
+   - Supports configuration per prefix (basePath, authentication, etc.)
+
+This design avoids unnecessary registry lookups for core functionality while maintaining flexibility for custom configurations.
+
 ### Priority-Based Resolution
 
 Resolvers are resolved in strict priority order (lower number = higher priority):
@@ -239,14 +255,23 @@ Priority 3: Variable lookup fallback
 **Resolution Algorithm:**
 ```typescript
 async function resolveAtReference(identifier: string, pathSegments: string[]): Promise<ResolverContent> {
-  // Check resolvers in priority order
-  for (const resolver of sortedResolvers) {
-    if (resolver.canResolve(`@${identifier}`)) {
-      return await resolver.resolve(`@${identifier}/${pathSegments.join('/')}`);
+  // 1. Check configured registries first (for custom prefixes)
+  for (const registry of registries) {
+    if (ref.startsWith(registry.prefix)) {
+      const resolver = resolvers.get(registry.resolver);
+      if (resolver && resolver.canResolve(ref)) {
+        return resolver.resolve(ref, registry.config);
+      }
     }
   }
   
-  // Fallback to variable lookup
+  // 2. Check direct resolver lookup (for built-ins)
+  const directResolver = resolvers.get(identifier.toUpperCase());
+  if (directResolver && directResolver.canResolve(ref)) {
+    return directResolver.resolve(ref);
+  }
+  
+  // 3. Fallback to variable lookup
   const variable = env.getVariable(identifier);
   if (variable) {
     return interpolateVariableInPath(variable, pathSegments);
