@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Check for reserved words when publishing
+- **mlld run Command**: Execute mlld scripts from a configured directory
+  - Run scripts by name: `mlld run script-name` (without .mld extension)
+  - List available scripts: `mlld run` (no arguments)
+  - Script directory configured in `mlld.lock.json` via `mlld setup`
+  - Default script directory: `llm/run/`
+  - Helpful error messages showing available scripts when script not found
 
 ## [1.4.3]
 
