@@ -18,6 +18,7 @@ import { version as currentMlldVersion } from '@core/version';
 import { DependencyDetector } from '@core/utils/dependency-detector';
 import { parseSync } from '@grammar/parser';
 import type { RegistryConfig } from '@core/resolvers/types';
+import reservedWords from '@core/reserved.json';
 
 export interface PublishOptions {
   verbose?: boolean;
@@ -858,9 +859,50 @@ export class PublishCommand {
       }
     }
 
-    // 4. Validate mlld syntax
+    // 4. Validate mlld syntax and check for reserved word conflicts
     try {
-      parseSync(content);
+      const ast = parseSync(content);
+      
+      // Extract all top-level variable names from the module
+      const exportedVariables = new Set<string>();
+      
+      for (const node of ast) {
+        // Skip non-directive nodes
+        if (node.type !== 'Directive') continue;
+        
+        const directive = node as any;
+        
+        // Check for variable definitions (@text, @data, @path, @exec)
+        if (['text', 'data', 'path', 'exec'].includes(directive.kind)) {
+          // Extract the identifier from the directive
+          const identifierNodes = directive.values?.identifier;
+          if (identifierNodes && Array.isArray(identifierNodes)) {
+            // The identifier is in a VariableReference node
+            for (const node of identifierNodes) {
+              if (node.type === 'VariableReference' && node.identifier) {
+                exportedVariables.add(node.identifier);
+              }
+            }
+          }
+        }
+      }
+      
+      // Check exported variables against reserved words
+      const conflictingExports: string[] = [];
+      for (const varName of exportedVariables) {
+        if (reservedWords.reservedWords.includes(varName)) {
+          conflictingExports.push(varName);
+        }
+      }
+      
+      if (conflictingExports.length > 0) {
+        errors.push(
+          `Module exports variables that conflict with mlld reserved words:\n` +
+          `    Conflicting variables: ${conflictingExports.join(', ')}\n` +
+          `    Reserved words cannot be used as variable names.\n` +
+          `    Please rename these variables to avoid conflicts.`
+        );
+      }
     } catch (parseError: any) {
       const errorMessage = parseError.message || 'Unknown parse error';
       const location = parseError.location ? 

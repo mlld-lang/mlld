@@ -69,7 +69,8 @@ async function runTestFile(file: string): Promise<TestResult> {
       filePath: file,
       captureEnvironment: (env) => { capturedEnv = env; },
       useMarkdownFormatter: false,
-      approveAllImports: true // Auto-approve imports for tests
+      approveAllImports: true, // Auto-approve imports for tests
+      devMode: true // Always run tests in dev mode for flexible path resolution
     });
     
     if (!capturedEnv) {
