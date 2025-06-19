@@ -3,8 +3,8 @@
 @data names = ["Alice", "Bob", "Charlie"]
 @data scores = [95, 87, 92]
 
-@exec greet(name) = @run bash [(echo "Hello, $name!")]
-@exec report(name, score) = @run bash [(echo "$name scored $score points")]
+@exec greet(name) = bash [(echo "Hello, $name!")]
+@exec report(name, score) = bash [(echo "$name scored $score points")]
 
 # Single parameter bash command
 @data greetings = foreach @greet(@names)

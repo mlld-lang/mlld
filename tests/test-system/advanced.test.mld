@@ -1,0 +1,52 @@
+# Advanced test scenarios
+
+@import { eq, deepEq, ok, notOk, gt, gte, lt, lte, includes, contains, len } from "../../modules/core/test.mld.md"
+
+# Test deepEq with objects
+@data obj1 = {"name": "test", "value": 42}
+@data obj2 = {"name": "test", "value": 42}
+@data obj3 = {"name": "test", "value": 43}
+@data test_deepEq_objects_same = @deepEq(@obj1, @obj2)
+@data test_deepEq_objects_different = @notOk(@deepEq(@obj1, @obj3))
+
+# Test deepEq with arrays
+@data arr1 = [1, 2, 3]
+@data arr2 = [1, 2, 3]
+@data arr3 = [1, 2, 4]
+@data test_deepEq_arrays_same = @deepEq(@arr1, @arr2)
+@data test_deepEq_arrays_different = @notOk(@deepEq(@arr1, @arr3))
+
+# Test comparison operators
+@data test_gte_equal = @gte(5, 5)
+@data test_gte_greater = @gte(6, 5)
+@data test_lte_equal = @lte(5, 5)
+@data test_lte_less = @lte(4, 5)
+
+# Test len with different types
+@data test_len_string = @eq(@len("hello"), 5)
+@data test_len_array = @eq(@len([1, 2, 3, 4]), 4)
+@data test_len_object = @eq(@len({"a": 1, "b": 2, "c": 3}), 3)
+@data test_len_empty_string = @eq(@len(""), 0)
+@data test_len_empty_array = @eq(@len([]), 0)
+@data test_len_empty_object = @eq(@len({}), 0)
+
+# Test contains (string alias for includes)
+@data test_contains_string = @contains("Hello, World!", "World")
+@data test_contains_string_not_found = @notOk(@contains("Hello", "World"))
+
+# Test with command output
+@text test_string = "test output"
+@data test_command_output = @eq(@test_string, "test output")
+
+# Test with foreach
+@data values = [1, 2, 3]
+@exec double(n) = javascript [(return n * 2)]
+@data doubled = foreach @double(@values)
+@data test_foreach_works = @deepEq(@doubled, [2, 4, 6])
+
+# Test boolean values directly
+@data test_true_is_truthy = @ok(true)
+@data test_false_is_falsy = @notOk(false)
+@data test_zero_is_falsy = @notOk(0)
+@data test_one_is_truthy = @ok(1)
+@data test_null_is_falsy = @notOk(null)

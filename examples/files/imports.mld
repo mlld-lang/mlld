@@ -16,6 +16,6 @@
 @text project_name = "Mlld"
 @text imported_title = "Hello from the imported file!"
 
-@exec codecat(dir) = @run [(find @dir -type f -exec sh -c 'echo "<$(realpath --relative-to=@dir {})>"; cat {}; echo "@dir {})>"' \;)]
+@exec codecat(dir) = [(find @dir -type f -exec sh -c 'echo "<$(realpath --relative-to=@dir {})>"; cat {}; echo "@dir {})>"' \;)]
 
-@exec echo(var) = @run [(echo @var)]
+@exec echo(var) = [(echo @var)]

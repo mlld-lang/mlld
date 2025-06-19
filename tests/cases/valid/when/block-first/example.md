@@ -1,7 +1,10 @@
 @text env = "production"
+@text isDev = ""
+@text isProd = "true"
+@text isTest = ""
 
-@when first:
-  @env == "development" => @add "Dev mode"
-  @env == "production" => @add "Prod mode"
-  @env == "test" => @add "Test mode"
-EOF < /dev/null
+@when first: [
+  @isDev => @add "Dev mode"
+  @isProd => @add "Prod mode"  
+  @isTest => @add "Test mode"
+]

@@ -32,6 +32,6 @@ TailValue
   / deps:NeedsObject { return deps; }                        // for 'needs'
 
 PipelineShorthand
-  = _ first:PipelineCommand rest:(_ ref:PipelineCommand { return ref; })* {
+  = HWS first:PipelineCommand rest:(HWS ref:PipelineCommand { return ref; })* {
       return [first, ...rest];
     }

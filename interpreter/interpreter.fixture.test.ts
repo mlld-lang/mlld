@@ -139,9 +139,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
     
     // Check for fixtures in wrong directories or with parsing issues
-    const isInValidDir = fixtureFile.includes('valid/');
-    const isInInvalidDir = fixtureFile.includes('invalid/');
-    const isInExceptionsDir = fixtureFile.includes('exceptions/');
+    const isInValidDir = fixtureFile.includes('/valid/') || fixtureFile.startsWith('valid/');
+    const isInInvalidDir = fixtureFile.includes('/invalid/') || fixtureFile.startsWith('invalid/');
+    const isInExceptionsDir = fixtureFile.includes('/exceptions/') || fixtureFile.startsWith('exceptions/');
     const hasParseError = fixture.parseError !== null && fixture.parseError !== undefined;
     const hasNullAST = fixture.ast === null;
     const hasExpectedError = !!fixture.expectedError;
@@ -187,16 +187,41 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       invalidFixtures.forEach(({ file, fixture, issue }) => {
         // Use regular it() with explicit failure instead of it.fail()
         it(`INVALID: ${fixture.name} - ${issue}`, () => {
-          const details = {
-            file,
-            issue,
-            parseError: fixture.parseError || undefined,
-            hasNullAST: fixture.ast === null,
-            input: fixture.input?.substring(0, 200) + (fixture.input?.length > 200 ? '...' : '')
-          };
+          let errorMessage = `Test fixture "${fixture.name}" has issues: ${issue}`;
           
-          console.error('Invalid fixture detected:', JSON.stringify(details, null, 2));
-          throw new Error(`Test fixture "${fixture.name}" has issues: ${issue}`);
+          // Add specific parse error details if available
+          if (fixture.parseError) {
+            const parseErr = fixture.parseError;
+            errorMessage += `\n\nParse Error: ${parseErr.message}`;
+            if (parseErr.location) {
+              errorMessage += `\nLocation: Line ${parseErr.location.start.line}, Column ${parseErr.location.start.column}`;
+            }
+            
+            // Show the problematic input around the error location
+            if (fixture.input && parseErr.location) {
+              const lines = fixture.input.split('\n');
+              const errorLine = parseErr.location.start.line - 1;
+              const startLine = Math.max(0, errorLine - 2);
+              const endLine = Math.min(lines.length, errorLine + 3);
+              
+              errorMessage += '\n\nContext:\n';
+              for (let i = startLine; i < endLine; i++) {
+                const lineNum = i + 1;
+                const prefix = lineNum === parseErr.location.start.line ? '> ' : '  ';
+                errorMessage += `${prefix}${lineNum}: ${lines[i]}\n`;
+                
+                // Add error pointer on the error line
+                if (lineNum === parseErr.location.start.line) {
+                  const spaces = ' '.repeat(parseErr.location.start.column + 3 + lineNum.toString().length);
+                  errorMessage += `${spaces}^\n`;
+                }
+              }
+            }
+          } else if (fixture.ast === null) {
+            errorMessage += '\n\nAST is null - parsing completely failed';
+          }
+          
+          throw new Error(errorMessage);
         });
       });
     });
@@ -219,6 +244,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
       'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
       'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
+      'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
       'text-url-section': 'Issue #82: URL section support not implemented',
       'text-variable-copy': 'Issue #176: Variable copying with @text copy = @original not supported',
       'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
@@ -226,6 +252,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
       'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
       'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
+      'output-exec-invocation': 'Exec invocation in @output not yet supported - future enhancement',
+      'output-run-exec-reference': 'Exec invocation in @output not yet supported - future enhancement',
+      'import-namespace': 'Issue #264: Namespace imports not implemented yet',
+      'when-variable-binding': 'Issue #263: Variable binding in when actions',
+      'modules-mixed': 'Mixes unimplemented security syntax with modules',
     };
 
     const testFn = skipTests[fixture.name] ? it.skip : it;

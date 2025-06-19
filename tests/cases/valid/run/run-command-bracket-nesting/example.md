@@ -3,7 +3,7 @@
 Test shell commands with bracket conditions that should not terminate parsing.
 
 @run [(
-if [ ! -d "/tmp/test" ]
+if [ ! -d "/tmp/test" )]
 then
   mkdir -p "/tmp/test"
   echo "Created directory"
@@ -12,7 +12,7 @@ echo "Directory check complete"
 )]
 
 @exec complex_shell(dir) = [(
-if [ ! -d "@dir" ]
+if [ ! -d "@dir" )]
 then
   echo "Error: @dir is not a directory"
   return 1

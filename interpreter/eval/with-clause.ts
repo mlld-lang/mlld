@@ -56,57 +56,19 @@ async function executePipelineCommand(
   command: PipelineCommand,
   env: Environment
 ): Promise<string> {
-  // Get the command identifier
-  const cmdName = command.rawIdentifier;
-  if (!cmdName) {
-    throw new MlldInterpreterError('Pipeline command has no identifier');
-  }
+  // Import the pipeline execution function from pipeline.ts
+  const { executePipeline } = await import('./pipeline');
   
-  // Look up the command
-  const cmd = env.getVariable(cmdName);
-  if (!cmd) {
-    throw new MlldInterpreterError(`Pipeline command not found: ${cmdName}`);
-  }
+  // Execute the pipeline command using the same logic as @run pipelines
+  // This ensures transformers and all executable types work properly
+  const result = await executePipeline(
+    env.getVariable('input')?.value || '', // Get @input value
+    [command], // Single command in pipeline
+    env,
+    command.location
+  );
   
-  // Execute based on command type
-  if (cmd.type === 'command') {
-    const definition = cmd.value as any;
-    
-    // Create environment for command execution
-    const cmdEnv = env.createChild();
-    
-    // Bind arguments if any
-    const args = command.rawArgs || [];
-    const params = definition.parameters || [];
-    
-    for (let i = 0; i < params.length; i++) {
-      const paramName = params[i];
-      const argValue = args[i];
-      
-      if (argValue !== undefined) {
-        cmdEnv.setVariable(paramName, {
-          type: 'text',
-          name: paramName,
-          value: String(argValue)
-        });
-      }
-    }
-    
-    // Execute the command
-    if (definition.type === 'command') {
-      const { interpolate } = await import('../core/interpreter');
-      const cmdTemplate = definition.commandTemplate || definition.command;
-      const interpolatedCmd = await interpolate(cmdTemplate, cmdEnv);
-      return await cmdEnv.executeCommand(interpolatedCmd);
-    } else if (definition.type === 'code') {
-      const { interpolate } = await import('../core/interpreter');
-      const codeTemplate = definition.codeTemplate || definition.code;
-      const interpolatedCode = await interpolate(codeTemplate, cmdEnv);
-      return await cmdEnv.executeCode(interpolatedCode, definition.language || 'javascript');
-    }
-  }
-  
-  throw new MlldInterpreterError(`Unsupported pipeline command type: ${cmd.type}`);
+  return result;
 }
 
 /**

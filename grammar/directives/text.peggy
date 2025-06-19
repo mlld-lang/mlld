@@ -575,35 +575,58 @@ AtText
         'run'
       );
     }
-  // Command execution - @text id = @run [command]
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ command:CommandCore {
-      helpers.debug('AtText matched @run with CommandCore abstraction', { id, command });
+  // Command execution - @text id = @run [command] with optional tail modifiers
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ content:UnifiedCommandBrackets tail:TailModifiers? {
+      helpers.debug('AtText matched @run with UnifiedCommandBrackets and tail modifiers', { id, content, tail });
       
       // Use the proper subtype and sourceType
       const subtype = 'textAssignment';
       const sourceType = 'directive';
       
+      // Create run directive node
+      const runValues = { ...content.values };
+      const runRaw = { ...content.raw };
+      const runMeta = { ...content.meta };
+      
+      // Add withClause from tail if present
+      if (tail) {
+        runValues.withClause = tail;
+        runRaw.withClause = tail;
+        runMeta.withClause = tail;
+      }
+      
+      const runDirective = helpers.createStructuredDirective(
+        'run',
+        content.subtype,
+        runValues,
+        runRaw,
+        runMeta,
+        location(),
+        'command'
+      );
+      
       // Create meta object with run information
       const meta = { 
         sourceType: sourceType,
         directive: 'run',
-        hasVariables: command.meta.hasVariables || false,
-        run: {
-          isCommand: true
-        }
+        hasVariables: content.meta.hasVariables || false
+      };
+      
+      const values = {
+        identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+        runDirective: runDirective
+      };
+      
+      const raw = {
+        identifier: id,
+        runDirective: `@run ${content.raw.command}${tail ? ' | ...' : ''}`
       };
       
       return helpers.createStructuredDirective(
         'text',
         subtype,
-        {
-          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          content: command.values.command // Use the command array from CommandCore
-        },
-        {
-          identifier: id,
-          content: `@run ${command.raw.command}`
-        },
+        values,
+        raw,
         meta,
         location(),
         'run'

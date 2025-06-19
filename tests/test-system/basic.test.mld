@@ -1,0 +1,27 @@
+# Basic test of the mlld test system
+
+@import { eq, ok, notOk, gt, includes, len } from "../../modules/core/test.mld.md"
+
+# Test basic assertions
+@data test_eq_works = @eq(1, 1)
+@data test_eq_fails = @notOk(@eq(1, 2))
+
+# Test truthy/falsy
+@data test_ok_true = @ok(true)
+@data test_ok_string = @ok("hello")
+@data test_notOk_false = @notOk(false)
+@data test_notOk_empty = @notOk("")
+
+# Test comparisons
+@data test_gt_works = @gt(5, 3)
+@data test_gt_fails = @notOk(@gt(3, 5))
+
+# Test includes
+@data test_includes_string = @includes("hello world", "world")
+@data test_includes_array = @includes(["a", "b", "c"], "b")
+
+# Test with actual computation
+@data numbers = [1, 2, 3, 4, 5]
+@data sum = 15
+@data test_sum_correct = @eq(@sum, 15)
+@data test_array_length = @eq(@len(@numbers), 5)

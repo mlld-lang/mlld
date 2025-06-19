@@ -2,6 +2,7 @@
 
 Test that @when actions can use @add with exec command invocations.
 
+@data isTrue = true
 @exec formatHeader(title) = [(echo "=== @title ===")]
 @exec getVersion() = [[v1.2.3]]
 
@@ -9,11 +10,11 @@ Test that @when actions can use @add with exec command invocations.
 
 @when @showHeader => @add @formatHeader("Welcome")
 
-@when true => @add "Current version: "
-@when true => @add @getVersion()
+@when @isTrue => @add "Current version: "
+@when @isTrue => @add @getVersion()
 
-@when true: [
+@when @isTrue: [
   "dev" => @add @formatHeader("Development Mode")
   "prod" => @add @formatHeader("Production Mode")
-  true => @add @formatHeader("Default Mode")
+  @isTrue => @add @formatHeader("Default Mode")
 ]

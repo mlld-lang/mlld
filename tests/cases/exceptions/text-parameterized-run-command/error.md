@@ -4,7 +4,7 @@ Location: line 1, column 22
 ```
 
 **Error explanation:**
-The syntax `@text codecat(dir) = @run [(...)]` is invalid. For parameterized commands that execute shell commands, use `@exec` instead:
+The syntax `@exec codecat(dir) = @run [(...)]` is invalid. For parameterized commands that execute shell commands, use `@exec` instead:
 
 **Correct syntax:**
 ```mlld

@@ -78,11 +78,11 @@ Path variables for file system references:
 
 @run [(echo "This is output from a shell command")]
 
-@exec greet = @run [(echo "Hello from an exec command")]
+@exec greet = [(echo "Hello from an exec command")]
 @run @greet
 
 @text user = "Alice"
-@exec greet_user(name) = @run [(echo "Hello, @name!")]
+@exec greet_user(name) = [(echo "Hello, @name!")]
 The output of this command will be included in the output:
 @run @greet_user(@user)
 

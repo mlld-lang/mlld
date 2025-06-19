@@ -2,9 +2,9 @@
 
 This tests the @output directive with @run @command syntax.
 
-@exec generateList() = [(ls -la]
-@exec showDate() = [(date]
+@exec generateList() = [(ls -la)]
+@exec showDate() = [(date)]
 
-# Using @output @run @command syntax
-@output @run @generateList() [generated-list.txt]
-@output @run @showDate() [current-date.txt]
+# Using @output with exec references
+@output @generateList() to "generated-list.txt"
+@output @showDate() to "current-date.txt"

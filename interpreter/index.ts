@@ -37,6 +37,7 @@ export interface InterpretOptions {
   enableTrace?: boolean; // Enable directive trace for debugging (default: true)
   useMarkdownFormatter?: boolean; // Use prettier for markdown formatting (default: true)
   localFileFuzzyMatch?: FuzzyMatchConfig | boolean; // Fuzzy matching for local file imports (default: true)
+  captureEnvironment?: (env: Environment) => void; // Callback to capture environment after execution
 }
 
 /**
@@ -180,6 +181,11 @@ export async function interpret(
     useMarkdownFormatter: options.useMarkdownFormatter,
     normalizeBlankLines: options.normalizeBlankLines
   });
+  
+  // Call captureEnvironment callback if provided
+  if (options.captureEnvironment) {
+    options.captureEnvironment(env);
+  }
   
   // Return environment if requested
   if (options.returnEnvironment) {

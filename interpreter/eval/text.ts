@@ -203,66 +203,74 @@ export async function evaluateText(
     }
     
   } else if (directive.source === 'run') {
-    // Check if this is a run source (e.g., @text result = @run [(echo "hello")] or @text result = @run @cmd(args))
-    const contentNodes = directive.values?.content;
-    if (!contentNodes || !Array.isArray(contentNodes)) {
-      throw new Error('Text directive missing content');
-    }
-    
-    // Check if this is a command reference
-    if (directive.meta?.run?.isCommandRef) {
-      // This is a command reference like @run @hello(args)
-      // Import the run evaluator to handle this properly
+    // Check if we have a runDirective node (created by grammar for @run with tail modifiers)
+    if (directive.values?.runDirective) {
+      // This is a run directive with possible tail modifiers
       const { evaluateRun } = await import('./run');
-      
-      // Get structured arguments from the grammar
-      const commandArgs = directive.meta.run.commandArgs || [];
-      
-      // Convert parsed arguments to the format expected by run directive
-      const processedArgs = [];
-      for (const arg of commandArgs) {
-        if (arg.type === 'string') {
-          processedArgs.push(arg.value);
-        } else if (arg.type === 'variable' && arg.value) {
-          // Variable reference - evaluate it
-          const varValue = await interpolate([arg.value], env);
-          processedArgs.push(varValue);
-        }
-      }
-      
-      // Create a synthetic run directive to evaluate
-      const runDirective: DirectiveNode = {
-        type: 'Directive',
-        nodeId: directive.nodeId + '-run',
-        kind: 'run',
-        subtype: 'runExec',
-        source: 'exec',
-        values: {
-          identifier: [{ 
-            type: 'Text', 
-            nodeId: '', 
-            content: directive.meta.run.commandName 
-          }],
-          args: processedArgs.map(arg => ({ 
-            type: 'Text', 
-            nodeId: '', 
-            content: String(arg) 
-          }))
-        },
-        raw: {}, // Empty raw field for synthetic node
-        meta: {
-          argumentCount: processedArgs.length
-        }
-      };
-      
-      // Evaluate the run directive
-      const result = await evaluateRun(runDirective, env);
+      const result = await evaluateRun(directive.values.runDirective, env);
       resolvedValue = result.value;
     } else {
-      // Regular command execution
-      const command = await interpolate(contentNodes, env);
-      // Execute the command and use the output as the value
-      resolvedValue = await env.executeCommand(command);
+      // Legacy handling for older grammar structure
+      const contentNodes = directive.values?.content;
+      if (!contentNodes || !Array.isArray(contentNodes)) {
+        throw new Error('Text directive missing content');
+      }
+      
+      // Check if this is a command reference
+      if (directive.meta?.run?.isCommandRef) {
+        // This is a command reference like @run @hello(args)
+        // Import the run evaluator to handle this properly
+        const { evaluateRun } = await import('./run');
+        
+        // Get structured arguments from the grammar
+        const commandArgs = directive.meta.run.commandArgs || [];
+        
+        // Convert parsed arguments to the format expected by run directive
+        const processedArgs = [];
+        for (const arg of commandArgs) {
+          if (arg.type === 'string') {
+            processedArgs.push(arg.value);
+          } else if (arg.type === 'variable' && arg.value) {
+            // Variable reference - evaluate it
+            const varValue = await interpolate([arg.value], env);
+            processedArgs.push(varValue);
+          }
+        }
+        
+        // Create a synthetic run directive to evaluate
+        const runDirective: DirectiveNode = {
+          type: 'Directive',
+          nodeId: directive.nodeId + '-run',
+          kind: 'run',
+          subtype: 'runExec',
+          source: 'exec',
+          values: {
+            identifier: [{ 
+              type: 'Text', 
+              nodeId: '', 
+              content: directive.meta.run.commandName 
+            }],
+            args: processedArgs.map(arg => ({ 
+              type: 'Text', 
+              nodeId: '', 
+              content: String(arg) 
+            }))
+          },
+          raw: {}, // Empty raw field for synthetic node
+          meta: {
+            argumentCount: processedArgs.length
+          }
+        };
+        
+        // Evaluate the run directive
+        const result = await evaluateRun(runDirective, env);
+        resolvedValue = result.value;
+      } else {
+        // Regular command execution
+        const command = await interpolate(contentNodes, env);
+        // Execute the command and use the output as the value
+        resolvedValue = await env.executeCommand(command);
+      }
     }
     
     // Trim trailing newlines for consistency
