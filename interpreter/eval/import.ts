@@ -73,6 +73,29 @@ function processModuleExports(
 }
 
 /**
+ * Create a namespace variable for imports with aliased wildcards (e.g., * as config)
+ */
+function createNamespaceVariable(
+  alias: string, 
+  moduleObject: Record<string, any>, 
+  importPath: string
+): MlldVariable {
+  return {
+    type: 'data',
+    identifier: alias,
+    value: moduleObject,
+    nodeId: '',
+    location: { line: 0, column: 0 },
+    metadata: {
+      isImported: true,
+      importPath: importPath,
+      isNamespace: true,
+      definedAt: { line: 0, column: 0, filePath: importPath }
+    }
+  };
+}
+
+/**
  * Import from a resolved path (extracted to handle both normal paths and URL strings)
  */
 async function importFromPath(
@@ -388,20 +411,7 @@ async function importFromPath(
       }
       
       // Create namespace variable with the module object
-      const namespaceVariable: MlldVariable = {
-        type: 'data',
-        identifier: alias,
-        value: moduleObject,
-        nodeId: '',
-        location: { line: 0, column: 0 },
-        metadata: {
-          isImported: true,
-          importPath: resolvedPath,
-          isNamespace: true,
-          definedAt: { line: 0, column: 0, filePath: resolvedPath }
-        }
-      };
-      
+      const namespaceVariable = createNamespaceVariable(alias, moduleObject, resolvedPath);
       env.setVariable(alias, namespaceVariable);
       
     } else if (directive.subtype === 'importSelected') {
@@ -808,20 +818,7 @@ async function importFromResolverContent(
       }
       
       // Create namespace variable with the module object
-      const namespaceVariable: MlldVariable = {
-        type: 'data',
-        identifier: alias,
-        value: moduleObject,
-        nodeId: '',
-        location: { line: 0, column: 0 },
-        metadata: {
-          isImported: true,
-          importPath: ref,
-          isNamespace: true,
-          definedAt: { line: 0, column: 0, filePath: ref }
-        }
-      };
-      
+      const namespaceVariable = createNamespaceVariable(alias, moduleObject, ref);
       env.setVariable(alias, namespaceVariable);
       
     } else if (directive.subtype === 'importSelected') {
