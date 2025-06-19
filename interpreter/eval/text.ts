@@ -207,8 +207,20 @@ export async function evaluateText(
     if (directive.values?.runDirective) {
       // This is a run directive with possible tail modifiers
       const { evaluateRun } = await import('./run');
-      const result = await evaluateRun(directive.values.runDirective, env);
+      // Mark the run directive as embedded so it doesn't add output to the document
+      const runDirective = {
+        ...directive.values.runDirective,
+        meta: {
+          ...directive.values.runDirective.meta,
+          isEmbedded: true
+        }
+      };
+      const result = await evaluateRun(runDirective, env);
       resolvedValue = result.value;
+      // Trim the trailing newline that run adds for embedded directives
+      if (resolvedValue.endsWith('\n')) {
+        resolvedValue = resolvedValue.slice(0, -1);
+      }
     } else {
       // Legacy handling for older grammar structure
       const contentNodes = directive.values?.content;
@@ -258,7 +270,8 @@ export async function evaluateText(
           },
           raw: {}, // Empty raw field for synthetic node
           meta: {
-            argumentCount: processedArgs.length
+            argumentCount: processedArgs.length,
+            isEmbedded: true
           }
         };
         
@@ -273,8 +286,7 @@ export async function evaluateText(
       }
     }
     
-    // Trim trailing newlines for consistency
-    resolvedValue = resolvedValue.replace(/\n+$/, '');
+    // Don't trim trailing newlines - let the pipeline/transformer handle it
     
   } else if (directive.source === 'exec' && directive.values?.execInvocation) {
     // ExecInvocation handling: @text result = @greet() | @uppercase
@@ -334,7 +346,8 @@ export async function evaluateText(
       },
       raw: {}, // Empty raw field for synthetic node
       meta: {
-        argumentCount: processedArgs.length
+        argumentCount: processedArgs.length,
+        isEmbedded: true
       }
     };
     

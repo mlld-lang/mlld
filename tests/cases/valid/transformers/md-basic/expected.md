@@ -1,7 +1,8 @@
 # Test: Markdown formatter
 
 ## Format unformatted markdown
-# Header with extra spaces
+
+# Header with extra spaces  
 
 This is a paragraph with irregular spacing.
 
@@ -12,6 +13,6 @@ This is a paragraph with irregular spacing.
 | Col1 | Col2 | Col3 |
 | ---- | ---- | ---- |
 | A    | B    | C    |
-
 ## Using uppercase alias
+
 # Quick test

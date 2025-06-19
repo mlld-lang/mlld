@@ -386,7 +386,7 @@ export async function evaluateRun(
   }
   
   // Handle with clause if present
-  const withClause = directive.meta?.withClause as WithClause | undefined;
+  const withClause = (directive.meta?.withClause || directive.values?.withClause) as WithClause | undefined;
   if (withClause) {
     // Check dependencies first if specified
     if (withClause.needs) {
@@ -412,7 +412,7 @@ export async function evaluateRun(
   }
   
   // Only add output nodes for non-embedded directives
-  if (!directive.meta?.isDataValue) {
+  if (!directive.meta?.isDataValue && !directive.meta?.isEmbedded) {
     // Create replacement text node with the output
     const replacementNode: TextNode = {
       type: 'Text',

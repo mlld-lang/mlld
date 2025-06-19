@@ -19,7 +19,9 @@ This test verifies that simple variable references work correctly inside @when a
 @when @isTrue => @add @config
 
 ## Test 3: Inside @when first: actions
-@when first: [
+@text testValue = "false"
+
+@when @testValue first: [
   false => @add "Won't show"
   true => @add @greeting
 ]

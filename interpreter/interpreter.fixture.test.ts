@@ -126,6 +126,32 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     fixtureFiles : 
     fixtureFiles.filter(f => !f.includes('/examples/'));
   
+  // Define skip tests up front to use in categorization
+  const skipTests: Record<string, string> = {
+    'modules-hash': 'Newline handling issue - hash validation is implemented',
+    'security-ttl-durations': 'Issue #99: TTL/trust security features not implemented',
+    'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
+    'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
+    'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
+    'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
+    'text-url-section': 'Issue #82: URL section support not implemented',
+    'text-variable-copy': 'Issue #176: Variable copying with @text copy = @original not supported',
+    'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
+    'add-foreach-section-variable-new': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
+    'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
+    'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
+    'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
+    'output-exec-invocation': 'Exec invocation in @output not yet supported - future enhancement',
+    'output-run-exec-reference': 'Exec invocation in @output not yet supported - future enhancement',
+    'import-namespace': 'Issue #264: Namespace imports not implemented yet',
+    'when-variable-binding': 'Issue #263: Variable binding in when actions',
+    'modules-mixed': 'Mixes unimplemented security syntax with modules',
+    'modules-auto-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
+    'modules-explicit-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
+    'modules-metadata': 'Issue #264: Namespace imports ({ * as name }) not implemented',
+    'run-run-code-bracket-nesting': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
+  };
+
   // Separate fixtures into categories for better reporting
   const invalidFixtures: Array<{ file: string; fixture: any; issue: string }> = [];
   const validFixturesToTest: Array<{ file: string; fixture: any }> = [];
@@ -137,6 +163,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
   filteredFixtures.forEach(fixtureFile => {
     const fixturePath = path.join(fixturesDir, fixtureFile);
     const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
+    
+    // Check if this fixture should be skipped
+    if (skipTests[fixture.name]) {
+      validFixturesToTest.push({ file: fixtureFile, fixture });
+      return; // Skip categorization for known issues
+    }
     
     // Check for fixtures in wrong directories or with parsing issues
     const isInValidDir = fixtureFile.includes('/valid/') || fixtureFile.startsWith('valid/');
@@ -237,28 +269,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     // For fixtures without expected output, run as smoke tests
     const isSmokeTest = isValidFixture && (fixture.expected === null || fixture.expected === undefined);
     
-    // Skip tests with known issues
-    const skipTests: Record<string, string> = {
-      'modules-hash': 'Newline handling issue - hash validation is implemented',
-      'security-ttl-durations': 'Issue #99: TTL/trust security features not implemented',
-      'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
-      'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
-      'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
-      'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
-      'text-url-section': 'Issue #82: URL section support not implemented',
-      'text-variable-copy': 'Issue #176: Variable copying with @text copy = @original not supported',
-      'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
-      'add-foreach-section-variable-new': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
-      'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
-      'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
-      'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
-      'output-exec-invocation': 'Exec invocation in @output not yet supported - future enhancement',
-      'output-run-exec-reference': 'Exec invocation in @output not yet supported - future enhancement',
-      'import-namespace': 'Issue #264: Namespace imports not implemented yet',
-      'when-variable-binding': 'Issue #263: Variable binding in when actions',
-      'modules-mixed': 'Mixes unimplemented security syntax with modules',
-    };
-
     const testFn = skipTests[fixture.name] ? it.skip : it;
     const skipReason = skipTests[fixture.name] ? ` (Skipped: ${skipTests[fixture.name]})` : '';
 

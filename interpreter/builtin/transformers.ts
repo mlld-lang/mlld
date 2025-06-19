@@ -4,6 +4,7 @@ import type { ExecutableDefinition } from '@core/types/executable';
 // Import existing utilities
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { formatMarkdown } from '../utils/markdown-formatter';
+import { jsonToXml } from '../utils/json-to-xml';
 
 export interface TransformerDefinition {
   name: string;
@@ -16,9 +17,25 @@ export const builtinTransformers: TransformerDefinition[] = [
   {
     name: 'xml',
     uppercase: 'XML',
-    description: 'Convert content to SCREAMING_SNAKE_CASE XML using llmxml',
+    description: 'Convert content to SCREAMING_SNAKE_CASE XML',
     implementation: async (input: string) => {
-      return await llmxmlInstance.toXml(input);
+      try {
+        // Try to parse as JSON first
+        const parsed = JSON.parse(input);
+        // Use our JSON to XML converter
+        return jsonToXml(parsed);
+      } catch {
+        // Not JSON - try llmxml for markdown conversion
+        const result = await llmxmlInstance.toXML(input);
+        
+        // If llmxml returned the input unchanged (no conversion happened)
+        if (result === input) {
+          // Wrap plain text in DOCUMENT tags
+          return `<DOCUMENT>\n${input}\n</DOCUMENT>`;
+        }
+        
+        return result;
+      }
     }
   },
   {
