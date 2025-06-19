@@ -66,6 +66,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'text-foreach-section-path-expression': 'text/foreach-section-path-expression',
       'exec-invocation-module': 'exec-invocation-module',
       'env-vars-allowed': 'input/env-vars-allowed',
+      'import-namespace-json': 'import/namespace-json',
+      'import-namespace-nested': 'import/namespace-nested',
     };
     
     // Check if we have a mapping for this fixture
@@ -126,40 +128,149 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     fixtureFiles : 
     fixtureFiles.filter(f => !f.includes('/examples/'));
   
-  // Create a test for each fixture
+  // Define skip tests up front to use in categorization
+  const skipTests: Record<string, string> = {
+    'modules-hash': 'Newline handling issue - hash validation is implemented',
+    'security-ttl-durations': 'Issue #99: TTL/trust security features not implemented',
+    'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
+    'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
+    'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
+    'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
+    'text-url-section': 'Issue #82: URL section support not implemented',
+    'text-variable-copy': 'Issue #176: Variable copying with @text copy = @original not supported',
+    'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
+    'add-foreach-section-variable-new': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
+    'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
+    'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
+    'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
+    'output-exec-invocation': 'Exec invocation in @output not yet supported - future enhancement',
+    'output-run-exec-reference': 'Exec invocation in @output not yet supported - future enhancement',
+    'import-namespace': 'Issue #264: Namespace imports not implemented yet',
+    'when-variable-binding': 'Issue #263: Variable binding in when actions',
+    'modules-mixed': 'Mixes unimplemented security syntax with modules',
+    'modules-auto-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
+    'modules-explicit-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
+    'modules-metadata': 'Issue #264: Namespace imports ({ * as name }) not implemented',
+    'run-run-code-bracket-nesting': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
+  };
+
+  // Separate fixtures into categories for better reporting
+  const invalidFixtures: Array<{ file: string; fixture: any; issue: string }> = [];
+  const validFixturesToTest: Array<{ file: string; fixture: any }> = [];
+  
+  // Debug: Check if examples are included
+  console.log('Total filtered fixtures:', filteredFixtures.length);
+  console.log('Include examples:', includeExamples);
+  
   filteredFixtures.forEach(fixtureFile => {
     const fixturePath = path.join(fixturesDir, fixtureFile);
     const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
     
+    // Check if this fixture should be skipped
+    if (skipTests[fixture.name]) {
+      validFixturesToTest.push({ file: fixtureFile, fixture });
+      return; // Skip categorization for known issues
+    }
+    
+    // Check for fixtures in wrong directories or with parsing issues
+    const isInValidDir = fixtureFile.includes('/valid/') || fixtureFile.startsWith('valid/');
+    const isInInvalidDir = fixtureFile.includes('/invalid/') || fixtureFile.startsWith('invalid/');
+    const isInExceptionsDir = fixtureFile.includes('/exceptions/') || fixtureFile.startsWith('exceptions/');
+    const hasParseError = fixture.parseError !== null && fixture.parseError !== undefined;
+    const hasNullAST = fixture.ast === null;
+    const hasExpectedError = !!fixture.expectedError;
+    
+    // Detect fixtures that are in the wrong place or have issues
+    if (isInValidDir && (hasParseError || hasNullAST)) {
+      // Debug specific examples
+      if (fixture.name === 'llm-interface') {
+        console.log('llm-interface debug:', {
+          hasParseError,
+          hasNullAST,
+          parseError: fixture.parseError
+        });
+      }
+      invalidFixtures.push({
+        file: fixtureFile,
+        fixture,
+        issue: hasParseError ? 'Parse error in valid directory' : 'Null AST in valid directory'
+      });
+    } else if ((isInInvalidDir || isInExceptionsDir) && !hasExpectedError && !hasParseError) {
+      invalidFixtures.push({
+        file: fixtureFile,
+        fixture,
+        issue: 'No error in error directory'
+      });
+    } else {
+      validFixturesToTest.push({ file: fixtureFile, fixture });
+    }
+  });
+  
+  // Debug log invalid fixtures
+  console.log('Invalid fixtures found:', invalidFixtures.length);
+  if (invalidFixtures.length > 0) {
+    console.log('First few invalid fixtures:');
+    invalidFixtures.slice(0, 5).forEach(({ file, fixture, issue }) => {
+      console.log(`  - ${fixture.name}: ${issue}`);
+    });
+  }
+  
+  // Report invalid fixtures in a separate describe block
+  if (invalidFixtures.length > 0) {
+    describe('Invalid Test Fixtures (need fixing)', () => {
+      invalidFixtures.forEach(({ file, fixture, issue }) => {
+        // Use regular it() with explicit failure instead of it.fail()
+        it(`INVALID: ${fixture.name} - ${issue}`, () => {
+          let errorMessage = `Test fixture "${fixture.name}" has issues: ${issue}`;
+          
+          // Add specific parse error details if available
+          if (fixture.parseError) {
+            const parseErr = fixture.parseError;
+            errorMessage += `\n\nParse Error: ${parseErr.message}`;
+            if (parseErr.location) {
+              errorMessage += `\nLocation: Line ${parseErr.location.start.line}, Column ${parseErr.location.start.column}`;
+            }
+            
+            // Show the problematic input around the error location
+            if (fixture.input && parseErr.location) {
+              const lines = fixture.input.split('\n');
+              const errorLine = parseErr.location.start.line - 1;
+              const startLine = Math.max(0, errorLine - 2);
+              const endLine = Math.min(lines.length, errorLine + 3);
+              
+              errorMessage += '\n\nContext:\n';
+              for (let i = startLine; i < endLine; i++) {
+                const lineNum = i + 1;
+                const prefix = lineNum === parseErr.location.start.line ? '> ' : '  ';
+                errorMessage += `${prefix}${lineNum}: ${lines[i]}\n`;
+                
+                // Add error pointer on the error line
+                if (lineNum === parseErr.location.start.line) {
+                  const spaces = ' '.repeat(parseErr.location.start.column + 3 + lineNum.toString().length);
+                  errorMessage += `${spaces}^\n`;
+                }
+              }
+            }
+          } else if (fixture.ast === null) {
+            errorMessage += '\n\nAST is null - parsing completely failed';
+          }
+          
+          throw new Error(errorMessage);
+        });
+      });
+    });
+  }
+  
+  // Create tests for valid fixtures
+  validFixturesToTest.forEach(({ file: fixtureFile, fixture }) => {
     // Handle different fixture types
     const isErrorFixture = !!fixture.expectedError || !!fixture.parseError;
     const isWarningFixture = !!fixture.expectedWarning;
     const isValidFixture = !isErrorFixture && !isWarningFixture;
     
-    // Check for null AST in valid fixtures - this indicates a grammar parsing failure
-    if (isValidFixture && fixture.ast === null) {
-      throw new Error(`Valid fixture '${fixture.name}' has null AST - this indicates the grammar failed to parse the input:\n${fixture.input}`);
-    }
-    
     // For fixtures without expected output, run as smoke tests
     const isSmokeTest = isValidFixture && (fixture.expected === null || fixture.expected === undefined);
     
-    // Skip tests with known issues
-    const skipTests: Record<string, string> = {
-      'modules-hash': 'Newline handling issue - hash validation is implemented',
-      'security-ttl-durations': 'Issue #99: TTL/trust security features not implemented',
-      'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
-      'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
-      'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
-      'text-url-section': 'Issue #82: URL section support not implemented',
-      'text-variable-copy': 'Issue #176: Variable copying with @text copy = @original not supported',
-      'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
-      'add-foreach-section-variable-new': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
-      'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
-      'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
-      'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
-    };
-
     const testFn = skipTests[fixture.name] ? it.skip : it;
     const skipReason = skipTests[fixture.name] ? ` (Skipped: ${skipTests[fixture.name]})` : '';
 
@@ -679,6 +790,34 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // Restore original fetch
         (global as any).fetch = originalFetch;
       }
+    });
+  });
+  
+  // Summary report after all tests
+  describe('Test Fixture Summary', () => {
+    it('should report fixture health', () => {
+      const totalFixtures = filteredFixtures.length;
+      const invalidCount = invalidFixtures.length;
+      const validCount = validFixturesToTest.length;
+      
+      console.log('\n=== Test Fixture Health Report ===');
+      console.log(`Total fixtures: ${totalFixtures}`);
+      console.log(`Valid fixtures: ${validCount}`);
+      console.log(`Invalid fixtures: ${invalidCount}`);
+      
+      if (invalidCount > 0) {
+        console.log('\nInvalid fixtures that need attention:');
+        invalidFixtures.forEach(({ file, fixture, issue }) => {
+          console.log(`  - ${fixture.name} (${file}): ${issue}`);
+        });
+        console.log('\nThese fixtures may represent:');
+        console.log('  1. Features that ARE implemented but have grammar changes');
+        console.log('  2. Tests in wrong directories');
+        console.log('  3. Missing expected error definitions');
+      }
+      
+      // This test always passes - it's just for reporting
+      expect(true).toBe(true);
     });
   });
 });

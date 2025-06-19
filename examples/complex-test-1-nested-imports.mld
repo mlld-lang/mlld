@@ -14,7 +14,7 @@
 ]]
 
 >> Simulate creating the lib file (in real usage, this would be a separate file)
-@exec write_lib(content) = @run [(echo '@lib_content @content' > ./files/lib.mld)]
+@exec write_lib(content) = [(echo '@lib_content @content' > ./files/lib.mld)]
 
 @run @write_lib("Hi")
 

@@ -4,8 +4,8 @@
 
 Define helper functions:
 
-@exec double(x) = @run js [(x * 2)]
-@exec triple(x) = @run js [(x * 3)]
+@exec double(x) = js [(x * 2)]
+@exec triple(x) = js [(x * 3)]
 
 Declare shadow environment:
 
@@ -13,7 +13,7 @@ Declare shadow environment:
 
 Use functions within JS context:
 
-@exec calculate(n) = @run js [(
+@exec calculate(n) = js [(
   const a = double(n);
   const b = triple(n);
   return a + b;
@@ -24,12 +24,12 @@ Use functions within JS context:
 
 ## Multiple Functions
 
-@exec formatNumber(n) = @run js [(n.toFixed(2))]
-@exec addPrefix(text, prefix) = @run js [(prefix + text)]
+@exec formatNumber(n) = js [(n.toFixed(2))]
+@exec addPrefix(text, prefix) = js [(prefix + text)]
 
 @exec js = { formatNumber, addPrefix }
 
-@exec process(value) = @run js [(
+@exec process(value) = js [(
   const formatted = formatNumber(value);
   return addPrefix(formatted, "$");
 )]

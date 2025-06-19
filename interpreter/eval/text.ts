@@ -5,7 +5,7 @@ import { interpolate } from '../core/interpreter';
 import { createTextVariable, astLocationToSourceLocation } from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
-import { normalizeTemplateContent } from '../utils/blank-line-normalizer';
+// Template normalization now handled in grammar - no longer needed here
 
 /**
  * Remove single blank lines but preserve multiple blank lines.
@@ -203,70 +203,90 @@ export async function evaluateText(
     }
     
   } else if (directive.source === 'run') {
-    // Check if this is a run source (e.g., @text result = @run [(echo "hello")] or @text result = @run @cmd(args))
-    const contentNodes = directive.values?.content;
-    if (!contentNodes || !Array.isArray(contentNodes)) {
-      throw new Error('Text directive missing content');
-    }
-    
-    // Check if this is a command reference
-    if (directive.meta?.run?.isCommandRef) {
-      // This is a command reference like @run @hello(args)
-      // Import the run evaluator to handle this properly
+    // Check if we have a runDirective node (created by grammar for @run with tail modifiers)
+    if (directive.values?.runDirective) {
+      // This is a run directive with possible tail modifiers
       const { evaluateRun } = await import('./run');
-      
-      // Get structured arguments from the grammar
-      const commandArgs = directive.meta.run.commandArgs || [];
-      
-      // Convert parsed arguments to the format expected by run directive
-      const processedArgs = [];
-      for (const arg of commandArgs) {
-        if (arg.type === 'string') {
-          processedArgs.push(arg.value);
-        } else if (arg.type === 'variable' && arg.value) {
-          // Variable reference - evaluate it
-          const varValue = await interpolate([arg.value], env);
-          processedArgs.push(varValue);
-        }
-      }
-      
-      // Create a synthetic run directive to evaluate
-      const runDirective: DirectiveNode = {
-        type: 'Directive',
-        nodeId: directive.nodeId + '-run',
-        kind: 'run',
-        subtype: 'runExec',
-        source: 'exec',
-        values: {
-          identifier: [{ 
-            type: 'Text', 
-            nodeId: '', 
-            content: directive.meta.run.commandName 
-          }],
-          args: processedArgs.map(arg => ({ 
-            type: 'Text', 
-            nodeId: '', 
-            content: String(arg) 
-          }))
-        },
-        raw: {}, // Empty raw field for synthetic node
+      // Mark the run directive as embedded so it doesn't add output to the document
+      const runDirective = {
+        ...directive.values.runDirective,
         meta: {
-          argumentCount: processedArgs.length
+          ...directive.values.runDirective.meta,
+          isEmbedded: true
         }
       };
-      
-      // Evaluate the run directive
       const result = await evaluateRun(runDirective, env);
       resolvedValue = result.value;
+      // Trim the trailing newline that run adds for embedded directives
+      if (resolvedValue.endsWith('\n')) {
+        resolvedValue = resolvedValue.slice(0, -1);
+      }
     } else {
-      // Regular command execution
-      const command = await interpolate(contentNodes, env);
-      // Execute the command and use the output as the value
-      resolvedValue = await env.executeCommand(command);
+      // Legacy handling for older grammar structure
+      const contentNodes = directive.values?.content;
+      if (!contentNodes || !Array.isArray(contentNodes)) {
+        throw new Error('Text directive missing content');
+      }
+      
+      // Check if this is a command reference
+      if (directive.meta?.run?.isCommandRef) {
+        // This is a command reference like @run @hello(args)
+        // Import the run evaluator to handle this properly
+        const { evaluateRun } = await import('./run');
+        
+        // Get structured arguments from the grammar
+        const commandArgs = directive.meta.run.commandArgs || [];
+        
+        // Convert parsed arguments to the format expected by run directive
+        const processedArgs = [];
+        for (const arg of commandArgs) {
+          if (arg.type === 'string') {
+            processedArgs.push(arg.value);
+          } else if (arg.type === 'variable' && arg.value) {
+            // Variable reference - evaluate it
+            const varValue = await interpolate([arg.value], env);
+            processedArgs.push(varValue);
+          }
+        }
+        
+        // Create a synthetic run directive to evaluate
+        const runDirective: DirectiveNode = {
+          type: 'Directive',
+          nodeId: directive.nodeId + '-run',
+          kind: 'run',
+          subtype: 'runExec',
+          source: 'exec',
+          values: {
+            identifier: [{ 
+              type: 'Text', 
+              nodeId: '', 
+              content: directive.meta.run.commandName 
+            }],
+            args: processedArgs.map(arg => ({ 
+              type: 'Text', 
+              nodeId: '', 
+              content: String(arg) 
+            }))
+          },
+          raw: {}, // Empty raw field for synthetic node
+          meta: {
+            argumentCount: processedArgs.length,
+            isEmbedded: true
+          }
+        };
+        
+        // Evaluate the run directive
+        const result = await evaluateRun(runDirective, env);
+        resolvedValue = result.value;
+      } else {
+        // Regular command execution
+        const command = await interpolate(contentNodes, env);
+        // Execute the command and use the output as the value
+        resolvedValue = await env.executeCommand(command);
+      }
     }
     
-    // Trim trailing newlines for consistency
-    resolvedValue = resolvedValue.replace(/\n+$/, '');
+    // Don't trim trailing newlines - let the pipeline/transformer handle it
     
   } else if (directive.source === 'exec' && directive.values?.execInvocation) {
     // ExecInvocation handling: @text result = @greet() | @uppercase
@@ -326,7 +346,8 @@ export async function evaluateText(
       },
       raw: {}, // Empty raw field for synthetic node
       meta: {
-        argumentCount: processedArgs.length
+        argumentCount: processedArgs.length,
+        isEmbedded: true
       }
     };
     
@@ -343,10 +364,8 @@ export async function evaluateText(
     
     resolvedValue = await interpolate(contentNodes, env);
     
-    // Apply template normalization if this is template content and normalization is enabled
-    if (directive.meta?.isTemplateContent && env.getNormalizeBlankLines()) {
-      resolvedValue = normalizeTemplateContent(resolvedValue, true);
-    }
+    // Template normalization is now handled in the grammar at parse time
+    // The AST already has normalized content
   }
   
   // Handle append operator

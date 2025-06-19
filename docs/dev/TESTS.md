@@ -140,6 +140,16 @@ The main test runner is in `interpreter/interpreter.fixture.test.ts`. It:
    - **Exception tests**: Verify specific errors are thrown
    - **Warning tests**: Verify warnings are produced
 
+### Output Formatting in Tests
+
+**Important**: The test runner disables prettier markdown formatting (`useMarkdownFormatter: false`) to ensure exact output matching. This means:
+
+- Expected output files don't have prettier's automatic formatting (e.g., blank lines before headers)
+- Tests verify the raw mlld output, not the prettified version
+- This makes tests more stable and independent of prettier's formatting rules
+
+In production use, mlld applies prettier formatting by default, which adds proper spacing, normalizes line breaks, and ensures consistent markdown formatting. Users can disable this with the `--no-format` flag.
+
 ### Environment Setup
 
 Each test gets a clean environment with:
@@ -147,6 +157,8 @@ Each test gets a clean environment with:
 - Path service for file resolution
 - Shared test files copied from `tests/cases/files/`
 - Example-specific files as needed
+- Markdown formatter disabled for exact output matching
+- Blank line normalization enabled (can be tested separately)
 
 ## Examples Integration
 

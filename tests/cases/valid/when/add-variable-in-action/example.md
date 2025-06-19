@@ -13,19 +13,22 @@ This test verifies that simple variable references work correctly inside @when a
 @add @config
 
 ## Test 2: Inside @when actions (currently fails)
-@when true => @add @greeting
-@when true => @add @template
-@when true => @add @config
+@data isTrue = true
+@when @isTrue => @add @greeting
+@when @isTrue => @add @template
+@when @isTrue => @add @config
 
 ## Test 3: Inside @when first: actions
-@when first: [
-  false => @add "Won't show"
-  true => @add @greeting
+@text testValue = "false"
+
+@when @testValue first: [
+  true => @add "Won't show"
+  false => @add @greeting
 ]
 
 ## Test 4: Mixed with exec invocations
 @exec greet(name) = [[Hello, {{name}}!]]
 @text simpleVar = "Simple value"
 
-@when true => @add @greet("Alice")
-@when true => @add @simpleVar
+@when @isTrue => @add @greet("Alice")
+@when @isTrue => @add @simpleVar

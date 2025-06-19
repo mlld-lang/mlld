@@ -1,9 +1,11 @@
 @data user = { "role": "guest", "verified": false }
 
-@when any:
-  @user.role == "admin"
-  @user.role == "moderator"
-  @user.verified == true
-=>
-  @add "Access granted"
-EOF < /dev/null
+@text isAdmin = ""
+@text isModerator = ""
+@text isVerified = ""
+
+@when any: [
+  @isAdmin
+  @isModerator
+  @isVerified
+] => @add "Access granted"

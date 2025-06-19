@@ -1,50 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeTemplateContent, normalizeOutputBlankLines, normalizeFinalOutput } from './blank-line-normalizer';
+import { normalizeOutputBlankLines, normalizeFinalOutput } from './blank-line-normalizer';
 
 describe('blank-line-normalizer', () => {
-  describe('normalizeTemplateContent', () => {
-    it('should not modify content when not a template', () => {
-      const content = '\nHello\nWorld\n\n';
-      expect(normalizeTemplateContent(content, false)).toBe(content);
-    });
-
-    it('should remove leading newline in templates', () => {
-      const content = '\nHello World!';
-      expect(normalizeTemplateContent(content, true)).toBe('Hello World!');
-    });
-
-    it('should preserve content without leading newline', () => {
-      const content = 'Hello World!';
-      expect(normalizeTemplateContent(content, true)).toBe('Hello World!');
-    });
-
-    it('should remove single trailing newline', () => {
-      // Single trailing newline is removed
-      expect(normalizeTemplateContent('Hello\n', true)).toBe('Hello');
-      
-      // Multiple trailing newlines - only the last one is removed
-      expect(normalizeTemplateContent('Hello\n\n', true)).toBe('Hello\n');
-      expect(normalizeTemplateContent('Hello\n\n\n', true)).toBe('Hello\n\n');
-    });
-
-    it('should handle both leading and trailing normalization', () => {
-      const content = '\nHello World!\n';
-      // Remove leading \n and trailing \n
-      expect(normalizeTemplateContent(content, true)).toBe('Hello World!');
-    });
-
-    it('should handle templates without trailing newline', () => {
-      const content = 'Hello World!';
-      expect(normalizeTemplateContent(content, true)).toBe('Hello World!');
-    });
-
-    it('should handle empty templates', () => {
-      expect(normalizeTemplateContent('', true)).toBe('');
-      expect(normalizeTemplateContent('\n', true)).toBe('');
-      expect(normalizeTemplateContent('\n\n', true)).toBe('');
-    });
-  });
-
   describe('normalizeOutputBlankLines', () => {
     it('should reduce multiple blank lines to single blank line', () => {
       expect(normalizeOutputBlankLines('A\n\n\nB')).toBe('A\n\nB');

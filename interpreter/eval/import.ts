@@ -73,6 +73,42 @@ function processModuleExports(
 }
 
 /**
+ * Create a namespace variable for imports with aliased wildcards (e.g., * as config)
+ */
+function createNamespaceVariable(
+  alias: string, 
+  moduleObject: Record<string, any>, 
+  importPath: string
+): MlldVariable {
+  // Unwrap the module object values for clean namespace access
+  const unwrappedObject: Record<string, any> = {};
+  
+  for (const [key, value] of Object.entries(moduleObject)) {
+    if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
+      // Unwrap the wrapped variable format
+      unwrappedObject[key] = value.__value;
+    } else {
+      // Keep the value as-is for non-wrapped values
+      unwrappedObject[key] = value;
+    }
+  }
+  
+  return {
+    type: 'data',
+    identifier: alias,
+    value: unwrappedObject,
+    nodeId: '',
+    location: { line: 0, column: 0 },
+    metadata: {
+      isImported: true,
+      importPath: importPath,
+      isNamespace: true,
+      definedAt: { line: 0, column: 0, filePath: importPath }
+    }
+  };
+}
+
+/**
  * Import from a resolved path (extracted to handle both normal paths and URL strings)
  */
 async function importFromPath(
@@ -170,6 +206,31 @@ async function importFromPath(
               }
             });
           }
+        } else if (directive.subtype === 'importNamespace') {
+          // Import entire JSON under a namespace alias
+          const imports = directive.values?.imports || [];
+          const importNode = imports[0]; // Should be single wildcard with alias
+          const alias = importNode?.alias;
+          
+          if (!alias) {
+            throw new Error('Namespace import missing alias');
+          }
+          
+          // Create namespace variable with the JSON object
+          // Note: For JSON files, we don't need to unwrap since the data is already plain
+          env.setVariable(alias, {
+            type: 'data',
+            identifier: alias,
+            value: moduleObject,
+            nodeId: '',
+            location: { line: 0, column: 0 },
+            metadata: {
+              isImported: true,
+              importPath: resolvedPath,
+              isNamespace: true,
+              definedAt: { line: 0, column: 0, filePath: resolvedPath }
+            }
+          });
         } else if (directive.subtype === 'importSelected') {
           // Import selected properties
           const imports = directive.values?.imports || [];
@@ -388,20 +449,7 @@ async function importFromPath(
       }
       
       // Create namespace variable with the module object
-      const namespaceVariable: MlldVariable = {
-        type: 'data',
-        identifier: alias,
-        value: moduleObject,
-        nodeId: '',
-        location: { line: 0, column: 0 },
-        metadata: {
-          isImported: true,
-          importPath: resolvedPath,
-          isNamespace: true,
-          definedAt: { line: 0, column: 0, filePath: resolvedPath }
-        }
-      };
-      
+      const namespaceVariable = createNamespaceVariable(alias, moduleObject, resolvedPath);
       env.setVariable(alias, namespaceVariable);
       
     } else if (directive.subtype === 'importSelected') {
@@ -797,6 +845,20 @@ async function importFromResolverContent(
         }
         env.setVariable(name, importedVariable);
       }
+    } else if (directive.subtype === 'importNamespace') {
+      // Import entire module under a namespace alias
+      const imports = directive.values?.imports || [];
+      const importNode = imports[0]; // Should be single wildcard with alias
+      const alias = importNode?.alias;
+      
+      if (!alias) {
+        throw new Error('Namespace import missing alias');
+      }
+      
+      // Create namespace variable with the module object
+      const namespaceVariable = createNamespaceVariable(alias, moduleObject, ref);
+      env.setVariable(alias, namespaceVariable);
+      
     } else if (directive.subtype === 'importSelected') {
       // Import selected variables - use same structure as importFromPath
       const imports = directive.values?.imports || [];

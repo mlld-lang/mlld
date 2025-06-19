@@ -15,6 +15,7 @@ import { createSetupCommand } from './commands/setup';
 import { createAliasCommand } from './commands/alias';
 import { envCommand } from './commands/env';
 import { languageServerCommand } from './commands/language-server';
+import { testCommand } from './commands/test';
 import chalk from 'chalk';
 import { version } from '@core/version';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
@@ -151,7 +152,7 @@ function parseArgs(args: string[]): CLIOptions {
   };
 
   // Commands that can have subcommands (and should stop parsing)
-  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 'setup', 'env'];
+  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 'setup', 'env', 'test'];
   
   // Store remaining args after command
   options._ = [];
@@ -634,6 +635,37 @@ Options:
     return;
   }
   
+  if (command === 'test') {
+    console.log(`
+Usage: mlld test [pattern...]
+
+Run mlld tests.
+
+Arguments:
+  pattern    Test file patterns or paths (e.g., "array", "src/utils", "*.test.mld")
+
+Test Discovery:
+  - Finds all **/*.test.mld files by default
+  - Use patterns to filter specific tests
+  - Pattern matching is case-insensitive
+
+Test Format:
+  Tests are written in mlld files using @mlld/test assertions:
+  
+  @import { eq, ok, includes } from @mlld/test
+  @data result = @myFunction("input")
+  @data test_returns_correct_value = @eq(@result, "expected")
+  @data test_not_empty = @ok(@result)
+
+Examples:
+  mlld test                    # Run all tests
+  mlld test array              # Run tests with "array" in the path
+  mlld test src/utils          # Run tests in src/utils/
+  mlld test parser.test.mld    # Run specific test file
+    `);
+    return;
+  }
+  
   if (command === 'language-server' || command === 'lsp') {
     console.log(`
 Usage: mlld language-server
@@ -685,6 +717,7 @@ Commands:
   auth                    Manage GitHub authentication
   publish                 Publish module to mlld registry
   registry                Manage mlld module registry
+  test                    Run mlld tests
   language-server, lsp    Start the mlld language server for editor integration
   debug-resolution        Debug variable resolution in a mlld file
   debug-transform         Debug node transformations through the pipeline
@@ -1088,6 +1121,10 @@ async function processFile(options: CLIOptions): Promise<void> {
   const apiOptions = cliToApiOptions(options);
   
   if (options.debugContext) {
+    // TODO: debugContextCommand is not imported
+    console.error('Debug context command not yet implemented');
+    return;
+    /*
     await debugContextCommand({
       filePath: options.input,
       variableName: options.variableName,
@@ -1100,6 +1137,7 @@ async function processFile(options: CLIOptions): Promise<void> {
       includeFilePaths: options.includeFilePaths
     });
     return;
+    */
   }
 
   // Use the common processing function
@@ -1405,8 +1443,19 @@ Examples:
       return;
     }
     
+    // Handle test command
+    if (cliOptions.input === 'test') {
+      const cmdArgs = cliOptions._ || [];
+      await testCommand(cmdArgs);
+      return;
+    }
+    
     // Handle debug-resolution command
     if (cliOptions.debugResolution) {
+      // TODO: debugResolutionCommand is not imported
+      console.error('Debug resolution command not yet implemented');
+      return;
+      /*
       try {
         await debugResolutionCommand({
           filePath: cliOptions.input,
@@ -1419,10 +1468,15 @@ Examples:
         throw error;
       }
       return;
+      */
     }
 
     // Handle debug-context command
     if (cliOptions.debugContext) {
+      // TODO: debugContextCommand is not imported
+      console.error('Debug context command not yet implemented');
+      return;
+      /*
       await debugContextCommand({
         filePath: cliOptions.input,
         variableName: cliOptions.variableName,
@@ -1435,10 +1489,15 @@ Examples:
         includeFilePaths: cliOptions.includeFilePaths !== false
       });
       return;
+      */
     }
 
     // Handle debug-transform command
     if (cliOptions.debugTransform) {
+      // TODO: debugTransformCommand is not imported
+      console.error('Debug transform command not yet implemented');
+      return;
+      /*
       await debugTransformCommand({
         filePath: cliOptions.input,
         directiveType: cliOptions.directiveType,
@@ -1447,6 +1506,7 @@ Examples:
         includeContent: cliOptions.includeContent
       });
       return;
+      */
     }
 
     // Configure logging based on options

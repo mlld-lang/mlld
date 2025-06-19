@@ -26,11 +26,11 @@
 }
 
 ## Service Health Checks
-@exec service_healthy(name) = @run [(
+@exec service_healthy(name) = [(
   curl -s "http://localhost:8080/{{name}}/health" | grep -q "ok" && echo "true"
 )]
 
-@exec all_services_healthy() = @run [(
+@exec all_services_healthy() = [(
   # Check if all services return healthy
   healthy=true
   for service in auth payment user; do
@@ -66,15 +66,15 @@ Please provide:
   foreach @analyze_service(@services)
 ]
 
-@exec analyze_service(service) = @run [(
+@exec analyze_service(service) = [(
   echo "=== Analysis for {{service.name}} ==="
   echo "{{serviceAnalysisPrompt}}" | llm --model gpt-4
 )]
 
 ## Conditional Deployment
-@exec is_production() = @run [(test "$ENVIRONMENT" = "production" && echo "true")]
-@exec tests_passing() = @run [(npm test 2>/dev/null && echo "true")]
-@exec approved_for_deploy() = @run [(test -f .deploy-approved && echo "true")]
+@exec is_production() = [(test "$ENVIRONMENT" = "production" && echo "true")]
+@exec tests_passing() = [(npm test 2>/dev/null && echo "true")]
+@exec approved_for_deploy() = [(test -f .deploy-approved && echo "true")]
 
 @when all: [
   @is_production()

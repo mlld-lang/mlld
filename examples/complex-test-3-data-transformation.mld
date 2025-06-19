@@ -14,8 +14,8 @@
 }
 
 # Complex exec commands for data processing
-@exec count_by_role(role) = @run [(echo '@users' | jq '[.[)] | select(.role == "@role")] | length']
-@exec get_active_users = @run [(echo '@users' | jq '[.[)] | select(.active == true)] | length']
+@exec count_by_role(role) = [(echo '@users' | jq '[.[)] | select(.role == "@role")] | length']
+@exec get_active_users = [(echo '@users' | jq '[.[)] | select(.active == true)] | length']
 
 # Test array access and data operations
 @text user_report = [[

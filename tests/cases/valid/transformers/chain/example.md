@@ -9,7 +9,7 @@
 ]
 ]]
 
-@text report = @run [(echo '@jsonData')] | @json | @csv
+@text report = @run [(echo "@jsonData")] with { pipeline: [@json, @csv] }
 @add @report
 
 ## Multiple transformations
@@ -20,5 +20,5 @@
 - Keyboard: $75
 ]]
 
-@text xmlReport = @run [(echo "@mdData")] | @md | @xml
+@text xmlReport = @run [(echo "@mdData")] with { pipeline: [@md, @xml] }
 @add @xmlReport

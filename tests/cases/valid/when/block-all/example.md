@@ -1,7 +1,11 @@
 @data features = ["auth", "payments", "notifications"]
 
-@when all:
-  "auth" in @features => @add "Authentication enabled\n"
-  "payments" in @features => @add "Payments enabled\n"
-  "chat" in @features => @add "Chat enabled\n"
-EOF < /dev/null
+@text hasAuth = "true"
+@text hasPayments = "true"
+@text hasChat = ""
+
+@when @hasAuth all: [
+  @hasAuth => @add "Authentication enabled\n"
+  @hasPayments => @add "Payments enabled\n"
+  @hasChat => @add "Chat enabled\n"
+]

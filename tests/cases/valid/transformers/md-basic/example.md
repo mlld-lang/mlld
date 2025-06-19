@@ -15,9 +15,9 @@ This is    a paragraph with     irregular spacing.
 |A|B|C|
 ]]
 
-@text prettyMd = @run [(echo "@uglyMd")] | @md
+@text prettyMd = @run [(echo "@uglyMd")] with { pipeline: [@md] }
 @add @prettyMd
 
 ## Using uppercase alias
-@text prettyUpper = @run [(echo "# Quick test")] | @MD
+@text prettyUpper = @run [(echo "# Quick test")] with { pipeline: [@MD] }
 @add @prettyUpper

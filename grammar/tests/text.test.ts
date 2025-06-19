@@ -66,7 +66,7 @@ describe('Text Directive Tests', () => {
       // Check meta
       expect(result.meta.sourceType).toBe('directive');
       expect(result.meta.directive).toBe('run');
-      expect(result.meta.run).toBeDefined();
+      expect(result.meta.hasVariables).toBe(false);
       
       // Type guard
       expect(isTextAssignmentDirective(result)).toBe(true);

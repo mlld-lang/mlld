@@ -2,6 +2,7 @@
 
 Test that @when actions can use @run with exec command invocations.
 
+@data isTrue = true
 @exec greet(name) = [(echo "Hello, @name!")]
 @exec capitalize(text) = [(echo "@text" | tr '[:lower:]' '[:upper:]')]
 
@@ -9,4 +10,4 @@ Test that @when actions can use @run with exec command invocations.
 
 @when @condition => @run @greet("World")
 
-@when true => @run @capitalize("test message")
+@when @isTrue => @run @capitalize("test message")

@@ -2,10 +2,10 @@
 
 ## Option 1: Namespace Object Pattern (Recommended)
 
-@exec llm_basic(prompt, system) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}})]
-@exec llm_media(prompt, system, media) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media)]
-@exec llm_tools(prompt, system, tools) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools)]
-@exec llm_full(prompt, parameters) = @run [(llm "@prompt" @parameters)]
+@exec llm_basic(prompt, system) = [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}})]
+@exec llm_media(prompt, system, media) = [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media)]
+@exec llm_tools(prompt, system, tools) = [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools)]
+@exec llm_full(prompt, parameters) = [(llm "@prompt" @parameters)]
 
 @data llm = {
   # Default function behavior
@@ -67,9 +67,9 @@
 
 ## For a module (@mlld/llm), Option 1 is cleanest:
 
-@exec _llm(prompt, system) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}})]
-@exec _llm_media(prompt, system, media) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media)]
-@exec _llm_tools(prompt, system, tools) = @run [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools)]
+@exec _llm(prompt, system) = [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}})]
+@exec _llm_media(prompt, system, media) = [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media)]
+@exec _llm_tools(prompt, system, tools) = [(llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools)]
 
 @data llm = {
   # Call directly: @run @llm("prompt")

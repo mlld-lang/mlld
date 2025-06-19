@@ -209,8 +209,44 @@ DoubleBracketContent "Content with {{var}} interpolation"
         firstType: Array.isArray(parts) && parts.length > 0 ? parts[0].type : 'none'
       });
       
+      // Strip formatting newlines at grammar level
+      // Process the parts array to remove leading/trailing newlines
+      let processedParts = parts;
+      
+      // Remove leading newline if first part is a Text node starting with \n
+      if (processedParts.length > 0 && processedParts[0].type === 'Text' && processedParts[0].content) {
+        if (processedParts[0].content === '\n') {
+          // If it's just a newline, remove the whole node
+          processedParts = processedParts.slice(1);
+        } else if (processedParts[0].content.startsWith('\n')) {
+          // If it starts with a newline, strip it
+          processedParts[0] = {
+            ...processedParts[0],
+            content: processedParts[0].content.slice(1)
+          };
+        }
+      }
+      
+      // Remove trailing newline if last part is a Text node ending with \n
+      if (processedParts.length > 0) {
+        const lastIndex = processedParts.length - 1;
+        const lastPart = processedParts[lastIndex];
+        if (lastPart.type === 'Text' && lastPart.content) {
+          if (lastPart.content === '\n') {
+            // If it's just a newline, remove the whole node
+            processedParts = processedParts.slice(0, -1);
+          } else if (lastPart.content.endsWith('\n')) {
+            // If it ends with a newline, strip it
+            processedParts[lastIndex] = {
+              ...lastPart,
+              content: lastPart.content.slice(0, -1)
+            };
+          }
+        }
+      }
+      
       // Return only the content within double brackets, not the brackets themselves
-      return parts;
+      return processedParts;
     }
   // Support direct {{var}} without requiring [[ ]] wrapper
   / parts:InterpolationVar {

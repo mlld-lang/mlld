@@ -7,6 +7,46 @@ import { isWhenSimpleNode, isWhenBlockNode, isWhenSwitchNode } from '@core/types
 import { evaluate } from '../core/interpreter';
 
 /**
+ * Compares two values according to mlld's when comparison rules
+ */
+function compareValues(expressionValue: any, conditionValue: any): boolean {
+  // Both null/undefined
+  if ((expressionValue === null || expressionValue === undefined) &&
+      (conditionValue === null || conditionValue === undefined)) {
+    return true;
+  }
+  // String comparison - case sensitive
+  else if (typeof expressionValue === 'string' && typeof conditionValue === 'string') {
+    return expressionValue === conditionValue;
+  }
+  // Boolean comparison
+  else if (typeof expressionValue === 'boolean' && typeof conditionValue === 'boolean') {
+    return expressionValue === conditionValue;
+  }
+  // Number comparison
+  else if (typeof expressionValue === 'number' && typeof conditionValue === 'number') {
+    return expressionValue === conditionValue;
+  }
+  // String-boolean comparison: "true"/"false" matches true/false
+  else if (typeof expressionValue === 'string' && typeof conditionValue === 'boolean') {
+    return (expressionValue === 'true' && conditionValue === true) ||
+           (expressionValue === 'false' && conditionValue === false);
+  }
+  else if (typeof expressionValue === 'boolean' && typeof conditionValue === 'string') {
+    return (expressionValue === true && conditionValue === 'true') ||
+           (expressionValue === false && conditionValue === 'false');
+  }
+  // Truthy comparison - if condition is boolean literal
+  else if (typeof conditionValue === 'boolean') {
+    return isTruthy(expressionValue) === conditionValue;
+  }
+  // Direct equality for other cases
+  else {
+    return expressionValue === conditionValue;
+  }
+}
+
+/**
  * Evaluates a @when directive.
  * Handles simple, switch, and block forms.
  */
@@ -92,34 +132,8 @@ async function evaluateWhenSwitch(
         conditionValue = conditionResult.value;
       }
       
-      // Compare values - handle special cases
-      let matches = false;
-      
-      // Both null/undefined
-      if ((expressionValue === null || expressionValue === undefined) &&
-          (conditionValue === null || conditionValue === undefined)) {
-        matches = true;
-      }
-      // String comparison - case sensitive
-      else if (typeof expressionValue === 'string' && typeof conditionValue === 'string') {
-        matches = expressionValue === conditionValue;
-      }
-      // Boolean comparison
-      else if (typeof expressionValue === 'boolean' && typeof conditionValue === 'boolean') {
-        matches = expressionValue === conditionValue;
-      }
-      // Number comparison
-      else if (typeof expressionValue === 'number' && typeof conditionValue === 'number') {
-        matches = expressionValue === conditionValue;
-      }
-      // Truthy comparison - if condition is boolean literal
-      else if (typeof conditionValue === 'boolean') {
-        matches = isTruthy(expressionValue) === conditionValue;
-      }
-      // Direct equality for other cases
-      else {
-        matches = expressionValue === conditionValue;
-      }
+      // Compare values using shared logic
+      let matches = compareValues(expressionValue, conditionValue);
       
       // Apply negation if needed
       if (isNegated) {
@@ -157,11 +171,18 @@ async function evaluateWhenBlock(
   const modifier = node.meta.modifier;
   const conditions = node.values.conditions;
   
+  // For comparison-based modifiers (first, any, all), we need the expression to compare against
+  let expressionNodes: BaseMlldNode[] | undefined;
+  
   // Store variable value if specified
   let originalValue: any;
   let variableName: string | undefined;
   
+  
   if (node.values.variable && node.meta.hasVariable) {
+    // The variable nodes contain the expression to evaluate
+    expressionNodes = node.values.variable;
+    
     // Extract variable name from the nodes
     const varResult = await evaluate(node.values.variable, env);
     variableName = String(varResult.value || '').trim();
@@ -180,7 +201,7 @@ async function evaluateWhenBlock(
     
     switch (modifier) {
       case 'first':
-        result = await evaluateFirstMatch(conditions, childEnv, variableName);
+        result = await evaluateFirstMatch(conditions, childEnv, variableName, expressionNodes);
         break;
         
       case 'all':
@@ -237,12 +258,69 @@ async function evaluateWhenBlock(
 async function evaluateFirstMatch(
   conditions: WhenConditionPair[],
   env: Environment,
-  variableName?: string
+  variableName?: string,
+  expressionNodes?: BaseMlldNode[]
 ): Promise<EvalResult> {
-  for (const pair of conditions) {
-    const conditionResult = await evaluateCondition(pair.condition, env, variableName);
+  // If we have expression nodes, evaluate them to get the value to compare against
+  let expressionValue: any;
+  if (expressionNodes && expressionNodes.length > 0) {
     
-    if (conditionResult) {
+    if (expressionNodes.length === 1 && expressionNodes[0].type === 'Text') {
+      expressionValue = (expressionNodes[0] as any).content;
+    } else if (expressionNodes.length === 1 && expressionNodes[0].type === 'VariableReference') {
+      // For variable references, get the actual value, not the output
+      const varRef = expressionNodes[0] as any;
+      const variable = env.getVariable(varRef.identifier);
+      if (variable) {
+        expressionValue = variable.value;
+      }
+      
+    } else {
+      const expressionResult = await evaluate(expressionNodes, env);
+      expressionValue = expressionResult.value;
+      
+    }
+  }
+  
+  for (const pair of conditions) {
+    let matches = false;
+    
+    if (expressionValue !== undefined) {
+      // Compare expression value against condition value (like switch mode)
+      let conditionValue: any;
+      
+      // Check for negation
+      let isNegated = false;
+      let actualCondition = pair.condition;
+      
+      if (actualCondition.length === 1 && actualCondition[0].type === 'Negation') {
+        isNegated = true;
+        const negationNode = actualCondition[0] as any;
+        actualCondition = negationNode.condition;
+      }
+      
+      // Evaluate the condition value
+      if (actualCondition.length === 1 && actualCondition[0].type === 'Text') {
+        conditionValue = (actualCondition[0] as any).content;
+      } else {
+        const conditionResult = await evaluate(actualCondition, env);
+        conditionValue = conditionResult.value;
+      }
+      
+      // Compare values using shared logic
+      matches = compareValues(expressionValue, conditionValue);
+      
+      
+      // Apply negation if needed
+      if (isNegated) {
+        matches = !matches;
+      }
+    } else {
+      // No expression value, fall back to truthiness evaluation
+      matches = await evaluateCondition(pair.condition, env, variableName);
+    }
+    
+    if (matches) {
       if (pair.action) {
         const result = await evaluate(pair.action, env);
         // The action has already added its output nodes during evaluation

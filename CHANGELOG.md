@@ -5,9 +5,14 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.4.2] - In Progress
+## [1.4.3]
 
 ### Added
+- **mlld test Command**: New command for running mlld test suites
+  - Discovers and runs `.test.mld` files in test directories
+  - Supports custom test directories with `--test-dir` flag
+  - Shows detailed test results with pass/fail status
+  - Integrates with CI/CD workflows
 - **Built-in Transformers**: Common data format transformers are now built into mlld
   - `@XML` / `@xml` - Convert content to SCREAMING_SNAKE_CASE XML using llmxml
   - `@JSON` / `@json` - Pretty-print JSON or convert markdown structures to JSON
@@ -24,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Error messages are preserved and shown in context
   - Stack traces included for debugging
   - Works in pipelines and shows full execution context
+- **Namespace Imports**: Support for importing all variables from a file under a namespace alias (#264)
+  - Import .mld files: `@import { * as utils } from "utils.mld"` - access as `{{utils.helper}}`
+  - Import JSON files: `@import { * as config } from "config.json"` - access as `{{config.name}}`
+  - Nested object access: `{{config.database.host}}` for deep properties
+  - Works in templates with dot notation for clean, organized variable access
 
 ### Fixed
 - Template executable property naming consistency (`template` vs `templateContent`)
@@ -33,13 +43,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pipeline syntax validation (only executables allowed after pipe operator)
 - Module path resolution in built-in transformer imports
 - isCommandVariable import in interpreter for executable variable handling
+- **Template interpolation in foreach**: Fixed parameter interpolation in exec templates used with foreach - must use `{{param}}` syntax inside `[[...]]` templates
+- **Shell parameter access**: Fixed exec functions with shell/sh commands to properly access parameters as environment variables using `$param` syntax
+- **Array length property**: Removed incorrect test expectation for `.length` property on arrays (not implemented in mlld)
+- **Grammar test expectations**: Fixed text directive test expecting undefined `meta.run` property for command execution
+- **Shadow environment support for JavaScript**: Restored shadow environment functionality for `js` language
+  - `js` execution uses in-process evaluation with direct function access
+  - `node` execution uses subprocess isolation without shadow environment support
+  - Shadow functions in `js` are synchronous for simple expressions, avoiding need for `await`
+- **When directive comparisons**: Fixed `@when` with `first:` modifier to use value comparison instead of truthiness
+  - `@when @var first: [...]` now compares `@var` value against each condition like switch syntax
+  - Added string-boolean comparison: `"true"` matches `true`, `"false"` matches `false`
+  - Consolidated comparison logic across all when variants for consistency
+- **Pipeline parsing**: Fixed grammar to prevent pipelines from crossing line boundaries
+
+### Changed
+- **Template newline handling**: Moved newline stripping from interpreter to grammar level
+  - Grammar now strips leading newline after `[[` and trailing newline before `]]`
+  - These newlines are treated as formatting for readability, not content
+  - More efficient and consistent than post-processing
+  - Removed unused `normalizeTemplateContent()` function
 
 ### Documentation
 - Added `docs/pipeline.md` - Comprehensive pipeline documentation
 - Added `docs/transformers.md` - Built-in transformer reference
-- Added `docs/SECURITY.md` - Security considerations for mlld usage
+- Added `docs/security.md` - Security considerations for mlld usage
 - Updated `docs/input-variables.md` with pipeline @INPUT documentation
 - Updated `llms.txt` with pipeline and transformer information
+
+## [1.4.2]
+
+### Added
+- Initial groundwork for pipeline support (full implementation in 1.4.3)
 
 ## [1.4.1]
 

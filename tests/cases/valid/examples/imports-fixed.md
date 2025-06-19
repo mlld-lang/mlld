@@ -12,6 +12,6 @@
     "security_review": "Carefully review the security of the code and advise on the quality of the security and areas of improvement."
 }
 
-@exec codecat(dir) = @run [(find @dir -type f -name "*.js" -exec cat {} \;)]
+@exec codecat(dir) = [(find @dir -type f -name "*.js" -exec cat {} \;)]
 
 @exec echo(var) = @add [[Echo: {{var}}]]

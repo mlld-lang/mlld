@@ -32,6 +32,13 @@ TailValue
   / deps:NeedsObject { return deps; }                        // for 'needs'
 
 PipelineShorthand
-  = _ first:PipelineCommand rest:(_ ref:PipelineCommand { return ref; })* {
+  = first:PipelineCommand rest:(HWS &{ 
+      // Check if we're still on the same line
+      const pos = peg$currPos;
+      const beforePos = input.lastIndexOf('\n', pos - 1);
+      const afterPos = input.indexOf('\n', pos);
+      const hasNewlineBefore = beforePos >= 0 && !input.substring(beforePos + 1, pos).trim();
+      return !hasNewlineBefore;
+    } ref:PipelineCommand { return ref; })* {
       return [first, ...rest];
     }
