@@ -206,6 +206,31 @@ async function importFromPath(
               }
             });
           }
+        } else if (directive.subtype === 'importNamespace') {
+          // Import entire JSON under a namespace alias
+          const imports = directive.values?.imports || [];
+          const importNode = imports[0]; // Should be single wildcard with alias
+          const alias = importNode?.alias;
+          
+          if (!alias) {
+            throw new Error('Namespace import missing alias');
+          }
+          
+          // Create namespace variable with the JSON object
+          // Note: For JSON files, we don't need to unwrap since the data is already plain
+          env.setVariable(alias, {
+            type: 'data',
+            identifier: alias,
+            value: moduleObject,
+            nodeId: '',
+            location: { line: 0, column: 0 },
+            metadata: {
+              isImported: true,
+              importPath: resolvedPath,
+              isNamespace: true,
+              definedAt: { line: 0, column: 0, filePath: resolvedPath }
+            }
+          });
         } else if (directive.subtype === 'importSelected') {
           // Import selected properties
           const imports = directive.values?.imports || [];

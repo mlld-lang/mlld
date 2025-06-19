@@ -66,6 +66,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'text-foreach-section-path-expression': 'text/foreach-section-path-expression',
       'exec-invocation-module': 'exec-invocation-module',
       'env-vars-allowed': 'input/env-vars-allowed',
+      'import-namespace-json': 'import/namespace-json',
+      'import-namespace-nested': 'import/namespace-nested',
     };
     
     // Check if we have a mapping for this fixture
