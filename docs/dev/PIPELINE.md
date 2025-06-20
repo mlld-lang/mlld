@@ -58,6 +58,63 @@ All features preserve source location for precise error reporting:
 - Evaluators pass location through to errors
 - Errors show exact position in source file
 
+## Pipeline Operator Syntax
+
+mlld supports two equivalent syntaxes for pipeline transformations:
+
+### Shorthand Syntax
+```mlld
+@data result = @input | @transformer1 | @transformer2
+@text output = @message | @upper | @trim
+```
+
+### Longhand Syntax  
+```mlld
+@data result = @input with { pipeline: [@transformer1, @transformer2] }
+@text output = @message with { pipeline: [@upper, @trim] }
+```
+
+Both syntaxes produce identical AST structures and should behave identically.
+
+### Grammar Implementation
+
+The pipeline operator is parsed in `grammar/patterns/tail-modifiers.peggy`:
+
+```peggy
+PipelineShorthand
+  = first:PipelineCommand rest:(HWS &{ 
+      // Check if we're still on the same line
+      const pos = peg$currPos;
+      const beforePos = input.lastIndexOf('\n', pos - 1);
+      const afterPos = input.indexOf('\n', pos);
+      const hasNewlineBefore = beforePos >= 0 && !input.substring(beforePos + 1, pos).trim();
+      return !hasNewlineBefore;
+    } "|" HWS ref:PipelineCommand { return ref; })* {
+      return [first, ...rest];
+    }
+```
+
+**Critical**: The `"|" HWS` sequence must be present to capture multiple pipe operators. Without it, only the first transformer is parsed.
+
+### Variable References with Pipelines
+
+To support pipelines in assignment contexts, we use `VariableReferenceWithTail`:
+
+```typescript
+// AST structure for @data result = @msg | @upper
+{
+  type: 'VariableReferenceWithTail',
+  variable: { identifier: 'msg' },
+  withClause: {
+    pipeline: [
+      { identifier: [{ identifier: 'upper' }], args: [], fields: [] }
+    ]
+  }
+}
+```
+
+This pattern is defined in `grammar/patterns/variables.peggy` and used by both `@data` and `@text` directives.
+
 ## Built-in Transformers
 
 As of version 1.4.2, mlld includes built-in transformers that integrate seamlessly with the pipeline system.

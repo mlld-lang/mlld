@@ -237,6 +237,16 @@ export class LockFile {
     return this.data!.security?.trustedDomains || [];
   }
 
+  async setTrustedDomains(domains: string[]): Promise<void> {
+    this.ensureLoaded();
+    if (!this.data!.security) {
+      this.data!.security = {};
+    }
+    this.data!.security.trustedDomains = domains;
+    this.isDirty = true;
+    await this.save();
+  }
+
   getBlockedPatterns(): string[] {
     this.ensureLoaded();
     return this.data!.security?.blockedPatterns || [];
@@ -333,6 +343,17 @@ export class LockFile {
   getScriptDir(): string | undefined {
     this.ensureLoaded();
     return this.data!.config?.scriptDir;
+  }
+  
+  // Set the script directory configuration
+  async setScriptDir(scriptDir: string): Promise<void> {
+    this.ensureLoaded();
+    if (!this.data!.config) {
+      this.data!.config = {};
+    }
+    this.data!.config.scriptDir = scriptDir;
+    this.isDirty = true;
+    await this.save();
   }
   
   // Update the lock file path (for project root discovery)

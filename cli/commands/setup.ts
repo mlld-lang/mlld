@@ -406,8 +406,7 @@ Information about this module.
     console.log('');
     
     // Get current script directory from lock file
-    const lockData = (lockFile as any).data;
-    const currentScriptDir = lockData.config?.scriptDir || 'llm/run';
+    const currentScriptDir = lockFile.getScriptDir() || 'llm/run';
     
     // Get script directory path
     const defaultDir = 'llm/run';
@@ -461,13 +460,7 @@ A simple mlld script example.
     
     // Save script directory configuration
     if (scriptDir) {
-      const lockData = (lockFile as any).data;
-      if (!lockData.config) {
-        lockData.config = {};
-      }
-      lockData.config.scriptDir = scriptDir;
-      (lockFile as any).isDirty = true;
-      await lockFile.save();
+      await lockFile.setScriptDir(scriptDir);
     }
 
     // If this is a new file, add some basic security configuration
@@ -484,13 +477,7 @@ A simple mlld script example.
       const needsUpdate = defaultDomains.some(domain => !currentTrustedDomains.includes(domain));
       if (needsUpdate) {
         const mergedDomains = [...new Set([...currentTrustedDomains, ...defaultDomains])];
-        // Update the lock file data manually since there's no setTrustedDomains method
-        (lockFile as any).data.security = {
-          ...(lockFile as any).data.security,
-          trustedDomains: mergedDomains
-        };
-        (lockFile as any).isDirty = true;
-        await lockFile.save();
+        await lockFile.setTrustedDomains(mergedDomains);
       }
     }
 
