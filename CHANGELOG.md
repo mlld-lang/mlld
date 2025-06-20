@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - @debug / @DEBUG wasn't working
 - Created better naming clarity with prefix/resolver/registry distinction and refactor
 - JS shadow env bug
+- @data not allowing RHS @run 
 
 ### Documentation
 - Lots of docs updates for resolvers

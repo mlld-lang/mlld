@@ -186,71 +186,20 @@ DataValue
 
 // Embedded directive value - semantic parsing for data context
 DirectiveValue
-  = "@run" _ "[" parts:DataCommandParts "]" {
-      const rawCommand = helpers.reconstructRawString(parts);
-      
-      // Extract command bases
-      let commandBases = [];
-      let rawBases = [];
-      if (parts.length > 0 && parts[0].type === NodeType.Text) {
-        const cmdMatch = parts[0].content.match(/^(\S+)/);
-        if (cmdMatch) {
-          commandBases.push(helpers.createNode(NodeType.CommandBase, {
-            command: cmdMatch[1],
-            location: parts[0].location
-          }));
-          rawBases.push(cmdMatch[1]);
-        }
+  = "@run" _ directive:RunDirectiveRef {
+      // Mark the directive as a data value
+      if (directive.meta) {
+        directive.meta.isDataValue = true;
+      } else {
+        directive.meta = { isDataValue: true };
       }
       
-      const runDirective = helpers.createStructuredDirective(
-        'run',
-        'runCommand',
-        {
-          command: parts,
-          commandBases: commandBases
-        },
-        {
-          command: rawCommand,
-          commandBases: rawBases
-        },
-        { 
-          isDataValue: true,
-          isMultiLine: rawCommand.includes('\n'),
-          commandCount: commandBases.length,
-          hasScriptRunner: false
-        },
-        location()
-      );
-      
       return {
         type: "nestedDirective",
-        directive: runDirective,
-        rawText: "@run [" + rawCommand + "]"
-      };
-    }
-  / "@run" _ "@" invocation:ExecInvocationWithTail {
-      const runDirective = helpers.createStructuredDirective(
-        'run',
-        'runExecInvocation',
-        {
-          execInvocation: invocation
-        },
-        {
-          execInvocation: invocation.commandRef.name
-        },
-        {
-          isDataValue: true,
-          isExecInvocation: true
-        },
-        location(),
-        'exec'
-      );
-      
-      return {
-        type: "nestedDirective",
-        directive: runDirective,
-        rawText: "@run @" + invocation.commandRef.name
+        directive: directive,
+        rawText: "@run " + (directive.raw?.lang ? directive.raw.lang + " [" + (directive.raw.code || "") + "]" :
+                           directive.raw?.command ? "[" + directive.raw.command + "]" :
+                           directive.raw?.identifier ? "@" + directive.raw.identifier : "")
       };
     }
   / "@add" _ content:AddCore {

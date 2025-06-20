@@ -187,6 +187,29 @@ RunDirectiveRef
         location()
       );
     }
+  / "@" commandRef:RunCommandReference {
+      // @ detected -> Command reference (exec) in RHS
+      helpers.debug('RunDirectiveRef matched exec reference in RHS', { commandRef });
+      
+      return helpers.createStructuredDirective(
+        'run',
+        'runExec',
+        {
+          identifier: commandRef.identifier,
+          args: commandRef.args || []
+        },
+        {
+          identifier: commandRef.rawIdentifier,
+          args: commandRef.rawArgs || []
+        },
+        {
+          argumentCount: commandRef.args ? commandRef.args.length : 0,
+          isRHSRef: true
+        },
+        location(),
+        'exec'
+      );
+    }
   / content:UnifiedCommandBrackets {
       helpers.debug('RunDirectiveRef matched command in RHS', { content });
       
