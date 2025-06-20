@@ -48,6 +48,16 @@ export async function executePipeline(
         );
       }
       
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('Pipeline command resolved:', {
+          rawIdentifier: command.rawIdentifier,
+          commandVarType: commandVar?.type,
+          hasValue: !!commandVar?.value,
+          valueType: commandVar?.value?.type
+        });
+      }
+      
       // Execute the command with @INPUT as the first argument if no args provided
       let args = command.args || [];
       
@@ -204,11 +214,34 @@ async function executeCommandVariable(
   if (commandVar && commandVar.type === 'executable' && commandVar.value) {
     // This is a wrapped executable variable
     execDef = commandVar.value;
+    
+    // Debug logging
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Executable definition extracted:', {
+        type: execDef?.type,
+        hasParamNames: !!execDef?.paramNames,
+        hasCommandTemplate: !!execDef?.commandTemplate,
+        hasCodeTemplate: !!execDef?.codeTemplate,
+        hasTemplateContent: !!execDef?.templateContent,
+        language: execDef?.language
+      });
+    }
   } else if (commandVar && (commandVar.type === 'command' || commandVar.type === 'code' || commandVar.type === 'template') && (commandVar.commandTemplate || commandVar.codeTemplate || commandVar.templateContent)) {
     // This is a direct executable definition
     execDef = commandVar;
   } else {
-    throw new Error(`Cannot execute non-executable variable in pipeline: ${JSON.stringify(commandVar)}`);
+    // Enhanced error message with more detail
+    const varInfo = {
+      type: commandVar?.type,
+      hasValue: !!commandVar?.value,
+      valueType: commandVar?.value?.type,
+      hasCommandTemplate: !!(commandVar?.commandTemplate),
+      hasCodeTemplate: !!(commandVar?.codeTemplate),
+      hasTemplateContent: !!(commandVar?.templateContent),
+      hasTemplate: !!(commandVar?.template),
+      keys: commandVar ? Object.keys(commandVar) : []
+    };
+    throw new Error(`Cannot execute non-executable variable in pipeline: ${JSON.stringify(varInfo)}`);
   }
   
   // Create environment with parameter bindings
@@ -261,12 +294,12 @@ async function executeCommandVariable(
     
     const result = await env.executeCode(code, execDef.language || 'javascript', params);
     return result;
-  } else if (execDef.type === 'template' && execDef.templateContent) {
+  } else if (execDef.type === 'template' && execDef.template) {
     // Interpolate template
     const { interpolate } = await import('../core/interpreter');
     const { InterpolationContext } = await import('../core/interpolation-context');
     
-    const result = await interpolate(execDef.templateContent, execEnv, InterpolationContext.Default);
+    const result = await interpolate(execDef.template, execEnv, InterpolationContext.Default);
     return result;
   }
   

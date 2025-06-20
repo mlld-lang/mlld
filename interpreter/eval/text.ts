@@ -288,6 +288,38 @@ export async function evaluateText(
     
     // Don't trim trailing newlines - let the pipeline/transformer handle it
     
+  } else if (directive.source === 'variableWithTail' && directive.values?.variableWithTail) {
+    // Variable with tail modifiers: @text result = @message | @upper
+    const varWithTail = directive.values.variableWithTail;
+    
+    // First resolve the variable
+    const variable = env.getVariable(varWithTail.variable.identifier);
+    if (!variable) {
+      throw new Error(`Variable not found: ${varWithTail.variable.identifier}`);
+    }
+    
+    // Get the value
+    const { resolveVariableValue } = await import('../core/interpreter');
+    let result = await resolveVariableValue(variable, env);
+    
+    // Apply field access if present
+    if (varWithTail.variable.fields && varWithTail.variable.fields.length > 0) {
+      const { accessField } = await import('../utils/field-access');
+      result = await accessField(result, varWithTail.variable.fields, varWithTail.variable.identifier);
+    }
+    
+    // Apply pipeline if present
+    if (varWithTail.withClause && varWithTail.withClause.pipeline) {
+      const { executePipeline } = await import('./pipeline');
+      result = await executePipeline(
+        String(result),
+        varWithTail.withClause.pipeline,
+        env
+      );
+    }
+    
+    resolvedValue = String(result);
+    
   } else if (directive.source === 'exec' && directive.values?.execInvocation) {
     // ExecInvocation handling: @text result = @greet() | @uppercase
     const execInvocation = directive.values.execInvocation;

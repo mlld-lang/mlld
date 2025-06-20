@@ -145,3 +145,25 @@ FrontmatterAccess
         ]
       };
     }
+
+// Variable reference with optional tail modifiers (for pipeline support)
+VariableReferenceWithTail "variable reference with tail modifiers"
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* tail:TailModifiers? {
+      const normalizedId = helpers.normalizePathVar(id);
+      const varRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+      
+      if (tail) {
+        // Wrap in a structure similar to ExecInvocation for consistency
+        return {
+          type: 'VariableReferenceWithTail',
+          variable: varRef,
+          withClause: tail
+        };
+      }
+      
+      // No tail modifiers - return plain variable reference
+      return varRef;
+    }

@@ -39,6 +39,6 @@ PipelineShorthand
       const afterPos = input.indexOf('\n', pos);
       const hasNewlineBefore = beforePos >= 0 && !input.substring(beforePos + 1, pos).trim();
       return !hasNewlineBefore;
-    } ref:PipelineCommand { return ref; })* {
+    } "|" HWS ref:PipelineCommand { return ref; })* {
       return [first, ...rest];
     }

@@ -255,23 +255,41 @@ ExecInvocationValue
 
 // Variable reference (including field access) with proper disambiguation
 VariableReferenceValue  
-  = !ReservedDirective "@" id:BaseIdentifier !"(" accessElements:AnyFieldAccess* {
+  = !ReservedDirective "@" id:BaseIdentifier !("(" / "[[") fields:AnyFieldAccess* tail:TailModifiers? {
+      // Build the variable reference
       const normalizedId = helpers.normalizePathVar(id);
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
+      const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
-        ...(accessElements.length > 0 ? { fields: accessElements } : {})
+        ...(fields && fields.length > 0 ? { fields: fields } : {})
       }, location());
       
+      // Check if this has tail modifiers
+      if (tail) {
+        // This is a variable with pipeline/tail modifiers
+        return {
+          type: "variableReferenceWithTail",
+          value: {
+            type: 'VariableReferenceWithTail',
+            variable: varRef,
+            withClause: tail
+          },
+          rawText: "@" + normalizedId,
+          meta: {
+            hasTailModifiers: true
+          }
+        };
+      }
+      
+      // Plain variable reference without tail modifiers
       return {
         type: "variableReference",
-        value: node,
-        rawText: "@" + normalizedId + (accessElements ? accessElements.map(f => {
+        value: varRef,
+        rawText: "@" + normalizedId + (fields ? fields.map(f => {
           if (f.type === 'field' || f.type === 'numericField' || f.type === 'stringIndex') {
             return '.' + f.value;
           } else if (f.type === 'arrayIndex') {
             return '[' + f.value + ']';
           }
-          // Fallback for any other types
           return '';
         }).join('') : '')
       };

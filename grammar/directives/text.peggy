@@ -244,6 +244,36 @@ AtText
       );
     }
   // Parameterized template definition removed - moved to @exec directive
+  // Variable reference with tail modifiers - must come before TemplateCore
+  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ ref:VariableReferenceWithTail &{ 
+      // Only match if this has tail modifiers (otherwise let TemplateCore handle it)
+      return ref.type === 'VariableReferenceWithTail';
+    } {
+      helpers.debug('AtText matched variable reference with tail modifiers', { id, ref });
+      
+      const subtype = 'textAssignment';
+      const sourceType = 'variableWithTail';
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          variableWithTail: ref
+        },
+        {
+          identifier: id,
+          content: '@' + ref.variable.identifier
+        },
+        {
+          sourceType,
+          hasVariables: true,
+          hasTailModifiers: true
+        },
+        location(),
+        sourceType
+      );
+    }
   // Template content (including [[...]]) - must come before other patterns to avoid misparsing
   / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
       // Use both variables and template syntax for detection

@@ -66,6 +66,11 @@ export function parseDataValue(node: ASTDataNode): DataValue {
     return node as DirectiveNode; // Return the directive node directly
   }
   
+  // Handle variable references with tail modifiers
+  if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'VariableReferenceWithTail') {
+    return node as any; // Return the node directly for special handling
+  }
+  
   // Handle variable references
   if (typeof node === 'object' && node !== null && 'type' in node && node.type === 'VariableReference') {
     return node as VariableReferenceNode; // Return the variable reference node directly

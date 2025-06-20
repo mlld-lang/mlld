@@ -106,6 +106,49 @@ export async function evaluateDataValue(
     return await evaluateForeachSection(value, env);
   }
   
+  // Handle variable references with tail modifiers (pipelines, etc.)
+  if (value && typeof value === 'object' && value.type === 'VariableReferenceWithTail') {
+    // First resolve the variable value
+    const varRef = value.variable;
+    const variable = env.getVariable(varRef.identifier);
+    if (!variable) {
+      throw new Error(`Variable not found: ${varRef.identifier}`);
+    }
+    
+    // Get the base value
+    let result: any;
+    if (isTextVariable(variable)) {
+      result = variable.value;
+    } else if (isDataVariable(variable)) {
+      result = await resolveVariableValue(variable, env);
+    } else if (isPathVariable(variable)) {
+      result = variable.value.resolvedPath;
+    } else if (isExecutableVariable(variable)) {
+      result = variable;
+    } else if (isImportVariable(variable)) {
+      result = variable.value;
+    } else {
+      throw new Error(`Unknown variable type in data evaluation: ${(variable as any).type}`);
+    }
+    
+    // Apply field access if present
+    if (varRef.fields && varRef.fields.length > 0) {
+      result = await accessField(result, varRef.fields, varRef.identifier);
+    }
+    
+    // Apply pipeline if present
+    if (value.withClause && value.withClause.pipeline) {
+      const { executePipeline } = await import('../eval/pipeline');
+      result = await executePipeline(
+        String(result),
+        value.withClause.pipeline,
+        env
+      );
+    }
+    
+    return result;
+  }
+  
   // Handle variable references (with potential field access)
   if (isVariableReferenceValue(value)) {
     const variable = env.getVariable(value.identifier);

@@ -80,7 +80,11 @@ export async function evaluateExecInvocation(
       execEnv.setVariable(paramName, {
         type: 'text',
         name: paramName,
-        value: argValue
+        value: argValue,
+        metadata: {
+          isSystem: true, // Mark as system variable to bypass reserved name check
+          isParameter: true
+        }
       });
     }
   }
