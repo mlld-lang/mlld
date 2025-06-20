@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ResolverManager } from './ResolverManager';
 import { LocalResolver } from './LocalResolver';
 import { RegistryResolver } from './RegistryResolver';
-import { Resolver, ResolverContent, RegistryConfig } from './types';
+import { Resolver, ResolverContent, PrefixConfig } from './types';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 
 // Mock resolver for testing
@@ -85,11 +85,10 @@ describe('ResolverManager', () => {
   
   describe('registry configuration', () => {
     it('should configure registries', () => {
-      const registries: RegistryConfig[] = [
+      const prefixes: PrefixConfig[] = [
         {
           prefix: '@company/',
           resolver: 'mock',
-          type: 'input',
           config: { basePath: '/company' }
         },
         {
@@ -103,25 +102,25 @@ describe('ResolverManager', () => {
       manager.registerResolver(new MockResolver());
       manager.registerResolver(new LocalResolver(fileSystem));
       
-      manager.configureRegistries(registries);
+      manager.configurePrefixes(prefixes);
       
-      const configured = manager.getRegistries();
+      const configured = manager.getPrefixConfigs();
       expect(configured).toHaveLength(2);
       expect(configured[0].prefix).toBe('@company/');
       expect(configured[1].prefix).toBe('@notes/');
     });
     
     it('should sort registries by prefix length', () => {
-      const registries: RegistryConfig[] = [
-        { prefix: '@a/', resolver: 'mock', type: 'input' },
-        { prefix: '@abc/', resolver: 'mock', type: 'input' },
-        { prefix: '@ab/', resolver: 'mock', type: 'input' }
+      const prefixes: PrefixConfig[] = [
+        { prefix: '@a/', resolver: 'mock' },
+        { prefix: '@abc/', resolver: 'mock' },
+        { prefix: '@ab/', resolver: 'mock' }
       ];
       
       manager.registerResolver(new MockResolver());
-      manager.configureRegistries(registries);
+      manager.configurePrefixes(prefixes);
       
-      const configured = manager.getRegistries();
+      const configured = manager.getPrefixConfigs();
       expect(configured[0].prefix).toBe('@abc/'); // Longest first
       expect(configured[1].prefix).toBe('@ab/');
       expect(configured[2].prefix).toBe('@a/');
@@ -136,11 +135,10 @@ describe('ResolverManager', () => {
     
     it('should resolve using configured prefix', async () => {
       // Configure mock resolver for @mock/ prefix  
-      manager.configureRegistries([
+      manager.configurePrefixes([
         {
           prefix: '@mock/',
           resolver: 'mock',
-          type: 'input',
           config: { mock: true }
         }
       ]);
@@ -189,7 +187,7 @@ describe('ResolverManager', () => {
       const outputResolver = new OutputOnlyResolver();
       freshManager.registerResolver(outputResolver);
       
-      freshManager.configureRegistries([
+      freshManager.configurePrefixes([
         {
           prefix: '@output/',
           resolver: 'output-only',
@@ -241,8 +239,8 @@ describe('ResolverManager', () => {
       });
       
       slowManager.registerResolver(new SlowResolver());
-      slowManager.configureRegistries([
-        { prefix: '@slow/', resolver: 'slow', type: 'input' }
+      slowManager.configurePrefixes([
+        { prefix: '@slow/', resolver: 'slow' }
       ]);
       
       await expect(slowManager.resolve('@slow/file')).rejects.toThrow('Operation timed out');
@@ -287,7 +285,7 @@ describe('ResolverManager', () => {
       }
       
       manager.registerResolver(new WriteResolver());
-      manager.configureRegistries([
+      manager.configurePrefixes([
         { prefix: '@output/', resolver: 'writer', type: 'io' }
       ]);
       
@@ -313,15 +311,14 @@ describe('ResolverManager', () => {
         pathOnlyMode: false
       });
       
-      const registries: RegistryConfig[] = [
+      const prefixes: PrefixConfig[] = [
         {
           prefix: '@custom/',
           resolver: './custom-resolver.js',
-          type: 'input'
         }
       ];
       
-      expect(() => secureManager.configureRegistries(registries)).toThrow('Custom resolvers are not allowed');
+      expect(() => secureManager.configurePrefixes(prefixes)).toThrow('Custom resolvers are not allowed');
     });
   });
 });

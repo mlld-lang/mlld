@@ -214,9 +214,9 @@ export interface Resolver {
 }
 
 /**
- * Registry configuration for a resolver
+ * Prefix configuration for a resolver
  */
-export interface RegistryConfig {
+export interface PrefixConfig {
   /**
    * Prefix pattern this resolver handles (e.g., "@notes/", "@company/")
    */

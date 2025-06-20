@@ -2,7 +2,7 @@ import {
   Resolver, 
   ResolverContent, 
   ResolutionResult, 
-  RegistryConfig, 
+  PrefixConfig, 
   ResolverSecurityPolicy,
   ResolverOptions,
   ContentInfo,
@@ -22,7 +22,7 @@ export class ResolverManager {
   private resolvers: Map<string, Resolver> = new Map();
   private resolversByPriority: Resolver[] = [];
   private resolverNamesCache: Set<string> = new Set(); // Cache all resolver name variants
-  private registries: RegistryConfig[] = [];
+  private prefixConfigs: PrefixConfig[] = [];
   private securityPolicy: ResolverSecurityPolicy;
   private moduleCache?: ModuleCache;
   private lockFile?: LockFile;
@@ -103,33 +103,33 @@ export class ResolverManager {
   }
 
   /**
-   * Configure registries from lock file or config
+   * Configure prefixes from lock file or config
    */
-  configureRegistries(registries: RegistryConfig[], projectRoot?: string): void {
-    // Validate all registries first
-    for (const registry of registries) {
-      this.validateRegistry(registry);
+  configurePrefixes(prefixes: PrefixConfig[], projectRoot?: string): void {
+    // Validate all prefixes first
+    for (const prefix of prefixes) {
+      this.validatePrefixConfig(prefix);
     }
 
-    // If projectRoot is provided, resolve relative basePaths in registry configs
-    const processedRegistries = projectRoot ? registries.map(registry => {
-      if (registry.config?.basePath && !path.isAbsolute(registry.config.basePath)) {
+    // If projectRoot is provided, resolve relative basePaths in prefix configs
+    const processedPrefixes = projectRoot ? prefixes.map(prefixConfig => {
+      if (prefixConfig.config?.basePath && !path.isAbsolute(prefixConfig.config.basePath)) {
         // Resolve relative basePath relative to project root
-        const resolvedPath = path.resolve(projectRoot, registry.config.basePath);
+        const resolvedPath = path.resolve(projectRoot, prefixConfig.config.basePath);
         return {
-          ...registry,
+          ...prefixConfig,
           config: {
-            ...registry.config,
+            ...prefixConfig.config,
             basePath: resolvedPath
           }
         };
       }
-      return registry;
-    }) : registries;
+      return prefixConfig;
+    }) : prefixes;
 
     // Sort by prefix length (longest first) for proper matching
-    this.registries = processedRegistries.sort((a, b) => b.prefix.length - a.prefix.length);
-    logger.debug(`Configured ${registries.length} registries`);
+    this.prefixConfigs = processedPrefixes.sort((a, b) => b.prefix.length - a.prefix.length);
+    logger.debug(`Configured ${prefixes.length} prefixes`);
   }
 
   /**
@@ -202,8 +202,8 @@ export class ResolverManager {
       );
     }
 
-    // 2. Find matching registry by prefix
-    const { resolver, registry } = await this.findResolver(ref, options?.context);
+    // 2. Find matching prefix by prefix
+    const { resolver, prefixConfig } = await this.findResolver(ref, options?.context);
 
     if (!resolver) {
       throw new MlldResolutionError(
@@ -230,13 +230,13 @@ export class ResolverManager {
 
     // Strip prefix from reference for resolver operations
     let resolverRef = ref;
-    if (registry?.prefix && ref.startsWith(registry.prefix)) {
-      resolverRef = ref.slice(registry.prefix.length);
+    if (prefixConfig?.prefix && ref.startsWith(prefixConfig.prefix)) {
+      resolverRef = ref.slice(prefixConfig.prefix.length);
     }
 
     // Check access if supported
     if (resolver.checkAccess) {
-      const hasAccess = await resolver.checkAccess(resolverRef, 'read', registry?.config);
+      const hasAccess = await resolver.checkAccess(resolverRef, 'read', prefixConfig?.config);
       if (!hasAccess) {
         throw new MlldResolutionError(
           `Access denied for reference: ${ref}`,
@@ -249,11 +249,11 @@ export class ResolverManager {
       // 3. Resolve fresh from source
       const timeoutMs = options?.securityPolicy?.timeout || this.securityPolicy.timeout;
       
-      // Merge registry config with options
+      // Merge prefix config with options
       const resolverConfig = {
-        ...registry?.config,
+        ...prefixConfig?.config,
         context: options?.context,
-        prefix: registry?.prefix
+        prefix: prefixConfig?.prefix
       };
       
       const content = await this.withTimeout(
@@ -295,13 +295,13 @@ export class ResolverManager {
       const resolutionTime = Date.now() - startTime;
 
       // Check for dirty state if not using LOCAL resolver
-      if (resolver.name !== 'LOCAL' && registry?.config?.basePath) {
+      if (resolver.name !== 'LOCAL' && prefixConfig?.config?.basePath) {
         // Add .mlld.md extension if not present
         let fileName = resolverRef;
         if (!fileName.includes('.')) {
           fileName += '.mlld.md';
         }
-        const localPath = path.join(process.cwd(), registry.config.basePath, fileName);
+        const localPath = path.join(process.cwd(), prefixConfig.config.basePath, fileName);
         
         // Check if local file exists and has uncommitted changes
         const gitStatus = await getGitStatus(localPath);
@@ -309,7 +309,7 @@ export class ResolverManager {
           const statusEmoji = gitStatus === 'modified' ? '📝' : '🆕';
           const statusText = gitStatus === 'modified' ? 'modified' : 'untracked';
           
-          console.warn(`\n${statusEmoji} Local ${statusText} version detected for ${registry.prefix}${resolverRef}`);
+          console.warn(`\n${statusEmoji} Local ${statusText} version detected for ${prefixConfig.prefix}${resolverRef}`);
           console.warn(`   Remote: Using ${resolver.name} resolver`);
           console.warn(`   Local:  ${localPath}`);
           console.warn(`   Hint:   Use --dev flag to test with local version`);
@@ -320,7 +320,7 @@ export class ResolverManager {
       return {
         content,
         resolverName: resolver.name,
-        matchedPrefix: registry?.prefix,
+        matchedPrefix: prefixConfig?.prefix,
         resolutionTime
       };
     } catch (error) {
@@ -340,7 +340,7 @@ export class ResolverManager {
               
               // Try to resolve using LOCAL resolver
               const localContent = await localResolver.resolve(moduleName, {
-                basePath: registry?.config?.basePath || process.cwd()
+                basePath: prefixConfig?.config?.basePath || process.cwd()
               });
               
               // Log warning about using local version
@@ -353,7 +353,7 @@ export class ResolverManager {
               return {
                 content: localContent,
                 resolverName: 'LOCAL (dev fallback)',
-                matchedPrefix: registry?.prefix,
+                matchedPrefix: prefixConfig?.prefix,
                 resolutionTime
               };
             } catch (localError) {
@@ -389,7 +389,7 @@ export class ResolverManager {
       );
     }
 
-    const { resolver, registry } = await this.findResolver(ref, undefined);
+    const { resolver, prefixConfig } = await this.findResolver(ref, undefined);
 
     if (!resolver) {
       throw new MlldResolutionError(
@@ -408,13 +408,13 @@ export class ResolverManager {
 
     // Strip prefix from reference for resolver operations
     let resolverRef = ref;
-    if (registry?.prefix && ref.startsWith(registry.prefix)) {
-      resolverRef = ref.slice(registry.prefix.length);
+    if (prefixConfig?.prefix && ref.startsWith(prefixConfig.prefix)) {
+      resolverRef = ref.slice(prefixConfig.prefix.length);
     }
 
     // Check access if supported
     if (resolver.checkAccess) {
-      const hasAccess = await resolver.checkAccess(resolverRef, 'write', registry?.config);
+      const hasAccess = await resolver.checkAccess(resolverRef, 'write', prefixConfig?.config);
       if (!hasAccess) {
         throw new MlldResolutionError(
           `Write access denied for reference: ${ref}`,
@@ -424,7 +424,7 @@ export class ResolverManager {
     }
 
     try {
-      await resolver.write(resolverRef, content, registry?.config);
+      await resolver.write(resolverRef, content, prefixConfig?.config);
     } catch (error) {
       throw new MlldResolutionError(
         `Failed to write '${ref}' using ${resolver.name}: ${error.message}`,
@@ -441,7 +441,7 @@ export class ResolverManager {
    * List available content under a prefix
    */
   async list(prefix: string, options?: ResolverOptions): Promise<ContentInfo[]> {
-    const { resolver, registry } = await this.findResolver(prefix, undefined);
+    const { resolver, prefixConfig } = await this.findResolver(prefix, undefined);
 
     if (!resolver || !resolver.list) {
       return [];
@@ -449,12 +449,12 @@ export class ResolverManager {
 
     // Strip prefix from reference for resolver operations
     let resolverPrefix = prefix;
-    if (registry?.prefix && prefix.startsWith(registry.prefix)) {
-      resolverPrefix = prefix.slice(registry.prefix.length);
+    if (prefixConfig?.prefix && prefix.startsWith(prefixConfig.prefix)) {
+      resolverPrefix = prefix.slice(prefixConfig.prefix.length);
     }
 
     try {
-      return await resolver.list(resolverPrefix, registry?.config);
+      return await resolver.list(resolverPrefix, prefixConfig?.config);
     } catch (error) {
       logger.warn(`Failed to list content for '${prefix}': ${error.message}`);
       return [];
@@ -484,21 +484,21 @@ export class ResolverManager {
   }
 
   /**
-   * Get configured registries
+   * Get configured prefixes
    */
-  getRegistries(): RegistryConfig[] {
-    return [...this.registries];
+  getPrefixConfigs(): PrefixConfig[] {
+    return [...this.prefixConfigs];
   }
   
   /**
-   * Update registry configuration after initialization
+   * Update prefix configuration after initialization
    * Useful for updating basePath after project root discovery
    */
-  updateRegistryConfig(prefix: string, updates: Partial<any>): void {
-    const registry = this.registries.find(r => r.prefix === prefix);
-    if (registry) {
-      registry.config = { ...registry.config, ...updates };
-      logger.debug(`Updated registry config for ${prefix}:`, updates);
+  updatePrefixConfig(prefix: string, updates: Partial<any>): void {
+    const prefixConfig = this.prefixConfigs.find(r => r.prefix === prefix);
+    if (prefixConfig) {
+      prefixConfig.config = { ...prefixConfig.config, ...updates };
+      logger.debug(`Updated prefix config for ${prefix}:`, updates);
     }
   }
 
@@ -541,30 +541,30 @@ export class ResolverManager {
   /**
    * Find the appropriate resolver for a reference
    */
-  private async findResolver(ref: string, context?: ResolutionContext): Promise<{ resolver?: Resolver, registry?: RegistryConfig }> {
-    // First, check configured registries (sorted by prefix length)
-    // This ensures that explicit registry configurations take precedence
-    for (const registry of this.registries) {
-      if (ref.startsWith(registry.prefix)) {
-        const resolver = this.resolvers.get(registry.resolver);
+  private async findResolver(ref: string, context?: ResolutionContext): Promise<{ resolver?: Resolver, prefixConfig?: PrefixConfig }> {
+    // First, check configured prefixes (sorted by prefix length)
+    // This ensures that explicit prefix configurations take precedence
+    for (const prefixConfig of this.prefixConfigs) {
+      if (ref.startsWith(prefixConfig.prefix)) {
+        const resolver = this.resolvers.get(prefixConfig.resolver);
         if (!resolver) {
           const availableResolvers = Array.from(this.resolvers.keys());
           throw new MlldResolutionError(
-            `Resolver '${registry.resolver}' not found. ` +
-            `Registry prefix '${registry.prefix}' is configured to use '${registry.resolver}' resolver, ` +
+            `Resolver '${prefixConfig.resolver}' not found. ` +
+            `Prefix '${prefixConfig.prefix}' is configured to use '${prefixConfig.resolver}' resolver, ` +
             `but only these resolvers are registered: ${availableResolvers.join(', ')}`,
             { 
-              prefix: registry.prefix,
-              expectedResolver: registry.resolver,
+              prefix: prefixConfig.prefix,
+              expectedResolver: prefixConfig.resolver,
               availableResolvers 
             }
           );
         }
         // Strip prefix from reference before checking canResolve
-        const resolverRef = ref.slice(registry.prefix.length);
-        if (resolver.canResolve(resolverRef, registry.config) && 
+        const resolverRef = ref.slice(prefixConfig.prefix.length);
+        if (resolver.canResolve(resolverRef, prefixConfig.config) && 
             (!context || this.canResolveInContext(resolver, context))) {
-          return { resolver, registry };
+          return { resolver, prefixConfig };
         }
       }
     }
@@ -596,29 +596,29 @@ export class ResolverManager {
   }
 
   /**
-   * Validate a registry configuration
+   * Validate a prefix configuration
    */
-  private validateRegistry(registry: RegistryConfig): void {
-    if (!registry.prefix || !registry.resolver) {
-      throw new Error('Registry must have prefix and resolver specified');
+  private validatePrefixConfig(prefixConfig: PrefixConfig): void {
+    if (!prefixConfig.prefix || !prefixConfig.resolver) {
+      throw new Error('Prefix configuration must have prefix and resolver specified');
     }
 
     // Check if resolver exists or is a custom path
-    if (!registry.resolver.includes('/') && !this.resolvers.has(registry.resolver)) {
-      throw new Error(`Unknown resolver: ${registry.resolver}`);
+    if (!prefixConfig.resolver.includes('/') && !this.resolvers.has(prefixConfig.resolver)) {
+      throw new Error(`Unknown resolver: ${prefixConfig.resolver}`);
     }
 
     // Validate custom resolver paths
-    if (registry.resolver.includes('/') && !this.securityPolicy.allowCustom) {
+    if (prefixConfig.resolver.includes('/') && !this.securityPolicy.allowCustom) {
       throw new Error('Custom resolvers are not allowed by security policy');
     }
 
     // Validate resolver config if validator exists
-    const resolver = this.resolvers.get(registry.resolver);
+    const resolver = this.resolvers.get(prefixConfig.resolver);
     if (resolver?.validateConfig) {
-      const errors = resolver.validateConfig(registry.config);
+      const errors = resolver.validateConfig(prefixConfig.config);
       if (errors.length > 0) {
-        throw new Error(`Invalid config for ${registry.resolver}: ${errors.join(', ')}`);
+        throw new Error(`Invalid config for ${prefixConfig.resolver}: ${errors.join(', ')}`);
       }
     }
   }

@@ -112,7 +112,7 @@ export class SetupCommand {
 
       // Get existing registries if updating
       if (hasExistingConfig) {
-        resolverRegistries = [...lockFile.getResolverRegistries()];
+        resolverRegistries = [...lockFile.getResolverPrefixes()];
       }
 
       // Configure GitHub resolver
@@ -457,7 +457,7 @@ A simple mlld script example.
     scriptDir?: string
   ): Promise<void> {
     // Update resolver registries
-    await lockFile.setResolverRegistries(resolverRegistries);
+    await lockFile.setResolverPrefixes(resolverRegistries);
     
     // Save script directory configuration
     if (scriptDir) {
@@ -509,7 +509,7 @@ A simple mlld script example.
     }
 
     const lockFile = new LockFile(lockFilePath);
-    const resolverRegistries = lockFile.getResolverRegistries();
+    const resolverRegistries = lockFile.getResolverPrefixes();
 
     if (resolverRegistries.length === 0) {
       console.log(chalk.yellow('No resolvers configured'));
@@ -578,7 +578,7 @@ A simple mlld script example.
       }
 
       if (newResolver) {
-        const existingRegistries = lockFile.getResolverRegistries();
+        const existingRegistries = lockFile.getResolverPrefixes();
         
         // Check for duplicate prefixes
         const existingPrefix = existingRegistries.find(r => r.prefix === newResolver.prefix);
@@ -594,11 +594,11 @@ A simple mlld script example.
           // Remove existing resolver with same prefix
           const updatedRegistries = existingRegistries.filter(r => r.prefix !== newResolver.prefix);
           updatedRegistries.push(newResolver);
-          await lockFile.setResolverRegistries(updatedRegistries);
+          await lockFile.setResolverPrefixes(updatedRegistries);
         } else {
           // Add new resolver
           existingRegistries.push(newResolver);
-          await lockFile.setResolverRegistries(existingRegistries);
+          await lockFile.setResolverPrefixes(existingRegistries);
         }
 
         console.log(chalk.green(`\n✔ Resolver added: ${newResolver.prefix}`));

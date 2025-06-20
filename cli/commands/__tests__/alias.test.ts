@@ -35,8 +35,8 @@ describe('AliasCommand', () => {
 
   it('should create a local alias', async () => {
     const mockLockFile = {
-      getResolverRegistries: vi.fn().mockReturnValue([]),
-      setResolverRegistries: vi.fn().mockResolvedValue(undefined),
+      getResolverPrefixes: vi.fn().mockReturnValue([]),
+      setResolverPrefixes: vi.fn().mockResolvedValue(undefined),
     };
     
     // Set up the mock implementation
@@ -48,12 +48,10 @@ describe('AliasCommand', () => {
       global: false
     });
 
-    expect(mockLockFile.setResolverRegistries).toHaveBeenCalledWith([
+    expect(mockLockFile.setResolverPrefixes).toHaveBeenCalledWith([
       {
         prefix: '@shared/',
         resolver: 'LOCAL',
-        type: 'input',
-        priority: 20,
         config: {
           basePath: '../shared-modules'
         }
@@ -65,8 +63,8 @@ describe('AliasCommand', () => {
 
   it('should create a global alias', async () => {
     const mockLockFile = {
-      getResolverRegistries: vi.fn().mockReturnValue([]),
-      setResolverRegistries: vi.fn().mockResolvedValue(undefined),
+      getResolverPrefixes: vi.fn().mockReturnValue([]),
+      setResolverPrefixes: vi.fn().mockResolvedValue(undefined),
     };
     
     // Set up the mock implementation
@@ -81,12 +79,10 @@ describe('AliasCommand', () => {
       global: true
     });
 
-    expect(mockLockFile.setResolverRegistries).toHaveBeenCalledWith([
+    expect(mockLockFile.setResolverPrefixes).toHaveBeenCalledWith([
       {
         prefix: '@desktop/',
         resolver: 'LOCAL',
-        type: 'input',
-        priority: 20,
         config: {
           basePath: '/home/user/Desktop'
         }
@@ -131,8 +127,8 @@ describe('AliasCommand', () => {
     };
 
     const mockLockFile = {
-      getResolverRegistries: vi.fn().mockReturnValue([existingRegistry]),
-      setResolverRegistries: vi.fn().mockResolvedValue(undefined),
+      getResolverPrefixes: vi.fn().mockReturnValue([existingRegistry]),
+      setResolverPrefixes: vi.fn().mockResolvedValue(undefined),
     };
     
     // Set up the mock implementation
@@ -144,12 +140,10 @@ describe('AliasCommand', () => {
       global: false
     });
 
-    expect(mockLockFile.setResolverRegistries).toHaveBeenCalledWith([
+    expect(mockLockFile.setResolverPrefixes).toHaveBeenCalledWith([
       {
         prefix: '@shared/',
         resolver: 'LOCAL',
-        type: 'input',
-        priority: 20,
         config: {
           basePath: 'new-path'
         }

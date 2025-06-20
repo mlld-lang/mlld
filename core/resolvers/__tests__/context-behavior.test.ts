@@ -19,11 +19,10 @@ describe('Context-Dependent Behavior', () => {
     beforeEach(() => {
       resolverManager.registerResolver(new TimeResolver());
       // Configure TIME resolver
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: '@TIME',
         resolver: 'TIME',
-        type: 'input'
-      }]);
+              }]);
     });
 
     it('returns text in variable context', async () => {
@@ -59,11 +58,10 @@ describe('Context-Dependent Behavior', () => {
     beforeEach(() => {
       resolverManager.registerResolver(new DebugResolver());
       // Configure DEBUG resolver
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: '@DEBUG',
         resolver: 'DEBUG',
-        type: 'input'
-      }]);
+              }]);
     });
 
     it('returns data in variable context', async () => {
@@ -92,11 +90,10 @@ describe('Context-Dependent Behavior', () => {
       const inputResolver = new InputResolver('{"config": "test"}');
       resolverManager.registerResolver(inputResolver);
       // Configure INPUT resolver
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: '@INPUT',
         resolver: 'INPUT',
-        type: 'input'
-      }]);
+              }]);
     });
 
     it('returns appropriate type in variable context', async () => {
@@ -123,7 +120,7 @@ describe('Context-Dependent Behavior', () => {
       resolverManager.registerResolver(localResolver);
       
       // Configure LOCAL resolver with basePath
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: '/',
         resolver: 'LOCAL',
         type: 'input',
@@ -166,11 +163,10 @@ describe('Context-Dependent Behavior', () => {
       resolverManager.registerResolver(new RegistryResolver());
       
       // Configure REGISTRY resolver
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: '@test/',
         resolver: 'REGISTRY',
-        type: 'input'
-      }]);
+              }]);
       
       // Mock fetch
       global.fetch = async (url: string) => {
@@ -223,7 +219,7 @@ describe('Context-Dependent Behavior', () => {
     });
 
     it('supports path context', async () => {
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: '@PROJECTPATH',
         resolver: 'PROJECTPATH',
         config: { basePath: '/project' }
@@ -238,7 +234,7 @@ describe('Context-Dependent Behavior', () => {
     it('supports import context for modules', async () => {
       await fileSystem.writeFile('/project/lib.mld', '@text name = "lib"');
       
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: '@PROJECTPATH',
         resolver: 'PROJECTPATH',
         config: { basePath: '/project' }
@@ -271,7 +267,7 @@ describe('Context-Dependent Behavior', () => {
       resolverManager.registerResolver(outputResolver);
       
       // Configure OUTPUT_ONLY resolver
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: '@OUTPUT_ONLY',
         resolver: 'OUTPUT_ONLY',
         type: 'output'

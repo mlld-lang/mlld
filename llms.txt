@@ -121,13 +121,28 @@ Remember: "Double brackets, double braces"
 ```
 
 ### 8. Import Patterns
-```mlld
-# Local files (with quotes and .mld extension):
-@import { helper, config } from "./utils.mld"
 
-# Registry modules (no quotes, @ prefix):
+**CRITICAL DISTINCTION**: mlld has two different import syntaxes - one for modules and one for paths.
+
+```mlld
+# MODULE imports (no brackets, @ prefix):
 @import { parallel, retry } from @mlld/core
+@import { utils } from @company/utils
+
+# PATH imports (WITH BRACKETS for resolver paths):
+@import { readme } from [@./README.md]
+@import { config } from [@PROJECTPATH/config.mld]
+@import { shared } from [@local/utils.mld]
+
+# Regular path imports (quotes, no @ prefix):
+@import { helper, config } from "./utils.mld"
 ```
+
+**Why brackets matter:**
+- `[@./file.md]` - Brackets tell mlld "resolve this path and read the file"
+- `@author/module` - No brackets means "resolve this as a module reference"
+
+Without brackets, `@./file` would be treated as trying to import from a user named "." - which is why you might see errors like "User '.' not found in registry".
 
 ### 9. Conditional Logic with @when
 
@@ -419,7 +434,19 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 @data sorted = @sortData(@users)
 ```
 
-### 8. JavaScript Confusion
+### 8. Import Bracket Confusion
+```mlld
+❌ WRONG: Forgetting brackets for path imports
+@import { readme } from @./README.md      # Error: "User '.' not found in registry"
+@import { config } from @PROJECTPATH/config.mld  # Error: "User 'PROJECTPATH' not found"
+
+✅ RIGHT: Use brackets for resolver paths
+@import { readme } from [@./README.md]          # Path import needs brackets
+@import { config } from [@PROJECTPATH/config.mld]  # Resolver path needs brackets
+@import { utils } from @company/utils           # Module import - NO brackets
+```
+
+### 9. JavaScript Confusion
 While you CAN write JavaScript in mlld, it's best kept simple:
 ```mlld
 # Okay for simple cases:
@@ -436,7 +463,7 @@ While you CAN write JavaScript in mlld, it's best kept simple:
 @data result = @processData(@rawData)
 ```
 
-### 9. No Early Exit
+### 10. No Early Exit
 mlld doesn't have `return` or `exit` - design your flow instead:
 
 ```mlld
@@ -623,9 +650,15 @@ Example workflow reading:
 ]
 ```
 
-## Configuring Custom Resolvers
+## Configuring Prefixes and Resolvers
 
-mlld 1.4+ introduces a resolver system that allows custom path resolution and private modules.
+mlld 1.4+ introduces a resolver system with customizable prefixes that "open doors" to different data sources.
+
+### Key Concepts
+- **Prefix**: An @ symbol that opens access to data (e.g., `@lib/`, `@company/`)
+- **Resolver**: The data provider that handles requests for a prefix (e.g., LOCAL, GITHUB, REGISTRY)
+- **Built-in Resolvers**: Special resolvers like @TIME, @DEBUG that don't need prefixes
+- **Registry**: The REGISTRY resolver that ONLY provides validated modules from registries
 
 ### Quick Setup with CLI Commands
 
@@ -648,9 +681,9 @@ mlld alias --name shared --path ../shared-modules
 mlld alias --name desktop --path ~/Desktop --global
 ```
 
-### Manual Path Resolver Configuration
+### Manual Prefix Configuration
 
-You can also configure custom path prefixes manually in your `mlld.lock.json`:
+You can configure custom prefixes manually in your `mlld.lock.json`:
 
 ```json
 // mlld.lock.json
@@ -658,19 +691,17 @@ You can also configure custom path prefixes manually in your `mlld.lock.json`:
   "version": "1.0",
   "config": {
     "resolvers": {
-      "registries": [
+      "prefixes": [          // Maps prefixes to resolvers
         {
-          "prefix": "@lib/",
-          "resolver": "LOCAL",
-          "type": "input",
+          "prefix": "@lib/",      // The door to open
+          "resolver": "LOCAL",     // The provider behind the door
           "config": {
             "basePath": "./src/lib"
           }
         },
         {
           "prefix": "@shared/",
-          "resolver": "LOCAL", 
-          "type": "input",
+          "resolver": "LOCAL",    // Same resolver, different prefix
           "config": {
             "basePath": "../shared-modules"
           }
@@ -709,11 +740,10 @@ Then configure your private repository:
   "version": "1.0",
   "config": {
     "resolvers": {
-      "registries": [
+      "prefixes": [
         {
-          "prefix": "@myorg/",
-          "resolver": "GITHUB",
-          "type": "input", 
+          "prefix": "@myorg/",    // Your organization's prefix
+          "resolver": "GITHUB",   // Uses GitHub resolver for this prefix
           "config": {
             "repository": "myorg/private-mlld-modules",
             "branch": "main",
@@ -739,11 +769,17 @@ Usage:
 
 ### Resolver Types
 
-- **LOCAL**: File system paths (relative or absolute) - called "path aliases" in user-facing commands
+**Configurable with prefixes**:
+- **LOCAL**: File system paths (used for "path aliases")
 - **HTTP**: Remote URLs (with caching support)
-- **GITHUB**: GitHub repositories (public or private with authentication)
-- **REGISTRY**: mlld module registry
-- **TIME, DEBUG, INPUT, PROJECTPATH**: Built-in variable resolvers
+- **GITHUB**: GitHub repositories (public or private)
+- **REGISTRY**: Special - ONLY provides validated modules from registries
+
+**Built-in resolvers (no prefix needed)**:
+- **TIME**: Dynamic timestamps (`@TIME`, not `@time/`)
+- **DEBUG**: Environment info (`@DEBUG`, not `@debug/`)
+- **INPUT**: Stdin/env data (`@INPUT`, not `@input/`)
+- **PROJECTPATH**: Project root (`@PROJECTPATH` or `@.`)
 
 ### Configuration Files
 

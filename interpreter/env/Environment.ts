@@ -22,13 +22,14 @@ import {
   GitHubResolver, 
   HTTPResolver,
   ProjectPathResolver,
-  convertLockFileToResolverConfigs
+  convertLockFileToPrefixConfigs
 } from '@core/resolvers';
 import { PathMatcher } from '@core/resolvers/utils/PathMatcher';
 import { logger } from '@core/utils/logger';
 import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import { builtinTransformers, createTransformerVariable } from '../builtin/transformers';
+import { NodeShadowEnvironment } from './NodeShadowEnvironment';
 
 interface CommandExecutionOptions {
   showProgress?: boolean;
@@ -81,6 +82,9 @@ export class Environment {
   
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
+  
+  // Node.js shadow environment (uses VM for better isolation)
+  private nodeShadowEnv?: NodeShadowEnvironment;
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
@@ -205,8 +209,8 @@ export class Environment {
         this.resolverManager.registerResolver(new GitHubResolver());
         this.resolverManager.registerResolver(new HTTPResolver());
         
-        // Configure built-in registries
-        this.resolverManager.configureRegistries([
+        // Configure built-in prefixes
+        this.resolverManager.configurePrefixes([
           {
             prefix: '@PROJECTPATH',
             resolver: 'PROJECTPATH',
@@ -228,19 +232,19 @@ export class Environment {
         // Load resolver configs from lock file if available
         if (lockFile) {
           // Try new config location first
-          const resolverRegistries = lockFile.getResolverRegistries();
-          if (resolverRegistries.length > 0) {
-            logger.debug(`Configuring ${resolverRegistries.length} resolver registries from lock file`);
-            this.resolverManager.configureRegistries(resolverRegistries, this.basePath);
-            logger.debug(`Total registries after configuration: ${this.resolverManager.getRegistries().length}`);
+          const resolverPrefixes = lockFile.getResolverPrefixes();
+          if (resolverPrefixes.length > 0) {
+            logger.debug(`Configuring ${resolverPrefixes.length} resolver prefixes from lock file`);
+            this.resolverManager.configurePrefixes(resolverPrefixes, this.basePath);
+            logger.debug(`Total prefixes after configuration: ${this.resolverManager.getPrefixConfigs().length}`);
           } else {
             // Fall back to legacy location
             const registries = lockFile.getRegistries();
             if (Object.keys(registries).length > 0) {
               logger.debug(`Configuring ${Object.keys(registries).length} legacy registries from lock file`);
-              const configs = convertLockFileToResolverConfigs(registries);
-              this.resolverManager.configureRegistries(configs, this.basePath);
-              logger.debug(`Total registries after legacy configuration: ${this.resolverManager.getRegistries().length}`);
+              const configs = convertLockFileToPrefixConfigs(registries);
+              this.resolverManager.configurePrefixes(configs, this.basePath);
+              logger.debug(`Total prefixes after legacy configuration: ${this.resolverManager.getPrefixConfigs().length}`);
             }
           }
         }
@@ -307,12 +311,12 @@ export class Environment {
       return;
     }
     
-    // Get configured registries from resolver manager
-    const registries = this.resolverManager.getRegistries();
+    // Get configured prefixes from resolver manager
+    const prefixes = this.resolverManager.getPrefixConfigs();
     
-    for (const registry of registries) {
+    for (const prefixConfig of prefixes) {
       // Extract the name from prefix (e.g., "@work/" -> "work")
-      const match = registry.prefix.match(/^@(\w+)\//);
+      const match = prefixConfig.prefix.match(/^@(\w+)\//);
       if (match) {
         const prefixName = match[1];
         this.reservedNames.add(prefixName);

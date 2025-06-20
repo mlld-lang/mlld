@@ -235,16 +235,16 @@ class ResolverCacheKeyStrategy implements CacheKeyStrategy {
 
 mlld uses a three-tier resolution approach, checked in order:
 
-1. **Prefix-Based Lookup** (Highest Priority) - For configured resolver prefixes
-   - Checks mlld.lock.json resolver configurations first
+1. **Prefix-Based Lookup** (Highest Priority) - For configured prefixes
+   - Checks mlld.lock.json prefix configurations first
    - Maps prefixes like `@company/`, `@local/`, `@docs/` to resolver types
-   - Multiple prefixes can use the same resolver type (e.g., both `@.` and `@PROJECTPATH` use type 'PROJECTPATH')
+   - Multiple prefixes can use the same resolver type (e.g., both `@.` and `@PROJECTPATH` are built-in prefixes for the PROJECTPATH resolver)
    - Each prefix has its own configuration (basePath, authentication, etc.)
    - Sorted by prefix length for correct matching (longest first)
 
-2. **Direct Resolver Lookup** - For built-in resolver names
-   - Checks if the reference matches a resolver name directly (TIME, DEBUG, INPUT, PROJECTPATH)
-   - Used when no prefix matches
+2. **Built-in Resolver Lookup** - For built-in resolvers
+   - Checks if the reference matches a built-in resolver directly (TIME, DEBUG, INPUT, PROJECTPATH)
+   - These don't use prefixes - they ARE the resolver (e.g., @TIME, not @time/)
    - Case-insensitive matching for convenience
 
 3. **Priority-Based Fallback** - For unmatched references
@@ -252,7 +252,7 @@ mlld uses a three-tier resolution approach, checked in order:
    - Each resolver's `canResolve()` method determines if it can handle the reference
    - REGISTRY resolver (priority 10) handles `@user/module` patterns by looking them up in module registries
 
-This design ensures explicit configurations take precedence while maintaining backward compatibility.
+This design ensures explicit prefix configurations take precedence while maintaining backward compatibility.
 
 ### Resolver Types and Priorities
 
@@ -265,25 +265,25 @@ Priority 10: Module resolvers (REGISTRY)
 Priority 20: File resolvers (LOCAL, GITHUB, HTTP)
 ```
 
-Note: The actual resolution order is registry-first, then direct lookup, then priority-based as described above.
+Note: The actual resolution order is prefix-first, then built-in resolver lookup, then priority-based as described above.
 
 **Resolution Algorithm:**
 ```typescript
 async function resolveAtReference(identifier: string, pathSegments: string[]): Promise<ResolverContent> {
-  // 1. Check configured registries first (for custom prefixes)
-  for (const registry of registries) {
-    if (ref.startsWith(registry.prefix)) {
-      const resolver = resolvers.get(registry.resolver);
+  // 1. Check configured prefixes first (for custom prefixes)
+  for (const prefixConfig of prefixes) {
+    if (ref.startsWith(prefixConfig.prefix)) {
+      const resolver = resolvers.get(prefixConfig.resolver);
       if (resolver && resolver.canResolve(ref)) {
-        return resolver.resolve(ref, registry.config);
+        return resolver.resolve(ref, prefixConfig.config);
       }
     }
   }
   
-  // 2. Check direct resolver lookup (for built-ins)
-  const directResolver = resolvers.get(identifier.toUpperCase());
-  if (directResolver && directResolver.canResolve(ref)) {
-    return directResolver.resolve(ref);
+  // 2. Check built-in resolver lookup (TIME, DEBUG, INPUT, etc.)
+  const builtinResolver = resolvers.get(identifier.toUpperCase());
+  if (builtinResolver && builtinResolver.canResolve(ref)) {
+    return builtinResolver.resolve(ref);
   }
   
   // 3. Fallback to variable lookup
@@ -371,7 +371,7 @@ if (isModuleImport && result.contentType !== 'module') {
 }
 ```
 
-## Lock File and Registry Configuration
+## Lock File and Prefix Configuration
 
 ### Lock File Discovery
 mlld searches up the directory tree for `mlld.lock.json`:
@@ -380,22 +380,27 @@ mlld searches up the directory tree for `mlld.lock.json`:
 - Falls back to project indicators (package.json, .git) if no lock file found
 - This allows running mlld commands from any project subdirectory
 
-### Registry Configuration Format
-Registries in mlld.lock.json map prefixes to resolver types:
+### Prefix Configuration Format
+Prefixes in mlld.lock.json map @ prefixes to resolver types:
 
 ```json
 {
   "config": {
     "resolvers": {
-      "registries": [
+      "prefixes": [               // Maps prefixes to resolvers
         {
-          "prefix": "@local/",      // The prefix to match
-          "resolver": "LOCAL",      // The resolver TYPE (not instance name)
-          "type": "input",          // io type: input, output, or io
-          "priority": 20,           // Optional override of resolver's default priority
-          "config": {               // Configuration passed to resolver
+          "prefix": "@local/",   // The prefix that opens the door
+          "resolver": "LOCAL",   // The resolver that provides the data
+          "config": {            // Configuration for this prefix
             "basePath": "./llm/modules",
             "readonly": true
+          }
+        },
+        {
+          "prefix": "@company/",
+          "resolver": "REGISTRY", // Registry resolver for modules only
+          "config": {
+            "registryUrl": "https://registry.company.com"
           }
         }
       ]
@@ -405,7 +410,7 @@ Registries in mlld.lock.json map prefixes to resolver types:
 ```
 
 ### Creating Custom Prefixes
-Use `mlld alias` to create LOCAL resolver prefixes:
+Use `mlld alias` to create prefixes that use the LOCAL resolver:
 
 ```bash
 # Project-specific alias
@@ -414,8 +419,8 @@ mlld alias --name shared --path ../shared-modules
 # Global alias (available to all projects)
 mlld alias --name desktop --path ~/Desktop --global
 
-# Creates registry entry:
-# @shared/ → LOCAL resolver with basePath: "../shared-modules"
+# Creates prefix configuration:
+# @shared/ → prefix that uses LOCAL resolver with basePath: "../shared-modules"
 ```
 
 ## Integration Points

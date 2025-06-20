@@ -72,12 +72,11 @@ describe('ResolverManager with Cache Integration', () => {
     testResolver = new TestResolver();
     manager.registerResolver(testResolver);
     
-    // Configure registry
-    manager.configureRegistries([
+    // Configure prefix
+    manager.configurePrefixes([
       {
         prefix: '@test/',
-        resolver: 'test',
-        type: 'input'
+        resolver: 'test'
       }
     ]);
   });
@@ -244,8 +243,8 @@ describe('ResolverManager with Cache Integration', () => {
       const slowResolver = new SlowTestResolver();
       
       manager.registerResolver(slowResolver);
-      manager.configureRegistries([
-        { prefix: '@slow/', resolver: slowResolver.name, type: 'input' }
+      manager.configurePrefixes([
+        { prefix: '@slow/', resolver: slowResolver.name }
       ]);
       
       // First resolution - slow

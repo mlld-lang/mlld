@@ -2,6 +2,13 @@
 
 Resolvers are mlld's system for handling @ references like `@TIME`, `@INPUT`, `@company/module`, and `@./path`. They provide a unified, extensible way to access external data, modules, and computed values.
 
+## Key Concepts
+
+- **Prefix**: An @ symbol that "opens doors" to data (e.g., `@local/`, `@company/`, `@docs/`)
+- **Resolver**: A data provider that handles requests for a prefix (e.g., LOCAL, GITHUB, REGISTRY)
+- **Built-in Resolvers**: Special resolvers like @TIME, @DEBUG, @PROJECTPATH that provide specific functionality without needing prefixes
+- **Registry**: A specific resolver type (REGISTRY) that ONLY provides modules from module registries
+
 ## Built-in Resolvers
 
 mlld includes several built-in resolvers that use UPPERCASE naming:
@@ -177,22 +184,26 @@ The same resolver can behave differently based on how it's used:
 
 When mlld encounters an @ reference like `@TIME`, `@local/module`, or `@author/package`:
 
-1. **Configured resolver prefixes** (from mlld.lock.json)
+1. **Configured prefixes** (from mlld.lock.json)
    - Checks your configured prefixes like `@local/`, `@docs/`, `@company/`
-   - Also checks built-in prefix mappings (`@PROJECTPATH`, `@.`)
+   - These prefixes map to resolver types (LOCAL, GITHUB, REGISTRY, etc.)
    - Longest matching prefix wins
    
-2. **Direct resolver names** 
-   - If no prefix matches, checks for exact resolver names
-   - Matches `@TIME`, `@DEBUG`, `@INPUT`, etc.
+2. **Built-in resolvers** 
+   - If no prefix matches, checks for built-in resolver names
+   - Matches `@TIME`, `@DEBUG`, `@INPUT`, `@PROJECTPATH`, etc.
+   - These ARE the resolver, not prefixes (no trailing /)
    - Case-insensitive (`@time` also works)
    
 3. **Priority-based fallback**
    - Each resolver's `canResolve()` method is checked in priority order
-   - Registry resolvers (priority 10) handle `@author/module` patterns by looking them up in module registries
+   - REGISTRY resolver (priority 10) handles `@author/module` patterns by looking them up in module registries
    - This is how public module lookups work
 
-**Note**: Built-in resolvers like `@TIME` are protected through naming conventions - they don't use the `/` suffix pattern that prefix configurations require, so they can't be accidentally overridden.
+**Important distinction**:
+- `@local/` is a PREFIX that uses the LOCAL resolver
+- `@TIME` is a BUILT-IN RESOLVER (not a prefix)
+- Prefixes always end with `/`, built-in resolvers don't
 
 ## Path Aliases and Custom Resolvers
 
@@ -213,9 +224,10 @@ mlld alias --name desktop --path ~/Desktop --global
 ```
 
 **How it works:**
-- Creates a resolver configuration in `mlld.lock.json`
-- Maps your prefix (e.g., `@shared/`) to the LOCAL resolver type
-- Configures the base path for that prefix
+- Creates a prefix configuration in `mlld.lock.json`
+- Maps your prefix (e.g., `@shared/`) to the LOCAL resolver
+- The prefix "opens the door" to files in that directory
+- The LOCAL resolver "provides the data" by reading files
 - mlld finds `mlld.lock.json` by searching up from current directory
 
 ### Quick Setup Commands
@@ -241,15 +253,20 @@ You can also configure resolvers manually in `mlld.lock.json`:
 {
   "config": {
     "resolvers": {
-      "registries": [
+      "prefixes": [
         {
-          "prefix": "@docs/",
-          "resolver": "LOCAL",
-          "type": "input",
-          "priority": 20,
+          "prefix": "@docs/",      // The door to open
+          "resolver": "LOCAL",     // The provider behind the door
           "config": {
             "basePath": "./documentation",
             "readonly": true
+          }
+        },
+        {
+          "prefix": "@company/",
+          "resolver": "REGISTRY",  // Registry resolver for modules only
+          "config": {
+            "registryUrl": "https://registry.company.com"
           }
         }
       ]
@@ -258,27 +275,33 @@ You can also configure resolvers manually in `mlld.lock.json`:
 }
 ```
 
-**Resolver configuration explained:**
-- `prefix`: The @ reference prefix to match (must end with `/`)
-- `resolver`: The resolver TYPE to use (LOCAL, GITHUB, HTTP, REGISTRY, etc.)
-- `type`: I/O type - "input" (read-only), "output" (write-only), or "io" (both)
-- `priority`: Optional priority override
+**Prefix configuration explained:**
+- `prefix`: The @ prefix that opens access (must end with `/`)
+- `resolver`: The resolver type that provides the data (LOCAL, GITHUB, HTTP, REGISTRY, etc.)
 - `config`: Configuration passed to the resolver (basePath, auth tokens, etc.)
 
-### Built-in Resolver Types
+### Resolver Types
 
-mlld includes several resolver types you can configure:
+mlld includes several resolver types:
 
+**File/Content Resolvers** (configured with prefixes):
 - **LOCAL**: Maps prefixes to local filesystem paths (can handle any file type)
 - **GITHUB**: Accesses files from GitHub repositories (can handle any file type)
 - **HTTP**: Fetches content from HTTP/HTTPS URLs (can handle any file type)
-- **REGISTRY**: Looks up modules in module registries (modules only)
-- **TIME**: Provides formatted timestamps (function resolver)
-- **DEBUG**: Provides environment information (function resolver)
-- **INPUT**: Provides stdin/environment data (function resolver)
-- **PROJECTPATH**: Provides project-relative paths (path resolver)
 
-Registry resolvers are special - they ONLY return modules from curated module registries. Other resolvers can return any content type (text, data, or modules).
+**Module Registry Resolver**:
+- **REGISTRY**: Special resolver that ONLY provides modules from module registries
+  - Cannot read arbitrary files
+  - Only returns validated mlld modules
+  - Used for `@author/module` patterns
+
+**Built-in Function Resolvers** (no prefix needed):
+- **TIME**: Provides formatted timestamps (`@TIME`, not `@time/`)
+- **DEBUG**: Provides environment information (`@DEBUG`, not `@debug/`)
+- **INPUT**: Provides stdin/environment data (`@INPUT`, not `@input/`)
+- **PROJECTPATH**: Provides project-relative paths (`@PROJECTPATH` or `@.`)
+
+**Key distinction**: REGISTRY is the only resolver restricted to modules - all others can return any content type.
 
 ### Fuzzy Path Matching
 
@@ -348,12 +371,10 @@ Access private repositories using the GITHUB resolver:
 {
   "config": {
     "resolvers": {
-      "registries": [
+      "prefixes": [
         {
           "prefix": "@company/",
           "resolver": "GITHUB",
-          "type": "input",
-          "priority": 10,
           "config": {
             "repository": "company/private-modules",
             "branch": "main",

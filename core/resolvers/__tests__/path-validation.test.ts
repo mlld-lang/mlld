@@ -25,34 +25,30 @@ describe('Path Content Type Validation', () => {
     resolverManager.registerResolver(new RegistryResolver());
     
     // Configure LOCAL resolver
-    resolverManager.configureRegistries([
+    resolverManager.configurePrefixes([
       {
         prefix: '/',
         resolver: 'LOCAL',
-        type: 'input',
         config: { basePath: '/' }
       },
       {
         prefix: './',
         resolver: 'LOCAL',
-        type: 'input',
         config: { basePath: '/' }
       }
     ]);
     
     // Configure PROJECTPATH resolver
-    resolverManager.configureRegistries([{
+    resolverManager.configurePrefixes([{
       prefix: '@PROJECTPATH',
       resolver: 'PROJECTPATH',
-      type: 'input',
       config: { basePath: '/' }
     }]);
     
     // Configure HTTP resolver
-    resolverManager.configureRegistries([{
+    resolverManager.configurePrefixes([{
       prefix: 'https:',
       resolver: 'HTTP',
-      type: 'input',
       config: { baseUrl: 'https://example.com', headers: {} }
     }]);
   });

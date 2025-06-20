@@ -173,20 +173,18 @@ describe('Import Content Type Validation', () => {
       resolverManager.registerResolver(new RegistryResolver());
       
       // Configure the test registry
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: '@test/',
         resolver: 'REGISTRY',
-        type: 'input',
         config: {
           registryUrl: 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules'
         }
       }]);
       
       // Also configure HTTP resolver for the registry URLs
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: 'https:',
         resolver: 'HTTP',
-        type: 'input',
         config: { baseUrl: 'https://example.com', headers: {} }
       }]);
       

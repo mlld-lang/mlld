@@ -24,7 +24,7 @@ describe('Content Type Detection', () => {
       resolverManager.registerResolver(localResolver);
       
       // Configure LOCAL resolver with basePath
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: '/',
         resolver: 'LOCAL',
         type: 'input',
@@ -90,7 +90,7 @@ describe('Content Type Detection', () => {
       resolverManager.registerResolver(githubResolver);
       
       // Configure GITHUB resolver
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: 'github:',
         resolver: 'GITHUB',
         type: 'input',
@@ -206,7 +206,7 @@ describe('Content Type Detection', () => {
       resolverManager.registerResolver(httpResolver);
       
       // Configure HTTP resolver with example.com as base
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: 'https://example.com/',
         resolver: 'HTTP',
         type: 'input',
@@ -284,11 +284,10 @@ describe('Content Type Detection', () => {
       resolverManager.registerResolver(registryResolver);
       
       // Configure REGISTRY resolver
-      resolverManager.configureRegistries([{
+      resolverManager.configurePrefixes([{
         prefix: '@test/',
         resolver: 'REGISTRY',
-        type: 'input'
-      }]);
+              }]);
       
       // Mock fetch for registry
       global.fetch = async (url: string) => {

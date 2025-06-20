@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { MlldError } from '@core/errors';
-import type { RegistryConfig } from '@core/resolvers/types';
+import type { PrefixConfig } from '@core/resolvers/types';
 
 export interface LockEntry {
   resolved: string;           // The resolved path (gist URL or registry path)
@@ -24,7 +24,8 @@ export interface LockFileData {
   };
   config?: {
     resolvers?: {
-      registries?: RegistryConfig[];
+      prefixes?: PrefixConfig[];
+      registries?: PrefixConfig[]; // Legacy support
     };
     security?: {
       allowedDomains?: string[];
@@ -301,16 +302,20 @@ export class LockFile {
     return (this.data!.security?.allowedEnvVars && this.data!.security.allowedEnvVars.length > 0) || false;
   }
 
-  // Registry configuration management methods
-  getResolverRegistries(): RegistryConfig[] {
+  // Prefix configuration management methods
+  getResolverPrefixes(): PrefixConfig[] {
     this.ensureLoaded();
-    if (!this.data!.config?.resolvers?.registries) {
+    if (!this.data!.config?.resolvers?.prefixes) {
+      // Check legacy location for backwards compatibility
+      if (this.data!.config?.resolvers?.registries) {
+        return this.data!.config.resolvers.registries;
+      }
       return [];
     }
-    return this.data!.config.resolvers.registries;
+    return this.data!.config.resolvers.prefixes;
   }
 
-  async setResolverRegistries(registries: RegistryConfig[]): Promise<void> {
+  async setResolverPrefixes(prefixes: PrefixConfig[]): Promise<void> {
     this.ensureLoaded();
     if (!this.data!.config) {
       this.data!.config = {};
@@ -319,7 +324,7 @@ export class LockFile {
       this.data!.config.resolvers = {};
     }
     
-    this.data!.config.resolvers.registries = registries;
+    this.data!.config.resolvers.prefixes = prefixes;
     this.isDirty = true;
     await this.save();
   }

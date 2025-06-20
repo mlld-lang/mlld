@@ -60,34 +60,32 @@ export class AliasCommand {
     // Load or create lock file
     const lockFile = new LockFile(lockFilePath);
     
-    // Create registry entry
+    // Create prefix configuration entry
     const prefix = `@${options.name}/`;
-    const newRegistry = {
+    const newPrefixConfig = {
       prefix,
       resolver: 'LOCAL',
-      type: 'input' as const,
-      priority: 20,
       config: {
-        basePath: options.global ? resolvedPath : resolvedPath
+        basePath: resolvedPath
       }
     };
 
-    // Get existing registries
-    const existingRegistries = lockFile.getResolverRegistries();
+    // Get existing prefixes
+    const existingPrefixes = lockFile.getResolverPrefixes();
     
     // Check for duplicate prefix
-    const existingIndex = existingRegistries.findIndex(r => r.prefix === prefix);
+    const existingIndex = existingPrefixes.findIndex(r => r.prefix === prefix);
     if (existingIndex >= 0) {
       // Replace existing
-      existingRegistries[existingIndex] = newRegistry;
+      existingPrefixes[existingIndex] = newPrefixConfig;
       console.log(chalk.yellow(`Updated existing path alias: ${prefix}`));
     } else {
       // Add new
-      existingRegistries.push(newRegistry);
+      existingPrefixes.push(newPrefixConfig);
     }
 
     // Save configuration
-    await lockFile.setResolverRegistries(existingRegistries);
+    await lockFile.setResolverPrefixes(existingPrefixes);
 
     // Success message
     const scope = options.global ? 'global' : 'local';

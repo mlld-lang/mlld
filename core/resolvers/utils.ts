@@ -1,13 +1,13 @@
-import { RegistryConfig } from '@core/resolvers/types';
+import { PrefixConfig } from '@core/resolvers/types';
 import { RegistryEntry } from '@core/registry/LockFile';
 
 /**
- * Convert lock file registry entries to resolver registry configs
+ * Convert lock file registry entries to resolver prefix configs
  */
-export function convertLockFileToResolverConfigs(
+export function convertLockFileToPrefixConfigs(
   lockFileRegistries: Record<string, RegistryEntry>
-): RegistryConfig[] {
-  const configs: RegistryConfig[] = [];
+): PrefixConfig[] {
+  const configs: PrefixConfig[] = [];
 
   for (const [name, entry] of Object.entries(lockFileRegistries)) {
     // Skip entries without resolver or patterns
@@ -49,7 +49,7 @@ export function convertLockFileToResolverConfigs(
 /**
  * Create default resolver configs if no lock file exists
  */
-export function getDefaultResolverConfigs(): RegistryConfig[] {
+export function getDefaultResolverConfigs(): PrefixConfig[] {
   return [
     // Example: Local notes directory
     {
