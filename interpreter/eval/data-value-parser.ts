@@ -237,6 +237,11 @@ export function needsEvaluation(value: DataValue): boolean {
     return true;
   }
   
+  // Handle VariableReferenceWithTail (pipelines)
+  if ((value as any)?.type === 'VariableReferenceWithTail') {
+    return true;
+  }
+  
   if ((value as any)?.type === 'object') {
     return Object.values((value as DataObjectValue).properties).some(needsEvaluation);
   }

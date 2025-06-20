@@ -489,6 +489,16 @@ export async function resolveVariableValue(variable: MlldVariable, env: Environm
     if (dataValue && typeof dataValue === 'object' && 'type' in dataValue) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const evaluatedValue = await evaluateDataValue(dataValue as MlldNode, env);
+      
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('resolveVariableValue - evaluated complex data:', {
+          variableName: variable.name,
+          evaluatedValue,
+          evaluatedType: typeof evaluatedValue
+        });
+      }
+      
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       return evaluatedValue;
     }
@@ -615,6 +625,16 @@ export async function interpolate(
         // Handle both simple and complex data variables
         value = await resolveVariableValue(variable, env);
         
+        // Debug logging
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('Variable resolved in template:', {
+            name: variable.name,
+            type: variable.type,
+            resolvedValue: value,
+            resolvedType: typeof value
+          });
+        }
+        
         // Special handling for lazy reserved variables like DEBUG
         if (value === null && variable.metadata?.isReserved && variable.metadata?.isLazy) {
           // Need to resolve this as a resolver variable
@@ -660,6 +680,16 @@ export async function interpolate(
       
       // Convert final value to string
       let stringValue: string;
+      
+      // Debug logging for data variables
+      if (process.env.MLLD_DEBUG === 'true' && node.identifier) {
+        console.log('Template interpolation:', {
+          identifier: node.identifier,
+          value,
+          valueType: typeof value,
+          isNull: value === null
+        });
+      }
       
       if (value === null) {
         stringValue = 'null';

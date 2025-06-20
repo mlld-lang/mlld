@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.4.7]
 ### Fixed
 - #270 LocalResolver fails to resolve .mld.md files with 'Access denied' error
+- Fixed `mlld setup` command throwing "Cannot read properties of null (reading 'config')" error when no mlld.lock.json exists
 
 ## [1.4.6]
 ### Added

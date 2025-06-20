@@ -139,11 +139,40 @@ export async function evaluateDataValue(
     // Apply pipeline if present
     if (value.withClause && value.withClause.pipeline) {
       const { executePipeline } = await import('../eval/pipeline');
-      result = await executePipeline(
+      
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('Before pipeline:', { result, stringified: String(result) });
+      }
+      
+      const pipelineResult = await executePipeline(
         String(result),
         value.withClause.pipeline,
         env
       );
+      
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('After pipeline:', { 
+          pipelineResult,
+          pipelineResultType: typeof pipelineResult,
+          pipelineResultIsNull: pipelineResult === null,
+          pipelineResultIsUndefined: pipelineResult === undefined
+        });
+      }
+      
+      result = pipelineResult;
+    }
+    
+    // Debug logging
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('VariableReferenceWithTail final result:', {
+        variableIdentifier: varRef.identifier,
+        resultValue: result,
+        resultType: typeof result,
+        resultIsNull: result === null,
+        resultIsUndefined: result === undefined
+      });
     }
     
     return result;

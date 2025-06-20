@@ -59,6 +59,20 @@ export async function evaluateData(
   // Check if this data contains any complex values that need evaluation
   const isComplex = needsEvaluation(dataValue);
   
+  // Debug logging
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('evaluateData:', {
+      identifier,
+      isComplex,
+      dataValueType: typeof dataValue,
+      dataValue: dataValue && typeof dataValue === 'object' ? 
+        { type: (dataValue as any).type, ...((dataValue as any).type === 'VariableReferenceWithTail' ? { 
+          variableIdentifier: (dataValue as any).variable?.identifier,
+          hasPipeline: !!(dataValue as any).withClause?.pipeline
+        } : {}) } : dataValue
+    });
+  }
+  
   // Handle field access in identifier (e.g., greeting.text)
   // TODO: This should be parsed by the grammar as field access, not string splitting
   // eslint-disable-next-line mlld/no-ast-string-manipulation
@@ -72,6 +86,16 @@ export async function evaluateData(
       const variable = createComplexDataVariable(varName, dataValue, {
         definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
       });
+      
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('Created complex data variable:', {
+          name: varName,
+          valueType: typeof variable.value,
+          value: variable.value
+        });
+      }
+      
       env.setVariable(varName, variable);
     } else {
       // Create a simple data variable for primitive/static values

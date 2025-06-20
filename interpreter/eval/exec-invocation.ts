@@ -49,6 +49,41 @@ export async function evaluateExecInvocation(
     throw new MlldInterpreterError(`Variable ${commandName} is not executable (type: ${variable.type})`);
   }
   
+  // Special handling for built-in transformers
+  if (variable.metadata?.isBuiltinTransformer && variable.metadata?.transformerImplementation) {
+    // Get command arguments from the node
+    const args = node.commandRef.args || [];
+    
+    // Evaluate the first argument to get the input value
+    let inputValue = '';
+    if (args.length > 0) {
+      const arg = args[0];
+      if (typeof arg === 'string') {
+        inputValue = arg;
+      } else if (arg && typeof arg === 'object') {
+        inputValue = await interpolate([arg], env);
+      } else {
+        inputValue = String(arg);
+      }
+    }
+    
+    // Call the transformer implementation directly
+    const result = await variable.metadata.transformerImplementation(inputValue);
+    
+    // Apply withClause transformations if present
+    if (node.withClause) {
+      return applyWithClause(String(result), node.withClause, env);
+    }
+    
+    return {
+      value: String(result),
+      env,
+      stdout: String(result),
+      stderr: '',
+      exitCode: 0
+    };
+  }
+  
   const definition = variable.value as ExecutableDefinition;
   
   // Create a child environment for parameter substitution

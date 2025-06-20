@@ -129,6 +129,17 @@ export async function executePipeline(
     }
   }
   
+  // Debug logging
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('executePipeline returning:', {
+      currentOutput,
+      currentOutputType: typeof currentOutput,
+      isNull: currentOutput === null,
+      isUndefined: currentOutput === undefined,
+      length: typeof currentOutput === 'string' ? currentOutput.length : 'N/A'
+    });
+  }
+  
   return currentOutput;
 }
 
