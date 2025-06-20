@@ -158,7 +158,7 @@ export class Environment {
       
       try {
         moduleCache = new ModuleCache();
-        // Try to load lock file from project root
+        // Create lock file instance - it will load lazily when accessed
         const lockFilePath = path.join(basePath, 'mlld.lock.json');
         lockFile = new LockFile(lockFilePath);
         
@@ -223,7 +223,7 @@ export class Environment {
               readonly: false
             }
           }
-        ]);
+        ], this.basePath);
         
         // Load resolver configs from lock file if available
         if (lockFile) {
@@ -231,7 +231,7 @@ export class Environment {
           const resolverRegistries = lockFile.getResolverRegistries();
           if (resolverRegistries.length > 0) {
             logger.debug(`Configuring ${resolverRegistries.length} resolver registries from lock file`);
-            this.resolverManager.configureRegistries(resolverRegistries);
+            this.resolverManager.configureRegistries(resolverRegistries, this.basePath);
             logger.debug(`Total registries after configuration: ${this.resolverManager.getRegistries().length}`);
           } else {
             // Fall back to legacy location
@@ -239,7 +239,7 @@ export class Environment {
             if (Object.keys(registries).length > 0) {
               logger.debug(`Configuring ${Object.keys(registries).length} legacy registries from lock file`);
               const configs = convertLockFileToResolverConfigs(registries);
-              this.resolverManager.configureRegistries(configs);
+              this.resolverManager.configureRegistries(configs, this.basePath);
               logger.debug(`Total registries after legacy configuration: ${this.resolverManager.getRegistries().length}`);
             }
           }

@@ -5,6 +5,8 @@ import { formatOutput } from './output/formatter';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
+import { findProjectRoot } from '@core/utils/findProjectRoot';
+import * as path from 'path';
 
 import type { ResolvedURLConfig } from '@core/config/types';
 
@@ -108,12 +110,26 @@ export async function interpret(
   
   const ast = parseResult.ast;
   
-  // Create the root environment
+  // Find the project root for lock file discovery
+  // If we have a filePath, start from its directory, otherwise use basePath
+  const basePath = options.basePath || process.cwd();
+  const searchStartPath = options.filePath 
+    ? path.dirname(path.resolve(basePath, options.filePath))
+    : basePath;
+  const projectRoot = await findProjectRoot(searchStartPath, options.fileSystem);
+  
+  // Create the root environment with the project root
   const env = new Environment(
     options.fileSystem,
     options.pathService,
-    options.basePath || process.cwd()
+    projectRoot
   );
+  
+  // If the project root is different from basePath, we may need to update
+  // the current file path to be relative to the project root
+  if (projectRoot !== basePath && options.filePath) {
+    // Keep the filePath as-is, it's already absolute or relative to basePath
+  }
   
   // Register built-in resolvers (async initialization)
   await env.registerBuiltinResolvers();

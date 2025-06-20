@@ -173,26 +173,57 @@ The same resolver can behave differently based on how it's used:
 # date = "2024-01-15"
 ```
 
-## Resolver Priority
+## How Resolvers Are Found
 
-Resolvers are checked in strict priority order:
+When mlld encounters an @ reference like `@TIME`, `@local/module`, or `@author/package`:
 
-1. **Built-in resolvers** (TIME, DEBUG, INPUT, PROJECTPATH)
-2. **Custom resolvers** (by configured priority)  
-3. **Variable lookup** (fallback)
+1. **Configured resolver prefixes** (from mlld.lock.json)
+   - Checks your configured prefixes like `@local/`, `@docs/`, `@company/`
+   - Also checks built-in prefix mappings (`@PROJECTPATH`, `@.`)
+   - Longest matching prefix wins
+   
+2. **Direct resolver names** 
+   - If no prefix matches, checks for exact resolver names
+   - Matches `@TIME`, `@DEBUG`, `@INPUT`, etc.
+   - Case-insensitive (`@time` also works)
+   
+3. **Priority-based fallback**
+   - Each resolver's `canResolve()` method is checked in priority order
+   - Registry resolvers (priority 10) handle `@author/module` patterns by looking them up in module registries
+   - This is how public module lookups work
 
-Higher priority always wins - you cannot override built-in resolvers.
+**Note**: Built-in resolvers like `@TIME` are protected through naming conventions - they don't use the `/` suffix pattern that prefix configurations require, so they can't be accidentally overridden.
 
-## Custom Resolvers
+## Path Aliases and Custom Resolvers
 
-You can create custom resolvers for organization-specific needs.
+### Local Path Aliases
 
-### Quick Setup
-
-The easiest way to configure resolvers is using mlld's interactive commands:
+The most common custom resolver use case is creating path aliases for local directories. Use `mlld alias` to set these up:
 
 ```bash
-# Complete setup wizard
+# Create project-specific alias
+mlld alias --name shared --path ../shared-modules
+
+# Create global alias (available to all projects)
+mlld alias --name desktop --path ~/Desktop --global
+
+# Now you can use:
+# @import { utils } from @shared/utils
+# @add [@desktop/notes.md]
+```
+
+**How it works:**
+- Creates a resolver configuration in `mlld.lock.json`
+- Maps your prefix (e.g., `@shared/`) to the LOCAL resolver type
+- Configures the base path for that prefix
+- mlld finds `mlld.lock.json` by searching up from current directory
+
+### Quick Setup Commands
+
+Set up common resolver patterns with interactive wizards:
+
+```bash
+# Complete setup wizard (recommended for first-time setup)
 mlld setup
 
 # Set up GitHub private modules
@@ -200,73 +231,54 @@ mlld setup --github
 
 # Set up local directory aliases
 mlld setup --local
-
-# Create specific aliases
-mlld alias --name lib --path ./src/lib
-mlld alias --name shared --path ../shared-modules --global
 ```
 
 ### Manual Configuration
 
-You can also add custom resolvers manually to `mlld.lock.json`:
+You can also configure resolvers manually in `mlld.lock.json`:
 
 ```json
 {
-  "resolvers": {
-    "@docs": {
-      "command": "mlld-path-resolver",
-      "args": ["--base-path", "./documentation"],
-      "priority": 100,
-      "capabilities": {
-        "io": { "read": true, "write": false, "list": true },
-        "contexts": { "import": true, "path": true, "output": false },
-        "supportedContentTypes": ["module", "data", "text"],
-        "defaultContentType": "text"
-      }
-    },
-    "@company": {
-      "command": "node",
-      "args": ["./resolvers/company-modules.js"],
-      "priority": 200,
-      "env": {
-        "API_TOKEN": "${COMPANY_API_TOKEN}"
-      },
-      "capabilities": {
-        "io": { "read": true, "write": false, "list": false },
-        "contexts": { "import": true, "path": false, "output": false },
-        "supportedContentTypes": ["module"],
-        "defaultContentType": "module"
-      }
+  "config": {
+    "resolvers": {
+      "registries": [
+        {
+          "prefix": "@docs/",
+          "resolver": "LOCAL",
+          "type": "input",
+          "priority": 20,
+          "config": {
+            "basePath": "./documentation",
+            "readonly": true
+          }
+        }
+      ]
     }
   }
 }
 ```
 
-### Understanding Resolver Capabilities
+**Resolver configuration explained:**
+- `prefix`: The @ reference prefix to match (must end with `/`)
+- `resolver`: The resolver TYPE to use (LOCAL, GITHUB, HTTP, REGISTRY, etc.)
+- `type`: I/O type - "input" (read-only), "output" (write-only), or "io" (both)
+- `priority`: Optional priority override
+- `config`: Configuration passed to the resolver (basePath, auth tokens, etc.)
 
-When creating custom resolvers, you need to declare their capabilities:
+### Built-in Resolver Types
 
-```json
-{
-  "@docs": {
-    "command": "mlld-path-resolver",
-    "args": ["--base-path", "./documentation"],
-    "priority": 100,
-    "capabilities": {
-      "io": { "read": true, "write": false, "list": true },
-      "contexts": { "import": true, "path": true, "output": false },
-      "supportedContentTypes": ["module", "text"],
-      "defaultContentType": "text"
-    }
-  }
-}
-```
+mlld includes several resolver types you can configure:
 
-**Capability Fields:**
-- `io`: What operations the resolver supports (read/write/list)
-- `contexts`: Where it can be used (import/path/output)
-- `supportedContentTypes`: What content types it can return
-- `defaultContentType`: What it returns when used as a bare variable
+- **LOCAL**: Maps prefixes to local filesystem paths (can handle any file type)
+- **GITHUB**: Accesses files from GitHub repositories (can handle any file type)
+- **HTTP**: Fetches content from HTTP/HTTPS URLs (can handle any file type)
+- **REGISTRY**: Looks up modules in module registries (modules only)
+- **TIME**: Provides formatted timestamps (function resolver)
+- **DEBUG**: Provides environment information (function resolver)
+- **INPUT**: Provides stdin/environment data (function resolver)
+- **PROJECTPATH**: Provides project-relative paths (path resolver)
+
+Registry resolvers are special - they ONLY return modules from curated module registries. Other resolvers can return any content type (text, data, or modules).
 
 ### Fuzzy Path Matching
 
@@ -327,32 +339,28 @@ Or disable entirely:
 }
 ```
 
-### Resolver Types
+### Common Resolver Patterns
 
-#### Path Resolvers
-Map @ prefixes to filesystem locations:
-
-**Usage:**
-```mlld
-@add [@docs/getting-started.md]
-@import { tutorial } from [@docs/tutorials/basic.md]
-```
-
-#### Module Resolvers  
-Access private module registries or repositories. For GitHub repositories, authenticate first with `mlld auth login`:
+#### GitHub Private Modules
+Access private repositories using the GITHUB resolver:
 
 ```json
 {
-  "@company": {
-    "command": "node",
-    "args": ["./resolvers/company-registry.js"],
-    "priority": 200,
-    "env": { "API_TOKEN": "${COMPANY_API_TOKEN}" },
-    "capabilities": {
-      "io": { "read": true, "write": false, "list": false },
-      "contexts": { "import": true, "path": false, "output": false },
-      "supportedContentTypes": ["module"],
-      "defaultContentType": "module"
+  "config": {
+    "resolvers": {
+      "registries": [
+        {
+          "prefix": "@company/",
+          "resolver": "GITHUB",
+          "type": "input",
+          "priority": 10,
+          "config": {
+            "repository": "company/private-modules",
+            "branch": "main",
+            "basePath": "modules"
+          }
+        }
+      ]
     }
   }
 }
@@ -360,129 +368,23 @@ Access private module registries or repositories. For GitHub repositories, authe
 
 **Usage:**
 ```mlld
+# First authenticate: mlld auth login
 @import { httpClient } from @company/web-utils
 @import { validation } from @company/common
 ```
 
-#### Function Resolvers
-Compute data dynamically:
+#### Shared Module Libraries
+Create a shared directory accessible from multiple projects:
 
-```json
-{
-  "@weather": {
-    "command": "python",
-    "args": ["./resolvers/weather.py"],
-    "priority": 150,
-    "env": { "API_KEY": "${WEATHER_API_KEY}" },
-    "capabilities": {
-      "io": { "read": true, "write": false, "list": false },
-      "contexts": { "import": true, "path": false, "output": false },
-      "supportedContentTypes": ["data"],
-      "defaultContentType": "data"
-    }
-  }
-}
+```bash
+# Global alias for shared modules
+mlld alias --name lib --path ~/Development/shared-libs --global
+
+# Now any project can use:
+@import { dateUtils, stringUtils } from @lib/utils
+@import { ApiClient } from @lib/networking
 ```
 
-**Usage:**
-```mlld
-@import { "San Francisco" as sfWeather } from @weather
-@import { current, forecast } from @weather
-```
-
-### Creating a Custom Resolver
-
-Custom resolvers are programs that follow the Model Context Protocol (MCP). Here's a simple example:
-
-```javascript
-// company-resolver.js
-class CompanyResolver {
-  // Declare resolver capabilities
-  getCapabilities() {
-    return {
-      io: { read: true, write: false, list: false },
-      contexts: { import: true, path: false, output: false },
-      supportedContentTypes: ['module'],
-      defaultContentType: 'module',
-      priority: 200
-    };
-  }
-  
-  async listTools() {
-    return [
-      {
-        name: "resolve",
-        description: "Resolve a company module or variable reference",
-        inputSchema: {
-          type: "object", 
-          properties: {
-            reference: { type: "string" },
-            context: { type: "string", enum: ["import", "variable"] },
-            requestedImports: { type: "array", items: { type: "string" } }
-          }
-        }
-      }
-    ];
-  }
-  
-  async callTool(name, args) {
-    if (name === "resolve") {
-      // Handle different contexts
-      if (args.context === "variable") {
-        // Return module listing for bare @company reference
-        return {
-          content: "Company module registry",
-          contentType: "text"
-        };
-      }
-      
-      // Import context - fetch and parse module
-      const moduleData = await this.fetchFromRegistry(args.reference);
-      
-      // mlld modules should return their exports
-      const exports = {};
-      if (args.requestedImports?.length) {
-        // Specific imports requested
-        for (const importName of args.requestedImports) {
-          if (!(importName in moduleData)) {
-            throw new Error(`Export '${importName}' not found in ${args.reference}`);
-          }
-          exports[importName] = moduleData[importName];
-        }
-      } else {
-        // Import all
-        Object.assign(exports, moduleData);
-      }
-      
-      return {
-        content: JSON.stringify(exports),
-        contentType: "module"
-      };
-    }
-  }
-  
-  async fetchFromRegistry(moduleRef) {
-    // Implementation specific to your organization
-    const apiToken = process.env.API_TOKEN;
-    const response = await fetch(`https://modules.company.com/api/${moduleRef}`, {
-      headers: { 'Authorization': `Bearer ${apiToken}` }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch ${moduleRef}: ${response.status}`);
-    }
-    
-    // Parse the mlld content and extract exports
-    const mlldContent = await response.text();
-    // In real implementation, parse mlld and extract module exports
-    return this.parseMlldModule(mlldContent);
-  }
-}
-
-// Start MCP server
-const server = new CompanyResolver();
-server.start();
-```
 
 ## Name Protection
 
@@ -503,16 +405,37 @@ Resolver names are protected to prevent conflicts:
 - Only ALL CAPS variants are protected for global resolvers
 - Variable names and import aliases cannot use reserved names
 
-## Error Handling
+## Troubleshooting
 
-Resolver errors clearly identify the source:
+### Common Issues
+
+**"User 'local' not found in registry"**
+- **Cause**: Running mlld from a subdirectory without mlld.lock.json in view
+- **Fix**: Run from project root or ensure mlld.lock.json exists
+- **Note**: mlld searches parent directories for mlld.lock.json (like npm)
+
+**"Access denied for reference: @local/module"**
+- **Cause**: The module file doesn't exist at the configured path
+- **Fix**: Check that the file exists and the basePath is correct
+- **Different from**: "not found in registry" - here the prefix IS configured
+
+**File not found with fuzzy matching**
+- mlld will suggest similar files when fuzzy matching is enabled
+- Check for typos in your file path
+- Use more specific paths to avoid ambiguity
+
+### Error Messages
+
+Resolver errors identify which resolver failed:
 
 ```
 TimeResolver failed: Invalid format string 'XYZ'
 Available formats: YYYY-MM-DD, HH:mm:ss, iso, unix
 
-CompanyResolver failed: Authentication token expired
-Check your COMPANY_API_TOKEN environment variable
+LocalResolver failed: File not found: utils.mld
+Did you mean:
+  - utils.mlld.md
+  - string.mld.md
 
 ProjectPathResolver failed: Path outside project directory: ../../../etc/passwd
 Paths must be within the project root

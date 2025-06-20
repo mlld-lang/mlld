@@ -621,6 +621,7 @@ export async function evaluateImport(
   
   // Check if this is a module reference (@prefix/ pattern)
   if (importPath.startsWith('@')) {
+    // This is a module reference, proceed with module resolution
     // Extract hash from the module reference if present
     let moduleRef = importPath;
     let expectedHash: string | undefined;
@@ -636,30 +637,23 @@ export async function evaluateImport(
       }
     }
     
-    // Use the ResolverManager for @prefix/ patterns
-    const resolverManager = env.getResolverManager();
-    if (resolverManager) {
-      try {
-        // ResolverManager will handle all @prefix/ patterns including @user/module
-        const resolverContent = await env.resolveModule(moduleRef, 'import');
-        
-        // Validate content type for imports
-        if (resolverContent.contentType !== 'module') {
-          throw new Error(
-            `Import target is not a module: ${moduleRef} (content type: ${resolverContent.contentType})`
-          );
-        }
-        
-        // For module imports from resolvers, we already have the content
-        // so we can process it directly instead of going through importFromPath
-        return await importFromResolverContent(directive, moduleRef, resolverContent, env);
-      } catch (error) {
-        // If resolver fails, let the original error bubble up so dev mode can handle it
-        throw error;
+    try {
+      // ResolverManager will handle all @prefix/ patterns including @user/module
+      const resolverContent = await env.resolveModule(moduleRef, 'import');
+      
+      // Validate content type for imports
+      if (resolverContent.contentType !== 'module') {
+        throw new Error(
+          `Import target is not a module: ${moduleRef} (content type: ${resolverContent.contentType})`
+        );
       }
-    } else {
-      // No ResolverManager available
-      throw new Error(`Cannot resolve module '${moduleRef}': Module resolution not configured`);
+      
+      // For module imports from resolvers, we already have the content
+      // so we can process it directly instead of going through importFromPath
+      return await importFromResolverContent(directive, moduleRef, resolverContent, env);
+    } catch (error) {
+      // If resolver fails, let the original error bubble up so dev mode can handle it
+      throw error;
     }
   } else if (isURL || env.isURL(importPath)) {
     // For URLs, use the URL as-is (no path resolution needed)

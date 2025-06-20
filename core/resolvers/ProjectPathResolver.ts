@@ -8,6 +8,8 @@ import {
 } from '@core/resolvers/types';
 import { MlldResolutionError, MlldFileNotFoundError } from '@core/errors';
 import { IFileSystemService } from '@services/fs/IFileSystemService';
+import { findProjectRoot } from '@core/utils/findProjectRoot';
+import { logger } from '@core/utils/logger';
 
 /**
  * Configuration for ProjectPathResolver
@@ -56,19 +58,30 @@ export class ProjectPathResolver implements Resolver {
    * Resolve a @PROJECTPATH reference
    */
   async resolve(ref: string, config?: ProjectPathResolverConfig): Promise<ResolverContent> {
-    if (!config?.basePath) {
+    // Try config basePath first
+    let basePath = config?.basePath;
+    
+    // If not provided or seems incorrect, detect project root
+    if (!basePath || !(await this.isProjectRoot(basePath))) {
+      logger.debug(`Detecting project root (basePath: ${basePath})`);
+      basePath = await this.findProjectRootFromCwd();
+    }
+    
+    if (!basePath) {
       throw new MlldResolutionError(
-        'ProjectPathResolver requires basePath in configuration',
-        {}
+        'ProjectPathResolver: Unable to determine project root. ' +
+        'This usually means the resolver registry was not properly configured. ' +
+        'Check that @. or @PROJECTPATH prefixes are mapped to PROJECTPATH resolver with basePath.',
+        { reference: ref, availableConfig: Object.keys(config || {}) }
       );
     }
 
     // Variable context - return the project path as text
-    if (!config.context || config.context === 'variable') {
+    if (!config || !config.context || config.context === 'variable') {
       // If it's just @PROJECTPATH, return the base path
       if (ref === '@PROJECTPATH' || ref === 'PROJECTPATH') {
         return {
-          content: config.basePath,
+          content: basePath,
           contentType: 'text',
           metadata: {
             source: 'PROJECTPATH',
@@ -103,7 +116,7 @@ export class ProjectPathResolver implements Resolver {
       // If no path specified, just return the project path
       if (!relativePath) {
         return {
-          content: config.basePath,
+          content: basePath,
           contentType: 'text',
           metadata: {
             source: 'PROJECTPATH',
@@ -113,10 +126,10 @@ export class ProjectPathResolver implements Resolver {
       }
 
       // Resolve full path relative to project root
-      const fullPath = path.resolve(config.basePath, relativePath);
+      const fullPath = path.resolve(basePath, relativePath);
 
       // Security check: ensure the resolved path is within the project
-      const normalizedBasePath = path.resolve(config.basePath);
+      const normalizedBasePath = path.resolve(basePath);
       const normalizedFullPath = path.resolve(fullPath);
       if (!normalizedFullPath.startsWith(normalizedBasePath)) {
         throw new MlldResolutionError(
@@ -274,4 +287,30 @@ export class ProjectPathResolver implements Resolver {
     );
   }
 
+  /**
+   * Check if a path is likely a project root
+   */
+  private async isProjectRoot(path: string): Promise<boolean> {
+    // Check for project indicators
+    const indicators = ['package.json', '.git', 'mlld.config.json', 'mlld.lock.json'];
+    for (const indicator of indicators) {
+      if (await this.fileSystem.exists(path + '/' + indicator)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  
+  /**
+   * Find project root from current working directory
+   */
+  private async findProjectRootFromCwd(): Promise<string | null> {
+    try {
+      const projectRoot = await findProjectRoot(process.cwd(), this.fileSystem);
+      return projectRoot;
+    } catch (error) {
+      logger.warn('Failed to find project root:', error);
+      return null;
+    }
+  }
 }

@@ -19,7 +19,12 @@ The resolver system determines whether `@identifier` refers to a resolver or a v
 
 ### Resolver Types
 
-mlld supports three types of resolvers, each serving different use cases:
+**Important**: Distinguish between resolver TYPE (the implementation class) and PREFIX (the @ reference):
+- `LOCAL` is a resolver TYPE (implemented by LocalResolver class)
+- `@local/` is a PREFIX that maps to the LOCAL resolver type
+- Multiple prefixes can use the same resolver type with different configs
+
+mlld supports three categories of resolvers, each serving different use cases:
 
 #### Function Resolvers
 Compute data dynamically and can accept parameters via import selections or path segments.
@@ -228,29 +233,39 @@ class ResolverCacheKeyStrategy implements CacheKeyStrategy {
 
 ### Resolution Architecture
 
-mlld uses a dual-mechanism approach for resolver lookup, optimized for performance:
+mlld uses a three-tier resolution approach, checked in order:
 
-1. **Direct Resolver Lookup** - For built-in resolvers (TIME, DEBUG, INPUT, PROJECTPATH)
-   - These are always available as part of the core
-   - Registered directly by name in ResolverManager
-   - Fast lookup without registry overhead
+1. **Prefix-Based Lookup** (Highest Priority) - For configured resolver prefixes
+   - Checks mlld.lock.json resolver configurations first
+   - Maps prefixes like `@company/`, `@local/`, `@docs/` to resolver types
+   - Multiple prefixes can use the same resolver type (e.g., both `@.` and `@PROJECTPATH` use type 'PROJECTPATH')
+   - Each prefix has its own configuration (basePath, authentication, etc.)
+   - Sorted by prefix length for correct matching (longest first)
 
-2. **Registry-Based Lookup** - For configured prefixes and custom resolvers
-   - Maps prefixes like `@company/`, `@local/`, `@docs/` to resolver instances
-   - Allows multiple prefixes to use the same resolver (e.g., both `@.` and `@PROJECTPATH`)
-   - Supports configuration per prefix (basePath, authentication, etc.)
+2. **Direct Resolver Lookup** - For built-in resolver names
+   - Checks if the reference matches a resolver name directly (TIME, DEBUG, INPUT, PROJECTPATH)
+   - Used when no prefix matches
+   - Case-insensitive matching for convenience
 
-This design avoids unnecessary registry lookups for core functionality while maintaining flexibility for custom configurations.
+3. **Priority-Based Fallback** - For unmatched references
+   - Iterates through all resolvers by priority
+   - Each resolver's `canResolve()` method determines if it can handle the reference
+   - REGISTRY resolver (priority 10) handles `@user/module` patterns by looking them up in module registries
 
-### Priority-Based Resolution
+This design ensures explicit configurations take precedence while maintaining backward compatibility.
 
-Resolvers are resolved in strict priority order (lower number = higher priority):
+### Resolver Types and Priorities
+
+Each resolver type has a default priority (lower number = higher priority):
 
 ```
-Priority 1: Built-in resolvers (TIME, DEBUG, INPUT, PROJECTPATH)
-Priority 2: Custom resolvers (by configured priority)
-Priority 3: Variable lookup fallback
+Priority 1:  Function resolvers (TIME, DEBUG, INPUT)
+Priority 1:  Path resolvers (PROJECTPATH)
+Priority 10: Module resolvers (REGISTRY)
+Priority 20: File resolvers (LOCAL, GITHUB, HTTP)
 ```
+
+Note: The actual resolution order is registry-first, then direct lookup, then priority-based as described above.
 
 **Resolution Algorithm:**
 ```typescript
@@ -356,6 +371,53 @@ if (isModuleImport && result.contentType !== 'module') {
 }
 ```
 
+## Lock File and Registry Configuration
+
+### Lock File Discovery
+mlld searches up the directory tree for `mlld.lock.json`:
+- Starts from the current working directory
+- Searches parent directories up to the home directory
+- Falls back to project indicators (package.json, .git) if no lock file found
+- This allows running mlld commands from any project subdirectory
+
+### Registry Configuration Format
+Registries in mlld.lock.json map prefixes to resolver types:
+
+```json
+{
+  "config": {
+    "resolvers": {
+      "registries": [
+        {
+          "prefix": "@local/",      // The prefix to match
+          "resolver": "LOCAL",      // The resolver TYPE (not instance name)
+          "type": "input",          // io type: input, output, or io
+          "priority": 20,           // Optional override of resolver's default priority
+          "config": {               // Configuration passed to resolver
+            "basePath": "./llm/modules",
+            "readonly": true
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+### Creating Custom Prefixes
+Use `mlld alias` to create LOCAL resolver prefixes:
+
+```bash
+# Project-specific alias
+mlld alias --name shared --path ../shared-modules
+
+# Global alias (available to all projects)
+mlld alias --name desktop --path ~/Desktop --global
+
+# Creates registry entry:
+# @shared/ → LOCAL resolver with basePath: "../shared-modules"
+```
+
 ## Integration Points
 
 ### Grammar Integration
@@ -452,9 +514,10 @@ async resolveAtReference(identifier: string, segments: string[]): Promise<any> {
 }
 ```
 
-### Error Attribution
+### Error Attribution and Common Issues
 
-Errors use a standardized format with clear resolver identification:
+#### Error Messages
+Errors include resolver identification and helpful context:
 
 ```typescript
 class ResolverError extends Error {
@@ -467,19 +530,25 @@ class ResolverError extends Error {
   ) {
     super(`${resolverName}Resolver failed: ${originalError.message}`);
   }
-  
-  toDisplayString(): string {
-    let msg = `${this.resolverName}Resolver failed: ${this.originalError.message}`;
-    if (this.input) {
-      msg += `\nInput: ${JSON.stringify(this.input)}`;
-    }
-    if (this.suggestions?.length) {
-      msg += `\nSuggestions: ${this.suggestions.join(', ')}`;
-    }
-    return msg;
-  }
 }
 ```
+
+#### Common Resolution Errors
+
+**"User 'local' not found in registry"**
+- Cause: Running mlld from a subdirectory without mlld.lock.json
+- Fix: Ensure mlld.lock.json exists in project root
+- Prevention: Lock file discovery will search parent directories
+
+**"ProjectPathResolver requires basePath in configuration"**
+- Cause: @PROJECTPATH or @. used without proper registry configuration
+- Fix: Check that registries are loaded from lock file
+- Prevention: Dynamic project root detection
+
+**"Access denied for reference: @local/module"**
+- Cause: Module file doesn't exist at the configured path
+- Fix: Create the module file or check the basePath configuration
+- Note: Different from "not found in registry" - resolver is configured but file is missing
 
 **Example error messages:**
 ```
@@ -487,9 +556,10 @@ TimeResolver failed: Invalid format string 'XYZ'
 Input: {"format": "XYZ"}
 Suggestions: YYYY-MM-DD, HH:mm:ss, iso, unix
 
-CompanyResolver failed: Authentication token expired
-Input: {"moduleRef": "@company/utils"}
-Suggestions: Check your COMPANY_API_TOKEN environment variable
+LocalResolver failed: File not found: modules/utils.mld
+Did you mean:
+  - modules/utils.mlld.md
+  - modules/string.mld.md
 ```
 
 ## Built-in Resolver Implementations

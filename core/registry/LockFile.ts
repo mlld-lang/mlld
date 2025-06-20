@@ -54,32 +54,47 @@ export interface RegistryEntry {
 }
 
 export class LockFile {
-  private data: LockFileData;
+  private data: LockFileData | null = null;
   private isDirty: boolean = false;
+  private loaded: boolean = false;
 
   constructor(private readonly filePath: string) {
-    this.data = this.load();
+    // Lazy loading - don't load in constructor
   }
 
-  private load(): LockFileData {
+  private ensureLoaded(): void {
+    if (this.loaded) return;
+    
     try {
       if (fs.existsSync(this.filePath)) {
         const content = fs.readFileSync(this.filePath, 'utf8');
-        return JSON.parse(content);
+        this.data = JSON.parse(content);
+      } else {
+        // Initialize with empty lock file
+        this.data = {
+          version: '1.0.0',
+          imports: {},
+          modules: {},
+          cache: {}
+        };
       }
     } catch (error) {
       console.warn(`Failed to load lock file: ${error.message}`);
+      // Initialize with empty lock file on error
+      this.data = {
+        version: '1.0.0',
+        imports: {},
+        modules: {},
+        cache: {}
+      };
     }
     
-    // Initialize with empty lock file
-    return {
-      version: '1.0.0',
-      imports: {}
-    };
+    this.loaded = true;
   }
 
   async save(): Promise<void> {
     if (!this.isDirty) return;
+    this.ensureLoaded();
 
     const dir = path.dirname(this.filePath);
     await fs.promises.mkdir(dir, { recursive: true });
@@ -93,34 +108,39 @@ export class LockFile {
   }
 
   getImport(importPath: string): LockEntry | undefined {
-    return this.data.imports[importPath];
+    this.ensureLoaded();
+    return this.data!.imports[importPath];
   }
 
   async addImport(importPath: string, entry: LockEntry): Promise<void> {
-    this.data.imports[importPath] = entry;
+    this.ensureLoaded();
+    this.data!.imports[importPath] = entry;
     this.isDirty = true;
     await this.save();
   }
 
   async updateImport(importPath: string, entry: Partial<LockEntry>): Promise<void> {
-    const existing = this.data.imports[importPath];
+    this.ensureLoaded();
+    const existing = this.data!.imports[importPath];
     if (!existing) {
       throw new MlldError(`No lock entry found for ${importPath}`);
     }
     
-    this.data.imports[importPath] = { ...existing, ...entry };
+    this.data!.imports[importPath] = { ...existing, ...entry };
     this.isDirty = true;
     await this.save();
   }
 
   async removeImport(importPath: string): Promise<void> {
-    delete this.data.imports[importPath];
+    this.ensureLoaded();
+    delete this.data!.imports[importPath];
     this.isDirty = true;
     await this.save();
   }
 
   getAllImports(): Record<string, LockEntry> {
-    return { ...this.data.imports };
+    this.ensureLoaded();
+    return { ...this.data!.imports };
   }
 
   async verifyIntegrity(importPath: string, content: string): Promise<boolean> {
@@ -143,9 +163,10 @@ export class LockFile {
   async checkOutdated(
     checkFn: (importPath: string, entry: LockEntry) => Promise<boolean>
   ): Promise<Array<{ importPath: string; entry: LockEntry }>> {
+    this.ensureLoaded();
     const outdated: Array<{ importPath: string; entry: LockEntry }> = [];
     
-    for (const [importPath, entry] of Object.entries(this.data.imports)) {
+    for (const [importPath, entry] of Object.entries(this.data!.imports)) {
       if (await checkFn(importPath, entry)) {
         outdated.push({ importPath, entry });
       }
@@ -156,29 +177,33 @@ export class LockFile {
 
   // Registry/Resolver configuration methods
   getRegistries(): Record<string, RegistryEntry> {
-    return this.data.security?.registries || {};
+    this.ensureLoaded();
+    return this.data!.security?.registries || {};
   }
 
   getRegistryConfig(name: string): RegistryEntry | undefined {
-    return this.data.security?.registries?.[name];
+    this.ensureLoaded();
+    return this.data!.security?.registries?.[name];
   }
 
   async setRegistry(name: string, config: RegistryEntry): Promise<void> {
-    if (!this.data.security) {
-      this.data.security = {};
+    this.ensureLoaded();
+    if (!this.data!.security) {
+      this.data!.security = {};
     }
-    if (!this.data.security.registries) {
-      this.data.security.registries = {};
+    if (!this.data!.security.registries) {
+      this.data!.security.registries = {};
     }
     
-    this.data.security.registries[name] = config;
+    this.data!.security.registries[name] = config;
     this.isDirty = true;
     await this.save();
   }
 
   async removeRegistry(name: string): Promise<void> {
-    if (this.data.security?.registries) {
-      delete this.data.security.registries[name];
+    this.ensureLoaded();
+    if (this.data!.security?.registries) {
+      delete this.data!.security.registries[name];
       this.isDirty = true;
       await this.save();
     }
@@ -202,53 +227,60 @@ export class LockFile {
 
   // Security policy methods
   getSecurityPolicy(): any {
-    return this.data.security?.policies || {};
+    this.ensureLoaded();
+    return this.data!.security?.policies || {};
   }
 
   getTrustedDomains(): string[] {
-    return this.data.security?.trustedDomains || [];
+    this.ensureLoaded();
+    return this.data!.security?.trustedDomains || [];
   }
 
   getBlockedPatterns(): string[] {
-    return this.data.security?.blockedPatterns || [];
+    this.ensureLoaded();
+    return this.data!.security?.blockedPatterns || [];
   }
 
   async setSecurityPolicy(policy: any): Promise<void> {
-    if (!this.data.security) {
-      this.data.security = {};
+    this.ensureLoaded();
+    if (!this.data!.security) {
+      this.data!.security = {};
     }
     
-    this.data.security.policies = policy;
+    this.data!.security.policies = policy;
     this.isDirty = true;
     await this.save();
   }
 
   // Environment variable management methods
   getAllowedEnvVars(): string[] {
-    return this.data.security?.allowedEnvVars || [];
+    this.ensureLoaded();
+    return this.data!.security?.allowedEnvVars || [];
   }
 
   async addAllowedEnvVar(varName: string): Promise<void> {
-    if (!this.data.security) {
-      this.data.security = {};
+    this.ensureLoaded();
+    if (!this.data!.security) {
+      this.data!.security = {};
     }
-    if (!this.data.security.allowedEnvVars) {
-      this.data.security.allowedEnvVars = [];
+    if (!this.data!.security.allowedEnvVars) {
+      this.data!.security.allowedEnvVars = [];
     }
     
     // Only add if not already present
-    if (!this.data.security.allowedEnvVars.includes(varName)) {
-      this.data.security.allowedEnvVars.push(varName);
+    if (!this.data!.security.allowedEnvVars.includes(varName)) {
+      this.data!.security.allowedEnvVars.push(varName);
       this.isDirty = true;
       await this.save();
     }
   }
 
   async removeAllowedEnvVar(varName: string): Promise<void> {
-    if (this.data.security?.allowedEnvVars) {
-      const index = this.data.security.allowedEnvVars.indexOf(varName);
+    this.ensureLoaded();
+    if (this.data!.security?.allowedEnvVars) {
+      const index = this.data!.security.allowedEnvVars.indexOf(varName);
       if (index !== -1) {
-        this.data.security.allowedEnvVars.splice(index, 1);
+        this.data!.security.allowedEnvVars.splice(index, 1);
         this.isDirty = true;
         await this.save();
       }
@@ -256,35 +288,51 @@ export class LockFile {
   }
 
   async clearAllowedEnvVars(): Promise<void> {
-    if (this.data.security?.allowedEnvVars) {
-      this.data.security.allowedEnvVars = [];
+    this.ensureLoaded();
+    if (this.data!.security?.allowedEnvVars) {
+      this.data!.security.allowedEnvVars = [];
       this.isDirty = true;
       await this.save();
     }
   }
 
   hasAllowedEnvVarsConfigured(): boolean {
-    return (this.data.security?.allowedEnvVars && this.data.security.allowedEnvVars.length > 0) || false;
+    this.ensureLoaded();
+    return (this.data!.security?.allowedEnvVars && this.data!.security.allowedEnvVars.length > 0) || false;
   }
 
   // Registry configuration management methods
   getResolverRegistries(): RegistryConfig[] {
-    if (!this.data.config?.resolvers?.registries) {
+    this.ensureLoaded();
+    if (!this.data!.config?.resolvers?.registries) {
       return [];
     }
-    return this.data.config.resolvers.registries;
+    return this.data!.config.resolvers.registries;
   }
 
   async setResolverRegistries(registries: RegistryConfig[]): Promise<void> {
-    if (!this.data.config) {
-      this.data.config = {};
+    this.ensureLoaded();
+    if (!this.data!.config) {
+      this.data!.config = {};
     }
-    if (!this.data.config.resolvers) {
-      this.data.config.resolvers = {};
+    if (!this.data!.config.resolvers) {
+      this.data!.config.resolvers = {};
     }
     
-    this.data.config.resolvers.registries = registries;
+    this.data!.config.resolvers.registries = registries;
     this.isDirty = true;
     await this.save();
+  }
+  
+  // Get the script directory configuration
+  getScriptDir(): string | undefined {
+    this.ensureLoaded();
+    return this.data!.config?.scriptDir;
+  }
+  
+  // Update the lock file path (for project root discovery)
+  updatePath(newPath: string): void {
+    this.filePath = newPath;
+    this.loaded = false; // Force reload on next access
   }
 }

@@ -8,12 +8,12 @@ import {
   ContentInfo,
   ResolutionContext
 } from '@core/resolvers/types';
+import * as path from 'path';
 import { MlldResolutionError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { ModuleCache, LockFile } from '@core/registry';
 import { HashUtils } from '@core/registry/utils/HashUtils';
 import { hasUncommittedChanges, getGitStatus } from '@core/utils/gitStatus';
-import * as path from 'path';
 
 /**
  * Manages resolver registration, routing, and execution
@@ -105,14 +105,30 @@ export class ResolverManager {
   /**
    * Configure registries from lock file or config
    */
-  configureRegistries(registries: RegistryConfig[]): void {
+  configureRegistries(registries: RegistryConfig[], projectRoot?: string): void {
     // Validate all registries first
     for (const registry of registries) {
       this.validateRegistry(registry);
     }
 
+    // If projectRoot is provided, resolve relative basePaths in registry configs
+    const processedRegistries = projectRoot ? registries.map(registry => {
+      if (registry.config?.basePath && !path.isAbsolute(registry.config.basePath)) {
+        // Resolve relative basePath relative to project root
+        const resolvedPath = path.resolve(projectRoot, registry.config.basePath);
+        return {
+          ...registry,
+          config: {
+            ...registry.config,
+            basePath: resolvedPath
+          }
+        };
+      }
+      return registry;
+    }) : registries;
+
     // Sort by prefix length (longest first) for proper matching
-    this.registries = registries.sort((a, b) => b.prefix.length - a.prefix.length);
+    this.registries = processedRegistries.sort((a, b) => b.prefix.length - a.prefix.length);
     logger.debug(`Configured ${registries.length} registries`);
   }
 
@@ -473,6 +489,18 @@ export class ResolverManager {
   getRegistries(): RegistryConfig[] {
     return [...this.registries];
   }
+  
+  /**
+   * Update registry configuration after initialization
+   * Useful for updating basePath after project root discovery
+   */
+  updateRegistryConfig(prefix: string, updates: Partial<any>): void {
+    const registry = this.registries.find(r => r.prefix === prefix);
+    if (registry) {
+      registry.config = { ...registry.config, ...updates };
+      logger.debug(`Updated registry config for ${prefix}:`, updates);
+    }
+  }
 
   /**
    * Check if a resolver can handle a reference in a given context
@@ -519,9 +547,22 @@ export class ResolverManager {
     for (const registry of this.registries) {
       if (ref.startsWith(registry.prefix)) {
         const resolver = this.resolvers.get(registry.resolver);
+        if (!resolver) {
+          const availableResolvers = Array.from(this.resolvers.keys());
+          throw new MlldResolutionError(
+            `Resolver '${registry.resolver}' not found. ` +
+            `Registry prefix '${registry.prefix}' is configured to use '${registry.resolver}' resolver, ` +
+            `but only these resolvers are registered: ${availableResolvers.join(', ')}`,
+            { 
+              prefix: registry.prefix,
+              expectedResolver: registry.resolver,
+              availableResolvers 
+            }
+          );
+        }
         // Strip prefix from reference before checking canResolve
         const resolverRef = ref.slice(registry.prefix.length);
-        if (resolver && resolver.canResolve(resolverRef, registry.config) && 
+        if (resolver.canResolve(resolverRef, registry.config) && 
             (!context || this.canResolveInContext(resolver, context))) {
           return { resolver, registry };
         }
