@@ -46,6 +46,7 @@ export async function evaluateAdd(
       throw new Error(`Variable not found: ${varName}`);
     }
     
+    
     // Get the base value using type-safe approach
     let value: any;
     let originalValue: any; // Keep track of the original value before evaluation
@@ -183,6 +184,7 @@ export async function evaluateAdd(
       // Handle null/undefined
       content = '';
     }
+    
     
   } else if (directive.subtype === 'addPath') {
     // Handle path inclusion (whole file)

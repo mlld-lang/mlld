@@ -7,6 +7,3 @@
 ## TIME as import (returns data with multiple formats)
 @import { iso, unix, date } from @TIME
 @add [[Import TIME - ISO: {{iso}}, Date: {{date}}]]
-
-## DEBUG as variable (returns data)
-@add [[Debug basePath: {{DEBUG.project.basePath}}]]

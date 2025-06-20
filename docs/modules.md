@@ -1443,6 +1443,157 @@ Here's a comprehensive configuration showing multiple resolver types:
 3. **Auditing**: Regular security audits of used modules
 4. **Training**: Educate developers on module best practices
 
+## Shadow Environments for JavaScript and Node.js
+
+Shadow environments in mlld allow you to define reusable functions in mlld that can be called from JavaScript or Node.js code blocks. This creates a seamless bridge between mlld's declarative syntax and imperative programming.
+
+### JavaScript Shadow Environment
+
+The JavaScript shadow environment enables lightweight, synchronous function execution:
+
+```mlld
+# Define mlld functions
+@exec add(a, b) = @run javascript [(return a + b;)]
+@exec multiply(x, y) = @run javascript [(return x * y;)]
+@exec calculate(n) = @run javascript [(
+  const sum = add(n, 10);
+  const product = multiply(sum, 2);
+  return product;
+)]
+
+# Create shadow environment
+@exec js = { add, multiply, calculate }
+
+# Use shadow functions in JavaScript
+@data result = @run javascript [(
+  // All shadow functions are available
+  const r1 = add(5, 3);        // returns 8
+  const r2 = multiply(4, 7);   // returns 28
+  const r3 = calculate(5);     // returns 30: (5+10)*2
+  
+  return { r1, r2, r3 };
+)]
+
+@add @result
+```
+
+**Key features:**
+- Functions execute in the same process (fast)
+- Synchronous execution for simple operations
+- Direct access to shadow functions by name
+- Console output is captured automatically
+
+### Node.js Shadow Environment
+
+The Node.js shadow environment provides full Node.js API access with VM isolation:
+
+```mlld
+# Define Node.js functions with full API access
+@exec readConfig(filename) = @run node [(
+  const fs = require('fs');
+  const path = require('path');
+  
+  const configPath = path.resolve(filename);
+  const content = fs.readFileSync(configPath, 'utf8');
+  return JSON.parse(content);
+)]
+
+@exec fetchData(url) = @run node [(
+  const https = require('https');
+  
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => resolve(JSON.parse(data)));
+    }).on('error', reject);
+  });
+)]
+
+# Create Node.js shadow environment
+@exec node = { readConfig, fetchData }
+
+# Use in Node.js code blocks
+@data config = @run node [(
+  // Access Node.js APIs and shadow functions
+  const config = await readConfig('./config.json');
+  const apiData = await fetchData(config.apiUrl);
+  
+  return {
+    ...config,
+    apiData
+  };
+)]
+```
+
+**Key features:**
+- Runs in isolated VM context for security
+- Full access to Node.js built-in modules
+- Async/await support throughout
+- Functions can call each other within the environment
+
+### When to Use Each Environment
+
+**Use JavaScript shadow environment when:**
+- Performing simple calculations or transformations
+- Speed is critical (no VM overhead)
+- You don't need Node.js-specific APIs
+- Working with synchronous operations
+
+**Use Node.js shadow environment when:**
+- Accessing file system, network, or other Node.js APIs
+- Better isolation is desired
+- Working with async operations
+- Using npm packages (with require)
+
+### Implementation Details
+
+**JavaScript Shadow Environment:**
+- Executes in the current Node.js process
+- Functions are created using `new Function()`
+- Console output is intercepted and captured
+- Parameters are merged with shadow functions in scope
+
+**Node.js Shadow Environment:**
+- Uses Node.js VM module for isolation
+- Each mlld file gets its own VM context
+- Includes standard Node.js globals (Buffer, process, require, etc.)
+- Functions persist across executions in the same context
+
+### Best Practices
+
+1. **Use appropriate environment for the task:**
+   - Simple math/string operations → JavaScript
+   - File I/O, network requests → Node.js
+
+2. **Keep shadow functions focused:**
+   ```mlld
+   # Good: Single responsibility
+   @exec formatDate(date) = @run js [(return new Date(date).toISOString())]
+   
+   # Avoid: Too many responsibilities
+   @exec doEverything(data) = @run js [(/* complex logic */)]
+   ```
+
+3. **Handle errors gracefully:**
+   ```mlld
+   @exec safeDiv(a, b) = @run js [(
+     if (b === 0) return { error: "Division by zero" };
+     return { result: a / b };
+   )]
+   ```
+
+4. **Document shadow functions:**
+   ```mlld
+   # Calculate compound interest
+   # @param principal - Initial amount
+   # @param rate - Annual interest rate (as decimal)
+   # @param time - Time period in years
+   @exec compound(principal, rate, time) = @run js [(
+     return principal * Math.pow(1 + rate, time);
+   )]
+   ```
+
 ## Future Considerations
 
 The module system may be extended with additional features based on community needs and feedback. Potential areas for enhancement include improved search capabilities, update management, and better integration with development tools.

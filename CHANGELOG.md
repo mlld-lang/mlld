@@ -5,6 +5,20 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.6]
+### Added
+- **Node shadow env support**
+- Some resolver bugs
+
+### Fixed
+- @debug / @DEBUG wasn't working
+- Created better naming clarity with prefix/resolver/registry distinction and refactor
+- JS shadow env bug
+
+### Documentation
+- Lots of docs updates for resolvers
+- Added missing alias and setup commands to cli help text
+
 ## [1.4.5]
 
 ### Added

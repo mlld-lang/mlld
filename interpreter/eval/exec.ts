@@ -331,9 +331,25 @@ function createSyncJsWrapper(
       throw new Error(`Cannot create synchronous wrapper for ${funcName}: ${error.message}`);
     }
     
+    // Get shadow environment functions to include in scope
+    const shadowEnv = env.getShadowEnv('js') || env.getShadowEnv('javascript');
+    const shadowFunctions: Record<string, any> = {};
+    const shadowNames: string[] = [];
+    const shadowValues: any[] = [];
+    
+    if (shadowEnv) {
+      for (const [name, func] of shadowEnv) {
+        if (!codeParams[name]) { // Don't override parameters
+          shadowFunctions[name] = func;
+          shadowNames.push(name);
+          shadowValues.push(func);
+        }
+      }
+    }
+    
     // Create and execute a synchronous function
-    const paramNames = Object.keys(codeParams);
-    const paramValues = Object.values(codeParams);
+    const allParamNames = [...Object.keys(codeParams), ...shadowNames];
+    const allParamValues = [...Object.values(codeParams), ...shadowValues];
     
     // Build function body
     let functionBody = code;
@@ -349,9 +365,9 @@ function createSyncJsWrapper(
       functionBody = `return (${functionBody})`;
     }
     
-    // Create and execute the function
-    const fn = new Function(...paramNames, functionBody);
-    return fn(...paramValues);
+    // Create and execute the function with shadow functions in scope
+    const fn = new Function(...allParamNames, functionBody);
+    return fn(...allParamValues);
   };
 }
 

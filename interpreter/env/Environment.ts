@@ -789,8 +789,29 @@ export class Environment {
   
   getVariable(name: string): MlldVariable | undefined {
     // FAST PATH: Check local variables first (most common case)
-    const variable = this.variables.get(name);
+    let variable = this.variables.get(name);
+    
+    // Handle lowercase reserved variable aliases
+    if (!variable && !this.parent) {
+      const upperName = name.toUpperCase();
+      if (upperName === 'TIME' || upperName === 'DEBUG' || upperName === 'INPUT' || upperName === 'PROJECTPATH') {
+        variable = this.variables.get(upperName);
+      }
+    }
+    
     if (variable) {
+      // Special handling for lazy variables like @DEBUG
+      if (variable.metadata?.isLazy && variable.value === null) {
+        // For lazy variables, we need to compute the value
+        if (name.toUpperCase() === 'DEBUG') {
+          const debugValue = this.createDebugObject(3); // Use markdown format
+          return {
+            ...variable,
+            type: 'text', // Markdown is text type
+            value: debugValue
+          };
+        }
+      }
       return variable;
     }
     
@@ -866,7 +887,7 @@ export class Environment {
     
     // Special handling for DEBUG variable - compute dynamically
     if (upperName === 'DEBUG') {
-      const debugValue = this.createDebugObject(2); // Use version 2 by default
+      const debugValue = this.createDebugObject(3); // Use markdown format
       
       
       const debugVar: MlldVariable = {
@@ -998,7 +1019,23 @@ export class Environment {
    * @param functions Map of function names to their implementations
    */
   setShadowEnv(language: string, functions: Map<string, any>): void {
-    this.shadowEnvs.set(language, functions);
+    if (language === 'node' || language === 'nodejs') {
+      // Create or get Node shadow environment
+      if (!this.nodeShadowEnv) {
+        this.nodeShadowEnv = new NodeShadowEnvironment(
+          this.basePath,
+          this.currentFilePath
+        );
+      }
+      
+      // Add functions to Node shadow environment
+      for (const [name, func] of functions) {
+        this.nodeShadowEnv.addFunction(name, func);
+      }
+    } else {
+      // Use existing implementation for other languages
+      this.shadowEnvs.set(language, functions);
+    }
   }
   
   /**
@@ -1007,7 +1044,30 @@ export class Environment {
    * @returns Map of function names to implementations, or undefined if not set
    */
   getShadowEnv(language: string): Map<string, any> | undefined {
+    if (language === 'node' || language === 'nodejs') {
+      // Return Node shadow env functions as a Map
+      const nodeShadowEnv = this.getNodeShadowEnv();
+      if (nodeShadowEnv) {
+        const functions = nodeShadowEnv.getFunctionNames();
+        const map = new Map<string, any>();
+        const context = nodeShadowEnv.getContext();
+        for (const name of functions) {
+          if (context[name]) {
+            map.set(name, context[name]);
+          }
+        }
+        return map;
+      }
+      return undefined;
+    }
     return this.shadowEnvs.get(language) || this.parent?.getShadowEnv(language);
+  }
+  
+  /**
+   * Get Node shadow environment instance
+   */
+  getNodeShadowEnv(): NodeShadowEnvironment | undefined {
+    return this.nodeShadowEnv || this.parent?.getNodeShadowEnv();
   }
   
   // --- Capabilities ---
@@ -1463,8 +1523,25 @@ export class Environment {
         throw codeError;
       }
     } else if (language === 'node' || language === 'nodejs') {
-      // Node.js subprocess execution (no shadow environment support)
       try {
+        // Check if we have a Node shadow environment
+        const nodeShadowEnv = this.getNodeShadowEnv();
+        
+        if (nodeShadowEnv) {
+          // Use shadow environment with VM
+          const result = await nodeShadowEnv.execute(code, params);
+          
+          // Format result (same as subprocess version)
+          if (result !== undefined) {
+            if (typeof result === 'object') {
+              return JSON.stringify(result);
+            }
+            return String(result);
+          }
+          return '';
+        }
+        
+        // Fall back to subprocess execution if no shadow environment
         // Create a temporary Node.js file with parameter injection
         const fs = require('fs');
         const os = require('os');
