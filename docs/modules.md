@@ -386,6 +386,36 @@ Created: January 15, 2024
 
 ## Module Development
 
+### Path Resolution in Modules
+
+When working with mlld modules, it's important to understand how relative paths are resolved:
+
+**Relative paths in mlld modules are resolved relative to the module file itself**, not the current working directory or the location of `mlld.lock.json`.
+
+This means:
+- If your module is at `/projects/mymodule/utils.mld`
+- And it contains `@import { config } from "./config.mld"`
+- The path resolves to `/projects/mymodule/config.mld`
+
+This behavior ensures modules are:
+- **Portable**: Modules can be moved or installed anywhere without breaking their internal references
+- **Self-contained**: All relative paths within a module are predictable and consistent
+- **Independent**: Module functionality doesn't depend on where you run the `mlld` command from
+
+**Example:**
+```mlld
+# In file: /home/user/modules/string-utils.mld
+
+# This always resolves relative to string-utils.mld's location
+@import { helpers } from "./lib/helpers.mld"  # → /home/user/modules/lib/helpers.mld
+
+# Even if you run mlld from a different directory:
+# cd /tmp && mlld /home/user/modules/string-utils.mld
+# The import still resolves to /home/user/modules/lib/helpers.mld
+```
+
+This design makes modules reliable and reusable across different projects and execution contexts.
+
 ### The `.mld.md` Executable Documentation Format
 
 mlld modules use the `.mld.md` file extension by default, enabling **executable documentation** - files that are simultaneously perfect GitHub markdown documentation and functional mlld modules. This innovative approach combines data, documentation, and code in one file.

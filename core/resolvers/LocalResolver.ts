@@ -98,6 +98,24 @@ export class LocalResolver implements Resolver {
     // The ResolverManager will have already matched the prefix
     const relativePath = this.extractRelativePath(ref, config);
     
+    // Quick check for .mld.md files (common module format)
+    if (config?.basePath) {
+      const mldMdPath = path.join(config.basePath, relativePath + '.mld.md');
+      if (await this.fileSystem.exists(mldMdPath)) {
+        const content = await this.fileSystem.readFile(mldMdPath, 'utf8');
+        return {
+          content,
+          contentType: 'module',
+          metadata: {
+            source: `file://${mldMdPath}`,
+            mimeType: 'text/x-mlld-module',
+            size: Buffer.byteLength(content, 'utf8'),
+            timestamp: new Date()
+          }
+        };
+      }
+    }
+    
     // First check for path traversal attempts (security check before fuzzy matching)
     if (relativePath.includes('..') || path.isAbsolute(relativePath)) {
       // Validate through resolveFullPath which has security checks
@@ -436,6 +454,12 @@ export class LocalResolver implements Resolver {
     try {
       const relativePath = this.extractRelativePath(ref, config);
       
+      // Quick check for .mld.md files (common module format)
+      const mldMdPath = path.join(config.basePath, relativePath + '.mld.md');
+      if (await this.fileSystem.exists(mldMdPath)) {
+        return true;
+      }
+      
       // Use fuzzy matching if enabled (default: true)
       const fuzzyConfig = config?.fuzzyMatch !== undefined ? config.fuzzyMatch : true;
       const fuzzyEnabled = typeof fuzzyConfig === 'boolean' ? fuzzyConfig : fuzzyConfig.enabled !== false;
@@ -507,7 +531,7 @@ export class LocalResolver implements Resolver {
           return await this.fileSystem.exists(fullPath);
         }
       }
-    } catch {
+    } catch (error) {
       return false;
     }
   }

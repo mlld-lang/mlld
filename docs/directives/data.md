@@ -76,6 +76,33 @@ Data structures can contain variable references in both keys and values:
 }
 ```
 
+## Executable Variables in Data
+
+Data structures can reference and execute executable variables using the universal pattern:
+- `@execVar` - stores a reference to the executable (lazy evaluation)
+- `@execVar()` - executes immediately and stores the result
+
+```mlld
+@exec getTimestamp = [date +%s]
+@exec formatName(name) = [[{{name}} (formatted)]]
+
+@data info = {
+  # Store executable references (not executed)
+  timestampCmd: @getTimestamp,
+  formatter: @formatName,
+  
+  # Execute and store results
+  currentTime: @getTimestamp(),
+  formatted: @formatName("Alice")
+}
+
+# Later, execute stored executables
+@run @info.timestampCmd()
+@add @info.formatter("Bob")
+```
+
+This pattern allows for powerful composition and lazy evaluation strategies.
+
 ## Referencing Data Variables
 
 Data variables are referenced differently based on context:
@@ -142,6 +169,24 @@ Using variables in data:
 Using command output as data:
 ```mlld
 @data gitInfo = @run [(git log -1 --format="%H,%an,%ae,%s")]
+```
+
+Using executable variables:
+```mlld
+@exec getDate = [date]
+@exec getUser = [whoami]
+
+# Store references to executables
+@data commands = {
+  date: @getDate,
+  user: @getUser
+}
+
+# Execute and store results
+@data results = {
+  date: @getDate(),
+  user: @getUser()
+}
 ```
 
 ## Error Handling
