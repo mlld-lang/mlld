@@ -711,6 +711,7 @@ Usage: mlld [command] [options] <input-file>
 Commands:
   init                    Create a new mlld module
   add-needs, needs, deps  Analyze and update module dependencies
+  alias                   Create path aliases for module imports
   env                     Manage environment variables allowed in @INPUT
   install, i              Install mlld modules
   ls, list               List installed modules
@@ -719,6 +720,7 @@ Commands:
   publish                 Publish module to mlld registry
   registry                Manage mlld module registry
   run                     Run mlld scripts from script directory
+  setup                   Configure mlld project with interactive wizard
   test                    Run mlld tests
   language-server, lsp    Start the mlld language server for editor integration
   debug-resolution        Debug variable resolution in a mlld file
