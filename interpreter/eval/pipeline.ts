@@ -14,9 +14,19 @@ export async function executePipeline(
   location?: any
 ): Promise<string> {
   let currentOutput = baseOutput;
+  const previousOutputs: string[] = [];
   
   for (let i = 0; i < pipeline.length; i++) {
     const command = pipeline[i];
+    
+    // Set pipeline context in the environment
+    env.setPipelineContext({
+      stage: i + 1,
+      totalStages: pipeline.length,
+      currentCommand: command.rawIdentifier,
+      input: currentOutput,
+      previousOutputs: [...previousOutputs]
+    });
     
     // Create child environment with @input variable
     const pipelineEnv = env.createChild();
@@ -41,10 +51,13 @@ export async function executePipeline(
       if (!commandVar) {
         throw new MlldCommandExecutionError(
           `Pipeline command ${command.rawIdentifier} not found`,
-          command.rawIdentifier,
-          1,
-          '',
-          location
+          location,
+          {
+            command: command.rawIdentifier,
+            exitCode: 1,
+            duration: 0,
+            workingDirectory: process.cwd()
+          }
         );
       }
       
@@ -114,20 +127,33 @@ export async function executePipeline(
       
       currentOutput = result;
       
+      // Store this stage's output for context
+      previousOutputs.push(result);
+      
     } catch (error) {
+      // Clear pipeline context on error
+      env.clearPipelineContext();
+      
       // Enhance error with pipeline context
       if (error instanceof MlldCommandExecutionError) {
         throw new MlldCommandExecutionError(
           `Pipeline step ${i + 1} failed: ${error.message}`,
-          command.rawIdentifier,
-          error.exitCode,
-          error.output,
-          location || error.location
+          location || error.sourceLocation,
+          {
+            command: command.rawIdentifier,
+            exitCode: error.exitCode || 1,
+            duration: 0,
+            stdout: error.output,
+            workingDirectory: process.cwd()
+          }
         );
       }
       throw error;
     }
   }
+  
+  // Clear pipeline context when done
+  env.clearPipelineContext();
   
   // Debug logging
   if (process.env.MLLD_DEBUG === 'true') {
@@ -214,7 +240,13 @@ async function executeCommandVariable(
     } catch (error) {
       throw new MlldCommandExecutionError(
         `Transformer ${commandVar.name} failed: ${error.message}`,
-        commandVar.location
+        undefined,
+        {
+          command: commandVar.name,
+          exitCode: 1,
+          duration: 0,
+          workingDirectory: process.cwd()
+        }
       );
     }
   }

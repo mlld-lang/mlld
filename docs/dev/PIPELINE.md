@@ -167,6 +167,58 @@ if (commandVar?.metadata?.isBuiltinTransformer) {
 3. **@CSV / @csv** - Converts JSON arrays to CSV format
 4. **@MD / @md** - Formats markdown using prettier
 
+## Pipeline Context Tracking (v1.4.7+)
+
+The pipeline execution system now tracks context information that's available during pipeline execution. This enables better debugging and introspection of pipeline operations.
+
+### Pipeline Context Structure
+
+```typescript
+interface PipelineContext {
+  stage: number;              // Current stage (1-based)
+  totalStages: number;        // Total number of pipeline stages
+  currentCommand: string;     // Command being executed (e.g., "json", "extractNames")
+  input: any;                // Input data for current stage
+  previousOutputs: string[];  // Outputs from previous stages
+}
+```
+
+### Context Management
+
+Pipeline context is managed through the Environment class:
+
+```typescript
+// Set at the start of each pipeline stage
+env.setPipelineContext({
+  stage: i + 1,
+  totalStages: pipeline.length,
+  currentCommand: command.rawIdentifier,
+  input: currentOutput,
+  previousOutputs: [...previousOutputs]
+});
+
+// Cleared when pipeline completes or errors
+env.clearPipelineContext();
+```
+
+### Child Environment Inheritance
+
+Pipeline stages execute in child environments that can access parent pipeline context:
+
+```typescript
+// Child environments check parent chain for pipeline context
+let pipelineCtx = this.pipelineContext;
+if (!pipelineCtx && this.parent) {
+  let current = this.parent;
+  while (current && !pipelineCtx) {
+    pipelineCtx = current.getPipelineContext();
+    current = current.parent;
+  }
+}
+```
+
+This ensures that nested operations (like @debug) can access pipeline context information.
+
 ### Error Context
 
 All features provide detailed error messages with execution context:

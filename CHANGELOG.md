@@ -6,9 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.4.7]
+### Added
+- **Pipeline-aware @debug**: The @debug variable now includes pipeline execution context when evaluated during pipeline operations
+  - Shows current stage number and total stages in pipeline
+  - Displays the command/transformer being executed
+  - Includes input data details (type, length, preview)
+  - Lists outputs from previous pipeline stages
+  - Context is accessible in child environments via parent chain lookup
+
 ### Fixed
 - #270 LocalResolver fails to resolve .mld.md files with 'Access denied' error
 - Fixed `mlld setup` command throwing "Cannot read properties of null (reading 'config')" error when no mlld.lock.json exists
+- Fixed pipeline `@data` variable evaluation returning null for complex pipeline expressions
+  - `VariableReferenceWithTail` nodes now properly marked for lazy evaluation
+  - Enables correct execution of expressions like `@data result = @input | @transformer1 | @transformer2`
+- Fixed incorrect MlldCommandExecutionError constructor usage that caused "Cannot use 'in' operator" errors
+  - Updated all error instantiations to use new signature with proper sourceLocation parameter
 
 ## [1.4.6]
 ### Added

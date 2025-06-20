@@ -79,6 +79,16 @@ _(not available unless passed via @INPUT)_
 - value: "example value"
 - defined at: relative/path.mld:15
 
+### Pipeline Context:
+- Current stage: 2 of 3
+- Current command: @json
+- Input type: string
+- Input length: 45
+- Input value: "{"name": "example", "data": [1, 2, 3]}"
+- Previous stages:
+  1. Raw input data...
+  2. Transformed by @uppercase...
+
 ### Statistics:
 - Total variables: 25
 - Output nodes: 10
@@ -104,7 +114,16 @@ _(not available unless passed via @INPUT)_
 - Includes their type, truncated value, and source location
 - Shows imported variables separately with import paths
 
-### 4. Statistics
+### 4. Pipeline Context (v1.4.7+)
+When @debug is evaluated during pipeline execution, it includes:
+- Current stage number and total stages
+- The command currently being executed
+- Input data type, length, and preview
+- Previous stage outputs for tracing data flow
+
+This context is only available during active pipeline execution and helps debug complex data transformations.
+
+### 5. Statistics
 - Total variable count
 - Number of output nodes generated
 - Error count

@@ -86,6 +86,15 @@ export class Environment {
   // Node.js shadow environment (uses VM for better isolation)
   private nodeShadowEnv?: NodeShadowEnvironment;
   
+  // Pipeline execution context
+  private pipelineContext?: {
+    stage: number;
+    totalStages: number;
+    currentCommand: string;
+    input: any;
+    previousOutputs: string[];
+  };
+  
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
     showProgress: true,
@@ -628,6 +637,42 @@ export class Environment {
         }
       }
       
+      // Pipeline context section (if in a pipeline)
+      // Check this environment and parent environments for pipeline context
+      let pipelineCtx = this.pipelineContext;
+      if (!pipelineCtx && this.parent) {
+        // Check parent environment for pipeline context
+        let current = this.parent;
+        while (current && !pipelineCtx) {
+          pipelineCtx = current.getPipelineContext();
+          current = current.parent;
+        }
+      }
+      
+      if (pipelineCtx) {
+        markdown += '\n### Pipeline Context:\n';
+        markdown += `- Current stage: ${pipelineCtx.stage} of ${pipelineCtx.totalStages}\n`;
+        markdown += `- Current command: @${String(pipelineCtx.currentCommand)}\n`;
+        markdown += `- Input type: ${typeof pipelineCtx.input}\n`;
+        markdown += `- Input length: ${typeof pipelineCtx.input === 'string' ? pipelineCtx.input.length : 'N/A'}\n`;
+        if (typeof pipelineCtx.input === 'string') {
+          const truncated = pipelineCtx.input.length > 100 
+            ? pipelineCtx.input.substring(0, 100) + '...' 
+            : pipelineCtx.input;
+          markdown += `- Input value: "${truncated}"\n`;
+        } else {
+          markdown += `- Input value: ${JSON.stringify(pipelineCtx.input, null, 2).substring(0, 200)}...\n`;
+        }
+        if (pipelineCtx.previousOutputs.length > 0) {
+          markdown += `- Previous stages:\n`;
+          pipelineCtx.previousOutputs.forEach((output, i) => {
+            const truncated = output.length > 50 ? output.substring(0, 50) + '...' : output;
+            markdown += `  ${i + 1}. ${truncated}\n`;
+          });
+        }
+        markdown += '\n';
+      }
+      
       // Stats section
       markdown += '### Statistics:\n';
       markdown += `- Total variables: ${allVars.size}\n`;
@@ -871,6 +916,33 @@ export class Environment {
         definedAt: { line: 0, column: 0, filePath: '<resolver>' }
       }
     };
+  }
+  
+  /**
+   * Set pipeline execution context
+   */
+  setPipelineContext(context: {
+    stage: number;
+    totalStages: number;
+    currentCommand: string;
+    input: any;
+    previousOutputs: string[];
+  }): void {
+    this.pipelineContext = context;
+  }
+  
+  /**
+   * Clear pipeline execution context
+   */
+  clearPipelineContext(): void {
+    this.pipelineContext = undefined;
+  }
+  
+  /**
+   * Get current pipeline context
+   */
+  getPipelineContext(): typeof this.pipelineContext {
+    return this.pipelineContext;
   }
   
   /**
@@ -1507,17 +1579,14 @@ export class Environment {
         const duration = Date.now() - startTime;
         const codeError = new MlldCommandExecutionError(
           error instanceof Error ? error.message : 'JavaScript execution failed',
-          'js',
-          code,
-          error instanceof Error ? error : undefined,
+          undefined, // sourceLocation
           {
+            command: 'js',
+            exitCode: 1,
             duration,
-            output: '',
+            stdout: '',
             stderr: error instanceof Error ? error.stack || error.message : 'Unknown error',
-            location: astLocationToSourceLocation(
-              { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
-              this.getCurrentFilePath()
-            )
+            workingDirectory: this.basePath
           }
         );
         throw codeError;
