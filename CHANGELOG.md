@@ -5,6 +5,15 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.11]
+
+### Fixed
+- Fixed pipeline operator converting JSON array strings to `[object Object]` (#272)
+  - ExecInvocation nodes with pipelines are now handled correctly in data value evaluation
+  - Functions are executed first, then their JSON string results are passed through the pipeline
+  - Pipeline now preserves JSON array data as strings instead of mangling them
+  - This fix ensures data can be properly passed between functions in a pipeline
+
 ## [1.4.10]
 ### Fixed
 - Fixed parser failing on bracket characters (`[` or `]`) in JavaScript/code string literals (#273)

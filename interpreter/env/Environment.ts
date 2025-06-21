@@ -1570,7 +1570,12 @@ export class Environment {
         
         // Format the result
         if (result !== undefined && result !== null) {
-          output = String(result);
+          // For objects and arrays, use JSON.stringify to preserve structure
+          if (typeof result === 'object') {
+            output = JSON.stringify(result);
+          } else {
+            output = String(result);
+          }
         }
         
         // Return the captured output

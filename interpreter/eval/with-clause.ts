@@ -17,13 +17,23 @@ export async function applyWithClause(
   // Apply pipeline transformations
   if (withClause.pipeline && withClause.pipeline.length > 0) {
     for (const pipelineCmd of withClause.pipeline) {
-      // Create a child environment with @input set
+      // Create a child environment with @INPUT set
       const pipelineEnv = env.createChild();
-      pipelineEnv.setVariable('input', {
-        type: 'text',
-        name: 'input',
-        value: result
-      });
+      
+      // Check if INPUT already exists and update it, otherwise create it
+      const existingInput = pipelineEnv.getVariable('INPUT');
+      if (existingInput) {
+        // Update existing INPUT variable
+        existingInput.value = result;
+      } else {
+        // Create new INPUT variable
+        pipelineEnv.setVariable('INPUT', {
+          type: 'text',
+          name: 'INPUT',
+          value: result,
+          metadata: { isSystem: true }  // Mark as system variable to bypass reserved name check
+        });
+      }
       
       // Execute the pipeline command
       result = await executePipelineCommand(pipelineCmd, pipelineEnv);

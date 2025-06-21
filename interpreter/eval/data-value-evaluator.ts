@@ -124,7 +124,20 @@ export async function evaluateDataValue(
     } else if (isPathVariable(variable)) {
       result = variable.value.resolvedPath;
     } else if (isExecutableVariable(variable)) {
-      result = variable;
+      // If we have a pipeline, we need to execute the variable to get its value
+      if (value.withClause && value.withClause.pipeline) {
+        // Execute the function to get its result
+        const { evaluateExecInvocation } = await import('./exec-invocation');
+        result = await evaluateExecInvocation({
+          type: 'ExecInvocation',
+          identifier: varRef.identifier,
+          args: [],
+          withClause: null
+        } as any, env);
+      } else {
+        // For non-pipeline cases, return the variable for lazy evaluation
+        result = variable;
+      }
     } else if (isImportVariable(variable)) {
       result = variable.value;
     } else {
@@ -299,6 +312,41 @@ export async function evaluateDataValue(
   // Handle ExecInvocation nodes
   if (value && typeof value === 'object' && value.type === 'ExecInvocation') {
     const { evaluateExecInvocation } = await import('./exec-invocation');
+    
+    // If the ExecInvocation has a pipeline, we need to handle it here
+    // to ensure proper data type handling
+    if (value.withClause && value.withClause.pipeline) {
+      // Create a copy without the withClause to avoid double execution
+      const nodeWithoutPipeline = {
+        ...value,
+        withClause: null
+      };
+      
+      const result = await evaluateExecInvocation(nodeWithoutPipeline as any, env);
+      
+      const { executePipeline } = await import('../eval/pipeline');
+      
+      // Get the string representation of the result for the pipeline
+      const stringResult = typeof result.value === 'string' ? result.value : JSON.stringify(result.value);
+      
+      // Execute the pipeline with the stringified result
+      const pipelineResult = await executePipeline(
+        stringResult,
+        value.withClause.pipeline,
+        env
+      );
+      
+      // Try to parse the pipeline result back to maintain type consistency
+      try {
+        const parsed = JSON.parse(pipelineResult);
+        return parsed;
+      } catch {
+        // If JSON parsing fails, return the string as-is
+        return pipelineResult;
+      }
+    }
+    
+    // No pipeline, execute normally
     const result = await evaluateExecInvocation(value as any, env);
     
     // If the result is a JSON string, try to parse it back into an object/array
