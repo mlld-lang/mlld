@@ -996,6 +996,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
   const { input, output, format, stdout, debug } = cliOptions;
   let outputPath = output;
   const normalizedFormat = normalizeFormat(format); // Use normalized format
+  let environment: any = null; // Define outside try block for cleanup access
 
 
   if (!stdout && !outputPath) {
@@ -1087,7 +1088,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
 
     // Extract result and environment
     const result = typeof interpretResult === 'string' ? interpretResult : interpretResult.output;
-    const environment = typeof interpretResult === 'string' ? null : interpretResult.environment;
+    environment = typeof interpretResult === 'string' ? null : interpretResult.environment;
     
     // Check if @output was used in the document
     const hasExplicitOutput = environment && (environment as any).hasExplicitOutput;
@@ -1111,8 +1112,30 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
         console.log('Operation cancelled by user.');
       }
     }
+    
+    // Clean up environment to prevent event loop from staying alive
+    if (environment && 'cleanup' in environment) {
+      (environment as any).cleanup();
+    }
+    
+    // For stdout mode, ensure clean exit after output
+    if (stdout) {
+      // Give a small delay to ensure all output is flushed
+      await new Promise(resolve => setTimeout(resolve, 10));
+      process.exit(0);
+    }
   } catch (error: any) {
+    // Clean up environment even on error
+    if (environment && 'cleanup' in environment) {
+      environment.cleanup();
+    }
     await handleError(error, cliOptions);
+    
+    // For stdout mode, ensure clean exit even on error
+    if (stdout) {
+      process.exit(1);
+    }
+    
     throw error;
   }
 }

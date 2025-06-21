@@ -10,6 +10,7 @@ export class NodeShadowEnvironment {
   private shadowFunctions: Map<string, Function>;
   private basePath: string;
   private currentFile?: string;
+  private isCleaningUp: boolean = false;
   
   constructor(basePath: string, currentFile?: string) {
     this.basePath = basePath;
@@ -67,6 +68,11 @@ export class NodeShadowEnvironment {
    * Execute code in the shadow environment with optional parameters
    */
   async execute(code: string, params?: Record<string, any>): Promise<any> {
+    // Check if cleanup has been called
+    if (this.isCleaningUp) {
+      throw new Error('Node shadow environment error: Cannot execute after cleanup');
+    }
+    
     // Add parameters to the existing context
     if (params) {
       for (const [key, value] of Object.entries(params)) {
@@ -133,5 +139,19 @@ export class NodeShadowEnvironment {
    */
   getFunctionNames(): string[] {
     return Array.from(this.shadowFunctions.keys());
+  }
+  
+  /**
+   * Clean up the VM context and clear any pending timers/resources
+   */
+  cleanup(): void {
+    this.isCleaningUp = true;
+    
+    // Clear shadow functions first
+    this.shadowFunctions.clear();
+    
+    // Simply replace the context with an empty one to break all references
+    // This is the simplest and most effective approach for cleanup
+    this.context = vm.createContext({});
   }
 }

@@ -2574,4 +2574,27 @@ ${code}
     if (this.parent) return this.parent.getImmutableCache();
     return undefined;
   }
+  
+  /**
+   * Clean up resources that might keep the event loop alive
+   */
+  cleanup(): void {
+    // Clean up NodeShadowEnvironment if it exists
+    if (this.nodeShadowEnv) {
+      this.nodeShadowEnv.cleanup();
+      this.nodeShadowEnv = undefined;
+    }
+    
+    // Clean up child environments recursively
+    // Note: We don't track child environments currently, so this would need
+    // to be implemented if we want full cleanup of all child environments
+    
+    // Clear any other resources that might keep event loop alive
+    this.urlCache.clear();
+    this.resolverVariableCache.clear();
+    this.shadowEnvs.clear();
+    
+    // Clear import stack to prevent memory leaks
+    this.importStack.clear();
+  }
 }

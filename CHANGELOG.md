@@ -22,6 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enables correct execution of expressions like `@data result = @input | @transformer1 | @transformer2`
 - Fixed incorrect MlldCommandExecutionError constructor usage that caused "Cannot use 'in' operator" errors
   - Updated all error instantiations to use new signature with proper sourceLocation parameter
+- Fixed Node.js shadow environment keeping process alive due to uncleaned timers
+  - Added `cleanup()` method to NodeShadowEnvironment to clear timers and VM context
+  - Environment cleanup is now called after CLI execution to ensure clean process exit
+  - Prevents hanging processes when using setTimeout/setInterval in @exec node functions
 
 ## [1.4.6]
 ### Added

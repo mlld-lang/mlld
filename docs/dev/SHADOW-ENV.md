@@ -320,6 +320,15 @@ The shadow environment architecture is designed to be extensible to other langua
 Test cases for shadow environments can be found in:
 - `tests/cases/valid/exec/`: General exec and shadow environment tests
 - Integration tests validate both JavaScript and Node.js shadow functionality
+- `interpreter/env/NodeShadowEnvironment.test.ts`: Unit tests for Node.js shadow environment
+- `tests/integration/node-shadow-cleanup.test.ts`: Integration tests for cleanup behavior
+
+### Key Test Scenarios
+
+1. **Basic functionality**: Function execution, parameter passing, shadow function calls
+2. **Timer cleanup**: Verifies timers don't keep process alive after cleanup
+3. **Error handling**: Ensures cleanup happens even when errors occur
+4. **Context isolation**: Tests that VM contexts are properly isolated
 
 ## Debugging
 
@@ -329,6 +338,84 @@ Test cases for shadow environments can be found in:
 2. **Async/Sync Mismatch**: Node functions are always async
 3. **Context Leaks**: VM contexts are per-file, not per-execution
 4. **Parameter Conflicts**: Shadow functions take precedence over params
+
+## Cleanup and Resource Management
+
+### Node.js Shadow Environment Cleanup
+
+The Node.js shadow environment requires special cleanup to prevent processes from hanging due to active timers or other asynchronous operations.
+
+**Location**: `interpreter/env/NodeShadowEnvironment.ts` - `cleanup()` method
+
+**Implementation**:
+```typescript
+cleanup(): void {
+  this.isCleaningUp = true;
+  
+  // Clear shadow functions first
+  this.shadowFunctions.clear();
+  
+  // Simply replace the context with an empty one to break all references
+  // This is the simplest and most effective approach for cleanup
+  this.context = vm.createContext({});
+}
+```
+
+**Key design decisions**:
+1. **Simple replacement**: Instead of trying to manipulate timers within the VM context, we replace the entire context
+2. **Break all references**: This ensures timers, intervals, and other async operations lose their references
+3. **No complex cleanup**: Avoids the complexity of tracking and clearing individual resources
+
+### Environment Cleanup Flow
+
+1. **Normal execution**: After successful mlld script execution
+   ```typescript
+   // In CLI (cli/index.ts)
+   if (environment && 'cleanup' in environment) {
+     environment.cleanup();
+   }
+   ```
+
+2. **Error handling**: Cleanup is called even when errors occur
+   ```typescript
+   } catch (error: any) {
+     // Clean up environment even on error
+     if (environment && 'cleanup' in environment) {
+       environment.cleanup();
+     }
+     // ... handle error
+   }
+   ```
+
+3. **Process exit**: For `--stdout` mode, explicit exit ensures clean termination
+   ```typescript
+   if (stdout) {
+     await new Promise(resolve => setTimeout(resolve, 10));
+     process.exit(0);
+   }
+   ```
+
+### Why Cleanup is Important
+
+Without proper cleanup, Node.js shadow environments can:
+- Keep the process alive indefinitely due to active timers
+- Consume memory with retained VM contexts
+- Prevent proper process exit in CLI tools
+
+Example of problematic code:
+```mlld
+@exec createTimer() = node [(
+  setTimeout(() => {
+    console.log('This keeps the process alive');
+  }, 10000);
+  return 'Timer created';
+)]
+
+@exec node = { createTimer }
+@text result = @createTimer()
+```
+
+Without cleanup, this would keep the mlld process running for 10 seconds. With cleanup, the process exits immediately after producing output.
 
 ## Implementation Details: Why This Architecture?
 
@@ -372,5 +459,12 @@ When adding a new language shadow environment:
 4. [ ] Add execution support in Environment.executeCode
 5. [ ] Handle console/output capture appropriately
 6. [ ] Add error handling and context enhancement
-7. [ ] Write comprehensive tests including nested function calls
-8. [ ] Document usage patterns and limitations
+7. [ ] Implement cleanup mechanism
+   - For isolated environments: Clear VM contexts, child processes, etc.
+   - For in-process environments: Clear function references
+   - Ensure cleanup is called from CLI in both success and error cases
+8. [ ] Write comprehensive tests including:
+   - Nested function calls
+   - Resource cleanup (timers, file handles, etc.)
+   - Error scenarios with cleanup
+9. [ ] Document usage patterns and limitations
