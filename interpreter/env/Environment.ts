@@ -93,6 +93,7 @@ export class Environment {
     currentCommand: string;
     input: any;
     previousOutputs: string[];
+    format?: string;
   };
   
   // Output management properties
@@ -927,6 +928,7 @@ export class Environment {
     currentCommand: string;
     input: any;
     previousOutputs: string[];
+    format?: string;
   }): void {
     this.pipelineContext = context;
   }
@@ -942,7 +944,21 @@ export class Environment {
    * Get current pipeline context
    */
   getPipelineContext(): typeof this.pipelineContext {
-    return this.pipelineContext;
+    // Check this environment first
+    if (this.pipelineContext) {
+      return this.pipelineContext;
+    }
+    
+    // Check parent environments
+    let current = this.parent;
+    while (current) {
+      if (current.pipelineContext) {
+        return current.pipelineContext;
+      }
+      current = current.parent;
+    }
+    
+    return undefined;
   }
   
   /**

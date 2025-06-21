@@ -38,6 +38,9 @@ WithProperty
   / "needs" _ ":" _ needs:NeedsObject {
       return ["needs", needs];
     }
+  / "format" _ ":" _ format:StringLiteral {
+      return ["format", format];
+    }
 
 // -------------------------------------------------------------
 // PIPELINE SUPPORT

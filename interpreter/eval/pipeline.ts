@@ -3,6 +3,7 @@ import type { PipelineCommand } from '@core/types';
 import { createTextVariable } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import { resolveVariableValue } from '../core/interpreter';
+import { createPipelineInput, isPipelineInput } from '../utils/pipeline-input';
 
 /**
  * Execute a pipeline of transformation commands with @input threading
@@ -11,7 +12,8 @@ export async function executePipeline(
   baseOutput: string,
   pipeline: PipelineCommand[],
   env: Environment,
-  location?: any
+  location?: any,
+  format?: string
 ): Promise<string> {
   let currentOutput = baseOutput;
   const previousOutputs: string[] = [];
@@ -25,7 +27,8 @@ export async function executePipeline(
       totalStages: pipeline.length,
       currentCommand: command.rawIdentifier,
       input: currentOutput,
-      previousOutputs: [...previousOutputs]
+      previousOutputs: [...previousOutputs],
+      format: format || 'json'
     });
     
     // Create child environment with @input variable
@@ -290,18 +293,78 @@ async function executeCommandVariable(
   // Create environment with parameter bindings
   const execEnv = env.createChild();
   
+  // Get the format from the pipeline context
+  const pipelineCtx = env.getPipelineContext();
+  const format = pipelineCtx?.format || 'json';
+  
   // Bind parameters if any
   if (execDef.paramNames) {
     for (let i = 0; i < execDef.paramNames.length; i++) {
       const paramName = execDef.paramNames[i];
       const argValue = i < args.length ? args[i] : null;
       
-      // Convert argument to text variable
-      const textValue = argValue === null ? '' :
-                       typeof argValue === 'string' ? argValue :
-                       argValue.content !== undefined ? argValue.content : String(argValue);
+      // Check if this is the first parameter in a pipeline context
+      const isPipelineParam = i === 0 && stdinInput !== undefined && pipelineCtx !== undefined;
       
-      execEnv.setParameterVariable(paramName, createTextVariable(paramName, textValue));
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('Parameter binding check:', {
+          i,
+          paramName,
+          stdinInput: stdinInput ? stdinInput.substring(0, 50) + '...' : undefined,
+          hasPipelineCtx: !!pipelineCtx,
+          isPipelineParam
+        });
+      }
+      
+      if (isPipelineParam) {
+        // Extract the actual value from the argument
+        const textValue = argValue === null ? stdinInput :
+                         typeof argValue === 'string' ? argValue :
+                         argValue.content !== undefined ? argValue.content : String(argValue);
+        
+        // Create wrapped input with format
+        const wrappedInput = createPipelineInput(textValue, format);
+        
+        // Debug logging
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('Creating pipeline parameter:', {
+            paramName,
+            format,
+            textValue: textValue.substring(0, 50) + '...',
+            wrappedInputKeys: Object.keys(wrappedInput)
+          });
+        }
+        
+        // Create a special variable that holds the wrapped input
+        // The value must be a string for mlld variable system, but we'll store the wrapped input in metadata
+        const pipelineVar = {
+          type: 'text' as const,
+          name: paramName,
+          value: textValue, // Store the raw string as the value
+          metadata: { 
+            isPipelineInput: true,
+            pipelineInput: wrappedInput // Store the wrapped input in metadata
+          }
+        };
+        
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('Setting pipeline parameter variable:', {
+            paramName,
+            hasMetadata: !!pipelineVar.metadata,
+            isPipelineInput: pipelineVar.metadata?.isPipelineInput,
+            wrappedInputType: typeof wrappedInput
+          });
+        }
+        
+        execEnv.setParameterVariable(paramName, pipelineVar);
+      } else {
+        // Regular parameter handling
+        const textValue = argValue === null ? '' :
+                         typeof argValue === 'string' ? argValue :
+                         argValue.content !== undefined ? argValue.content : String(argValue);
+        
+        execEnv.setParameterVariable(paramName, createTextVariable(paramName, textValue));
+      }
     }
   }
   
@@ -330,7 +393,30 @@ async function executeCommandVariable(
       for (const paramName of execDef.paramNames) {
         const paramVar = execEnv.getVariable(paramName);
         if (paramVar) {
-          params[paramName] = paramVar.value;
+          // Debug logging
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.log('Processing parameter for JS execution:', {
+              paramName,
+              varType: paramVar.type,
+              hasMetadata: !!paramVar.metadata,
+              isPipelineInput: paramVar.metadata?.isPipelineInput,
+              hasPipelineInput: !!paramVar.metadata?.pipelineInput,
+              metadataKeys: paramVar.metadata ? Object.keys(paramVar.metadata) : []
+            });
+          }
+          
+          // Check if this is a pipeline input variable
+          if (paramVar.metadata?.isPipelineInput && paramVar.metadata?.pipelineInput) {
+            // Use the wrapped pipeline input from metadata
+            params[paramName] = paramVar.metadata.pipelineInput;
+            
+            if (process.env.MLLD_DEBUG === 'true') {
+              console.log('Using wrapped pipeline input for param:', paramName);
+            }
+          } else {
+            // Regular variable - use the value directly
+            params[paramName] = paramVar.value;
+          }
         }
       }
     }

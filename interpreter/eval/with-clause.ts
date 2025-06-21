@@ -16,28 +16,20 @@ export async function applyWithClause(
   
   // Apply pipeline transformations
   if (withClause.pipeline && withClause.pipeline.length > 0) {
-    for (const pipelineCmd of withClause.pipeline) {
-      // Create a child environment with @INPUT set
-      const pipelineEnv = env.createChild();
-      
-      // Check if INPUT already exists and update it, otherwise create it
-      const existingInput = pipelineEnv.getVariable('INPUT');
-      if (existingInput) {
-        // Update existing INPUT variable
-        existingInput.value = result;
-      } else {
-        // Create new INPUT variable
-        pipelineEnv.setVariable('INPUT', {
-          type: 'text',
-          name: 'INPUT',
-          value: result,
-          metadata: { isSystem: true }  // Mark as system variable to bypass reserved name check
-        });
-      }
-      
-      // Execute the pipeline command
-      result = await executePipelineCommand(pipelineCmd, pipelineEnv);
-    }
+    // Extract format from with clause if specified
+    const format = withClause.format as string | undefined;
+    
+    // Import the pipeline execution function
+    const { executePipeline } = await import('./pipeline');
+    
+    // Execute the entire pipeline with format
+    result = await executePipeline(
+      result,
+      withClause.pipeline,
+      env,
+      undefined, // location
+      format
+    );
   }
   
   // Apply trust validation
@@ -57,28 +49,6 @@ export async function applyWithClause(
     stderr: '',
     exitCode: 0
   };
-}
-
-/**
- * Execute a pipeline command
- */
-async function executePipelineCommand(
-  command: PipelineCommand,
-  env: Environment
-): Promise<string> {
-  // Import the pipeline execution function from pipeline.ts
-  const { executePipeline } = await import('./pipeline');
-  
-  // Execute the pipeline command using the same logic as @run pipelines
-  // This ensures transformers and all executable types work properly
-  const result = await executePipeline(
-    env.getVariable('input')?.value || '', // Get @input value
-    [command], // Single command in pipeline
-    env,
-    command.location
-  );
-  
-  return result;
 }
 
 /**

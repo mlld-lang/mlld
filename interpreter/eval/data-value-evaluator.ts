@@ -153,15 +153,20 @@ export async function evaluateDataValue(
     if (value.withClause && value.withClause.pipeline) {
       const { executePipeline } = await import('../eval/pipeline');
       
+      // Extract format from with clause if specified
+      const format = value.withClause.format as string | undefined;
+      
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('Before pipeline:', { result, stringified: String(result) });
+        console.log('Before pipeline:', { result, stringified: String(result), format });
       }
       
       const pipelineResult = await executePipeline(
         String(result),
         value.withClause.pipeline,
-        env
+        env,
+        undefined, // location
+        format
       );
       
       // Debug logging
@@ -329,11 +334,16 @@ export async function evaluateDataValue(
       // Get the string representation of the result for the pipeline
       const stringResult = typeof result.value === 'string' ? result.value : JSON.stringify(result.value);
       
-      // Execute the pipeline with the stringified result
+      // Extract format from with clause if specified
+      const format = value.withClause.format as string | undefined;
+      
+      // Execute the pipeline with the stringified result and format
       const pipelineResult = await executePipeline(
         stringResult,
         value.withClause.pipeline,
-        env
+        env,
+        undefined, // location
+        format
       );
       
       // Try to parse the pipeline result back to maintain type consistency
