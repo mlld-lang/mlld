@@ -19,7 +19,7 @@ This pattern detects the content type and applies appropriate parsing rules.
 // Used by: AtRun directive when language is specified
 // Purpose: Parse code content without language detection
 UnifiedCodeBrackets "Code brackets [(...))]"
-  = "[(" _ content:$(UnifiedCodeContent) _ ")]" {
+  = "[" _ "(" _ content:$(UnifiedCodeContent) _ ")" _ "]" {
       helpers.debug('UnifiedCodeBrackets matched', { content });
       return {
         content: content.trim(),
@@ -31,7 +31,7 @@ UnifiedCodeBrackets "Code brackets [(...))]"
 // Used by: AtRun directive when no language is specified  
 // Purpose: Parse command content with variable interpolation and security checks
 UnifiedCommandBrackets "Command brackets [(...))]"
-  = "[(" _ parts:UnifiedCommandParts _ ")]" {
+  = "[" _ "(" _ parts:UnifiedCommandParts _ ")" _ "]" {
       helpers.debug('UnifiedCommandBrackets matched with UnifiedCommandParts', { parts });
       
       const rawCommand = helpers.reconstructRawString(parts);
@@ -392,23 +392,7 @@ UnifiedCodeContent
     }
 
 // Code characters - preserve everything literally
+// IMPORTANT: Code content is treated as opaque - we don't parse brackets specially
+// This allows bracket characters in string literals, arrays, regex, etc.
 UnifiedCodeChar
-  = '[' inner:UnifiedCodeInnerContent ']' {
-      // Preserve brackets in code
-      return '[' + inner + ']';
-    }
-  / !')]' char:. { return char; }
-
-// Inner content for code brackets
-UnifiedCodeInnerContent
-  = chars:UnifiedCodeInnerChar* {
-      return chars.join('');
-    }
-
-// Characters inside code brackets
-UnifiedCodeInnerChar
-  = '[' inner:UnifiedCodeInnerContent ']' {
-      // Handle deeply nested brackets
-      return '[' + inner + ']';
-    }
-  / !']' char:. { return char; }
+  = !')]' char:. { return char; }

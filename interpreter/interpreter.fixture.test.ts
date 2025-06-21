@@ -151,7 +151,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     'modules-auto-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
     'modules-explicit-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
     'modules-metadata': 'Issue #264: Namespace imports ({ * as name }) not implemented',
-    'run-run-code-bracket-nesting': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
   };
 
   // Separate fixtures into categories for better reporting

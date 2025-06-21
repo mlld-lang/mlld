@@ -342,14 +342,25 @@ AtRun
 @run ...
 ├─ Command content
 │  ├─ Language keyword detected (js, python, bash, etc.)?
-│  │  ├─ YES: "@run language [(code)]"
-│  │  │  └─ Code execution mode
-│  │  │     └─ Language specified outside brackets
-│  │  │        └─ [(code content)]
-│  │  │           ├─ No @ variable processing in code
-│  │  │           ├─ Preserve all [brackets]
-│  │  │           └─ Preserve all quotes
-│  │  │
+│  │  ├─ YES: Code execution mode
+│  │  │  ├─ Check for optional inline arguments?
+│  │  │  │  ├─ YES: "@run js (x, y) [(return x + y)]"
+│  │  │  │  │  └─ Inline function with parameters
+│  │  │  │  │     ├─ Language specified
+│  │  │  │  │     ├─ Arguments for the code
+│  │  │  │  │     └─ [(code content)]
+│  │  │  │  │        ├─ Parameters available as @x, @y
+│  │  │  │  │        ├─ No other @ variable processing
+│  │  │  │  │        ├─ Preserve all [brackets]
+│  │  │  │  │        └─ Preserve all quotes
+│  │  │  │  │
+│  │  │  │  └─ NO: "@run js [(console.log('test'))]"
+│  │  │  │     └─ Simple code execution
+│  │  │  │        └─ [(code content)]
+│  │  │  │           ├─ No @ variable processing in code
+│  │  │  │           ├─ Preserve all [brackets]
+│  │  │  │           └─ Preserve all quotes
+│  │  │  │
 │  ├─ "[(" detected?
 │  │  ├─ YES: "@run [(command)]"
 │  │  │  └─ Command execution mode
@@ -372,6 +383,8 @@ AtRun
 
 Examples:
 - @run [(echo "Hello")]
+- @run js [(console.log('test'))]
+- @run js (x, y) [(return x + y)]  # Inline function parameters
 - @run [(rm -rf temp/)] trust always
 - @run [(curl api.com)] | @validate @parse
 - @run @deploy(prod) trust always

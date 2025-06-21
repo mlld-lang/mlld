@@ -65,9 +65,9 @@ AtExec
       );
     }
   // Code executable: @exec name(params) = js [(code)]
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ codeCore:RunLanguageCodeCore withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       // Code syntax: @exec fn() = language [(code)]
-      helpers.debug('AtExec matched with code', { id, params, lang, code, trust });
+      helpers.debug('AtExec matched with RunLanguageCodeCore', { id, params, codeCore, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -75,31 +75,26 @@ AtExec
       // Process parameters
       const processedParams = params || [];
       
-      // Build values and raw objects
-      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
-      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
-      
+      // Use values and raw from the core pattern
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        lang: [langNode],
-        args: args || [],
-        code: [codeNode]
+        lang: codeCore.values.lang,
+        args: codeCore.values.args,
+        code: codeCore.values.code
       };
       
       const raw = {
         identifier: id,
-        params: processedParams.map(p => p.name),  // Extract parameter names for raw field
-        lang: lang,
-        args: args ? args.map(arg => arg.identifier || '') : [],
-        code: code.content
+        params: processedParams.map(p => p.name),
+        lang: codeCore.raw.lang,
+        args: codeCore.raw.args,
+        code: codeCore.raw.code
       };
       
-      // Metadata
+      // Merge metadata from core with exec-specific metadata
       const metaObj = {
-        isMultiLine: code.content.includes('\n'),
-        language: lang,
-        hasVariables: false, // Code blocks don't support variable interpolation
+        ...codeCore.meta,
         parameterCount: processedParams.length,
         ...helpers.createSecurityMeta({ trust }),
         ...(meta ? { riskLevel: meta } : {})

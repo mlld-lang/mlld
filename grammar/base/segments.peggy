@@ -62,7 +62,7 @@ TemplateTextSegment "Template text segment"
 TemplateChar
   = StringEscapeSequence  // Process string escapes first
   / EscapeSequence       // Then mlld syntax escapes
-  / !('{{' / '}}' / '[[' / ']]') char:. { return char; }
+  / !'{{' !'}}' !']]' char:. { return char; }
 
 // Command text segment - for command content, with escape support
 CommandTextSegment "Command text segment"

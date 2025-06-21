@@ -21,38 +21,18 @@ It can be used in three main forms:
 // Primary @run directive - Supporting both command and code syntax
 // Order matters: most specific patterns first
 AtRun
-  = DirectiveContext "@run" _ security:(SecurityOptions _)? lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets tail:TailModifiers? comment:InlineComment? {
-      // Language + code syntax: @run language [(code)]
+  = DirectiveContext "@run" _ security:(SecurityOptions _)? codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? comment:InlineComment? {
+      // Language + code syntax: @run language [(code)] or @run language (args) [(code)]
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched language + code', { lang, code, securityOptions, tail });
+      helpers.debug('AtRun matched with language code pattern', { codeCore, securityOptions, tail });
       
-      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
-      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
+      // Use values and raw from the core pattern
+      const values = codeCore.values;
+      const raw = codeCore.raw;
       
-      const values = {
-        lang: [langNode],
-        args: args || [],
-        code: [codeNode]
-      };
-      
-      const raw = {
-        lang: lang,
-        args: args ? args.map(arg => {
-          // Handle Argument nodes
-          if (arg.type === NodeType.Argument && arg.value) {
-            if (arg.value.type === NodeType.Text) return arg.value.content;
-            if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
-          }
-          // Legacy handling
-          return arg.identifier || '';
-        }) : [],
-        code: code.content
-      };
-      
+      // Merge metadata
       const meta = {
-        isMultiLine: code.isMultiLine || code.content.includes('\n'),
-        language: lang,
-        hasVariables: false, // Code blocks don't support variable interpolation
+        ...codeCore.meta,
         ...helpers.createSecurityMeta(securityOptions),
         ...(comment ? { comment } : {})
       };
@@ -150,41 +130,28 @@ AtRun
 
 // Run directive reference in RHS contexts (nested in other directives)
 RunDirectiveRef
-  = lang:RunCodeLanguage _ args:RunCodeArguments? _ code:UnifiedCodeBrackets {
-      // Language + code syntax in RHS: language [(code)]
-      helpers.debug('RunDirectiveRef matched language + code in RHS', { lang, code });
+  = codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) {
+      // Language + code syntax in RHS: language [(code)] or language (args) [(code)]
+      helpers.debug('RunDirectiveRef matched language + code in RHS', { codeCore });
       
-      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
-      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
+      // Use values and raw from the core pattern
+      const values = codeCore.values;
+      const raw = codeCore.raw;
+      
+      // Merge metadata
+      const meta = {
+        ...codeCore.meta,
+        isRHSRef: true
+      };
       
       return helpers.createStructuredDirective(
         'run',
         'runCode',
-        {
-          lang: [langNode],
-          args: args || [],
-          code: [codeNode]
-        },
-        {
-          lang: lang,
-          args: args ? args.map(arg => {
-          // Handle Argument nodes
-          if (arg.type === NodeType.Argument && arg.value) {
-            if (arg.value.type === NodeType.Text) return arg.value.content;
-            if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
-          }
-          // Legacy handling
-          return arg.identifier || '';
-        }) : [],
-          code: code.content
-        },
-        { 
-          isMultiLine: code.isMultiLine || code.content.includes('\n'),
-          language: lang,
-          hasVariables: false,
-          isRHSRef: true
-        },
-        location()
+        values,
+        raw,
+        meta,
+        location(),
+        'code'
       );
     }
   / "@" commandRef:RunCommandReference {

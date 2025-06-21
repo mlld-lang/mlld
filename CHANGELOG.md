@@ -5,6 +5,13 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.10]
+### Fixed
+- Fixed parser failing on bracket characters (`[` or `]`) in JavaScript/code string literals (#273)
+  - Code content within `[(...))]` blocks is now treated as opaque text
+  - Enables string comparisons like `if (char === "[")` and array literals like `["[", "]"]`
+  - Fixes regex patterns, JSON parsing, and other code using bracket characters
+
 ## [1.4.9]
 ### Fixed
 - Fixed Node.js exec functions throwing ReferenceError when optional parameters are not provided

@@ -92,34 +92,84 @@ LanguageCodeCore
 // RUN LANGUAGE CODE CORE - Unified language + code block pattern
 // -------------------------------------------------------------
 
-// This is the key abstraction that can be used by both run.peggy and exec.peggy
-// for consistent handling of language + code block patterns in different contexts
+// This is the base abstraction for language + code patterns
+// Used by exec.peggy where parameters are already parsed
 RunLanguageCodeCore
-  = language:RunCodeLanguage _ args:RunCodeArguments? _ code:DirectCodeContent {
-      helpers.debug('RunLanguageCodeCore matched', { language, args, code });
+  = language:RunCodeLanguage _ code:UnifiedCodeBrackets {
+      helpers.debug('RunLanguageCodeCore matched', { language, code });
       
       // Create language node
       const langNode = helpers.createNode(NodeType.Text, { content: language, location: location() });
       
-      // Process code content - get from bracketed content
-      const codeContent = code[0].content;
+      // Process code content - get from unified code brackets
+      const codeContent = code.content;
+      const codeNode = helpers.createNode(NodeType.Text, { content: codeContent, location: location() });
       
       // Build values and raw objects
       const values = {
         lang: [langNode],
-        args: args || [],
-        code: code
+        args: [],  // No args in this pattern - they're handled by the directive
+        code: [codeNode]
       };
       
       const raw = {
         lang: language,
-        args: args ? args.map(arg => arg.identifier || '') : [],
+        args: [],
         code: codeContent
       };
       
       // Add metadata
       const meta = {
-        isMultiLine: codeContent.includes('\n'),
+        isMultiLine: code.isMultiLine || codeContent.includes('\n'),
+        language: language,
+        hasVariables: false  // Code blocks don't support variable interpolation
+      };
+      
+      // Return a structured result that can be used by both directives
+      return {
+        type: 'runCode',
+        values,
+        raw,
+        meta,
+        location: location()
+      };
+    }
+
+// This pattern is used by run.peggy where arguments can appear after the language
+RunLanguageCodeWithArgs
+  = language:RunCodeLanguage _ args:RunCodeArguments _ code:UnifiedCodeBrackets {
+      helpers.debug('RunLanguageCodeWithArgs matched', { language, args, code });
+      
+      // Create language node
+      const langNode = helpers.createNode(NodeType.Text, { content: language, location: location() });
+      
+      // Process code content - get from unified code brackets
+      const codeContent = code.content;
+      const codeNode = helpers.createNode(NodeType.Text, { content: codeContent, location: location() });
+      
+      // Build values and raw objects
+      const values = {
+        lang: [langNode],
+        args: args || [],
+        code: [codeNode]
+      };
+      
+      const raw = {
+        lang: language,
+        args: args ? args.map(arg => {
+          // Handle different arg node types
+          if (arg.type === NodeType.Argument && arg.value) {
+            if (arg.value.type === NodeType.Text) return arg.value.content;
+            if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
+          }
+          return arg.identifier || '';
+        }) : [],
+        code: codeContent
+      };
+      
+      // Add metadata
+      const meta = {
+        isMultiLine: code.isMultiLine || codeContent.includes('\n'),
         language: language,
         hasVariables: false  // Code blocks don't support variable interpolation
       };
