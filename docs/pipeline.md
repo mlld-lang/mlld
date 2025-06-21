@@ -96,6 +96,57 @@ The pipeline operator is syntactic sugar for the `with` clause:
 @text result2 = @run [(echo "hello")] with { pipeline: [@uppercase] }
 ```
 
+## Pipeline Format Feature
+
+When using the `with` clause, you can specify how data should be parsed before being passed to pipeline functions:
+
+```mlld
+@data result = @getData() with { format: "json", pipeline: [@processData] }
+```
+
+### Available Formats
+
+- **`json`** (default) - Parses as JSON, accessible via `input.data`
+- **`csv`** - Parses as CSV, accessible via `input.csv` as 2D array
+- **`xml`** - Converts JSON to XML or wraps text, accessible via `input.xml`
+- **`text`** - Plain text, `input.data` returns raw text
+
+### How It Works
+
+Pipeline functions receive an input object with:
+- `input.text` - Raw text (always available)
+- `input.type` - Format type ("json", "csv", etc.)
+- Format-specific property (parsed lazily when accessed)
+
+### Example: JSON Format
+
+```mlld
+@exec getUsers() = @run [(echo '[{"name":"Alice"},{"name":"Bob"}]')]
+
+@exec processUsers(input) = js [(
+  // Access parsed JSON via input.data
+  const users = input.data;
+  return users.map(u => u.name).join(', ');
+)]
+
+@data names = @getUsers() with { format: "json", pipeline: [@processUsers] }
+@add @names  # Output: Alice, Bob
+```
+
+### Example: CSV Format
+
+```mlld
+@exec getCSV() = @run [(echo 'name,age\nAlice,30\nBob,25')]
+
+@exec processCSV(input) = js [(
+  // Access as 2D array via input.csv
+  const [headers, ...rows] = input.csv;
+  return `${rows.length} records`;
+)]
+
+@data count = @getCSV() with { format: "csv", pipeline: [@processCSV] }
+```
+
 ## Error Handling
 
 Pipeline errors include context about which step failed:

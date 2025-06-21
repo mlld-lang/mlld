@@ -312,6 +312,7 @@ mlld supports Unix-style pipelines for chaining commands:
 - Each step gets an @INPUT variable with the piped data
 - Functions without arguments get smart parameter handling
 - Each step runs in a child environment
+- Use `with { format: "json|csv|xml|text" }` to specify parsing
 
 ### Smart Parameter Handling
 
@@ -345,6 +346,25 @@ mlld includes transformers for common formats (both UPPERCASE and lowercase):
 @exec addTotal(data) = [[Total: {{data.length}} items\n{{INPUT}}]]
 @text report = @run [(cat data.json)] | @json | @addTotal | @md
 ```
+
+### Pipeline Format Feature
+
+Specify how data should be parsed in pipelines using `format`:
+
+```mlld
+@exec processJSON(input) = js [(
+  // input.text - raw text
+  // input.type - format type
+  // input.data - parsed JSON (lazy)
+  // input.csv - parsed CSV array (lazy)
+  // input.xml - XML string (lazy)
+  return input.data.users.map(u => u.name);
+)]
+
+@data names = @getData() with { format: "json", pipeline: [@processJSON] }
+```
+
+Formats: `json` (default), `csv`, `xml`, `text`
 
 ## Philosophy: Simplicity in Files, Complexity in Modules
 

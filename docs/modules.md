@@ -1590,6 +1590,25 @@ The Node.js shadow environment provides full Node.js API access with VM isolatio
 - Includes standard Node.js globals (Buffer, process, require, etc.)
 - Functions persist across executions in the same context
 
+### Pipeline Format Support
+
+When using JavaScript or Node.js functions in pipelines with the `format` option, functions receive a structured input object:
+
+```mlld
+@exec processJSON(input) = @run js [(
+  // With format: "json", input has these properties:
+  // input.text - raw text
+  // input.type - "json"
+  // input.data - parsed JSON object (lazy-loaded)
+  const users = input.data;
+  return users.map(u => u.name).join(', ');
+)]
+
+@data names = @getData() with { format: "json", pipeline: [@processJSON] }
+```
+
+See [Pipeline Format Feature](pipeline.md#pipeline-format-feature) for complete details.
+
 ### Best Practices
 
 1. **Use appropriate environment for the task:**

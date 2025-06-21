@@ -183,6 +183,152 @@ interface PipelineContext {
 }
 ```
 
+## Pipeline Format Feature (v1.4.10+)
+
+The pipeline format feature allows specifying how data should be parsed when passed through pipelines, enabling functions to receive both raw text and parsed representations.
+
+### Architecture Overview
+
+**Key Components:**
+1. **Grammar Extension**: `with { format: "json|csv|xml|text" }` syntax
+2. **Pipeline Input Wrapper**: Creates lazy-parsed input objects
+3. **Parameter Handling**: Passes wrapped inputs to JS/Node functions
+4. **Format-Specific Parsers**: JSON, CSV, XML, and text handlers
+
+### Grammar Implementation
+
+In `grammar/patterns/with-clause.peggy`:
+
+```peggy
+WithProperty
+  = "format" _ ":" _ format:StringLiteral {
+      return ["format", format];
+    }
+```
+
+The format property is parsed and passed through the evaluation chain.
+
+### Pipeline Input Wrapper
+
+**File**: `interpreter/utils/pipeline-input.ts`
+
+```typescript
+export interface PipelineInput {
+  text: string;              // Raw text (always available)
+  type: string;              // Format type ("json", "csv", etc.)
+  readonly data?: any;       // Lazy-parsed data (format-specific)
+  readonly csv?: any[][];    // CSV-specific parsed data
+  readonly xml?: any;        // XML-specific parsed data
+}
+```
+
+### Lazy Parsing Implementation
+
+Each format defines a getter that parses on first access:
+
+```typescript
+case 'json':
+  Object.defineProperty(input, 'data', {
+    get() {
+      if (this._parsed === undefined) {
+        this._parsed = JSON.parse(this.text);
+      }
+      return this._parsed;
+    }
+  });
+```
+
+### Integration Points
+
+1. **With Clause Evaluation** (`interpreter/eval/with-clause.ts`):
+   - Extracts format from with properties
+   - Passes to pipeline executor
+
+2. **Pipeline Execution** (`interpreter/eval/pipeline.ts`):
+   - Creates wrapped inputs for pipeline parameters
+   - Marks variables with `isPipelineInput` metadata
+
+3. **JavaScript/Node Execution**:
+   - Shadow environments pass wrapped objects to functions
+   - Functions receive the PipelineInput object directly
+
+### Format Implementations
+
+**JSON (Default)**:
+- Uses native `JSON.parse()`
+- Accessible via `input.data`
+- Throws on invalid JSON
+
+**CSV**:
+- Custom parser handling quoted values
+- Returns 2D array via `input.csv`
+- Handles escaped quotes and commas
+
+**XML**:
+- Uses `jsonToXml()` for JSON input
+- Falls back to wrapping text in `<DOCUMENT>` tags
+- Note: Full markdown-to-XML parsing requires async llmxml (see LLMXML-SYNC-ISSUE.md)
+
+**Text**:
+- No parsing - `input.data` returns raw text
+- Useful for plain text processing
+
+### Backwards Compatibility
+
+Functions expecting strings still work:
+- Pipeline input objects stringify to their text content
+- Old functions receive `input.text` transparently
+- No breaking changes for existing modules
+
+### Error Handling
+
+Parse errors are thrown when accessing parsed properties:
+```typescript
+try {
+  const data = input.data;  // Throws if invalid JSON
+} catch (e) {
+  // Handle parse error
+}
+```
+
+### Example Usage
+
+```mlld
+# JSON format (default)
+@exec processUsers(input) = js [(
+  const users = input.data;  // Parsed JSON
+  return users.map(u => u.name).join(', ');
+)]
+
+@data names = @getUsers() with { format: "json", pipeline: [@processUsers] }
+
+# CSV format
+@exec analyzeCSV(input) = js [(
+  const rows = input.csv;  // 2D array
+  const headers = rows[0];
+  return `${rows.length - 1} records with ${headers.length} fields`;
+)]
+
+@data analysis = @getCSV() with { format: "csv", pipeline: [@analyzeCSV] }
+```
+
+### Implementation Flow
+
+1. **Grammar Parse**: `with { format: "json" }` → AST node
+2. **With Clause Eval**: Extract format from properties
+3. **Pipeline Setup**: Pass format to pipeline executor
+4. **Parameter Wrapping**: Create PipelineInput for params
+5. **Function Execution**: JS receives wrapped input
+6. **Lazy Parsing**: Parse only when accessed
+
+### Testing Strategy
+
+Test coverage includes:
+- Each format type (JSON, CSV, XML, text)
+- Parse error handling
+- Backwards compatibility
+- Multi-stage pipelines with format specified
+
 ### Context Management
 
 Pipeline context is managed through the Environment class:

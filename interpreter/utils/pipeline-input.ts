@@ -1,4 +1,6 @@
 import { MlldInterpreterError } from '@core/errors';
+import { llmxmlInstance } from './llmxml-instance';
+import { jsonToXml } from './json-to-xml';
 
 /**
  * Pipeline input interface that provides both raw text and parsed data
@@ -55,18 +57,22 @@ function parseCSV(text: string): any[][] {
 }
 
 /**
- * Parse XML text - placeholder for now
- * TODO: Integrate with llmxml or similar
+ * Parse XML text using our internal XML handling
+ * This is a simplified synchronous version for pipeline compatibility
+ * TODO: Add support for async parsing in the future
  */
 function parseXML(text: string): any {
-  // For now, just return a placeholder object
-  // In the future, this should use a proper XML parser
-  return {
-    _raw: text,
-    _parsed: false,
-    // Placeholder structure
-    root: null
-  };
+  try {
+    // Try to parse as JSON first
+    const parsed = JSON.parse(text);
+    // Use our JSON to XML converter for structured data
+    return jsonToXml(parsed);
+  } catch {
+    // For non-JSON text, we can't use llmxml synchronously
+    // So we'll just wrap in DOCUMENT tags for now
+    // TODO: Support async XML parsing in pipelines
+    return `<DOCUMENT>\n${text}\n</DOCUMENT>`;
+  }
 }
 
 /**

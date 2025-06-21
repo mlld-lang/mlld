@@ -60,6 +60,34 @@ mlld data-processor.mld.md --stdout | jq .
 mlld my-module.mld.md --stdout && mlld my-module.mld.md -o output.md
 ```
 
+### Testing Pipeline Formats
+
+When developing functions for use in pipelines, test with different formats:
+
+```mlld
+@exec debugInput(input) = @run js [(
+  console.log('Input type:', input.type);
+  console.log('Has text:', !!input.text);
+  console.log('Has data:', !!input.data);
+  console.log('Has csv:', !!input.csv);
+  console.log('Has xml:', !!input.xml);
+  return 'Debug complete';
+)]
+
+# Test with different formats
+@data jsonTest = @run [(echo '{"test": true}')] with { 
+  format: "json", 
+  pipeline: [@debugInput] 
+}
+
+@data csvTest = @run [(echo 'a,b\n1,2')] with { 
+  format: "csv", 
+  pipeline: [@debugInput] 
+}
+```
+
+This helps ensure your pipeline functions handle all expected input formats correctly. See [Pipeline Format Feature](pipeline.md#pipeline-format-feature) for more details.
+
 
 ---
 
