@@ -5,7 +5,7 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.4.7]
+## [1.4.8]
 ### Added
 - **Pipeline-aware @debug**: The @debug variable now includes pipeline execution context when evaluated during pipeline operations
   - Shows current stage number and total stages in pipeline
@@ -15,7 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Context is accessible in child environments via parent chain lookup
 
 ### Fixed
-- #270 LocalResolver fails to resolve .mld.md files with 'Access denied' error
 - Fixed `mlld setup` command throwing "Cannot read properties of null (reading 'config')" error when no mlld.lock.json exists
 - Fixed pipeline `@data` variable evaluation returning null for complex pipeline expressions
   - `VariableReferenceWithTail` nodes now properly marked for lazy evaluation
@@ -26,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `cleanup()` method to NodeShadowEnvironment to clear timers and VM context
   - Environment cleanup is now called after CLI execution to ensure clean process exit
   - Prevents hanging processes when using setTimeout/setInterval in @exec node functions
+
+## [1.4.7]
+
+### Fixed
+- #270 LocalResolver fails to resolve .mld.md files with 'Access denied' error
 
 ## [1.4.6]
 ### Added
