@@ -86,7 +86,11 @@ When developing functions for use in pipelines, test with different formats:
 }
 ```
 
-This helps ensure your pipeline functions handle all expected input formats correctly. See [Pipeline Format Feature](pipeline.md#pipeline-format-feature) for more details.
+This helps ensure your pipeline functions handle all expected input formats correctly. 
+
+**Important**: As of v1.4.11+, all stages in a pipeline receive wrapped input consistently. Whether your function is the first, middle, or last stage in a pipeline, it will always receive the same wrapped input object with `text`, `type`, and format-specific properties. This makes it easier to write functions that work reliably in any pipeline position.
+
+See [Pipeline Format Feature](pipeline.md#pipeline-format-feature) for more details.
 
 
 ---

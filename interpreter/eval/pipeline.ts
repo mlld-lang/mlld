@@ -304,7 +304,7 @@ async function executeCommandVariable(
       const argValue = i < args.length ? args[i] : null;
       
       // Check if this is the first parameter in a pipeline context
-      const isPipelineParam = i === 0 && stdinInput !== undefined && pipelineCtx !== undefined;
+      const isPipelineParam = i === 0 && pipelineCtx !== undefined;
       
       if (process.env.MLLD_DEBUG === 'true') {
         console.log('Parameter binding check:', {
@@ -312,13 +312,17 @@ async function executeCommandVariable(
           paramName,
           stdinInput: stdinInput ? stdinInput.substring(0, 50) + '...' : undefined,
           hasPipelineCtx: !!pipelineCtx,
-          isPipelineParam
+          isPipelineParam,
+          argValue: argValue ? String(argValue).substring(0, 50) + '...' : null
         });
       }
       
       if (isPipelineParam) {
-        // Extract the actual value from the argument
-        const textValue = argValue === null ? stdinInput :
+        // Extract the actual value from the argument or stdin
+        // For first stage of pipeline: value comes from stdinInput
+        // For subsequent stages: value comes from args[0]
+        const textValue = stdinInput !== undefined ? stdinInput :
+                         argValue === null ? '' :
                          typeof argValue === 'string' ? argValue :
                          argValue.content !== undefined ? argValue.content : String(argValue);
         

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Functions are executed first, then their JSON string results are passed through the pipeline
   - Pipeline now preserves JSON array data as strings instead of mangling them
   - This fix ensures data can be properly passed between functions in a pipeline
+- Fixed pipeline format feature to provide wrapped input to all pipeline stages
+  - Previously only the first pipeline stage received wrapped input objects with `text`, `type`, and `data` properties
+  - Now all stages consistently receive wrapped input, enabling format-aware processing throughout the pipeline
+  - This allows subsequent pipeline stages to access parsed data (e.g., `input.csv` for CSV format)
 
 ## [1.4.10]
 ### Fixed
