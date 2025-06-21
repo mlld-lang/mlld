@@ -5,6 +5,13 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.9]
+### Fixed
+- Fixed Node.js exec functions throwing ReferenceError when optional parameters are not provided
+  - All declared parameters are now properly initialized in the execution context, even when undefined
+  - Enables functions like `filterByFrontmatter(files, field, value)` to be called with just `(files, field)`
+  - Affects both shadow environment (VM) and subprocess execution modes
+
 ## [1.4.8]
 ### Added
 - **Pipeline-aware @debug**: The @debug variable now includes pipeline execution context when evaluated during pipeline operations

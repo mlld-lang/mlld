@@ -296,6 +296,9 @@ function createSyncJsWrapper(
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
       let argValue = args[i];
+      
+      // Always add the parameter, even if undefined
+      // This ensures JS code can reference all declared parameters
       if (argValue !== undefined) {
         // Try to parse numeric values (same logic as async wrapper)
         if (typeof argValue === 'string') {
@@ -305,8 +308,10 @@ function createSyncJsWrapper(
             argValue = numValue;
           }
         }
-        codeParams[paramName] = argValue;
       }
+      
+      // Set the parameter value (will be undefined if not provided)
+      codeParams[paramName] = argValue;
     }
     
     // Get the code template
@@ -442,6 +447,9 @@ function createExecWrapper(
       for (let i = 0; i < params.length; i++) {
         const paramName = params[i];
         let argValue = args[i];
+        
+        // Always add the parameter, even if undefined
+        // This ensures Node.js code can reference all declared parameters
         if (argValue !== undefined) {
           // Ensure we await any promises in arguments
           argValue = argValue instanceof Promise ? await argValue : argValue;
@@ -454,9 +462,10 @@ function createExecWrapper(
               argValue = numValue;
             }
           }
-          
-          codeParams[paramName] = argValue;
         }
+        
+        // Set the parameter value (will be undefined if not provided)
+        codeParams[paramName] = argValue;
       }
       
       // Debug logging

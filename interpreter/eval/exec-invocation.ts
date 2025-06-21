@@ -159,9 +159,9 @@ export async function evaluateExecInvocation(
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
       const argValue = evaluatedArgs[i];
-      if (argValue !== undefined) {
-        codeParams[paramName] = argValue;
-      }
+      // Always include the parameter, even if undefined
+      // This ensures the code can reference all declared parameters
+      codeParams[paramName] = argValue;
     }
     
     // Execute the code with parameters
