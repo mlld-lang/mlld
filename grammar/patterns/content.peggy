@@ -175,6 +175,30 @@ DoubleQuotedText
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
+// Content inside backtick templates - supports @var and @func(args)
+BacktickInterpolation
+  = BacktickExecInvocation    // @func(args) - must come before variable
+  / UnquotedPathVar           // @var or @var.field
+  / BacktickTextSegment       // Plain text
+
+// Function call in backtick template
+BacktickExecInvocation
+  = "@" name:BaseIdentifier &"(" args:CommandArgs {
+      helpers.debug('BacktickExecInvocation matched', { name, args });
+      
+      // Create an exec invocation node
+      return {
+        type: 'ExecInvocation',
+        commandRef: {
+          name,
+          identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
+          args: args || [],
+          isCommandReference: true
+        },
+        withClause: null
+      };
+    }
+
 // Text inside backticks (excluding @ for variable interpolation)
 BacktickTextSegment
   = chars:(![`@] char:. { return char; })+ {
@@ -368,7 +392,7 @@ TemplateStyleInterpolation "Template interpolation patterns"
         wrapperType: 'doubleBracket'
       };
     }
-  / '`' parts:(UnquotedPathVar / BacktickTextSegment)* '`' {
+  / '`' parts:(BacktickInterpolation)* '`' {
       helpers.debug('TemplateStyleInterpolation matched backtick with @var interpolation', { parts });
       
       return {

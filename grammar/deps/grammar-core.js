@@ -379,7 +379,7 @@ export const helpers = {
     },
     createTemplateMetadata(parts, wrapperType) {
         return {
-            hasVariables: parts.some(p => p && p.type === NodeType.VariableReference),
+            hasVariables: parts.some(p => p && (p.type === NodeType.VariableReference || p.type === NodeType.ExecInvocation)),
             isTemplateContent: wrapperType === 'doubleBracket'
         };
     },

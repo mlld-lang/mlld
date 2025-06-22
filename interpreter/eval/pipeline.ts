@@ -426,7 +426,17 @@ async function executeCommandVariable(
     }
     
     const result = await env.executeCode(code, execDef.language || 'javascript', params);
-    return result;
+    
+    // If the function returns a PipelineInput object, extract the text
+    // This can happen if the function just returns its input parameter
+    if (result && typeof result === 'object' && 'text' in result && 'type' in result) {
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('Pipeline function returned PipelineInput object, extracting text');
+      }
+      return String(result.text);
+    }
+    
+    return String(result);
   } else if (execDef.type === 'template' && execDef.template) {
     // Interpolate template
     const { interpolate } = await import('../core/interpreter');

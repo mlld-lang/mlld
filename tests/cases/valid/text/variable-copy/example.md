@@ -1,7 +1,7 @@
 @text original = "Original Value"
 @text copy = @original
-Original: @add @original
-Copy: @add @copy
+@add [[Original: {{original}}]]
+@add [[Copy: {{copy}}]]
 
 @text greeting = "Hello"
 @text name = "World"

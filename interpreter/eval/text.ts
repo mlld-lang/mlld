@@ -311,14 +311,20 @@ export async function evaluateText(
     // Apply pipeline if present
     if (varWithTail.withClause && varWithTail.withClause.pipeline) {
       const { executePipeline } = await import('./pipeline');
+      const format = varWithTail.withClause.format as string | undefined;
+      // Convert result to string properly - JSON.stringify for objects/arrays
+      const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
       result = await executePipeline(
-        String(result),
+        stringResult,
         varWithTail.withClause.pipeline,
-        env
+        env,
+        undefined, // location
+        format
       );
     }
     
-    resolvedValue = String(result);
+    // Convert final result to string properly
+    resolvedValue = typeof result === 'string' ? result : JSON.stringify(result);
     
   } else if (directive.source === 'exec' && directive.values?.execInvocation) {
     // ExecInvocation handling: @text result = @greet() | @uppercase
@@ -386,6 +392,36 @@ export async function evaluateText(
     // Evaluate the run directive
     const result = await evaluateRun(runDirective, env);
     resolvedValue = result.value;
+    
+  } else if (directive.source === 'variable' && directive.meta?.isVariableReference) {
+    // Simple variable copy: @text copy = @original
+    const contentNodes = directive.values?.content;
+    if (!contentNodes || !Array.isArray(contentNodes) || contentNodes.length === 0) {
+      throw new Error('Variable reference missing in text directive');
+    }
+    
+    const varRefNode = contentNodes[0];
+    if (varRefNode.type !== 'VariableReference') {
+      throw new Error('Expected variable reference in text directive');
+    }
+    
+    // Get the variable
+    const variable = env.getVariable(varRefNode.identifier);
+    if (!variable) {
+      throw new Error(`Variable not found: ${varRefNode.identifier}`);
+    }
+    
+    // Resolve its value
+    const { resolveVariableValue } = await import('../core/interpreter');
+    let result = await resolveVariableValue(variable, env);
+    
+    // Apply field access if present
+    if (varRefNode.fields && varRefNode.fields.length > 0) {
+      const { accessField } = await import('../utils/field-access');
+      result = await accessField(result, varRefNode.fields, varRefNode.identifier);
+    }
+    
+    resolvedValue = String(result);
     
   } else {
     // Normal case: interpolate the content (resolve {{variables}})

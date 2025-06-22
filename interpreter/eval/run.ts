@@ -396,11 +396,13 @@ export async function evaluateRun(
     
     // Apply pipeline transformations if specified
     if (withClause.pipeline && withClause.pipeline.length > 0) {
+      const format = withClause.format as string | undefined;
       output = await executePipeline(
         output,
         withClause.pipeline,
         env,
-        directive.location
+        directive.location,
+        format
       );
     }
   }

@@ -161,8 +161,11 @@ export async function evaluateDataValue(
         console.log('Before pipeline:', { result, stringified: String(result), format });
       }
       
+      // Convert result to string properly - JSON.stringify for objects/arrays
+      const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
+      
       const pipelineResult = await executePipeline(
-        String(result),
+        stringResult,
         value.withClause.pipeline,
         env,
         undefined, // location
@@ -345,6 +348,15 @@ export async function evaluateDataValue(
         undefined, // location
         format
       );
+      
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('ExecInvocation pipeline result:', {
+          pipelineResult,
+          pipelineResultType: typeof pipelineResult,
+          isPipelineInput: !!(pipelineResult && typeof pipelineResult === 'object' && 'text' in pipelineResult)
+        });
+      }
       
       // Try to parse the pipeline result back to maintain type consistency
       try {

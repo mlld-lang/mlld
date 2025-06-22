@@ -31,6 +31,7 @@ CommandArgumentList "command arguments list"
 
 CommandArgument "command argument"
   = CommandTemplateArgument     // Template arguments [[...]]
+  / NestedExecInvocation       // Nested function calls @func(args)
   / str:StringLiteral {
       // Create a Text node directly
       return helpers.createNode(NodeType.Text, {
@@ -44,6 +45,26 @@ CommandArgument "command argument"
     }
   / EscapedArgument      // Escaped characters in unquoted arguments
   / RawArgument          // Fallback for unquoted arguments
+
+// Nested function call in command arguments
+NestedExecInvocation "nested exec invocation"
+  = "@" name:BaseIdentifier args:CommandArgs {
+      helpers.debug('NestedExecInvocation matched', { name, args });
+      
+      // Create a command reference
+      const ref = {
+        name,
+        identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
+        args: args || [],
+        isCommandReference: true
+      };
+      
+      return helpers.createNode(NodeType.ExecInvocation, {
+        commandRef: ref,
+        withClause: null,
+        location: location()
+      });
+    }
 
 // Template argument - [[template content]]
 CommandTemplateArgument "command template argument"

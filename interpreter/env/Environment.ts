@@ -1586,8 +1586,14 @@ export class Environment {
         
         // Format the result
         if (result !== undefined && result !== null) {
-          // For objects and arrays, use JSON.stringify to preserve structure
-          if (typeof result === 'object') {
+          // Check if this is a PipelineInput object - if so, return just the text
+          if (typeof result === 'object' && 'text' in result && 'type' in result && 
+              typeof result.text === 'string' && typeof result.type === 'string') {
+            // This is likely a PipelineInput object
+            output = String(result.text);
+          }
+          // For other objects and arrays, use JSON.stringify to preserve structure
+          else if (typeof result === 'object') {
             output = JSON.stringify(result);
           } else {
             output = String(result);

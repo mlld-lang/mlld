@@ -577,6 +577,8 @@ interface InterpolationNode {
   identifier?: string;
   fields?: FieldAccess[];
   value?: string;
+  commandRef?: any;
+  withClause?: any;
 }
 
 /**
@@ -594,6 +596,11 @@ export async function interpolate(
       parts.push(node.content || '');
     } else if (node.type === 'PathSeparator') {
       parts.push(node.value || '/');
+    } else if (node.type === 'ExecInvocation') {
+      // Handle function calls in templates
+      const { evaluateExecInvocation } = await import('../eval/exec-invocation');
+      const result = await evaluateExecInvocation(node as any, env);
+      parts.push(String(result.value));
     } else if (node.type === 'VariableReference') {
       const varName = node.identifier || node.name;
       if (!varName) continue;
@@ -654,6 +661,9 @@ export async function interpolate(
         value = variable.value;
       } else if (isExecutableVariable(variable)) {
         // Executables (like transformers) don't interpolate - they need to be invoked
+        if (context === InterpolationContext.Default) {
+          console.warn(`Warning: Referenced executable '@${variable.name}' without calling it. Did you mean to use @${variable.name}() instead?`);
+        }
         value = `[executable: ${variable.name}]`;
       } else {
         // This should never happen with proper typing

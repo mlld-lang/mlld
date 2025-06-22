@@ -433,6 +433,60 @@ AtExec
       );
     }
   // Resolver executable: @exec name(params) = @resolver/path [{ @payload }]
+  // Direct command reference: @exec alias() = @other
+  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" commandRef:BaseIdentifier !"/" withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      helpers.debug('AtExec matched direct command reference', { id, params, commandRef, trust });
+      
+      // Create identifier node
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      
+      // Process parameters
+      const processedParams = params || [];
+      
+      // Build values and raw objects
+      const values = {
+        identifier: [identifierNode],
+        params: processedParams,
+        commandRef: [helpers.createNode(NodeType.Text, { content: commandRef, location: location() })]
+      };
+      
+      const raw = {
+        identifier: id,
+        params: processedParams.map(p => p.name),
+        commandRef: commandRef
+      };
+      
+      // Create meta object
+      const metaObj = {
+        parameterCount: processedParams.length,
+        isCommandRef: true,
+        ...helpers.createSecurityMeta({ trust })
+      };
+      
+      // Add metadata if present
+      if (meta) {
+        values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
+        raw.metadata = meta;
+        metaObj.metadata = { type: meta };
+      }
+      
+      // Add with clause if present
+      if (withClause) {
+        values.withClause = withClause;
+        raw.withClause = withClause;
+        metaObj.withClause = withClause;
+      }
+      
+      return helpers.createStructuredDirective(
+        'exec',
+        'execCommand',
+        values,
+        raw,
+        metaObj,
+        location(),
+        'reference'
+      );
+    }
   / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" resolver:ResolverPathPattern payload:ExecResolverPayload? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('AtExec matched resolver executable', { id, params, resolver, trust });
       

@@ -3,7 +3,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
 import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable } from '@core/types/executable';
-import { interpolate } from '../core/interpreter';
+import { interpolate, resolveVariableValue } from '../core/interpreter';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError } from '@core/errors';
 import { extractSection } from './add';
@@ -99,8 +99,60 @@ export async function evaluateExecInvocation(
     if (typeof arg === 'string') {
       evaluatedArgs.push(arg);
     } else if (arg && typeof arg === 'object') {
-      const evaluated = await interpolate([arg], env);
-      evaluatedArgs.push(evaluated);
+      // Check if this is a nested ExecInvocation
+      if (arg.type === 'ExecInvocation') {
+        // Recursively evaluate the nested function call
+        const nestedResult = await evaluateExecInvocation(arg, env);
+        // Convert result to string appropriately
+        const resultValue = nestedResult.value;
+        let stringValue: string;
+        if (typeof resultValue === 'string') {
+          stringValue = resultValue;
+        } else if (resultValue === null || resultValue === undefined) {
+          stringValue = String(resultValue);
+        } else if (typeof resultValue === 'object') {
+          // For objects and arrays, use JSON.stringify
+          stringValue = JSON.stringify(resultValue);
+        } else {
+          stringValue = String(resultValue);
+        }
+        evaluatedArgs.push(stringValue);
+      } else if (arg.type === 'VariableReference') {
+        // Handle variable references directly
+        const varRef = arg as any;
+        const variable = env.getVariable(varRef.identifier);
+        if (!variable) {
+          throw new Error(`Variable not found: ${varRef.identifier}`);
+        }
+        
+        // Resolve the variable value
+        const value = await resolveVariableValue(variable, env);
+        
+        // Apply field access if present
+        let finalValue = value;
+        if (varRef.fields && varRef.fields.length > 0) {
+          const { accessField } = await import('../utils/field-access');
+          finalValue = await accessField(value, varRef.fields, varRef.identifier);
+        }
+        
+        // Convert to string appropriately
+        let stringValue: string;
+        if (typeof finalValue === 'string') {
+          stringValue = finalValue;
+        } else if (finalValue === null || finalValue === undefined) {
+          stringValue = String(finalValue);
+        } else if (typeof finalValue === 'object') {
+          // For objects and arrays, use JSON.stringify
+          stringValue = JSON.stringify(finalValue);
+        } else {
+          stringValue = String(finalValue);
+        }
+        evaluatedArgs.push(stringValue);
+      } else {
+        // Otherwise interpolate as usual
+        const evaluated = await interpolate([arg], env);
+        evaluatedArgs.push(evaluated);
+      }
     } else {
       evaluatedArgs.push(String(arg));
     }

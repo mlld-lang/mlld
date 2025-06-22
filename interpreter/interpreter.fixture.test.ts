@@ -137,7 +137,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
     'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
     'text-url-section': 'Issue #82: URL section support not implemented',
-    'text-variable-copy': 'Issue #176: Variable copying with @text copy = @original not supported',
     'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
     'add-foreach-section-variable-new': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
     'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
