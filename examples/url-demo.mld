@@ -3,26 +3,26 @@
 This example demonstrates how to use URLs in Meld directives.
 
 ## Import from URL
-@import { * } from "https://raw.githubusercontent.com/example/repo/main/config.mld"
+/import { * } from "https://raw.githubusercontent.com/example/repo/main/config.mld"
 
 ## Text from URL
-@text readme = [https://raw.githubusercontent.com/example/repo/main/README.md]
+/text @readme = [https://raw.githubusercontent.com/example/repo/main/README.md]
 
 ## Add content from URL
-@add [https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md]
+/add [https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md]
 
 ## Path assignment with URL
-@path apiEndpoint = "https://api.example.com/v1"
+/path @apiEndpoint = "https://api.example.com/v1"
 
 ## Complex data with URL-fetching directives
-@data projectInfo = {
+/data @projectInfo = {
   "readme": [https://raw.githubusercontent.com/example/repo/main/README.md],
-  "version": @run [(curl -s https://api.example.com/version)],
+  "version": @run {curl -s https://api.example.com/version},
   "apiBase": @apiEndpoint
 }
 
 ## Using the API endpoint
-@run [(curl -s @apiEndpoint/users)]
+/run {curl -s @apiEndpoint/users}
 
 Note: To enable URL support, you have two options:
 

@@ -1,9 +1,9 @@
-@text isAdmin = ""
-@text isModerator = "true"
-@text isVerified = ""
+/text @isAdmin = ""
+/text @isModerator = "true"
+/text @isVerified = ""
 
 # any: with block action - executes if ANY condition matches
-@when @isAdmin any: [
+/when @isAdmin any: [
   @isAdmin
   @isModerator
   @isVerified

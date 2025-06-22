@@ -1,0 +1,21 @@
+@data role = {
+    "architect": "You are a senior software architect skilled in assessing TypeScript codebases.",
+    "security": "You are a security engineer focused on identifying vulnerabilities.",
+    "ux": "You are a UX designer focused on user experience and interface design.",
+    "pm": "You are a project manager focused on roadmaps and priorities."
+}
+
+@data task = {
+    "archrev": "What's the architecture's biggest flaw?",
+    "uxrev": "Review the UX of this code",
+    "secrev": "Review this code for vulnerabilities", 
+    "roadmap": "Create a roadmap based on highest priority"
+}
+
+@text version = "1.0.0"
+@text project_name = "Mlld"
+@text imported_title = "Hello from the imported file!"
+
+@exec codecat(dir) = [(find @dir -type f -exec sh -c 'echo "<$(realpath --relative-to=@dir {})>"; cat {}; echo "@dir {})>"' \;)]
+
+@exec echo(var) = [(echo @var)]

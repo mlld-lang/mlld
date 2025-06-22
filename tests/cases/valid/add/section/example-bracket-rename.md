@@ -1,1 +1,1 @@
-@add [file.md # Original Title] as "# New Title"
+/add [file.md # Original Title] as "# New Title"

@@ -1,2 +1,2 @@
-@import {*} from "files/imports.mld"
-@add @imported_title
+/import {*} from "files/imports.mld"
+/add @imported_title

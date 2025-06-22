@@ -1,0 +1,5 @@
+@data api = {
+  "status": "System is running",
+  "version": "1.0.0",
+  "endpoint": "https://api.example.com"
+}

@@ -11,7 +11,7 @@ This document has its own frontmatter:
 
 ## Importing Another File's Frontmatter
 
-@import { fm as importedFm } from "frontmatter-basic.mld"
+/import { fm as importedFm } from "frontmatter-basic.mld"
 
 The imported document has:
 - Title: {{importedFm.title}}

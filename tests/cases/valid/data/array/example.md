@@ -1,2 +1,2 @@
-@data colors = ["red", "green", "blue"]
-@add @colors[0]
+/data @colors = ["red", "green", "blue"]
+/add @colors[0]

@@ -7,4 +7,4 @@ description: Shell background operator should be rejected
 
 This should fail because & is a background operator outside quotes:
 
-@run [(sleep 5 &)]
+/run {sleep 5 &}

@@ -2,6 +2,6 @@
 
 This example demonstrates importing JSON data from stdin.
 
-@import { name, version } from @stdin
+/import { name, version } from @stdin
 
-@add [[Project: {{name}} v{{version}}]]
+/add [[Project: {{name}} v{{version}}]]

@@ -7,5 +7,5 @@ mlld is a programming language embedded in Markdown, not a template language. Va
 **To fix this:**
 ```mlld
 This line contains a variable reference:
-@add @myvar
+/add @myvar
 ```

@@ -2,6 +2,6 @@
 
 This example demonstrates the shorthand import syntax for stdin.
 
-@import @stdin
+/import @stdin
 
-@add [[Name: {{name}}, Version: {{version}}]]
+/add [[Name: {{name}}, Version: {{version}}]]

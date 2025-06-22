@@ -1,1 +1,1 @@
-@text sectionContent = [file.md # Original Title] as "# Modified Title"
+/text @sectionContent = [file.md # Original Title] as "# Modified Title"

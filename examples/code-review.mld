@@ -1,13 +1,13 @@
-@import {roles, tasks} from "files/prompts.mld"
+/import {roles, tasks} from "files/prompts.mld"
 
-@text arch = @add [files/README.md # Architecture]
-@text standards = @add [files/README.md # Code Standards]
-@text diff = @run [(git diff | cat)]
+/text @arch = @add [files/README.md # Architecture]
+/text @standards = @add [files/README.md # Code Standards]
+/text @diff = @run {git diff | cat}
 
-@text prompt = [[
+/text @prompt = [[
    Read our docs: {{arch}} {{standards}}
    Review the latest changes: {{diff}}
    Here's your task: {{tasks.codereview}}
 ]]
 
-@run [(llm @prompt --system @roles.architect)]
+/run {llm @prompt --system @roles.architect}

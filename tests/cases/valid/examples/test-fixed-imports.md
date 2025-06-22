@@ -1,9 +1,9 @@
 # Testing Fixed Imports
 
-@import { imported_title, role, codecat, echo } from "./imports-fixed.mld"
+/import { imported_title, role, codecat, echo } from "./imports-fixed.mld"
 
 ## Title: 
-@add @imported_title
+/add @imported_title
 
 ## Roles Available: 
 - Architect: @add @role.architect
@@ -11,6 +11,6 @@
 - Security: @add @role.security
 
 ## Test the echo function:
-@add @echo("Hello World")
+/add @echo("Hello World")
 
 ## Note: codecat function available for: @run @codecat("./src")

@@ -1,5 +1,5 @@
-@text variable = "value"
-@add [[
+/text @variable = "value"
+/add [[
 Content with {{variable}}
 
 And some more content

@@ -1,0 +1,2 @@
+Authentication enabled
+Payments enabled

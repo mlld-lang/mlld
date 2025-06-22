@@ -2,7 +2,7 @@
 
 Test namespace imports with aliases.
 
-@import { * as config } from "settings.mld"
+/import { * as config } from "settings.mld"
 
-@text result = [[Config author: {{config.author}}, API URL: {{config.apiUrl}}]]
-@add @result
+/text @result = [[Config author: {{config.author}}, API URL: {{config.apiUrl}}]]
+/add @result

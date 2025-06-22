@@ -1,6 +1,6 @@
-@text configKey = "ANTHROPIC_API_KEY"
+/text @configKey = "ANTHROPIC_API_KEY"
 
-@when @configKey: [
+/when @configKey: [
   "ANTHROPIC_API_KEY" => @add "✓ API key configured"
   "" => @add "ERROR: Missing API key"
 ]

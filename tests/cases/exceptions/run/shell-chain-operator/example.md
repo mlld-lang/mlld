@@ -7,4 +7,4 @@ description: Shell chain operators should be rejected
 
 This should fail because && is a chain operator outside quotes:
 
-@run [(echo hello && echo world)]
+/run {echo hello && echo world}

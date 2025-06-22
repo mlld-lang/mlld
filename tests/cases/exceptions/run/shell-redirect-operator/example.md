@@ -7,4 +7,4 @@ description: Shell redirection operators should be rejected
 
 This should fail because > is a redirect operator outside quotes:
 
-@run [(echo hello > output.txt)]
+/run {echo hello > output.txt}

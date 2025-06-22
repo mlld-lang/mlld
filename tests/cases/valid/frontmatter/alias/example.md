@@ -11,10 +11,10 @@ metadata:
 
 Testing the @frontmatter.* alias for frontmatter access.
 
-@add [[Project: {{frontmatter.project}}]]
-@add [[Description: {{frontmatter.description}}]]
+/add [[Project: {{frontmatter.project}}]]
+/add [[Description: {{frontmatter.description}}]]
 
 Metadata:
-@add [[Created: {{frontmatter.metadata.created}}]]
-@add [[Updated: {{frontmatter.metadata.updated}}]]
-@add [[Status: {{frontmatter.metadata.status}}]]
+/add [[Created: {{frontmatter.metadata.created}}]]
+/add [[Updated: {{frontmatter.metadata.updated}}]]
+/add [[Status: {{frontmatter.metadata.status}}]]

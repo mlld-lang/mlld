@@ -1,6 +1,6 @@
 # Test Node.js Undefined Parameter Handling
 
-@exec greet(name, title, suffix) = node [(
+/exec @greet(name, title, suffix) = node {}
   // Function that handles optional parameters
   let greeting = "Hello";
   
@@ -15,9 +15,9 @@
   }
   
   return greeting + "!";
-)]
+}
 
-@exec checkParams(a, b, c, d) = node [(
+/exec @checkParams(a, b, c, d) = node {}
   // Test that all parameters are accessible even when undefined
   const results = [];
   
@@ -28,22 +28,22 @@
   results.push(`d: ${typeof d} = ${d === undefined ? 'undefined' : d}`);
   
   return results.join(', ');
-)]
+}
 
 # Test case 1: All parameters provided
-@data greeting1 = @greet("Alice", "Dr.", "PhD")
-@add @greeting1
+/data @greeting1 = @greet("Alice", "Dr.", "PhD")
+/add @greeting1
 
 # Test case 2: Only required parameter
-@data greeting2 = @greet("Bob")
-@add @greeting2
+/data @greeting2 = @greet("Bob")
+/add @greeting2
 
 # Test case 3: Check parameter types
-@data params1 = @checkParams("first")
-@add @params1
+/data @params1 = @checkParams("first")
+/add @params1
 
-@data params2 = @checkParams("one", "two")
-@add @params2
+/data @params2 = @checkParams("one", "two")
+/add @params2
 
-@data params3 = @checkParams("x", "y", "z", "w")
-@add @params3
+/data @params3 = @checkParams("x", "y", "z", "w")
+/add @params3

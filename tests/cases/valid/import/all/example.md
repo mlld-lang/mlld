@@ -1,3 +1,3 @@
-@import {*} from [config.mld]
-@add @greeting
-@add @count
+/import {*} from [config.mld]
+/add @greeting
+/add @count

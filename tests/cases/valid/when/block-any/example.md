@@ -1,10 +1,10 @@
-@data user = { "role": "guest", "verified": false }
+/data @user = { "role": "guest", "verified": false }
 
-@text isAdmin = ""
-@text isModerator = ""
-@text isVerified = ""
+/text @isAdmin = ""
+/text @isModerator = ""
+/text @isVerified = ""
 
-@when any: [
+/when any: [
   @isAdmin
   @isModerator
   @isVerified

@@ -1,2 +1,2 @@
-@text content = [file.md]
-@add @content
+/text @content = [file.md]
+/add @content

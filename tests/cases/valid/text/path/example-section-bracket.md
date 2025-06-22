@@ -1,1 +1,1 @@
-@text sectionContent = [file.md # Section 1]
+/text @sectionContent = [file.md # Section 1]

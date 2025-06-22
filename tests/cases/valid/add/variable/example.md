@@ -1,2 +1,2 @@
-@text variableName = "hello world"
-@add @variableName
+/text @variableName = "hello world"
+/add @variableName

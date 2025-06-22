@@ -1,2 +1,2 @@
-@data number.count = 42
-@add @number.count
+/data number.count = 42
+/add @number.count

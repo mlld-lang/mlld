@@ -3,7 +3,7 @@
 This tests the lowercase @time reserved variable alias.
 
 Timestamp lowercase: 
-@add @time
+/add @time
 
-@text report = [[Report generated at {{time}}]]
-@add @report
+/text @report = [[Report generated at {{time}}]]
+/add @report

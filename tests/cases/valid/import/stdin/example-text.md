@@ -2,6 +2,6 @@
 
 This example demonstrates importing plain text from stdin.
 
-@import { content } from @stdin
+/import { content } from @stdin
 
-@add [[Received: {{content}}]]
+/add [[Received: {{content}}]]

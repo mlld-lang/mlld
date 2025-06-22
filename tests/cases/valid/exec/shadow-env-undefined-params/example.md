@@ -1,6 +1,6 @@
 # Test Shadow Environment with Undefined Parameters
 
-@exec processText(text, transform, options) = node [(
+/exec @processText(text, transform, options) = node {}
   // Test function that uses optional parameters
   let result = text;
   
@@ -17,12 +17,12 @@
   }
   
   return result;
-)]
+}
 
-@exec nodejs = { processText }
+/exec nodejs = { processText }
 
 # Test with shadow environment
-@run node [(
+/run node {
   // Call with all parameters
   const r1 = await processText("Hello World", "uppercase", { prefix: ">> " });
   
@@ -33,4 +33,4 @@
   const r3 = await processText("Mixed Case", "lowercase");
   
   console.log(JSON.stringify({ r1, r2, r3 }, null, 2));
-)]
+}

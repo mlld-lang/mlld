@@ -7,8 +7,8 @@ This example demonstrates importing from custom resolvers and the public registr
 Import from a custom resolver prefix (requires resolver configuration):
 
 ```mlld
-@import { utils, config } from @mycompany/shared/utilities
-@import { * as helpers } from @internal/lib/helpers
+/import { utils, config } from @mycompany/shared/utilities
+/import { * as helpers } from @internal/lib/helpers
 ```
 
 ## Public Registry Import (DNS-based)
@@ -16,8 +16,8 @@ Import from a custom resolver prefix (requires resolver configuration):
 Import from the public registry using username/module pattern:
 
 ```mlld
-@import { formatDate, parseDate } from @jdoe/date-utils
-@import { Chart, Graph } from @dataviz/charts
+/import { formatDate, parseDate } from @jdoe/date-utils
+/import { Chart, Graph } from @dataviz/charts
 ```
 
 ## How It Works

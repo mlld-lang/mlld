@@ -1,0 +1,5 @@
+@data helpers = {
+  "formatDate": "Date formatter function",
+  "parseJSON": "JSON parser function",
+  "validateEmail": "Email validator function"
+}

@@ -1,2 +1,2 @@
-@data targetSection = "Section Title"
-@add [file.md # @targetSection]
+/data @targetSection = "Section Title"
+/add [file.md # @targetSection]

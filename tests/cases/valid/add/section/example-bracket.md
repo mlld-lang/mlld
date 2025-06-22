@@ -1,1 +1,1 @@
-@add [file.md # Section Title]
+/add [file.md # Section Title]

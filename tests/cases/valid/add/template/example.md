@@ -1,1 +1,1 @@
-@add [[This is template content]]
+/add [[This is template content]]

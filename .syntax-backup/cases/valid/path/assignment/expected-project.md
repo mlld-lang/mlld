@@ -1,0 +1,1 @@
+The project source is /mock/project/src

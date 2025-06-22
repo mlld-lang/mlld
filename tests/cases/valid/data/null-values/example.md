@@ -1,4 +1,4 @@
-@data config = {
+/data @config = {
   name: "TestApp",
   version: "1.0.0",
   description: null,
@@ -14,7 +14,7 @@
   metadata: null
 }
 
-@add [[Application Config:
+/add [[Application Config:
 Name: {{config.name}}
 Version: {{config.version}}
 Description: {{config.description}}

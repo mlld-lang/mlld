@@ -2,12 +2,12 @@
 # This demonstrates how mlld with @when and foreach can replace complex YAML workflows
 
 ## Load Architecture Files
-@path architectureDoc = [docs/ARCHITECTURE.md]
-@path authConfigDoc = [docs/AUTH-CONFIG.md]
-@text overallArchitecture = @path [docs/ARCHITECTURE.md]
+/path @architectureDoc = [docs/ARCHITECTURE.md]
+/path @authConfigDoc = [docs/AUTH-CONFIG.md]
+/text @overallArchitecture = @path [docs/ARCHITECTURE.md]
 
 ## Define Services
-@data services = {
+/data @services = {
   "auth": {
     "description": "Authentication and Authorization Service",
     "path": "services/auth",
@@ -26,11 +26,11 @@
 }
 
 ## Service Health Checks
-@exec service_healthy(name) = [(
+/exec @service_healthy(name) = {
   curl -s "http://localhost:8080/{{name}}/health" | grep -q "ok" && echo "true"
-)]
+}
 
-@exec all_services_healthy() = [(
+/exec @all_services_healthy() = {}
   # Check if all services return healthy
   healthy=true
   for service in auth payment user; do
@@ -40,13 +40,13 @@
     fi
   done
   echo "$healthy"
-)]
+}
 
 ## Conditional Analysis Based on Health
-@when @all_services_healthy() => @add "✅ All services healthy - proceeding with analysis"
+/when @all_services_healthy() => @add "✅ All services healthy - proceeding with analysis"
 
 ## Analyze Each Service
-@text serviceAnalysisPrompt = [[
+/text @serviceAnalysisPrompt = [[
 Analyze the {{serviceName}} service:
 - Description: {{serviceDescription}}
 - Configuration: {{serviceConfig}}
@@ -62,28 +62,27 @@ Please provide:
 ]]
 
 ## Generate Analysis for Each Service
-@when all: [
+/when all: [
   foreach @analyze_service(@services)
 ]
 
-@exec analyze_service(service) = [(
+/exec @analyze_service(service) = {
   echo "=== Analysis for {{service.name}} ==="
-  echo "{{serviceAnalysisPrompt}}" | llm --model gpt-4
-)]
+  echo "{{serviceAnalysisPrompt}}" | llm --model gpt-4}
 
 ## Conditional Deployment
-@exec is_production() = [(test "$ENVIRONMENT" = "production" && echo "true")]
-@exec tests_passing() = [(npm test 2>/dev/null && echo "true")]
-@exec approved_for_deploy() = [(test -f .deploy-approved && echo "true")]
+/exec @is_production() = {test "$ENVIRONMENT" = "production" && echo "true"}
+/exec @tests_passing() = {npm test 2>/dev/null && echo "true"}
+/exec @approved_for_deploy() = {test -f .deploy-approved && echo "true"}
 
-@when all: [
+/when all: [
   @is_production()
   @tests_passing()
   @approved_for_deploy()
-] => @run [(npm run deploy)]
+] => @run {npm run deploy}
 
 ## Generate Summary Report
-@text summaryTemplate = [[
+/text @summaryTemplate = [[
 # Service Analysis Summary
 
 Generated: {{TIME}}
@@ -97,17 +96,17 @@ foreach @services as service:
 endforeach
 
 ## Health Status:
-@when @all_services_healthy() => @add "All services operational ✅"
-@when any: [
+/when @all_services_healthy() => @add "All services operational ✅"
+/when any: [
   foreach @not_healthy(@services)
 ] => @add "⚠️ Some services require attention"
 
 ## Next Steps:
-@when @is_production() => @add "- Monitor production metrics"
-@when first: [
+/when @is_production() => @add "- Monitor production metrics"
+/when first: [
   @tests_passing() => @add "- Ready for deployment"
-  @run [(echo "true")] => @add "- Fix failing tests before deployment"
+  @run {echo "true"} => @add "- Fix failing tests before deployment"
 ]
 ]]
 
-@add @summaryTemplate
+/add @summaryTemplate

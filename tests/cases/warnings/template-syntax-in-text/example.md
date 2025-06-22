@@ -1,3 +1,3 @@
-@text myvar = "Hello world"
+/text @myvar = "Hello world"
 
 This line uses template syntax: {{myvar}}

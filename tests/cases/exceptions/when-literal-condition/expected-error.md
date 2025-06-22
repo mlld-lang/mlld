@@ -1,4 +1,4 @@
-@when directive requires a variable reference, not a literal value.
+/when directive requires a variable reference, not a literal value.
 Use a variable instead:
    @when true => ...  (incorrect)
    @text condition = "true"

@@ -2,8 +2,8 @@
 
 Test shell commands with bracket conditions that should not terminate parsing.
 
-@run [(
-if [ ! -d "/tmp/test" )]
+/run {
+if [ ! -d "/tmp/test" }
 then
   mkdir -p "/tmp/test"
   echo "Created directory"
@@ -11,8 +11,8 @@ fi
 echo "Directory check complete"
 )]
 
-@exec complex_shell(dir) = [(
-if [ ! -d "@dir" )]
+/exec @complex_shell(dir) = {
+if [ ! -d "@dir" }
 then
   echo "Error: @dir is not a directory"
   return 1
@@ -21,4 +21,4 @@ echo "Processing directory: @dir"
 ls "@dir" | head -5
 )]
 
-@run @complex_shell(/tmp)
+/run @complex_shell(/tmp)

@@ -1,2 +1,2 @@
-@data greeting.text = "Hello, world!"
-@add @greeting.text
+/data greeting.text = "Hello, world!"
+/add @greeting.text

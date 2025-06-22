@@ -1,2 +1,2 @@
-@path projectSrc = [@./src]
-@add [[The project source is {{projectSrc}}]]
+/path @projectSrc = [@./src]
+/add [[The project source is {{projectSrc}}]]
