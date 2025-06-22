@@ -31,14 +31,9 @@ CONTENT TYPES
 // MID-LEVEL PATTERNS - Handle delimiters and basic structures
 // -------------------------------------------------------------
 
-// Quoted string - captures content within quotes WITHOUT including the quotes
-// No interpolation for quoted strings - but with escape sequence support
+// Single quoted string - literal content without interpolation
 LiteralContent "Literal content without interpolation"
-  = '"' content:EscapedStringContent '"' { 
-      // Return the escaped content as a Text node
-      return [helpers.createNode(NodeType.Text, { content, location: location() })];
-    }
-  / "'" content:EscapedSingleStringContent "'" { 
+  = "'" content:EscapedSingleStringContent "'" { 
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
 
@@ -352,9 +347,17 @@ CodeLiteralPart
 // SEMANTIC DELIMITER PATTERNS - Clear semantic meaning for each delimiter type
 // -------------------------------------------------------------
 
-// Literal text without any interpolation (quotes only)
+// Literal text without any interpolation (single quotes only)
 LiteralOnlyContent "Literal text without any interpolation"
-  = LiteralContent  // Already exists: "...", '...', `...`
+  = "'" content:EscapedSingleStringContent "'" { 
+      return [helpers.createNode(NodeType.Text, { content, location: location() })];
+    }
+
+// Double quoted content with @var interpolation (NOT multiline)
+InterpolatedDoubleQuoteContent "Double quoted content with @var interpolation"
+  = '"' parts:(SpecialVariable / CommandContextVariable / DoubleQuotedText)* '"' {
+      return parts;
+    }
 
 // Path content with @var interpolation (brackets only)
 InterpolatedPathContent "Path content with @var interpolation" 
@@ -372,7 +375,7 @@ InterpolatedTemplateContent "Template content with {{var}} interpolation"
 PathStyleInterpolation "Path interpolation patterns"
   = InterpolatedPathContent  // [content with @var] - all paths must be bracketed
 
-// Template-style interpolation: templates with {{var}}, @var in backticks, or literal text
+// Template-style interpolation: multiple types with different interpolation behavior
 TemplateStyleInterpolation "Template interpolation patterns"  
   = rule:InterpolatedTemplateContent {
       helpers.debug('TemplateStyleInterpolation matched InterpolatedTemplateContent', { 
@@ -400,20 +403,29 @@ TemplateStyleInterpolation "Template interpolation patterns"
         wrapperType: 'backtick'
       };
     }
-  / rule:LiteralOnlyContent {
-      helpers.debug('TemplateStyleInterpolation matched LiteralOnlyContent', { rule });
+  / rule:InterpolatedDoubleQuoteContent {
+      helpers.debug('TemplateStyleInterpolation matched double quotes with @var interpolation', { rule });
       
       return {
         content: rule,
-        wrapperType: 'literal'
+        wrapperType: 'doubleQuote'
+      };
+    }
+  / rule:LiteralOnlyContent {
+      helpers.debug('TemplateStyleInterpolation matched single quotes (literal)', { rule });
+      
+      return {
+        content: rule,
+        wrapperType: 'singleQuote'
       };
     }
 
 // Command-style interpolation: supports all relevant interpolation types
 CommandStyleInterpolation "Command interpolation patterns"
-  = LiteralOnlyContent          // "literal command"
-  / InterpolatedPathContent     // [command with @var] 
-  / InterpolatedTemplateContent // [[command with {{var}}]]
+  = InterpolatedDoubleQuoteContent // "command with @var"
+  / LiteralOnlyContent            // 'literal command'
+  / InterpolatedPathContent       // [command with @var] 
+  / InterpolatedTemplateContent   // [[command with {{var}}]]
 
 // -------------------------------------------------------------
 // SEMANTIC FORK PATTERNS - Help directives choose content type
@@ -438,15 +450,15 @@ SemanticTextContent "Semantic content for @text directive"
       helpers.debug('SemanticTextContent detected [');
       return { type: 'path', lookahead: '[' };
     }
-  / "@run" {
+  / "/run" {
       // Run reference
-      helpers.debug('SemanticTextContent detected @run');
-      return { type: 'run', lookahead: '@run' };
+      helpers.debug('SemanticTextContent detected /run');
+      return { type: 'run', lookahead: '/run' };
     }
   / "\"" {
-      // Quoted literal
+      // Double quoted string with interpolation
       helpers.debug('SemanticTextContent detected "');
-      return { type: 'literal', lookahead: '"' };
+      return { type: 'template', lookahead: '"' };
     }
   / "'" {
       // Quoted literal
@@ -511,9 +523,10 @@ WrappedCommandContent "Wrapped command content"
 
 // Specialized command interpolation that allows complex shell syntax
 CommandContentInterpolation "Command content interpolation patterns"
-  = LiteralOnlyContent          // "literal command"
-  / CommandBracketContent       // [command with @var] - permissive for shell commands
-  / InterpolatedTemplateContent // [[command with {{var}}]]
+  = InterpolatedDoubleQuoteContent // "command with @var"
+  / LiteralOnlyContent            // 'literal command'
+  / CommandBracketContent         // [command with @var] - permissive for shell commands
+  / InterpolatedTemplateContent   // [[command with {{var}}]]
 
 // For code blocks in run, exec directives
 WrappedCodeContent "Wrapped code content"

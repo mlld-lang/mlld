@@ -54,7 +54,7 @@ InterDirectiveNewline
         i++;
       }
       /* success only if the next real char starts a directive line */
-      return i < input.length && input[i] === '@' && helpers.isLogicalLineStart(input, i);
+      return i < input.length && input[i] === '/' && helpers.isLogicalLineStart(input, i);
     } {
       return helpers.createNode(NodeType.Newline, { content: term, location: location() });
     }
@@ -94,10 +94,9 @@ Comment
     });
   }
 
-// Support both >> and << as comment markers
+// Support // as comment marker
 CommentMarker
-  = ">>" { return ">>"; }
-  / "<<" { return "<<"; }
+  = "//" { return "//"; }
 
 CommentContent
   = chars:[^\n]* "\n"? {
@@ -128,7 +127,7 @@ TextPart
   = !{ 
       const pos = offset();
       const isAtLineStart = helpers.isLogicalLineStart(input, pos);
-      const isAtStartChar = input[pos] === '@';
+      const isAtStartChar = input[pos] === '/';
       
       // Is this potentially a directive?
       if (isAtLineStart && isAtStartChar) {
@@ -137,7 +136,7 @@ TextPart
       }
       
       // For regular comment handling
-      const isComment = isAtLineStart && input.substr(pos, 2) === '>>';
+      const isComment = isAtLineStart && input.substr(pos, 2) === '//';
       
       return isAtLineStart && isAtStartChar || isComment;
     } !(
@@ -246,12 +245,12 @@ CodeFenceLangID
 // -------------------------------------------------------------------------
 
 // All the AtDirectives are now imported from their respective files:
-// - AtRun from directives/run.peggy
-// - AtExec from directives/exec.peggy
-// - AtText from directives/text.peggy
-// - AtImport from directives/import.peggy
-// - AtAdd from directives/add.peggy
-// - AtData from directives/data.peggy
-// - AtPath from directives/path.peggy
-// - AtOutput from directives/output.peggy
-// - AtWhen from directives/when.peggy
+// - AtRun from directives/run.peggy (/run)
+// - AtExec from directives/exec.peggy (/exec)
+// - AtText from directives/text.peggy (/text)
+// - AtImport from directives/import.peggy (/import)
+// - AtAdd from directives/add.peggy (/add)
+// - AtData from directives/data.peggy (/data)
+// - AtPath from directives/path.peggy (/path)
+// - AtOutput from directives/output.peggy (/output)
+// - AtWhen from directives/when.peggy (/when)

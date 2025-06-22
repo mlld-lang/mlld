@@ -39,14 +39,14 @@ TextRHS
         value: foreach.value
       };
     }
-  / "@run" _ RunDirectiveRef {
-      // Handle nested @run directive
-      helpers.debug('TextRHS matched @run reference');
+  / "/run" _ RunDirectiveRef {
+      // Handle nested /run directive
+      helpers.debug('TextRHS matched /run reference');
       return { type: 'directive', directive: 'run' };
     }
-  / "@add" _ AddDirectiveRef {
-      // Handle nested @add directive
-      helpers.debug('TextRHS matched @add reference');
+  / "/add" _ AddDirectiveRef {
+      // Handle nested /add directive
+      helpers.debug('TextRHS matched /add reference');
       return { type: 'directive', directive: 'add' };
     }
   / section:SectionExtractionCore {
@@ -92,8 +92,8 @@ DataRHS
         value: foreach.value
       };
     }
-  / "@run" IsInRHS _ RunDirectiveRef {
-      // Handle nested @run directive
+  / "/run" IsInRHS _ RunDirectiveRef {
+      // Handle nested /run directive
       return { type: 'directive', directive: 'run' };
     }
   / "{" _ properties:DataProperties? _ "}" {

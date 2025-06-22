@@ -1,25 +1,25 @@
 // OUTPUT DIRECTIVE
-// Implementation of the @output directive for writing content to various targets
+// Implementation of the /output directive for writing content to various targets
 
-// Main @output directive - supports multiple forms:
+// Main /output directive - supports multiple forms:
 // Legacy syntax (backward compatible):
-// @output [file.md]                              <- outputs full document
-// @output @variable [file.md]                    <- outputs variable content
-// @output @template(args) [file.md]              <- outputs template result
-// @output @command(args) [file.md]               <- outputs command result  
-// @output "text content" [file.md]               <- outputs literal text
+// /output [file.md]                              <- outputs full document
+// /output @variable [file.md]                    <- outputs variable content
+// /output @template(args) [file.md]              <- outputs template result
+// /output @command(args) [file.md]               <- outputs command result  
+// /output "text content" [file.md]               <- outputs literal text
 //
 // New enhanced syntax:
-// @output @variable to "path/to/file.md"         <- file output
-// @output @variable to stdout                    <- standard output
-// @output @variable to stderr                    <- standard error
-// @output @variable to env                       <- environment variable (MLLD_VARIABLE)
-// @output @variable to env:CUSTOM_NAME           <- custom environment variable
-// @output @variable to @resolver/path/file.md    <- resolver output
-// @output @variable to "file.json" as json       <- with format specification
+// /output @variable to "path/to/file.md"         <- file output
+// /output @variable to stdout                    <- standard output
+// /output @variable to stderr                    <- standard error
+// /output @variable to env                       <- environment variable (MLLD_VARIABLE)
+// /output @variable to env:CUSTOM_NAME           <- custom environment variable
+// /output @variable to @resolver/path/file.md    <- resolver output
+// /output @variable to "file.json" as json       <- with format specification
 
 AtOutput
-  = DirectiveContext "@output" _ source:OutputSource _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
+  = DirectiveContext "/output" _ source:OutputSource _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
       helpers.debug('AtOutput enhanced syntax matched', { source, target, format });
       
       const values = {
@@ -59,7 +59,7 @@ AtOutput
       );
     }
   // Legacy bracket syntax for backward compatibility
-  / DirectiveContext "@output" _ source:OutputSource _ path:WrappedPathContent {
+  / DirectiveContext "/output" _ source:OutputSource _ path:WrappedPathContent {
       helpers.debug('AtOutput legacy syntax with source matched', { source, path });
       
       const values = {
@@ -93,7 +93,7 @@ AtOutput
         location()
       );
     }
-  / DirectiveContext "@output" _ path:WrappedPathContent {
+  / DirectiveContext "/output" _ path:WrappedPathContent {
       helpers.debug('AtOutput legacy syntax without source matched', { path });
       
       const values = {
@@ -125,7 +125,7 @@ AtOutput
       );
     }
   // New enhanced syntax for document output
-  / DirectiveContext "@output" _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
+  / DirectiveContext "/output" _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
       helpers.debug('AtOutput enhanced syntax without source matched', { target, format });
       
       const values = {

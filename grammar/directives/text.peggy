@@ -4,7 +4,7 @@
 // Primary @text directive
 AtText
   // Foreach section expression assignment - NEW pattern for section extraction
-  = DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ foreach:ForeachSectionExpression {
+  = DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ foreach:ForeachSectionExpression {
       helpers.debug('AtText matched foreach section expression', { id, foreach });
       
       const subtype = 'textAssignment';
@@ -31,7 +31,7 @@ AtText
       );
     }
   // Foreach command expression assignment - existing pattern
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ foreach:ForeachCommandExpression {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ foreach:ForeachCommandExpression {
       helpers.debug('AtText matched foreach expression', { id, foreach });
       
       const subtype = 'textAssignment';
@@ -57,37 +57,8 @@ AtText
         sourceType
       );
     }
-  // Literal string assignment with security options
-  / DirectiveContext "@text" _ security:(SecurityOptions _)? id:BaseIdentifier _ "=" _ content:StringLiteral {
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('AtText matched literal string', { id, content, securityOptions });
-      
-      const subtype = 'textAssignment';
-      const sourceType = 'literal';
-      
-      return helpers.createStructuredDirective(
-        'text',
-        subtype,
-        {
-          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          content: [helpers.createNode(NodeType.Text, { content, location: location() })]
-        },
-        {
-          identifier: id,
-          content
-        },
-        {
-          sourceType,
-          hasVariables: false,
-          isTemplateContent: false,
-          ...helpers.createSecurityMeta(securityOptions)
-        },
-        location(),
-        sourceType
-      );
-    }
   // Double-bracketed path with section: [[path/to/file.md # Section]]
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
       helpers.debug('AtText matched double-bracketed path section', { id, content, rename });
       
       const subtype = 'textPathSection';
@@ -138,7 +109,7 @@ AtText
       );
     }
   // Bracketed path (with optional section) - semantic parsing
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "[" parts:TextPathParts _ section:("#" _ s:SectionName { return s; })? "]" rename:AsNewTitle? {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ "[" parts:TextPathParts _ section:("#" _ s:SectionName { return s; })? "]" rename:AsNewTitle? {
       helpers.debug('AtText matched bracketed path', { id, parts, section, rename });
       
       const rawPath = helpers.reconstructRawString(parts);
@@ -195,7 +166,7 @@ AtText
       );
     }
   // Section extraction - must come first to avoid quoted string being matched as template
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ section:SectionExtractionCore {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ section:SectionExtractionCore {
       helpers.debug('AtText matched section extraction', { id, section });
       
       const subtype = section.rename ? 'textPathSection' : 'textPathSection';
@@ -244,8 +215,41 @@ AtText
       );
     }
   // Parameterized template definition removed - moved to @exec directive
+  // Double quoted string with interpolation - must come BEFORE TemplateCore
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ content:InterpolatedDoubleQuoteContent {
+      helpers.debug('AtText matched double quoted string with interpolation', { id, content });
+      
+      // Check if content has variables
+      const hasVariables = content.some(part => 
+        part && part.type === NodeType.VariableReference
+      );
+      
+      const subtype = hasVariables ? 'textTemplate' : 'textAssignment';
+      const sourceType = hasVariables ? 'template' : 'literal';
+      
+      return helpers.createStructuredDirective(
+        'text',
+        subtype,
+        {
+          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+          content: content
+        },
+        {
+          identifier: id,
+          content: helpers.reconstructRawString(content)
+        },
+        {
+          sourceType,
+          hasVariables,
+          isTemplateContent: false,
+          wrapperType: 'doubleQuote'
+        },
+        location(),
+        sourceType
+      );
+    }
   // Variable reference with tail modifiers - must come before TemplateCore
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ ref:VariableReferenceWithTail &{ 
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ ref:VariableReferenceWithTail &{ 
       // Only match if this has tail modifiers (otherwise let TemplateCore handle it)
       return ref.type === 'VariableReferenceWithTail';
     } {
@@ -275,7 +279,7 @@ AtText
       );
     }
   // Template content (including [[...]]) - must come before other patterns to avoid misparsing
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ template:TemplateCore {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ template:TemplateCore {
       // Use both variables and template syntax for detection
       // The meta now contains both hasVariables and isTemplateContent
       
@@ -313,7 +317,7 @@ AtText
       );
     }
   // @add directive with bracketed path section: @text var = @add [path/to/file.md # Section]
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ content:WrappedPathContent &{ return content.type === 'sectionPath'; } rename:AsNewTitle? {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ "@add" _ content:WrappedPathContent &{ return content.type === 'sectionPath'; } rename:AsNewTitle? {
       helpers.debug('AtText matched @add with bracketed path section', { id, content, rename });
       
       const subtype = 'textPathSection';
@@ -366,7 +370,7 @@ AtText
       );
     }
   // @add directive with section extraction - must come before path to avoid quoted strings being matched as paths
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ section:SectionExtractionCore {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ "@add" _ section:SectionExtractionCore {
       helpers.debug('AtText matched @add with section extraction', { id, section });
       
       const subtype = 'textPathSection';
@@ -416,7 +420,7 @@ AtText
       );
     }
   // @add directive reference - for backward compatibility
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@add" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ "@add" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? {
       helpers.debug('AtText matched @add with path', { id, path, security });
       
       const subtype = 'textPath';
@@ -451,7 +455,7 @@ AtText
       );
     }
   // Path starting with @variable - must come before command reference
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ PathStartingWithVariableContext path:PathExpression {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ PathStartingWithVariableContext path:PathExpression {
       helpers.debug('AtText matched path starting with @variable', { id, path });
       
       const subtype = 'textPath';
@@ -486,7 +490,7 @@ AtText
     }
   // Simple variable reference - @text name = @varname or @var.field.subfield
   // MUST come before exec invocation to properly match @TIME, @DEBUG, etc without parentheses
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@" !("run" _ / "add" _) varId:BaseIdentifier !"(" fields:AnyFieldAccess* {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ "@" !("run" _ / "add" _) varId:BaseIdentifier !"(" fields:AnyFieldAccess* {
       helpers.debug('AtText matched simple variable reference with field access', { id, varId, fields });
       
       const subtype = 'textAssignment';
@@ -524,7 +528,7 @@ AtText
     }
   // Exec invocation with tail modifiers - @text name = @command() | @modifiers
   // Comes after simple variable reference so @TIME matches as variable not exec
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@" !("run" _ / "add" _) invocation:ExecInvocationWithTail {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ "@" !("run" _ / "add" _) invocation:ExecInvocationWithTail {
       helpers.debug('AtText matched exec invocation with tail modifiers', { id, invocation });
       
       const subtype = 'textAssignment';
@@ -568,8 +572,8 @@ AtText
     }
   // Code execution - @text id = @run language [code]
   // Check for language BEFORE bracket to avoid consuming non-language commands
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ lang:RunCodeLanguage _ "[" content:$(CodeLiteralContent) "]" {
-      helpers.debug('AtText matched @run with language code', { id, lang, content });
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ "@run" _ lang:RunCodeLanguage _ "[" content:$(CodeLiteralContent) "]" {
+      helpers.debug('AtText matched /run with language code', { id, lang, content });
       
       // Use the proper subtype and sourceType
       const subtype = 'textAssignment';
@@ -587,7 +591,7 @@ AtText
       };
       
       // Create raw content string
-      const rawContent = `@run ${lang} [${content}]`;
+      const rawContent = `/run ${lang} [${content}]`;
       
       return helpers.createStructuredDirective(
         'text',
@@ -606,8 +610,8 @@ AtText
       );
     }
   // Command execution - @text id = @run [command] with optional tail modifiers
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ content:UnifiedCommandBrackets tail:TailModifiers? {
-      helpers.debug('AtText matched @run with UnifiedCommandBrackets and tail modifiers', { id, content, tail });
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ "@run" _ content:UnifiedCommandBrackets tail:TailModifiers? {
+      helpers.debug('AtText matched /run with UnifiedCommandBrackets and tail modifiers', { id, content, tail });
       
       // Use the proper subtype and sourceType
       const subtype = 'textAssignment';
@@ -649,7 +653,7 @@ AtText
       
       const raw = {
         identifier: id,
-        runDirective: `@run ${content.raw.command}${tail ? ' | ...' : ''}`
+        runDirective: `/run ${content.raw.command}${tail ? ' | ...' : ''}`
       };
       
       return helpers.createStructuredDirective(
@@ -663,8 +667,8 @@ AtText
       );
     }
   // Command reference with @run and tail modifiers - @text id = @run @cmdRef(args) | @transform
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ "@run" _ "@" invocation:ExecInvocationWithTail {
-      helpers.debug('AtText matched @run with exec invocation and tail modifiers', { id, invocation });
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ "@run" _ "@" invocation:ExecInvocationWithTail {
+      helpers.debug('AtText matched /run with exec invocation and tail modifiers', { id, invocation });
       
       const subtype = 'textAssignment';
       const sourceType = 'directive';
@@ -696,7 +700,7 @@ AtText
         values,
         {
           identifier: id,
-          content: `@run @${commandRef.name}`
+          content: `/run @${commandRef.name}`
         },
         meta,
         location(),
@@ -704,7 +708,7 @@ AtText
       );
     }
   // Direct path content - @text content = [file.md]
-  / DirectiveContext "@text" _ id:BaseIdentifier _ "=" _ path:PathExpression {
+  / DirectiveContext "/text" _ "@" id:BaseIdentifier _ "=" _ path:PathExpression {
       helpers.debug('AtText matched direct path content', { id, path });
       
       const subtype = 'textPath';

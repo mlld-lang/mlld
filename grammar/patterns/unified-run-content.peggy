@@ -1,25 +1,25 @@
 // UNIFIED RUN CONTENT PATTERN
-// Handles the new [(...))] syntax for both commands and code
+// Handles the new {...} syntax for both commands and code
 
 /* 
 # Unified Run Content
 
-The [(...))] syntax unifies command and code execution:
-- @run [(echo "hello")]        - Command (no language keyword)
-- @run [(js console.log(42))]  - Code (starts with language keyword)
+The {...} syntax unifies command and code execution:
+- /run {echo "hello"}        - Command (no language keyword)
+- /run js {console.log(42)}  - Code (starts with language keyword)
 
 This pattern detects the content type and applies appropriate parsing rules.
 */
 
 // -------------------------------------------------------------
-// UNIFIED CONTENT PATTERN - Single entry point for [(...)]
+// UNIFIED CONTENT PATTERN - Single entry point for {...}
 // -------------------------------------------------------------
 
-// UNIFIED CODE BRACKETS - Parses [(code)] for language-specific code
+// UNIFIED CODE BRACKETS - Parses {code} for language-specific code
 // Used by: AtRun directive when language is specified
 // Purpose: Parse code content without language detection
-UnifiedCodeBrackets "Code brackets [(...))]"
-  = "[" _ "(" _ content:$(UnifiedCodeContent) _ ")" _ "]" {
+UnifiedCodeBrackets "Code brackets {...}"
+  = "{" _ content:$(UnifiedCodeContent) _ "}" {
       helpers.debug('UnifiedCodeBrackets matched', { content });
       return {
         content: content.trim(),
@@ -27,11 +27,19 @@ UnifiedCodeBrackets "Code brackets [(...))]"
       };
     }
 
-// UNIFIED COMMAND BRACKETS - Parses [(command)] for shell commands
+// UNIFIED COMMAND BRACKETS - Parses {command} for shell commands
 // Used by: AtRun directive when no language is specified  
 // Purpose: Parse command content with variable interpolation and security checks
-UnifiedCommandBrackets "Command brackets [(...))]"
-  = "[" _ "(" _ parts:UnifiedCommandParts _ ")" _ "]" {
+UnifiedCommandBrackets "Command brackets {...}"
+  = &{ helpers.debug('UnifiedCommandBrackets: Trying to match at position', offset()); return true; }
+    "{" 
+    &{ helpers.debug('UnifiedCommandBrackets: Matched opening brace'); return true; }
+    _ 
+    parts:UnifiedCommandParts 
+    &{ helpers.debug('UnifiedCommandBrackets: Got parts, looking for closing brace'); return true; }
+    _ 
+    "}" 
+    &{ helpers.debug('UnifiedCommandBrackets: Matched closing brace, entering action'); return true; } {
       helpers.debug('UnifiedCommandBrackets matched with UnifiedCommandParts', { parts });
       
       const rawCommand = helpers.reconstructRawString(parts);
@@ -156,7 +164,7 @@ UnifiedRunContentInner
 
 // Parse shell command line content with proper operator checking
 ShellCommandLineContent
-  = content:$([^)]*) {
+  = content:$([^}]*) {
       // Use a simple tokenizer approach instead of the full ShellCommandLine parser
       // for now to avoid circular dependencies
       const tokens = [];
@@ -213,7 +221,9 @@ ShellCommandLineContent
 
 // Command parts for unified syntax - tokenizes properly
 UnifiedCommandParts
-  = tokens:UnifiedCommandToken* {
+  = &{ helpers.debug('UnifiedCommandParts: Starting to parse at position', offset()); return true; }
+    tokens:UnifiedCommandToken* {
+      helpers.debug('UnifiedCommandParts: Parsed tokens', { count: tokens.length });
       // Flatten any arrays that might come from quoted strings with variables
       const flattened = [];
       for (const token of tokens) {
@@ -336,8 +346,13 @@ UnifiedCommandWordChar
         return false;
       }
       
-      // Don't consume )] - it ends the command
+      // Don't consume )] as it ends the command (old syntax)
       if (char === ')' && input[pos + 1] === ']') {
+        return false;
+      }
+      
+      // Don't consume closing brace as it ends the command (new syntax)
+      if (char === String.fromCharCode(125)) {
         return false;
       }
       

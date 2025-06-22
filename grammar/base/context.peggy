@@ -66,17 +66,17 @@ RunCodeBlockContext "Run-style code block context"
       // First determine if we're in an RHS context
       const isRHS = helpers.isRHSContext(input, pos);
       
-      // Then check if we're preceded by "@run" or in a context that expects 
+      // Then check if we're preceded by "/run" or in a context that expects 
       // a language + code block pattern
       let isInRunContext = false;
       
-      // Look backward for "@run" pattern if in RHS context
+      // Look backward for "/run" pattern if in RHS context
       if (isRHS) {
-        // Search backward for "@run" indicator within reasonable bounds
+        // Search backward for "/run" indicator within reasonable bounds
         // This is a simplified check - a more comprehensive implementation
-        // would match the exact pattern for "@run" in different contexts
+        // would match the exact pattern for "/run" in different contexts
         let i = pos - 1;
-        let seenAtSymbol = false;
+        let seenSlashSymbol = false;
         let potentialRunKeyword = '';
         
         // Skip whitespace
@@ -84,19 +84,19 @@ RunCodeBlockContext "Run-style code block context"
           i--;
         }
         
-        // Collect potential keyword and check for @ symbol
+        // Collect potential keyword and check for / symbol
         while (i >= 0 && /[a-zA-Z]/.test(input[i])) {
           potentialRunKeyword = input[i] + potentialRunKeyword;
           i--;
         }
         
-        // Check for @ symbol
-        if (i >= 0 && input[i] === '@') {
-          seenAtSymbol = true;
+        // Check for / symbol
+        if (i >= 0 && input[i] === '/') {
+          seenSlashSymbol = true;
         }
         
-        // If we've seen @run, we're in a run code block context
-        if (seenAtSymbol && potentialRunKeyword === 'run') {
+        // If we've seen /run, we're in a run code block context
+        if (seenSlashSymbol && potentialRunKeyword === 'run') {
           isInRunContext = true;
         }
       }
@@ -104,17 +104,17 @@ RunCodeBlockContext "Run-style code block context"
       return isInRunContext || helpers.isInRunCodeBlockContext(input, pos);
     }
 
-// Specialized RHS context for exec directive that handles @run reference
-ExecRunRHSContext "Exec @run right-hand side context"
+// Specialized RHS context for exec directive that handles /run reference
+ExecRunRHSContext "Exec /run right-hand side context"
   = &{
       const pos = offset();
       
-      // Check both RHS context and the presence of @run pattern
+      // Check both RHS context and the presence of /run pattern
       if (!helpers.isRHSContext(input, pos)) {
         return false;
       }
       
-      // Look backward for "@exec" to confirm we're in an exec directive
+      // Look backward for "/exec" to confirm we're in an exec directive
       let isInExecDirective = false;
       let i = pos - 1;
       
@@ -149,8 +149,8 @@ ExecRunRHSContext "Exec @run right-hand side context"
           i--;
         }
         
-        // Check for @ symbol
-        if (i >= 0 && input[i] === '@') {
+        // Check for / symbol
+        if (i >= 0 && input[i] === '/') {
           if (keyword === 'exec') {
             isInExecDirective = true;
           }

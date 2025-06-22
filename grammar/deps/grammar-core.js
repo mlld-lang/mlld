@@ -48,14 +48,14 @@ export const helpers = {
     /**
      * Determines if the current position represents a directive context
      * A directive context requires:
-     * 1. @ symbol at logical line start
+     * 1. / symbol at logical line start
      * 2. Followed by a valid directive keyword
      */
     isAtDirectiveContext(input, pos) {
-        // First check if we're at an @ symbol
-        if (input[pos] !== '@')
+        // First check if we're at a / symbol
+        if (input[pos] !== '/')
             return false;
-        // Determine if this @ symbol is at a logical line start
+        // Determine if this / symbol is at a logical line start
         const isAtLineStart = this.isLogicalLineStart(input, pos);
         if (!isAtLineStart)
             return false;
@@ -155,12 +155,12 @@ export const helpers = {
                 name = input[j] + name;
                 j--;
             }
-            // Check for @ symbol indicating directive
-            if (j >= 0 && input[j] === '@') {
+            // Check for / symbol indicating directive
+            if (j >= 0 && input[j] === '/') {
                 // Valid assignment directives that can have nested directives in RHS
                 const validAssignmentDirectives = ['exec', 'text', 'data', 'run'];
                 if (validAssignmentDirectives.includes(name)) {
-                    // Check if the @ is at logical line start (to confirm it's a directive)
+                    // Check if the / is at logical line start (to confirm it's a directive)
                     if (this.isLogicalLineStart(input, j)) {
                         return true;
                     }

@@ -1,16 +1,16 @@
 // DATA DIRECTIVE
-// Implementation of the @data directive for defining data structures
+// Implementation of the /data directive for defining data structures
 
 /* 
 # Data Directive
 
 The data directive defines structured data objects and arrays.
 It can be used in these forms:
-1. @data varName = "string literal"              - Basic value assignment
-2. @data varName = { "key": "value" }            - Object assignment
-3. @data varName = [1, 2, 3]                     - Array assignment
-4. @data varName = { nested: { prop: "value" } } - Nested structure
-5. @data varName = @run command                  - Command output as data
+1. /data varName = "string literal"              - Basic value assignment
+2. /data varName = { "key": "value" }            - Object assignment
+3. /data varName = [1, 2, 3]                     - Array assignment
+4. /data varName = { nested: { prop: "value" } } - Nested structure
+5. /data varName = @run command                  - Command output as data
 */
 
 // Core content handlers (context, tokens, literals, whitespace, variables, fields, directives)
@@ -26,9 +26,9 @@ DottedIdentifier "Dotted Identifier"
       return first + rest.join('');
     }
 
-// Primary @data directive
+// Primary /data directive
 AtData
-  = DirectiveContext "@data" _ id:DottedIdentifier _ securityOptions:SecurityOptions? _ "=" _ value:DataValue {
+  = DirectiveContext "/data" _ "@" id:DottedIdentifier _ securityOptions:SecurityOptions? _ "=" _ value:DataValue {
       helpers.debug('AtData matched', { id, valueType: value.type });
       
       // Create variable reference node for identifier

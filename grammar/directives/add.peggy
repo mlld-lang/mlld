@@ -22,7 +22,7 @@ It can be used in these forms:
 // Primary @add directive with all variants
 AtAdd
   // Foreach section expression: @add foreach [@array.field # section] as [[template]]
-  = DirectiveContext "@add" _ expr:ForeachSectionExpression {
+  = DirectiveContext "/add" _ expr:ForeachSectionExpression {
       helpers.debug('AtAdd matched foreach section expression', { expr });
       
       // Extract the inner value from the ForeachSectionExpression
@@ -56,7 +56,7 @@ AtAdd
       );
     }
   // Foreach command expression: @add foreach @command(@arrays)
-  / DirectiveContext "@add" _ expr:ForeachCommandExpression {
+  / DirectiveContext "/add" _ expr:ForeachCommandExpression {
       helpers.debug('AtAdd matched foreach expression', { expr });
       
       // Extract the inner value from the ForeachCommandExpression
@@ -98,7 +98,7 @@ AtAdd
       );
     }
   // Double-bracketed path with section: [[path/to/file.md # Section]]
-  / DirectiveContext "@add" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
+  / DirectiveContext "/add" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
       helpers.debug('AtAdd matched double-bracketed path section', { content, rename });
       
       const rawPath = content.raw.split(' # ')[0];
@@ -142,7 +142,7 @@ AtAdd
       );
     }
   // Single-bracketed path with section: [path/to/file.md # Section]  
-  / DirectiveContext "@add" _ content:SemanticSectionContent rename:AsNewTitle? {
+  / DirectiveContext "/add" _ content:SemanticSectionContent rename:AsNewTitle? {
       helpers.debug('AtAdd matched bracketed path section', { content, rename });
       
       const rawPath = content.raw.split(' # ')[0];
@@ -185,7 +185,7 @@ AtAdd
         'section'  // Added source parameter
       );
     }
-  / DirectiveContext "@add" _ sectionTitle:QuotedContent _ "from" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ asTitle:AsNewTitle? {
+  / DirectiveContext "/add" _ sectionTitle:QuotedContent _ "from" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ asTitle:AsNewTitle? {
       // This rule should match section syntax FIRST before the template rule below
       helpers.debug('AtAdd matched section', { sectionTitle, path, asTitle, security });
       
@@ -233,7 +233,7 @@ AtAdd
         'section'  // Added source parameter
       );
     }
-  / DirectiveContext "@add" _ security:(SecurityOptions _)? template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/add" _ security:(SecurityOptions _)? template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       const securityOptions = security ? security[0] : null;
       helpers.debug('AtAdd matched template content', { template, headerLevel, underHeader });
       
@@ -295,7 +295,7 @@ AtAdd
       );
     }
   // Variable reference MUST come before exec invocation to match simple @varname first
-  / DirectiveContext "@add" _ security:(SecurityOptions _)? "@" varRef:VariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/add" _ security:(SecurityOptions _)? "@" varRef:VariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       const securityOptions = security ? security[0] : null;
       helpers.debug('AtAdd matched variable reference', { varRef, headerLevel, underHeader });
       
@@ -357,8 +357,8 @@ AtAdd
         'variable'  // Added source parameter
       );
     }
-  // Exec invocation with tail modifiers - @add @command() | @modifiers
-  / DirectiveContext "@add" _ "@" invocation:ExecInvocationWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  // Exec invocation with tail modifiers - /add @command() | @modifiers
+  / DirectiveContext "/add" _ "@" invocation:ExecInvocationWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched exec invocation with tail modifiers', { invocation, headerLevel, underHeader });
       
       // Extract command reference info
@@ -426,7 +426,7 @@ AtAdd
         'invocation'
       );
     }
-  / DirectiveContext "@add" _ security:(SecurityOptions _)? "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/add" _ security:(SecurityOptions _)? "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       const securityOptions = security ? security[0] : null;
       helpers.debug('AtAdd matched quoted string', { content, headerLevel, underHeader, securityOptions });
       
@@ -499,7 +499,7 @@ AtAdd
         'path'
       );
     }
-  / DirectiveContext "@add" _ !("[[") !('[' [^#\]]* '#') path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/add" _ !("[[") !('[' [^#\]]* '#') path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched path', { path, headerLevel, underHeader, security });
       
       // Extract header level and under header if provided

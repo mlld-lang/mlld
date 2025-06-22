@@ -1,13 +1,13 @@
 // IMPORT DIRECTIVE
-// Implementation of the @import directive for importing values from other Mlld files
+// Implementation of the /import directive for importing values from other Mlld files
 
 /* 
 # Import Directive
 
 The import directive brings in variables from other Mlld files.
 It can be used in these forms:
-1. @import {var1, var2} from "path/to/file"  - Import specific variables
-2. @import {*} from "path/to/file"          - Import all variables
+1. /import {var1, var2} from "path/to/file"  - Import specific variables
+2. /import {*} from "path/to/file"          - Import all variables
 */
 
 // Core content handlers (context, tokens, whitespace, variables, path)
@@ -17,14 +17,14 @@ It can be used in these forms:
 // TOP-LEVEL IMPORT DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @import directive
+// Primary /import directive
 AtImport
   = AtImportShorthand
   / AtImportFull
 
-// Shorthand import: @import [path] or @import @input
+// Shorthand import: /import [path] or /import @input
 AtImportShorthand
-  = DirectiveContext "@import" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? {
+  = DirectiveContext "/import" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? {
       helpers.debug('AtImportShorthand matched', { path, ttl, tail });
       
       // Shorthand always imports all (*)
@@ -73,7 +73,7 @@ AtImportShorthand
 
 // Full import with explicit imports list
 AtImportFull
-  = DirectiveContext "@import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? {
+  = DirectiveContext "/import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? {
       helpers.debug('AtImport matched', { imports, path, ttl, tail });
       
       // Get the raw imports text
@@ -218,8 +218,23 @@ BracketImportPath
 
 // Quoted path for imports
 QuotedPath
-  = "\"" content:$([^"]*) "\"" {
-      helpers.debug('QuotedPath matched', { content });
+  = content:InterpolatedDoubleQuoteContent {
+      helpers.debug('QuotedPath matched with interpolation', { content });
+      const rawPath = helpers.reconstructRawString(content);
+      return {
+        type: 'path',
+        subtype: 'filePath',
+        values: { 
+          path: content
+        },
+        raw: { 
+          path: rawPath
+        },
+        meta: helpers.createPathMetadata(rawPath, content)
+      };
+    }
+  / "'" content:$([^']*) "'" {
+      helpers.debug('QuotedPath matched single quotes (literal)', { content });
       return {
         type: 'path',
         subtype: 'filePath',

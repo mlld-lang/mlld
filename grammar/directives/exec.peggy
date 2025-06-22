@@ -1,25 +1,25 @@
 // EXEC DIRECTIVE
-// Implementation of the @exec directive for defining executable commands and code
+// Implementation of the /exec directive for defining executable commands and code
 
 /* 
 # Exec Directive
 
 The exec directive defines named commands or code blocks that can be executed
-by the @run directive. It can be used in these forms:
-1. @exec cmdName (param1, param2) = @run command-string   - Define a shell command
-2. @exec fnName (param1) = @run js [code-block]           - Define a code function
-3. @exec alias (param1) = @run @otherCmd                  - Define a command reference
+by the /run directive. It can be used in these forms:
+1. /exec cmdName (param1, param2) = @run command-string   - Define a shell command
+2. /exec fnName (param1) = @run js [code-block]           - Define a code function
+3. /exec alias (param1) = @run @otherCmd                  - Define a command reference
 
 # Unified Executable Syntax (Phase 2 Implementation)
 
 The exec directive is being extended to support unified executable syntax:
-1. @exec greeting(name) = [[Hello {{name}}!]]       - Template executable with {{var}} interpolation
-2. @exec greeting(name) = `Hello @name!`            - Template executable with @var interpolation
-3. @exec build(env) = [(npm run build:@env)]        - Command executable
-4. @exec calculate(x) = js [(return @x * 2)]        - Code executable
-5. @exec getSection(file, section) = [@file # @section] - Section executable
-6. @exec getSection(file, section, newheader) = [@file # @section] as @newheader - Section with rename
-7. @exec fetchData(endpoint, parameter) = @resolver/api/@endpoint/@parameter - Resolver executable
+1. /exec greeting(name) = [[Hello {{name}}!]]       - Template executable with {{var}} interpolation
+2. /exec greeting(name) = `Hello @name!`            - Template executable with @var interpolation
+3. /exec build(env) = {npm run build:@env}        - Command executable
+4. /exec calculate(x) = js {return @x * 2}        - Code executable
+5. /exec getSection(file, section) = [@file # @section] - Section executable
+6. /exec getSection(file, section, newheader) = [@file # @section] as @newheader - Section with rename
+7. /exec fetchData(endpoint, parameter) = @resolver/api/@endpoint/@parameter - Resolver executable
 */
 
 // Core content handlers (context, tokens, whitespace, variables, command, code)
@@ -29,10 +29,10 @@ The exec directive is being extended to support unified executable syntax:
 // TOP-LEVEL EXEC DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @exec directive - supporting command, code, and environment syntax
+// Primary /exec directive - supporting command, code, and environment syntax
 AtExec
-  = DirectiveContext "@exec" _ id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" {
-      // Environment declaration syntax: @exec js = { helperA, helperB }
+  = DirectiveContext "/exec" _ "@" id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" {
+      // Environment declaration syntax: /exec js = { helperA, helperB }
       helpers.debug('AtExec matched environment declaration', { id, envVars });
       
       // Create identifier node
@@ -64,9 +64,9 @@ AtExec
         'environment'
       );
     }
-  // Code executable: @exec name(params) = js [(code)]
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ codeCore:RunLanguageCodeCore withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      // Code syntax: @exec fn() = language [(code)]
+  // Code executable: /exec name(params) = js {code}
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ codeCore:RunLanguageCodeCore withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      // Code syntax: /exec fn() = language {code}
       helpers.debug('AtExec matched with RunLanguageCodeCore', { id, params, codeCore, trust });
       
       // Create identifier node
@@ -124,9 +124,9 @@ AtExec
         'code'
       );
     }
-  // Command executable: @exec name(params) = [(command)]
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      // Command syntax: @exec cmd() = [(command)]
+  // Command executable: /exec name(params) = {command}
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      // Command syntax: /exec cmd() = {command}
       helpers.debug('AtExec matched with command', { id, params, content, trust });
       
       // Create identifier node
@@ -182,8 +182,8 @@ AtExec
         'command'
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      // Command syntax: @exec cmd() = @run [(command)]
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      // Command syntax: /exec cmd() = @run {command}
       helpers.debug('AtExec matched with command', { id, params, content, trust });
       
       // Create identifier node
@@ -239,7 +239,7 @@ AtExec
         'command'
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('AtExec matched command reference', { id, params, commandRef, trust });
       
       // Create identifier node
@@ -304,8 +304,8 @@ AtExec
         'reference'  // Added source parameter
       );
     }
-  // Template executable: @exec name(params) = [[template]] or `template`
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ template:TemplateCore withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  // Template executable: /exec name(params) = [[template]] or `template`
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ template:TemplateCore withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('AtExec matched template executable', { id, params, template, trust });
       
       // Create identifier node
@@ -359,8 +359,8 @@ AtExec
         'template'
       );
     }
-  // Section executable: @exec name(params) = [@file # @section] [as @newheader]
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "[" _ "@" pathParam:BaseIdentifier fields:AnyFieldAccess* _ "#" _ section:SectionIdentifier _ "]" rename:ExecAsNewTitle? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  // Section executable: /exec name(params) = [@file # @section] [as @newheader]
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "[" _ "@" pathParam:BaseIdentifier fields:AnyFieldAccess* _ "#" _ section:SectionIdentifier _ "]" rename:ExecAsNewTitle? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('AtExec matched section executable', { id, params, pathParam, section, rename, trust });
       
       // Create identifier node
@@ -432,9 +432,9 @@ AtExec
         'section'
       );
     }
-  // Resolver executable: @exec name(params) = @resolver/path [{ @payload }]
-  // Direct command reference: @exec alias() = @other
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" commandRef:BaseIdentifier !"/" withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  // Resolver executable: /exec name(params) = @resolver/path [{ @payload }]
+  // Direct command reference: /exec alias() = @other
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" commandRef:BaseIdentifier !"/" withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('AtExec matched direct command reference', { id, params, commandRef, trust });
       
       // Create identifier node
@@ -487,7 +487,7 @@ AtExec
         'reference'
       );
     }
-  / DirectiveContext "@exec" _ id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" resolver:ResolverPathPattern payload:ExecResolverPayload? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" resolver:ResolverPathPattern payload:ExecResolverPayload? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('AtExec matched resolver executable', { id, params, resolver, trust });
       
       // Create identifier node

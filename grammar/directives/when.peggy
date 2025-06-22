@@ -1,13 +1,13 @@
 // WHEN DIRECTIVE
-// Implementation of the @when directive for conditional execution
+// Implementation of the /when directive for conditional execution
 
 /* 
 # When Directive
 
 The when directive provides conditional execution based on truthiness.
 It can be used in two main forms:
-1. @when <condition> => <action>                    - Simple conditional
-2. @when <var> <modifier>: [conditions] => <action> - Block conditional with modifiers
+1. /when <condition> => <action>                    - Simple conditional
+2. /when <var> <modifier>: [conditions] => <action> - Block conditional with modifiers
 
 Modifiers:
 - first: Execute the first truthy condition's action
@@ -22,18 +22,18 @@ Modifiers:
 // TOP-LEVEL WHEN DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @when directive
+// Primary /when directive
 AtWhen
   = WhenSimpleForm
   / WhenBlockForm
   / WhenSwitchForm
 
 // -------------------------------------------------------------
-// SIMPLE FORM: @when <condition> => <action>
+// SIMPLE FORM: /when <condition> => <action>
 // -------------------------------------------------------------
 
 WhenSimpleForm
-  = DirectiveContext "@when" _ condition:WhenSimpleCondition _ "=>" _ action:WhenAction {
+  = DirectiveContext "/when" _ condition:WhenSimpleCondition _ "=>" _ action:WhenAction {
       helpers.debug('WhenSimpleForm matched', { condition, action });
       
       return helpers.createStructuredDirective(
@@ -55,11 +55,11 @@ WhenSimpleForm
     }
 
 // -------------------------------------------------------------
-// SWITCH FORM: @when <expression>: [value => action, ...]
+// SWITCH FORM: /when <expression>: [value => action, ...]
 // -------------------------------------------------------------
 
 WhenSwitchForm
-  = DirectiveContext "@when" _ expression:WhenConditionExpression _ ":" _ "[" _ conditions:WhenConditionList _ "]" {
+  = DirectiveContext "/when" _ expression:WhenConditionExpression _ ":" _ "[" _ conditions:WhenConditionList _ "]" {
       helpers.debug('WhenSwitchForm matched', { expression, conditions });
       
       return helpers.createStructuredDirective(
@@ -84,11 +84,11 @@ WhenSwitchForm
     }
 
 // -------------------------------------------------------------
-// BLOCK FORM: @when <var> <modifier>: [...] => <action>
+// BLOCK FORM: /when <var> <modifier>: [...] => <action>
 // -------------------------------------------------------------
 
 WhenBlockForm
-  = DirectiveContext "@when" _ variable:("@" id:BaseIdentifier { return id; })? _ 
+  = DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ 
     modifier:WhenModifier? _ ":" _ "[" _ conditions:WhenConditionList _ "]" 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
@@ -195,13 +195,13 @@ NonNegatedSimpleCondition
   // Deliberately exclude literals - these will cause parse errors with helpful message
   / value:(BooleanLiteral / NullLiteral / StringLiteral) {
       error(
-        '@when directive requires a variable reference, not a literal value.\n' +
+        '/when directive requires a variable reference, not a literal value.\n' +
         'Use a variable instead:\n' +
-        '   @when true => ...  (incorrect)\n' +
-        '   @text condition = "true"\n' +
-        '   @when @condition => ...  (correct)\n\n' +
+        '   /when true => ...  (incorrect)\n' +
+        '   /text condition = "true"\n' +
+        '   /when @condition => ...  (correct)\n\n' +
         'For switch-style conditions with literal values, use:\n' +
-        '   @when @variable: [\n' +
+        '   /when @variable: [\n' +
         '     true => ...\n' +
         '     false => ...\n' +
         '   ]'
@@ -278,12 +278,12 @@ WhenConditionList
 WhenConditionSeparator
   = _ "," _ {
       error(
-        'Comma separators are not allowed in @when conditions. ' +
-        'For readability, @when conditions must be separated by whitespace (newlines or spaces) instead of commas.\n' +
+        'Comma separators are not allowed in /when conditions. ' +
+        'For readability, /when conditions must be separated by whitespace (newlines or spaces) instead of commas.\n' +
         '💡 Remove the comma and use a newline or space:\n' +
-        '   @when expr: [value1 => action1, value2 => action2]  ❌\n' +
-        '   @when expr: [value1 => action1  value2 => action2]  ✅\n' +
-        '   @when expr: [\n' +
+        '   /when expr: [value1 => action1, value2 => action2]  ❌\n' +
+        '   /when expr: [value1 => action1  value2 => action2]  ✅\n' +
+        '   /when expr: [\n' +
         '     value1 => action1\n' +
         '     value2 => action2\n' +
         '   ]  ✅'

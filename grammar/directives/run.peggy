@@ -1,14 +1,14 @@
 // RUN DIRECTIVE
-// Implementation of the @run directive for executing commands and code
+// Implementation of the /run directive for executing commands and code
 
 /* 
 # Run Directive
 
 The run directive executes shell commands, code blocks, or references to exec-defined variables.
 It can be used in three main forms:
-1. @run command-string        - Execute a shell command
-2. @run language [code-block] - Execute a code block in the specified language
-3. @run @commandVariable      - Execute a previously defined command/code reference
+1. /run command-string        - Execute a shell command
+2. /run language [code-block] - Execute a code block in the specified language
+3. /run @commandVariable      - Execute a previously defined command/code reference
 */
 
 // Core content handlers (context, tokens, whitespace, variables, command, code)
@@ -18,11 +18,100 @@ It can be used in three main forms:
 // TOP-LEVEL RUN DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @run directive - Supporting both command and code syntax
+// Primary /run directive - Supporting both command and code syntax
 // Order matters: most specific patterns first
 AtRun
-  = DirectiveContext "@run" _ security:(SecurityOptions _)? codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? comment:InlineComment? {
-      // Language + code syntax: @run language [(code)] or @run language (args) [(code)]
+  = DirectiveContext "/run" _ security:(SecurityOptions _)? "\"" command:$([^"]*) "\"" tail:TailModifiers? comment:InlineComment? {
+      // Quoted command syntax: /run "echo hello"
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtRun matched quoted command', { command, securityOptions, tail });
+      
+      // Parse the command string to extract parts
+      const parts = helpers.parseCommandContent(command);
+      
+      // Extract command base
+      let commandBases = [];
+      let rawBases = [];
+      
+      if (parts.length > 0 && parts[0].type === NodeType.Text) {
+        const cmdMatch = parts[0].content.match(/^(\S+)/);
+        if (cmdMatch) {
+          commandBases.push(helpers.createNode(NodeType.CommandBase, {
+            command: cmdMatch[1],
+            location: location()
+          }));
+          rawBases.push(cmdMatch[1]);
+        }
+      }
+      
+      const meta = {
+        isMultiLine: false,
+        commandCount: commandBases.length,
+        hasScriptRunner: false,
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+      
+      const values = {
+        command: parts,
+        commandBases: commandBases
+      };
+      
+      const raw = {
+        command: command,
+        commandBases: rawBases
+      };
+      
+      // Add withClause from tail if present
+      if (tail) {
+        values.withClause = tail;
+        raw.withClause = tail;
+        meta.withClause = tail;
+      }
+      
+      return helpers.createStructuredDirective(
+        'run',
+        'runCommand',
+        values,
+        raw,
+        meta,
+        location(),
+        'command'
+      );
+    }
+  / DirectiveContext "/run" _ security:(SecurityOptions _)? content:UnifiedCommandBrackets tail:TailModifiers? comment:InlineComment? {
+      // Command syntax: /run {command}
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('AtRun matched command', { content, securityOptions, tail });
+      
+      const meta = {
+        ...content.meta,
+        ...helpers.createSecurityMeta(securityOptions),
+        ...(comment ? { comment } : {})
+      };
+      
+      const values = content.values;
+      const raw = content.raw;
+      
+      // Add withClause from tail if present
+      if (tail) {
+        values.withClause = tail;
+        raw.withClause = tail;
+        meta.withClause = tail;
+      }
+      
+      return helpers.createStructuredDirective(
+        'run',
+        content.subtype,
+        values,
+        raw,
+        meta,
+        location(),
+        content.type
+      );
+    }
+  / DirectiveContext "/run" _ security:(SecurityOptions _)? codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? comment:InlineComment? {
+      // Language + code syntax: /run language {code} or /run language (args) {code}
       const securityOptions = security ? security[0] : null;
       helpers.debug('AtRun matched with language code pattern', { codeCore, securityOptions, tail });
       
@@ -54,8 +143,8 @@ AtRun
         'code'
       );
     }
-  / DirectiveContext "@run" _ security:(SecurityOptions _)? content:UnifiedCommandBrackets tail:TailModifiers? comment:InlineComment? {
-      // Command syntax: @run [(command)]
+  / DirectiveContext "/run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference tail:TailModifiers? comment:InlineComment? {
+      // Command syntax: /run {command}
       const securityOptions = security ? security[0] : null;
       helpers.debug('AtRun matched command', { content, securityOptions, tail });
       
@@ -85,7 +174,7 @@ AtRun
         content.type
       );
     }
-  / DirectiveContext "@run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference tail:TailModifiers? comment:InlineComment? {
+  / DirectiveContext "/run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference tail:TailModifiers? comment:InlineComment? {
       // @ detected -> Command reference (exec)
       const securityOptions = security ? security[0] : null;
       helpers.debug('AtRun matched command reference', { commandRef, securityOptions, tail });
@@ -131,7 +220,7 @@ AtRun
 // Run directive reference in RHS contexts (nested in other directives)
 RunDirectiveRef
   = codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) {
-      // Language + code syntax in RHS: language [(code)] or language (args) [(code)]
+      // Language + code syntax in RHS: language {code} or language (args) {code}
       helpers.debug('RunDirectiveRef matched language + code in RHS', { codeCore });
       
       // Use values and raw from the core pattern
@@ -197,7 +286,7 @@ RunDirectiveRef
 // HELPER RULES
 // -------------------------------------------------------------
 
-// Command reference structure (for @run @command with field access support)
+// Command reference structure (for /run @command with field access support)
 RunCommandReference
   = identifier:BaseIdentifier fields:AnyFieldAccess* _ args:RunCommandArguments? {
       // Process arguments if present

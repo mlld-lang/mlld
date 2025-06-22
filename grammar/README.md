@@ -336,40 +336,48 @@ AtRun
 
 **CRITICAL**: Before making ANY grammar changes, you MUST update the relevant parse tree documentation below. The tree must accurately reflect the parsing decisions and semantic choices. This is not optional.
 
-### @run Directive
+### /run Directive
 
 ```
-@run ...
+/run ...
 ├─ Command content
 │  ├─ Language keyword detected (js, python, bash, etc.)?
 │  │  ├─ YES: Code execution mode
 │  │  │  ├─ Check for optional inline arguments?
-│  │  │  │  ├─ YES: "@run js (x, y) [(return x + y)]"
+│  │  │  │  ├─ YES: "/run js (x, y) {return x + y}"
 │  │  │  │  │  └─ Inline function with parameters
 │  │  │  │  │     ├─ Language specified
 │  │  │  │  │     ├─ Arguments for the code
-│  │  │  │  │     └─ [(code content)]
+│  │  │  │  │     └─ {code content}
 │  │  │  │  │        ├─ Parameters available as @x, @y
 │  │  │  │  │        ├─ No other @ variable processing
-│  │  │  │  │        ├─ Preserve all [brackets]
+│  │  │  │  │        ├─ Preserve all {braces} and [brackets]
 │  │  │  │  │        └─ Preserve all quotes
 │  │  │  │  │
-│  │  │  │  └─ NO: "@run js [(console.log('test'))]"
+│  │  │  │  └─ NO: "/run js {console.log('test')}"
 │  │  │  │     └─ Simple code execution
-│  │  │  │        └─ [(code content)]
+│  │  │  │        └─ {code content}
 │  │  │  │           ├─ No @ variable processing in code
-│  │  │  │           ├─ Preserve all [brackets]
+│  │  │  │           ├─ Preserve all {braces} and [brackets]
 │  │  │  │           └─ Preserve all quotes
 │  │  │  │
-│  ├─ "[(" detected?
-│  │  ├─ YES: "@run [(command)]"
+│  ├─ "{" detected?
+│  │  ├─ YES: "/run {command}"
 │  │  │  └─ Command execution mode
 │  │  │     └─ CommandParts with @var interpolation
 │  │  │        ├─ @var → Variable reference
 │  │  │        └─ text → Command text segments
 │  │  │
+│  ├─ '"' detected?
+│  │  ├─ YES: "/run "command with spaces""
+│  │  │  └─ Quoted command execution mode
+│  │  │     ├─ Double quotes: WITH @var interpolation
+│  │  │     │  └─ /run "echo Hello @name" (@name gets expanded)
+│  │  │     └─ Single quotes: No interpolation
+│  │  │        └─ /run 'echo Hello @name' (outputs literal @name)
+│  │  │
 │  ├─ "@" detected?
-│  │  ├─ YES: "@run @command"
+│  │  ├─ YES: "/run @command"
 │  │  │  └─ Command reference (exec)
 │  │  │
 │  └─ Other patterns
@@ -382,13 +390,15 @@ AtRun
    └─ with { trust: <level>, pipeline: [...], needs: {...} }
 
 Examples:
-- @run [(echo "Hello")]
-- @run js [(console.log('test'))]
-- @run js (x, y) [(return x + y)]  # Inline function parameters
-- @run [(rm -rf temp/)] trust always
-- @run [(curl api.com)] | @validate @parse
-- @run @deploy(prod) trust always
-- @run [(npm test)] with { needs: { node: { jest: "^29.0.0" } } }
+- /run {echo "Hello"}
+- /run "echo Hello @name"         # Double quotes WITH @var interpolation
+- /run 'cat file.txt'            # Single quotes (no interpolation)
+- /run js {console.log('test')}
+- /run js (x, y) {return x + y}  # Inline function parameters
+- /run {rm -rf temp/} trust always
+- /run {curl api.com} | @validate @parse
+- /run @deploy(prod) trust always
+- /run {npm test} with { needs: { node: { jest: "^29.0.0" } } }
 ```
 
 ### Command Parsing Logic Tree
@@ -396,13 +406,13 @@ Examples:
 **CRITICAL**: This tree documents the ACTUAL implementation in `patterns/unified-run-content.peggy` as of the current codebase.
 
 ```
-@run [(echo '<div>Hello</div>')]
+/run {echo '<div>Hello</div>'}
 │
 ├─ AtRun (directives/run.peggy)
-│  ├─ "@run" ✓
+│  ├─ DirectiveMarker "run" ✓
 │  ├─ _ (whitespace) ✓
 │  └─ UnifiedCommandBrackets
-│     ├─ "[(" ✓
+│     ├─ "{" ✓
 │     ├─ _ ✓
 │     ├─ UnifiedCommandParts
 │     │  └─ UnifiedCommandToken* (zero or more tokens)
@@ -423,7 +433,7 @@ Examples:
 │     │     │  │        ├─ Not a quote → continue
 │     │     │  │        ├─ Not a space → continue
 │     │     │  │        ├─ Not @ → continue
-│     │     │  │        ├─ Not )] → continue
+│     │     │  │        ├─ Not } → continue
 │     │     │  │        ├─ Security checks pass → ✓
 │     │     │  │        └─ Returns: Text node "echo"
 │     │     │  │
@@ -446,7 +456,7 @@ Examples:
 │     │     └─ Result: Array of 3 Text nodes
 │     │
 │     ├─ _ ✓
-│     └─ ")]" ✓
+│     └─ "}" ✓
 │
 └─ Success: Command parsed with quoted content preserved
 ```
@@ -475,273 +485,189 @@ The token-based approach ensures that:
 2. **Security checks everywhere**: Only in unquoted content (UnifiedCommandWordChar)
 3. **Quote consumption**: Quotes are preserved in the output, not consumed
 
-### @text Directive (Target Design)
+### /text Directive
 
 ```
-@text name = ...
+/text @name = ...
 ├─ "[[" detected?
 │  ├─ YES: Template
 │  │  └─ [[TemplateContent]]
 │  │     └─ {{var}} interpolation only
 │  │
 ├─ "[" detected?
-│  ├─ YES: Could be path or section
+│  ├─ YES: Could be path or section (SEMANTIC FORK)
 │  │  ├─ Contains " # "?
 │  │  │  ├─ YES: [SectionExtraction]
 │  │  │  │  └─ [path # section]
 │  │  │  └─ NO: [PathContent]
 │  │  │     └─ [/path/to/@var/file]
+│  │  │        └─ LOADS FILE CONTENTS
 │  │
 ├─ "@" detected?
-│  ├─ YES: Variable, invocation, or @run
-│  │  ├─ @varname → Variable reference (no modifiers)
-│  │  ├─ @command(args) [tail modifiers]
-│  │  │  ├─ Exec invocation with optional modifiers
-│  │  │  └─ Template invocation with optional modifiers
-│  │  └─ @run [...] [tail modifiers]
-│  │     └─ Direct run command
+│  ├─ YES: Variable or /run
+│  │  ├─ @varname → Variable reference
+│  │  └─ /run {...} → Direct run command
 │  │
 ├─ "`" detected?
 │  ├─ YES: BacktickTemplate
-│  │  └─ `TemplateContent with @var`
-│  │     └─ @var interpolation (simpler than [[{{var}}]])
+│  │  └─ `Multi-line template with @var and @func(args)`
+│  │     ├─ @var interpolation (simpler than [[{{var}}]])
+│  │     ├─ @func(args) function calls supported
+│  │     └─ Multi-line capable (spans newlines)
+│  │
+├─ "`" detected?
+│  ├─ YES: BacktickTemplate  
+│  │  └─ `Multi-line template with @var and @func(args)`
+│  │     ├─ @var interpolation (simpler than [[{{var}}]])
+│  │     ├─ @func(args) function calls supported
+│  │     └─ Multi-line capable (spans newlines)
 │  │
 └─ '"' or "'" detected?
-   └─ QuotedLiteral
-      └─ "simple string" (no interpolation)
+   └─ QuotedString
+      ├─ "string with @var interpolation" 
+      └─ 'string literal' (NO interpolation)
 
 Examples:
-- @text greeting = "Hello, world!"
-- @text content = [[Welcome {{user}}!]]
-- @text link = `[@url.path](@url.name)`           # Backtick with @var interpolation
-- @text data = @fetchData() | @parse              # Direct exec with pipeline
-- @text secure = @getSecrets() trust always       # Direct exec with trust
-- @text result = @process() with { trust: verify, pipeline: [@validate] }
-- @text cmd = @run [(echo "test")] | @uppercase  # Direct run with pipeline
+- /text @greeting = "Hello, world!"          # String literal (no @vars)
+- /text @welcome = "Hello @name!"            # String with @name expansion
+- /text @literal = 'Hello @name!'            # String literal (NO expansion)
+- /text @content = [[Welcome {{user}}!]]      # Template with {{user}} expansion
+- /text @fileData = [./config.json]           # LOADS file contents
+- /text @dynamic = "./configs/@env/data.json" # String with @env expansion
+- /text @link = `[@url.path](@url.name)`      # Backtick template
+- /text @data = /run {curl api.com} | @parse  # Direct run command
 ```
 
-### @data Directive (Target Design)
+### /data Directive
 
 ```
-@data obj = ...
+/data @obj = ...
 ├─ "{" detected?
 │  ├─ YES: ObjectLiteral
 │  │  └─ { key: DataValue, ... }
 │  │     └─ DataValue can be:
 │  │        ├─ Primitive: "string", 123, true
-│  │        ├─ @command(args) [tail modifiers]
-│  │        ├─ @run [...] [tail modifiers]
+│  │        ├─ @variable reference
+│  │        ├─ [path] → LOADS contents
 │  │        └─ Nested object/array
 │  │
 ├─ "[" detected?
-│  ├─ YES: ArrayLiteral
-│  │  └─ [DataValue, DataValue, ...]
-│  │     └─ Same DataValue options as above
+│  ├─ YES: Could be array OR path (CONTEXT MATTERS)
+│  │  ├─ First element suggests array? ([1, 2, 3])
+│  │  │  └─ ArrayLiteral
+│  │  └─ Looks like path? ([./file.md])
+│  │     └─ LOADS FILE CONTENTS
 │  │
-├─ "foreach" detected? → SEMANTIC FORKING
-│  ├─ YES: Foreach pattern analysis
-│  │  │
-│  │  ├─ Look ahead for pattern type:
-│  │  │  ├─ "[@" found? → Section extraction foreach
-│  │  │  │  └─ foreach [@array.field # section] as [[template]]
-│  │  │  │     ├─ Parse section expression with variable/literal section
-│  │  │  │     └─ Apply template to each extracted section
-│  │  │  │
-│  │  │  └─ "@" found? → Command foreach  
-│  │  │     └─ foreach @command(@arrays) [tail modifiers]
-│  │  │        ├─ Traditional parameterized command iteration
-│  │  │        └─ Cartesian product for multiple arrays
+├─ "foreach" detected?
+│  ├─ YES: Foreach expression
+│  │  └─ foreach @command(@arrays)
 │  │
 ├─ "@" detected?
-│  ├─ YES: Variable, invocation, or @run
+│  ├─ YES: Variable or /run
 │  │  ├─ @varname → Variable reference
-│  │  ├─ @command(args) [tail modifiers]
-│  │  └─ @run [...] [tail modifiers]
+│  │  └─ /run {...} → Direct run command
 │  │
 └─ Other: PrimitiveValue
    └─ String, number, boolean, null
 
 Examples:
-- @data result = @fetchAPI("api.com") | @parse
-- @data secure = @checkAuth() trust always
-- @data items = foreach @process(@list) | @validate
-- @data sections = foreach [@files.path # tldr] as [[### {{files.name}}]]  # NEW
-- @data config = { 
-    api: @getEndpoint() trust always,
-    data: @fetchData() | @decrypt @parse
-  }
+- /data @config = { "path": "./data.json", "content": [./data.json] }
+  # "path" is string, "content" is loaded file contents
+- /data @users = [./users.json]    # Loads JSON file
+- /data @list = [1, 2, 3]          # Array literal
+- /data @result = /run {cat data.csv} | @csv
 ```
 
-### Foreach Section Extraction (NEW Pattern)
+
+### /exec Directive
 
 ```
-foreach [@array.field # section] as [[template]]
-├─ Semantic forking decision:
-│  ├─ "foreach" detected ✓
-│  ├─ Look ahead: "[" found ✓
-│  ├─ Look ahead: "@" after bracket ✓
-│  └─ Look ahead: " # " pattern ✓
-│     └─ SEMANTIC CHOICE: ForeachSectionExpression
-│
-├─ ForeachSectionExpression parsing:
-│  ├─ "foreach" keyword ✓
-│  ├─ _ (whitespace) ✓
-│  ├─ "[" section bracket start ✓
-│  ├─ "@" variable reference start ✓
-│  ├─ array:BaseIdentifier ("files") ✓
-│  ├─ "." field access ✓
-│  ├─ field:BaseIdentifier ("path") ✓
-│  ├─ _ (whitespace) ✓
-│  ├─ "#" section separator ✓
-│  ├─ _ (whitespace) ✓
-│  ├─ section:SectionIdentifier
-│  │  ├─ Literal section: "tldr" → Text node
-│  │  └─ Variable section: "@section" → VariableReference node
-│  ├─ "]" bracket end ✓
-│  ├─ _ (whitespace) ✓
-│  ├─ "as" keyword ✓
-│  ├─ _ (whitespace) ✓
-│  └─ template:TemplateCore
-│     └─ [[...]] → Template with {{var}} interpolation
-│        └─ Array variable name rebound to iteration item
-│
-├─ AST Structure:
-│  ├─ type: "foreach-section"
-│  ├─ arrayVariable: "files" (source array)
-│  ├─ pathField: "path" (field to access for file path)
-│  ├─ section: SectionIdentifier (literal or variable)
-│  ├─ template: TemplateCore (output format)
-│  └─ rebinding: "files" → iteration item context
-│
-└─ Execution semantics:
-   ├─ Resolve @files array
-   ├─ For each item in array:
-   │  ├─ Rebind "files" variable to current item
-   │  ├─ Extract section from item.path
-   │  ├─ Apply template with item context
-   │  └─ Collect result
-   └─ Return array of formatted results
-
-Examples:
-- foreach [@files.path # tldr] as [[### {{files.name}}]]
-  └─ Extract "tldr" section from each file's path, format with name
-
-- foreach [@docs.path # @docs.section] as [[## {{docs.title}}]]
-  └─ Extract variable section from each doc, format with title
-
-- foreach [@modules.file # interface] as [[```{{modules.lang}}\n@add [{{modules.file}} # interface]\n```]]
-  └─ Extract "interface" section, wrap in code blocks by language
-```
-
-### @exec Directive (Updated: Unified Executable Syntax)
-
-```
-@exec name(params) = ...
-├─ RHS semantic forking (no @run required):
+/exec @name(params) = ...
+├─ RHS patterns (no /run prefix needed):
 │  │
 │  ├─ Language keyword detected (js, python, bash, etc.)?
-│  │  ├─ YES: "@exec fn(x) = js [(code)]"
+│  │  ├─ YES: "/exec @fn(x) = js {code}"
 │  │  │  └─ Code execution mode
-│  │  │     └─ Language specified before brackets
-│  │  │        └─ [(code content)]
-│  │  │           ├─ @param references allowed
-│  │  │           ├─ No @ variable processing in code
-│  │  │           └─ Preserve all brackets and quotes
 │  │  │
-│  ├─ "[(" detected?
-│  │  ├─ YES: "@exec cmd(p) = [(command)]"
+│  ├─ "{" detected?
+│  │  ├─ YES: "/exec @cmd(p) = {command}"
 │  │  │  └─ Command execution mode
-│  │  │     └─ CommandParts with @param interpolation
-│  │  │        ├─ @param → Parameter reference
-│  │  │        └─ text → Command text segments
-│  │  │
-│  ├─ "[[" detected?
-│  │  ├─ YES: "@exec greeting(name) = [[template]]"
-│  │  │  └─ Template executable
-│  │  │     └─ [[text with {{param}}]]
-│  │  │        └─ {{param}} interpolation in templates
-│  │  │
-│  ├─ "`" detected?
-│  │  ├─ YES: "@exec msg(name) = `template`"
-│  │  │  └─ Backtick template executable
-│  │  │     └─ `text with @param`
-│  │  │        └─ @param interpolation (simpler syntax)
-│  │  │
-│  ├─ "[" with " # " pattern?
-│  │  ├─ YES: "@exec getSection(file, section) = [@file # @section]"
-│  │  │  └─ Section executable
-│  │  │     ├─ [@param # literal] → Extract literal section
-│  │  │     ├─ [@param # @param2] → Extract variable section
-│  │  │     └─ Optional: as @newheader → Rename section
-│  │  │
-│  ├─ "@" with "/" pattern?
-│  │  ├─ YES: "@exec fetch(endpoint, payload) = @resolver/api/@endpoint { @payload }"
-│  │  │  └─ Resolver executable
-│  │  │     ├─ Resolver path must contain "/"
-│  │  │     ├─ Path segments can include @param references
-│  │  │     └─ Optional: { @payload } → JSON payload
-│  │  │
-│  ├─ "@" without "/"?
-│  │  ├─ YES: "@exec alias() = @other"
-│  │  │  └─ Command reference (to another exec)
-│  │  │
-│  └─ "{" detected?
-│     └─ "@exec js = { helperA, helperB }"
-│        └─ Environment declaration (shadow functions)
-│
-└─ Tail modifier (optional)?
-   ├─ trust <level> → Security level
-   └─ with { trust: <level>, ... } → Extended modifiers
-
-Examples:
-- @exec deploy(env) = [(./deploy.sh @env)] trust always
-- @exec validate(data) = python [(validate(@data))]
-- @exec greet(name) = [[Hello {{name}}!]]
-- @exec greet2(name) = `Hello @name!`
-- @exec getIntro(file) = [@file # Introduction]
-- @exec getSection(file, section) = [@file # @section] as "Summary"
-- @exec fetchUser(id) = @resolver/api/users/@id
-- @exec postData(endpoint, data) = @resolver/api/@endpoint { @data }
-- @exec process(file) = [(cat @file)] | @transform
-- @exec js = { formatDate, parseJSON }
-```
-
-### @path Directive
-
-```
-@path var = ...
-├─ Path value
-│  ├─ "[" detected?
-│  │  ├─ YES: BracketPath
-│  │  │  └─ [@var/path/segments]
 │  │  │
 │  ├─ '"' detected?
-│  │  ├─ YES: QuotedPath
-│  │  │  └─ "path with spaces"
+│  │  ├─ YES: "/exec @cmd(p) = "command @p""
+│  │  │  └─ Quoted command mode WITH @p interpolation
+│  │  │
+│  ├─ "[[" detected?
+│  │  ├─ YES: "/exec @greeting(name) = [[template]]"
+│  │  │  └─ Template executable
+│  │  │
+│  ├─ "`" detected?
+│  │  ├─ YES: "/exec @msg(name) = `template`"
+│  │  │  └─ Backtick template executable
+│  │  │
+│  ├─ "[" with " # " pattern?
+│  │  ├─ YES: "/exec @getSection(file) = [@file # Introduction]"
+│  │  │  └─ Section executable (LOADS AND EXTRACTS)
+│  │  │
+│  ├─ "@" detected?
+│  │  ├─ YES: "/exec @alias() = @other"
+│  │  │  └─ Command reference
+│  │  │
+│  └─ "{" for environment?
+│     └─ "/exec @js = { helperA, helperB }"
+│        └─ Environment declaration
+
+Examples:
+- /exec @deploy(env) = {./deploy.sh @env}
+- /exec @deploy(env) = "./deploy.sh @env"      # Double quotes WITH @env expansion
+- /exec @literal(cmd) = './script.sh @cmd'     # Single quotes (no expansion)
+- /exec @greet(name) = [[Hello {{name}}!]]
+- /exec @greet2(name) = `Hello @name!`
+- /exec @getIntro(file) = [@file # Introduction]  # Loads & extracts
+- /exec @js = { formatDate, parseJSON }
+```
+
+### /path Directive
+
+```
+/path @var = ...
+├─ Path value (NO BRACKETS - paths are references, not content)
+│  ├─ '"' detected?
+│  │  ├─ YES: DoubleQuotedPath
+│  │  │  └─ "path with @var/interpolation"
+│  │  │     └─ @var expanded in double quotes
+│  │  │
+│  ├─ "'" detected?
+│  │  ├─ YES: SingleQuotedPath
+│  │  │  └─ 'literal path no @var'
+│  │  │     └─ No interpolation in single quotes
 │  │  │
 │  └─ No delimiter?
 │     └─ UnquotedPath
 │        └─ @var/path/segments
 │
+│  NOTE: NO BRACKET SYNTAX for /path
+│  Paths are references, not dereferenced content
+│
 ├─ TTL (optional)?
 │  └─ "(" duration ")"
-│     └─ See unified tail syntax tree
 │
 └─ Tail modifier (optional)?
    ├─ trust <level>
    └─ with { trust: <level>, ... }
 
 Examples:
-- @path config = ./config.json
-- @path api = https://api.com/data (5m)
-- @path docs = [https://docs.com/readme.md] (7d) trust always
-- @path secure = @baseUrl/endpoint (1h) with { trust: verify }
+- /path @config = ./config.json
+- /path @api = https://api.com/data (5m)
+- /path @secure = @baseUrl/endpoint (1h) trust always
+- /path @file = "path with spaces.txt"
+- /path @literal = 'no @interpolation here'
 ```
 
-### @import Directive
+### /import Directive
 
 ```
-@import ...
+/import ...
 ├─ Import pattern?
 │  ├─ { imports } from source → Selective import
 │  │  ├─ { var1, var2 } → Named imports
@@ -750,61 +676,42 @@ Examples:
 │  │
 │  └─ source (no braces) → Import all (implicit)
 │
-├─ Source types:
-│  ├─ @input → Special stdin/pipe input
-│  ├─ @author/module → Registry module
-│  ├─ @resolver/path/to/mod → Module with path
-│  ├─ [@var/path.mld] → Path with variables
-│  ├─ [path/to/file.mld] → Local file path
-│  ├─ [https://url.com/file] → Remote URL
-│  └─ "path/to/file.mld" → Quoted path
+├─ Source types (ALL LOAD CONTENT):
+│  ├─ @INPUT → Special stdin/pipe input
+│  ├─ @author/module → Registry module (implicit dereference)
+│  ├─ [path/to/file.mld] → Local file (explicit dereference)
+│  ├─ [https://url.com/file] → Remote URL (explicit dereference)
+│  └─ "path/to/file.mld" → Local file (traditional syntax)
 │
-├─ TTL (optional after source)?
-│  └─ (ttl) → Cache duration
-│     ├─ (5000) → Milliseconds
-│     ├─ (30s) → Seconds
-│     ├─ (5m) → Minutes
-│     ├─ (2h) → Hours
-│     ├─ (7d) → Days
-│     ├─ (2w) → Weeks
-│     └─ (static) → Cache forever
-│
-└─ Tail modifiers (optional)?
-   ├─ trust <level> → Security validation
-   │  ├─ always → Skip validation
-   │  ├─ never → Block entirely
-   │  └─ verify → Full validation (default)
-   │
-   └─ with { ... } → Multiple modifiers
-      └─ { trust: <level>, ... }
+└─ TTL and modifiers supported
 
-Full syntax examples:
-- @import { x, y } from [path/to/file.mld]
-- @import { x as X } from @author/module
-- @import [file.mld] (10d) trust always
-- @import { * } from [@pathvar/file.mld]
-- @import { data } from @input
-- @import @corp/utils (static) trust verify
-- @import [https://api.com/data.mld] (5m) with { trust: always }
+Examples:
+- /import { x, y } from [path/to/file.mld]
+- /import { x as X } from @author/module
+- /import [file.mld] (10d) trust always
+- /import { data } from @INPUT
+- /import { utils } from "./utils.mld"    # Traditional
 ```
 
-### @add Directive (Target Design)
+### /add Directive
 
 ```
-@add ...
-├─ "foreach" detected?
-│  ├─ YES: ForeachExpression
-│  │  └─ foreach @command(@arrays) [tail modifiers]
-│  │     ├─ Text concatenation mode
-│  │     ├─ Default separator: "\n"
-│  │     └─ Tail modifiers supported
-│  │
-├─ "[[" detected?
-│  ├─ YES: TemplateContent
-│  │  └─ [[text with {{vars}}]]
+/add ...
+├─ "foreach" detected? (HIGHEST PRIORITY)
+│  ├─ YES: ForeachExpression variants
+│  │  ├─ foreach @command(@arrays)
+│  │  │  ├─ Traditional command iteration
+│  │  │  ├─ Text concatenation mode
+│  │  │  ├─ Default separator: "\n"
+│  │  │  └─ Tail modifiers supported
+│  │  │
+│  │  └─ foreach [@array.field # section] as [[template]]
+│  │     └─ Section extraction foreach
+│  │        ├─ Extract sections from paths
+│  │        └─ Apply template to each
 │  │
 ├─ "[" detected?
-│  ├─ YES: PathOrSection (SEMANTIC FORKING)
+│  ├─ YES: PathOrSection (ALWAYS LOADS CONTENT)
 │  │  │
 │  │  ├─ Contains " # "? → Section Extraction
 │  │  │  └─ SemanticAddSectionContent
@@ -818,259 +725,170 @@ Full syntax examples:
 │  │     └─ SemanticPathContent
 │  │        └─ [path/with/@vars]
 │  │
+├─ "[[" detected?
+│  ├─ YES: TemplateContent
+│  │  └─ [[text with {{vars}}]]
+│  │
+├─ '"' detected?
+│  ├─ YES: Literal text output
+│  │  └─ "This text will be output as-is"
+│  │
 ├─ "@" detected?
 │  ├─ YES: Variable or invocation
 │  │  ├─ @varname → Variable reference
-│  │  └─ @command(args) [tail modifiers]
-│  │     ├─ Exec invocation
-│  │     └─ Template invocation
-│  │
-└─ '"' detected?
-   └─ LiteralContent
-      └─ "text to add"
-
-Examples:
-- @add [file.md # Introduction]        # Literal section
-- @add [file.md # @targetSection]      # Variable section (NEW)
-- @add @greeting("World") | @uppercase
-- @add @fetchData() trust always
-- @add foreach @process(@items) | @validate
-- @add @result    # Variable (no modifiers)
-```
-
-### @output Directive (Target Design)
-
-```
-@output ...
-├─ "@" detected?
-│  ├─ YES: Variable or invocation output
-│  │  ├─ @output @var [file.md]
-│  │  │  └─ Variable content → file (no modifiers)
-│  │  │
-│  │  ├─ @output @invocation(args) [tail modifiers] [file.md]
-│  │  │  ├─ Template invocation with optional modifiers
-│  │  │  └─ Exec invocation with optional modifiers
-│  │  │
-│  │  └─ @output @run [...] [tail modifiers] [file.md]
-│  │     └─ Direct run command with modifiers
-│  │
-│  └─ Followed by "[" path?
-│     └─ [path/to/file.md]
-│        └─ Path can have @var interpolation
-│
-├─ '"' string detected?
-│  ├─ YES: Output literal text
-│  │  └─ @output "text content" [file.md]
-│  │     └─ Literal text → file
-│  │
-├─ "[" path detected (no source)?
-│  ├─ YES: Output full document
-│  │  └─ @output [file.md]
-│  │     └─ Complete document → file
+│  │  └─ @command(args) → Exec invocation
 │  │
 └─ Other patterns
    └─ Parse error (invalid syntax)
 
 Examples:
-- @output [report.md]
-- @output @result [output.txt]                    # Variable (no modifiers)
-- @output @formatTemplate(data) | @minify [doc.md]  # Template with pipeline
-- @output @generateReport() trust always [report.pdf]  # Exec with trust
-- @output @process() | @validate @format [data.json]   # Exec with pipeline
-- @output @run [(curl api.com)] trust always [data.json]  # Run with trust
-- @output "Static content" [static.txt]
-
-Usage in @when blocks:
-- @when @condition => @output [file.md]
-- @when @hasData => @output @process() | @format [result.md]
-- @when @needsReport => @output @generate() with { trust: verify, pipeline: [@pdf] } [report.pdf]
+- /add [file.md # Introduction]        # Load and extract section
+- /add [README.md]                     # Load entire file
+- /add "This is literal text"          # Output text as-is
+- /add [[Welcome {{user}}!]]           # Template output
+- /add @greeting                       # Variable output
+- /add foreach @process(@items)        # Foreach command
+- /add foreach [@files.path # tldr] as [[### {{files.name}}]]  # Section foreach
 ```
 
-### @when Directive (Target Design)
+### /output Directive
 
 ```
-@when ...
-├─ Condition patterns (with tail modifier support)
-│  ├─ Simple: @when @condition => action
+/output ...
+├─ Source content
+│  ├─ "@" detected?
+│  │  ├─ @var → Output variable content
+│  │  └─ @cmd() → Output command result
+│  │
+│  └─ '"' detected?
+│     └─ "text" → Output literal text
+│
+└─ Target path (optional)
+   ├─ [path] → Path to write to (bracket = path reference)
+   └─ "path" → Path to write to (quote = path string)
+
+Examples:
+- /output [report.md]                  # Output doc to file
+- /output @result [output.txt]         # Variable to file
+- /output "Static text" [static.txt]   # Literal to file
+```
+
+### /when Directive
+
+```
+/when ...
+├─ Condition patterns
+│  ├─ Simple: /when @condition => action
 │  │  ├─ @condition → Variable/invocation to test
-│  │  │  ├─ @varname
-│  │  │  └─ @checkCondition() [tail modifiers]
 │  │  └─ action → Directive to execute if truthy
 │  │
-│  ├─ Multi with mode: @when @var mode: [conditions]
+│  ├─ Multi with mode: /when @var mode: [conditions]
 │  │  ├─ first: Execute first matching condition only
 │  │  ├─ any: Execute all matching conditions
 │  │  └─ all: Execute action only if all match
 │  │
-│  └─ Block action: @when @var: [...] => action
+│  └─ Block action: /when @var: [...] => action
 │     └─ Single action for all conditions
 │
 └─ Actions support full directive syntax
-   ├─ Direct exec invocations with tail modifiers
-   │  ├─ @deploy() trust always
-   │  ├─ @notify() | @format @send
-   │  └─ @process() with { trust: verify, pipeline: [@log] }
-   │
-   ├─ @run commands with tail modifiers
-   ├─ @output with tail modifiers
-   ├─ @text assignments
-   └─ Any directive (all support exec tail modifiers)
+   ├─ Direct exec invocations
+   ├─ /run commands
+   ├─ /output directives
+   ├─ /text assignments
+   └─ Any directive
 
 Examples:
-- @when @isProduction => @deploy() trust always
-- @when @hasData() => @process() | @validate @save  
-- @when @needsAuth() | @isExpired => @authenticate() trust verify
-- @when @results any: [
-    @success => @notify("success") | @format,
-    @warning => @logWarning() trust always,
-    @error => @alertTeam() with { pipeline: [@urgent, @send] }
+- /when @isProduction => /deploy() trust always
+- /when @hasData => /output @report [report.md]
+- /when @results any: [
+    @success => /notify("success"),
+    @warning => /logWarning(),
+    @error => /alertTeam()
   ]
 ```
 
-### Exec-Defined Command Invocations (Target Design)
 
-```
-@commandName(args) [tail modifiers] - Unified invocation syntax
-├─ Base invocation
-│  ├─ @commandName → Exec-defined command reference
-│  ├─ (args) → Arguments passed to command
-│  └─ [tail modifiers] → Optional modifiers (same everywhere)
-│
-├─ Tail modifiers (available on ALL exec invocations)
-│  ├─ trust <level>
-│  ├─ | @filter @format
-│  ├─ pipeline [...]
-│  └─ with { trust: <level>, pipeline: [...] }
-│
-└─ Supported contexts (all with full tail modifier support)
-   ├─ @add @greet() | @uppercase
-   ├─ @text message = @format(data) trust always
-   ├─ @data results = foreach @process(@items) | @validate
-   ├─ @when @isReady() => @deploy() trust always
-   └─ @output @generate() | @format @minify [file.md]
 
-Grammar normalization:
-- All exec invocations with tail modifiers → RunExecReference AST node
-- Tail modifiers parsed consistently across all directives
-- Same withClause structure as @run directive
+## Critical Semantic Preservation
 
-Complete example:
-# Define commands and templates
-@exec fetchAPI(url) = @run [(curl -s @url)]
-@exec processData(json) = @run python [(process_json(@json))]
-@text greeting(name, title) = [[Hello {{title}} {{name}}!]]
+### String Interpolation Rules
 
-# Unified syntax - tail modifiers work everywhere
-@add @greeting("Smith", "Dr.") | @uppercase               # Pipeline on template
-@text secure = @fetchAPI("api.com") trust always          # Trust on exec
-@data results = foreach @processData(@items) | @validate   # Pipeline on foreach
-@when @hasData() => @output @generate() | @format [doc.md] # Pipeline on output
-@output @fetchAPI("api/report") with {                    # Full with clause
-  trust: verify,
-  pipeline: [@validateJSON, @extractData, @format]
-} [report.json]
+**Standardized behavior across ALL directives:**
 
-Examples:
-# Define commands
-@exec fetchData(endpoint) = @run [(curl @endpoint)]
-@exec process(data) = @run python [(process(@data))]
-@exec deploy(env) = @run [(./deploy.sh @env)]
-
-# Use with tail modifiers
-@text apiData = @run @fetchData("api/users") | @validateJSON @extractUsers
-@data config = @run @process(rawConfig) trust always
-@when @isProduction => @run @deploy("prod") with { trust: verify }
-@output @run @generate("report") | @format [report.md]
-```
-
-### Unified Tail Syntax (Target Design)
-
-```
-Tail Modifiers - Available on ALL command executions
-├─ Where tail modifiers apply:
-│  ├─ @run directives
-│  │  ├─ @run [(command)] [tail]
-│  │  └─ @run @execRef(args) [tail]
-│  │
-│  ├─ Exec invocations (anywhere)
-│  │  ├─ @text var = @cmd() [tail]
-│  │  ├─ @data var = @cmd() [tail]
-│  │  ├─ @add @cmd() [tail]
-│  │  ├─ @output @cmd() [tail] [path]
-│  │  ├─ @when @cond() [tail] => action
-│  │  └─ foreach @cmd() [tail]
-│  │
-│  └─ @exec definitions
-│     └─ @exec name() = @run [...] [tail]
-│
-├─ TTL (path/import only - special position)
-│  └─ @path url = source (ttl) [tail]
-│     └─ @import source (ttl) [tail]
-│
-└─ Tail modifier syntax
-   ├─ Single keyword sugar:
-   │  ├─ trust <level> → { trust: <level> }
-   │  ├─ pipeline [...] → { pipeline: [...] }
-   │  ├─ | @cmd @cmd → { pipeline: [@cmd, @cmd] }
-   │  └─ needs {...} → { needs: {...} }
-   │
-   └─ with {...} → Multiple properties
-      ├─ trust: always/never/verify
-      ├─ pipeline: [@cmd1, @cmd2]
-      ├─ needs: { lang: { pkg: ver } }
-      └─ ...future extensions
-
-Grammar implementation:
-1. Parse exec invocations with optional TailModifiers
-2. Convert to normalized AST (same as @run)
-3. Interpreter sees unified structure
-
-Complete examples:
-# All of these support tail modifiers uniformly
-@path api = https://api.com (5d) trust always
-@import [utils.mld] (30m) trust verify
-@exec deploy(env) = @run [(./deploy.sh @env)] trust always
-
-@text data = @fetchAPI("users") | @validateJSON @extract
-@data config = @loadConfig() trust always
-@add @greeting("World") | @uppercase
-@output @generate() | @format @minify [doc.md]
-@when @isReady() => @deploy("prod") trust always
-@data results = foreach @process(@items) | @validate
-```
-
-## Grammar Implementation Strategy
-
-### Target: Unified Exec Invocation Tail Modifiers
-
-To implement tail modifiers on all exec invocations:
-
-1. **Create unified pattern** in `patterns/tail-modifiers.peggy`:
-   ```peggy
-   TailModifiers
-     = _ keyword:TailKeyword _ value:TailValue { 
-         return normalizeToWithClause(keyword, value);
-       }
+1. **Double quotes `"..."`**: Strings WITH `@var` interpolation
+   - Example: `/text @msg = "Hello @name"` → `@name` gets expanded
+   - Example: `/run "echo Hello @name"` → `@name` gets expanded  
+   - Example: `/data @obj = { "msg": "Hello @name" }` → `@name` gets expanded
+   - Variables are replaced with their values
    
-   ExecInvocationWithTail
-     = ref:CommandReference tail:TailModifiers? {
-         return { 
-           ...ref,
-           withClause: tail || null
-         };
-       }
-   ```
+2. **Single quotes `'...'`**: Literal strings with NO interpolation
+   - Example: `/text @msg = 'Hello @name'` → stores exactly `"Hello @name"`
+   - Example: `/run 'echo Hello @name'` → outputs exactly `Hello @name`
+   - No variable processing whatsoever
 
-2. **Update each directive** to use the pattern:
-   - `@add`: Support `ExecInvocationWithTail`
-   - `@text`: RHS uses `ExecInvocationWithTail`
-   - `@data`: RHS and foreach use `ExecInvocationWithTail`
-   - `@output`: Source uses `ExecInvocationWithTail`
-   - `@when`: Conditions can use `ExecInvocationWithTail`
+3. **Backticks `` `...` ``**: Multi-line templates WITH `@var` interpolation
+   - Example: `` /text @msg = `Hello @name!` `` → `@name` gets expanded
+   - Supports function calls: `` `Result: @process(data)` ``
+   - Multi-line capable
 
-3. **AST normalization**: All exec invocations with tail modifiers produce the same AST structure as `@run` with tail modifiers
+4. **Double brackets `[[...]]`** (for `/text` only): Templates with `{{mustache}}` interpolation
+   - Example: `/text @msg = [[Hello {{name}}!]]` → `{{name}}` gets expanded
+   - NO `@var` interpolation - `@var` is literal text inside `[[...]]`
+   - Multi-line capable
 
-4. **Interpreter**: No changes needed - already handles withClause
+5. **Curly braces `{...}`** (for `/run` and `/exec`): Commands WITH `@var` interpolation
+   - Example: `/run {echo Hello @name}` → `@name` gets expanded
+   - Example: `/exec @cmd(p) = {command @p}` → `@p` gets expanded
+
+### The Bracket Rule
+
+**NEVER CHANGE THIS**: `[...]` always means dereference/load content
+
+```
+Context         Brackets Mean           Double Quotes Mean       Single Quotes Mean       Backticks Mean
+-------         -------------           ------------------       ------------------       --------------
+/text =         Load file contents      String literal (no interp) String literal (no interp) Multi-line template with @var
+/data =         Load file/Array literal String literal (no interp) String literal (no interp) Multi-line template with @var
+/add            Include file contents   Output literal text      Output literal text      Multi-line template with @var
+/import from    Load module/file        File path (loads too)    File path (loads too)    Multi-line path with @var
+/path =         NOT ALLOWED             Path literal (no interp) Path literal (no interp) Multi-line path with @var
+/run            Command execution       Command WITH @var interp Command literal (no interp) Multi-line command with @var
+/exec           Command definition      Command WITH @var interp Command literal (no interp) Multi-line template with @var
+```
+
+### Examples Showing Distinction
+
+```mlld
+# Store path vs load contents
+/text @configPath = "./config.json"      # Stores: "./config.json" (string literal, no @var)
+/text @configData = [./config.json]      # Loads file contents
+
+# Variable interpolation in strings (CONSISTENT behavior)
+/text @message = "Hello @name!"          # String with interpolation: @name expanded
+/text @literal = 'Hello @name!'          # String literal: "Hello @name!" (NO interpolation)
+/text @multiline = `Hello @name!
+Welcome to the system!`                 # Multi-line with @name expanded
+/text @template = [[Hello {{name}}!]]     # Template with {{name}} expanded (NOT @name)
+
+# Commands with interpolation (SAME as /text!)
+/run "echo Hello @name"                  # @name gets expanded
+/run 'echo Hello @name'                  # Outputs literally: Hello @name
+/run `echo "Hello @name"
+echo "Welcome!"`                        # Multi-line command with @name expanded
+
+# Output text vs include file
+/add "Welcome @user to the system"       # Outputs text with @user expanded
+/add [README.md]                         # Includes README file contents
+
+# Path references with interpolation
+/path @config = "./configs/@env/settings.json"  # Path with @env expanded
+/path @literal = './configs/@env/settings.json' # Path literal (no interpolation)
+/path @docs = [./documentation]          # ERROR - paths don't load
+
+# Import with interpolation
+/import { config } from "./configs/@env/settings.mld"  # Path with @env expanded
+/import { data } from './configs/@env/data.mld'       # Path literal (no interpolation)
+```
 
 ## Parse Tree Maintenance
 
