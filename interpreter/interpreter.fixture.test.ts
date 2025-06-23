@@ -352,14 +352,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           await fileSystem.writeFile('/settings.mld', '/text @author = "Settings Author"\n/text @apiUrl = "https://api.example.com"');
         }
         
-        // Set up import test files if they don't exist (for other import tests)
+        // Set up import test files for other import tests (import-all, import-selected, etc.)
         else {
-          if (!await fileSystem.exists('/config.mld')) {
-            await fileSystem.writeFile('/config.mld', '/text @greeting = "Hello, world!"\n/data @count = 42\n/text @author = "Mlld Test Suite"');
-          }
-          if (!await fileSystem.exists('/utils.mld')) {
-            await fileSystem.writeFile('/utils.mld', '/text @greeting = "Hello, world!"\n/data @count = 42\n/text @version = "1.0.0"\n/path @docs = "./docs"');
-          }
+          await fileSystem.writeFile('/config.mld', '/text @greeting = "Hello, world!"\n/data @count = 42\n/text @author = "Mlld Test Suite"');
+          await fileSystem.writeFile('/utils.mld', '/text @greeting = "Hello, world!"\n/data @count = 42\n/text @version = "1.0.0"\n/path @docs = "./docs"');
         }
       } else if (fixture.name === 'data-directive') {
         // This fixture seems to be missing context - create the expected variable
