@@ -31,9 +31,42 @@ The exec directive is being extended to support unified executable syntax:
 
 // Primary /exec directive - supporting command, code, and environment syntax
 AtExec
-  = DirectiveContext "/exec" _ "@" id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" {
+  = DirectiveContext "/exec" _ id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" {
       // Environment declaration syntax: /exec js = { helperA, helperB }
-      helpers.debug('AtExec matched environment declaration', { id, envVars });
+      helpers.debug('AtExec matched environment declaration (no @)', { id, envVars });
+      
+      // Create identifier node
+      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      
+      // Build values and raw objects
+      const values = {
+        identifier: [identifierNode],
+        environment: envVars
+      };
+      
+      const raw = {
+        identifier: id,
+        environment: envVars.map(v => v.identifier)
+      };
+      
+      // Metadata
+      const metaObj = {
+        environmentCount: envVars.length
+      };
+      
+      return helpers.createStructuredDirective(
+        'exec',
+        'environment',
+        values,
+        raw,
+        metaObj,
+        location(),
+        'environment'
+      );
+    }
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" {
+      // Environment declaration syntax: /exec @js = { helperA, helperB }
+      helpers.debug('AtExec matched environment declaration (with @)', { id, envVars });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });

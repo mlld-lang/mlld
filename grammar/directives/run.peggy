@@ -144,37 +144,6 @@ AtRun
       );
     }
   / DirectiveContext "/run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference tail:TailModifiers? comment:InlineComment? {
-      // Command syntax: /run {command}
-      const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched command', { content, securityOptions, tail });
-      
-      const meta = {
-        ...content.meta,
-        ...helpers.createSecurityMeta(securityOptions),
-        ...(comment ? { comment } : {})
-      };
-      
-      const values = content.values;
-      const raw = content.raw;
-      
-      // Add withClause from tail if present
-      if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
-      }
-      
-      return helpers.createStructuredDirective(
-        'run',
-        content.subtype,
-        values,
-        raw,
-        meta,
-        location(),
-        content.type
-      );
-    }
-  / DirectiveContext "/run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference tail:TailModifiers? comment:InlineComment? {
       // @ detected -> Command reference (exec)
       const securityOptions = security ? security[0] : null;
       helpers.debug('AtRun matched command reference', { commandRef, securityOptions, tail });

@@ -410,4 +410,4 @@ UnifiedCodeContent
 // IMPORTANT: Code content is treated as opaque - we don't parse brackets specially
 // This allows bracket characters in string literals, arrays, regex, etc.
 UnifiedCodeChar
-  = !')]' char:. { return char; }
+  = !'}' char:. { return char; }
