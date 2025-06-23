@@ -1,7 +1,7 @@
-@text title = "Config Title"
-@text greeting = "Hello, world!"
-@data count = 42
-@data config = {
+/text @title = "Config Title"
+/text @greeting = "Hello, world!"
+/data @count = 42
+/data @config = {
   "name": "Project",
   "greeting": "Hello, World!"
 }

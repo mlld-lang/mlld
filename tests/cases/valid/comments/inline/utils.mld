@@ -1,2 +1,2 @@
-@text x = "Value X"
-@text y = "Value Y"
+/text @x = "Value X"
+/text @y = "Value Y"
