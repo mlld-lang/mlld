@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import * as acorn from 'acorn';
 
 export const NodeType = {
   Text: 'Text',
@@ -584,5 +585,66 @@ export const helpers = {
    */
   isExecInvocationNode(node: any): boolean {
     return node?.type === 'ExecInvocation';
+  },
+
+  /**
+   * Parse a JavaScript code block using acorn to find the complete block
+   * This handles nested braces, strings, template literals, etc. properly
+   * 
+   * @param input - The full input string
+   * @param startPos - Position after the opening brace
+   * @returns The parsed code content and end position, or null if invalid
+   */
+  parseJavaScriptBlock(input: string, startPos: number): { content: string; endPos: number } | null {
+    // Extract everything from startPos to end of input as potential code
+    const potentialCode = input.substring(startPos);
+    
+    // Try to find a valid JavaScript block by testing progressively longer strings
+    let lastValidEnd = -1;
+    let lastValidCode = '';
+    
+    for (let i = 0; i < potentialCode.length; i++) {
+      // Skip if we haven't reached a closing brace yet
+      if (potentialCode[i] !== '}') continue;
+      
+      // Extract code up to this closing brace
+      const testCode = potentialCode.substring(0, i);
+      
+      try {
+        // Try to parse as a block statement or expression
+        // Wrap in parentheses to handle object literals
+        acorn.parse(`(${testCode})`, { 
+          ecmaVersion: 'latest',
+          allowReturnOutsideFunction: true
+        } as any);
+        
+        // If parse succeeded, this is valid JavaScript
+        lastValidEnd = i;
+        lastValidCode = testCode;
+      } catch (e) {
+        // Try as a statement/function body
+        try {
+          acorn.parse(testCode, { 
+            ecmaVersion: 'latest',
+            allowReturnOutsideFunction: true,
+            sourceType: 'module'
+          } as any);
+          
+          lastValidEnd = i;
+          lastValidCode = testCode;
+        } catch (e2) {
+          // Not valid JavaScript yet, keep looking
+        }
+      }
+    }
+    
+    if (lastValidEnd >= 0) {
+      return {
+        content: lastValidCode.trim(),
+        endPos: startPos + lastValidEnd
+      };
+    }
+    
+    return null;
   },
 };

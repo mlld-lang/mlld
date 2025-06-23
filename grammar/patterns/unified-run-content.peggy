@@ -406,8 +406,26 @@ UnifiedCodeContent
       return chars.join('');
     }
 
-// Code characters - preserve everything literally
-// IMPORTANT: Code content is treated as opaque - we don't parse brackets specially
-// This allows bracket characters in string literals, arrays, regex, etc.
+// Code characters - preserve everything literally including nested braces
 UnifiedCodeChar
-  = !'}' char:. { return char; }
+  = '"' chars:DoubleQuoteChar* '"' { return '"' + chars.join('') + '"'; }  // Double quoted strings
+  / "'" chars:SingleQuoteChar* "'" { return "'" + chars.join('') + "'"; }  // Single quoted strings
+  / '`' chars:BacktickChar* '`' { return '`' + chars.join('') + '`'; }      // Template literals
+  / '{' inner:UnifiedCodeContent '}' { return '{' + inner + '}'; }          // Nested braces
+  / !'}' char:. { return char; }                                            // Any other character
+
+// Characters inside double quotes
+DoubleQuoteChar
+  = '\\' char:. { return '\\' + char; }  // Escaped characters
+  / !'"' char:. { return char; }
+
+// Characters inside single quotes  
+SingleQuoteChar
+  = '\\' char:. { return '\\' + char; }  // Escaped characters
+  / !"'" char:. { return char; }
+
+// Characters inside backticks
+BacktickChar
+  = '\\' char:. { return '\\' + char; }  // Escaped characters
+  / !'`' char:. { return char; }
+

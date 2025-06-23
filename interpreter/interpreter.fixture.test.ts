@@ -338,27 +338,27 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       // Set up specific test files that aren't in the examples directory
       if (fixture.name === 'comments-inline') {
         // Set up files for comments-inline test
-        await fileSystem.writeFile('/utils.mld', '@text x = "Value X"\n@text y = "Value Y"');
+        await fileSystem.writeFile('/utils.mld', '/text @x = "Value X"\n/text @y = "Value Y"');
         await fileSystem.writeFile('/README.md', '# Example Project\n\nThis is the main README content.');
       } else if (fixture.name.startsWith('import-')) {
         // Set up files for import alias tests
         if (fixture.name === 'import-alias') {
-          await fileSystem.writeFile('/config.mld', '@text author = "Config Author"\n@text title = "My Project"');
-          await fileSystem.writeFile('/utils.mld', '@text author = "Utils Author"');
+          await fileSystem.writeFile('/config.mld', '/text @author = "Config Author"\n/text @title = "My Project"');
+          await fileSystem.writeFile('/utils.mld', '/text @author = "Utils Author"');
         }
         
         // Set up files for import namespace tests
         else if (fixture.name === 'import-namespace') {
-          await fileSystem.writeFile('/settings.mld', '@text author = "Settings Author"\n@text apiUrl = "https://api.example.com"');
+          await fileSystem.writeFile('/settings.mld', '/text @author = "Settings Author"\n/text @apiUrl = "https://api.example.com"');
         }
         
         // Set up import test files if they don't exist (for other import tests)
         else {
           if (!await fileSystem.exists('/config.mld')) {
-            await fileSystem.writeFile('/config.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text author = "Mlld Test Suite"');
+            await fileSystem.writeFile('/config.mld', '/text @greeting = "Hello, world!"\n/data @count = 42\n/text @author = "Mlld Test Suite"');
           }
           if (!await fileSystem.exists('/utils.mld')) {
-            await fileSystem.writeFile('/utils.mld', '@text greeting = "Hello, world!"\n@data count = 42\n@text version = "1.0.0"\n@path docs = "./docs"');
+            await fileSystem.writeFile('/utils.mld', '/text @greeting = "Hello, world!"\n/data @count = 42\n/text @version = "1.0.0"\n/path @docs = "./docs"');
           }
         }
       } else if (fixture.name === 'data-directive') {
@@ -411,7 +411,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           } else if (url === 'https://gist.githubusercontent.com/example/123456/raw/http.mld') {
             return {
               ok: true,
-              text: async () => '@data http = { "get": "@get", "post": "@post", "put": "@put", "delete": "@delete", "auth": { "get": "@auth_get", "post": "@auth_post" } }'
+              text: async () => '/data @http = { "get": "@get", "post": "@post", "put": "@put", "delete": "@delete", "auth": { "get": "@auth_get", "post": "@auth_post" } }'
             } as any;
           }
           throw new Error(`Unexpected URL in test: ${url}`);
@@ -443,7 +443,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             // For testing, we'll use a known content and verify the hash matches
             return {
               ok: true,
-              text: async () => '@data config = { "theme": "dark" }'
+              text: async () => '/data @config = { "theme": "dark" }'
             } as any;
           } else if (url === 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules/org/registry.json') {
             return {
@@ -463,7 +463,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           } else if (url === 'https://gist.githubusercontent.com/org/234567/raw/utils.mld') {
             return {
               ok: true,
-              text: async () => '@text version = "v2.1.0"'
+              text: async () => '/text @version = "v2.1.0"'
             } as any;
           } else if (url === 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules/namespace/registry.json') {
             return {
@@ -483,7 +483,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           } else if (url === 'https://gist.githubusercontent.com/namespace/345678/raw/lib.mld') {
             return {
               ok: true,
-              text: async () => '@data helpers = { "formatDate": "2024-01-15" }'
+              text: async () => '/data @helpers = { "formatDate": "2024-01-15" }'
             } as any;
           } else if (url === 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules/company/registry.json') {
             return {
@@ -503,7 +503,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           } else if (url === 'https://gist.githubusercontent.com/company/456789/raw/toolkit.mld') {
             return {
               ok: true,
-              text: async () => '@data tools = { "name": "Development Toolkit" }'
+              text: async () => '/data @tools = { "name": "Development Toolkit" }'
             } as any;
           }
           throw new Error(`Unexpected URL in test: ${url}`);
@@ -567,12 +567,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             } else if (url === 'https://raw.githubusercontent.com/example/repo/main/config.mld') {
               return {
                 ok: true,
-                text: async () => '@text greeting = "Hello from URL!"\n@data version = "2.0.0"\n@text author = "URL Import"'
+                text: async () => '/text @greeting = "Hello from URL!"\n/data @version = "2.0.0"\n/text @author = "URL Import"'
               } as any;
             } else if (url === 'https://raw.githubusercontent.com/example/repo/main/remote-config.mld') {
               return {
                 ok: true,
-                text: async () => '@text remoteValue = "Value from remote config"\n@data remoteData = { "loaded": true }'
+                text: async () => '/text @remoteValue = "Value from remote config"\n/data @remoteData = { "loaded": true }'
               } as any;
             }
             throw new Error(`Unexpected URL in test: ${url}`);
