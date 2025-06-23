@@ -157,16 +157,17 @@ AtImportFull
 
 // Import path - handles special @input source, module references, and regular paths
 ImportPath
-  = "@input" {
-      helpers.debug('ImportPath matched @input');
+  = "@INPUT"i {
+      helpers.debug('ImportPath matched @INPUT');
+      const matched = text();
       return {
         type: 'path',
         subtype: 'inputPath',
         values: { 
-          path: [helpers.createNode(NodeType.Text, { content: '@input', location: location() })]
+          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
         },
         raw: { 
-          path: '@input'
+          path: matched
         },
         meta: {
           isSpecial: true,
