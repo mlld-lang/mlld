@@ -53,8 +53,16 @@ InterDirectiveNewline
       while (i < input.length && (input[i] === ' ' || input[i] === '\t' || input[i] === '\r')) {
         i++;
       }
-      /* success only if the next real char starts a directive line */
-      return i < input.length && input[i] === '/' && helpers.isLogicalLineStart(input, i);
+      /* success only if the next real char starts a directive line (not a comment) */
+      if (i < input.length && input[i] === '/') {
+        // Check if it's a comment (//) first
+        if (i + 1 < input.length && input[i + 1] === '/') {
+          return false; // It's a comment, not a directive
+        }
+        // Otherwise check if it's a directive
+        return helpers.isLogicalLineStart(input, i);
+      }
+      return false;
     } {
       return helpers.createNode(NodeType.Newline, { content: term, location: location() });
     }
@@ -129,16 +137,17 @@ TextPart
       const isAtLineStart = helpers.isLogicalLineStart(input, pos);
       const isAtStartChar = input[pos] === '/';
       
-      // Is this potentially a directive?
+      // Is this potentially a directive or comment?
       if (isAtLineStart && isAtStartChar) {
-        // Check if we're at a directive context
+        // Check if it's a comment first (more specific)
+        if (input.substr(pos, 2) === '//') {
+          return true; // Stop parsing text - it's a comment
+        }
+        // Otherwise check if it's a directive
         return helpers.isAtDirectiveContext(input, pos);
       }
       
-      // For regular comment handling
-      const isComment = isAtLineStart && input.substr(pos, 2) === '//';
-      
-      return isAtLineStart && isAtStartChar || isComment;
+      return false; // Continue parsing text
     } !(
        "{{"           /* still block the opening of a text-var */
      / "}}"           /* …and its closing */
