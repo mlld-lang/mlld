@@ -2,7 +2,7 @@
 
 This tests that variable values containing mlld syntax are treated as literals.
 
-/text @mlld_content = "/text @foo = 'bar'\n/run {echo 'hello'}\n/add @foo"
+/text @mlld_content = '/text @foo = \'bar\'\n/run {echo \'hello\'}\n/add @foo'
 
 /text @path_content = "[some/path.md]"
 /text @template_content = "Hello {{name}}"
