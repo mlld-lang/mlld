@@ -215,6 +215,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           }
           // Skip comment nodes
           if (isComment(n)) {
+            console.log('DEBUG: Skipping comment node:', n.content);
             continue;
           }
           env.addNode(n);
@@ -237,6 +238,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           }
           // Skip comment nodes
           if (isComment(n)) {
+            console.log('DEBUG: Skipping comment node:', n.content);
             continue;
           }
           env.addNode(n);
