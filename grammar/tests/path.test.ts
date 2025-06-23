@@ -7,7 +7,7 @@ import { parse } from '@grammar/parser';
 describe('Path Directive', () => {
   test('Basic path with special variable', async () => {
     // Using brackets for variable interpolation per new syntax rules
-    const content = `@path docs = [@PROJECTPATH/documentation]`;
+    const content = `/path @docs = [@PROJECTPATH/documentation]`;
     const parseResult = await parse(content);
     
     // Log the structure
@@ -55,7 +55,7 @@ describe('Path Directive', () => {
   
   test('Path with escape sequences', async () => {
     // Test escape sequence handling in paths
-    const content = `@path social = [https://twitter.com/\@username]`;
+    const content = `/path @social = [https://twitter.com/\@username]`;
     const parseResult = await parse(content);
     const directiveNode = parseResult.ast[0];
     
@@ -88,7 +88,7 @@ describe('Path Directive', () => {
   
   test('Path with variable interpolation', async () => {
     // Paths only use @var interpolation with brackets
-    const content = '@path config = [@PROJECTPATH/@configDir/settings]';
+    const content = '/path @config = [@PROJECTPATH/@configDir/settings]';
     const parseResult = await parse(content);
     const directiveNode = parseResult.ast[0];
     
@@ -108,7 +108,7 @@ describe('Path Directive', () => {
   // This test helps verify path variable reference handling
   test('Path referencing another path variable', async () => {
     // Using brackets for variable interpolation per new syntax rules
-    const content = `@path backup = [@mainPath/backup]`;
+    const content = `/path @backup = [@mainPath/backup]`;
     const parseResult = await parse(content);
     const directiveNode = parseResult.ast[0];
     

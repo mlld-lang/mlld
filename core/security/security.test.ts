@@ -60,7 +60,7 @@ describe('Import Security', () => {
     // Skip: Issue #99 - Security cache features not fully implemented
     it.skip('should store and retrieve content by hash', async () => {
       const url = 'https://example.com/test.mld';
-      const content = '@text hello = "world"';
+      const content = '/text @hello = "world"';
       const expectedHash = crypto.createHash('sha256').update(content, 'utf8').digest('hex');
       
       // Mock fs operations
@@ -141,7 +141,7 @@ describe('Import Security', () => {
     });
 
     it('should calculate content hash', () => {
-      const content = '@text hello = "world"';
+      const content = '/text @hello = "world"';
       const hash = (approval as any).calculateHash(content);
       expect(hash).toMatch(/^[a-f0-9]{64}$/); // SHA256 hash format
     });
@@ -159,7 +159,7 @@ describe('Import Security', () => {
 
     it('should check existing approvals by hash', async () => {
       const url = 'https://example.com/test.mld';
-      const content = '@text hello = "world"';
+      const content = '/text @hello = "world"';
       const hash = crypto.createHash('sha256').update(content, 'utf8').digest('hex');
 
       // Mock the config to have existing approval

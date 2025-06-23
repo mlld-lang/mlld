@@ -6,7 +6,7 @@ import { isTextAssignmentDirective, isTextTemplateDirective } from '@core/types/
 describe('Text Directive Tests', () => {
   describe('Text Assignment', () => {
     it('should parse a basic text assignment', async () => {
-      const parseResult = await parse('@text greeting = "Hello, world!"');
+      const parseResult = await parse('/text @greeting = "Hello, world!"');
       console.log('Basic text assignment parsed result:', JSON.stringify(parseResult, null, 2));
       const result = parseResult.ast[0] as TextAssignmentDirectiveNode;
       
@@ -30,7 +30,7 @@ describe('Text Directive Tests', () => {
     });
     
     it('should parse a text assignment with path', async () => {
-      const result = (await parse('@text content = [./README.md]')).ast[0];
+      const result = (await parse('/text @content = [./README.md]')).ast[0];
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -52,7 +52,7 @@ describe('Text Directive Tests', () => {
     });
     
     it('should parse a text assignment with run', async () => {
-      const result = (await parse('@text output = @run [(echo "Hello")]')).ast[0] as TextAssignmentDirectiveNode;
+      const result = (await parse('/text @output = @run {echo "Hello"}')).ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('text');
@@ -76,7 +76,7 @@ describe('Text Directive Tests', () => {
   describe('Text Template', () => {
     it('should parse a template text with identifier assignment', async () => {
       console.log('About to parse template text with identifier assignment...');
-      const parseResult = await parse('@text message = [[This is some text]]');
+      const parseResult = await parse('/text @message = [[This is some text]]');
       console.log('Parse result:', JSON.stringify(parseResult, null, 2));
       
       const result = parseResult.ast[0] as TextTemplateDirectiveNode;
@@ -104,7 +104,7 @@ describe('Text Directive Tests', () => {
     
     it('should parse a template text with variable interpolation', async () => {
       console.log('About to parse template text with variable interpolation...');
-      const parseResult = await parse('@text greeting = [[Hello, {{name}}!]]');
+      const parseResult = await parse('/text @greeting = [[Hello, {{name}}!]]');
       console.log('Parse result with interpolation:', JSON.stringify(parseResult, null, 2));
       
       const result = parseResult.ast[0] as TextTemplateDirectiveNode;
@@ -137,7 +137,7 @@ describe('Text Directive Tests', () => {
     
     it('should reject a template text without an identifier', async () => {
       // A text directive without an identifier should be rejected as invalid syntax
-      const result = await parse('@text [[This is invalid syntax]]');
+      const result = await parse('/text [[This is invalid syntax]]');
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
     });

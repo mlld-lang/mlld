@@ -3,7 +3,7 @@ import { parse } from '@grammar/parser';
 
 describe('Path Separator in Brackets - Regression Test for Issue #53', () => {
   it('should parse paths in brackets with PathSeparator nodes', async () => {
-    const input = '@add [path/to/file.md]';
+    const input = '/add [path/to/file.md]';
     const parseResult = await parse(input);
     const result = parseResult.ast;
     
@@ -34,7 +34,7 @@ describe('Path Separator in Brackets - Regression Test for Issue #53', () => {
   });
 
   it('should parse paths in text directive brackets with PathSeparator nodes', async () => {
-    const input = '@text content = [path/to/file.md]';
+    const input = '/text @content = [path/to/file.md]';
     const parseResult = await parse(input);
     const result = parseResult.ast;
     
@@ -66,7 +66,7 @@ describe('Path Separator in Brackets - Regression Test for Issue #53', () => {
   });
 
   it('should handle paths with multiple directory levels', async () => {
-    const input = '@add [deep/nested/path/to/file.md]';
+    const input = '/add [deep/nested/path/to/file.md]';
     const parseResult = await parse(input);
     const result = parseResult.ast;
     
@@ -81,7 +81,7 @@ describe('Path Separator in Brackets - Regression Test for Issue #53', () => {
   });
 
   it('should handle paths with variables and separators', async () => {
-    const input = '@text mypath = [@root/path/to/file.md]';
+    const input = '/text @mypath = [@root/path/to/file.md]';
     const parseResult = await parse(input);
     const result = parseResult.ast;
     

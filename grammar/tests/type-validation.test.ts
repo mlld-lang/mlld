@@ -25,7 +25,7 @@ describe('Grammar-Type System Alignment', () => {
   
   describe('Text Directive Type Validation', () => {
     it('should produce valid textAssignment nodes', async () => {
-      const input = '@text greeting = "Hello World"';
+      const input = '/text @greeting = "Hello World"';
       const result = await parse(input);
       const ast = result.ast;
       
@@ -55,7 +55,7 @@ describe('Grammar-Type System Alignment', () => {
     });
 
     it('should produce valid textTemplate nodes', async () => {
-      const input = '@text message = [[Hello {{name}}!]]';
+      const input = '/text @message = [[Hello {{name}}!]]';
       const result = await parse(input);
       const ast = result.ast;
       
@@ -67,7 +67,7 @@ describe('Grammar-Type System Alignment', () => {
     it('should reject invalid text subtypes', async () => {
       // This test would fail currently because grammar produces
       // subtypes like 'textPath' that don't exist in types
-      const input = '@text content = [file.md]';
+      const input = '/text @content = [file.md]';
       const result = await parse(input);
       const ast = result.ast;
       
@@ -87,7 +87,7 @@ describe('Grammar-Type System Alignment', () => {
 
   describe('Data Directive Type Validation', () => {
     it('should produce dataAssignment not dataDirective', async () => {
-      const input = '@data config = { "key": "value" }';
+      const input = '/data @config = { "key": "value" }';
       const result = await parse(input);
       const ast = result.ast;
       
@@ -98,7 +98,7 @@ describe('Grammar-Type System Alignment', () => {
 
   describe('Variable Reference Type Validation', () => {
     it('should produce valid VariableReferenceNode structure', async () => {
-      const input = '@text message = [[Hello {{user.name}}!]]';
+      const input = '/text @message = [[Hello {{user.name}}!]]';
       const result = await parse(input);
       const ast = result.ast;
       
@@ -120,9 +120,9 @@ describe('Grammar-Type System Alignment', () => {
     it('should only use defined NodeType values', async () => {
       // Test various inputs to ensure they only produce valid node types
       const inputs = [
-        '@text val = "null"',
-        '@text str = "string"',
-        '@text section = "# Section" from [file.md]'
+        '/text @val = "null"',
+        '/text @str = "string"',
+        '/text @section = "# Section" from [file.md]'
       ];
       
       const validNodeTypes = Object.values(NodeType);
@@ -142,7 +142,7 @@ describe('Grammar-Type System Alignment', () => {
 
   describe('Directive Property Placement', () => {
     it('should place source at root level when present', async () => {
-      const input = '@add [[template content]]';
+      const input = '/add [[template content]]';
       const result = await parse(input);
       const ast = result.ast;
       

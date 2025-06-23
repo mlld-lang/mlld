@@ -6,7 +6,7 @@ import { VariableValueType } from '@core/types/variables';
 describe('Run directive', () => {
   describe('runCommand subtype', () => {
     test('Basic shell command', async () => {
-      const content = '@run [(ls -la)]';
+      const content = '/run {ls -la}';
       const parseResult = await parse(content);
       
       // The tests now pass with a single directive node in the AST
@@ -32,7 +32,7 @@ describe('Run directive', () => {
     });
     
     test('Multi-line shell command', async () => {
-      const content = '@run [(\nfind . -name "*.js" | \nxargs grep "TODO"\n)]';
+      const content = '/run {\nfind . -name "*.js" | \nxargs grep "TODO"\n}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -53,7 +53,7 @@ describe('Run directive', () => {
     });
     
     test('Command with variable interpolation', async () => {
-      const content = '@run [(ls -la @directory)]';
+      const content = '/run {ls -la @directory}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -82,7 +82,7 @@ describe('Run directive', () => {
   
   describe('runCode subtype', () => {
     test('Basic code execution', async () => {
-      const content = '@run javascript [(\nconsole.log("Hello, world!");\n)]';
+      const content = '/run javascript {\nconsole.log("Hello, world!");\n}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -107,7 +107,7 @@ describe('Run directive', () => {
     });
     
     test('Code with arguments', async () => {
-      const content = '@run python (data, format) [(\nimport json\ndata_obj = json.loads(data)\nprint(json.dumps(data_obj, indent=4 if format == "pretty" else None))\n)]';
+      const content = '/run python (data, format) {\nimport json\ndata_obj = json.loads(data)\nprint(json.dumps(data_obj, indent=4 if format == "pretty" else None))\n}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -131,7 +131,7 @@ describe('Run directive', () => {
     });
     
     test('Code containing variable syntax as text', async () => {
-      const content = '@run javascript [(\nconst greeting = "{{greeting}}";\nconsole.log(greeting);\n)]';
+      const content = '/run javascript {\nconst greeting = "{{greeting}}";\nconsole.log(greeting);\n}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -157,7 +157,7 @@ describe('Run directive', () => {
   describe('runExec subtype', () => {
     // Skip: Issue #100 - raw.identifier not populated in runExec AST nodes
     test.skip('Basic command execution', async () => {
-      const content = '@run @listFiles';
+      const content = '/run @listFiles';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -181,7 +181,7 @@ describe('Run directive', () => {
     
     // Skip: Issue #100 - raw.identifier not populated in runExec AST nodes
     test.skip('Command with arguments (with space)', async () => {
-      const content = '@run @formatData ("large_file.json", "pretty")';
+      const content = '/run @formatData ("large_file.json", "pretty")';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -207,7 +207,7 @@ describe('Run directive', () => {
     
     // Skip: Issue #100 - raw.identifier not populated in runExec AST nodes
     test.skip('Command with arguments (without space)', async () => {
-      const content = '@run @formatData("large_file.json", "pretty")';
+      const content = '/run @formatData("large_file.json", "pretty")';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -232,7 +232,7 @@ describe('Run directive', () => {
     });
     
     test('Command with variable arguments', async () => {
-      const content = '@run @processFile ({{filename}}, {{options}})';
+      const content = '/run @processFile ({{filename}}, {{options}})';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);

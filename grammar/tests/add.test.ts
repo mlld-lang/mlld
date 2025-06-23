@@ -19,7 +19,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic path add', async () => {
-    const content = `@add [@PROJECTPATH/README.md]`;
+    const content = `/add [@PROJECTPATH/README.md]`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -49,7 +49,7 @@ describe('Add Directive', () => {
   // The old syntax @add [file.md # header] is deprecated
   
   test('Path add with headerLevel', async () => {
-    const content = `@add [README.md] as ###`;
+    const content = `/add [README.md] as ###`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -71,7 +71,7 @@ describe('Add Directive', () => {
   });
   
   test('Path add with underHeader', async () => {
-    const content = `@add [code.js] under Example Code`;
+    const content = `/add [code.js] under Example Code`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -95,7 +95,7 @@ describe('Add Directive', () => {
   
   test('Complex path add with all modifiers', async () => {
     // Updated to use separate path with no section
-    const content = `@add [@PROJECTPATH/doc.md] as ## under API Documentation`;
+    const content = `/add [@PROJECTPATH/doc.md] as ## under API Documentation`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -129,7 +129,7 @@ describe('Add Directive', () => {
   
   test('Complex section add with new title', async () => {
     // The new recommended syntax for section extraction with a new title
-    const content = `@add "# API Reference" from [@PROJECTPATH/doc.md] as "## API"`;
+    const content = `/add "# API Reference" from [@PROJECTPATH/doc.md] as "## API"`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result
@@ -155,7 +155,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic template add', async () => {
-    const content = `@add [[# Template Content]]`;
+    const content = `/add [[# Template Content]]`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -179,7 +179,7 @@ describe('Add Directive', () => {
   });
   
   test('Template add with variable interpolation', async () => {
-    const content = `@add [[Hello {{name}}!]]`;
+    const content = `/add [[Hello {{name}}!]]`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -200,7 +200,7 @@ describe('Add Directive', () => {
   });
   
   test('Template add with headerLevel', async () => {
-    const content = `@add [[# Content]] as ##`;
+    const content = `/add [[# Content]] as ##`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -226,7 +226,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic variable add', async () => {
-    const content = `@add @content`;
+    const content = `/add @content`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -247,7 +247,7 @@ describe('Add Directive', () => {
   });
   
   test('Variable add with headerLevel and underHeader', async () => {
-    const content = `@add @document as ## under Documentation`;
+    const content = `/add @document as ## under Documentation`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -278,7 +278,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic section add', async () => {
-    const content = `@add "# Header Title" from [document.md]`;
+    const content = `/add "# Header Title" from [document.md]`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -305,7 +305,7 @@ describe('Add Directive', () => {
   });
   
   test('Section add with as clause', async () => {
-    const content = `@add "# Original Header" from [document.md] as "## New Title"`;
+    const content = `/add "# Original Header" from [document.md] as "## New Title"`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -330,7 +330,7 @@ describe('Add Directive', () => {
   });
   
   test('Section add with variable in path', async () => {
-    const content = `@add "# API Reference" from [@PROJECTPATH/docs/api.md]`;
+    const content = `/add "# API Reference" from [@PROJECTPATH/docs/api.md]`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -355,7 +355,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Multiline template add', async () => {
-    const content = `@add [[
+    const content = `/add [[
 # Multiline Content
 - Item 1
 - Item 2

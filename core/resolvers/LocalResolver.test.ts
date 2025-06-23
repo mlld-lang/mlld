@@ -14,7 +14,7 @@ describe('LocalResolver', () => {
     // Set up test files
     await fileSystem.mkdir('/project');
     await fileSystem.mkdir('/project/modules');
-    await fileSystem.writeFile('/project/modules/utils.mld', '@text greeting = "Hello from utils"');
+    await fileSystem.writeFile('/project/modules/utils.mld', '/text @greeting = "Hello from utils"');
     await fileSystem.writeFile('/project/modules/config.json', '{"version": "1.0.0"}');
     await fileSystem.writeFile('/project/README.md', '# Test Project');
   });
@@ -39,7 +39,7 @@ describe('LocalResolver', () => {
       
       const result = await resolver.resolve('modules/utils.mld', config);
       
-      expect(result.content).toBe('@text greeting = "Hello from utils"');
+      expect(result.content).toBe('/text @greeting = "Hello from utils"');
       expect(result.metadata?.source).toBe('file:///project/modules/utils.mld');
       expect(result.metadata?.mimeType).toBe('text/x-mlld');
     });

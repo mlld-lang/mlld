@@ -6,7 +6,7 @@ import { parseDirective } from './utils/test-helpers';
 
 describe('Import Directive Debug', () => {
   it('should log the import directive structure', async () => {
-    const input = '@import { * } from [path/to/file.mlld]';
+    const input = '/import { * } from [path/to/file.mlld]';
     const result = (await parse(input)).ast[0];
     
     // Log the structure so we can see what it looks like
@@ -17,7 +17,7 @@ describe('Import Directive Debug', () => {
 describe('Import Directive Syntax Tests', () => {
   describe('Import All', () => {
     it('should parse a wildcard import', async () => {
-      const input = '@import { * } from [path/to/file.mlld]';
+      const input = '/import { * } from [path/to/file.mlld]';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -46,7 +46,7 @@ describe('Import Directive Syntax Tests', () => {
     });
     
     it('should parse a wildcard import with path variable', async () => {
-      const input = '@import { * } from [@pathVar]';
+      const input = '/import { * } from [@pathVar]';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -75,7 +75,7 @@ describe('Import Directive Syntax Tests', () => {
   
   describe('Import Selected', () => {
     it('should parse a selective import', async () => {
-      const input = '@import { var1, var2 } from [path/to/file.mlld]';
+      const input = '/import { var1, var2 } from [path/to/file.mlld]';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -103,7 +103,7 @@ describe('Import Directive Syntax Tests', () => {
     // The test for aliases has been removed as this syntax is no longer supported
     
     it('should parse an import with @var variable in path', async () => {
-      const input = '@import { var1 } from [prefix/@textVar/suffix.mlld]';
+      const input = '/import { var1 } from [prefix/@textVar/suffix.mlld]';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');

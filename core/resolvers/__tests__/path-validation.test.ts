@@ -58,8 +58,8 @@ describe('Path Content Type Validation', () => {
       await fileSystem.writeFile('/readme.txt', 'This is a readme file');
       
       const code = `
-@path readme = "./readme.txt"
-@add @readme
+/path @readme = "./readme.txt"
+/add @readme
 `;
       
       const result = await interpret(code, {
@@ -76,8 +76,8 @@ describe('Path Content Type Validation', () => {
       await fileSystem.writeFile('/config.json', '{"setting": "value"}');
       
       const code = `
-@path config = "./config.json"
-@add @config
+/path @config = "./config.json"
+/add @config
 `;
       
       const result = await interpret(code, {
@@ -96,8 +96,8 @@ describe('Path Content Type Validation', () => {
       await fileSystem.writeFile('/project/src/data.txt', 'Project data');
       
       const code = `
-@path data = "@PROJECTPATH/src/data.txt"
-@add @data
+/path @data = "@PROJECTPATH/src/data.txt"
+/add @data
 `;
       
       const result = await interpret(code, {
@@ -113,10 +113,10 @@ describe('Path Content Type Validation', () => {
 
   describe('Module Files in Paths', () => {
     it('should accept module files in path directives as text content', async () => {
-      await fileSystem.writeFile('/module.mld', '@text greeting = "Hello"');
+      await fileSystem.writeFile('/module.mld', '/text @greeting = "Hello"');
       
-      const code = `@path mod = "./module.mld"
-@add @mod`;
+      const code = `/path @mod = "./module.mld"
+/add @mod`;
       
       const result = await interpret(code, {
         fileSystem,
@@ -125,14 +125,14 @@ describe('Path Content Type Validation', () => {
         resolverManager
       });
       
-      expect(result.trim()).toBe('@text greeting = "Hello"');
+      expect(result.trim()).toBe('/text @greeting = "Hello"');
     });
 
     it('should accept .mlld module files in path directives as text content', async () => {
-      await fileSystem.writeFile('/module.mlld', '@data config = { enabled: true }');
+      await fileSystem.writeFile('/module.mlld', '/data @config = { enabled: true }');
       
-      const code = `@path mod = "./module.mlld"
-@add @mod`;
+      const code = `/path @mod = "./module.mlld"
+/add @mod`;
       
       const result = await interpret(code, {
         fileSystem,
@@ -141,12 +141,12 @@ describe('Path Content Type Validation', () => {
         resolverManager
       });
       
-      expect(result.trim()).toBe('@data config = { enabled: true }');
+      expect(result.trim()).toBe('/data @config = { enabled: true }');
     });
 
     it('should reject invalid syntax for registry modules in path directives', async () => {
       // The syntax @path mod = @test/utils is invalid - path expects a quoted string
-      const code = `@path mod = @test/utils`;
+      const code = `/path @mod = @test/utils`;
       
       await expect(
         interpret(code, {
@@ -162,8 +162,8 @@ describe('Path Content Type Validation', () => {
   describe('Resolver Path Support', () => {
     it.skip('should accept TIME resolver in paths (returns text) - invalid syntax', async () => {
       const code = `
-@path timestamp = @TIME
-@add [[Timestamp path: {{timestamp}}]]
+/path @timestamp = @TIME
+/add [[Timestamp path: {{timestamp}}]]
 `;
       
       const result = await interpret(code, {
@@ -179,9 +179,9 @@ describe('Path Content Type Validation', () => {
 
     it.skip('should accept DEBUG resolver in paths (returns data) - invalid syntax', async () => {
       const code = `
-@path debug = @DEBUG
-@data parsed = @debug
-@add [[Debug type: {{parsed.project.basePath}}]]
+/path @debug = @DEBUG
+/data @parsed = @debug
+/add [[Debug type: {{parsed.project.basePath}}]]
 `;
       
       const result = await interpret(code, {
@@ -196,9 +196,9 @@ describe('Path Content Type Validation', () => {
 
     it.skip('should accept INPUT resolver in paths - invalid syntax', async () => {
       const code = `
-@path input = @INPUT
-@data parsed = @input
-@add [[Input data: {{parsed.test}}]]
+/path @input = @INPUT
+/data @parsed = @input
+/add [[Input data: {{parsed.test}}]]
 `;
       
       const result = await interpret(code, {
@@ -231,7 +231,7 @@ describe('Path Content Type Validation', () => {
         if (url.includes('/module.mld')) {
           return {
             ok: true,
-            text: async () => '@text greeting = "URL module"'
+            text: async () => '/text @greeting = "URL module"'
           } as any;
         }
         throw new Error('Not found');
@@ -240,8 +240,8 @@ describe('Path Content Type Validation', () => {
 
     it('should accept text URLs in path directives', async () => {
       const code = `
-@path data = "https://example.com/data.txt"
-@add @data
+/path @data = "https://example.com/data.txt"
+/add @data
 `;
       
       const result = await interpret(code, {
@@ -262,8 +262,8 @@ describe('Path Content Type Validation', () => {
 
     it('should accept data URLs in path directives', async () => {
       const code = `
-@path config = "https://example.com/config.json"
-@add @config
+/path @config = "https://example.com/config.json"
+/add @config
 `;
       
       const result = await interpret(code, {
@@ -283,8 +283,8 @@ describe('Path Content Type Validation', () => {
     });
 
     it('should accept module URLs in path directives as text content', async () => {
-      const code = `@path mod = "https://example.com/module.mld"
-@add @mod`;
+      const code = `/path @mod = "https://example.com/module.mld"
+/add @mod`;
       
       const result = await interpret(code, {
         fileSystem,
@@ -299,16 +299,16 @@ describe('Path Content Type Validation', () => {
         }
       });
       
-      expect(result.trim()).toBe('@text greeting = "URL module"');
+      expect(result.trim()).toBe('/text @greeting = "URL module"');
     });
   });
 
   describe('Path File Access', () => {
     it('should successfully read .mld files in path directives', async () => {
-      await fileSystem.writeFile('/lib.mld', '@text name = "Library"');
+      await fileSystem.writeFile('/lib.mld', '/text @name = "Library"');
       
-      const code = `@path lib = "./lib.mld"
-@add @lib`;
+      const code = `/path @lib = "./lib.mld"
+/add @lib`;
       
       const result = await interpret(code, {
         fileSystem,
@@ -317,18 +317,18 @@ describe('Path Content Type Validation', () => {
         resolverManager
       });
       
-      expect(result.trim()).toBe('@text name = "Library"');
+      expect(result.trim()).toBe('/text @name = "Library"');
     });
 
     it('should handle mixed file references', async () => {
       await fileSystem.writeFile('/data.txt', 'Text data');
-      await fileSystem.writeFile('/module.mld', '@text mod = "Module"');
+      await fileSystem.writeFile('/module.mld', '/text @mod = "Module"');
       
       const code = `
-@path text = "./data.txt"
-@path mod = "./module.mld"
-@add @text
-@add @mod
+/path @text = "./data.txt"
+/path @mod = "./module.mld"
+/add @text
+/add @mod
 `;
       
       const result = await interpret(code, {
@@ -338,7 +338,7 @@ describe('Path Content Type Validation', () => {
         resolverManager
       });
       
-      expect(result.trim()).toBe('Text data\n@text mod = "Module"');
+      expect(result.trim()).toBe('Text data\n/text @mod = "Module"');
     });
   });
 });
