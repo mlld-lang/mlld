@@ -213,6 +213,10 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           if (isText(n) && n.content.trimStart().match(/^(>>|<<)/)) {
             continue;
           }
+          // Skip comment nodes
+          if (isComment(n)) {
+            continue;
+          }
           env.addNode(n);
         }
       }
@@ -229,6 +233,10 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
         if (!isDirective(n)) {
           // Skip inline comments (lines starting with >> or <<)
           if (isText(n) && n.content.trimStart().match(/^(>>|<<)/)) {
+            continue;
+          }
+          // Skip comment nodes
+          if (isComment(n)) {
             continue;
           }
           env.addNode(n);
