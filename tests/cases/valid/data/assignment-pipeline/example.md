@@ -7,16 +7,16 @@
 
 /exec @process(data) = js {
   // Handle both direct invocation (string) and pipeline (PipelineInput)
-if (typeof data === 'string') {
+  if (typeof data === 'string') {
     // Direct invocation - parse the JSON string
-const items = JSON.parse(data);
-return items.map(p => p.name).join(', ');
+    const items = JSON.parse(data);
+    return items.map(p => p.name).join(', ');
   } else {
     // Pipeline invocation - use the PipelineInput object
-console.log('Type:', data.type);
-console.log('Text length:', data.text.length);
-const items = data.data;
-return items.map(p => p.name).join(', ');
+    console.log('Type:', data.type);
+    console.log('Text length:', data.text.length);
+    const items = data.data;
+    return items.map(p => p.name).join(', ');
   }
 }
 

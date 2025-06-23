@@ -1,23 +1,23 @@
 /exec @getItems() = js {
-JSON.stringify([
-  { id: 1, name: 'Item 1' },
-  { id: 2, name: 'Item 2' }
+  return JSON.stringify([
+    { id: 1, name: 'Item 1' },
+    { id: 2, name: 'Item 2' }
   ])
 }
 
 /exec @showData(x) = js {
   // Handle both string and PipelineInput objects
-let str;
-if (typeof x === 'string') {
-str = x;
+  let str;
+  if (typeof x === 'string') {
+    str = x;
   } else if (x && x.text && x.type) {
     // This is a PipelineInput object - use the text
-str = x.text;
+    str = x.text;
   } else {
     // Other objects
-str = JSON.stringify(x);
+    str = JSON.stringify(x);
   }
-return str.substring(0, 100);
+  return str.substring(0, 100);
 }
 
 # Direct call (should work)
