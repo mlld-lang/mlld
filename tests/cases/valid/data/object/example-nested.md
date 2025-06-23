@@ -1,8 +1,8 @@
 /data @config = {
-  server: {
-    port: 8080,
-    host: "localhost"
+server: {
+port: 8080,
+host: "localhost"
   },
-  debug: true
+debug: true
 }
 /add @config.server.port

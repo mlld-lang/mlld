@@ -12,10 +12,10 @@ This example shows how to create reusable HTTP request commands using @exec and 
 ## Create a call object with all methods
 
 /data @call = {
-  get: @get,
-  post: @post,
-  put: @put,
-  delete: @delete
+get: @get,
+post: @post,
+put: @put,
+delete: @delete
 }
 
 ## Use the API commands
@@ -33,15 +33,15 @@ This example shows how to create reusable HTTP request commands using @exec and 
 ## Even better: Create a full API client
 
 /data @api = {
-  baseUrl: "https://api.example.com",
+baseUrl: "https://api.example.com",
   
-  # Methods attached to the object
-  users: {
-    list: @get(@api.baseUrl + "/users"),
-    create: @post(@api.baseUrl + "/users"),
-    get: @exec(id) = @run {curl -s @api.baseUrl/users/@id},
-    update: @exec(id, data) = @run {curl -s -X PUT @api.baseUrl/users/@id -d '@data'},
-    delete: @exec(id) = @run {curl -s -X DELETE @api.baseUrl/users/@id}
+# Methods attached to the object
+users: {
+list: @get(@api.baseUrl + "/users"),
+create: @post(@api.baseUrl + "/users"),
+get: @exec(id) = @run {curl -s @api.baseUrl/users/@id},
+update: @exec(id, data) = @run {curl -s -X PUT @api.baseUrl/users/@id -d '@data'},
+delete: @exec(id) = @run {curl -s -X DELETE @api.baseUrl/users/@id}
   }
 }
 
@@ -52,7 +52,7 @@ This example shows how to create reusable HTTP request commands using @exec and 
 /exec @post(url, data, headers) = {curl -s -X POST @url -H "Content-Type: application/json" {{headers ? "-H '" + headers + "'" : ""}} -d '@data'}
 
 /data @call = {
-  get: @get,
-  post: @post
+get: @get,
+post: @post
 }
 ]]

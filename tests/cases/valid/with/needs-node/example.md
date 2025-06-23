@@ -3,7 +3,7 @@
 This test checks for npm (which should always exist with node).
 
 /run {echo "npm is available"} with {
-  needs: {
+needs: {
     "node": {
       "npm": "*"
     }

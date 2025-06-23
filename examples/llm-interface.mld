@@ -8,18 +8,18 @@
 /exec @llm_full(prompt, parameters) = {llm "@prompt" @parameters}
 
 /data @llm = {
-  # Default function behavior
-  query: @llm_basic,
+# Default function behavior
+query: @llm_basic,
   
-  # Namespace methods
-  media: @llm_media,
-  tools: @llm_tools,
-  full: @llm_full,
+# Namespace methods
+media: @llm_media,
+tools: @llm_tools,
+full: @llm_full,
   
-  # Convenience presets
-  assistant: @exec(prompt) = @run {llm "@prompt" -s "You are a helpful assistant"},
-  coder: @exec(prompt) = @run {llm "@prompt" -s "You are an expert programmer"},
-  reviewer: @exec(prompt) = @run {llm "@prompt" -s "You are a thorough code reviewer"}
+# Convenience presets
+assistant: @exec(prompt) = @run {llm "@prompt" -s "You are a helpful assistant"},
+coder: @exec(prompt) = @run {llm "@prompt" -s "You are an expert programmer"},
+reviewer: @exec(prompt) = @run {llm "@prompt" -s "You are a thorough code reviewer"}
 }
 
 ## Usage examples:
@@ -41,25 +41,25 @@
 ## Option 2: Builder Pattern
 
 /data @llm = {
-  # Store configuration
-  _system: "",
-  _media: [],
-  _tools: [],
+# Store configuration
+_system: "",
+_media: [],
+_tools: [],
   
-  # Chainable setters (would need special handling)
-  system: @exec(text) = @data llm = {...@llm, _system: @text},
-  media: @exec(files) = @data llm = {...@llm, _media: @files},
-  tools: @exec(tools) = @data llm = {...@llm, _tools: @tools},
+# Chainable setters (would need special handling)
+system: @exec(text) = @data llm = {...@llm, _system: @text},
+media: @exec(files) = @data llm = {...@llm, _media: @files},
+tools: @exec(tools) = @data llm = {...@llm, _tools: @tools},
   
-  # Execute with current config
-  run: @exec(prompt) = @run {llm "@prompt" -s "@llm._system" {{llm._media ? "-a " + llm._media : ""}} {{llm._tools ? "--tool " + llm._tools : ""}}}
+# Execute with current config
+run: @exec(prompt) = @run {llm "@prompt" -s "@llm._system" {{llm._media ? "-a " + llm._media : ""}} {{llm._tools ? "--tool " + llm._tools : ""}}}
 }
 
 ## Option 3: Factory Functions
 
 /exec @createLLM(config) = @data {
-  prompt: @exec(text) = @run {llm "@text" -s "@config.system" {{config.media ? "-a " + config.media : ""}}},
-  withTools: @exec(text, tools) = @run {llm "@text" -s "@config.system" --tool @tools}
+prompt: @exec(text) = @run {llm "@text" -s "@config.system" {{config.media ? "-a " + config.media : ""}}},
+withTools: @exec(text, tools) = @run {llm "@text" -s "@config.system" --tool @tools}
 }
 
 /data @codingLLM = @createLLM({system: "You are an expert programmer"})
@@ -72,11 +72,11 @@
 /exec @_llm_tools(prompt, system, tools) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools}
 
 /data @llm = {
-  # Call directly: @run @llm("prompt")
-  __call__: @_llm,  # Special property (if supported)
+# Call directly: @run @llm("prompt")
+__call__: @_llm,  # Special property (if supported)
   
-  # Or use as: @run @llm.query("prompt")
-  query: @_llm,
-  media: @_llm_media,
-  tools: @_llm_tools
+# Or use as: @run @llm.query("prompt")
+query: @_llm,
+media: @_llm_media,
+tools: @_llm_tools
 }

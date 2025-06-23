@@ -27,19 +27,19 @@
 
 ## Service Health Checks
 /exec @service_healthy(name) = {
-  curl -s "http://localhost:8080/{{name}}/health" | grep -q "ok" && echo "true"
+curl -s "http://localhost:8080/{{name}}/health" | grep -q "ok" && echo "true"
 }
 
 /exec @all_services_healthy() = {}
-  # Check if all services return healthy
-  healthy=true
-  for service in auth payment user; do
-    if ! curl -s "http://localhost:8080/$service/health" | grep -q "ok"; then
-      healthy=false
-      break
-    fi
-  done
-  echo "$healthy"
+# Check if all services return healthy
+healthy=true
+for service in auth payment user; do
+if ! curl -s "http://localhost:8080/$service/health" | grep -q "ok"; then
+healthy=false
+break
+fi
+done
+echo "$healthy"
 }
 
 ## Conditional Analysis Based on Health
@@ -63,12 +63,12 @@ Please provide:
 
 ## Generate Analysis for Each Service
 /when all: [
-  foreach @analyze_service(@services)
+foreach @analyze_service(@services)
 ]
 
 /exec @analyze_service(service) = {
-  echo "=== Analysis for {{service.name}} ==="
-  echo "{{serviceAnalysisPrompt}}" | llm --model gpt-4}
+echo "=== Analysis for {{service.name}} ==="
+echo "{{serviceAnalysisPrompt}}" | llm --model gpt-4}
 
 ## Conditional Deployment
 /exec @is_production() = {test "$ENVIRONMENT" = "production" && echo "true"}
@@ -91,14 +91,14 @@ Environment: {{env}}
 ## Services Analyzed:
 foreach @services as service:
 - **{{service.name}}**: {{service.description}}
-  - Path: `{{service.path}}`
-  - Config: `{{service.config}}`
+- Path: `{{service.path}}`
+- Config: `{{service.config}}`
 endforeach
 
 ## Health Status:
 /when @all_services_healthy() => @add "All services operational ✅"
 /when any: [
-  foreach @not_healthy(@services)
+foreach @not_healthy(@services)
 ] => @add "⚠️ Some services require attention"
 
 ## Next Steps:

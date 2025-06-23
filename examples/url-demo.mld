@@ -27,7 +27,7 @@ This example demonstrates how to use URLs in Meld directives.
 Note: To enable URL support, you have two options:
 
 1. Use CLI flags:
-   meld url-demo.mld --allow-urls --url-allowed-domains github.com,githubusercontent.com,api.example.com
+meld url-demo.mld --allow-urls --url-allowed-domains github.com,githubusercontent.com,api.example.com
 
 2. Create a meld.config.json file in your project:
    ```json

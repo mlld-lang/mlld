@@ -5,5 +5,5 @@
 /exec @format() = {echo "Word count: @INPUT"}
 
 /run {echo "  hello   world  "} with {
-  pipeline: [@trim, @count, @format]
+pipeline: [@trim, @count, @format]
 }

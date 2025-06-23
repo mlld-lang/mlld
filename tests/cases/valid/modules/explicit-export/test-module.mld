@@ -13,6 +13,6 @@ version: 1.0.0
 
 # Explicit module export - only greet and farewell are exported
 @data module = {
-  greet: @greet,
-  farewell: @farewell
+greet: @greet,
+farewell: @farewell
 }

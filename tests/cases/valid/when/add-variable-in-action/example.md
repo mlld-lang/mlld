@@ -22,8 +22,8 @@ This test verifies that simple variable references work correctly inside @when a
 /text @testValue = "false"
 
 /when @testValue first: [
-  true => @add "Won't show"
-  false => @add @greeting
+true => @add "Won't show"
+false => @add @greeting
 ]
 
 ## Test 4: Mixed with exec invocations

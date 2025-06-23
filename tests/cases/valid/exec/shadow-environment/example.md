@@ -9,14 +9,14 @@ Define helper functions:
 
 Declare shadow environment:
 
-/exec js = { double, triple }
+/exec @js = { double, triple }
 
 Use functions within JS context:
 
-/exec @calculate(n) = js {}
-  const a = double(n);
-  const b = triple(n);
-  return a + b;
+/exec @calculate(n) = js {
+const a = double(n);
+const b = triple(n);
+return a + b;
 }
 
 /data @result = @calculate(5)
@@ -27,11 +27,11 @@ Use functions within JS context:
 /exec @formatNumber(n) = js {n.toFixed(2)}
 /exec @addPrefix(text, prefix) = js {prefix + text}
 
-/exec js = { formatNumber, addPrefix }
+/exec @js = { formatNumber, addPrefix }
 
-/exec @process(value) = js {}
-  const formatted = formatNumber(value);
-  return addPrefix(formatted, "$");
+/exec @process(value) = js {
+const formatted = formatNumber(value);
+return addPrefix(formatted, "$");
 }
 
 /data @price = @process(42.567)

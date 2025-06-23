@@ -4,5 +4,5 @@
 /exec @addPrefix(text) = {echo "PREFIX: @text"}
 
 /run {echo "hello world"} with {
-  pipeline: [@uppercase, @addPrefix]
+pipeline: [@uppercase, @addPrefix]
 }

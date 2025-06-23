@@ -3,9 +3,9 @@ title: Basic Frontmatter Example
 author: mlld team
 version: 1.0.0
 tags:
-  - example
-  - frontmatter
-  - documentation
+- example
+- frontmatter
+- documentation
 ---
 
 # {{fm.title}}

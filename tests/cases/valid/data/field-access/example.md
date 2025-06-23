@@ -3,8 +3,8 @@
   {name: "Bob", role: {title: "User", level: 1}}
 ]
 /data @permissions = {
-  adminName: @users[0].name,
-  adminLevel: @users[0].role.level,
-  userCount: 2
+adminName: @users[0].name,
+adminLevel: @users[0].role.level,
+userCount: 2
 }
 /add [[{{permissions.adminName}} has level {{permissions.adminLevel}} access]]

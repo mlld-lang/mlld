@@ -1,17 +1,17 @@
 /data @config = {
-  name: "TestApp",
-  version: "1.0.0",
-  description: null,
-  settings: {
-    debug: false,
-    logLevel: null,
-    features: {
-      auth: true,
-      cache: null,
-      api: "v2"
+name: "TestApp",
+version: "1.0.0",
+description: null,
+settings: {
+debug: false,
+logLevel: null,
+features: {
+auth: true,
+cache: null,
+api: "v2"
     }
   },
-  metadata: null
+metadata: null
 }
 
 /add [[Application Config:

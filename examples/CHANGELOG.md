@@ -10,17 +10,17 @@
 ## Version 2.0
 
 - **Breaking Changes:**
-  - Renamed `createState` to `createStore`
-  - Updated action creator API
-  - Removed deprecated methods
+- Renamed `createState` to `createStore`
+- Updated action creator API
+- Removed deprecated methods
 
 - **New Features:**
-  - Computed state selectors
-  - Middleware support
-  - DevTools integration
-  - Performance optimizations
+- Computed state selectors
+- Middleware support
+- DevTools integration
+- Performance optimizations
 
 - **Bug Fixes:**
-  - Fixed memory leaks in observers
-  - Improved error handling
-  - Better TypeScript inference
+- Fixed memory leaks in observers
+- Improved error handling
+- Better TypeScript inference

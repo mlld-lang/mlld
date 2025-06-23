@@ -1,14 +1,14 @@
-/exec getValue = js {return "test-value"}
-/exec getMessage = js {return "Hello from exec"}
+/exec @getValue = js {return "test-value"}
+/exec @getMessage = js {return "Hello from exec"}
 /exec @greet(name) = [[Hello, {{name}}!]]
 
 /data @demo = {
-  valueCmd: @getValue,
-  messageCmd: @getMessage,
-  greetCmd: @greet,
-  value: @getValue(),
-  message: @getMessage(),
-  greeting: @greet("World")
+valueCmd: @getValue,
+messageCmd: @getMessage,
+greetCmd: @greet,
+value: @getValue(),
+message: @getMessage(),
+greeting: @greet("World")
 }
 
 /text @info1 = [[Demo object contains:]]

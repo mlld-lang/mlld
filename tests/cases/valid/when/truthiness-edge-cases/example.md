@@ -48,8 +48,8 @@ Test comprehensive truthiness behavior in @when directives.
 /text @mode = "true"
 
 /when @mode: [
-  true => @add "Matched as boolean true"
-  false => @add "Matched as boolean false"
+true => @add "Matched as boolean true"
+false => @add "Matched as boolean false"
   "production" => @add "Matched production"
 ]
 
@@ -97,18 +97,18 @@ Test comprehensive truthiness behavior in @when directives.
 /when @userResponse: [
   "yes" => @add "User agreed"
   "no" => @add "User declined"
-  true => @add "Truthy response"
+true => @add "Truthy response"
 ]
 
 // Empty string and zero shouldn't match true
 /when @permission: [
-  true => @add "FAIL: empty matched true"
-  false => @add "No permission"
+true => @add "FAIL: empty matched true"
+false => @add "No permission"
 ]
 
 /when @score: [
-  true => @add "FAIL: zero matched true"
-  false => @add "No score"
+true => @add "FAIL: zero matched true"
+false => @add "No score"
 ]
 
 ## 7. @when any: Block with Mixed Truthiness
@@ -170,7 +170,7 @@ Test comprehensive truthiness behavior in @when directives.
   @firstStatus => @add "Status: {{firstStatus}}"
   @firstFallback => @add "Fallback: {{firstFallback}}"
   @firstDefault => @add "Default: {{firstDefault}}"
-  true => @add "Ultimate fallback"
+true => @add "Ultimate fallback"
 ]
 
 ## 10. Negation in Block Forms
@@ -218,17 +218,17 @@ Test comprehensive truthiness behavior in @when directives.
 
 ## 13. Deeply Falsy Values
 
-/exec @getFalsy() = js {}
+/exec @getFalsy() = js {
   // Return various falsy values
-  return "";
+return "";
 }
 
-/exec @getStringFalse() = js {}
-  return "false";
+/exec @getStringFalse() = js {
+return "false";
 }
 
-/exec @getStringZero() = js {}
-  return "0";
+/exec @getStringZero() = js {
+return "0";
 }
 
 /when @getFalsy() => @add "FAIL: Empty from JS triggered"

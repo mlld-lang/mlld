@@ -3,12 +3,12 @@ title: Test Document
 author: John Doe
 date: 2024-01-15
 tags:
-  - test
-  - mlld
-  - frontmatter
+- test
+- mlld
+- frontmatter
 settings:
-  debug: true
-  version: 1.0.0
+debug: true
+version: 1.0.0
 ---
 
 # Frontmatter Test

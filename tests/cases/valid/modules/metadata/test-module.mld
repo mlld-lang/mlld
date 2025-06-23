@@ -8,5 +8,5 @@ customField: Custom metadata value
 @text hello = "Hello from module"
 
 @data module = {
-  hello: @hello
+hello: @hello
 }

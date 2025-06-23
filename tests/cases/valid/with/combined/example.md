@@ -3,8 +3,8 @@
 /exec @format() = {sed 's/^/> /'}
 
 /run {npm --version} with {
-  pipeline: [@format],
-  needs: {
+pipeline: [@format],
+needs: {
     "node": {
       "npm": "*"
     }

@@ -5,9 +5,9 @@
 /text @diff = @run {git diff | cat}
 
 /text @prompt = [[
-   Read our docs: {{arch}} {{standards}}
-   Review the latest changes: {{diff}}
-   Here's your task: {{tasks.codereview}}
+Read our docs: {{arch}} {{standards}}
+Review the latest changes: {{diff}}
+Here's your task: {{tasks.codereview}}
 ]]
 
 /run {llm @prompt --system @roles.architect}

@@ -23,14 +23,14 @@ Import from the public registry using username/module pattern:
 ## How It Works
 
 1. **Custom Resolvers** (`@prefix/...`):
-   - The ResolverManager checks configured resolver prefixes
-   - Each prefix can map to different sources (local, GitHub, HTTP, etc.)
-   - Configure in mlld.config.json or mlld.lock.json
+- The ResolverManager checks configured resolver prefixes
+- Each prefix can map to different sources (local, GitHub, HTTP, etc.)
+- Configure in mlld.config.json or mlld.lock.json
 
 2. **Public Registry** (`@username/module`):
-   - Falls back to DNS resolution when no resolver prefix matches
-   - Looks up TXT records at `_mlld.username.domain`
-   - Supports versioning and integrity checks
+- Falls back to DNS resolution when no resolver prefix matches
+- Looks up TXT records at `_mlld.username.domain`
+- Supports versioning and integrity checks
 
 ## Example Configuration
 

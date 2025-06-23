@@ -37,7 +37,7 @@ This file tests the new output management features.
 
 /run javascript {console.log("JavaScript output test");
 for (let i = 1; i <= 5; i++) {
-  console.log(`Line ${i}`);
+console.log(`Line ${i}`);
 }
 }
 

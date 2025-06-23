@@ -4,7 +4,7 @@
 # A more complex bash script
 names=("Alice" "Bob" "Charlie")
 for name in "${names[@]}"; do
-  echo "Welcome, $name!"
+echo "Welcome, $name!"
 done
 
 # Math operations

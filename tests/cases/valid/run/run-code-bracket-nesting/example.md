@@ -9,8 +9,8 @@ print(data[0])
 
 ### JavaScript with objects and arrays  
 /run javascript {const config = {
-  items: [1, 2, 3],
-  nested: { values: [4, 5, 6] }
+items: [1, 2, 3],
+nested: { values: [4, 5, 6] }
 };
 console.log(config.items[0]);
 }
@@ -21,12 +21,12 @@ console.log(config.items[0]);
   {"name": "prod", "values": [4, 5, 6]}
 ]
 for item in data:
-  print(f"Processing {item['name']}: {item['values']}")
+print(f"Processing {item['name']}: {item['values']}")
 }
 
 ### Bash with test conditions
 /run sh {if [ -f "file.txt" ]; then
-  echo "File exists"
-  cat "file.txt" | grep "pattern"
+echo "File exists"
+cat "file.txt" | grep "pattern"
 fi
 }

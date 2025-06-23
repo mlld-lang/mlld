@@ -8,7 +8,7 @@ This is a paragraph with irregular spacing.
 
 - Item 1
 - Item 2
-  - Nested item
+- Nested item
 
 | Col1 | Col2 | Col3 |
 | ---- | ---- | ---- |

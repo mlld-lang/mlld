@@ -5,8 +5,8 @@
 @exec greetUser(name) = [(echo "Hello, @name!")]
 
 @exec multiLine() = [(
-  echo "Line 1"
-  echo "Line 2"
+echo "Line 1"
+echo "Line 2"
 )]
 
 @exec withParams(first, second) = [(echo "First: @first, Second: @second")]

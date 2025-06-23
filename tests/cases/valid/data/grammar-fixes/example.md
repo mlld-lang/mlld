@@ -1,14 +1,14 @@
 /exec @messageTemplate(user, action) = [[{{user}} {{action}} successfully!]]
-/exec getVersion = {echo "v1.2.3"}
+/exec @getVersion = {echo "v1.2.3"}
 
 /data @testAllFixes = {
-  message: @add @messageTemplate("Alice", "logged in"),
-  version: @run @getVersion,
-  nullable: null,
-  complex: {
-    greeting: @add @messageTemplate("Bob", "signed up"),
-    build: @run @getVersion,
-    empty: null,
-    flag: true
+message: @add @messageTemplate("Alice", "logged in"),
+version: @run @getVersion,
+nullable: null,
+complex: {
+greeting: @add @messageTemplate("Bob", "signed up"),
+build: @run @getVersion,
+empty: null,
+flag: true
   }
 }

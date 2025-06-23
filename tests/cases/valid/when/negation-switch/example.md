@@ -12,5 +12,5 @@
 
 /when @hasPermission: [
   !false => @add "This should not appear"
-  false => @add "No permission granted"
+false => @add "No permission granted"
 ]

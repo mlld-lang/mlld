@@ -1,2 +1,2 @@
-/data isEnabled.value = true
+/data @isEnabled.value = true
 /add @isEnabled.value

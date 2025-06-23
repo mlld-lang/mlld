@@ -4,9 +4,9 @@
 /text @author = "Meld Team"
 /text @date = "2025-02-25"
 /data @metadata = {
-  version: "1.0.0",
-  description: "A comprehensive demonstration of Meld capabilities",
-  tags: ["demo", "api", "documentation"]
+version: "1.0.0",
+description: "A comprehensive demonstration of Meld capabilities",
+tags: ["demo", "api", "documentation"]
 }
 
 /text @intro_content = [[
@@ -45,12 +45,12 @@ Then you can add them in this one:
 ## Data Variables
 
 /data @config = {
-  app: {
-    name: "Meld Demo",
-    version: "1.0.0",
-    features: ["text", "data", "path", "import", "add", "run", "exec"]
+app: {
+name: "Meld Demo",
+version: "1.0.0",
+features: ["text", "data", "path", "import", "add", "run", "exec"]
   },
-  env: "production"
+env: "production"
 }
 
 /text @data_content = [[
@@ -78,7 +78,7 @@ Path variables for file system references:
 
 /run {echo "This is output from a shell command"}
 
-/exec greet = {echo "Hello from an exec command"}
+/exec @greet = {echo "Hello from an exec command"}
 /run @greet
 
 /text @user = "Alice"
@@ -132,9 +132,9 @@ Still in outer fence
   { name: "Item 3", value: 300 }
 ]
 
-/exec calculateTotal = @run javascript {[
-  const values = [100, 200, 300};
-  return values.reduce((a, b) => a + b, 0);
+/exec @calculateTotal = @run javascript {[
+const values = [100, 200, 300};
+return values.reduce((a, b) => a + b, 0);
 ]]
 
 /text @complex_template = [[

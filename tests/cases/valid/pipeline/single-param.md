@@ -8,7 +8,7 @@ Tests that single parameter functions continue working as before.
 /exec @uppercase(text) = js {text.toUpperCase()}
 /text @result = @run {echo "hello world"} | @uppercase
 /add @result
-```
+  ```
 
 ## Expected
 

@@ -1,10 +1,10 @@
 /data @testResults = {
-  suites: [
+suites: [
     @run {echo "unit: passed"},
     @run {echo "integration: passed"},
     @run {echo "e2e: passed"}
   ],
-  count: 3
+count: 3
 }
 /add [[Test Results:
 {{testResults.suites[0]}}

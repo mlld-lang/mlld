@@ -10,11 +10,11 @@
 # Create HTTP namespace with lazy command references
 # Critical: @get, @post, etc. are stored as references, not executed immediately
 /data @http = {
-  get: @get,
-  post: @post,
-  auth: {
-    get: @auth_get,
-    post: @auth_post
+get: @get,
+post: @post,
+auth: {
+get: @auth_get,
+post: @auth_post
   }
 }
 

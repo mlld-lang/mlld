@@ -1,14 +1,14 @@
-/exec getDate = {echo "2024-01-15"}
-/exec getUser = {echo "admin"}
-/exec getStatus = {echo "active"}
+/exec @getDate = {echo "2024-01-15"}
+/exec @getUser = {echo "admin"}
+/exec @getStatus = {echo "active"}
 
 /data @systemInfo = {
-  date: @run @getDate,
-  user: @run @getUser,
-  status: @run @getStatus,
-  nested: {
-    backup_date: @run @getDate,
-    backup_user: @run @getUser
+date: @run @getDate,
+user: @run @getUser,
+status: @run @getStatus,
+nested: {
+backup_date: @run @getDate,
+backup_user: @run @getUser
   }
 }
 

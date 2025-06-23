@@ -18,7 +18,7 @@ echo "Array length: ${#arr[@]}"
 # Test 2: Array iteration using @
 colors=("red" "green" "blue")
 for color in "${colors[@]}"; do
-  echo "Color: $color"
+echo "Color: $color"
 done
 }
 
