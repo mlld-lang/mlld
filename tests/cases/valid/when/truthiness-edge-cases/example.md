@@ -219,7 +219,7 @@ true => @add "Ultimate fallback"
 ## 13. Deeply Falsy Values
 
 /exec @getFalsy() = js {
-  >> Return various falsy values
+  // Return various falsy values
 return "";
 }
 

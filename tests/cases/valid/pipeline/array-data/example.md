@@ -6,15 +6,15 @@ JSON.stringify([
 }
 
 /exec @showData(x) = js {
-  >> Handle both string and PipelineInput objects
+  // Handle both string and PipelineInput objects
 let str;
 if (typeof x === 'string') {
 str = x;
   } else if (x && x.text && x.type) {
-    >> This is a PipelineInput object - use the text
+    // This is a PipelineInput object - use the text
 str = x.text;
   } else {
-    >> Other objects
+    // Other objects
 str = JSON.stringify(x);
   }
 return str.substring(0, 100);

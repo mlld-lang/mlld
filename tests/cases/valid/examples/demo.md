@@ -107,8 +107,8 @@ def hello():
 ```javascript
 >> This is a JavaScript code block
 function greet() {
-  >> Directives inside code fences are preserved as-is
-  >> @data config = { key: "value" }
+ // Directives inside code fences are preserved as-is
+ // @data config = { key: "value" }
   console.log("Hello!");
 }
 ```

@@ -1,7 +1,7 @@
 # Test Node.js Undefined Parameter Handling
 
 /exec @greet(name, title, suffix) = node {
-  >> Function that handles optional parameters
+  // Function that handles optional parameters
   let greeting = "Hello";
   
   if (title !== undefined) {
@@ -18,10 +18,10 @@
 }
 
 /exec @checkParams(a, b, c, d) = node {
-  >> Test that all parameters are accessible even when undefined
+  // Test that all parameters are accessible even when undefined
   const results = [];
   
-  >> This would throw ReferenceError if parameters weren't declared
+  // This would throw ReferenceError if parameters weren't declared
   results.push(`a: ${typeof a} = ${a}`);
   results.push(`b: ${typeof b} = ${b === undefined ? 'undefined' : b}`);
   results.push(`c: ${typeof c} = ${c === undefined ? 'undefined' : c}`);

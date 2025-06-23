@@ -91,7 +91,7 @@ You can disable fuzzy matching for stricter path resolution:
 {
   "@desktop": {
     "config": {
-      "fuzzyMatch": false  >> Exact matches only
+      "fuzzyMatch": false // Exact matches only
     }
   }
 }
@@ -105,8 +105,8 @@ Or selectively disable features:
     "config": {
       "fuzzyMatch": {
         "enabled": true,
-        "caseInsensitive": false,    >> Case must match exactly
-        "normalizeWhitespace": true   >> But spaces/dashes still work
+        "caseInsensitive": false,   // Case must match exactly
+        "normalizeWhitespace": true  // But spaces/dashes still work
       }
     }
   }
