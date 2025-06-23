@@ -1,23 +1,23 @@
 # Bracket character tests
 
 /exec @checkBracket(x) = js {
-const firstChar = x.charAt(0);
-if (firstChar === "[") {
-return "starts with bracket";
+  const firstChar = x.charAt(0);
+  if (firstChar === "[") {
+    return "starts with bracket";
   }
-return "no bracket";
+  return "no bracket";
 }
 
 /exec @hasBrackets(x) = js {x.includes("[") || x.includes("]")}
 
 /exec @arrayTest() = js {
-const arr = ["[", "]", "[]"];
-return arr.join(",");
+  const arr = ["[", "]", "[]"];
+  return arr.join(",");
 }
 
 /exec @regexTest(x) = js {
-const match = x.match(/\[([^\]]+)\]/);
-return match ? match[1] : "no match";
+  const match = x.match(/\[([^\]]+)\]/);
+  return match ? match[1] : "no match";
 }
 
 ## Results

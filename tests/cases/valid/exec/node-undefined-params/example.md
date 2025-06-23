@@ -2,32 +2,32 @@
 
 /exec @greet(name, title, suffix) = node {
   // Function that handles optional parameters
-let greeting = "Hello";
+  let greeting = "Hello";
   
-if (title !== undefined) {
-greeting += ", " + title;
+  if (title !== undefined) {
+    greeting += ", " + title;
   }
   
-greeting += " " + name;
+  greeting += " " + name;
   
-if (suffix !== undefined) {
-greeting += " " + suffix;
+  if (suffix !== undefined) {
+    greeting += " " + suffix;
   }
   
-return greeting + "!";
+  return greeting + "!";
 }
 
 /exec @checkParams(a, b, c, d) = node {
   // Test that all parameters are accessible even when undefined
-const results = [];
+  const results = [];
   
   // This would throw ReferenceError if parameters weren't declared
-results.push(`a: ${typeof a} = ${a}`);
-results.push(`b: ${typeof b} = ${b === undefined ? 'undefined' : b}`);
-results.push(`c: ${typeof c} = ${c === undefined ? 'undefined' : c}`);
-results.push(`d: ${typeof d} = ${d === undefined ? 'undefined' : d}`);
+  results.push(`a: ${typeof a} = ${a}`);
+  results.push(`b: ${typeof b} = ${b === undefined ? 'undefined' : b}`);
+  results.push(`c: ${typeof c} = ${c === undefined ? 'undefined' : c}`);
+  results.push(`d: ${typeof d} = ${d === undefined ? 'undefined' : d}`);
   
-return results.join(', ');
+  return results.join(', ');
 }
 
 # Test case 1: All parameters provided

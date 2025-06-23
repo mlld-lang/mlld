@@ -2,7 +2,7 @@
 
 /exec @double(x) = js {x * 2}
 
-/exec @js = { double }
+/exec js = { double }
 
 /exec @test(n) = js {double(n)}
 

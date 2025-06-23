@@ -1,2 +1,12 @@
-/text greeting = "Hello, World!"
-/add @greeting
+# Test nested braces
+
+/exec @simple() = js { console.log('hello') }
+
+/exec @withBraces() = js { if (true) { return 42; } }
+
+/exec @simpleReturn() = js { return 5 + 3 }
+
+/run @simple()
+/run @withBraces()
+/run @simpleReturn()
+EOF < /dev/null

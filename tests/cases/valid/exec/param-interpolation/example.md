@@ -20,11 +20,11 @@ Direct calls:
 ## Code Template Tests
 
 /exec @jsGreet(name) = javascript {
-console.log(`JS says hello to ${name}!`);
+  console.log(`JS says hello to ${name}!`);
 }
 
 /exec @bashGreet(name) = bash {
-echo "Bash says hi to $name!"
+  echo "Bash says hi to $name!"
 }
 
 Direct calls:
