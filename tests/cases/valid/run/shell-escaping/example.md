@@ -7,9 +7,9 @@ This tests that variables containing special shell characters are properly escap
 /text @with_dollar = "Price is $100.00"
 /text @with_backticks = "Use `npm install` to install"
 /text @with_at = "@username mentioned @other"
-/text @with_newlines = "Line 1
+/text @with_newlines = `Line 1
 Line 2
-Line 3"
+Line 3`
 /text @with_mixed = "Complex: $VAR, @user, `cmd`, 'single', \"double\""
 
 // Test simple text

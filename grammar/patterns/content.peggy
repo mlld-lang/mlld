@@ -164,11 +164,17 @@ SingleQuotedCommandContent
       return chars.join('');
     }
 
-// Text inside double quotes
+// Text inside double quotes (supports newlines)
 DoubleQuotedText
-  = chars:(!['"@] char:. { return char; })+ {
+  = chars:DoubleQuotedChar+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
+
+// Character inside double quotes
+DoubleQuotedChar
+  = StringEscapeSequence  // Handle \n, \t, etc.
+  / EscapeSequence       // Handle \@, \", etc.
+  / !["@\n\r] char:. { return char; }
 
 // Content inside backtick templates - supports @var and @func(args)
 BacktickInterpolation
@@ -353,7 +359,7 @@ LiteralOnlyContent "Literal text without any interpolation"
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
 
-// Double quoted content with @var interpolation (NOT multiline)
+// Double quoted content with @var interpolation (supports multiline)
 InterpolatedDoubleQuoteContent "Double quoted content with @var interpolation"
   = '"' parts:(SpecialVariable / CommandContextVariable / DoubleQuotedText)* '"' {
       return parts;

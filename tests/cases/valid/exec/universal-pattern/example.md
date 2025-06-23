@@ -1,5 +1,5 @@
-/exec getValue = js {return "test-value"}
-/exec getMessage = js {return "Hello from exec"}
+/exec @getValue = js {return "test-value"}
+/exec @getMessage = js {return "Hello from exec"}
 /exec @greet(name) = [[Hello, {{name}}!]]
 
 /data @demo = {
