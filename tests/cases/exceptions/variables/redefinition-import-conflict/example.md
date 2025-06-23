@@ -1,3 +1,3 @@
 /import { title } from "config.mld"
-/text @title = "Local Title"
-/add @title
+/var @title = "Local Title"
+/show @title

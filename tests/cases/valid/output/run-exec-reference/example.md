@@ -2,8 +2,8 @@
 
 This tests the @output directive with @run @command syntax.
 
-/exec @generateList() = {ls -la}
-/exec @showDate() = {date}
+/exe @generateList() = {ls -la}
+/exe @showDate() = {date}
 
 # Using @output with exec references
 /output @generateList() to "generated-list.txt"

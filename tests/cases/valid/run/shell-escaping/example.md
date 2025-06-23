@@ -2,15 +2,15 @@
 
 This tests that variables containing special shell characters are properly escaped.
 
-/text @simple = "Hello World"
-/text @with_quotes = "She said 'hello' and \"goodbye\""
-/text @with_dollar = "Price is $100.00"
-/text @with_backticks = "Use `npm install` to install"
-/text @with_at = '@username mentioned @other'
-/text @with_newlines = `Line 1
+/var @simple = "Hello World"
+/var @with_quotes = "She said 'hello' and \"goodbye\""
+/var @with_dollar = "Price is $100.00"
+/var @with_backticks = "Use `npm install` to install"
+/var @with_at = '@username mentioned @other'
+/var @with_newlines = `Line 1
 Line 2
 Line 3`
-/text @with_mixed = 'Complex: $VAR, @user, `cmd`, \'single\', "double"'
+/var @with_mixed = 'Complex: $VAR, @user, `cmd`, \'single\', "double"'
 
 >> Test simple text
 /run {echo "@simple"}

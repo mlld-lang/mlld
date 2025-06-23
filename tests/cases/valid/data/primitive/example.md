@@ -1,2 +1,2 @@
-/data @greeting.text = "Hello, world!"
-/add @greeting.text
+/var @greeting.text = "Hello, world!"
+/show @greeting.text

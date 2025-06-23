@@ -2,11 +2,11 @@
 
 Test that @when actions can use @add with exec command invocations.
 
-/data @isTrue = true
-/exec @formatHeader(title) = {echo "=== @title ==="}
-/exec @getVersion() = [[v1.2.3]]
+/var @isTrue = true
+/exe @formatHeader(title) = {echo "=== @title ==="}
+/exe @getVersion() = [[v1.2.3]]
 
-/text @showHeader = "true"
+/var @showHeader = "true"
 
 /when @showHeader => @add @formatHeader("Welcome")
 

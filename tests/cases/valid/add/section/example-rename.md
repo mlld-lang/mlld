@@ -1,1 +1,1 @@
-/add "# Original Title" from [file.md] as "# New Title"
+/show "# Original Title" from [file.md] as "# New Title"

@@ -1,11 +1,11 @@
-/text @isProduction = "false"
-/text @emptyString = ""
-/text @hasValue = "yes"
-/data @nullValue = null
-/data @trueValue = true
-/data @falseValue = false
-/data @zeroValue = 0
-/data @oneValue = 1
+/var @isProduction = "false"
+/var @emptyString = ""
+/var @hasValue = "yes"
+/var @nullValue = null
+/var @trueValue = true
+/var @falseValue = false
+/var @zeroValue = 0
+/var @oneValue = 1
 
 # Testing negation in @when
 

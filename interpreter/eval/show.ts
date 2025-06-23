@@ -24,7 +24,7 @@ function compactBlankLines(content: string): string {
  * 
  * Ported from AddDirectiveHandler.
  */
-export async function evaluateAdd(
+export async function evaluateShow(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {

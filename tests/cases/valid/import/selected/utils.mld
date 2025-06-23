@@ -1,2 +1,2 @@
-/text @greeting = "Hello, world!"
-/data @count = 42
+/var @greeting = "Hello, world!"
+/var @count = 42

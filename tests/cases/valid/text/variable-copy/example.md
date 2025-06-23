@@ -1,9 +1,9 @@
-/text @original = "Original Value"
-/text @copy = @original
-/add [[Original: {{original}}]]
-/add [[Copy: {{copy}}]]
+/var @original = "Original Value"
+/var @copy = @original
+/show [[Original: {{original}}]]
+/show [[Copy: {{copy}}]]
 
-/text @greeting = "Hello"
-/text @name = "World"
-/text @combined = @greeting
-/add @combined
+/var @greeting = "Hello"
+/var @name = "World"
+/var @combined = @greeting
+/show @combined

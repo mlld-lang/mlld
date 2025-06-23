@@ -3,6 +3,6 @@
 This tests backward compatibility with @stdin syntax.
 
 /import { * } from @stdin
-/add @config.greeting
+/show @config.greeting
 
-/add @data.message
+/show @data.message

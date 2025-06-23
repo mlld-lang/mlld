@@ -15,15 +15,15 @@ settings:
 
 This document has frontmatter that can be accessed.
 
-/add [[Title: {{fm.title}}]]
-/add [[Author: {{fm.author}}]]
-/add [[Date: {{fm.date}}]]
+/show [[Title: {{fm.title}}]]
+/show [[Author: {{fm.author}}]]
+/show [[Date: {{fm.date}}]]
 
 Tags:
-/add [[{{fm.tags[0]}}]]
-/add [[{{fm.tags[1]}}]]
-/add [[{{fm.tags[2]}}]]
+/show [[{{fm.tags[0]}}]]
+/show [[{{fm.tags[1]}}]]
+/show [[{{fm.tags[2]}}]]
 
 Settings:
-/add [[Debug: {{fm.settings.debug}}]]
-/add [[Version: {{fm.settings.version}}]]
+/show [[Debug: {{fm.settings.debug}}]]
+/show [[Version: {{fm.settings.version}}]]

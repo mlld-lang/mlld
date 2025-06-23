@@ -1,17 +1,17 @@
 # Test: foreach with bash commands accessing parameters as environment variables
 
-/data @names = ["Alice", "Bob", "Charlie"]
-/data @scores = [95, 87, 92]
+/var @names = ["Alice", "Bob", "Charlie"]
+/var @scores = [95, 87, 92]
 
-/exec @greet(name) = bash {echo "Hello, $name!"}
-/exec @report(name, score) = bash {echo "$name scored $score points"}
+/exe @greet(name) = bash {echo "Hello, $name!"}
+/exe @report(name, score) = bash {echo "$name scored $score points"}
 
 # Single parameter bash command
-/data @greetings = foreach @greet(@names)
-/add @greetings
+/var @greetings = foreach @greet(@names)
+/show @greetings
 
 ---
 
 # Multiple parameter bash command
-/data @reports = foreach @report(@names, @scores)
-/add @reports
+/var @reports = foreach @report(@names, @scores)
+/show @reports

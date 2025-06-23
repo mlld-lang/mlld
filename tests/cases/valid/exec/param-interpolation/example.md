@@ -8,9 +8,9 @@ This test verifies that @param syntax works consistently in exec functions acros
 
 ## Command Template Tests
 
-/exec @greet(name) = {echo "Hello, @name!"}
-/exec @greetQuoted(name) = {echo "Greetings, '@name'"}
-/exec @greetSpecial(name) = {echo "Welcome @name (special: \$@name)"}
+/exe @greet(name) = {echo "Hello, @name!"}
+/exe @greetQuoted(name) = {echo "Greetings, '@name'"}
+/exe @greetSpecial(name) = {echo "Welcome @name (special: \$@name)"}
 
 Direct calls:
 /run @greet("Alice")
@@ -19,11 +19,11 @@ Direct calls:
 
 ## Code Template Tests
 
-/exec @jsGreet(name) = javascript {
+/exe @jsGreet(name) = javascript {
   console.log(`JS says hello to ${name}!`);
 }
 
-/exec @bashGreet(name) = bash {
+/exe @bashGreet(name) = bash {
   echo "Bash says hi to $name!"
 }
 
@@ -33,23 +33,23 @@ Direct calls:
 
 ## Foreach Tests
 
-/data @names = ["Frank", "Grace's Shop", "Henry & Sons"]
-/data @greetings = foreach @greet(@names)
-/add @greetings
+/var @names = ["Frank", "Grace's Shop", "Henry & Sons"]
+/var @greetings = foreach @greet(@names)
+/show @greetings
 
-/data @jsGreetings = foreach @jsGreet(@names)
-/add @jsGreetings
+/var @jsGreetings = foreach @jsGreet(@names)
+/show @jsGreetings
 
 ## Multiple Parameters
 
-/exec @introduce(first, last) = {echo "@first @last"}
-/data @firstNames = ["Ian", "Jane"]
-/data @lastNames = ["Smith", "O'Brien"]
-/data @intros = foreach @introduce(@firstNames, @lastNames)
-/add @intros
+/exe @introduce(first, last) = {echo "@first @last"}
+/var @firstNames = ["Ian", "Jane"]
+/var @lastNames = ["Smith", "O'Brien"]
+/var @intros = foreach @introduce(@firstNames, @lastNames)
+/show @intros
 
 ## Nested Variable References
 
-/text @myName = "Kate"
-/exec @greetVariable(prefix) = {echo "@prefix @myName!"}
+/var @myName = "Kate"
+/exe @greetVariable(prefix) = {echo "@prefix @myName!"}
 /run @greetVariable("Hello")

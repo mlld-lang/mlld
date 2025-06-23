@@ -1,6 +1,6 @@
 # Test Shadow Environment with Undefined Parameters
 
-/exec @processText(text, transform, options) = node {
+/exe @processText(text, transform, options) = node {
   // Test function that uses optional parameters
   let result = text;
   
@@ -19,7 +19,7 @@
   return result;
 }
 
-/exec nodejs = { processText }
+/exe nodejs = { processText }
 
 # Test with shadow environment
 /run node {

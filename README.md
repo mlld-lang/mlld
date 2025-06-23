@@ -52,10 +52,10 @@ import { processMlld } from 'mlld';
 
 // Process mlld content
 const mlldContent = `
-  @text greeting = "Hello"
-  @text name = "World"
+  /var @greeting = "Hello"
+  /var @name = "World"
   
-  @add [[{{greeting}}, {{name}}!]]
+  /show [[{{greeting}}, {{name}}!]]
 `;
 
 // Simple usage
@@ -71,29 +71,29 @@ const xmlResult = await processMlld(mlldContent, {
 
 ## Writing mlld Files
 
-mlld is a simple scripting language designed to work within markdown-like documents. It processes special `@directive` lines while preserving all other content as-is.
+mlld is a simple scripting language designed to work within markdown-like documents. It processes special `/directive` lines while preserving all other content as-is.
 
 ### Core Directives
 
 ```mlld
-@text name = "value"              # Define a text variable
-@data config = { "key": "value" } # Define a structured data variable
-@path docs = [file.md]            # Define a path reference
-@add [file.md]                    # Add content from another file
-@add "# Section" from [file.md]   # Add specific section from file
-@run [command]                    # Run a shell command
-@import { * } from [file.mld]     # Import another mlld file
-@exec cmd = @run [echo "hi"]      # Define a reusable command
+/var @name = "value"              # Define a variable (text, data, arrays, etc.)
+/var @config = { "key": "value" } # Objects and arrays use /var too
+/path @docs = [file.md]           # Define a path reference
+/show [file.md]                   # Show content from another file
+/show [file.md # Section]         # Show specific section from file
+/run [command]                    # Run a shell command
+/import { * } from [file.mld]     # Import another mlld file
+/exe @cmd = @run [echo "hi"]      # Define a reusable command
 ```
 
 ### Variables & Interpolation
 
-Must be inside an @ directive to be interpolated
+Must be inside a / directive to be interpolated
 
 ```mlld
 >> In directive contexts:
 @variable               << Reference a variable in directives
-@datavar.field          << Access data field in directives
+@varname.field          << Access object field in directives
 @pathvar                << Reference a path variable in directives
 
 >> In template contexts:
@@ -101,8 +101,8 @@ Must be inside an @ directive to be interpolated
 {{datavar.field}}       << Access data field in templates
 
 >> Variables can be used in templates and commands:
-@text greeting = [[Hello {{name}}!]]
-@run [cat @file]
+/var @greeting = [[Hello {{name}}!]]
+/run [cat @file]
 ```
 
 ### Comments & Code Fences
@@ -110,12 +110,12 @@ Must be inside an @ directive to be interpolated
 ````mlld
 >> This is a comment
 >> Comments work at line beginnings
-@add [file.md] << They can also be added at line endings
+/show [file.md] << They can also be added at line endings
 
 >> Code fences preserve content exactly:
 ```python
 def hello():
-    print("Hi")  # @text directives here are preserved as-is
+    print("Hi")  # /var directives here are preserved as-is
 ```
 ````
 
@@ -125,9 +125,9 @@ def hello():
 - Quotes must match (no mixing)
 - Use backticks for template strings with variables:
 ```mlld
-@text simple = "Hello"
-@text template = [[Hello {{name}}!]]
-@text multiline = [[
+/var @simple = "Hello"
+/var @template = [[Hello {{name}}!]]
+/var @multiline = [[
   Multi-line
   template with {{vars}}
 ]]
@@ -138,20 +138,20 @@ def hello():
 - Reference files and URLs using brackets
 - Support both local files and remote URLs
 ```mlld
-@path docs = [./docs/api.md]
-@path remote = [https://example.com/config.json]
+/path @docs = [./docs/api.md]
+/path @remote = [https://example.com/config.json]
 >> Example Usage:
-@add @docs
-@add [./some_file.txt] 
+/show @docs
+/show [./some_file.txt] 
 ```
 
 ### Data Variables
 
-- Store structured data (objects/arrays)
+- Store structured data (objects/arrays) using /var
 - Support field access
 ```mlld
-@data user = { "name": "Alice", "id": 123 }
-@text name = [[User: {{user.name}}]]
+/var @user = { "name": "Alice", "id": 123 }
+/var @name = [[User: {{user.name}}]]
 ```
 
 ## Module System & Registry
@@ -177,8 +177,8 @@ Import in your mlld files:
 
 ```mlld
 >> Import from public registry
-@import { format, parse } from @alice/strings
-@import { * } from @company/templates
+/import { format, parse } from @alice/strings
+/import { * } from @company/templates
 
 >> Modules are cached locally and content-addressed for security
 >> Lock files ensure reproducible builds
@@ -209,8 +209,8 @@ author: myusername
 keywords: [utils, text, helpers]
 ---
 
-@exec trim(str) = [(echo "@str" | xargs)]
-@exec uppercase(str) = [(echo "@str" | tr '[:lower:]' '[:upper:]')]
+/exe @trim(str) = [(echo "@str" | xargs)]
+/exe @uppercase(str) = [(echo "@str" | tr '[:lower:]' '[:upper:]')]
 ```
 
 See the [Publishing Modules Guide](docs/publishing-modules.md) for detailed instructions.
@@ -221,13 +221,13 @@ Configure resolvers for private or corporate modules:
 
 ```mlld
 >> Local filesystem modules
-@import { utils } from @notes/helpers
+/import { utils } from @notes/helpers
 
 >> Private GitHub repositories  
-@import { internal } from @company/tools
+/import { internal } from @company/tools
 
 >> Custom HTTP endpoints
-@import { api } from @corporate/modules
+/import { api } from @corporate/modules
 ```
 
 Configure resolvers in your lock file:
@@ -261,12 +261,12 @@ Configure resolvers in your lock file:
 
 ```mlld
 >> Security options
-@import { trusted } from @company/utils trust always
-@import { external } from @community/parser trust verify
+/import { trusted } from @company/utils trust always
+/import { external } from @community/parser trust verify
 
 >> Cache control  
-@import { live } from @api/data (30m) << Refresh every 30 minutes
-@import { stable } from @alice/lib (static) << Never refresh
+/import { live } from @api/data (30m) << Refresh every 30 minutes
+/import { stable } from @alice/lib (static) << Never refresh
 ```
 
 ## License

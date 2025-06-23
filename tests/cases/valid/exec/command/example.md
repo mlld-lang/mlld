@@ -1,1 +1,1 @@
-/exec @greet(name) = {echo "Hello, @name!"}
+/exe @greet(name) = {echo "Hello, @name!"}

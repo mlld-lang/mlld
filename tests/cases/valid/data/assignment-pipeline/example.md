@@ -1,11 +1,11 @@
 # Test data pipeline with arrays and objects
 
-/data @items = [
+/var @items = [
   { "id": 1, "name": "Item 1" },
   { "id": 2, "name": "Item 2" }
 ]
 
-/exec @process(data) = js {
+/exe @process(data) = js {
   // Handle both direct invocation (string) and pipeline (PipelineInput)
   if (typeof data === 'string') {
     // Direct invocation - parse the JSON string
@@ -19,13 +19,13 @@
 }
 
 # Direct invocation works
-/data @direct = @process(@items)
-/add [[Direct: {{direct}}]]
+/var @direct = @process(@items)
+/show [[Direct: {{direct}}]]
 
 # Pipeline should also work
-/data @piped = @items | @process
-/add [[Piped: {{piped}}]]
+/var @piped = @items | @process
+/show [[Piped: {{piped}}]]
 
 # With explicit format
-/data @formatted = @items with { format: "json", pipeline: [@process] }
-/add [[Formatted: {{formatted}}]]
+/var @formatted = @items with { format: "json", pipeline: [@process] }
+/show [[Formatted: {{formatted}}]]

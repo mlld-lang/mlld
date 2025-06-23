@@ -3,10 +3,10 @@
 This tests the @PROJECTPATH reserved variable.
 
 Project root: 
-/add @PROJECTPATH
+/show @PROJECTPATH
 
 /path @configPath = [@PROJECTPATH/config]
-/add [[Config location: {{configPath}}]]
+/show [[Config location: {{configPath}}]]
 
-/text @readme = [[Project README is at {{PROJECTPATH}}/README.md]]
-/add @readme
+/var @readme = [[Project README is at {{PROJECTPATH}}/README.md]]
+/show @readme

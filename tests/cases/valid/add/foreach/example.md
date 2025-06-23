@@ -1,13 +1,13 @@
 # Test @add foreach
 
-/data @questions = ["What is your name?", "Where are you from?", "What do you do?"]
+/var @questions = ["What is your name?", "Where are you from?", "What do you do?"]
 
-/exec @ask(q) = {echo "Answer to: @q"}
+/exe @ask(q) = {echo "Answer to: @q"}
 
 ## Direct foreach output
 
-/add foreach @ask(@questions)
+/show foreach @ask(@questions)
 
 ## With custom separator
 
-/add foreach @ask(@questions) with { separator: "\n==========\n" }
+/show foreach @ask(@questions) with { separator: "\n==========\n" }

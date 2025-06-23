@@ -11,7 +11,7 @@ fi
 echo "Directory check complete"
 )]
 
-/exec @complex_shell(dir) = {
+/exe @complex_shell(dir) = {
 if [ ! -d "@dir" }
 then
 echo "Error: @dir is not a directory"

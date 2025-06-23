@@ -5,8 +5,8 @@ version: 2.5.0
 customField: Custom metadata value
 ---
 
-/text @hello = "Hello from module"
+/var @hello = "Hello from module"
 
-/data @module = {
+/var @module = {
 hello: @hello
 }

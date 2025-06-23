@@ -1,2 +1,2 @@
-/data @number.count = 42
-/add @number.count
+/var @number.count = 42
+/show @number.count

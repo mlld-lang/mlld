@@ -1,4 +1,4 @@
-/data @servers = ["web1", "web2", "db1"]
+/var @servers = ["web1", "web2", "db1"]
 
 /when server any:
   "web1" in @servers

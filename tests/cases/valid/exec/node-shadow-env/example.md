@@ -1,21 +1,21 @@
 # Test Node.js Shadow Environment
 
-/exec @add(a, b) = node {
+/exe @add(a, b) = node {
   return a + b;
 }
 
-/exec @multiply(x, y) = node {
+/exe @multiply(x, y) = node {
   return x * y;
 }
 
-/exec @calculate(n) = node {
+/exe @calculate(n) = node {
   // Can call other shadow functions
   const sum = await add(n, 10);
   const product = await multiply(sum, 2);
   return product;
 }
 
-/exec nodejs = { add, multiply, calculate }
+/exe nodejs = { add, multiply, calculate }
 
 >> Test using direct @run directive (not inside @text)
 /run node {

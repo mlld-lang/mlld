@@ -1,8 +1,8 @@
-/data @features = ["auth", "payments", "notifications"]
+/var @features = ["auth", "payments", "notifications"]
 
-/text @hasAuth = "true"
-/text @hasPayments = "true"
-/text @hasChat = ""
+/var @hasAuth = "true"
+/var @hasPayments = "true"
+/var @hasChat = ""
 
 /when @hasAuth all: [
   @hasAuth => @add "Authentication enabled\n"

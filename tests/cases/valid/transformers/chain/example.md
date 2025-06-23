@@ -1,7 +1,7 @@
 # Test: Chaining transformers
 
 ## JSON to CSV pipeline
-/text @jsonData = [[
+/var @jsonData = [[
 [
   {"product": "Laptop", "price": 999, "stock": 15},
   {"product": "Mouse", "price": 25, "stock": 50},
@@ -9,16 +9,16 @@
 ]
 ]]
 
-/text @report = @run {echo "@jsonData"} with { pipeline: [@json, @csv] }
-/add @report
+/var @report = @run {echo "@jsonData"} with { pipeline: [@json, @csv] }
+/show @report
 
 ## Multiple transformations
-/text @mdData = [[
+/var @mdData = [[
 # Products
 - Laptop: $999
 - Mouse: $25
 - Keyboard: $75
 ]]
 
-/text @xmlReport = @run {echo "@mdData"} with { pipeline: [@md, @xml] }
-/add @xmlReport
+/var @xmlReport = @run {echo "@mdData"} with { pipeline: [@md, @xml] }
+/show @xmlReport

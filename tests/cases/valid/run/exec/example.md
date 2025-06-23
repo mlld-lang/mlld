@@ -1,2 +1,2 @@
-/exec @greetCommand = {echo "Hello from predefined command"}
+/exe @greetCommand = {echo "Hello from predefined command"}
 /run @greetCommand

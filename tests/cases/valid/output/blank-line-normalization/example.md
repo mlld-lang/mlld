@@ -3,20 +3,20 @@ name: blank-line-normalization
 description: Test blank line normalization between outputs
 ---
 
-/add [[Section 1]]
+/show [[Section 1]]
 
 
-/add [[Section 2]]
+/show [[Section 2]]
 
 
 
-/add [[Section 3]]
+/show [[Section 3]]
 
-/text @para = [[
+/var @para = [[
 Paragraph content
 ]]
 
-/add @para
+/show @para
 
 
-/add [[Final section]]
+/show [[Final section]]

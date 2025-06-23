@@ -1,5 +1,5 @@
-/text @condition1 = "true"
-/text @condition2 = "false"
+/var @condition1 = "true"
+/var @condition2 = "false"
 
 # Invalid: any: modifier cannot have individual actions
 /when @condition1 any: [

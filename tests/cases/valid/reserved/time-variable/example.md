@@ -3,9 +3,9 @@
 This tests the @TIME reserved variable.
 
 Current timestamp: 
-/add @TIME
+/show @TIME
 
-/text @logEntry = [[Log entry at {{TIME}}: System check completed]]
-/add @logEntry
+/var @logEntry = [[Log entry at {{TIME}}: System check completed]]
+/show @logEntry
 
 /run {echo "Script executed at @TIME"}

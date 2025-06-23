@@ -1,4 +1,4 @@
-/data @testResults = {
+/var @testResults = {
 suites: [
     @run {echo "unit: passed"},
     @run {echo "integration: passed"},
@@ -6,7 +6,7 @@ suites: [
   ],
 count: 3
 }
-/add [[Test Results:
+/show [[Test Results:
 {{testResults.suites[0]}}
 {{testResults.suites[1]}}
 {{testResults.suites[2]}}

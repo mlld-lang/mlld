@@ -1,3 +1,3 @@
 /import {greeting, count} from [utils.mld]
-/add @greeting
-/add @count
+/show @greeting
+/show @count

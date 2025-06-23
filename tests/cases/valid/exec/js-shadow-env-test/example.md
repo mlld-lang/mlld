@@ -1,18 +1,18 @@
 # Test JavaScript Shadow Environment
 
-/exec @add(a, b) = js {a + b}
+/exe @add(a, b) = js {a + b}
 
-/exec @multiply(x, y) = js {x * y}
+/exe @multiply(x, y) = js {x * y}
 
-/exec js = { add, multiply }
+/exe js = { add, multiply }
 
-/exec @calculate(n) = js {
+/exe @calculate(n) = js {
   const sum = add(n, 10);
   const product = multiply(sum, 2);
   return product;
 }
 
-/exec js = { add, multiply, calculate }
+/exe js = { add, multiply, calculate }
 
 /run js {
   // Test direct calls

@@ -7,6 +7,6 @@ mlld directives are only processed when they appear at the start of a line. Dire
 **To fix this:**
 ```mlld
 Some text 
-/add @myvar
+/show @myvar
 in the middle of a line.
 ```

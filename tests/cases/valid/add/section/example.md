@@ -1,1 +1,1 @@
-/add "# Section Title" from [file.md]
+/show "# Section Title" from [file.md]

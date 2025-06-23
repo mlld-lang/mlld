@@ -1,8 +1,8 @@
-/exec @getDate = {echo "2024-01-15"}
-/exec @getUser = {echo "admin"}
-/exec @getStatus = {echo "active"}
+/exe @getDate = {echo "2024-01-15"}
+/exe @getUser = {echo "admin"}
+/exe @getStatus = {echo "active"}
 
-/data @systemInfo = {
+/var @systemInfo = {
 date: @run @getDate,
 user: @run @getUser,
 status: @run @getStatus,
@@ -12,7 +12,7 @@ backup_user: @run @getUser
   }
 }
 
-/add [[System Information:
+/show [[System Information:
 Date: {{systemInfo.date}}
 User: {{systemInfo.user}}
 Status: {{systemInfo.status}}

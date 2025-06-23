@@ -1,2 +1,2 @@
-/text @x = "Value X"
-/text @y = "Value Y"
+/var @x = "Value X"
+/var @y = "Value Y"

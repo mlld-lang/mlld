@@ -1,5 +1,5 @@
-/text @projectVar = "MyProject"
-/data @buildInfo = {
+/var @projectVar = "MyProject"
+/var @buildInfo = {
 name: @projectVar,
 version: "1.0.0",
 build: 42,
@@ -10,7 +10,7 @@ tags: ["release", "production"],
 timestamp: @run {echo "2024-01-15"}
   }
 }
-/add [[
+/show [[
 Build {{buildInfo.name}} v{{buildInfo.version}} (#{{buildInfo.build}})
 Status: {{buildInfo.status}}
 Stable: {{buildInfo.stable}}

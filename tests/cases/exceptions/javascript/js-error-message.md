@@ -5,7 +5,7 @@ Tests that JavaScript errors preserve their original error messages.
 ## Example
 
 ```mlld
-/exec @validate(data) = js {
+/exe @validate(data) = js {
   const parsed = JSON.parse(data);
   if (!parsed.name) {
   throw new Error("Invalid data: missing field 'name'");
@@ -13,7 +13,7 @@ Tests that JavaScript errors preserve their original error messages.
   return "Valid";
 }
 
-/text @result = @validate('{"age": 25}')
+/var @result = @validate('{"age": 25}')
 ```
 
 ## Expected Error

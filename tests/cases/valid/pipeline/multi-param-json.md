@@ -5,9 +5,9 @@ Tests that multi-parameter functions automatically destructure JSON objects.
 ## Example
 
 ```mlld
-/exec @greet(name, title) = [[Hello {{title}} {{name}}!]]
-/text @result = @run {echo '{"name": "Smith", "title": "Dr."}'} | @greet
-/add @result
+/exe @greet(name, title) = [[Hello {{title}} {{name}}!]]
+/var @result = @run {echo '{"name": "Smith", "title": "Dr."}'} | @greet
+/show @result
 ```
 
 ## Expected

@@ -1,2 +1,2 @@
 /path @absPath = [/absolute/path/to/file.ext]
-/add [[The absolute path is {{absPath}}]]
+/show [[The absolute path is {{absPath}}]]

@@ -4,4 +4,4 @@ This example demonstrates importing JSON data from stdin.
 
 /import { name, version } from @stdin
 
-/add [[Project: {{name}} v{{version}}]]
+/show [[Project: {{name}} v{{version}}]]

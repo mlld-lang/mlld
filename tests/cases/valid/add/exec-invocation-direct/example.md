@@ -1,5 +1,5 @@
-/exec @getGreeting = {echo "Hello, World!"}
-/exec @getUserInfo(name) = {echo "{\"name\":\"@name\",\"role\":\"developer\"}"}
+/exe @getGreeting = {echo "Hello, World!"}
+/exe @getUserInfo(name) = {echo "{\"name\":\"@name\",\"role\":\"developer\"}"}
 
-/add @getGreeting()
-/add @getUserInfo("Alice")
+/show @getGreeting()
+/show @getUserInfo("Alice")

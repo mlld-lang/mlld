@@ -24,7 +24,7 @@ done
 
 ## Mixed mlld and Bash @
 
-/text @myvar = "mlld variable"
+/var @myvar = "mlld variable"
 /run bash {#!/bin/bash
 # Test 3: Bash @ and mlld @ in same context
 bash_array=("item1" "item2")

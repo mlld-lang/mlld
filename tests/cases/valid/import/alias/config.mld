@@ -1,2 +1,2 @@
-/text @author = "Config Author"
-/text @title = "My Project"
+/var @author = "Config Author"
+/var @title = "My Project"

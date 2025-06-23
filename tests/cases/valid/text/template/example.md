@@ -1,3 +1,3 @@
-/text @variable = "value"
-/text @template = [[This is a template with {{variable}}]]
-/add @template
+/var @variable = "value"
+/var @template = [[This is a template with {{variable}}]]
+/show @template

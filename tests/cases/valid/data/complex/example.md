@@ -1,5 +1,5 @@
-/data @results = {
+/var @results = {
 greeting: @run {echo "Hello from embedded command"},
 value: 42
 }
-/add @results.greeting
+/show @results.greeting

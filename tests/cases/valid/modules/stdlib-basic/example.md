@@ -3,4 +3,4 @@
 This tests importing from the mlld standard library.
 
 /import { http } from @mlld/http
-/add @http
+/show @http

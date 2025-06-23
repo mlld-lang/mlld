@@ -1,3 +1,3 @@
-/text @username = "john"
+/var @username = "john"
 /path @userConfig = [config/@username/settings.json]
-/add [[The user config is at {{userConfig}}]]
+/show [[The user config is at {{userConfig}}]]

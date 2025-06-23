@@ -4,35 +4,35 @@
 
 Define helper functions:
 
-/exec @double(x) = js {x * 2}
-/exec @triple(x) = js {x * 3}
+/exe @double(x) = js {x * 2}
+/exe @triple(x) = js {x * 3}
 
 Declare shadow environment:
 
-/exec js = { double, triple }
+/exe js = { double, triple }
 
 Use functions within JS context:
 
-/exec @calculate(n) = js {
+/exe @calculate(n) = js {
   const a = double(n);
   const b = triple(n);
   return a + b;
 }
 
-/data @result = @calculate(5)
-/add `Result: @result`
+/var @result = @calculate(5)
+/show `Result: @result`
 
 ## Multiple Functions
 
-/exec @formatNumber(n) = js {n.toFixed(2)}
-/exec @addPrefix(text, prefix) = js {prefix + text}
+/exe @formatNumber(n) = js {n.toFixed(2)}
+/exe @addPrefix(text, prefix) = js {prefix + text}
 
-/exec js = { formatNumber, addPrefix }
+/exe js = { formatNumber, addPrefix }
 
-/exec @process(value) = js {
+/exe @process(value) = js {
   const formatted = formatNumber(value);
   return addPrefix(formatted, "$");
 }
 
-/data @price = @process(42.567)
-/add `Price: @price`
+/var @price = @process(42.567)
+/show `Price: @price`

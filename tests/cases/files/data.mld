@@ -1,4 +1,4 @@
-/data @data = {
+/var @data = {
   "items": ["item1", "item2", "item3"],
   "total": 3,
   "metadata": {

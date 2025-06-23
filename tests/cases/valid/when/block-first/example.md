@@ -1,7 +1,7 @@
-/text @env = "production"
-/text @isDev = ""
-/text @isProd = "true"
-/text @isTest = ""
+/var @env = "production"
+/var @isDev = ""
+/var @isProd = "true"
+/var @isTest = ""
 
 /when first: [
   @isDev => @add "Dev mode"

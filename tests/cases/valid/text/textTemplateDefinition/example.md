@@ -1,8 +1,8 @@
-/exec @greetingTemplate(name, title) = [[
+/exe @greetingTemplate(name, title) = [[
 Hello {{title}} {{name}}!
 Welcome back, {{name}}!
 ]]
 
-/text @userName = "Alice"
-/text @userTitle = "Dr."
-/add @greetingTemplate(@userName, @userTitle)
+/var @userName = "Alice"
+/var @userTitle = "Dr."
+/show @greetingTemplate(@userName, @userTitle)

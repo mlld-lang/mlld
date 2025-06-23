@@ -15,12 +15,12 @@
 /run @withParams("foo", "bar")
 
 ## In data directive
-/data @result = @sayHello()
-/add @result
+/var @result = @sayHello()
+/show @result
 
 ## In text template
-/text @message = [[Output: {{greeting}}]]
-/add @message
+/var @message = [[Output: {{greeting}}]]
+/show @message
 
 ## Verify regular variable import works
-/add @greeting
+/show @greeting

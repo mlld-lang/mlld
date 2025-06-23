@@ -1,6 +1,6 @@
 # Test Node.js Undefined Parameter Handling
 
-/exec @greet(name, title, suffix) = node {
+/exe @greet(name, title, suffix) = node {
   // Function that handles optional parameters
   let greeting = "Hello";
   
@@ -17,7 +17,7 @@
   return greeting + "!";
 }
 
-/exec @checkParams(a, b, c, d) = node {
+/exe @checkParams(a, b, c, d) = node {
   // Test that all parameters are accessible even when undefined
   const results = [];
   
@@ -31,19 +31,19 @@
 }
 
 # Test case 1: All parameters provided
-/data @greeting1 = @greet("Alice", "Dr.", "PhD")
-/add @greeting1
+/var @greeting1 = @greet("Alice", "Dr.", "PhD")
+/show @greeting1
 
 # Test case 2: Only required parameter
-/data @greeting2 = @greet("Bob")
-/add @greeting2
+/var @greeting2 = @greet("Bob")
+/show @greeting2
 
 # Test case 3: Check parameter types
-/data @params1 = @checkParams("first")
-/add @params1
+/var @params1 = @checkParams("first")
+/show @params1
 
-/data @params2 = @checkParams("one", "two")
-/add @params2
+/var @params2 = @checkParams("one", "two")
+/show @params2
 
-/data @params3 = @checkParams("x", "y", "z", "w")
-/add @params3
+/var @params3 = @checkParams("x", "y", "z", "w")
+/show @params3

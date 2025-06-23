@@ -1,2 +1,2 @@
-/text @variable = "value"
-/add [[Content with {{variable}}]]
+/var @variable = "value"
+/show [[Content with {{variable}}]]

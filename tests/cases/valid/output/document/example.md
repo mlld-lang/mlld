@@ -2,10 +2,10 @@
 
 This is a test document with some content.
 
-/text @greeting = "Hello, World!"
-/data @version = "1.0.0"
+/var @greeting = "Hello, World!"
+/var @version = "1.0.0"
 
-/add @greeting
+/show @greeting
 
 The document continues here.
 

@@ -6,7 +6,7 @@ import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandR
 import { interpolate, resolveVariableValue } from '../core/interpreter';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError } from '@core/errors';
-import { extractSection } from './add';
+import { extractSection } from './show';
 
 /**
  * Evaluate an ExecInvocation node

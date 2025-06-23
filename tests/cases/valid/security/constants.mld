@@ -1,2 +1,2 @@
-/text @version = "v1.0.0"
+/var @version = "v1.0.0"
 /run {echo "Constants loaded"}

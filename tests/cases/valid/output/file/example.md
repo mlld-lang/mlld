@@ -2,9 +2,9 @@
 
 This tests outputting variables to files with format detection.
 
-/text @markdown = "# Hello\n\nThis is markdown content."
-/data @jsonData = { "key": "value", "items": [1, 2, 3] }
-/text @htmlContent = "<h1>Hello</h1><p>HTML content</p>"
+/var @markdown = "# Hello\n\nThis is markdown content."
+/var @jsonData = { "key": "value", "items": [1, 2, 3] }
+/var @htmlContent = "<h1>Hello</h1><p>HTML content</p>"
 
 /output @markdown to "./output.md"
 /output @jsonData to "./data.json"

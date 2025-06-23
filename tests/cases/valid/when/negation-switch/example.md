@@ -1,6 +1,6 @@
-/text @userRole = "guest"
-/text @adminRole = "admin" 
-/data @hasPermission = false
+/var @userRole = "guest"
+/var @adminRole = "admin" 
+/var @hasPermission = false
 
 # Testing negation in switch form
 

@@ -1,3 +1,3 @@
 /import { MYVAR, OTHERVAR } from @input
-/text @result = [[MYVAR: {{MYVAR}}, OTHERVAR: {{OTHERVAR}}]]
-/add @result
+/var @result = [[MYVAR: {{MYVAR}}, OTHERVAR: {{OTHERVAR}}]]
+/show @result

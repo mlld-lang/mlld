@@ -1,4 +1,4 @@
-/data @config = {
+/var @config = {
 server: {
 host: "localhost",
 port: 8080,
@@ -10,4 +10,4 @@ mode: @run {echo "production"}
   },
 debug: true
 }
-/add [[Server running on {{config.server.host}}:{{config.server.port}}]]
+/show [[Server running on {{config.server.host}}:{{config.server.port}}]]

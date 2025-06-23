@@ -5,9 +5,9 @@ Tests that multi-parameter functions fall back to passing text as first paramete
 ## Example
 
 ```mlld
-/exec @greet(name, title) = [[Hello {{title}} {{name}}!]]
-/text @result = @run {echo "Smith"} | @greet
-/add @result
+/exe @greet(name, title) = [[Hello {{title}} {{name}}!]]
+/var @result = @run {echo "Smith"} | @greet
+/show @result
 ```
 
 ## Expected

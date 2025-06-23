@@ -1,7 +1,7 @@
 # Test: Markdown formatter
 
 ## Format unformatted markdown
-/text @uglyMd = [[
+/var @uglyMd = [[
 #  Header with extra spaces  
 
 This is    a paragraph with     irregular spacing.
@@ -15,9 +15,9 @@ This is    a paragraph with     irregular spacing.
 |A|B|C|
 ]]
 
-/text @prettyMd = @run {echo "@uglyMd"} with { pipeline: [@md] }
-/add @prettyMd
+/var @prettyMd = @run {echo "@uglyMd"} with { pipeline: [@md] }
+/show @prettyMd
 
 ## Using uppercase alias
-/text @prettyUpper = @run {echo "# Quick test"} with { pipeline: [@MD] }
-/add @prettyUpper
+/var @prettyUpper = @run {echo "# Quick test"} with { pipeline: [@MD] }
+/show @prettyUpper

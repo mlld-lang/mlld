@@ -1,8 +1,8 @@
-/text @greeting = "Hello, world!"
-/data @count = 42
-/text @version = "1.0.0"
+/var @greeting = "Hello, world!"
+/var @count = 42
+/var @version = "1.0.0"
 /path @docs = "./docs"
-/data @utils = {
+/var @utils = {
   "name": "Utility Module",
   "description": "Common utilities"
 }

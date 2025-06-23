@@ -1,2 +1,2 @@
-/text @content = [file.md]
-/add @content
+/var @content = [file.md]
+/show @content

@@ -4,4 +4,4 @@ This example demonstrates the shorthand import syntax for stdin.
 
 /import @stdin
 
-/add [[Name: {{name}}, Version: {{version}}]]
+/show [[Name: {{name}}, Version: {{version}}]]

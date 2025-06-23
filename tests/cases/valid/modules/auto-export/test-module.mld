@@ -6,6 +6,6 @@ version: 1.0.0
 
 # No explicit module export - all variables are exported
 
-/text @func1 = "Function 1 output"
-/text @func2 = "Function 2 output"
-/text @_internal = "Internal function output"
+/var @func1 = "Function 1 output"
+/var @func2 = "Function 2 output"
+/var @_internal = "Internal function output"

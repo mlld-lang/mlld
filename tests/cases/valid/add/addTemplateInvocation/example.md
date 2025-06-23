@@ -1,2 +1,2 @@
-/exec @messageTemplate(user, action) = [[{{user}} {{action}} successfully!]]
-/add @messageTemplate("Bob", "logged in")
+/exe @messageTemplate(user, action) = [[{{user}} {{action}} successfully!]]
+/show @messageTemplate("Bob", "logged in")

@@ -1,22 +1,22 @@
 # Test exec invocation without @run
 
-/exec @greet() = {echo "Hello, direct exec!"}
-/exec @withParam(name) = {echo "Hello, @name!"}
-/exec @multiArg(a, b) = {echo "@a and @b"}
+/exe @greet() = {echo "Hello, direct exec!"}
+/exe @withParam(name) = {echo "Hello, @name!"}
+/exe @multiArg(a, b) = {echo "@a and @b"}
 
 ## Direct exec invocation in text
-/text @result1 = @greet()
-/add @result1
+/var @result1 = @greet()
+/show @result1
 
 ## With parameter
-/text @result2 = @withParam("Alice")
-/add @result2
+/var @result2 = @withParam("Alice")
+/show @result2
 
 ## Multiple arguments
-/text @result3 = @multiArg("foo", "bar")
-/add @result3
+/var @result3 = @multiArg("foo", "bar")
+/show @result3
 
 ## Variable argument
-/text @userName = "Bob"
-/text @result4 = @withParam(@userName)
-/add @result4
+/var @userName = "Bob"
+/var @result4 = @withParam(@userName)
+/show @result4

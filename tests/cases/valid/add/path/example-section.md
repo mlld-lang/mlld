@@ -1,1 +1,1 @@
-/add "Section 1" from [file.md]
+/show "Section 1" from [file.md]

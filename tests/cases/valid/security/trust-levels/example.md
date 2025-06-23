@@ -10,11 +10,11 @@ This tests different trust levels: always, verify, never.
 /run trust verify {echo "Needs verification"}
 /run trust never {echo "Never executed"}
 
-/exec trust always @safeCommand() = {echo "Safe execution"}
+/exe trust always @safeCommand() = {echo "Safe execution"}
 /run @safeCommand()
 
-/exec trust verify @checkCommand() = {echo "Check before run"}
+/exe trust verify @checkCommand() = {echo "Check before run"}
 /run @checkCommand()
 
 /path trust always safePath = "./safe"
-/add @safePath
+/show @safePath

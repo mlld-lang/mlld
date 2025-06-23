@@ -15,5 +15,5 @@ The @when directive requires a variable to evaluate, not a literal value.
 /when "value" => @add "String literals are not allowed"
 
 ## Valid: Using a variable
-/text @myCondition = "true"
+/var @myCondition = "true"
 /when @myCondition => @add "This is valid syntax"

@@ -1,7 +1,7 @@
 # Test Output in When Actions
 
-/text @condition = "yes"
-/text @result = "Condition was true!"
+/var @condition = "yes"
+/var @result = "Condition was true!"
 
 /when @condition: [
   "yes" => @output @result [when-output.txt]

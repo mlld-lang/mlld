@@ -1,5 +1,5 @@
-/text @name = "bob smith"
-/exec @format(name) = javascript {
+/var @name = "bob smith"
+/exe @format(name) = javascript {
   // Format the name with title case
   const words = name.split(' ');
   const titled = words.map(word => {

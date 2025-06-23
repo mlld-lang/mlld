@@ -1,7 +1,7 @@
-/exec @greeting(name) = [[Hello, {{name}}!]]
-/exec @farewell(name, when) = [[Goodbye {{name}}, see you {{when}}!]]
+/exe @greeting(name) = [[Hello, {{name}}!]]
+/exe @farewell(name, when) = [[Goodbye {{name}}, see you {{when}}!]]
 
-/data @messages = {
+/var @messages = {
 welcome: @add @greeting("Alice"),
 goodbye: @add @farewell("Bob", "tomorrow"),
 nested: {
@@ -10,7 +10,7 @@ evening: @add @farewell("David", "next week")
   }
 }
 
-/add [[{{messages.welcome}}
+/show [[{{messages.welcome}}
 {{messages.goodbye}}
 {{messages.nested.morning}}
 {{messages.nested.evening}}]]

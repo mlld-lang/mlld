@@ -1,1 +1,1 @@
-/text @sectionContent = [file.md # Section 1]
+/var @sectionContent = [file.md # Section 1]

@@ -1,4 +1,4 @@
-/data @features = {
+/var @features = {
   "darkMode": false,
   "analytics": true,
   "experimental": false

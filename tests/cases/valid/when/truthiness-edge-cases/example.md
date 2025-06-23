@@ -4,13 +4,13 @@ Test comprehensive truthiness behavior in @when directives.
 
 ## 1. Simple @when Truthiness Tests
 
-/text @isEnabled = "true"
-/text @isDisabled = "false"
-/data @hasFeature = true
-/data @noFeature = false
-/text @emptyString = ""
-/data @nullValue = null
-/data @zeroNumber = 0
+/var @isEnabled = "true"
+/var @isDisabled = "false"
+/var @hasFeature = true
+/var @noFeature = false
+/var @emptyString = ""
+/var @nullValue = null
+/var @zeroNumber = 0
 
 >> Truthy values should trigger
 /when @isEnabled => @add "String 'true' is truthy"
@@ -26,11 +26,11 @@ Test comprehensive truthiness behavior in @when directives.
 
 ## 2. Negation Tests
 
-/text @hasLicense = "false"
-/data @isValid = false
-/data @nothing = null
-/text @empty = ""
-/data @zero = 0
+/var @hasLicense = "false"
+/var @isValid = false
+/var @nothing = null
+/var @empty = ""
+/var @zero = 0
 
 >> Negating falsy values should trigger
 /when !@hasLicense => @add "No license (string 'false')"
@@ -45,7 +45,7 @@ Test comprehensive truthiness behavior in @when directives.
 
 ## 3. Switch with String/Boolean Equivalence
 
-/text @mode = "true"
+/var @mode = "true"
 
 /when @mode: [
 true => @add "Matched as boolean true"
@@ -55,8 +55,8 @@ false => @add "Matched as boolean false"
 
 ## 4. Number/String Equivalence in Switch
 
-/data @count = 42
-/text @version = "1"
+/var @count = 42
+/var @version = "1"
 
 >> Numbers and strings should match
 /when @count: [
@@ -71,10 +71,10 @@ false => @add "Matched as boolean false"
 
 ## 5. Exec Function String Results
 
-/exec @isReady() = [["true"]]
-/exec @isEmpty() = [["false"]]
-/exec @getNull() = [[]]
-/exec @getZero() = [["0"]]
+/exe @isReady() = [["true"]]
+/exe @isEmpty() = [["false"]]
+/exe @getNull() = [[]]
+/exe @getZero() = [["0"]]
 
 >> String "true" from exec should be truthy
 /when @isReady() => @add "System is ready"
@@ -90,9 +90,9 @@ false => @add "Matched as boolean false"
 
 ## 6. Complex Truthiness in Switches
 
-/data @userResponse = "yes"
-/text @permission = ""
-/data @score = 0
+/var @userResponse = "yes"
+/var @permission = ""
+/var @score = 0
 
 /when @userResponse: [
   "yes" => @add "User agreed"
@@ -113,9 +113,9 @@ false => @add "No score"
 
 ## 7. @when any: Block with Mixed Truthiness
 
-/text @hasTests = "false"
-/data @hasDocs = null
-/text @hasExamples = "true"
+/var @hasTests = "false"
+/var @hasDocs = null
+/var @hasExamples = "true"
 
 >> At least one truthy value should trigger
 /when any: [
@@ -125,9 +125,9 @@ false => @add "No score"
 ] => @add "Has at least one artifact"
 
 >> All falsy should not trigger
-/text @a = ""
-/data @b = 0
-/data @c = false
+/var @a = ""
+/var @b = 0
+/var @c = false
 
 /when any: [
   @a
@@ -137,9 +137,9 @@ false => @add "No score"
 
 ## 8. @when all: Block with Mixed Values
 
-/text @allValid = "true"
-/data @allSecure = true
-/text @allReady = "yes"
+/var @allValid = "true"
+/var @allSecure = true
+/var @allReady = "yes"
 
 >> All truthy should trigger
 /when all: [
@@ -149,9 +149,9 @@ false => @add "No score"
 ] => @add "All checks passed"
 
 >> One falsy should prevent trigger
-/text @check1 = "true"
-/data @check2 = false
-/text @check3 = "true"
+/var @check1 = "true"
+/var @check2 = false
+/var @check3 = "true"
 
 /when all: [
   @check1
@@ -161,9 +161,9 @@ false => @add "No score"
 
 ## 9. @when first: with Truthiness
 
-/data @firstStatus = null
-/text @firstFallback = ""
-/text @firstDefault = "active"
+/var @firstStatus = null
+/var @firstFallback = ""
+/var @firstDefault = "active"
 
 >> Should find first truthy
 /when first: [
@@ -175,9 +175,9 @@ true => @add "Ultimate fallback"
 
 ## 10. Negation in Block Forms
 
-/text @hasError = ""
-/data @hasWarning = false
-/text @hasInfo = "false"
+/var @hasError = ""
+/var @hasWarning = false
+/var @hasInfo = "false"
 
 >> Negated conditions in any block
 /when any: [
@@ -200,9 +200,9 @@ true => @add "Ultimate fallback"
 
 ## 12. Mixed Negation in Same Block
 
-/text @feature1 = "true"
-/data @feature2 = false
-/text @feature3 = ""
+/var @feature1 = "true"
+/var @feature2 = false
+/var @feature3 = ""
 
 /when any: [
   @feature1
@@ -218,16 +218,16 @@ true => @add "Ultimate fallback"
 
 ## 13. Deeply Falsy Values
 
-/exec @getFalsy() = js {
+/exe @getFalsy() = js {
   // Return various falsy values
 return "";
 }
 
-/exec @getStringFalse() = js {
+/exe @getStringFalse() = js {
 return "false";
 }
 
-/exec @getStringZero() = js {
+/exe @getStringZero() = js {
 return "0";
 }
 

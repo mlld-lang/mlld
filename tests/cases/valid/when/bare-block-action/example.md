@@ -1,6 +1,6 @@
-/text @condition1 = "true"
-/text @condition2 = "yes"
-/text @condition3 = "1"
+/var @condition1 = "true"
+/var @condition2 = "yes"
+/var @condition3 = "1"
 
 # Bare @when with block action - like all:
 /when @condition1: [

@@ -1,4 +1,4 @@
-/data @config = {
+/var @config = {
 name: "TestApp",
 version: "1.0.0",
 description: null,
@@ -14,7 +14,7 @@ api: "v2"
 metadata: null
 }
 
-/add [[Application Config:
+/show [[Application Config:
 Name: {{config.name}}
 Version: {{config.version}}
 Description: {{config.description}}

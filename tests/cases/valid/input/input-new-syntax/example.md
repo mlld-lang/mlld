@@ -3,6 +3,6 @@
 This tests the new @input syntax for stdin imports.
 
 /import { config, data } from @input
-/add @config.greeting
+/show @config.greeting
 
-/add @data.message
+/show @data.message

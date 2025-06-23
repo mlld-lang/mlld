@@ -5,6 +5,6 @@ This tests that @stdin still works but shows a deprecation warning.
 /import { name, version } from @stdin
 
 Package: 
-/add @name
+/show @name
 Version: 
-/add @version
+/show @version

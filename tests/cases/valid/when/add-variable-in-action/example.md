@@ -3,23 +3,23 @@
 This test verifies that simple variable references work correctly inside @when actions.
 
 ## Setup
-/text @greeting = "Hello from a text variable"
-/text @template = [[Hello from a template with {{greeting}}]]
-/data @config = { "message": "Hello from data" }
+/var @greeting = "Hello from a text variable"
+/var @template = [[Hello from a template with {{greeting}}]]
+/var @config = { "message": "Hello from data" }
 
 ## Test 1: Direct @add (baseline - should work)
-/add @greeting
-/add @template
-/add @config
+/show @greeting
+/show @template
+/show @config
 
 ## Test 2: Inside @when actions (currently fails)
-/data @isTrue = true
+/var @isTrue = true
 /when @isTrue => @add @greeting
 /when @isTrue => @add @template
 /when @isTrue => @add @config
 
 ## Test 3: Inside @when first: actions
-/text @testValue = "false"
+/var @testValue = "false"
 
 /when @testValue first: [
 true => @add "Won't show"
@@ -27,8 +27,8 @@ false => @add @greeting
 ]
 
 ## Test 4: Mixed with exec invocations
-/exec @greet(name) = [[Hello, {{name}}!]]
-/text @simpleVar = "Simple value"
+/exe @greet(name) = [[Hello, {{name}}!]]
+/var @simpleVar = "Simple value"
 
 /when @isTrue => @add @greet("Alice")
 /when @isTrue => @add @simpleVar

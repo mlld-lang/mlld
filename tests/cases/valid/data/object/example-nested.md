@@ -1,8 +1,8 @@
-/data @config = {
+/var @config = {
 server: {
 port: 8080,
 host: "localhost"
   },
 debug: true
 }
-/add @config.server.port
+/show @config.server.port

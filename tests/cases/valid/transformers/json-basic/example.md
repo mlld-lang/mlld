@@ -1,19 +1,19 @@
 # Test: JSON transformer basic formatting
 
 ## Format existing JSON
-/text @data = @run {echo '{"name":"Alice","age":30,"city":"NYC"}'} with { pipeline: [@json] }
-/add @data
+/var @data = @run {echo '{"name":"Alice","age":30,"city":"NYC"}'} with { pipeline: [@json] }
+/show @data
 
 ## Convert markdown to JSON
-/text @mdContent = [[
+/var @mdContent = [[
 name: Alice
 age: 30
 city: NYC
 ]]
 
-/text @converted = @run {echo "@mdContent"} with { pipeline: [@JSON] }
-/add @converted
+/var @converted = @run {echo "@mdContent"} with { pipeline: [@JSON] }
+/show @converted
 
 ## Chain with other transformers
-/text @result = @run {echo '{"items":[1,2,3]}'} with { pipeline: [@json] }
-/add @result
+/var @result = @run {echo '{"items":[1,2,3]}'} with { pipeline: [@json] }
+/show @result

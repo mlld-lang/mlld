@@ -1,6 +1,6 @@
-/text @feature1 = "enabled"
-/text @feature2 = "true"
-/text @feature3 = "on"
+/var @feature1 = "enabled"
+/var @feature2 = "true"
+/var @feature3 = "on"
 
 # all: with individual actions - executes each action for true conditions
 /when @feature1 all: [

@@ -2,8 +2,8 @@
 
 This tests that variable values containing mlld syntax are treated as literals.
 
-/text @foo = 'bar'
+/var @foo = 'bar'
 /run {echo 'hello'}
-/add @foo
+/show @foo
 [some/path.md]
 Hello {{name}}

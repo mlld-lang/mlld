@@ -1,11 +1,11 @@
-/exec @getItems() = js {
+/exe @getItems() = js {
   return JSON.stringify([
     { id: 1, name: 'Item 1' },
     { id: 2, name: 'Item 2' }
   ])
 }
 
-/exec @showData(x) = js {
+/exe @showData(x) = js {
   // Handle both string and PipelineInput objects
   let str;
   if (typeof x === 'string') {
@@ -21,9 +21,9 @@
 }
 
 # Direct call (should work)
-/data @direct = @showData(@getItems())
-/add [[Direct: {{direct}}]]
+/var @direct = @showData(@getItems())
+/show [[Direct: {{direct}}]]
 
 # Pipeline (should now also work)  
-/data @piped = @getItems() | @showData
-/add [[Piped: {{piped}}]]
+/var @piped = @getItems() | @showData
+/show [[Piped: {{piped}}]]

@@ -8,10 +8,10 @@ The syntax `@exec codecat(dir) = @run {...}` is invalid. For parameterized comma
 
 **Correct syntax:**
 ```mlld
-/exec @codecat(dir) = {find @dir -type f -name "*.js" -exec cat {} \;}
+/exe @codecat(dir) = {find @dir -type f -name "*.js" -exec cat {} \;}
 ```
 
 **Alternative for text templates:**
 ```mlld
-/exec @greeting(name) = [[Hello {{name}}!]]
+/exe @greeting(name) = [[Hello {{name}}!]]
 ```

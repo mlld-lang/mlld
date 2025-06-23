@@ -1,4 +1,4 @@
-/text @env = "production"
+/var @env = "production"
 
 # first: modifier - executes only the first matching condition
 /when @env first: [

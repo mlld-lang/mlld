@@ -1,8 +1,8 @@
-/data @user = { "role": "guest", "verified": false }
+/var @user = { "role": "guest", "verified": false }
 
-/text @isAdmin = ""
-/text @isModerator = ""
-/text @isVerified = ""
+/var @isAdmin = ""
+/var @isModerator = ""
+/var @isVerified = ""
 
 /when any: [
   @isAdmin

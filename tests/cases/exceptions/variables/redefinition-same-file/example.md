@@ -1,3 +1,3 @@
-/text @author = "First Author"
-/text @author = "Second Author"
-/add @author
+/var @author = "First Author"
+/var @author = "Second Author"
+/show @author

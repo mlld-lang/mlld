@@ -1,6 +1,6 @@
 # Bracket character tests
 
-/exec @checkBracket(x) = js {
+/exe @checkBracket(x) = js {
   const firstChar = x.charAt(0);
   if (firstChar === "[") {
     return "starts with bracket";
@@ -8,28 +8,28 @@
   return "no bracket";
 }
 
-/exec @hasBrackets(x) = js {x.includes("[") || x.includes("]")}
+/exe @hasBrackets(x) = js {x.includes("[") || x.includes("]")}
 
-/exec @arrayTest() = js {
+/exe @arrayTest() = js {
   const arr = ["[", "]", "[]"];
   return arr.join(",");
 }
 
-/exec @regexTest(x) = js {
+/exe @regexTest(x) = js {
   const match = x.match(/\[([^\]]+)\]/);
   return match ? match[1] : "no match";
 }
 
 ## Results
-/text @bracketInput = "[test]"
-/text @mixedInput = "test[]"
-/text @contentInput = "[content]"
-/data @bracketCheck = @checkBracket(@bracketInput)
-/data @hasBracketsResult = @hasBrackets(@mixedInput)
-/data @arrayTestResult = @arrayTest()
-/data @regexTestResult = @regexTest(@contentInput)
+/var @bracketInput = "[test]"
+/var @mixedInput = "test[]"
+/var @contentInput = "[content]"
+/var @bracketCheck = @checkBracket(@bracketInput)
+/var @hasBracketsResult = @hasBrackets(@mixedInput)
+/var @arrayTestResult = @arrayTest()
+/var @regexTestResult = @regexTest(@contentInput)
 
-/add [[Bracket check: {{bracketCheck}}]]
-/add [[Has brackets: {{hasBracketsResult}}]]  
-/add [[Array test: {{arrayTestResult}}]]
-/add [[Regex test: {{regexTestResult}}]]
+/show [[Bracket check: {{bracketCheck}}]]
+/show [[Has brackets: {{hasBracketsResult}}]]  
+/show [[Array test: {{arrayTestResult}}]]
+/show [[Regex test: {{regexTestResult}}]]

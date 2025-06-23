@@ -1,2 +1,2 @@
-/text @author = "Author A"
-/text @version = "1.0.0"
+/var @author = "Author A"
+/var @version = "1.0.0"

@@ -3,11 +3,11 @@ name: template-newline-normalization
 description: Test template newline normalization
 ---
 
-/text @greeting = [[
+/var @greeting = [[
 Hello World!
 ]]
 
-/text @multiline = [[
+/var @multiline = [[
 First line
 
 Second line
@@ -16,12 +16,12 @@ Second line
 Third line
 ]]
 
-/text @trailing = [[
+/var @trailing = [[
 Content with trailing blank lines
 
 
 ]]
 
-/add @greeting
-/add @multiline
-/add @trailing
+/show @greeting
+/show @multiline
+/show @trailing

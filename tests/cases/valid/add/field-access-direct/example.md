@@ -1,12 +1,12 @@
-/data @user = {"name": "Alice", "age": 30}
-/add @user.name
-/add @user.age
+/var @user = {"name": "Alice", "age": 30}
+/show @user.name
+/show @user.age
 
-/data @nested = {
+/var @nested = {
   "company": {
     "name": "TechCorp",
     "employees": 150
   }
 }
-/add @nested.company.name
-/add @nested.company.employees
+/show @nested.company.name
+/show @nested.company.employees

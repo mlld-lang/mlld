@@ -36,7 +36,7 @@ function extractParamNames(params: any[]): string[] {
  * 
  * Ported from ExecDirectiveHandler.
  */
-export async function evaluateExec(
+export async function evaluateExe(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {

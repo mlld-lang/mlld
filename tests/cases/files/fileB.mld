@@ -1,2 +1,2 @@
-/text @author = "Author B"
-/text @description = "Second file"
+/var @author = "Author B"
+/var @description = "Second file"

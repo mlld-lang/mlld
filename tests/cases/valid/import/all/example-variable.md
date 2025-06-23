@@ -1,4 +1,4 @@
 /path @configPath = [config.mld]
 /import {*} from [@configPath]
-/add @greeting
-/add @count
+/show @greeting
+/show @count

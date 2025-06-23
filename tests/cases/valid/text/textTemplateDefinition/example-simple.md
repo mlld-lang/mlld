@@ -1,2 +1,2 @@
-/exec @greeting(name) = [[Hello, {{name}}!]]
-/add @greeting("World")
+/exe @greeting(name) = [[Hello, {{name}}!]]
+/show @greeting("World")
