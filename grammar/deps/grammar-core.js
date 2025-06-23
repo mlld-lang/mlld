@@ -592,4 +592,34 @@ export const helpers = {
         }
         return null;
     },
+    // Array vs Path disambiguation helpers for /var directive
+    createEmptyArray(location) {
+        return {
+            type: 'array',
+            items: [],
+            location
+        };
+    },
+    createArrayFromContent(content, location) {
+        return {
+            type: 'array',
+            items: content,
+            location
+        };
+    },
+    createSectionExtraction(content, location) {
+        return {
+            type: 'section',
+            path: content.path,
+            section: content.section,
+            location
+        };
+    },
+    createPathDereference(content, location) {
+        return {
+            type: 'path',
+            segments: content,
+            location
+        };
+    },
 };

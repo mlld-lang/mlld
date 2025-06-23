@@ -12,6 +12,10 @@ import { evaluateAdd } from './add';
 import { evaluateImport } from './import';
 import { evaluateWhen } from './when';
 import { evaluateOutput } from './output';
+// New evaluators
+import { evaluateVar } from './var';
+import { evaluateShow } from './show';
+import { evaluateExe } from './exe';
 
 /**
  * Extract trace information from a directive
@@ -29,10 +33,13 @@ function extractTraceInfo(directive: DirectiveNode): {
     case 'text':
     case 'data':
     case 'path':
-      // @text varName = ...
-      const identifier = directive.values?.identifier?.[0];
+    case 'var':
+      // @text varName = ... or @var varName = ...
+      const identifier = directive.values?.identifier?.[0] || directive.values?.identifier;
       if (identifier?.type === 'Text' && 'content' in identifier) {
         info.varName = identifier.content;
+      } else if (identifier?.type === 'VariableReference' && 'identifier' in identifier) {
+        info.varName = identifier.identifier;
       }
       break;
       
@@ -47,7 +54,8 @@ function extractTraceInfo(directive: DirectiveNode): {
       break;
       
     case 'exec':
-      // @exec funcName(...) = ...
+    case 'exe':
+      // @exec funcName(...) = ... or @exe funcName(...) = ...
       const execName = directive.values?.name?.[0];
       if (execName?.type === 'Text' && 'content' in execName) {
         info.varName = execName.content;
@@ -121,6 +129,16 @@ export async function evaluateDirective(
       
     case 'output':
       return await evaluateOutput(directive, env);
+      
+    // New directives
+    case 'var':
+      return await evaluateVar(directive, env);
+      
+    case 'show':
+      return await evaluateShow(directive, env);
+      
+    case 'exe':
+      return await evaluateExe(directive, env);
       
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);
