@@ -17,18 +17,18 @@ mlld syntax is only interpreted in lines that start with a mlld directive:
 - ❌ `/run/` (trailing slash is invalid)
 
 ### 3. Variable creation requires @ prefix
-- ✅ `/text @name = "value"` (creates variable `name`)
-- ❌ `/text name = "value"` (missing @ on left side)
+- ✅ `/var @name = "value"` (creates variable `name`)
+- ❌ `/var name = "value"` (missing @ on left side)
 
 ### 4. Commands use braces or quotes
 - ✅ `/run {echo "hello"}` (braces for multi-line)
 - ✅ `/run "echo hello @name"` (quotes for single-line)
 - ❌ `/run echo "hello"` (missing braces/quotes)
 
-### 5. Only /run, /add, and /output produce output
+### 5. Only /run, /show, and /output produce output
 Other directives define or assign but don't output.
 - `/run` - executes commands and shows their output
-- `/add` - adds content to the document
+- `/show` - shows content in the document
 - `/output` - controls where output goes (stdout, stderr, file)
 
 ### 6. Comments use >>
@@ -40,13 +40,13 @@ Other directives define or assign but don't output.
 
 ```mlld
 # Simple variable assignment
-/text @author = "Alice"
-/text @greeting = "Hello, world!"
+/var @author = "Alice"
+/var @greeting = "Hello, world!"
 
 >> Comments go at start or end of lines only
 # Output content
-/add @greeting
-/add "Welcome to mlld!"  >> Inline comments too!
+/show @greeting
+/show "Welcome to mlld!"  >> Inline comments too!
 
 # Run commands (quoted syntax for single lines)
 /run "echo System info:"
@@ -59,57 +59,57 @@ Other directives define or assign but don't output.
 }
 
 # Data structures
-/data @config = {
+/var @config = {
   "name": "my-app",
   "version": "1.0.0",
   "debug": true
 }
 
 # Access nested data
-/add "App: {{config.name}} v{{config.version}}"
+/show "App: {{config.name}} v{{config.version}}"
 ```
 
 ## Templates and Interpolation
 
 ### Backtick templates (primary - with @ interpolation)
 ```mlld
-/text @message = `Hello @name, welcome to @place!`
-/text @link = `[@title](@url)`
+/var @message = `Hello @name, welcome to @place!`
+/var @link = `[@title](@url)`
 ```
 
 ### Double-bracket templates (fallback - for @ heavy content)
 ```mlld
-/text @tweet = [[Hey {{user}}, check out {{handle}}'s new post!]]
+/var @tweet = [[Hey {{user}}, check out {{handle}}'s new post!]]
 ```
 
 ### @ interpolation in double quotes
 ```mlld
-/text @greeting = "Hello @name!"    >> @ variables work in double quotes
+/var @greeting = "Hello @name!"    >> @ variables work in double quotes
 /run "echo User: @username"         >> Works in quoted commands
 /run {echo "Welcome @user.name"}    >> And in brace commands
 ```
 
-## Exec - Defining Reusable Commands
+## Exe - Defining Reusable Commands
 
 ```mlld
 # Command executable
-/exec @deploy(env) = "deploy.sh @env"      >> Single line with quotes
-/exec @build(type) = {                      >> Multi-line with braces
+/exe @deploy(env) = "deploy.sh @env"      >> Single line with quotes
+/exe @build(type) = {                      >> Multi-line with braces
   npm run build:@type
   npm test
 }
 
 # Code executable
-/exec @calculate(x) = js {return @x * 2}
+/exe @calculate(x) = js {return @x * 2}
 
 # Template executable
-/exec @greet(name) = `Hello @name!`
+/exe @greet(name) = `Hello @name!`
 
 # Section executable
-/exec @getIntro(file) = [@file # Introduction]
+/exe @getIntro(file) = [@file # Introduction]
 
 # Environment declaration (shadow functions)
-/exec @js = { formatDate, parseJSON }
+/exe @js = { formatDate, parseJSON }
 ```
 
 ## Conditional Logic (/when)
@@ -120,9 +120,9 @@ Other directives define or assign but don't output.
 
 # Multiple conditions
 /when @env first: [
-  "prod" => /add "⚠️ Production Environment"
-  "dev" => /add "🔧 Development Environment"
-  _ => /add "Unknown environment"
+  "prod" => /show "⚠️ Production Environment"
+  "dev" => /show "🔧 Development Environment"
+  _ => /show "Unknown environment"
 ]
 ```
 
@@ -180,14 +180,14 @@ Other directives define or assign but don't output.
 
 ### Running scripts with parameters
 ```mlld
-/exec @test(suite) = {npm test -- @suite}
+/exe @test(suite) = {npm test -- @suite}
 /run @test("integration")
 ```
 
 ### Template with many @ symbols
 ```mlld
 # Use [[...]] when you have many @ symbols to escape
-/text @twitterTemplate = [[
+/var @twitterTemplate = [[
   Hey @{{handle}}, love your work!
   @{{otherHandle}} you should check this out.
   Reply to this tweet @{{originalAuthor}}
@@ -196,9 +196,9 @@ Other directives define or assign but don't output.
 
 ### Field access
 ```mlld
-/data @user = { "name": "Alice", "scores": [95, 87, 92] }
-/add "Name: @user.name"
-/add "First score: @user.scores.0"
+/var @user = { "name": "Alice", "scores": [95, 87, 92] }
+/show "Name: @user.name"
+/show "First score: @user.scores.0"
 ```
 
 ## Common Mistakes
@@ -212,21 +212,21 @@ Other directives define or assign but don't output.
 
 ### ❌ Missing @ when creating variables
 ```mlld
-/text greeting = "Hello"  # WRONG - missing @
-/text @greeting = "Hello"  # CORRECT
+/var greeting = "Hello"  # WRONG - missing @
+/var @greeting = "Hello"  # CORRECT
 ```
 
 ### ❌ Using @ for directives
 ```mlld
-@text @greeting = "Hello"  # WRONG - directives use /
-/text @greeting = "Hello"  # CORRECT
+@var @greeting = "Hello"  # WRONG - directives use /
+/var @greeting = "Hello"  # CORRECT
 ```
 
 ### ❌ Trying to interpolate everywhere
 ```mlld
 Hello @name!  # WRONG - plain text, not interpreted
-/add "Hello @name!"  # CORRECT - in directive
-/text @msg = `Hello @name!`  # CORRECT - in template
+/show "Hello @name!"  # CORRECT - in directive
+/var @msg = `Hello @name!`  # CORRECT - in template
 ```
 
 ## Module-First Philosophy
@@ -235,16 +235,16 @@ For complex operations, create modules instead of inline scripts:
 
 ### ❌ Overly complex inline mlld
 ```mlld
-/data @results = foreach @processData(@items) | @validate @transform
+/var @results = foreach @processData(@items) | @validate @transform
 /when @results.length > 0: [
-  true => /data @filtered = foreach @filter(@results)
+  true => /var @filtered = foreach @filter(@results)
 ]
 ```
 
 ### ✅ Better: Use a module
 ```mlld
 /import { processItems } from @myteam/data-utils
-/data @results = @processItems(@items)
+/var @results = @processItems(@items)
 ```
 
 ## Key Concepts
