@@ -19,7 +19,7 @@ function compactBlankLines(content: string): string {
 }
 
 /**
- * Evaluate @add directives.
+ * Evaluate /show directives.
  * Handles variable references, paths, and templates.
  * 
  * Ported from AddDirectiveHandler.
@@ -30,7 +30,7 @@ export async function evaluateShow(
 ): Promise<EvalResult> {
   let content = '';
   
-  if (directive.subtype === 'addVariable') {
+  if (directive.subtype === 'showVariable') {
     // Handle variable reference
     const variableNodes = directive.values?.variable;
     if (!variableNodes || variableNodes.length === 0) {
@@ -186,7 +186,7 @@ export async function evaluateShow(
     }
     
     
-  } else if (directive.subtype === 'addPath') {
+  } else if (directive.subtype === 'showPath') {
     // Handle path inclusion (whole file)
     const pathValue = directive.values?.path;
     if (!pathValue) {
@@ -222,7 +222,7 @@ export async function evaluateShow(
       content = await env.readFile(resolvedPath);
     }
     
-  } else if (directive.subtype === 'addPathSection') {
+  } else if (directive.subtype === 'showPathSection') {
     // Handle section extraction: @add "Section Title" from [file.md]
     const sectionTitleNodes = directive.values?.sectionTitle;
     const pathValue = directive.values?.path;
@@ -312,7 +312,7 @@ export async function evaluateShow(
       }
     }
     
-  } else if (directive.subtype === 'addTemplate') {
+  } else if (directive.subtype === 'showTemplate') {
     // Handle template
     const templateNodes = directive.values?.content;
     if (!templateNodes) {
@@ -473,7 +473,7 @@ export async function evaluateShow(
     const result = await evaluateExecInvocation(execInvocation, env);
     content = String(result.value);
     
-  } else if (directive.subtype === 'addForeachSection') {
+  } else if (directive.subtype === 'showForeachSection') {
     // Handle foreach section expressions: @add foreach [@array.field # section] as [[template]]
     const foreachExpression = directive.values?.foreach;
     if (!foreachExpression) {
@@ -492,7 +492,7 @@ export async function evaluateShow(
     }
     
   } else {
-    throw new Error(`Unsupported add subtype: ${directive.subtype}`);
+    throw new Error(`Unsupported show subtype: ${directive.subtype}`);
   }
   
   // Output directives always end with a newline

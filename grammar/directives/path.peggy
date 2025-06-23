@@ -18,10 +18,10 @@ It is used in the form:
 // -------------------------------------------------------------
 
 // Primary /path directive - handles bracketed paths using proper abstraction
-AtPath
+SlashPath
   // Double quoted string path with @var interpolation
   = DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ content:InterpolatedDoubleQuoteContent ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('AtPath matched double quoted string with interpolation', { id, content, ttl, tail });
+      helpers.debug('SlashPath matched double quoted string with interpolation', { id, content, ttl, tail });
       
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
@@ -61,7 +61,7 @@ AtPath
     }
   // Single quoted string path (literal, no interpolation)
   / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ "'" content:$([^']*) "'" ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('AtPath matched single quoted string (literal)', { id, content, ttl, tail });
+      helpers.debug('SlashPath matched single quoted string (literal)', { id, content, ttl, tail });
       
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
@@ -99,7 +99,7 @@ AtPath
     }
   // Bracketed path with TTL and tail modifiers - semantic parsing
   / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ "[" parts:PathAssignmentParts "]" ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('AtPath matched bracketed path', { id, parts, ttl, tail });
+      helpers.debug('SlashPath matched bracketed path', { id, parts, ttl, tail });
       
       // Process special path variables in the parsed content (only @. special case)
       const processedPathParts = [];
@@ -161,7 +161,7 @@ AtPath
       );
     }
   / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ path:PathExpression ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('AtPath matched normal path', { id, path, ttl, tail });
+      helpers.debug('SlashPath matched normal path', { id, path, ttl, tail });
       
       // Process special path variables
       let processedPath = path.raw.path || path.raw.url;

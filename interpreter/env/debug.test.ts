@@ -19,7 +19,7 @@ describe('@DEBUG variable', () => {
     // Get the DEBUG variable
     const debugVar = env.getVariable('DEBUG');
     expect(debugVar).toBeDefined();
-    expect(debugVar?.type).toBe('text');
+    expect(debugVar?.type).toBe('var');
     
     // Check the output
     const debugOutput = debugVar?.value as string;
@@ -61,7 +61,7 @@ describe('@DEBUG variable', () => {
     // Get lowercase debug
     const debugVar = env.getVariable('debug');
     expect(debugVar).toBeDefined();
-    expect(debugVar?.type).toBe('text');
+    expect(debugVar?.type).toBe('var');
     
     // Should produce the same markdown output
     const debugOutput = debugVar?.value as string;

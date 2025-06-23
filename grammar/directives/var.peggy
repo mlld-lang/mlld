@@ -2,7 +2,7 @@
 // Replaces: /text and /data directives - DELETED with no backward compatibility
 // Purpose: Single directive for all variable types with type inference from syntax
 
-AtVarDirective "var directive"
+SlashVar "var directive"
   = DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent security:(_ s:SecurityOptions { return s; })? {
       helpers.debug('AtVar matched', { id, value });
       

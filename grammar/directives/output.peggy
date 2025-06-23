@@ -18,9 +18,9 @@
 // /output @variable to @resolver/path/file.md    <- resolver output
 // /output @variable to "file.json" as json       <- with format specification
 
-AtOutput
+SlashOutput
   = DirectiveContext "/output" _ source:OutputSource _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
-      helpers.debug('AtOutput enhanced syntax matched', { source, target, format });
+      helpers.debug('SlashOutput enhanced syntax matched', { source, target, format });
       
       const values = {
         source: source.values,
@@ -60,7 +60,7 @@ AtOutput
     }
   // Legacy bracket syntax for backward compatibility
   / DirectiveContext "/output" _ source:OutputSource _ path:WrappedPathContent {
-      helpers.debug('AtOutput legacy syntax with source matched', { source, path });
+      helpers.debug('SlashOutput legacy syntax with source matched', { source, path });
       
       const values = {
         source: source.values,
@@ -94,7 +94,7 @@ AtOutput
       );
     }
   / DirectiveContext "/output" _ path:WrappedPathContent {
-      helpers.debug('AtOutput legacy syntax without source matched', { path });
+      helpers.debug('SlashOutput legacy syntax without source matched', { path });
       
       const values = {
         target: {
@@ -126,7 +126,7 @@ AtOutput
     }
   // New enhanced syntax for document output
   / DirectiveContext "/output" _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
-      helpers.debug('AtOutput enhanced syntax without source matched', { target, format });
+      helpers.debug('SlashOutput enhanced syntax without source matched', { target, format });
       
       const values = {
         target: target

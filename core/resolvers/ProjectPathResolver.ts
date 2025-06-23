@@ -283,7 +283,7 @@ export class ProjectPathResolver implements Resolver {
     
     return ast.some(node => 
       node && node.type === 'Directive' && 
-      ['text', 'data', 'exec', 'path'].includes(node.kind)
+      ['var', 'exe', 'path'].includes(node.kind)
     );
   }
 

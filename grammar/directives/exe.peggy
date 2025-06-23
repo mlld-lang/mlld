@@ -31,10 +31,10 @@ The exe directive supports unified executable syntax:
 // -------------------------------------------------------------
 
 // Primary /exec directive - supporting command, code, and environment syntax
-AtExe
+SlashExe
   = DirectiveContext "/exe" _ id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" comment:InlineComment? {
       // Environment declaration syntax: /exec js = { helperA, helperB }
-      helpers.debug('AtExe matched environment declaration (no @)', { id, envVars });
+      helpers.debug('SlashExe matched environment declaration (no @)', { id, envVars });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -67,7 +67,7 @@ AtExe
     }
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" comment:InlineComment? {
       // Environment declaration syntax: /exec @js = { helperA, helperB }
-      helpers.debug('AtExe matched environment declaration (with @)', { id, envVars });
+      helpers.debug('SlashExe matched environment declaration (with @)', { id, envVars });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -101,7 +101,7 @@ AtExe
   // Code executable: /exec name(params) = js {code}
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ codeCore:RunLanguageCodeCore withClause:WithClause? trust:(_ t:TrustOption { return t; })? comment:InlineComment? {
       // Code syntax: /exec fn() = language {code}
-      helpers.debug('AtExe matched with RunLanguageCodeCore', { id, params, codeCore, trust });
+      helpers.debug('SlashExe matched with RunLanguageCodeCore', { id, params, codeCore, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -161,7 +161,7 @@ AtExe
   // Command executable: /exec name(params) = {command}
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? comment:InlineComment? {
       // Command syntax: /exec cmd() = {command}
-      helpers.debug('AtExe matched with command', { id, params, content, trust });
+      helpers.debug('SlashExe matched with command', { id, params, content, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -218,7 +218,7 @@ AtExe
     }
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? comment:InlineComment? {
       // Command syntax: /exec cmd() = @run {command}
-      helpers.debug('AtExe matched with command', { id, params, content, trust });
+      helpers.debug('SlashExe matched with command', { id, params, content, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -274,7 +274,7 @@ AtExe
       );
     }
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      helpers.debug('AtExe matched command reference', { id, params, commandRef, trust });
+      helpers.debug('SlashExe matched command reference', { id, params, commandRef, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -340,7 +340,7 @@ AtExe
     }
   // Template executable: /exec name(params) = [[template]] or `template`
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ template:TemplateCore withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      helpers.debug('AtExe matched template executable', { id, params, template, trust });
+      helpers.debug('SlashExe matched template executable', { id, params, template, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -395,7 +395,7 @@ AtExe
     }
   // Section executable: /exec name(params) = [@file # @section] [as @newheader]
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "[" _ "@" pathParam:BaseIdentifier fields:AnyFieldAccess* _ "#" _ section:SectionIdentifier _ "]" rename:ExecAsNewTitle? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      helpers.debug('AtExe matched section executable', { id, params, pathParam, section, rename, trust });
+      helpers.debug('SlashExe matched section executable', { id, params, pathParam, section, rename, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -469,7 +469,7 @@ AtExe
   // Resolver executable: /exec name(params) = @resolver/path [{ @payload }]
   // Direct command reference: /exec alias() = @other
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" commandRef:BaseIdentifier !"/" withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      helpers.debug('AtExe matched direct command reference', { id, params, commandRef, trust });
+      helpers.debug('SlashExe matched direct command reference', { id, params, commandRef, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
@@ -522,7 +522,7 @@ AtExe
       );
     }
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" resolver:ResolverPathPattern payload:ExecResolverPayload? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      helpers.debug('AtExe matched resolver executable', { id, params, resolver, trust });
+      helpers.debug('SlashExe matched resolver executable', { id, params, resolver, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });

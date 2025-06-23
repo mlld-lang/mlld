@@ -33,7 +33,7 @@ describe('Content Type Detection', () => {
     });
 
     it('should detect .mld files as modules', async () => {
-      await fileSystem.writeFile('/test.mld', '/text @greeting = "Hello"');
+      await fileSystem.writeFile('/test.mld', '/var @greeting = "Hello"');
       
       const result = await resolverManager.resolve('/test.mld');
       
@@ -42,7 +42,7 @@ describe('Content Type Detection', () => {
     });
 
     it('should detect .mlld files as modules', async () => {
-      await fileSystem.writeFile('/test.mlld', '/text @greeting = "Hello"');
+      await fileSystem.writeFile('/test.mlld', '/var @greeting = "Hello"');
       
       const result = await resolverManager.resolve('/test.mlld');
       
@@ -58,7 +58,7 @@ describe('Content Type Detection', () => {
     });
 
     it('should detect mlld modules by content parsing', async () => {
-      await fileSystem.writeFile('/module.txt', '/data @module = { greeting: "Hello" }');
+      await fileSystem.writeFile('/module.txt', '/var @module = { greeting: "Hello" }');
       
       const result = await resolverManager.resolve('/module.txt');
       
@@ -112,7 +112,7 @@ describe('Content Type Detection', () => {
             ok: true,
             json: async () => ({
               type: 'file',
-              content: Buffer.from('/text @greeting = "Hello from GitHub"').toString('base64'),
+              content: Buffer.from('/var @greeting = "Hello from GitHub"').toString('base64'),
               encoding: 'base64'
             }),
             headers: {
@@ -150,7 +150,7 @@ describe('Content Type Detection', () => {
         if (url.includes('/module.mld')) {
           return {
             ok: true,
-            text: async () => '/text @greeting = "Hello from GitHub"',
+            text: async () => '/var @greeting = "Hello from GitHub"',
             headers: {
               get: (name: string) => name === 'etag' ? '"abc123"' : null
             }
@@ -230,7 +230,7 @@ describe('Content Type Detection', () => {
               get: (name: string) => mockHeaders.get(name.toLowerCase()),
               forEach: (fn: any) => mockHeaders.forEach((v, k) => fn(v, k))
             },
-            text: async () => '/data @module = { version: "1.0.0" }'
+            text: async () => '/var @module = { version: "1.0.0" }'
           } as any;
         }
         if (url.endsWith('.json')) {
@@ -308,7 +308,7 @@ describe('Content Type Detection', () => {
         if (url.includes('/utils.mld')) {
           return {
             ok: true,
-            text: async () => '/text @version = "1.0.0"'
+            text: async () => '/var @version = "1.0.0"'
           } as any;
         }
         throw new Error('Not found');

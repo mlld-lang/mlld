@@ -4,14 +4,14 @@ import { parse } from '@grammar/parser';
 describe('Parameterized Text Templates', () => {
   describe('Template Definition', () => {
     it('should parse basic parameterized template definition', async () => {
-      const input = '/exec @greetingTemplate(name, title) = [[Hello {{title}} {{name}}!]]';
+      const input = '/exe @greetingTemplate(name, title) = [[Hello {{title}} {{name}}!]]';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe('Directive');
-      expect(result[0].kind).toBe('exec');
-      expect(result[0].subtype).toBe('execTemplate');
+      expect(result[0].kind).toBe('exe');
+      expect(result[0].subtype).toBe('exeTemplate');
       expect(result[0].source).toBe('template');
       
       // Check parameters
@@ -28,7 +28,7 @@ describe('Parameterized Text Templates', () => {
     });
 
     it('should handle template with no parameters', async () => {
-      const input = '/exec @staticTemplate() = [[Static content here]]';
+      const input = '/exe @staticTemplate() = [[Static content here]]';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
@@ -37,7 +37,7 @@ describe('Parameterized Text Templates', () => {
     });
 
     it('should handle multiline template with parameter reuse', async () => {
-      const input = `/exec @emailTemplate(name, subject) = [[
+      const input = `/exe @emailTemplate(name, subject) = [[
 Subject: {{subject}}
 
 Dear {{name}},
@@ -72,14 +72,14 @@ The {{name}} Team
 
   describe('Template Invocation', () => {
     it('should parse template invocation with string arguments', async () => {
-      const input = '/add @greetingTemplate("Alice", "Dr.")';
+      const input = '/show @greetingTemplate("Alice", "Dr.")';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe('Directive');
-      expect(result[0].kind).toBe('add');
-      expect(result[0].subtype).toBe('addInvocation');
+      expect(result[0].kind).toBe('show');
+      expect(result[0].subtype).toBe('showInvocation');
       expect(result[0].source).toBe('invocation');
       
       // Check invocation structure
@@ -96,7 +96,7 @@ The {{name}} Team
     });
 
     it('should parse template invocation with variable arguments', async () => {
-      const input = '/add @greetingTemplate(@userName, @userTitle)';
+      const input = '/show @greetingTemplate(@userName, @userTitle)';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
@@ -109,7 +109,7 @@ The {{name}} Team
     });
 
     it('should parse template invocation with mixed arguments', async () => {
-      const input = '/add @emailTemplate(@userName, "Welcome to our service")';
+      const input = '/show @emailTemplate(@userName, "Welcome to our service")';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
@@ -121,7 +121,7 @@ The {{name}} Team
     });
 
     it('should parse template invocation with no arguments', async () => {
-      const input = '/add @staticTemplate()';
+      const input = '/show @staticTemplate()';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
@@ -134,23 +134,23 @@ The {{name}} Team
     it('should parse template invocation assigned to variable', async () => {
       // TODO: This syntax is not yet implemented in the grammar
       // For now, template invocations must be used directly with @add
-      // Future enhancement: /text @result = /add @greetingTemplate("Bob", "Prof.")
+      // Future enhancement: /text @result = /show @greetingTemplate("Bob", "Prof.")
       
       // Test the current supported syntax
-      const input = '/add @greetingTemplate("Bob", "Prof.")';
+      const input = '/show @greetingTemplate("Bob", "Prof.")';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
       expect(result).toHaveLength(1);
       expect(result[0].type).toBe('Directive');
-      expect(result[0].kind).toBe('add');
-      expect(result[0].subtype).toBe('addInvocation');
+      expect(result[0].kind).toBe('show');
+      expect(result[0].subtype).toBe('showInvocation');
     });
   });
 
   describe('Edge Cases', () => {
     it('should handle single quotes in arguments', async () => {
-      const input = '/add @greetingTemplate(\'Alice\', \'Dr.\')';
+      const input = '/show @greetingTemplate(\'Alice\', \'Dr.\')';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
@@ -162,7 +162,7 @@ The {{name}} Team
     });
 
     it('should handle template with header level', async () => {
-      const input = '/add @greetingTemplate("Alice", "Dr.") as ##';
+      const input = '/show @greetingTemplate("Alice", "Dr.") as ##';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
@@ -171,7 +171,7 @@ The {{name}} Team
     });
 
     it('should handle template with under header', async () => {
-      const input = '/add @greetingTemplate("Alice", "Dr.") under Introduction';
+      const input = '/show @greetingTemplate("Alice", "Dr.") under Introduction';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       

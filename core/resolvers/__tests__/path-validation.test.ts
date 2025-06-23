@@ -59,7 +59,7 @@ describe('Path Content Type Validation', () => {
       
       const code = `
 /path @readme = "./readme.txt"
-/add @readme
+/show @readme
 `;
       
       const result = await interpret(code, {
@@ -77,7 +77,7 @@ describe('Path Content Type Validation', () => {
       
       const code = `
 /path @config = "./config.json"
-/add @config
+/show @config
 `;
       
       const result = await interpret(code, {
@@ -97,7 +97,7 @@ describe('Path Content Type Validation', () => {
       
       const code = `
 /path @data = "@PROJECTPATH/src/data.txt"
-/add @data
+/show @data
 `;
       
       const result = await interpret(code, {
@@ -116,7 +116,7 @@ describe('Path Content Type Validation', () => {
       await fileSystem.writeFile('/module.mld', '/text @greeting = "Hello"');
       
       const code = `/path @mod = "./module.mld"
-/add @mod`;
+/show @mod`;
       
       const result = await interpret(code, {
         fileSystem,
@@ -132,7 +132,7 @@ describe('Path Content Type Validation', () => {
       await fileSystem.writeFile('/module.mlld', '/data @config = { enabled: true }');
       
       const code = `/path @mod = "./module.mlld"
-/add @mod`;
+/show @mod`;
       
       const result = await interpret(code, {
         fileSystem,
@@ -241,7 +241,7 @@ describe('Path Content Type Validation', () => {
     it('should accept text URLs in path directives', async () => {
       const code = `
 /path @data = "https://example.com/data.txt"
-/add @data
+/show @data
 `;
       
       const result = await interpret(code, {
@@ -263,7 +263,7 @@ describe('Path Content Type Validation', () => {
     it('should accept data URLs in path directives', async () => {
       const code = `
 /path @config = "https://example.com/config.json"
-/add @config
+/show @config
 `;
       
       const result = await interpret(code, {
@@ -284,7 +284,7 @@ describe('Path Content Type Validation', () => {
 
     it('should accept module URLs in path directives as text content', async () => {
       const code = `/path @mod = "https://example.com/module.mld"
-/add @mod`;
+/show @mod`;
       
       const result = await interpret(code, {
         fileSystem,
@@ -308,7 +308,7 @@ describe('Path Content Type Validation', () => {
       await fileSystem.writeFile('/lib.mld', '/text @name = "Library"');
       
       const code = `/path @lib = "./lib.mld"
-/add @lib`;
+/show @lib`;
       
       const result = await interpret(code, {
         fileSystem,
@@ -327,8 +327,8 @@ describe('Path Content Type Validation', () => {
       const code = `
 /path @text = "./data.txt"
 /path @mod = "./module.mld"
-/add @text
-/add @mod
+/show @text
+/show @mod
 `;
       
       const result = await interpret(code, {

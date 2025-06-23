@@ -21,10 +21,10 @@ It can be used in these forms:
 // -------------------------------------------------------------
 
 // Primary /show directive with all variants
-AtShow
+SlashShow
   // Foreach section expression: /show foreach [@array.field # section] as [[template]]
   = DirectiveContext "/show" _ expr:ForeachSectionExpression {
-      helpers.debug('AtShow matched foreach section expression', { expr });
+      helpers.debug('SlashShow matched foreach section expression', { expr });
       
       // Extract the inner value from the ForeachSectionExpression
       const foreachValue = expr.value;
@@ -58,7 +58,7 @@ AtShow
     }
   // Foreach command expression: /show foreach @command(@arrays)
   / DirectiveContext "/show" _ expr:ForeachCommandExpression {
-      helpers.debug('AtShow matched foreach expression', { expr });
+      helpers.debug('SlashShow matched foreach expression', { expr });
       
       // Extract the inner value from the ForeachCommandExpression
       const foreachValue = expr.value;
@@ -100,7 +100,7 @@ AtShow
     }
   // Double-bracketed path with section: [[path/to/file.md # Section]]
   / DirectiveContext "/show" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
-      helpers.debug('AtShow matched double-bracketed path section', { content, rename });
+      helpers.debug('SlashShow matched double-bracketed path section', { content, rename });
       
       const rawPath = content.raw.split(' # ')[0];
       const sectionText = content.section;
@@ -144,7 +144,7 @@ AtShow
     }
   // Single-bracketed path with section: [path/to/file.md # Section]  
   / DirectiveContext "/show" _ content:SemanticSectionContent rename:AsNewTitle? {
-      helpers.debug('AtShow matched bracketed path section', { content, rename });
+      helpers.debug('SlashShow matched bracketed path section', { content, rename });
       
       const rawPath = content.raw.split(' # ')[0];
       const sectionText = content.section;
@@ -188,7 +188,7 @@ AtShow
     }
   / DirectiveContext "/show" _ sectionTitle:QuotedContent _ "from" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ asTitle:AsNewTitle? {
       // This rule should match section syntax FIRST before the template rule below
-      helpers.debug('AtShow matched section', { sectionTitle, path, asTitle, security });
+      helpers.debug('SlashShow matched section', { sectionTitle, path, asTitle, security });
       
       // Process the section title and path
       const sectionTitleNode = sectionTitle[0]; // Get the first node from the array
@@ -236,7 +236,7 @@ AtShow
     }
   / DirectiveContext "/show" _ security:(SecurityOptions _)? template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtShow matched template content', { template, headerLevel, underHeader });
+      helpers.debug('SlashShow matched template content', { template, headerLevel, underHeader });
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
@@ -298,7 +298,7 @@ AtShow
   // Variable reference MUST come before exec invocation to match simple @varname first
   / DirectiveContext "/show" _ security:(SecurityOptions _)? "@" varRef:ShowVariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtShow matched variable reference', { varRef, headerLevel, underHeader });
+      helpers.debug('SlashShow matched variable reference', { varRef, headerLevel, underHeader });
       
       // Extract variable reference information
       const id = varRef.identifier;
@@ -360,7 +360,7 @@ AtShow
     }
   // Exec invocation with tail modifiers - /show @command() | @modifiers
   / DirectiveContext "/show" _ "@" invocation:ExecInvocationWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
-      helpers.debug('AtShow matched exec invocation with tail modifiers', { invocation, headerLevel, underHeader });
+      helpers.debug('SlashShow matched exec invocation with tail modifiers', { invocation, headerLevel, underHeader });
       
       // Extract command reference info
       const commandRef = invocation.commandRef;
@@ -429,7 +429,7 @@ AtShow
     }
   / DirectiveContext "/show" _ security:(SecurityOptions _)? "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtShow matched quoted string', { content, headerLevel, underHeader, securityOptions });
+      helpers.debug('SlashShow matched quoted string', { content, headerLevel, underHeader, securityOptions });
       
       // Create path structure
       const path = {
@@ -501,7 +501,7 @@ AtShow
       );
     }
   / DirectiveContext "/show" _ !("[[") !('[' [^#\]]* '#') path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
-      helpers.debug('AtShow matched path', { path, headerLevel, underHeader, security });
+      helpers.debug('SlashShow matched path', { path, headerLevel, underHeader, security });
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;

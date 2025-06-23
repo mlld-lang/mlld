@@ -11,7 +11,7 @@ describe('Text Directive Tests', () => {
       const result = parseResult.ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
-      expect(result.kind).toBe('text');
+      expect(result.kind).toBe('var');
       expect(result.subtype).toBe('textAssignment');
       
       // Check values
@@ -33,7 +33,7 @@ describe('Text Directive Tests', () => {
       const result = (await parse('/text @content = [./README.md]')).ast[0];
       
       expect(result.type).toBe('Directive');
-      expect(result.kind).toBe('text');
+      expect(result.kind).toBe('var');
       expect(result.subtype).toBe('textPath');
       
       // Check values - textPath uses 'path' not 'content'
@@ -55,7 +55,7 @@ describe('Text Directive Tests', () => {
       const result = (await parse('/text @output = @run {echo "Hello"}')).ast[0] as TextAssignmentDirectiveNode;
       
       expect(result.type).toBe('Directive');
-      expect(result.kind).toBe('text');
+      expect(result.kind).toBe('var');
       expect(result.subtype).toBe('textAssignment');
       
       // Check values
@@ -82,7 +82,7 @@ describe('Text Directive Tests', () => {
       const result = parseResult.ast[0] as TextTemplateDirectiveNode;
       
       expect(result.type).toBe('Directive');
-      expect(result.kind).toBe('text');
+      expect(result.kind).toBe('var');
       expect(result.subtype).toBe('textTemplate');
       
       // Check values
@@ -110,7 +110,7 @@ describe('Text Directive Tests', () => {
       const result = parseResult.ast[0] as TextTemplateDirectiveNode;
       
       expect(result.type).toBe('Directive');
-      expect(result.kind).toBe('text');
+      expect(result.kind).toBe('var');
       expect(result.subtype).toBe('textTemplate');
       
       // Check values

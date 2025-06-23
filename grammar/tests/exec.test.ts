@@ -1,19 +1,19 @@
 import { describe, expect, test } from 'vitest';
 import { parse } from '@grammar/parser';
-import { isExecCommandDirective, isExecCodeDirective } from '@core/types/exec';
+import { isExeCommandDirective, isExeCodeDirective } from '@core/types/exe';
 
 describe('Exec directive', () => {
   describe('execCommand subtype', () => {
     test('Basic exec command', async () => {
-      const content = '/exec @listFiles = {ls -la}';
+      const content = '/exe @listFiles = {ls -la}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
       expect(directiveNode.type).toBe('Directive');
-      expect(directiveNode.kind).toBe('exec');
-      expect(directiveNode.subtype).toBe('execCommand');
+      expect(directiveNode.kind).toBe('exe');
+      expect(directiveNode.subtype).toBe('exeCommand');
       
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('listFiles');
@@ -28,19 +28,19 @@ describe('Exec directive', () => {
       expect(directiveNode.meta.parameterCount).toBe(0);
       
       // Type guard
-      expect(isExecCommandDirective(directiveNode)).toBe(true);
+      expect(isExeCommandDirective(directiveNode)).toBe(true);
     });
     
     test('Exec command with parameters (with space)', async () => {
-      const content = '/exec @formatFile (file, type) = {fmt @file --type=@type}';
+      const content = '/exe @formatFile (file, type) = {fmt @file --type=@type}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
       expect(directiveNode.type).toBe('Directive');
-      expect(directiveNode.kind).toBe('exec');
-      expect(directiveNode.subtype).toBe('execCommand');
+      expect(directiveNode.kind).toBe('exe');
+      expect(directiveNode.subtype).toBe('exeCommand');
       
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('formatFile');
@@ -62,19 +62,19 @@ describe('Exec directive', () => {
       expect(directiveNode.meta.parameterCount).toBe(2);
       
       // Type guard
-      expect(isExecCommandDirective(directiveNode)).toBe(true);
+      expect(isExeCommandDirective(directiveNode)).toBe(true);
     });
     
     test('Exec command with parameters (without space)', async () => {
-      const content = '/exec @formatFile(file, type) = {fmt @file --type=@type}';
+      const content = '/exe @formatFile(file, type) = {fmt @file --type=@type}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
       expect(directiveNode.type).toBe('Directive');
-      expect(directiveNode.kind).toBe('exec');
-      expect(directiveNode.subtype).toBe('execCommand');
+      expect(directiveNode.kind).toBe('exe');
+      expect(directiveNode.subtype).toBe('exeCommand');
       
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('formatFile');
@@ -89,19 +89,19 @@ describe('Exec directive', () => {
       expect(directiveNode.meta.parameterCount).toBe(2);
       
       // Type guard
-      expect(isExecCommandDirective(directiveNode)).toBe(true);
+      expect(isExeCommandDirective(directiveNode)).toBe(true);
     });
     
     test('Exec command with metadata', async () => {
-      const content = '/exec @dangerous.risk.high = {rm -rf @dir}';
+      const content = '/exe @dangerous.risk.high = {rm -rf @dir}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
       expect(directiveNode.type).toBe('Directive');
-      expect(directiveNode.kind).toBe('exec');
-      expect(directiveNode.subtype).toBe('execCommand');
+      expect(directiveNode.kind).toBe('exe');
+      expect(directiveNode.subtype).toBe('exeCommand');
       
       // Check metadata
       expect(directiveNode.values.identifier[0].content).toBe('dangerous');
@@ -111,21 +111,21 @@ describe('Exec directive', () => {
       expect(directiveNode.meta.metadata?.type).toBe('risk.high');
       
       // Type guard
-      expect(isExecCommandDirective(directiveNode)).toBe(true);
+      expect(isExeCommandDirective(directiveNode)).toBe(true);
     });
   });
   
   describe('execCode subtype', () => {
     test('Basic code definition', async () => {
-      const content = '/exec @greet = javascript {\n  console.log("Hello, world!");\n}';
+      const content = '/exe @greet = javascript {\n  console.log("Hello, world!");\n}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
       expect(directiveNode.type).toBe('Directive');
-      expect(directiveNode.kind).toBe('exec');
-      expect(directiveNode.subtype).toBe('execCode');
+      expect(directiveNode.kind).toBe('exe');
+      expect(directiveNode.subtype).toBe('exeCode');
       
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('greet');
@@ -140,19 +140,19 @@ describe('Exec directive', () => {
       expect(directiveNode.meta.parameterCount).toBe(0);
       
       // Type guard
-      expect(isExecCodeDirective(directiveNode)).toBe(true);
+      expect(isExeCodeDirective(directiveNode)).toBe(true);
     });
     
     test('Code definition with parameters (with space)', async () => {
-      const content = '/exec @formatJson (data, style) = python {\n  import json\n  data_obj = json.loads(data)\n  print(json.dumps(data_obj, indent=4 if style == "pretty" else None))\n}';
+      const content = '/exe @formatJson (data, style) = python {\n  import json\n  data_obj = json.loads(data)\n  print(json.dumps(data_obj, indent=4 if style == "pretty" else None))\n}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
       expect(directiveNode.type).toBe('Directive');
-      expect(directiveNode.kind).toBe('exec');
-      expect(directiveNode.subtype).toBe('execCode');
+      expect(directiveNode.kind).toBe('exe');
+      expect(directiveNode.subtype).toBe('exeCode');
       
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('formatJson');
@@ -169,19 +169,19 @@ describe('Exec directive', () => {
       expect(directiveNode.meta.parameterCount).toBe(2);
       
       // Type guard
-      expect(isExecCodeDirective(directiveNode)).toBe(true);
+      expect(isExeCodeDirective(directiveNode)).toBe(true);
     });
     
     test('Code definition with parameters (without space)', async () => {
-      const content = '/exec @formatJson(data, style) = python {\n  import json\n  data_obj = json.loads(data)\n  print(json.dumps(data_obj, indent=4 if style == "pretty" else None))\n}';
+      const content = '/exe @formatJson(data, style) = python {\n  import json\n  data_obj = json.loads(data)\n  print(json.dumps(data_obj, indent=4 if style == "pretty" else None))\n}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
       expect(directiveNode.type).toBe('Directive');
-      expect(directiveNode.kind).toBe('exec');
-      expect(directiveNode.subtype).toBe('execCode');
+      expect(directiveNode.kind).toBe('exe');
+      expect(directiveNode.subtype).toBe('exeCode');
       
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('formatJson');
@@ -196,19 +196,19 @@ describe('Exec directive', () => {
       expect(directiveNode.meta.parameterCount).toBe(2);
       
       // Type guard
-      expect(isExecCodeDirective(directiveNode)).toBe(true);
+      expect(isExeCodeDirective(directiveNode)).toBe(true);
     });
     
     test('Code definition containing variable syntax as text', async () => {
-      const content = '/exec @processTemplate = javascript {\n  const template = "{{template}}";\n  console.log(`Processing template: ${template}`);\n}';
+      const content = '/exe @processTemplate = javascript {\n  const template = "{{template}}";\n  console.log(`Processing template: ${template}`);\n}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
       expect(directiveNode.type).toBe('Directive');
-      expect(directiveNode.kind).toBe('exec');
-      expect(directiveNode.subtype).toBe('execCode');
+      expect(directiveNode.kind).toBe('exe');
+      expect(directiveNode.subtype).toBe('exeCode');
       
       // Check structured format
       expect(directiveNode.values.identifier[0].content).toBe('processTemplate');
@@ -223,19 +223,19 @@ describe('Exec directive', () => {
       expect(directiveNode.raw.code).toContain('{{template}}');
       
       // Type guard
-      expect(isExecCodeDirective(directiveNode)).toBe(true);
+      expect(isExeCodeDirective(directiveNode)).toBe(true);
     });
     
     test('Code definition with metadata', async () => {
-      const content = '/exec @processData.meta = python {\n  import json\n  print(json.dumps(data))\n}';
+      const content = '/exe @processData.meta = python {\n  import json\n  print(json.dumps(data))\n}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
       
       const directiveNode = parseResult.ast[0];
       expect(directiveNode.type).toBe('Directive');
-      expect(directiveNode.kind).toBe('exec');
-      expect(directiveNode.subtype).toBe('execCode');
+      expect(directiveNode.kind).toBe('exe');
+      expect(directiveNode.subtype).toBe('exeCode');
       
       // Check metadata
       expect(directiveNode.values.identifier[0].content).toBe('processData');
@@ -245,7 +245,7 @@ describe('Exec directive', () => {
       expect(directiveNode.meta.metadata?.type).toBe('meta');
       
       // Type guard
-      expect(isExecCodeDirective(directiveNode)).toBe(true);
+      expect(isExeCodeDirective(directiveNode)).toBe(true);
     });
   });
 });

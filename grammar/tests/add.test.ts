@@ -19,7 +19,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic path add', async () => {
-    const content = `/add [@PROJECTPATH/README.md]`;
+    const content = `/show [@PROJECTPATH/README.md]`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -35,8 +35,8 @@ describe('Add Directive', () => {
     expect(directiveNode.type).toBe('Directive');
     
     // Verify structure of the new format
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addPath');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showPath');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('path');
@@ -49,7 +49,7 @@ describe('Add Directive', () => {
   // The old syntax @add [file.md # header] is deprecated
   
   test('Path add with headerLevel', async () => {
-    const content = `/add [README.md] as ###`;
+    const content = `/show [README.md] as ###`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -57,8 +57,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addPath');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showPath');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('path');
@@ -71,7 +71,7 @@ describe('Add Directive', () => {
   });
   
   test('Path add with underHeader', async () => {
-    const content = `/add [code.js] under Example Code`;
+    const content = `/show [code.js] under Example Code`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -79,8 +79,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addPath');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showPath');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('path');
@@ -95,7 +95,7 @@ describe('Add Directive', () => {
   
   test('Complex path add with all modifiers', async () => {
     // Updated to use separate path with no section
-    const content = `/add [@PROJECTPATH/doc.md] as ## under API Documentation`;
+    const content = `/show [@PROJECTPATH/doc.md] as ## under API Documentation`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -106,8 +106,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addPath');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showPath');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('path');
@@ -129,7 +129,7 @@ describe('Add Directive', () => {
   
   test('Complex section add with new title', async () => {
     // The new recommended syntax for section extraction with a new title
-    const content = `/add "# API Reference" from [@PROJECTPATH/doc.md] as "## API"`;
+    const content = `/show "# API Reference" from [@PROJECTPATH/doc.md] as "## API"`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result
@@ -137,8 +137,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addPathSection');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showPathSection');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('sectionTitle');
@@ -155,7 +155,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic template add', async () => {
-    const content = `/add [[# Template Content]]`;
+    const content = `/show [[# Template Content]]`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -166,8 +166,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addTemplate');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showTemplate');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('content');
@@ -179,7 +179,7 @@ describe('Add Directive', () => {
   });
   
   test('Template add with variable interpolation', async () => {
-    const content = `/add [[Hello {{name}}!]]`;
+    const content = `/show [[Hello {{name}}!]]`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -187,8 +187,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addTemplate');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showTemplate');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('content');
@@ -200,7 +200,7 @@ describe('Add Directive', () => {
   });
   
   test('Template add with headerLevel', async () => {
-    const content = `/add [[# Content]] as ##`;
+    const content = `/show [[# Content]] as ##`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -208,8 +208,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addTemplate');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showTemplate');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('content');
@@ -226,7 +226,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic variable add', async () => {
-    const content = `/add @content`;
+    const content = `/show @content`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -237,8 +237,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addVariable');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showVariable');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('variable');
@@ -247,7 +247,7 @@ describe('Add Directive', () => {
   });
   
   test('Variable add with headerLevel and underHeader', async () => {
-    const content = `/add @document as ## under Documentation`;
+    const content = `/show @document as ## under Documentation`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -255,8 +255,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addVariable');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showVariable');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('variable');
@@ -278,7 +278,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic section add', async () => {
-    const content = `/add "# Header Title" from [document.md]`;
+    const content = `/show "# Header Title" from [document.md]`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -289,8 +289,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addPathSection');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showPathSection');
     expect(directiveNode.source).toBe('section'); // Check source field
     
     // Check values structure
@@ -305,7 +305,7 @@ describe('Add Directive', () => {
   });
   
   test('Section add with as clause', async () => {
-    const content = `/add "# Original Header" from [document.md] as "## New Title"`;
+    const content = `/show "# Original Header" from [document.md] as "## New Title"`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -313,8 +313,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addPathSection');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showPathSection');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('sectionTitle');
@@ -330,7 +330,7 @@ describe('Add Directive', () => {
   });
   
   test('Section add with variable in path', async () => {
-    const content = `/add "# API Reference" from [@PROJECTPATH/docs/api.md]`;
+    const content = `/show "# API Reference" from [@PROJECTPATH/docs/api.md]`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -338,8 +338,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addPathSection');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showPathSection');
     
     // Check path has a variable
     expect(directiveNode.meta.path.hasVariables).toBe(true);
@@ -355,7 +355,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Multiline template add', async () => {
-    const content = `/add [[
+    const content = `/show [[
 # Multiline Content
 - Item 1
 - Item 2
@@ -370,8 +370,8 @@ describe('Add Directive', () => {
     
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
-    expect(directiveNode.kind).toBe('add');
-    expect(directiveNode.subtype).toBe('addTemplate');
+    expect(directiveNode.kind).toBe('show');
+    expect(directiveNode.subtype).toBe('showTemplate');
     
     // Check values structure
     expect(directiveNode.values).toHaveProperty('content');

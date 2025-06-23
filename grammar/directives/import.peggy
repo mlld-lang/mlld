@@ -18,14 +18,14 @@ It can be used in these forms:
 // -------------------------------------------------------------
 
 // Primary /import directive
-AtImport
-  = AtImportShorthand
-  / AtImportFull
+SlashImport
+  = SlashImportShorthand
+  / SlashImportFull
 
 // Shorthand import: /import [path] or /import @input
-AtImportShorthand
+SlashImportShorthand
   = DirectiveContext "/import" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('AtImportShorthand matched', { path, ttl, tail });
+      helpers.debug('SlashImportShorthand matched', { path, ttl, tail });
       
       // Shorthand always imports all (*)
       const imports = ["*"];
@@ -72,9 +72,9 @@ AtImportShorthand
     }
 
 // Full import with explicit imports list
-AtImportFull
+SlashImportFull
   = DirectiveContext "/import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('AtImport matched', { imports, path, ttl, tail });
+      helpers.debug('SlashImport matched', { imports, path, ttl, tail });
       
       // Get the raw imports text
       const importsRaw = imports.map(item => {

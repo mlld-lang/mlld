@@ -20,11 +20,11 @@ It can be used in three main forms:
 
 // Primary /run directive - Supporting both command and code syntax
 // Order matters: most specific patterns first
-AtRun
+SlashRun
   = DirectiveContext "/run" _ security:(SecurityOptions _)? "\"" command:$([^"]*) "\"" tail:TailModifiers? comment:InlineComment? {
       // Quoted command syntax: /run "echo hello"
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched quoted command', { command, securityOptions, tail });
+      helpers.debug('SlashRun matched quoted command', { command, securityOptions, tail });
       
       // Parse the command string to extract parts
       const parts = helpers.parseCommandContent(command);
@@ -82,7 +82,7 @@ AtRun
   / DirectiveContext "/run" _ security:(SecurityOptions _)? content:UnifiedCommandBrackets tail:TailModifiers? comment:InlineComment? {
       // Command syntax: /run {command}
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched command', { content, securityOptions, tail });
+      helpers.debug('SlashRun matched command', { content, securityOptions, tail });
       
       const meta = {
         ...content.meta,
@@ -113,7 +113,7 @@ AtRun
   / DirectiveContext "/run" _ security:(SecurityOptions _)? codeCore:(RunLanguageCodeWithArgs / RunLanguageCodeCore) tail:TailModifiers? comment:InlineComment? {
       // Language + code syntax: /run language {code} or /run language (args) {code}
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched with language code pattern', { codeCore, securityOptions, tail });
+      helpers.debug('SlashRun matched with language code pattern', { codeCore, securityOptions, tail });
       
       // Use values and raw from the core pattern
       const values = codeCore.values;
@@ -146,7 +146,7 @@ AtRun
   / DirectiveContext "/run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference tail:TailModifiers? comment:InlineComment? {
       // @ detected -> Command reference (exec)
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtRun matched command reference', { commandRef, securityOptions, tail });
+      helpers.debug('SlashRun matched command reference', { commandRef, securityOptions, tail });
       
       const values = {
         identifier: commandRef.identifier,

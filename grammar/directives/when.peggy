@@ -23,7 +23,7 @@ Modifiers:
 // -------------------------------------------------------------
 
 // Primary /when directive
-AtWhen
+SlashWhen
   = WhenSimpleForm
   / WhenBlockForm
   / WhenSwitchForm

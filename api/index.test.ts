@@ -14,23 +14,23 @@ describe('Mlld API', () => {
 
   describe('processMlld', () => {
     it('should process simple text assignment', async () => {
-      const content = '/text @greeting = "Hello, World!"';
+      const content = '/var @greeting = "Hello, World!"';
       const result = await processMlld(content);
       // Text assignment alone doesn't produce output
       expect(result).toBe('');
     });
 
-    it('should process text with add directive', async () => {
+    it('should process text with show directive', async () => {
       const content = `
-/text @greeting = "Hello, World!"
-/add @greeting
+/var @greeting = "Hello, World!"
+/show @greeting
       `.trim();
       const result = await processMlld(content);
       expect(result.trim()).toBe('Hello, World!');
     });
 
     it('should process with custom options', async () => {
-      const content = '/add "Hello, World!"';
+      const content = '/show "Hello, World!"';
       const result = await processMlld(content, {
         format: 'markdown',
         basePath: '/custom/path'
@@ -44,7 +44,7 @@ describe('Mlld API', () => {
       
       const content = `
 /path @testFile = [/test.md]
-/add @testFile
+/show @testFile
       `.trim();
       const result = await processMlld(content, {
         fileSystem,
@@ -55,7 +55,7 @@ describe('Mlld API', () => {
     });
 
     it('should handle data directives', async () => {
-      const content = '/data @config = { name: "Test", version: 1.0 }';
+      const content = '/var @config = { name: "Test", version: 1.0 }';
       const result = await processMlld(content, { format: 'xml' });
       expect(result).toContain('<MLLD_OUTPUT>');
       expect(result).toContain('<CONFIG>');
@@ -64,9 +64,9 @@ describe('Mlld API', () => {
 
     it('should handle template interpolation', async () => {
       const content = `
-/text @name = "World"
-/text @greeting = [[Hello, {{name}}!]]
-/add @greeting
+/var @name = "World"
+/var @greeting = [[Hello, {{name}}!]]
+/show @greeting
       `.trim();
       const result = await processMlld(content);
       expect(result.trim()).toBe('Hello, World!');
@@ -74,11 +74,11 @@ describe('Mlld API', () => {
 
     it('should handle import directives', async () => {
       // Set up a test file to import
-      await fileSystem.writeFile('/utils.mld', '/text @helper = "Helper Text"');
+      await fileSystem.writeFile('/utils.mld', '/var @helper = "Helper Text"');
       
       const content = `
 /import { helper } from [/utils.mld]
-/add @helper
+/show @helper
       `.trim();
       const result = await processMlld(content, {
         fileSystem,
@@ -92,7 +92,7 @@ describe('Mlld API', () => {
       // When a file doesn't exist, path directive should return the path as a string
       const content = `
 /path @testPath = [/nonexistent.md]
-/add @testPath
+/show @testPath
       `.trim();
       const result = await processMlld(content, {
         fileSystem,
@@ -102,11 +102,11 @@ describe('Mlld API', () => {
       expect(result.trim()).toBe('/nonexistent.md');
     });
 
-    it('should process add directive with sections', async () => {
+    it('should process show directive with sections', async () => {
       // Set up a test file with sections
       await fileSystem.writeFile('/doc.md', `# Document\n\n## Section One\nContent 1\n\n## Section Two\nContent 2`);
       
-      const content = '/add "Section Two" from [/doc.md]';
+      const content = '/show "Section Two" from [/doc.md]';
       const result = await processMlld(content, {
         fileSystem,
         pathService,
@@ -130,30 +130,30 @@ describe('Mlld API', () => {
       expect(error.code).toBe('TEST_ERROR');
     });
 
-    it('should handle exec directive', async () => {
+    it('should handle exe directive', async () => {
       const content = `
-/exec @greeting = @run {echo "Hello from exec!"}
+/exe @greeting = @run {echo "Hello from exe!"}
       `.trim();
       const result = await processMlld(content, {
         fileSystem,
         pathService,
         basePath: '/'
       });
-      // Exec directive alone doesn't produce output, just stores the value
+      // Exe directive alone doesn't produce output, just stores the value
       expect(result).toBe('');
     });
 
-    it('should handle simple literal add', async () => {
-      const content = '/add "This is literal text"';
+    it('should handle simple literal show', async () => {
+      const content = '/show "This is literal text"';
       const result = await processMlld(content);
       expect(result.trim()).toBe('This is literal text');
     });
 
-    it('should handle multiple add directives', async () => {
+    it('should handle multiple show directives', async () => {
       const content = `
-/add "Line 1"
-/add "Line 2"
-/add "Line 3"
+/show "Line 1"
+/show "Line 2"
+/show "Line 3"
       `.trim();
       const result = await processMlld(content);
       const lines = result.trim().split('\n');

@@ -12,7 +12,7 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-/data @results = {
+/var @results = {
   echo: @run {echo "hello world"},
   date: @run {date}
 }
@@ -25,7 +25,7 @@ describe('Complex Data Assignment', () => {
     // Get the results variable
     const resultsVar = env.getVariable('results');
     expect(resultsVar).toBeDefined();
-    expect(resultsVar?.type).toBe('data');
+    expect(resultsVar?.type).toBe('var');
     
     // The value should be evaluated lazily when accessed
     // For this test, we'll manually trigger evaluation
@@ -38,15 +38,15 @@ describe('Complex Data Assignment', () => {
     expect(typeof resolvedValue.date).toBe('string');
   });
 
-  it('should support embedded @add directives in data values', async () => {
+  it('should support embedded @show directives in data values', async () => {
     const fs = new MemoryFileSystem();
     await fs.writeFile('/test.txt', 'File contents');
     const pathService = new PathService();
     const env = new Environment(fs, pathService, '/');
     
     const mlldContent = `
-/data @docs = {
-  readme: @add [/test.txt]
+/var @docs = {
+  readme: @show [/test.txt]
 }
 `;
     
@@ -71,12 +71,12 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-/data @user = {
+/var @user = {
   name: "John",
   scores: [10, 20, 30]
 }
 
-/data @results = {
+/var @results = {
   userName: @user.name,
   firstScore: @user.scores[0]
 }
@@ -103,9 +103,9 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-/text @name = "World"
+/var @name = "World"
 
-/data @messages = {
+/var @messages = {
   greeting: [[Hello {{name}}!]],
   farewell: [[Goodbye {{name}}!]]
 }
@@ -132,7 +132,7 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-/data @config = {
+/var @config = {
   app: {
     name: "MyApp",
     version: @run {echo "1.0.0"}
@@ -165,7 +165,7 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-/data @tests = [@run {echo "test1"}, @run {echo "test2"}, @run {echo "test3"}]
+/var @tests = [@run {echo "test1"}, @run {echo "test2"}, @run {echo "test3"}]
 `;
     
     const parseResult = await parse(mlldContent);
@@ -189,7 +189,7 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-/data @results = {
+/var @results = {
   success: @run {echo "ok"},
   failure: @run {nonexistent-command},
   another: @run {echo "still works"}

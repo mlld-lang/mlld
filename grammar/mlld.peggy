@@ -162,14 +162,14 @@ Directive
   = &{ return helpers.isLogicalLineStart(input, offset()); }
     [ \t]*                        // allow leading tabs/spaces
     dir:(
-      AtVarDirective // NEW: Var directives (unified variable assignment)
-    / AtShow         // NEW: Show directives (content display) - replaces AtAdd
-    / AtExe          // NEW: Exe directives (define commands/code) - replaces AtExec
-    / AtRun          // Run directives (commands, code)
-    / AtPath         // Path directives (path variables)
-    / AtImport       // Import directives (from other files)
-    / AtOutput       // Output directives (output routing)
-    / AtWhen         // When directives (conditional execution)
+      SlashVar      // NEW: Var directives (unified variable assignment)
+    / SlashShow     // NEW: Show directives (content display) - replaces AtAdd
+    / SlashExe      // NEW: Exe directives (define commands/code) - replaces AtExec
+    / SlashRun      // Run directives (commands, code)
+    / SlashPath     // Path directives (path variables)
+    / SlashImport   // Import directives (from other files)
+    / SlashOutput   // Output directives (output routing)
+    / SlashWhen     // When directives (conditional execution)
     // NO AtText, AtData, AtAdd, AtExec - deleted!
     ) { return dir; }
 
