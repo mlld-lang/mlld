@@ -1,1 +1,1 @@
-@run [(echo "Templates loaded")]
+/run {echo "Templates loaded"}

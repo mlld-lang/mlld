@@ -1,4 +1,4 @@
-@text templates = "Template collection"
-@text header = "<!-- Header Template -->"
-@text footer = "<!-- Footer Template -->"
-@text layout = "<!-- Main Layout Template -->"
+/text @templates = "Template collection"
+/text @header = "<!-- Header Template -->"
+/text @footer = "<!-- Footer Template -->"
+/text @layout = "<!-- Main Layout Template -->"

@@ -1,1 +1,1 @@
-@run [(echo "Data loaded")]
+/run {echo "Data loaded"}

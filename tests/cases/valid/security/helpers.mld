@@ -1,1 +1,1 @@
-@run [(echo "Helpers loaded")]
+/run {echo "Helpers loaded"}

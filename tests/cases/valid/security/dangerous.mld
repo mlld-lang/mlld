@@ -1,1 +1,1 @@
-@run [(echo "Dangerous loaded")]
+/run {echo "Dangerous loaded"}

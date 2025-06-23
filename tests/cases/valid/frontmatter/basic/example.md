@@ -7,8 +7,8 @@ tags:
 - mlld
 - frontmatter
 settings:
-debug: true
-version: 1.0.0
+  debug: true
+  version: 1.0.0
 ---
 
 # Frontmatter Test

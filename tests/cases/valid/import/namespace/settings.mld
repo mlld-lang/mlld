@@ -1,2 +1,2 @@
-@text author = "Settings Author"
-@text apiUrl = "https://api.example.com"
+/text @author = "Settings Author"
+/text @apiUrl = "https://api.example.com"

@@ -1,1 +1,1 @@
-@run [(echo "Trusted loaded")]
+/run {echo "Trusted loaded"}
