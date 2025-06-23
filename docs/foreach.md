@@ -7,7 +7,7 @@ The `foreach` operator enables powerful iteration over arrays with two distinct 
 ### Pattern 1: Parameterized Commands (Traditional)
 
 ```mlld
-@data <result> = foreach <parameterized-command>(<arrays>)
+/data @<result> = foreach <parameterized-command>(<arrays>)
 ```
 
 Apply exec commands or text templates to arrays with cartesian product support.
@@ -15,7 +15,7 @@ Apply exec commands or text templates to arrays with cartesian product support.
 ### Pattern 2: Section Extraction (NEW)
 
 ```mlld
-@data <result> = foreach [@array.field # section] as [[template]]
+/data @<result> = foreach [@array.field # section] as [[template]]
 ```
 
 Extract sections from files and apply templates directly - perfect for documentation assembly.
@@ -23,12 +23,12 @@ Extract sections from files and apply templates directly - perfect for documenta
 ## Basic Command Syntax
 
 ```mlld
-@data <result> = foreach <parameterized-command>(<arrays>)
+/data @<result> = foreach <parameterized-command>(<arrays>)
 ```
 
 Where:
-- `<result>` - Variable to store the array of results
-- `<parameterized-command>` - A reference to an `@exec` command or `@text` template with parameters
+- `@<result>` - Variable to store the array of results (requires @ prefix)
+- `<parameterized-command>` - A reference to an `/exec` command or `/text` template with parameters
 - `<arrays>` - One or more array variables to iterate over
 
 ## Single Array Iteration
@@ -36,9 +36,9 @@ Where:
 Apply the same operation to each element in an array:
 
 ```mlld
-@data topics = ["security", "performance", "scalability"]
-@exec analyze(topic) = @run [(claude --message "Analyze @topic aspects of the code")]
-@data analyses = foreach @analyze(@topics)
+/data @topics = ["security", "performance", "scalability"]
+/exec @analyze(topic) = "claude --message 'Analyze @topic aspects of the code'"
+/data @analyses = foreach @analyze(@topics)
 ```
 
 Result: `analyses` contains an array with 3 elements (one analysis per topic).
@@ -48,10 +48,10 @@ Result: `analyses` contains an array with 3 elements (one analysis per topic).
 When given multiple arrays, `foreach` computes the cartesian product, testing all combinations:
 
 ```mlld
-@data models = ["claude", "gpt-4"]
-@data temperatures = [0.7, 0.9]
-@exec test(model, temp) = @run [(@model --temperature @temp "Explain quantum computing")]
-@data results = foreach @test(@models, @temperatures)
+/data @models = ["claude", "gpt-4"]
+/data @temperatures = [0.7, 0.9]
+/exec @test(model, temp) = "@model --temperature @temp 'Explain quantum computing'"
+/data @results = foreach @test(@models, @temperatures)
 ```
 
 Result: `results` contains 4 elements:
@@ -65,18 +65,18 @@ Result: `results` contains 4 elements:
 When iterating over objects, the entire object is passed as the parameter:
 
 ```mlld
-@data users = [
+/data @users = [
   {"name": "Alice", "role": "admin"},
   {"name": "Bob", "role": "user"}
 ]
 
-@text profile(user) = [[
+/exec @profile(user) = [[
 ### {{user.name}}
 Role: {{user.role}}
 Permissions: {{user.role}} level access
 ]]
 
-@data profiles = foreach @profile(@users)
+/data @profiles = foreach @profile(@users)
 ```
 
 ## Parameter Matching
@@ -84,15 +84,15 @@ Permissions: {{user.role}} level access
 The number of arrays must match the number of parameters in the command/template:
 
 ```mlld
-@exec process(a, b) = @run [(echo "@a and @b")]
+/exec @process(a, b) = "echo '@a and @b'"
 
-# Valid:
-@data x = [1, 2]
-@data y = [3, 4]
-@data results = foreach @process(@x, @y)  # ✓ 2 arrays, 2 parameters
+>> Valid:
+/data @x = [1, 2]
+/data @y = [3, 4]
+/data @results = foreach @process(@x, @y)  >> ✓ 2 arrays, 2 parameters
 
-# Invalid:
-@data results = foreach @process(@x)      # ✗ 1 array, 2 parameters
+>> Invalid:
+/data @results = foreach @process(@x)      >> ✗ 1 array, 2 parameters
 ```
 
 ## Practical Examples
@@ -102,16 +102,16 @@ The number of arrays must match the number of parameters in the command/template
 Process multiple questions with the same LLM:
 
 ```mlld
-@data questions = [
+/data @questions = [
   "What is machine learning?",
   "Explain neural networks",
   "What are transformers?"
 ]
-@exec ask(q) = @run [(claude --message "@q")]
-@data answers = foreach @ask(@questions)
+/exec @ask(q) = "claude --message '@q'"
+/data @answers = foreach @ask(@questions)
 
-# Generate Q&A document
-@add @answers
+>> Generate Q&A document
+/add @answers
 ```
 
 ### Multi-Model Comparison
@@ -119,13 +119,13 @@ Process multiple questions with the same LLM:
 Compare responses across different AI models:
 
 ```mlld
-@data models = ["claude-3", "gpt-4", "gemini-pro"]
-@data prompts = ["Write a haiku about programming", "Explain recursion"]
+/data @models = ["claude-3", "gpt-4", "gemini-pro"]
+/data @prompts = ["Write a haiku about programming", "Explain recursion"]
 
-@exec query(model, prompt) = @run [(@model "@prompt")]
-@data responses = foreach @query(@models, @prompts)
+/exec @query(model, prompt) = "@model '@prompt'"
+/data @responses = foreach @query(@models, @prompts)
 
-# Creates 6 responses (3 models × 2 prompts)
+>> Creates 6 responses (3 models × 2 prompts)
 ```
 
 ### Batch File Processing
@@ -133,9 +133,9 @@ Compare responses across different AI models:
 Process multiple files with the same operation:
 
 ```mlld
-@data js_files = @run [(find ./src -name "*.js" -type f)]
-@exec analyze_file(file) = @run [(eslint @file --format json)]
-@data lint_results = foreach @analyze_file(@js_files)
+/data @js_files = /run "find ./src -name '*.js' -type f"
+/exec @analyze_file(file) = "eslint @file --format json"
+/data @lint_results = foreach @analyze_file(@js_files)
 ```
 
 ### Template-based Report Generation
@@ -143,7 +143,7 @@ Process multiple files with the same operation:
 Generate structured reports from data:
 
 ```mlld
-@data metrics = [
+/data @metrics = [
   {"name": "CPU", "value": 45, "unit": "%"},
   {"name": "Memory", "value": 2.3, "unit": "GB"},
   {"name": "Disk", "value": 67, "unit": "%"}

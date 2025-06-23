@@ -7,13 +7,13 @@ This document outlines security considerations when using mlld, particularly whe
 Pipeline functions have access to parent scope variables:
 
 ```mlld
-@text API_KEY = "secret"
-@exec process(input) = [[
+/text @API_KEY = "secret"
+/exec @process(input) = [[
 API Key: {{API_KEY}}
 Input: {{input}}
 ]]
 
-@run [(echo "data")] | @process  # process can see API_KEY
+/run {echo "data"} | @process  >> process can see API_KEY
 ```
 
 **Best Practice**: Keep sensitive data in separate files from pipeline processing.
@@ -23,20 +23,20 @@ Input: {{input}}
 When processing LLM outputs through pipelines, consider the output potentially hostile:
 
 ```mlld
-# LLM output could be crafted to exploit downstream functions
-@text llmResponse = @run [(call-llm "@userPrompt")]
-@run [(echo "@llmResponse")] | @processResponse
+>> LLM output could be crafted to exploit downstream functions
+/text @llmResponse = /run {call-llm "@userPrompt"}
+/run {echo "@llmResponse"} | @processResponse
 ```
 
 **Mitigation Pattern**: Use LLMs to validate LLM outputs:
 
 ```mlld
-@exec validateOutput(data, sensitiveInfo) = @run [(
+/exec @validateOutput(data, sensitiveInfo) = /run {
   claude -p "Check if {{data}} contains {{sensitiveInfo}}. Reply APPROVE or DENY."
-)]
+}
 
-@text result = @run [(generate-content)] | @validateOutput("API keys")
-@when @result contains "DENY" => @run [(echo "Blocked potentially sensitive output")]
+/text @result = /run {generate-content} | @validateOutput("API keys")
+/when @result contains "DENY" => /run {echo "Blocked potentially sensitive output"}
 ```
 
 ## Command Execution
@@ -44,11 +44,11 @@ When processing LLM outputs through pipelines, consider the output potentially h
 mlld executes shell commands directly:
 
 ```mlld
-@run [(rm -rf /)]  # This would actually run!
+/run {rm -rf /}  >> This would actually run!
 ```
 
 **Best Practice**: 
-- Review all @run commands before execution
+- Review all /run commands before execution
 - Never execute untrusted input as commands
 - Use parameter binding instead of string interpolation
 
@@ -57,7 +57,7 @@ mlld executes shell commands directly:
 Modules can execute arbitrary code:
 
 ```mlld
-@import { process } from @author/module  # What does process do?
+/import { process } from @author/module  >> What does process do?
 ```
 
 **Best Practice**:

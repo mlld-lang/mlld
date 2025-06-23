@@ -9,16 +9,16 @@ The mlld test system provides a native way to write and run tests for mlld modul
 Create a `.test.mld` file anywhere in your project:
 
 ```mlld
-# my-module.test.mld
-@import { eq, ok, includes } from "path/to/test.mld.md"
+>> my-module.test.mld
+/import { eq, ok, includes } from "path/to/test.mld.md"
 
-# Test data
-@data input = ["apple", "banana", "cherry"]
+>> Test data
+/data @input = ["apple", "banana", "cherry"]
 
-# Write tests as boolean variables with test_ prefix
-@data test_array_has_three_items = @eq(@len(@input), 3)
-@data test_includes_banana = @includes(@input, "banana")
-@data test_first_item_is_apple = @eq(@input.0, "apple")
+>> Write tests as boolean variables with test_ prefix
+/data @test_array_has_three_items = @eq(@len(@input), 3)
+/data @test_includes_banana = @includes(@input, "banana")
+/data @test_first_item_is_apple = @eq(@input.0, "apple")
 ```
 
 ### Running Tests
@@ -67,27 +67,27 @@ Tests are discovered using the following rules:
 ## Example Test File
 
 ```mlld
-@import { eq, deepEq, ok, notOk, includes, len } from "../test.mld.md"
+/import { eq, deepEq, ok, notOk, includes, len } from "../test.mld.md"
 
-# Test object equality
-@data user1 = {"name": "Alice", "age": 30}
-@data user2 = {"name": "Alice", "age": 30}
-@data test_users_are_equal = @deepEq(@user1, @user2)
+>> Test object equality
+/data @user1 = {"name": "Alice", "age": 30}
+/data @user2 = {"name": "Alice", "age": 30}
+/data @test_users_are_equal = @deepEq(@user1, @user2)
 
-# Test array operations
-@data numbers = [1, 2, 3, 4, 5]
-@data test_array_length = @eq(@len(@numbers), 5)
-@data test_includes_three = @includes(@numbers, 3)
+>> Test array operations
+/data @numbers = [1, 2, 3, 4, 5]
+/data @test_array_length = @eq(@len(@numbers), 5)
+/data @test_includes_three = @includes(@numbers, 3)
 
-# Test with exec functions
-@exec double(n) = javascript [(return n * 2)]
-@data doubled = foreach @double(@numbers)
-@data test_foreach_doubles = @deepEq(@doubled, [2, 4, 6, 8, 10])
+>> Test with exec functions
+/exec @double(n) = javascript {return n * 2}
+/data @doubled = foreach @double(@numbers)
+/data @test_foreach_doubles = @deepEq(@doubled, [2, 4, 6, 8, 10])
 
-# Test falsy values
-@data test_empty_string_is_falsy = @notOk("")
-@data test_zero_is_falsy = @notOk(0)
-@data test_null_is_falsy = @notOk(null)
+>> Test falsy values
+/data @test_empty_string_is_falsy = @notOk("")
+/data @test_zero_is_falsy = @notOk(0)
+/data @test_null_is_falsy = @notOk(null)
 ```
 
 ## Test Output

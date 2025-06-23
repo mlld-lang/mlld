@@ -11,9 +11,9 @@ API_KEY=secret123 DATABASE_URL=postgres://localhost mlld deploy.mld
 ```
 
 ```mlld
-@import { API_KEY, DATABASE_URL } from @input
-@text config = [[API Key: {{API_KEY}}, Database: {{DATABASE_URL}}]]
-@add @config
+/import { API_KEY, DATABASE_URL } from @input
+/text @config = [[API Key: {{API_KEY}}, Database: {{DATABASE_URL}}]]
+/add @config
 ```
 
 ### How It Works
@@ -31,9 +31,9 @@ NODE_ENV=production mlld build.mld
 ```
 
 ```mlld
-@import { NODE_ENV } from @input
-@text env = [[Building for: {{NODE_ENV}}]]
-@add @env
+/import { NODE_ENV } from @input
+/text @env = [[Building for: {{NODE_ENV}}]]
+/add @env
 ```
 
 **Multiple variables:**
@@ -42,9 +42,9 @@ API_KEY=abc123 DB_HOST=localhost DB_PORT=5432 mlld app.mld
 ```
 
 ```mlld
-@import { API_KEY, DB_HOST, DB_PORT } from @input
-@text dbUrl = [[postgres://{{DB_HOST}}:{{DB_PORT}}/myapp]]
-@add @dbUrl
+/import { API_KEY, DB_HOST, DB_PORT } from @input
+/text @dbUrl = [[postgres://{{DB_HOST}}:{{DB_PORT}}/myapp]]
+/add @dbUrl
 ```
 
 ## Stdin Input
@@ -57,9 +57,9 @@ echo '{"version": "1.0.0", "author": "Alice"}' | mlld release.mld
 ```
 
 ```mlld
-@import { version, author } from @input
-@text release = [[Release {{version}} by {{author}}]]
-@add @release
+/import { version, author } from @input
+/text @release = [[Release {{version}} by {{author}}]]
+/add @release
 ```
 
 **Plain text input:**
@@ -68,8 +68,8 @@ echo "Hello World" | mlld process.mld
 ```
 
 ```mlld
-@import { content } from @input
-@add [[Received: {{content}}]]
+/import { content } from @input
+/add [[Received: {{content}}]]
 ```
 
 ## Combining Environment Variables and Stdin
@@ -81,9 +81,9 @@ echo '{"config": "production"}' | API_KEY=secret123 mlld deploy.mld
 ```
 
 ```mlld
-@import { API_KEY, config } from @input
-@text deployment = [[Deploying {{config}} with key {{API_KEY}}]]
-@add @deployment
+/import { API_KEY, config } from @input
+/text @deployment = [[Deploying {{config}} with key {{API_KEY}}]]
+/add @deployment
 ```
 
 ### Merging Rules
@@ -101,7 +101,7 @@ DEBUG=true API_KEY=secret mlld debug.mld
 ```
 
 ```mlld
-@add @INPUT
+/add @INPUT
 ```
 
 This outputs all available environment variables and stdin data as JSON.
@@ -115,9 +115,9 @@ USER_DATA='{"name": "Alice", "role": "admin"}' mlld user.mld
 ```
 
 ```mlld
-@import { USER_DATA } from @input
-@text welcome = [[Welcome {{USER_DATA.name}} ({{USER_DATA.role}})]]
-@add @welcome
+/import { USER_DATA } from @input
+/text @welcome = [[Welcome {{USER_DATA.name}} ({{USER_DATA.role}})]]
+/add @welcome
 ```
 
 ## Configuration
@@ -137,12 +137,12 @@ When using pipelines, an `@INPUT` variable is created in each step containing th
 ### How It Works
 
 ```mlld
-@exec showInput() = [[
+/exec @showInput() = [[
 Received via @INPUT: {{INPUT}}
 ]]
 
-@text result = @run [(echo "Hello, World!")] | @showInput
-@add @result
+/text @result = /run {echo "Hello, World!"} | @showInput
+/add @result
 ```
 
 Output:
@@ -156,22 +156,22 @@ When piping to functions without providing arguments, mlld intelligently handles
 
 **Single parameter functions** - @INPUT passed as the parameter:
 ```mlld
-@exec uppercase(text) = @run js [(text.toUpperCase())]
-@text result = @run [(echo "hello")] | @uppercase
-# uppercase receives: text = "hello"
+/exec @uppercase(text) = /run js {text.toUpperCase()}
+/text @result = /run {echo "hello"} | @uppercase
+>> uppercase receives: text = "hello"
 ```
 
 **Multi-parameter functions with JSON** - Automatically destructured:
 ```mlld
-@exec greet(name, title) = [[Hello {{title}} {{name}}!]]
-@text result = @run [(echo '{"name": "Smith", "title": "Dr."}')] | @greet
-# greet receives: name = "Smith", title = "Dr."
+/exec @greet(name, title) = [[Hello {{title}} {{name}}!]]
+/text @result = /run {echo '{"name": "Smith", "title": "Dr."}'} | @greet
+>> greet receives: name = "Smith", title = "Dr."
 ```
 
 **Multi-parameter functions with non-JSON** - Passed as first parameter:
 ```mlld
-@text result = @run [(echo "Alice")] | @greet
-# greet receives: name = "Alice", title = ""
+/text @result = /run {echo "Alice"} | @greet
+>> greet receives: name = "Alice", title = ""
 ```
 
 ### Pipeline Environment
@@ -190,8 +190,8 @@ Each pipeline step runs in a child environment where:
 4. **Use defaults when appropriate**: Provide fallback values for optional variables
 
 ```mlld
-@import { NODE_ENV } from @input
-@text environment = @NODE_ENV || "development"
-@text message = [[Running in {{environment}} mode]]
-@add @message
+/import { NODE_ENV } from @input
+/text @environment = @NODE_ENV || "development"
+/text @message = [[Running in {{environment}} mode]]
+/add @message
 ```

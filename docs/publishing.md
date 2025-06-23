@@ -66,8 +66,8 @@ Helpful functions for string manipulation.
 ## Module
 
 ```mlld-run
-@exec slugify(text) = @run js [(@text.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''))]
-@exec truncate(text, length) = @run js [(@text.length > @length ? @text.slice(0, @length) + '...' : @text)]
+/exec @slugify(text) = /run js {@text.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
+/exec @truncate(text, length) = /run js {@text.length > @length ? @text.slice(0, @length) + '...' : @text}
 ```
 
 ### Module Metadata
@@ -223,8 +223,8 @@ Private publishing:
 
 Team members import using file paths:
 ```mlld
-@import { utils } from "./llm/modules/utils.mld.md"
-@import { shared } from "../other-repo/llm/modules/shared.mld.md"
+/import { utils } from "./llm/modules/utils.mld.md"
+/import { shared } from "../other-repo/llm/modules/shared.mld.md"
 ```
 
 ### Manual Registry Registration
@@ -288,12 +288,12 @@ If you need to manually add your module to the registry:
 Modules auto-export all top-level variables, or use explicit patterns:
 
 ```mlld
-# Auto-export pattern
-@exec helper1(...) = ...
-@exec helper2(...) = ...
+>> Auto-export pattern
+/exec @helper1(...) = ...
+/exec @helper2(...) = ...
 
-# Explicit export
-@data module = {
+>> Explicit export
+/data @module = {
   helper1: @helper1,
   helper2: @helper2
 }

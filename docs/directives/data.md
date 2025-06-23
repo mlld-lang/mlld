@@ -1,21 +1,21 @@
 ---
 layout: docs.njk
-title: "@data Directive"
+title: "/data Directive"
 ---
 
-# @data Directive
+# /data Directive
 
-The `@data` directive defines a structured data variable that can store objects, arrays, or other complex data types.
+The `/data` directive defines a structured data variable that can store objects, arrays, or other complex data types.
 
 ## Syntax
 
 ```mlld
-@data identifier = value
+/data @identifier = value
 ```
 
 Where:
-- `identifier` is the variable name (must be a valid identifier)
-- `value` can be an object literal, array literal, string literal, or the result of an `@add`, `@run`, or `@call` directive
+- `@identifier` is the variable name (requires `@` prefix when creating)
+- `value` can be an object literal, array literal, string literal, or the result of an `/add`, `/run`, or other directive
 
 ## Identifier Requirements
 
@@ -26,7 +26,7 @@ Where:
 
 ## Supported Data Types
 
-The @data directive supports all standard JSON data types:
+The /data directive supports all standard JSON data types:
 - Objects (key-value pairs)
 - Arrays
 - Strings
@@ -39,13 +39,13 @@ The @data directive supports all standard JSON data types:
 Data objects can be defined using JSON syntax:
 
 ```mlld
-@data config = { "name": "test", "version": 1 }
+/data @config = { "name": "test", "version": 1 }
 ```
 
 For multi-line objects:
 
 ```mlld
-@data user = {
+/data @user = {
   "name": "Alice",
   "id": 123,
   "roles": ["admin", "editor"],
@@ -59,7 +59,7 @@ For multi-line objects:
 Arrays can be defined as well:
 
 ```mlld
-@data colors = ["red", "green", "blue"]
+/data @colors = ["red", "green", "blue"]
 ```
 
 ## Variable Interpolation in Data
@@ -67,10 +67,10 @@ Arrays can be defined as well:
 Data structures can contain variable references in both keys and values:
 
 ```mlld
-@text name = "John"
-@text keyName = "username"
-@data user = {
-  @keyName: @name,    # Dynamic key name
+/text @name = "John"
+/text @keyName = "username"
+/data @user = {
+  @keyName: @name,    >> Dynamic key name
   "id": 123,
   "active": true
 }
@@ -83,22 +83,22 @@ Data structures can reference and execute executable variables using the univers
 - `@execVar()` - executes immediately and stores the result
 
 ```mlld
-@exec getTimestamp = [date +%s]
-@exec formatName(name) = [[{{name}} (formatted)]]
+/exec @getTimestamp() = "date +%s"
+/exec @formatName(name) = [[{{name}} (formatted)]]
 
-@data info = {
-  # Store executable references (not executed)
-  timestampCmd: @getTimestamp,
-  formatter: @formatName,
+/data @info = {
+  >> Store executable references (not executed)
+  "timestampCmd": @getTimestamp,
+  "formatter": @formatName,
   
-  # Execute and store results
-  currentTime: @getTimestamp(),
-  formatted: @formatName("Alice")
+  >> Execute and store results
+  "currentTime": @getTimestamp(),
+  "formatted": @formatName("Alice")
 }
 
-# Later, execute stored executables
-@run @info.timestampCmd()
-@add @info.formatter("Bob")
+>> Later, execute stored executables
+/run @info.timestampCmd()
+/add @info.formatter("Bob")
 ```
 
 This pattern allows for powerful composition and lazy evaluation strategies.
@@ -110,21 +110,21 @@ Data variables are referenced differently based on context:
 - In templates `[[...]]`: `{{identifier}}` or `{{identifier.field}}`
 
 ```mlld
-@data user = { "name": "Alice", "id": 123 }
-@text greeting = [[Hello, {{user.name}}!]]
-@add @user.name
+/data @user = { "name": "Alice", "id": 123 }
+/text @greeting = [[Hello, {{user.name}}!]]
+/add @user.name
 ```
 
 You can access nested fields using dot notation:
 
 ```mlld
-@data config = { 
+/data @config = { 
   "app": { 
     "name": "MyApp",
     "version": "1.0.0"
   }
 }
-@text appInfo = [[App: {{config.app.name}} v{{config.app.version}}]]
+/text @appInfo = [[App: {{config.app.name}} v{{config.app.version}}]]
 ```
 
 ### Accessing Array Elements
@@ -132,9 +132,9 @@ You can access nested fields using dot notation:
 Use dot notation to access array elements:
 
 ```mlld
-@data fruits = ["apple", "banana", "cherry"]
-@text favorite = [[My favorite fruit is {{fruits.0}}]]
-@text list = [[Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}]]
+/data @fruits = ["apple", "banana", "cherry"]
+/text @favorite = [[My favorite fruit is {{fruits.0}}]]
+/text @list = [[Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}]]
 ```
 
 Note: Currently, only dot notation is supported for array access. Bracket notation (`fruits[0]`) is not supported.
@@ -144,14 +144,14 @@ Note: Currently, only dot notation is supported for array access. Bracket notati
 Values can also be provided as JSON strings which are parsed:
 
 ```mlld
-@data config = '{"key": "value"}'
+/data @config = '{"key": "value"}'
 ```
 
 ## Examples
 
 Basic data variable:
 ```mlld
-@data settings = { 
+/data @settings = { 
   "darkMode": true,
   "fontSize": 16
 }
@@ -159,8 +159,8 @@ Basic data variable:
 
 Using variables in data:
 ```mlld
-@text name = "John"
-@data user = { 
+/text @name = "John"
+/data @user = { 
   "username": @name,
   "active": true 
 }
@@ -168,24 +168,24 @@ Using variables in data:
 
 Using command output as data:
 ```mlld
-@data gitInfo = @run [(git log -1 --format="%H,%an,%ae,%s")]
+/data @gitInfo = /run "git log -1 --format='%H,%an,%ae,%s'"
 ```
 
 Using executable variables:
 ```mlld
-@exec getDate = [date]
-@exec getUser = [whoami]
+/exec @getDate() = "date"
+/exec @getUser() = "whoami"
 
-# Store references to executables
-@data commands = {
-  date: @getDate,
-  user: @getUser
+>> Store references to executables
+/data @commands = {
+  "date": @getDate,
+  "user": @getUser
 }
 
-# Execute and store results
-@data results = {
-  date: @getDate(),
-  user: @getUser()
+>> Execute and store results
+/data @results = {
+  "date": @getDate(),
+  "user": @getUser()
 }
 ```
 
@@ -194,7 +194,7 @@ Using executable variables:
 The following errors are possible with data directives:
 - JSON parsing errors (if value is invalid JSON)
 - Variable resolution errors
-- Execution errors when using @run or @add as sources
+- Execution errors when using /run or /add as sources
 
 ## Notes
 

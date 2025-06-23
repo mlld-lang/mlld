@@ -4,7 +4,7 @@ Shadow environments in mlld provide a bridge between mlld's declarative syntax a
 
 ## Overview
 
-Shadow environments allow mlld `@exec` functions to be called from within JavaScript or Node.js code blocks. This creates a seamless integration where mlld functions become available as regular functions in the target language.
+Shadow environments allow mlld `/exec` functions to be called from within JavaScript or Node.js code blocks. This creates a seamless integration where mlld functions become available as regular functions in the target language.
 
 ## Architecture Comparison
 
@@ -82,7 +82,7 @@ export class NodeShadowEnvironment {
 
 ### 1. Shadow Environment Creation (`exec.ts`)
 
-When `@exec lang = { func1, func2 }` is evaluated:
+When `/exec @lang = { func1, func2 }` is evaluated:
 
 ```typescript
 // In evaluateExec function
@@ -235,24 +235,24 @@ if (nodeShadowEnv) {
 ### Basic Shadow Function Creation
 
 ```mlld
-# Simple JavaScript function
-@exec double(x) = @run js [(return x * 2)]
+>> Simple JavaScript function
+/exec @double(x) = /run js {return x * 2}
 
-# Node.js function with modules
-@exec hash(text) = @run node [(
+>> Node.js function with modules
+/exec @hash(text) = /run node {
   const crypto = require('crypto');
   return crypto.createHash('sha256').update(text).digest('hex');
-)]
+}
 ```
 
 ### Environment Declaration
 
 ```mlld
-# JavaScript environment
-@exec js = { double, triple, square }
+>> JavaScript environment
+/exec @js = { double, triple, square }
 
-# Node.js environment
-@exec node = { hash, readFile, fetchUrl }
+>> Node.js environment
+/exec @node = { hash, readFile, fetchUrl }
 ```
 
 ### Cross-Function Calls
@@ -260,30 +260,30 @@ if (nodeShadowEnv) {
 Shadow functions can call each other within the same environment:
 
 ```mlld
-@exec add(a, b) = js [(a + b)]
-@exec multiply(x, y) = js [(x * y)]
+/exec @add(a, b) = js {a + b}
+/exec @multiply(x, y) = js {x * y}
 
-# First shadow env declaration (needed for calculate to access add/multiply)
-@exec js = { add, multiply }
+>> First shadow env declaration (needed for calculate to access add/multiply)
+/exec @js = { add, multiply }
 
-@exec calculate(n) = js [(
+/exec @calculate(n) = js {
   // calculate can now call add and multiply
   const sum = add(n, 10);
   const product = multiply(sum, 2);
   return product;
-)]
+}
 
-# Update shadow env to include calculate
-@exec js = { add, multiply, calculate }
+>> Update shadow env to include calculate
+/exec @js = { add, multiply, calculate }
 
-@run js [(
+/run js {
   // All functions available here
   console.log(add(5, 3));        // outputs: 8
   console.log(calculate(5));     // outputs: 30 ((5+10)*2)
-)]
+}
 ```
 
-**Important**: The shadow environment must be declared before functions that use other shadow functions. This is why we declare `@exec js = { add, multiply }` before defining `calculate`.
+**Important**: The shadow environment must be declared before functions that use other shadow functions. This is why we declare `/exec @js = { add, multiply }` before defining `calculate`.
 
 ## Performance Considerations
 
@@ -404,15 +404,15 @@ Without proper cleanup, Node.js shadow environments can:
 
 Example of problematic code:
 ```mlld
-@exec createTimer() = node [(
+/exec @createTimer() = node {
   setTimeout(() => {
     console.log('This keeps the process alive');
   }, 10000);
   return 'Timer created';
-)]
+}
 
-@exec node = { createTimer }
-@text result = @createTimer()
+/exec @node = { createTimer }
+/text @result = @createTimer()
 ```
 
 Without cleanup, this would keep the mlld process running for 10 seconds. With cleanup, the process exits immediately after producing output.
