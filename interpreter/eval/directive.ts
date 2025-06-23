@@ -3,16 +3,11 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 
 // Import specific evaluators
-import { evaluateText } from './text';
-import { evaluateData } from './data';
 import { evaluatePath } from './path';
 import { evaluateRun } from './run';
-import { evaluateExec } from './exec';
-import { evaluateAdd } from './add';
 import { evaluateImport } from './import';
 import { evaluateWhen } from './when';
 import { evaluateOutput } from './output';
-// New evaluators
 import { evaluateVar } from './var';
 import { evaluateShow } from './show';
 import { evaluateExe } from './exe';
@@ -25,16 +20,14 @@ function extractTraceInfo(directive: DirectiveNode): {
   varName?: string;
 } {
   const info: { directive: string; varName?: string } = {
-    directive: `@${directive.kind}`
+    directive: `/${directive.kind}`
   };
   
   // Extract variable/exec names based on directive type
   switch (directive.kind) {
-    case 'text':
-    case 'data':
     case 'path':
     case 'var':
-      // @text varName = ... or @var varName = ...
+      // /path @varName = ... or /var @varName = ...
       const identifier = directive.values?.identifier?.[0] || directive.values?.identifier;
       if (identifier?.type === 'Text' && 'content' in identifier) {
         info.varName = identifier.content;
@@ -44,7 +37,7 @@ function extractTraceInfo(directive: DirectiveNode): {
       break;
       
     case 'run':
-      // @run @execName or @run [command]
+      // /run @execName or /run [command]
       if (directive.subtype === 'runExec') {
         const execId = directive.values?.identifier?.[0];
         if (execId?.type === 'Text' && 'content' in execId) {
@@ -55,7 +48,7 @@ function extractTraceInfo(directive: DirectiveNode): {
       
     case 'exec':
     case 'exe':
-      // @exec funcName(...) = ... or @exe funcName(...) = ...
+      // /exec @funcName(...) = ... or /exe @funcName(...) = ...
       const execName = directive.values?.name?.[0];
       if (execName?.type === 'Text' && 'content' in execName) {
         info.varName = execName.content;
@@ -71,7 +64,7 @@ function extractTraceInfo(directive: DirectiveNode): {
       break;
       
     case 'import':
-      // @import { ... } from "path"
+      // /import { ... } from "path"
       const importPath = directive.values?.path?.[0];
       if (importPath?.type === 'Text' && 'content' in importPath) {
         // Show just the filename for cleaner trace
@@ -103,23 +96,11 @@ export async function evaluateDirective(
   try {
     // Route based on directive kind
     switch (directive.kind) {
-    case 'text':
-      return await evaluateText(directive, env);
-      
-    case 'data':
-      return await evaluateData(directive, env);
-      
     case 'path':
       return await evaluatePath(directive, env);
       
     case 'run':
       return await evaluateRun(directive, env);
-      
-    case 'exec':
-      return await evaluateExec(directive, env);
-      
-    case 'add':
-      return await evaluateAdd(directive, env);
       
     case 'import':
       return await evaluateImport(directive, env);

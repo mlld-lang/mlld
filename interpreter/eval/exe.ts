@@ -31,12 +31,12 @@ function extractParamNames(params: any[]): string[] {
 }
 
 /**
- * Evaluate @exe directives (renamed from @exec).
+ * Evaluate @exec directives.
  * Defines executable commands/code but doesn't run them.
  * 
  * Ported from ExecDirectiveHandler.
  */
-export async function evaluateExe(
+export async function evaluateExec(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
@@ -100,10 +100,10 @@ export async function evaluateExe(
   // Extract identifier - this is a command name, not content to interpolate
   const identifierNodes = directive.values?.identifier;
   if (!identifierNodes || !Array.isArray(identifierNodes) || identifierNodes.length === 0) {
-    throw new Error('Exe directive missing identifier');
+    throw new Error('Exec directive missing identifier');
   }
   
-  // For exe directives, extract the command name
+  // For exec directives, extract the command name
   const identifierNode = identifierNodes[0];
   let identifier: string;
   
@@ -113,7 +113,7 @@ export async function evaluateExe(
   } else if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
     identifier = (identifierNode as any).identifier;
   } else {
-    throw new Error('Exe directive identifier must be a simple command name');
+    throw new Error('Exec directive identifier must be a simple command name');
   }
   
   let executableDef: ExecutableDefinition;

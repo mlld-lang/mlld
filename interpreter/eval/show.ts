@@ -19,22 +19,22 @@ function compactBlankLines(content: string): string {
 }
 
 /**
- * Evaluate @show directives (renamed from @add).
+ * Evaluate @add directives.
  * Handles variable references, paths, and templates.
  * 
  * Ported from AddDirectiveHandler.
  */
-export async function evaluateShow(
+export async function evaluateAdd(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
   let content = '';
   
-  if (directive.subtype === 'showVariable') {
+  if (directive.subtype === 'addVariable') {
     // Handle variable reference
     const variableNodes = directive.values?.variable;
     if (!variableNodes || variableNodes.length === 0) {
-      throw new Error('Show variable directive missing variable reference');
+      throw new Error('Add variable directive missing variable reference');
     }
     
     const variableNode = variableNodes[0];
@@ -186,11 +186,11 @@ export async function evaluateShow(
     }
     
     
-  } else if (directive.subtype === 'showPath') {
+  } else if (directive.subtype === 'addPath') {
     // Handle path inclusion (whole file)
     const pathValue = directive.values?.path;
     if (!pathValue) {
-      throw new Error('Show path directive missing path');
+      throw new Error('Add path directive missing path');
     }
     
     // Handle both string paths (URLs) and node arrays
@@ -206,7 +206,7 @@ export async function evaluateShow(
     }
     
     if (!resolvedPath) {
-      throw new Error('Show path directive resolved to empty path');
+      throw new Error('Add path directive resolved to empty path');
     }
     
     // Check if this directive has security options
@@ -222,13 +222,13 @@ export async function evaluateShow(
       content = await env.readFile(resolvedPath);
     }
     
-  } else if (directive.subtype === 'showPathSection') {
+  } else if (directive.subtype === 'addPathSection') {
     // Handle section extraction: @add "Section Title" from [file.md]
     const sectionTitleNodes = directive.values?.sectionTitle;
     const pathValue = directive.values?.path;
     
     if (!sectionTitleNodes || !pathValue) {
-      throw new Error('Show section directive missing section title or path');
+      throw new Error('Add section directive missing section title or path');
     }
     
     // Get the section title
@@ -312,11 +312,11 @@ export async function evaluateShow(
       }
     }
     
-  } else if (directive.subtype === 'showTemplate') {
+  } else if (directive.subtype === 'addTemplate') {
     // Handle template
     const templateNodes = directive.values?.content;
     if (!templateNodes) {
-      throw new Error('Show template directive missing content');
+      throw new Error('Add template directive missing content');
     }
     
     // Interpolate the template
@@ -333,18 +333,18 @@ export async function evaluateShow(
       }
     }
     
-  } else if (directive.subtype === 'showInvocation') {
+  } else if (directive.subtype === 'addInvocation') {
     // Handle unified invocation - could be template or exec
     const invocation = directive.values?.invocation;
     if (!invocation) {
-      throw new Error('Show invocation directive missing invocation');
+      throw new Error('Add invocation directive missing invocation');
     }
     
     // Get the invocation name
     const commandRef = invocation.commandRef;
     const name = commandRef.name || commandRef.identifier[0]?.content;
     if (!name) {
-      throw new Error('Show invocation missing name');
+      throw new Error('Add invocation missing name');
     }
     
     // Look up what this invocation refers to
@@ -363,11 +363,11 @@ export async function evaluateShow(
       throw new Error(`Variable ${name} is not executable (type: ${variable.type})`);
     }
     
-  } else if (directive.subtype === 'showTemplateInvocation') {
+  } else if (directive.subtype === 'addTemplateInvocation') {
     // Handle old-style template invocation (for backward compatibility)
     const templateNameNodes = directive.values?.templateName;
     if (!templateNameNodes || templateNameNodes.length === 0) {
-      throw new Error('Show template invocation missing template name');
+      throw new Error('Add template invocation missing template name');
     }
     
     // Get the template name
@@ -443,11 +443,11 @@ export async function evaluateShow(
     
     // Template normalization is now handled in the grammar at parse time
     
-  } else if (directive.subtype === 'showForeach') {
+  } else if (directive.subtype === 'addForeach') {
     // Handle foreach expressions for direct output
     const foreachExpression = directive.values?.foreach;
     if (!foreachExpression) {
-      throw new Error('Show foreach directive missing foreach expression');
+      throw new Error('Add foreach directive missing foreach expression');
     }
     
     // Parse options from with clause if present
@@ -461,11 +461,11 @@ export async function evaluateShow(
     // Evaluate foreach and format as text
     content = await evaluateForeachAsText(foreachExpression, env, options);
     
-  } else if (directive.subtype === 'showExecInvocation') {
+  } else if (directive.subtype === 'addExecInvocation') {
     // Handle exec invocation nodes
     const execInvocation = directive.values?.execInvocation;
     if (!execInvocation) {
-      throw new Error('Show exec invocation directive missing exec invocation');
+      throw new Error('Add exec invocation directive missing exec invocation');
     }
     
     // Evaluate the exec invocation
@@ -473,7 +473,7 @@ export async function evaluateShow(
     const result = await evaluateExecInvocation(execInvocation, env);
     content = String(result.value);
     
-  } else if (directive.subtype === 'showForeachSection') {
+  } else if (directive.subtype === 'addForeachSection') {
     // Handle foreach section expressions: @add foreach [@array.field # section] as [[template]]
     const foreachExpression = directive.values?.foreach;
     if (!foreachExpression) {
@@ -492,7 +492,7 @@ export async function evaluateShow(
     }
     
   } else {
-    throw new Error(`Unsupported show subtype: ${directive.subtype}`);
+    throw new Error(`Unsupported add subtype: ${directive.subtype}`);
   }
   
   // Output directives always end with a newline
