@@ -25,12 +25,16 @@ mlld syntax is only interpreted in lines that start with a mlld directive:
 - ✅ `/run "echo hello @name"` (quotes for single-line)
 - ❌ `/run echo "hello"` (missing braces/quotes)
 
-### 5. Only /run and /add produce output
+### 5. Only /run, /add, and /output produce output
 Other directives define or assign but don't output.
+- `/run` - executes commands and shows their output
+- `/add` - adds content to the document
+- `/output` - controls where output goes (stdout, stderr, file)
 
-### 6. Comments use //
-- Start-of-line: `// This is a comment`
-- End-of-line: `/text @name = "Alice" // This is also a comment`
+### 6. Comments use >>
+- Start-of-line: `>> This is a comment`
+- End-of-line: `/text @name = "Alice" >> This is also a comment`
+- Inside templates/strings: `[[Hello >> World]]` - >> is treated as literal text, not a comment
 
 ## Basic Examples
 
@@ -39,10 +43,10 @@ Other directives define or assign but don't output.
 /text @author = "Alice"
 /text @greeting = "Hello, world!"
 
-// Comments can appear anywhere
+>> Comments go at start or end of lines only
 # Output content
 /add @greeting
-/add "Welcome to mlld!"  // Inline comments too!
+/add "Welcome to mlld!"  >> Inline comments too!
 
 # Run commands (quoted syntax for single lines)
 /run "echo System info:"
@@ -80,17 +84,17 @@ Other directives define or assign but don't output.
 
 ### @ interpolation in double quotes
 ```mlld
-/text @greeting = "Hello @name!"    // @ variables work in double quotes
-/run "echo User: @username"         // Works in quoted commands
-/run {echo "Welcome @user.name"}    // And in brace commands
+/text @greeting = "Hello @name!"    >> @ variables work in double quotes
+/run "echo User: @username"         >> Works in quoted commands
+/run {echo "Welcome @user.name"}    >> And in brace commands
 ```
 
 ## Exec - Defining Reusable Commands
 
 ```mlld
 # Command executable
-/exec @deploy(env) = "deploy.sh @env"      // Single line with quotes
-/exec @build(type) = {                      // Multi-line with braces
+/exec @deploy(env) = "deploy.sh @env"      >> Single line with quotes
+/exec @build(type) = {                      >> Multi-line with braces
   npm run build:@type
   npm test
 }
@@ -154,6 +158,22 @@ Other directives define or assign but don't output.
 
 # URLs with caching
 /path @api = https://api.example.com/data (5m)
+```
+
+## Output Directive
+
+```mlld
+# Output to files
+/output @content to "output.txt"
+/output @data to "config.json"
+/output @html to "page.html" as html
+
+# Output to stdout/stderr
+/output @message to stdout
+/output @error to stderr
+
+# With format specification
+/output @config to "settings.yaml" as yaml
 ```
 
 ## Common Patterns
@@ -234,4 +254,4 @@ For complex operations, create modules instead of inline scripts:
 3. **Markdown-first** - The document should be readable without executing mlld
 4. **Module-first for complexity** - Use modules for complex logic
 5. **Clear visual distinction** - `/` for commands (directives), `@` for data (variables)
-6. **Comments use //** - Consistent with slash commands, familiar from other languages
+6. **Comments use >>** - Double angle brackets, visually distinct from directives

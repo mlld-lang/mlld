@@ -35,18 +35,18 @@ mlld maintains a minimal core language for orchestration while supporting extens
 
 ### 1. Everything is Markdown
 
-mlld enhances regular markdown - anything that isn't a directive (starting with `@`) is treated as normal markdown:
+mlld enhances regular markdown - anything that isn't a directive (starting with `/`) is treated as normal markdown:
 
 ```mlld
 # My Document
 
 This is regular markdown.
 
-@text greeting = "Hello from mlld!"
+/text @greeting = "Hello from mlld!"
 
 The greeting is still markdown, but now we can make it dynamic.
 
-@add @greeting
+/add @greeting
 ```
 
 ### 2. Directives Execute Line by Line
@@ -54,30 +54,30 @@ The greeting is still markdown, but now we can make it dynamic.
 Meld processes directives sequentially, building up state as it goes:
 
 ```mlld
-@text name = "Alice"
-@text role = "software engineer"
-@data context = {
+/text @name = "Alice"
+/text @role = "software engineer"
+/data @context = {
   "project": "AI Assistant",
   "language": "Python"
 }
 
-@text prompt = [[
+/text @prompt = [[
 You are helping {{name}}, a {{role}}, working on {{context.project}} using {{context.language}}.
 ]]
 
-@add @prompt
+/add @prompt
 ```
 
-### 3. Only @add and @run Produce Output
+### 3. Only /add and /run Produce Output
 
-This is crucial - most directives just set up state. Only `@add` and `@run` actually contribute to the final document:
+This is crucial - most directives just set up state. Only `/add` and `/run` actually contribute to the final document:
 
 ```mlld
-@text hidden = "This won't appear in output"
-@data config = { "debug": true }
+/text @hidden = "This won't appear in output"
+/data @config = { "debug": true }
 
-@add [[This WILL appear in output]]
-@run [(echo "This command output WILL appear")]
+/add [[This WILL appear in output]]
+/run "echo This command output WILL appear"
 ```
 
 ### 4. Complexity Lives in Modules
@@ -86,12 +86,12 @@ mlld deliberately lacks traditional programming constructs (loops, error handlin
 
 ```mlld
 # Instead of language features, use modules:
-@import { forEach, parallel, retry } from @mlld/core
-@import { validateResponse, improveAnswer } from @company/ai-tools
+/import { forEach, parallel, retry } from @mlld/core
+/import { validateResponse, improveAnswer } from @company/ai-tools
 
 # Orchestrate with simple, readable syntax:
-@data results = @run @parallel(@llmCalls, { concurrency: 3 })
-@text refined = @run @validateResponse(@results) 
+/data @results = /run @parallel(@llmCalls, { concurrency: 3 })
+/text @refined = /run @validateResponse(@results) 
 ```
 
 This separation keeps mlld scripts clean and focused on orchestration while modules handle implementation details.
@@ -104,16 +104,16 @@ Create reusable prompt components in separate files:
 
 **prompts/roles.mld:**
 ```mlld
-@text architect = "You are a senior software architect with 20 years of experience."
-@text reviewer = "You are a thorough code reviewer focused on security and performance."
-@text teacher = "You are a patient teacher who explains complex concepts simply."
+/text @architect = "You are a senior software architect with 20 years of experience."
+/text @reviewer = "You are a thorough code reviewer focused on security and performance."
+/text @teacher = "You are a patient teacher who explains complex concepts simply."
 ```
 
 **prompts/tasks.mld:**
 ```mlld
-@text analyze_code = "Analyze this code for potential issues and suggest improvements."
-@text explain_concept = "Explain this concept as if teaching a junior developer."
-@text review_pr = "Review this pull request for merge readiness."
+/text @analyze_code = "Analyze this code for potential issues and suggest improvements."
+/text @explain_concept = "Explain this concept as if teaching a junior developer."
+/text @review_pr = "Review this pull request for merge readiness."
 ```
 
 ### Composing Complex Prompts
@@ -121,13 +121,13 @@ Create reusable prompt components in separate files:
 Import and combine modules to build sophisticated prompts:
 
 ```mlld
-@import { architect, reviewer } from "./prompts/roles.mld"
-@import { analyze_code } from "./prompts/tasks.mld"
+/import { architect, reviewer } from "./prompts/roles.mld"
+/import { analyze_code } from "./prompts/tasks.mld"
 
-@text codebase = @run [(find src -name "*.py" -exec cat {} \;)]
-@text recent_changes = @run [(git diff main..HEAD)]
+/text @codebase = /run "find src -name '*.py' -exec cat {} \;"
+/text @recent_changes = /run "git diff main..HEAD"
 
-@text full_prompt = [[
+/text @full_prompt = [[
 {{architect}}
 
 Here's our codebase:
@@ -143,7 +143,7 @@ Recent changes:
 {{analyze_code}}
 ]]
 
-@run [(claude --message @full_prompt)]
+/run "claude --message '@full_prompt'"
 ```
 
 ## The Power of Modules

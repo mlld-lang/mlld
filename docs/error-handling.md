@@ -43,7 +43,7 @@ These situations don't generate errors or warnings:
 
 ### File System Errors
 
-- **Missing Files**: When an `@add` or `@import` directive references a non-existent file
+- **Missing Files**: When an `/add` or `/import` directive references a non-existent file
 - **Path Validation**: When paths contain null bytes or are malformed
 - **File Permission Issues**: When mlld can't read a referenced file
 
@@ -55,7 +55,7 @@ These situations don't generate errors or warnings:
 
 ### Execution Errors
 
-- **Command Failures**: When an `@run` command exits with a non-zero status
+- **Command Failures**: When an `/run` command exits with a non-zero status
 - **Circular Imports**: When mlld detects circular file imports
 - **Type Mismatches**: Using the wrong variable type in a context
 
@@ -80,10 +80,10 @@ Example error output:
 VariableRedefinition: Variable 'author' is already defined and cannot be redefined
 
   ./test.mlld:2:1
-  1 | @text author = "First Author"
-  2 | @text author = "Second Author"
+  1 | /text @author = "First Author"
+  2 | /text @author = "Second Author"
       ^
-  3 | @add @author
+  3 | /add @author
 
 Details:
   variableName: author

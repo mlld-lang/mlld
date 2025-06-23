@@ -1,19 +1,30 @@
-# @import Directive
+# /import Directive
 
-The `@import` directive allows you to import variables and commands from other mlld files.
+The `/import` directive allows you to import variables and commands from other mlld files, modules, and environment variables.
 
 ## Syntax
 
 File imports:
 ```mlld
-@import { * } from "path/to/file.mld"           # Import all variables
-@import { var1, var2 } from "path/to/file.mld"  # Import specific variables
-@import { var1 as alias1, var2 } from "path/to/file.mld" # Import with aliases
+/import { * } from "path/to/file.mld"           # Import all variables
+/import { var1, var2 } from "path/to/file.mld"  # Import specific variables
+/import { var1 as alias1, var2 } from "path/to/file.mld" # Import with aliases
 ```
 
-Module imports:
+Module imports (no quotes):
 ```mlld
-@import { func1, func2 } from @author/module    # Import from registry module
+/import { func1, func2 } from @author/module    # Import from registry module
+```
+
+Resolver path imports (with brackets):
+```mlld
+/import { readme } from [@./README.md]          # Import from resolver path
+/import { config } from [@PROJECTPATH/config.mld]  # Project root resolver
+```
+
+Environment variable imports:
+```mlld
+/import { API_KEY, NODE_ENV } from @INPUT      # Import allowed env vars
 ```
 
 
@@ -62,30 +73,42 @@ Import with aliases to avoid name conflicts:
 
 Basic import:
 ```mlld
-@import { * } from "./utils.mld"
+/import { * } from "./utils.mld"
 ```
 
 Selective import:
 ```mlld
-@import { textVar, dataVar } from "./lib/utils.mld"
+/import { textVar, dataVar } from "./lib/utils.mld"
 ```
 
 Import with aliases:
 ```mlld
-@import { textVar as myText, dataVar as myData } from "./lib/utils.mld"
+/import { textVar as myText, dataVar as myData } from "./lib/utils.mld"
 ```
 
 Module import:
 ```mlld
-@import { http, utils } from @mlld/stdlib
+/import { http, utils } from @mlld/stdlib
+```
+
+Resolver path import:
+```mlld
+/import { readme } from [@./README.md]
+/import { shared } from [@lib/shared-utils.mld]  # Custom resolver prefix
+```
+
+Environment variables:
+```mlld
+/import { GITHUB_TOKEN, NODE_ENV } from @INPUT
+/text @message = "Running in @NODE_ENV mode"
 ```
 
 Using imported variables:
 ```mlld
-@import { importedName, importedCommand } from "./utils.mld"
+/import { importedName, importedCommand } from "./utils.mld"
 
-@text message = [[Hello, {{importedName}}!]]
-@run @importedCommand(@param)
+/text @message = [[Hello, {{importedName}}!]]
+/run @importedCommand(@param)
 ```
 
 ## Error Handling
@@ -105,3 +128,6 @@ The implementation handles various error scenarios:
 - Imported files can have their own imports (nesting is supported)
 - Variables with the same name will be overwritten (last imported wins)
 - Circular imports are detected and will generate errors
+- Module imports don't use quotes: `@author/module`
+- Resolver paths require brackets: `[@./path]`
+- Environment variables must be allowed in `mlld.lock.json`

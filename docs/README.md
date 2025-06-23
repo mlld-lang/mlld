@@ -1,6 +1,6 @@
 # mlld Documentation
 
-mlld is a simple scripting language designed to work within markdown and markdown-like documents. It processes special `@directive` lines while preserving all other content as-is.
+mlld is a simple scripting language designed to work within markdown and markdown-like documents. It processes special `/directive` lines while preserving all other content as-is.
 
 ## Documentation Structure
 

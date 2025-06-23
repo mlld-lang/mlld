@@ -29,13 +29,13 @@ mlld install
 Once installed, import modules in your `.mld.md` or `.mld` files:
 
 ```mlld
-@import { formatDate, capitalize } from @alice/utils
+/import { formatDate, capitalize } from @alice/utils
 
-@text greeting = [[Hello {{capitalize("world")}}!]]
-@text today = [[Today is {{formatDate(@TIME)}}]]
+/text @greeting = `Hello @capitalize("world")!`
+/text @today = `Today is @formatDate(@TIME)`
 
-@add @greeting
-@add @today
+/add @greeting
+/add @today
 ```
 
 ### Listing Modules

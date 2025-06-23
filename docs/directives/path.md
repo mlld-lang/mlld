@@ -1,30 +1,30 @@
 ---
 layout: docs.njk
-title: "@path Directive"
+title: "/path Directive"
 ---
 
-# @path Directive
+# /path Directive
 
-The `@path` directive defines filesystem path and URL variables that can be used in `@add` and `@run` commands. It supports both local file paths and remote URLs with intelligent caching and security controls.
+The `/path` directive defines filesystem path and URL variables that can be used in `/add` and `/run` commands. It supports both local file paths and remote URLs with intelligent caching and security controls.
 
 ## Syntax
 
 ### Basic Paths
 ```mlld
-@path identifier = [@./path]          # Project root
-@path identifier = [/absolute/path]   # Absolute path
-@path identifier = [relative/path]    # Relative path
+/path @identifier = "./path"          # Relative path
+/path @identifier = "/absolute/path"  # Absolute path
+/path @identifier = "path/to/file"    # Relative path
 ```
 
 ### URLs with Caching and Security
 ```mlld
-@path identifier = "https://example.com/file.md"
-@path (TTL) identifier = "https://example.com/file.md"
-@path (TTL) trust LEVEL identifier = "https://example.com/file.md"
+/path @identifier = "https://example.com/file.md"
+/path (TTL) @identifier = "https://example.com/file.md"
+/path (TTL) trust LEVEL @identifier = "https://example.com/file.md"
 ```
 
 Where:
-- `identifier` is the variable name (must be a valid identifier)
+- `@identifier` is the variable name (requires `@` prefix when creating)
 - `TTL` is the cache time-to-live (optional, see [URL Caching](#url-caching))
 - `LEVEL` is the security trust level (optional, see [Security Options](#security-options))
 - Path segments are separated by forward slashes
@@ -42,57 +42,58 @@ Where:
 - Must not be empty
 - Cannot contain null bytes
 - Path formats:
-  - Project root: `[@./path]`
-  - Absolute paths: `[/usr/local/bin]`
-  - Relative paths: `[path/to/file]`
+  - Relative paths: `"./path/to/file"`
+  - Absolute paths: `"/usr/local/bin"`
+  - Variable interpolation: `"results/@date.txt"`
 
-## Special Path Prefixes
+## Special Path Resolvers
 
-mlld provides a special path prefix for project-relative paths:
+mlld provides special resolvers for paths (used with brackets):
 
-- `.`: Refers to the current project root directory
+- `[@./path]`: Project root relative path
+- `[@PROJECTPATH/path]`: Alternative project root syntax
 
-This prefix must be used inside brackets: `[@./path]`
+Resolver paths use brackets: `[@./path]`, while regular paths use quotes: `"./path"`
 
 ## Referencing Path Variables
 
 Path variables are referenced using the `@identifier` syntax:
 
 ```mlld
-@path docs = [@./docs]
-@add [@docs/guide.md]
+/path @docs = "./docs"
+/add [@docs/guide.md]
 ```
 
 Path variables can be used:
-- Inside square brackets `[...]` for paths and commands
-- After a space in command arguments
+- Inside square brackets `[...]` for paths
+- In commands: `/run "ls @docs"`
 - With additional path segments appended using `/`
 
 ## Examples
 
 Basic path variables:
 ```mlld
-@path docs = [@./docs]
-@path configs = [@./configs]
-@path assets = [@./assets]
+/path @docs = "./docs"
+/path @configs = "./configs"
+/path @assets = "./assets"
 ```
 
 Using path variables in commands:
 ```mlld
-@path src = [@./src]
-@run [(ls -la @src)]
+/path @src = "./src"
+/run "ls -la @src"
 ```
 
 Embedding files with path variables:
 ```mlld
-@path templates = [@./templates]
-@add [@templates/header.md]
+/path @templates = "./templates"
+/add [@templates/header.md]
 ```
 
 Using path segments:
 ```mlld
-@path src = [@./src]
-@add [@src/components/button.js]
+/path @src = "./src"
+/add [@src/components/button.js]
 ```
 
 ## Error Handling
@@ -103,23 +104,24 @@ The following errors are possible with path directives:
 
 ## Variables in Paths
 
-Paths can include variables, which are resolved during execution:
+Paths can include variables with @ interpolation in double quotes:
 
 ```mlld
-@text dir = "docs"
-@path docs = [@./@dir]
+/text @dir = "docs"
+/path @docs = "./@dir"
+/path @output = "build/@version/output.txt"
 ```
 
 ## Path Best Practices
 
-- For project-relative paths, use the `.` prefix inside brackets
+- For project-relative paths, use `[@./path]` resolver syntax
 - Use forward slashes for path separators (even on Windows)
 - Be cautious when using absolute paths or parent directory references (`..`), as they may make your mlld files less portable
 - Consider using path variables to encapsulate filesystem paths for better maintainability
 
 ## URL Caching
 
-The `@path` directive supports intelligent URL caching to improve performance and reduce network requests.
+The `/path` directive supports intelligent URL caching to improve performance and reduce network requests.
 
 ### TTL (Time-To-Live) Options
 
@@ -127,17 +129,17 @@ Control how long URL content is cached:
 
 ```mlld
 # Duration-based TTL
-@path (30s) api = "https://api.example.com/data.json"    # 30 seconds
-@path (5m) template = "https://example.com/template.md"  # 5 minutes  
-@path (2h) config = "https://example.com/config.yaml"   # 2 hours
-@path (1d) docs = "https://example.com/docs.md"         # 1 day
-@path (1w) archive = "https://example.com/archive.zip"  # 1 week
+/path (30s) @api = "https://api.example.com/data.json"    # 30 seconds
+/path (5m) @template = "https://example.com/template.md"  # 5 minutes  
+/path (2h) @config = "https://example.com/config.yaml"   # 2 hours
+/path (1d) @docs = "https://example.com/docs.md"         # 1 day
+/path (1w) @archive = "https://example.com/archive.zip"  # 1 week
 ```
 
 ```mlld
 # Special TTL values
-@path (live) feed = "https://api.example.com/live-feed.json"  # Always fetch fresh
-@path (static) logo = "https://example.com/logo.png"         # Cache indefinitely
+/path (live) @feed = "https://api.example.com/live-feed.json"  # Always fetch fresh
+/path (static) @logo = "https://example.com/logo.png"         # Cache indefinitely
 ```
 
 **TTL Units:**

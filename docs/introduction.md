@@ -9,7 +9,7 @@ mlld is a simple and constrained scripting language designed for use within mark
 
 ## Core Concepts
 
-mlld works by processing only lines that begin with directives (like `@text`, `@run`, etc.) while treating all other content as literal text. This makes it ideal for creating dynamic, templated documents.
+mlld works by processing only lines that begin with directives (like `/text`, `/run`, etc.) while treating all other content as literal text. This makes it ideal for creating dynamic, templated documents.
 
 ### Key Features
 
@@ -21,8 +21,8 @@ mlld works by processing only lines that begin with directives (like `@text`, `@
 ## Basic Example
 
 ```mlld
-@text name = "World"
-@path docs = "$./docs"
+/text @name = "World"
+/path @docs = "$./docs"
 
 This line will be interpreted as plain text.
 
@@ -30,13 +30,13 @@ This line will be interpreted as plain text.
 This will remain a codefence.
 ```
 
-@add [[
+/add [[
     Hello, {{name}}!
 ]]
 
-@add [$docs/example.md]
+/add [@docs/example.md]
 
-@run [(echo "Current time: $(date)")]
+/run "echo Current time: $(date)"
 ```
 
 This example:

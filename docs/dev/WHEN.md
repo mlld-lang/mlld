@@ -1,16 +1,16 @@
-# @when Directive - Architecture & Implementation
+# /when Directive - Architecture & Implementation
 
-This document explains the internal architecture and implementation details of the @when directive in mlld.
+This document explains the internal architecture and implementation details of the /when directive in mlld.
 
 ## Overview
 
-The @when directive provides conditional execution through a two-phase approach: grammar parsing into AST nodes, followed by interpretation/evaluation. The implementation is split across several key files.
+The /when directive provides conditional execution through a two-phase approach: grammar parsing into AST nodes, followed by interpretation/evaluation. The implementation is split across several key files.
 
 ## AST Structure
 
 ### Node Types
 
-The @when directive produces two types of AST nodes:
+The /when directive produces two types of AST nodes:
 
 1. **WhenSimpleNode**: For single-line conditionals
    ```typescript
@@ -49,15 +49,15 @@ The @when directive produces two types of AST nodes:
 
 The grammar defines several key rules:
 
-1. **AtWhen**: Main entry point, delegates to simple or block form
-2. **WhenSimpleForm**: Parses `@when <condition> => <action>`
-3. **WhenBlockForm**: Parses `@when <var> <modifier>: [...] => <action>`
+1. **SlashWhen**: Main entry point, delegates to simple or block form
+2. **WhenSimpleForm**: Parses `/when <condition> => <action>`
+3. **WhenBlockForm**: Parses `/when <var> <modifier>: [...] => <action>`
 4. **WhenConditionExpression**: Accepts only:
    - CommandReference (`@command()` or `@command`)
    - VariableReference (`@variable`)
-   - Note: Direct `@run` is NOT supported by design
+   - Note: Direct `/run` is NOT supported by design
 
-### Key Design Decision: No Direct @run
+### Key Design Decision: No Direct /run
 
 The grammar intentionally restricts conditions to predefined commands. This ensures:
 - Conditions are named and reusable

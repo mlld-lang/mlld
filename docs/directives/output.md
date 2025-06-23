@@ -1,6 +1,6 @@
-# @output
+# /output
 
-The `@output` directive writes content to various targets including files, streams, environment variables, and resolvers. It's useful for generating configuration files, splitting documentation, creating multiple output files, or integrating with external systems.
+The `/output` directive writes content to various targets including files, streams, environment variables, and resolvers. It's useful for generating configuration files, splitting documentation, creating multiple output files, or integrating with external systems.
 
 ## Syntax
 
@@ -8,47 +8,47 @@ The `@output` directive writes content to various targets including files, strea
 
 ```mlld
 # Output to file
-@output @variable to "path/to/file.ext"
-@output @variable to [path/with/@interpolation.ext]
+/output @variable to "path/to/file.ext"
+/output @variable to "path/with/@interpolation.ext"
 
 # Output to streams
-@output @variable to stdout
-@output @variable to stderr
+/output @variable to stdout
+/output @variable to stderr
 
 # Output to environment variables
-@output @variable to env              # Creates MLLD_VARIABLE
-@output @variable to env:CUSTOM_NAME  # Creates CUSTOM_NAME
+/output @variable to env              # Creates MLLD_VARIABLE
+/output @variable to env:CUSTOM_NAME  # Creates CUSTOM_NAME
 
 # Output to resolver
-@output @variable to @resolver/path/file.ext
+/output @variable to @resolver/path/file.ext
 
 # With format specification
-@output @variable to "file.json" as json
-@output @variable to stdout as yaml
+/output @variable to "file.json" as json
+/output @variable to stdout as yaml
 ```
 
 ### Legacy Syntax (Backward Compatible)
 
 ```mlld
 # Output the entire document
-@output [filename.ext]
+/output [filename.ext]
 
 # Output a variable's content
-@output @variable [filename.ext]
+/output @variable [filename.ext]
 
 # Output a template invocation result
-@output @template(arg1, arg2) [filename.ext]
+/output @template(arg1, arg2) [filename.ext]
 
 # Output a command execution result
-@output @command(arg1, arg2) [filename.ext]
+/output @command(arg1, arg2) [filename.ext]
 
 # Output literal text
-@output "text content" [filename.ext]
+/output "text content" [filename.ext]
 ```
 
 ## Description
 
-The `@output` directive provides flexible ways to write content to various destinations during mlld processing. Unlike other directives that produce output in the document, `@output` writes to external targets and produces no visible output in the document itself.
+The `/output` directive provides flexible ways to write content to various destinations during mlld processing. Unlike other directives that produce output in the document, `/output` writes to external targets and produces no visible output in the document itself.
 
 ### Key Features
 
@@ -64,54 +64,54 @@ The `@output` directive provides flexible ways to write content to various desti
 ### File Output
 
 ```mlld
-@text readme = "# My Project\n\nWelcome to my project!"
-@data config = { "name": "my-app", "version": "1.0.0" }
+/text @readme = "# My Project\n\nWelcome to my project!"
+/data @config = { "name": "my-app", "version": "1.0.0" }
 
 # Enhanced syntax
-@output @readme to "README.md"
-@output @config to "package.json"
+/output @readme to "README.md"
+/output @config to "package.json"
 
 # With format specification
-@output @config to "config.yaml" as yaml
+/output @config to "config.yaml" as yaml
 
 # With path interpolation
-@text outputDir = "dist"
-@output @readme to [@outputDir/README.md]
+/text @outputDir = "dist"
+/output @readme to "@outputDir/README.md"
 ```
 
 ### Stream Output
 
 ```mlld
-@text result = "Build completed successfully!"
-@text error = "Warning: deprecated API usage"
+/text @result = "Build completed successfully!"
+/text @error = "Warning: deprecated API usage"
 
 # Output to standard streams
-@output @result to stdout
-@output @error to stderr
+/output @result to stdout
+/output @error to stderr
 
 # With formatting
-@data metrics = { "tests": 150, "passed": 148, "failed": 2 }
-@output @metrics to stdout as json
+/data @metrics = { "tests": 150, "passed": 148, "failed": 2 }
+/output @metrics to stdout as json
 ```
 
 ### Environment Variable Output
 
 ```mlld
-@text apiKey = "sk-1234567890"
-@data config = { "debug": true, "port": 3000 }
+/text @apiKey = "sk-1234567890"
+/data @config = { "debug": true, "port": 3000 }
 
 # Default naming (MLLD_APIKEY)
-@output @apiKey to env
+/output @apiKey to env
 
 # Custom naming
-@output @apiKey to env:API_KEY
-@output @config to env:APP_CONFIG  # JSON stringified
+/output @apiKey to env:API_KEY
+/output @config to env:APP_CONFIG  # JSON stringified
 ```
 
 ### Parameterized Template Output
 
 ```mlld
-@text taskTemplate(issue, assignee) = @add [[
+/exec @taskTemplate(issue, assignee) = [[
 # Task {{issue}}
 Assigned to: {{assignee}}
 
@@ -119,21 +119,21 @@ Please review the issue and provide updates.
 ]]
 
 # Enhanced syntax
-@output @taskTemplate("123", "Alice") to "tasks/task-123.md"
-@output @taskTemplate("124", "Bob") to "tasks/task-124.md"
+/output @taskTemplate("123", "Alice") to "tasks/task-123.md"
+/output @taskTemplate("124", "Bob") to "tasks/task-124.md"
 ```
 
 ### Command Output
 
 ```mlld
-@exec generateReport(type) = @run [python report.py --type @type]
+/exec @generateReport(type) = "python report.py --type @type"
 
 # Enhanced syntax
-@output @generateReport("weekly") to "reports/weekly.txt"
-@output @generateReport("monthly") to "reports/monthly.txt"
+/output /run @generateReport("weekly") to "reports/weekly.txt"
+/output /run @generateReport("monthly") to "reports/monthly.txt"
 
 # Output to stdout for piping
-@output @generateReport("summary") to stdout
+/output /run @generateReport("summary") to stdout
 ```
 
 ### Document Output
@@ -143,22 +143,22 @@ Please review the issue and provide updates.
 
 This is the main documentation that will be rendered.
 
-@text apiDocs = "# API Reference\n\nAPI documentation here..."
-@output @apiDocs to "docs/api.md"
+/text @apiDocs = "# API Reference\n\nAPI documentation here..."
+/output @apiDocs to "docs/api.md"
 
 # The document continues here
 
 More content for the main document.
 
 # Output the entire document
-@output to "output/full-document.md"
+/output to "output/full-document.md"
 ```
 
 ### Literal Text Output
 
 ```mlld
-@output "Copyright 2024 - All rights reserved" to "LICENSE.txt"
-@output "node_modules/\n*.log\n.env" to ".gitignore"
+/output "Copyright 2024 - All rights reserved" to "LICENSE.txt"
+/output "node_modules/\n*.log\n.env" to ".gitignore"
 ```
 
 ## Behavior
@@ -214,7 +214,7 @@ The directive will fail if:
 
 ## Related Directives
 
-- [`@text`](./text.md) - Define text variables and templates
-- [`@data`](./data.md) - Define data structures
-- [`@exec`](./exec.md) - Define parameterized commands
-- [`@add`](./add.md) - Add content to the document (opposite of @output)
+- [`/text`](./text.md) - Define text variables and templates
+- [`/data`](./data.md) - Define data structures
+- [`/exec`](./exec.md) - Define parameterized commands
+- [`/add`](./add.md) - Add content to the document (opposite of /output)

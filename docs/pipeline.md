@@ -7,8 +7,8 @@ mlld supports Unix-style pipelines for chaining commands and transformations tog
 Use the `|` operator to chain commands:
 
 ```mlld
-@text result = @run [(echo "hello world")] | @uppercase
-@add @result
+/text @result = /run "echo hello world" | @uppercase
+/add @result
 ```
 
 Output:
@@ -29,12 +29,12 @@ HELLO WORLD
 When piping to multi-parameter functions, mlld intelligently handles JSON data:
 
 ```mlld
-@exec process(items, filter) = [[
+/exec @process(items, filter) = [[
 Processing {{items}} with filter {{filter}}
 ]]
 
-@text result = @run [(echo '{"items": [1,2,3], "filter": "active"}')] | @process
-@add @result
+/text @result = /run "echo '{\"items\": [1,2,3], \"filter\": \"active\"}'" | @process
+/add @result
 ```
 
 Output:
@@ -51,7 +51,7 @@ Processing [1,2,3] with filter active
 ## Pipeline Components
 
 ### Sources (Left Side)
-- `@run [command]` - Execute shell commands
+- `/run "command"` - Execute shell commands
 - Variable references - Use existing variables
 - Imported functions - From modules
 
@@ -64,25 +64,25 @@ Processing [1,2,3] with filter active
 
 ### Multi-Step Pipeline
 ```mlld
-@text result = @run [(cat data.json)] | @json | @uppercase | @md
-@add @result
+/text @result = /run "cat data.json" | @json | @uppercase | @md
+/add @result
 ```
 
 ### With Functions
 ```mlld
-@exec addHeader(content) = [[# Report
+/exec @addHeader(content) = [[# Report
 {{content}}]]
 
-@text report = @run [(cat stats.txt)] | @addHeader | @md
-@add @report
+/text @report = /run "cat stats.txt" | @addHeader | @md
+/add @report
 ```
 
 ### JSON Processing
 ```mlld
-@exec extractName(data) = [[Name: {{data.user.name}}]]
+/exec @extractName(data) = [[Name: {{data.user.name}}]]
 
-@text info = @run [(curl -s api.example.com/user)] | @extractName
-@add @info
+/text @info = /run "curl -s api.example.com/user" | @extractName
+/add @info
 ```
 
 ## Alternative Syntax
@@ -91,9 +91,9 @@ The pipeline operator is syntactic sugar for the `with` clause:
 
 ```mlld
 # These are equivalent:
-@text result1 = @run [(echo "hello")] | @uppercase
+/text @result1 = /run "echo hello" | @uppercase
 
-@text result2 = @run [(echo "hello")] with { pipeline: [@uppercase] }
+/text @result2 = /run "echo hello" with { pipeline: [@uppercase] }
 ```
 
 ## Pipeline Format Feature
