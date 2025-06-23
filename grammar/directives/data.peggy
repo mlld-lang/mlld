@@ -28,7 +28,7 @@ DottedIdentifier "Dotted Identifier"
 
 // Primary /data directive
 AtData
-  = DirectiveContext "/data" _ "@" id:DottedIdentifier _ securityOptions:SecurityOptions? _ "=" _ value:DataValue {
+  = DirectiveContext "/data" _ "@" id:DottedIdentifier _ securityOptions:SecurityOptions? _ "=" _ value:DataValue comment:InlineComment? {
       helpers.debug('AtData matched', { id, valueType: value.type });
       
       // Create variable reference node for identifier

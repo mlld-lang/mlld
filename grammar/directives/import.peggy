@@ -24,7 +24,7 @@ AtImport
 
 // Shorthand import: /import [path] or /import @input
 AtImportShorthand
-  = DirectiveContext "/import" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? {
+  = DirectiveContext "/import" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('AtImportShorthand matched', { path, ttl, tail });
       
       // Shorthand always imports all (*)
@@ -73,7 +73,7 @@ AtImportShorthand
 
 // Full import with explicit imports list
 AtImportFull
-  = DirectiveContext "/import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? {
+  = DirectiveContext "/import" _ "{" _ imports:ImportsList _ "}" _ "from" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('AtImport matched', { imports, path, ttl, tail });
       
       // Get the raw imports text

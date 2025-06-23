@@ -31,7 +31,7 @@ The exec directive is being extended to support unified executable syntax:
 
 // Primary /exec directive - supporting command, code, and environment syntax
 AtExec
-  = DirectiveContext "/exec" _ id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" {
+  = DirectiveContext "/exec" _ id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" comment:InlineComment? {
       // Environment declaration syntax: /exec js = { helperA, helperB }
       helpers.debug('AtExec matched environment declaration (no @)', { id, envVars });
       
@@ -64,7 +64,7 @@ AtExec
         'environment'
       );
     }
-  / DirectiveContext "/exec" _ "@" id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" {
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier _ "=" _ "{" _ envVars:EnvironmentVarList _ "}" comment:InlineComment? {
       // Environment declaration syntax: /exec @js = { helperA, helperB }
       helpers.debug('AtExec matched environment declaration (with @)', { id, envVars });
       
@@ -98,7 +98,7 @@ AtExec
       );
     }
   // Code executable: /exec name(params) = js {code}
-  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ codeCore:RunLanguageCodeCore withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ codeCore:RunLanguageCodeCore withClause:WithClause? trust:(_ t:TrustOption { return t; })? comment:InlineComment? {
       // Code syntax: /exec fn() = language {code}
       helpers.debug('AtExec matched with RunLanguageCodeCore', { id, params, codeCore, trust });
       
@@ -158,7 +158,7 @@ AtExec
       );
     }
   // Command executable: /exec name(params) = {command}
-  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? comment:InlineComment? {
       // Command syntax: /exec cmd() = {command}
       helpers.debug('AtExec matched with command', { id, params, content, trust });
       
@@ -215,7 +215,7 @@ AtExec
         'command'
       );
     }
-  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  / DirectiveContext "/exec" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? comment:InlineComment? {
       // Command syntax: /exec cmd() = @run {command}
       helpers.debug('AtExec matched with command', { id, params, content, trust });
       

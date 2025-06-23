@@ -20,7 +20,7 @@ It is used in the form:
 // Primary /path directive - handles bracketed paths using proper abstraction
 AtPath
   // Double quoted string path with @var interpolation
-  = DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ content:InterpolatedDoubleQuoteContent ttl:(_ TTLClause)? tail:TailModifiers? {
+  = DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ content:InterpolatedDoubleQuoteContent ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('AtPath matched double quoted string with interpolation', { id, content, ttl, tail });
       
       // Create variable reference node for identifier
@@ -60,7 +60,7 @@ AtPath
       );
     }
   // Single quoted string path (literal, no interpolation)
-  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ "'" content:$([^']*) "'" ttl:(_ TTLClause)? tail:TailModifiers? {
+  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ "'" content:$([^']*) "'" ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('AtPath matched single quoted string (literal)', { id, content, ttl, tail });
       
       // Create variable reference node for identifier
@@ -98,7 +98,7 @@ AtPath
       );
     }
   // Bracketed path with TTL and tail modifiers - semantic parsing
-  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ "[" parts:PathAssignmentParts "]" ttl:(_ TTLClause)? tail:TailModifiers? {
+  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ "[" parts:PathAssignmentParts "]" ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('AtPath matched bracketed path', { id, parts, ttl, tail });
       
       // Process special path variables in the parsed content (only @. special case)
@@ -160,7 +160,7 @@ AtPath
         'path'  // Source parameter
       );
     }
-  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ path:PathExpression ttl:(_ TTLClause)? tail:TailModifiers? {
+  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ path:PathExpression ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('AtPath matched normal path', { id, path, ttl, tail });
       
       // Process special path variables
