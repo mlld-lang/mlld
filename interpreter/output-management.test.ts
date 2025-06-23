@@ -22,7 +22,7 @@ describe('Output Management Integration', () => {
   });
 
   it('should show progress when showProgress is enabled', async () => {
-    const content = '@run [(echo "Hello, World!")]';
+    const content = '/run [(echo "Hello, World!")]';
     
     await interpret(content, {
       fileSystem,
@@ -38,7 +38,7 @@ describe('Output Management Integration', () => {
   });
 
   it('should not show progress when showProgress is disabled', async () => {
-    const content = '@run [(echo "Hello, World!")]';
+    const content = '/run [(echo "Hello, World!")]';
     
     await interpret(content, {
       fileSystem,
@@ -55,7 +55,7 @@ describe('Output Management Integration', () => {
 
   it('should NOT truncate output even when maxOutputLines is set', async () => {
     // Create a command that generates many lines
-    const content = '@run [(seq 1 100)]';
+    const content = '/run [(seq 1 100)]';
     
     const result = await interpret(content, {
       fileSystem,
@@ -74,9 +74,9 @@ describe('Output Management Integration', () => {
 
   it('should collect errors when collectErrors is enabled', async () => {
     const content = `
-@run [(exit 1)]
-@run [(echo "This should still run")]
-@run [(exit 2)]
+    /run [(exit 1)]
+    /run [(echo "This should still run")]
+    /run [(exit 2)]
     `.trim();
     
     await interpret(content, {
@@ -98,8 +98,8 @@ describe('Output Management Integration', () => {
 
   it('should halt on error when errorBehavior is halt', async () => {
     const content = `
-@run [(exit 1)]
-@run [(echo "This should not run")]
+    /run [(exit 1)]
+    /run [(echo "This should not run")]
     `.trim();
     
     await expect(
@@ -116,8 +116,8 @@ describe('Output Management Integration', () => {
 
   it('should continue on error when errorBehavior is continue', async () => {
     const content = `
-@run [(exit 1)]
-@run [(echo "This should run")]
+    /run [(exit 1)]
+    /run [(echo "This should run")]
     `.trim();
     
     const result = await interpret(content, {
@@ -133,7 +133,7 @@ describe('Output Management Integration', () => {
   });
 
   it('should include source location in command errors', async () => {
-    const content = '@run [(nonexistent-command)]';
+    const content = '/run [(nonexistent-command)]';
     
     try {
       await interpret(content, {

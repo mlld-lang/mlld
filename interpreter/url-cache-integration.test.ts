@@ -25,13 +25,13 @@ describe('URL Cache Integration', () => {
     } as Response);
 
     const mlldContent = `
-@path (30m) trust always template = "https://example.com/template.md"
+    /path @(30m) trust always template = "https://example.com/template.md"
 
 First use:
-@add @template
+    /add @template
 
 Second use:
-@add @template
+    /add @template
 `;
 
     const urlConfig = {
@@ -92,9 +92,9 @@ Second use:
   // Skip: Issue #99 - TTL/trust security features not implemented
   it.skip('should respect trust level restrictions', async () => {
     const mlldContent = `
-@path (5m) trust verify template = "http://insecure.example.com/template.md"
+    /path @(5m) trust verify template = "http://insecure.example.com/template.md"
 
-@add @template
+    /add @template
 `;
 
     const urlConfig = {
@@ -136,10 +136,10 @@ Second use:
     });
 
     const mlldContent = `
-@path (live) trust always template = "https://example.com/live.md"
+    /path @(live) trust always template = "https://example.com/live.md"
 
-@add @template
-@add @template
+    /add @template
+    /add @template
 `;
 
     const urlConfig = {
@@ -179,9 +179,9 @@ Second use:
     } as Response);
 
     const mlldContent = `
-@path (static) trust always template = "https://example.com/static.md"
+    /path @(static) trust always template = "https://example.com/static.md"
 
-@add @template
+    /add @template
 `;
 
     const urlConfig = {
@@ -240,8 +240,8 @@ Second use:
     } as Response);
 
     const mlldContent = `
-@add (10m) trust always "https://example.com/direct.md"
-@add (10m) trust always "https://example.com/direct.md"
+    /add (10m) trust always "https://example.com/direct.md"
+    /add (10m) trust always "https://example.com/direct.md"
 `;
 
     const urlConfig = {

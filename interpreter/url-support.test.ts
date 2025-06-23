@@ -126,12 +126,12 @@ describe('URL Support', () => {
   describe('Import with URLs', () => {
     it('should import from URL', async () => {
       // Set up mock file system for local imports
-      await fileSystem.writeFile('/project/test.mld', `@import { * } from [https://example.com/remote.mld]`);
+      await fileSystem.writeFile('/project/test.mld', `/import { * } from [https://example.com/remote.mld]`);
       
       // Mock the URL content
       const mockResponse = {
         ok: true,
-        text: vi.fn().mockResolvedValue(`@text greeting = "Hello from URL"`)
+        text: vi.fn().mockResolvedValue(`/text @greeting = "Hello from URL"`)
       };
       (global.fetch as any).mockResolvedValue(mockResponse);
 
@@ -172,7 +172,7 @@ describe('URL Support', () => {
       (global.fetch as any).mockResolvedValue(mockResponse);
 
       // This test assumes the grammar supports URL paths in text directives
-      const source = `@text content = [https://example.com/content.md]`;
+      const source = `/text @content = [https://example.com/content.md]`;
       
       // For now, we'll test the readFile method directly
       const content = await env.readFile('https://example.com/content.md');

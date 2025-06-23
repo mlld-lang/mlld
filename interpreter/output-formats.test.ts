@@ -51,10 +51,10 @@ describe('Output Format Tests', () => {
   describe('Markdown Format', () => {
     it('should output clean markdown by default', async () => {
       const source = `
-@text message = "Hello Markdown"
-@data config = {"name": "MyApp", "version": "1.0.0"}
-@add @message
-@add @config
+    /text @message = "Hello Markdown"
+    /data @config = {"name": "MyApp", "version": "1.0.0"}
+    /add @message
+    /add @config
 `;
       
       const result = await interpret(source, {
@@ -76,9 +76,9 @@ describe('Output Format Tests', () => {
   describe('XML Format', () => {
     it('should output valid XML with variables', async () => {
       const source = `
-@text message = "Hello XML"
-@data config = {"name": "MyApp", "version": "1.0.0"}
-@add @message
+    /text @message = "Hello XML"
+    /data @config = {"name": "MyApp", "version": "1.0.0"}
+    /add @message
 `;
       
       const result = await interpret(source, {
@@ -99,10 +99,10 @@ describe('Output Format Tests', () => {
     
     it('should include all variables in XML output', async () => {
       const source = `
-@text message = "Hello"
-@data config = {"version": "1.0"}
-@path filePath = [./test.md]
-@exec cmd = @run [(echo "test")]
+    /text @message = "Hello"
+    /data @config = {"version": "1.0"}
+    /path @filePath = [./test.md]
+    /exec @cmd = @run [(echo "test")]
 `;
       
       const result = await interpret(source, {
@@ -142,16 +142,16 @@ describe('Integration Scenarios', () => {
     it('should use imported variables (first import wins immutable design)', async () => {
       // Set up imported file with variables
       await fileSystem.writeFile('/imported.mld', `
-@text greeting = "Hello from import"
-@text author = "Import Author"
-@data settings = {"theme": "dark", "lang": "en"}
+    /text @greeting = "Hello from import"
+    /text @author = "Import Author"
+    /data @settings = {"theme": "dark", "lang": "en"}
 `);
       
       const source = `
-@import {*} from [/imported.mld]
-@add @greeting
-@add " by "
-@add @author
+    /import {*} from [/imported.mld]
+    /add @greeting
+    /add " by "
+    /add @author
 `;
       
       const result = await interpret(source, {
@@ -168,14 +168,14 @@ describe('Integration Scenarios', () => {
     
     it('should import only selected variables', async () => {
       await fileSystem.writeFile('/utils.mld', `
-@text helper = "Utility Function"
-@text private = "Should not be imported"
-@data config = {"debug": true}
+    /text @helper = "Utility Function"
+    /text @private = "Should not be imported"
+    /data @config = {"debug": true}
 `);
       
       const source = `
-@import {helper, config} from [/utils.mld]
-@add @helper
+    /import {helper, config} from [/utils.mld]
+    /add @helper
 `;
       
       const result = await interpret(source, {
@@ -189,8 +189,8 @@ describe('Integration Scenarios', () => {
       
       // Verify 'private' was not imported by checking it throws
       const sourceWithPrivate = `
-@import {helper, config} from [/utils.mld]
-@add @private
+    /import {helper, config} from [/utils.mld]
+    /add @private
 `;
       
       await expect(interpret(sourceWithPrivate, {
@@ -206,8 +206,8 @@ describe('Integration Scenarios', () => {
     
     it('should throw error when attempting to redefine a variable', async () => {
       const source = `
-@text message = "First definition"
-@text message = "Second definition"
+    /text @message = "First definition"
+    /text @message = "Second definition"
 `;
       
       await expect(interpret(source, {
@@ -219,8 +219,8 @@ describe('Integration Scenarios', () => {
     
     it('should throw error when redefining across different variable types', async () => {
       const source = `
-@text myVar = "Text value"
-@data myVar = {"type": "data"}
+    /text @myVar = "Text value"
+    /data @myVar = {"type": "data"}
 `;
       
       await expect(interpret(source, {
@@ -231,11 +231,11 @@ describe('Integration Scenarios', () => {
     });
     
     it('should throw error when imported variable conflicts with existing', async () => {
-      await fileSystem.writeFile('/defs.mld', '@text conflict = "From import"');
+      await fileSystem.writeFile('/defs.mld', '/text @conflict = "From import"');
       
       const source = `
-@text conflict = "Original"
-@import {*} from [/defs.mld]
+    /text @conflict = "Original"
+    /import {*} from [/defs.mld]
 `;
       
       await expect(interpret(source, {

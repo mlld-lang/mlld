@@ -12,9 +12,9 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-@data results = {
-  echo: @run [(echo "hello world")],
-  date: @run [(date)]
+/data @results = {
+  echo: @run {echo "hello world"},
+  date: @run {date}
 }
 `;
     
@@ -45,7 +45,7 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, '/');
     
     const mlldContent = `
-@data docs = {
+/data @docs = {
   readme: @add [/test.txt]
 }
 `;
@@ -71,12 +71,12 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-@data user = {
+/data @user = {
   name: "John",
   scores: [10, 20, 30]
 }
 
-@data results = {
+/data @results = {
   userName: @user.name,
   firstScore: @user.scores[0]
 }
@@ -103,9 +103,9 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-@text name = "World"
+/text @name = "World"
 
-@data messages = {
+/data @messages = {
   greeting: [[Hello {{name}}!]],
   farewell: [[Goodbye {{name}}!]]
 }
@@ -132,10 +132,10 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-@data config = {
+/data @config = {
   app: {
     name: "MyApp",
-    version: @run [(echo "1.0.0")]
+    version: @run {echo "1.0.0"}
   },
   messages: {
     welcome: [[Welcome to MyApp!]]
@@ -165,7 +165,7 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-@data tests = [@run [(echo "test1")], @run [(echo "test2")], @run [(echo "test3")]]
+/data @tests = [@run {echo "test1"}, @run {echo "test2"}, @run {echo "test3"}]
 `;
     
     const parseResult = await parse(mlldContent);
@@ -189,10 +189,10 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-@data results = {
-  success: @run [(echo "ok")],
-  failure: @run [(nonexistent-command)],
-  another: @run [(echo "still works")]
+/data @results = {
+  success: @run {echo "ok"},
+  failure: @run {nonexistent-command},
+  another: @run {echo "still works"}
 }
 `;
     
