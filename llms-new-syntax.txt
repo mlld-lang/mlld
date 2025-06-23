@@ -12,7 +12,7 @@ mlld syntax is only interpreted in lines that start with a mlld directive:
 - ❌ `Some text /text @greeting = "Hello"` (directive not at line start)
 
 ### 2. Slash for directives, @ for variables
-- **Directives use `/`**: `/run`, `/text`, `/data`, `/exec`, etc.
+- **Directives use `/`**: `/run`, `/var`, `/show`, `/exe`, etc.
 - **Variables use `@`**: Create with `@name`, reference with `@name`
 - ❌ `/run/` (trailing slash is invalid)
 

@@ -1,29 +1,30 @@
-// ADD DIRECTIVE
-// Implementation of the @add directive for adding content from various sources
+// SHOW DIRECTIVE
+// Implementation of the /show directive for displaying content from various sources
+// Replaces: /add directive - DELETED with no backward compatibility
 
 /* 
-# Add Directive
+# Show Directive
 
-The add directive includes content from templates, variables, paths, or sections.
+The show directive displays content from templates, variables, paths, or sections.
 It can be used in these forms:
-1. @add [[Template content]]                 - Add template content
-2. @add @variable                            - Add variable content
-3. @add [path/to/file.md]                    - Add content from a file
-4. @add "# Header" from [path.md] as "# New" - Add a specific section from a file
+1. /show [[Template content]]                 - Show template content
+2. /show @variable                            - Show variable content
+3. /show [path/to/file.md]                    - Show content from a file
+4. /show "# Header" from [path.md] as "# New" - Show a specific section from a file
 */
 
 // Core content handlers (context, tokens, whitespace, variables, template, path)
 // are automatically included by the build process - no imports needed
 
 // -------------------------------------------------------------
-// TOP-LEVEL ADD DIRECTIVE
+// TOP-LEVEL SHOW DIRECTIVE
 // -------------------------------------------------------------
 
-// Primary @add directive with all variants
-AtAdd
-  // Foreach section expression: @add foreach [@array.field # section] as [[template]]
-  = DirectiveContext "/add" _ expr:ForeachSectionExpression {
-      helpers.debug('AtAdd matched foreach section expression', { expr });
+// Primary /show directive with all variants
+AtShow
+  // Foreach section expression: /show foreach [@array.field # section] as [[template]]
+  = DirectiveContext "/show" _ expr:ForeachSectionExpression {
+      helpers.debug('AtShow matched foreach section expression', { expr });
       
       // Extract the inner value from the ForeachSectionExpression
       const foreachValue = expr.value;
@@ -46,8 +47,8 @@ AtAdd
       };
       
       return helpers.createStructuredDirective(
-        'add',
-        'addForeachSection',
+        DirectiveKind.show,
+        'showForeachSection',
         values,
         raw,
         meta,
@@ -55,9 +56,9 @@ AtAdd
         'foreach-section'
       );
     }
-  // Foreach command expression: @add foreach @command(@arrays)
-  / DirectiveContext "/add" _ expr:ForeachCommandExpression {
-      helpers.debug('AtAdd matched foreach expression', { expr });
+  // Foreach command expression: /show foreach @command(@arrays)
+  / DirectiveContext "/show" _ expr:ForeachCommandExpression {
+      helpers.debug('AtShow matched foreach expression', { expr });
       
       // Extract the inner value from the ForeachCommandExpression
       const foreachValue = expr.value;
@@ -88,8 +89,8 @@ AtAdd
       };
       
       return helpers.createStructuredDirective(
-        'add',
-        'addForeach',
+        DirectiveKind.show,
+        'showForeach',
         values,
         raw,
         meta,
@@ -98,8 +99,8 @@ AtAdd
       );
     }
   // Double-bracketed path with section: [[path/to/file.md # Section]]
-  / DirectiveContext "/add" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
-      helpers.debug('AtAdd matched double-bracketed path section', { content, rename });
+  / DirectiveContext "/show" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
+      helpers.debug('AtShow matched double-bracketed path section', { content, rename });
       
       const rawPath = content.raw.split(' # ')[0];
       const sectionText = content.section;
@@ -132,8 +133,8 @@ AtAdd
       };
       
       return helpers.createStructuredDirective(
-        'add', 
-        'addPathSection', 
+        DirectiveKind.show, 
+        'showPathSection', 
         values, 
         raw, 
         meta, 
@@ -142,8 +143,8 @@ AtAdd
       );
     }
   // Single-bracketed path with section: [path/to/file.md # Section]  
-  / DirectiveContext "/add" _ content:SemanticSectionContent rename:AsNewTitle? {
-      helpers.debug('AtAdd matched bracketed path section', { content, rename });
+  / DirectiveContext "/show" _ content:SemanticSectionContent rename:AsNewTitle? {
+      helpers.debug('AtShow matched bracketed path section', { content, rename });
       
       const rawPath = content.raw.split(' # ')[0];
       const sectionText = content.section;
@@ -176,8 +177,8 @@ AtAdd
       };
       
       return helpers.createStructuredDirective(
-        'add', 
-        'addPathSection', 
+        DirectiveKind.show, 
+        'showPathSection', 
         values, 
         raw, 
         meta, 
@@ -185,9 +186,9 @@ AtAdd
         'section'  // Added source parameter
       );
     }
-  / DirectiveContext "/add" _ sectionTitle:QuotedContent _ "from" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ asTitle:AsNewTitle? {
+  / DirectiveContext "/show" _ sectionTitle:QuotedContent _ "from" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ asTitle:AsNewTitle? {
       // This rule should match section syntax FIRST before the template rule below
-      helpers.debug('AtAdd matched section', { sectionTitle, path, asTitle, security });
+      helpers.debug('AtShow matched section', { sectionTitle, path, asTitle, security });
       
       // Process the section title and path
       const sectionTitleNode = sectionTitle[0]; // Get the first node from the array
@@ -224,8 +225,8 @@ AtAdd
       };
       
       return helpers.createStructuredDirective(
-        'add', 
-        'addPathSection', 
+        DirectiveKind.show, 
+        'showPathSection', 
         values, 
         raw, 
         meta, 
@@ -233,9 +234,9 @@ AtAdd
         'section'  // Added source parameter
       );
     }
-  / DirectiveContext "/add" _ security:(SecurityOptions _)? template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/show" _ security:(SecurityOptions _)? template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtAdd matched template content', { template, headerLevel, underHeader });
+      helpers.debug('AtShow matched template content', { template, headerLevel, underHeader });
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
@@ -285,8 +286,8 @@ AtAdd
       };
       
       return helpers.createStructuredDirective(
-        'add', 
-        'addTemplate', 
+        DirectiveKind.show, 
+        'showTemplate', 
         values, 
         raw, 
         meta, 
@@ -295,9 +296,9 @@ AtAdd
       );
     }
   // Variable reference MUST come before exec invocation to match simple @varname first
-  / DirectiveContext "/add" _ security:(SecurityOptions _)? "@" varRef:VariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/show" _ security:(SecurityOptions _)? "@" varRef:ShowVariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtAdd matched variable reference', { varRef, headerLevel, underHeader });
+      helpers.debug('AtShow matched variable reference', { varRef, headerLevel, underHeader });
       
       // Extract variable reference information
       const id = varRef.identifier;
@@ -348,8 +349,8 @@ AtAdd
       };
       
       return helpers.createStructuredDirective(
-        'add', 
-        'addVariable', 
+        DirectiveKind.show, 
+        'showVariable', 
         values, 
         raw, 
         meta, 
@@ -357,9 +358,9 @@ AtAdd
         'variable'  // Added source parameter
       );
     }
-  // Exec invocation with tail modifiers - @add @command() | @modifiers
-  / DirectiveContext "/add" _ "@" invocation:ExecInvocationWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
-      helpers.debug('AtAdd matched exec invocation with tail modifiers', { invocation, headerLevel, underHeader });
+  // Exec invocation with tail modifiers - /show @command() | @modifiers
+  / DirectiveContext "/show" _ "@" invocation:ExecInvocationWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+      helpers.debug('AtShow matched exec invocation with tail modifiers', { invocation, headerLevel, underHeader });
       
       // Extract command reference info
       const commandRef = invocation.commandRef;
@@ -417,7 +418,7 @@ AtAdd
       };
       
       return helpers.createStructuredDirective(
-        'add', 
+        DirectiveKind.show, 
         'addInvocation', 
         values, 
         raw, 
@@ -426,9 +427,9 @@ AtAdd
         'invocation'
       );
     }
-  / DirectiveContext "/add" _ security:(SecurityOptions _)? "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/show" _ security:(SecurityOptions _)? "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('AtAdd matched quoted string', { content, headerLevel, underHeader, securityOptions });
+      helpers.debug('AtShow matched quoted string', { content, headerLevel, underHeader, securityOptions });
       
       // Create path structure
       const path = {
@@ -490,8 +491,8 @@ AtAdd
       };
       
       return helpers.createStructuredDirective(
-        'add', 
-        'addPath', 
+        DirectiveKind.show, 
+        'showPath', 
         values, 
         raw, 
         meta, 
@@ -499,8 +500,8 @@ AtAdd
         'path'
       );
     }
-  / DirectiveContext "/add" _ !("[[") !('[' [^#\]]* '#') path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
-      helpers.debug('AtAdd matched path', { path, headerLevel, underHeader, security });
+  / DirectiveContext "/show" _ !("[[") !('[' [^#\]]* '#') path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+      helpers.debug('AtShow matched path', { path, headerLevel, underHeader, security });
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
@@ -552,8 +553,8 @@ AtAdd
       };
       
       return helpers.createStructuredDirective(
-        'add', 
-        'addPath', 
+        DirectiveKind.show, 
+        'showPath', 
         values, 
         raw, 
         meta, 
@@ -570,7 +571,7 @@ AtAdd
 AddDirectiveRef
   = RHSContext _ path:WrappedPathContent {
       return {
-        subtype: 'addPath',
+        subtype: 'showPath',
         values: { path: path.parts },
         raw: { path: path.raw },
         meta: { 
@@ -581,15 +582,15 @@ AddDirectiveRef
   / RHSContext _ path:$([^\r\n]*) {
       // Fallback for simple path text
       return {
-        subtype: 'addPath',
+        subtype: 'showPath',
         values: { path: [helpers.createNode(NodeType.Text, { content: path, location: location() })] },
         raw: { path },
         meta: {}
       };
     }
 
-// Helper rule for variable references in add directive
-VariableReference
+// Helper rule for variable references in show directive
+ShowVariableReference
   = id:BaseIdentifier accessElements:AnyFieldAccess* {
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
@@ -642,7 +643,7 @@ TemplateArgument
   = str:QuotedStringContent {
       return { type: 'string', value: str };
     }
-  / "@" varRef:VariableReference {
+  / "@" varRef:ShowVariableReference {
       return { type: 'variable', value: varRef };
     }
 

@@ -22,14 +22,14 @@ export const NodeType = {
 };
 export const DirectiveKind = {
     run: 'run',
-    add: 'add',
-    text: 'text',
-    exec: 'exec',
-    data: 'data',
+    var: 'var', // NEW: Replaces text/data
+    show: 'show', // NEW: Replaces add
+    exe: 'exe', // NEW: Replaces exec
     path: 'path',
     import: 'import',
     output: 'output',
     when: 'when',
+    // NO deprecated entries - clean break!
 };
 export const helpers = {
     debug(msg, ...args) {

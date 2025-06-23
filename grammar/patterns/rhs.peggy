@@ -26,126 +26,18 @@ IsInRHS "In right-hand side of assignment"
     }
 
 // -------------------------------------------------------------
-// TEXT RHS PATTERNS - Values for @text assignments
+// TEXT RHS PATTERNS - REMOVED (replaced by /var directive)
 // -------------------------------------------------------------
 
-// RHS value for @text directive
-TextRHS
-  = foreach:ForeachCommandExpression {
-      // Handle foreach expression
-      helpers.debug('TextRHS matched foreach', { foreach });
-      return { 
-        type: 'foreach',
-        value: foreach.value
-      };
-    }
-  / "/run" _ RunDirectiveRef {
-      // Handle nested /run directive
-      helpers.debug('TextRHS matched /run reference');
-      return { type: 'directive', directive: 'run' };
-    }
-  / "/add" _ AddDirectiveRef {
-      // Handle nested /add directive
-      helpers.debug('TextRHS matched /add reference');
-      return { type: 'directive', directive: 'add' };
-    }
-  / section:SectionExtractionCore {
-      // Handle section extraction (e.g., "## Setup" from [file.md])
-      helpers.debug('TextRHS matched section extraction', { section });
-      return { 
-        type: 'section',
-        section: section.section,
-        path: section.path,
-        rename: section.rename,
-        meta: section.meta
-      };
-    }
-  / path:PathExpression {
-      // Handle direct path content (e.g., [file.md] or https://example.com/file.md)
-      helpers.debug('TextRHS matched path content', { path });
-      return { 
-        type: 'path',
-        path: path
-      };
-    }
-  / content:WrappedTemplateContent {
-      // Handle template content
-      helpers.debug('TextRHS matched template content');
-      return { 
-        type: 'template', 
-        content: content.parts,
-        raw: content.raw
-      };
-    }
+// These patterns are no longer used since /text directive is deleted
+// TextRHS removed
 
 // -------------------------------------------------------------
-// DATA RHS PATTERNS - Values for @data assignments
+// DATA RHS PATTERNS - REMOVED (replaced by /var directive)
 // -------------------------------------------------------------
 
-// RHS value for @data directive
-DataRHS
-  = foreach:ForeachCommandExpression {
-      // Handle foreach expression
-      helpers.debug('DataRHS matched foreach', { foreach });
-      return { 
-        type: 'foreach',
-        value: foreach.value
-      };
-    }
-  / "/run" IsInRHS _ RunDirectiveRef {
-      // Handle nested /run directive
-      return { type: 'directive', directive: 'run' };
-    }
-  / "{" _ properties:DataProperties? _ "}" {
-      // Handle object literal
-      return { 
-        type: 'object',
-        properties: properties || []
-      };
-    }
-  / "[" _ items:DataItems? _ "]" {
-      // Handle array literal
-      return { 
-        type: 'array',
-        items: items || []
-      };
-    }
-  / value:DataLiteral {
-      // Handle primitive values
-      return { 
-        type: 'literal',
-        value
-      };
-    }
-
-// Object properties for data objects
-DataProperties
-  = first:DataProperty rest:(_ "," _ prop:DataProperty { return prop; })* {
-      return [first, ...rest];
-    }
-
-// Single property in a data object
-DataProperty
-  = key:StringLiteral _ ":" _ value:DataValue {
-      return { key, value };
-    }
-  / key:BaseIdentifier _ ":" _ value:DataValue {
-      return { key, value };
-    }
-
-// Array items for data arrays
-DataItems
-  = first:DataValue rest:(_ "," _ item:DataValue { return item; })* {
-      return [first, ...rest];
-    }
-
-
-// Primitive literal values for data
-DataLiteral
-  = value:StringLiteral { return value; }
-  / value:NumberLiteral { return value; }
-  / value:BooleanLiteral { return value; }
-  / value:NullLiteral { return value; }
+// These patterns are no longer used since /data directive is deleted
+// DataRHS, DataProperties, DataProperty, DataItems, DataLiteral removed
 
 // -------------------------------------------------------------
 // RUN RHS PATTERNS - Values for @run assignments

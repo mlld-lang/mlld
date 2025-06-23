@@ -162,15 +162,15 @@ Directive
   = &{ return helpers.isLogicalLineStart(input, offset()); }
     [ \t]*                        // allow leading tabs/spaces
     dir:(
-      AtRun          // Run directives (commands, code)
-    / AtExec         // Exec directives (define commands/code)
-    / AtText         // Text directives (templates)
-    / AtImport       // Import directives (from other files)
-    / AtAdd          // Add directives (content inclusion)
-    / AtData         // Data directives (structured data)
+      AtVarDirective // NEW: Var directives (unified variable assignment)
+    / AtShow         // NEW: Show directives (content display) - replaces AtAdd
+    / AtExe          // NEW: Exe directives (define commands/code) - replaces AtExec
+    / AtRun          // Run directives (commands, code)
     / AtPath         // Path directives (path variables)
+    / AtImport       // Import directives (from other files)
     / AtOutput       // Output directives (output routing)
     / AtWhen         // When directives (conditional execution)
+    // NO AtText, AtData, AtAdd, AtExec - deleted!
     ) { return dir; }
 
 // -------------------------------------------------------------------------
@@ -246,12 +246,11 @@ CodeFenceLangID
 // -------------------------------------------------------------------------
 
 // All the AtDirectives are now imported from their respective files:
+// - AtVarDirective from directives/var.peggy (/var) - NEW: replaces text/data
+// - AtShow from directives/show.peggy (/show) - NEW: replaces add
+// - AtExe from directives/exe.peggy (/exe) - NEW: replaces exec
 // - AtRun from directives/run.peggy (/run)
-// - AtExec from directives/exec.peggy (/exec)
-// - AtText from directives/text.peggy (/text)
 // - AtImport from directives/import.peggy (/import)
-// - AtAdd from directives/add.peggy (/add)
-// - AtData from directives/data.peggy (/data)
 // - AtPath from directives/path.peggy (/path)
 // - AtOutput from directives/output.peggy (/output)
 // - AtWhen from directives/when.peggy (/when)

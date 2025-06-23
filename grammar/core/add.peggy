@@ -53,7 +53,7 @@ AddTemplateCore
 // -------------------------------------------------------------
 
 AddVariableCore
-  = "@" varRef:VariableReference {
+  = "@" varRef:AtVar {
       helpers.debug('AddVariableCore matched variable', { varRef });
       
       return {
@@ -167,7 +167,7 @@ AddCore
 // -------------------------------------------------------------
 // These rules are defined in other files and will be available
 // during the build process:
-// - VariableReference (from add.peggy)
+// - AtVar (from variables.peggy)
 // - TemplateArgumentList (from add.peggy)
 // - TemplateArgument (from add.peggy) 
 // - QuotedStringContent (from add.peggy)
