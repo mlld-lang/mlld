@@ -1,3 +1,3 @@
 # Test Node.js Shadow Environment
 
-// Test using direct @run directive (not inside @text)
+>> Test using direct @run directive (not inside @text)

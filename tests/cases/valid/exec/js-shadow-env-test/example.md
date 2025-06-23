@@ -15,10 +15,10 @@
 /exec js = { add, multiply, calculate }
 
 /run js {
-  // Test direct calls
+  >> Test direct calls
   const r1 = add(5, 3);
   const r2 = multiply(4, 7);
-  const r3 = calculate(5); // (5+10)*2 = 30
+  const r3 = calculate(5); >> (5+10)*2 = 30
   
   console.log(JSON.stringify({ r1, r2, r3 }));
 }

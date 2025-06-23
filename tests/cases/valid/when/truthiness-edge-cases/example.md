@@ -12,12 +12,12 @@ Test comprehensive truthiness behavior in @when directives.
 /data @nullValue = null
 /data @zeroNumber = 0
 
-// Truthy values should trigger
+>> Truthy values should trigger
 /when @isEnabled => @add "String 'true' is truthy"
 
 /when @hasFeature => @add "Boolean true is truthy"
 
-// Falsy values should NOT trigger
+>> Falsy values should NOT trigger
 /when @isDisabled => @add "FAIL: String 'false' triggered"
 /when @noFeature => @add "FAIL: Boolean false triggered"
 /when @emptyString => @add "FAIL: Empty string triggered"
@@ -32,7 +32,7 @@ Test comprehensive truthiness behavior in @when directives.
 /text @empty = ""
 /data @zero = 0
 
-// Negating falsy values should trigger
+>> Negating falsy values should trigger
 /when !@hasLicense => @add "No license (string 'false')"
 
 /when !@isValid => @add "Not valid (boolean false)"
@@ -58,7 +58,7 @@ false => @add "Matched as boolean false"
 /data @count = 42
 /text @version = "1"
 
-// Numbers and strings should match
+>> Numbers and strings should match
 /when @count: [
   "42" => @add "Count is 42"
   "100" => @add "Count is 100"
@@ -76,16 +76,16 @@ false => @add "Matched as boolean false"
 /exec @getNull() = [[]]
 /exec @getZero() = [["0"]]
 
-// String "true" from exec should be truthy
+>> String "true" from exec should be truthy
 /when @isReady() => @add "System is ready"
 
-// String "false" from exec should be falsy
+>> String "false" from exec should be falsy
 /when @isEmpty() => @add "FAIL: false string triggered"
 
-// Empty string should be falsy
+>> Empty string should be falsy
 /when @getNull() => @add "FAIL: empty triggered"
 
-// String "0" should be falsy
+>> String "0" should be falsy
 /when @getZero() => @add "FAIL: zero string triggered"
 
 ## 6. Complex Truthiness in Switches
@@ -100,7 +100,7 @@ false => @add "Matched as boolean false"
 true => @add "Truthy response"
 ]
 
-// Empty string and zero shouldn't match true
+>> Empty string and zero shouldn't match true
 /when @permission: [
 true => @add "FAIL: empty matched true"
 false => @add "No permission"
@@ -117,14 +117,14 @@ false => @add "No score"
 /data @hasDocs = null
 /text @hasExamples = "true"
 
-// At least one truthy value should trigger
+>> At least one truthy value should trigger
 /when any: [
   @hasTests
   @hasDocs
   @hasExamples
 ] => @add "Has at least one artifact"
 
-// All falsy should not trigger
+>> All falsy should not trigger
 /text @a = ""
 /data @b = 0
 /data @c = false
@@ -141,14 +141,14 @@ false => @add "No score"
 /data @allSecure = true
 /text @allReady = "yes"
 
-// All truthy should trigger
+>> All truthy should trigger
 /when all: [
   @allValid
   @allSecure
   @allReady
 ] => @add "All checks passed"
 
-// One falsy should prevent trigger
+>> One falsy should prevent trigger
 /text @check1 = "true"
 /data @check2 = false
 /text @check3 = "true"
@@ -165,7 +165,7 @@ false => @add "No score"
 /text @firstFallback = ""
 /text @firstDefault = "active"
 
-// Should find first truthy
+>> Should find first truthy
 /when first: [
   @firstStatus => @add "Status: {{firstStatus}}"
   @firstFallback => @add "Fallback: {{firstFallback}}"
@@ -179,14 +179,14 @@ true => @add "Ultimate fallback"
 /data @hasWarning = false
 /text @hasInfo = "false"
 
-// Negated conditions in any block
+>> Negated conditions in any block
 /when any: [
   !@hasError
   !@hasWarning
   !@hasInfo
 ] => @add "At least one log level is clean"
 
-// Negated in all block
+>> Negated in all block
 /when all: [
   !@hasError
   !@hasWarning
@@ -195,8 +195,8 @@ true => @add "Ultimate fallback"
 
 ## 11. Edge Cases with Empty Arrays
 
-// What happens with empty condition arrays?
-// These might need special handling or error messages
+>> What happens with empty condition arrays?
+>> These might need special handling or error messages
 
 ## 12. Mixed Negation in Same Block
 
@@ -219,7 +219,7 @@ true => @add "Ultimate fallback"
 ## 13. Deeply Falsy Values
 
 /exec @getFalsy() = js {
-  // Return various falsy values
+  >> Return various falsy values
 return "";
 }
 

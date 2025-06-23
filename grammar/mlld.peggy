@@ -29,14 +29,13 @@
 // Main entry point - processes a complete document
 Start
   = frontmatter:Frontmatter? nodes:(
-      LineStartComment
-    / Comment
-    / MlldRunFence       /* <— Special mlld-run blocks that are interpreted */
-    / CodeFence          /* <— Regular code blocks that are NOT interpreted */
-    / Directive              /* <— first try to match directives */
-    / Variable               /* <— Then try to match variables (moved after directives) */
-    / InterDirectiveNewline  /* <— then capture newlines between directives */
-    / TextBlock
+      LineStartComment           /* <— Comments get highest priority! */
+    / Comment                    /* <— Any other comments */
+    / MlldRunFence               /* <— Special mlld-run blocks that are interpreted */
+    / CodeFence                  /* <— Regular code blocks that are NOT interpreted */
+    / Directive                  /* <— Directives come after comments */
+    / Variable                   /* <— Then try to match variables */
+    / TextBlock                  /* <— Finally, plain text */
     )* {
     helpers.debug('Start: Entered');
     const result = [];
@@ -44,6 +43,7 @@ Start
     result.push(...nodes);
     return result;
   }
+
 
 // structural newline that should become an AST node
 InterDirectiveNewline
@@ -53,16 +53,8 @@ InterDirectiveNewline
       while (i < input.length && (input[i] === ' ' || input[i] === '\t' || input[i] === '\r')) {
         i++;
       }
-      /* success only if the next real char starts a directive line (not a comment) */
-      if (i < input.length && input[i] === '/') {
-        // Check if it's a comment (//) first
-        if (i + 1 < input.length && input[i + 1] === '/') {
-          return false; // It's a comment, not a directive
-        }
-        // Otherwise check if it's a directive
-        return helpers.isLogicalLineStart(input, i);
-      }
-      return false;
+      /* success only if the next real char starts a directive line */
+      return i < input.length && input[i] === '/' && helpers.isLogicalLineStart(input, i);
     } {
       return helpers.createNode(NodeType.Newline, { content: term, location: location() });
     }
@@ -102,9 +94,10 @@ Comment
     });
   }
 
-// Support // as comment marker
+// Support both >> and << as comment markers
 CommentMarker
-  = "//" { return "//"; }
+  = ">>" { return ">>"; }
+  / "<<" { return "<<"; }
 
 CommentContent
   = chars:[^\n]* "\n"? {
@@ -135,16 +128,15 @@ TextPart
   = !{ 
       const pos = offset();
       const isAtLineStart = helpers.isLogicalLineStart(input, pos);
-      const isAtStartChar = input[pos] === '/';
       
-      // Is this potentially a directive or comment?
-      if (isAtLineStart && isAtStartChar) {
-        // Check if it's a comment first (more specific)
-        if (input.substr(pos, 2) === '//') {
-          return true; // Stop parsing text - it's a comment
-        }
-        // Otherwise check if it's a directive
+      // Check for directive start
+      if (isAtLineStart && input[pos] === '/') {
         return helpers.isAtDirectiveContext(input, pos);
+      }
+      
+      // Check for comment start
+      if (isAtLineStart && input[pos] === '>' && input[pos + 1] === '>') {
+        return true; // Stop parsing text - it's a comment
       }
       
       return false; // Continue parsing text

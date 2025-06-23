@@ -9,18 +9,18 @@
   }
 }
 
-// Dynamic path selection based on data
+>> Dynamic path selection based on data
 /path @config_dir = @env.paths.dev
 
-// Build dynamic file paths
+>> Build dynamic file paths
 /path @config_file = [[{{config_dir}}/settings.json]]
 /path @docs_file = [[{{config_dir}}/README.md]]
 
-// Test path operations with dynamic paths
+>> Test path operations with dynamic paths
 /text @settings = @config_file
 /text @documentation = @docs_file # Section Extraction
 
-// Complex template with nested conditionals (simulated)
+>> Complex template with nested conditionals (simulated)
 /text @report = [[
 # Configuration Report
 

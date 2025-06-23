@@ -12,23 +12,23 @@ Line 2
 Line 3`
 /text @with_mixed = 'Complex: $VAR, @user, `cmd`, \'single\', "double"'
 
-// Test simple text
+>> Test simple text
 /run {echo "@simple"}
 
-// Test quotes
+>> Test quotes
 /run {echo "@with_quotes"}
 
-// Test dollar signs
+>> Test dollar signs
 /run {echo "@with_dollar"}
 
-// Test backticks
+>> Test backticks
 /run {echo "@with_backticks"}
 
-// Test @ symbols
+>> Test @ symbols
 /run {echo "@with_at"}
 
-// Test newlines
+>> Test newlines
 /run {echo "@with_newlines"}
 
-// Test mixed special characters
+>> Test mixed special characters
 /run {echo "@with_mixed"}

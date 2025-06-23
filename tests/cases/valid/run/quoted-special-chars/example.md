@@ -12,7 +12,7 @@ These characters have special meaning in shell but should be allowed inside quot
 /run {echo 'A && B || C'}
 /run {echo "Redirect to file: > output.txt"}
 /run {echo 'Background job: command &'}
-/run {echo "Append // to file"}
+/run {echo "Append >> to file"}
 /run {echo 'Chain commands: cmd1 ; cmd2'}
 
 # Mixed quotes

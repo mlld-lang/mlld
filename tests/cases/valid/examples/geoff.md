@@ -1,9 +1,9 @@
 /path @src = @./interpreter
 
-// Create a folder for generated docs:
+>> Create a folder for generated docs:
 /run {mkdir -p @src/docs}
 
-// For each .ts file in src, send it to llm asking for detailed docs:
+>> For each .ts file in src, send it to llm asking for detailed docs:
 /run {
 for f in @src/**/*.ts; do
 filename=$(basename "$f")
@@ -22,12 +22,12 @@ llm \
 done
 }
 
-// Get names of files
+>> Get names of files
 
-// Finally, generate a README.md at the project level that links to all docs:
+>> Finally, generate a README.md at the project level that links to all docs:
 /run {echo "# Project docs" > README.md}
 /run {
 for f in @src/**/*.ts; do 
-echo "* [$(basename "$f").md}(docs/$(basename "$f").md)" // README.md
+echo "* [$(basename "$f").md}(docs/$(basename "$f").md)" >> README.md
 done
 ]

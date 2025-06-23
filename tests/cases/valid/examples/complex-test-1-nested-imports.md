@@ -13,15 +13,15 @@
 }
 ]]
 
-// Simulate creating the lib file (in real usage, this would be a separate file)
+>> Simulate creating the lib file (in real usage, this would be a separate file)
 /exec @write_lib(content) = {echo '@lib_content @content' > ./files/lib.mld}
 
 /run @write_lib("Hi")
 
-// Now import from our "lib" that itself has imports
+>> Now import from our "lib" that itself has imports
 /import { lib_message, lib_config } from "./files/lib.mld"
 
-// Test if nested imports work and variable scoping is correct
+>> Test if nested imports work and variable scoping is correct
 /text @final_output = [[
 Project: {{project_name}}
 Library Message: {{lib_message}}
