@@ -13,8 +13,6 @@
     return items.map(p => p.name).join(', ');
   } else {
     // Pipeline invocation - use the PipelineInput object
-    console.log('Type:', data.type);
-    console.log('Text length:', data.text.length);
     const items = data.data;
     return items.map(p => p.name).join(', ');
   }
