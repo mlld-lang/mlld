@@ -20,7 +20,7 @@ describe('NodeShadowEnvironment process exit', () => {
     const content = `
 # Test Node Shadow Environment Cleanup
 
-@exec createTimer(delay) = node [(
+/exec @createTimer(delay) = node {
   console.error('Setting timer for ' + delay + 'ms');
   
   // This timer would normally keep the process alive
@@ -36,12 +36,12 @@ describe('NodeShadowEnvironment process exit', () => {
   }, 100);
   
   return 'Timers set';
-)]
+}
 
-@exec node = { createTimer }
+/exec @node = { createTimer }
 
-@text result = @createTimer(5000)
-@add [[Result: {{result}}]]
+/text @result = @createTimer(5000)
+/add [[Result: {{result}}]]
 `;
     
     await fs.writeFile(testFile, content);
@@ -66,24 +66,24 @@ describe('NodeShadowEnvironment process exit', () => {
     const content = `
 # Test Multiple Shadow Environments
 
-@exec jsTimer() = js [(
+/exec @jsTimer() = js {
   setTimeout(() => console.log('JS timer'), 1000);
   return 'JS timer set';
-)]
+}
 
-@exec nodeTimer() = node [(
+/exec @nodeTimer() = node {
   setTimeout(() => console.log('Node timer'), 1000);
   return 'Node timer set';
-)]
+}
 
-@exec js = { jsTimer }
-@exec node = { nodeTimer }
+/exec @js = { jsTimer }
+/exec @node = { nodeTimer }
 
-@text jsResult = @jsTimer()
-@text nodeResult = @nodeTimer()
+/text @jsResult = @jsTimer()
+/text @nodeResult = @nodeTimer()
 
-@add [[JS: {{jsResult}}]]
-@add [[Node: {{nodeResult}}]]
+/add [[JS: {{jsResult}}]]
+/add [[Node: {{nodeResult}}]]
 `;
     
     await fs.writeFile(testFile, content);
@@ -101,7 +101,7 @@ describe('NodeShadowEnvironment process exit', () => {
   it('should handle errors and still exit cleanly', async () => {
     const testFile = path.join(testDir, 'error-with-timer.mld');
     const content = `
-@exec buggyTimer() = node [(
+/exec @buggyTimer() = node {
   // Set a timer that would keep process alive
   setTimeout(() => {
     console.error('This should not execute');
@@ -109,11 +109,11 @@ describe('NodeShadowEnvironment process exit', () => {
   
   // Then throw an error
   throw new Error('Intentional error');
-)]
+}
 
-@exec node = { buggyTimer }
+/exec @node = { buggyTimer }
 
-@text result = @buggyTimer()
+/text @result = @buggyTimer()
 `;
     
     await fs.writeFile(testFile, content);
