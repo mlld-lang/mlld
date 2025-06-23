@@ -357,7 +357,7 @@ AtAdd
         'variable'  // Added source parameter
       );
     }
-  // Exec invocation with tail modifiers - /add @command() | @modifiers
+  // Exec invocation with tail modifiers - @add @command() | @modifiers
   / DirectiveContext "/add" _ "@" invocation:ExecInvocationWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('AtAdd matched exec invocation with tail modifiers', { invocation, headerLevel, underHeader });
       

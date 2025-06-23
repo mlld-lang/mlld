@@ -31,9 +31,12 @@ CONTENT TYPES
 // MID-LEVEL PATTERNS - Handle delimiters and basic structures
 // -------------------------------------------------------------
 
-// Single quoted string - literal content without interpolation
+// Literal content - no interpolation (both single and double quotes)
 LiteralContent "Literal content without interpolation"
-  = "'" content:EscapedSingleStringContent "'" { 
+  = '"' content:EscapedStringContent '"' { 
+      return [helpers.createNode(NodeType.Text, { content, location: location() })];
+    }
+  / "'" content:EscapedSingleStringContent "'" { 
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
 
