@@ -575,7 +575,21 @@ export async function evaluateImport(
     throw new Error('Import directive path must be a string or array of nodes');
   }
   
-  // Check for special stdin import (@stdin, @INPUT, or @input)
+  // Check for special imports based on metadata
+  const pathMeta = directive.meta?.path;
+  if (pathMeta?.isSpecial) {
+    if (pathMeta.source === 'stdin') {
+      return await evaluateInputImport(directive, env);
+    } else if (pathMeta.source === 'time') {
+      // Handle TIME resolver import
+      const resolverManager = env.getResolverManager();
+      if (resolverManager && resolverManager.isResolverName('TIME')) {
+        return await evaluateResolverImport(directive, 'TIME', env);
+      }
+    }
+  }
+  
+  // Check for special stdin import (@stdin, @INPUT, or @input) - legacy handling
   // Handle cases where the path might have multiple nodes (e.g., VariableReference + newline Text)
   if (pathNodes.length >= 1) {
     const firstNode = pathNodes[0];
@@ -627,7 +641,6 @@ export async function evaluateImport(
     let expectedHash: string | undefined;
     
     // Check if the directive has hash information in metadata
-    const pathMeta = directive.meta?.path;
     if (pathMeta && pathMeta.hash) {
       expectedHash = pathMeta.hash;
       // Remove hash from module reference for resolution
@@ -664,8 +677,8 @@ export async function evaluateImport(
   }
   
   // Use the common import logic, passing the expected hash if present
-  const pathMeta = directive.meta?.path;
-  const expectedHash = pathMeta?.hash;
+  const pathMetaForHash = directive.meta?.path;
+  const expectedHash = pathMetaForHash?.hash;
   return importFromPath(directive, resolvedPath, env, expectedHash);
 }
 

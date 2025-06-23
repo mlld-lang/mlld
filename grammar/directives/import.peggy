@@ -175,6 +175,24 @@ ImportPath
         }
       };
     }
+  / "@TIME"i {
+      helpers.debug('ImportPath matched @TIME');
+      const matched = text();
+      return {
+        type: 'path',
+        subtype: 'timePath',
+        values: { 
+          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+        },
+        raw: { 
+          path: matched
+        },
+        meta: {
+          isSpecial: true,
+          source: 'time'
+        }
+      };
+    }
   / "@stdin" {  // Keep for backward compatibility
       helpers.debug('ImportPath matched @stdin (deprecated)');
       return {
