@@ -8,9 +8,9 @@ mlld provides built-in transformers for common data format conversions. These ar
 Converts content to SCREAMING_SNAKE_CASE XML using llmxml.
 
 ```mlld
-/text @data = [[{"user": {"firstName": "Alice", "lastName": "Smith"}}]]
-/text @result = @data | @XML
-/add @result
+/var @data = [[{"user": {"firstName": "Alice", "lastName": "Smith"}}]]
+/var @result = @data | @XML
+/show @result
 ```
 
 Output:
@@ -25,9 +25,9 @@ Output:
 Formats JSON data with proper indentation.
 
 ```mlld
-/text @data = [[{"name":"Alice","age":30,"active":true}]]
-/text @result = @data | @JSON
-/add @result
+/var @data = [[{"name":"Alice","age":30,"active":true}]]
+/var @result = @data | @JSON
+/show @result
 ```
 
 Output:
@@ -43,9 +43,9 @@ Output:
 Converts JSON arrays to CSV format.
 
 ```mlld
-/text @data = [[[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]]]
-/text @result = @data | @CSV
-/add @result
+/var @data = [[[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]]]
+/var @result = @data | @CSV
+/show @result
 ```
 
 Output:
@@ -59,15 +59,15 @@ Bob,25
 Formats content as clean Markdown using prettier.
 
 ```mlld
-/text @data = [[# Hello World
+/var @data = [[# Hello World
 
 This is a paragraph with **bold** and *italic* text.
 
 - Item 1
 - Item 2]]
 
-/text @result = @data | @MD
-/add @result
+/var @result = @data | @MD
+/show @result
 ```
 
 Output:
@@ -86,12 +86,12 @@ Transformers work seamlessly in pipelines:
 
 ```mlld
 >> API response to formatted CSV
-/text @result = /run {curl -s api.example.com/users} | @json | @csv
-/add @result
+/var @result = /run {curl -s api.example.com/users} | @json | @csv
+/show @result
 
 >> Multiple transformations
-/text @report = /run {cat data.json} | @json | @uppercase | @md
-/add @report
+/var @report = /run {cat data.json} | @json | @uppercase | @md
+/show @report
 ```
 
 ## With /exec Functions
@@ -99,13 +99,13 @@ Transformers work seamlessly in pipelines:
 Combine transformers with custom functions:
 
 ```mlld
-/exec @processUsers(data) = [[
+/exe @processUsers(data) = [[
 Total users: {{data.length}}
 First user: {{data.0.name}}
 ]]
 
-/text @result = /run {cat users.json} | @json | @processUsers
-/add @result
+/var @result = /run {cat users.json} | @json | @processUsers
+/show @result
 ```
 
 ## Error Handling
@@ -114,7 +114,7 @@ Transformers validate input and provide clear error messages:
 
 ```mlld
 >> Invalid JSON input
-/text @result = /run {echo "not json"} | @json
+/var @result = /run {echo "not json"} | @json
 >> Error: Transformer JSON failed: Unexpected token...
 ```
 
@@ -131,8 +131,8 @@ Both forms are identical in function:
 
 ```mlld
 >> These produce the same result
-/text @result1 = @data | @JSON
-/text @result2 = @data | @json
+/var @result1 = @data | @JSON
+/var @result2 = @data | @json
 ```
 
 Use uppercase for clarity in documentation, lowercase for convenience in scripts.

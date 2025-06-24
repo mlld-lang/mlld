@@ -64,8 +64,8 @@ The `/output` directive provides flexible ways to write content to various desti
 ### File Output
 
 ```mlld
-/text @readme = "# My Project\n\nWelcome to my project!"
-/data @config = { "name": "my-app", "version": "1.0.0" }
+/var @readme = "# My Project\n\nWelcome to my project!"
+/var @config = { "name": "my-app", "version": "1.0.0" }
 
 # Enhanced syntax
 /output @readme to "README.md"
@@ -75,30 +75,30 @@ The `/output` directive provides flexible ways to write content to various desti
 /output @config to "config.yaml" as yaml
 
 # With path interpolation
-/text @outputDir = "dist"
+/var @outputDir = "dist"
 /output @readme to "@outputDir/README.md"
 ```
 
 ### Stream Output
 
 ```mlld
-/text @result = "Build completed successfully!"
-/text @error = "Warning: deprecated API usage"
+/var @result = "Build completed successfully!"
+/var @error = "Warning: deprecated API usage"
 
 # Output to standard streams
 /output @result to stdout
 /output @error to stderr
 
 # With formatting
-/data @metrics = { "tests": 150, "passed": 148, "failed": 2 }
+/var @metrics = { "tests": 150, "passed": 148, "failed": 2 }
 /output @metrics to stdout as json
 ```
 
 ### Environment Variable Output
 
 ```mlld
-/text @apiKey = "sk-1234567890"
-/data @config = { "debug": true, "port": 3000 }
+/var @apiKey = "sk-1234567890"
+/var @config = { "debug": true, "port": 3000 }
 
 # Default naming (MLLD_APIKEY)
 /output @apiKey to env
@@ -111,7 +111,7 @@ The `/output` directive provides flexible ways to write content to various desti
 ### Parameterized Template Output
 
 ```mlld
-/exec @taskTemplate(issue, assignee) = [[
+/exe @taskTemplate(issue, assignee) = [[
 # Task {{issue}}
 Assigned to: {{assignee}}
 
@@ -126,7 +126,7 @@ Please review the issue and provide updates.
 ### Command Output
 
 ```mlld
-/exec @generateReport(type) = "python report.py --type @type"
+/exe @generateReport(type) = "python report.py --type @type"
 
 # Enhanced syntax
 /output /run @generateReport("weekly") to "reports/weekly.txt"
@@ -143,7 +143,7 @@ Please review the issue and provide updates.
 
 This is the main documentation that will be rendered.
 
-/text @apiDocs = "# API Reference\n\nAPI documentation here..."
+/var @apiDocs = "# API Reference\n\nAPI documentation here..."
 /output @apiDocs to "docs/api.md"
 
 # The document continues here

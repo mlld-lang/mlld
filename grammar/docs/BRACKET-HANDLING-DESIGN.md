@@ -8,9 +8,9 @@ This document describes the design for handling brackets in the mlld grammar. Br
 
 Brackets in mlld have different semantics depending on context:
 
-1. **Command brackets**: `@run [echo "test"]` - Shell commands with potential nested brackets
+1. **Command brackets**: `run [echo "test"]` - Shell commands with potential nested brackets
 2. **Code brackets**: `@run python [data[0] = [1,2,3]]` - Language-specific syntax preservation
-3. **Data brackets**: `@data arr = [1, @run [cmd], 3]` - Array literals with embedded directives
+3. **Data brackets**: `@data arr = [1, run [cmd], 3]` - Array literals with embedded directives
 4. **Template brackets**: `[[Hello {{name}}]]` - Template content with interpolation
 
 The challenge is disambiguating these contexts and applying appropriate parsing rules.

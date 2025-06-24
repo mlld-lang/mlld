@@ -4,10 +4,10 @@
 ## Load Architecture Files
 /path @architectureDoc = [docs/ARCHITECTURE.md]
 /path @authConfigDoc = [docs/AUTH-CONFIG.md]
-/text @overallArchitecture = @path [docs/ARCHITECTURE.md]
+/var @overallArchitecture = @path [docs/ARCHITECTURE.md]
 
 ## Define Services
-/data @services = {
+/var @services = {
   "auth": {
     "description": "Authentication and Authorization Service",
     "path": "services/auth",
@@ -26,11 +26,11 @@
 }
 
 ## Service Health Checks
-/exec @service_healthy(name) = {
+/exe @service_healthy(name) = {
 curl -s "http://localhost:8080/{{name}}/health" | grep -q "ok" && echo "true"
 }
 
-/exec @all_services_healthy() = {}
+/exe @all_services_healthy() = {}
 # Check if all services return healthy
 healthy=true
 for service in auth payment user; do
@@ -46,7 +46,7 @@ echo "$healthy"
 /when @all_services_healthy() => @add "✅ All services healthy - proceeding with analysis"
 
 ## Analyze Each Service
-/text @serviceAnalysisPrompt = [[
+/var @serviceAnalysisPrompt = [[
 Analyze the {{serviceName}} service:
 - Description: {{serviceDescription}}
 - Configuration: {{serviceConfig}}
@@ -66,14 +66,14 @@ Please provide:
 foreach @analyze_service(@services)
 ]
 
-/exec @analyze_service(service) = {
+/exe @analyze_service(service) = {
 echo "=== Analysis for {{service.name}} ==="
 echo "{{serviceAnalysisPrompt}}" | llm --model gpt-4}
 
 ## Conditional Deployment
-/exec @is_production() = {test "$ENVIRONMENT" = "production" && echo "true"}
-/exec @tests_passing() = {npm test 2>/dev/null && echo "true"}
-/exec @approved_for_deploy() = {test -f .deploy-approved && echo "true"}
+/exe @is_production() = {test "$ENVIRONMENT" = "production" && echo "true"}
+/exe @tests_passing() = {npm test 2>/dev/null && echo "true"}
+/exe @approved_for_deploy() = {test -f .deploy-approved && echo "true"}
 
 /when all: [
   @is_production()
@@ -82,7 +82,7 @@ echo "{{serviceAnalysisPrompt}}" | llm --model gpt-4}
 ] => run {npm run deploy}
 
 ## Generate Summary Report
-/text @summaryTemplate = [[
+/var @summaryTemplate = [[
 # Service Analysis Summary
 
 Generated: {{TIME}}
@@ -109,4 +109,4 @@ foreach @not_healthy(@services)
 ]
 ]]
 
-/add @summaryTemplate
+/show @summaryTemplate

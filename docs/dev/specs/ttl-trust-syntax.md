@@ -57,8 +57,8 @@ Exec-defined commands support tail modifiers uniformly across all contexts:
 
 ```mlld
 # Define commands
-@exec deploy(env) = @run [(./deploy.sh @env)]
-@exec fetchData(url) = @run [(curl -s @url)]
+@exec deploy(env) = run [(./deploy.sh @env)]
+@exec fetchData(url) = run [(curl -s @url)]
 @exec processJSON(data) = @run python [(json.loads(@data))]
 
 # Tail modifiers work everywhere (no @run wrapper needed)
@@ -69,7 +69,7 @@ Exec-defined commands support tail modifiers uniformly across all contexts:
 @when @isReady() => @deploy("prod") with { trust: always, pipeline: [@log] }
 
 # Direct @run still supports tail modifiers
-@text cmd = @run [(echo "test")] | @uppercase
+@text cmd = run [(echo "test")] | @uppercase
 @data result = @run @deploy("dev") trust always  # Also valid but redundant
 ```
 
@@ -90,8 +90,8 @@ Exec-defined commands support tail modifiers uniformly across all contexts:
 # Simple trust syntax
 @path config = https://internal.corp.com/config.json trust always
 @import [https://github.com/org/repo/file.mld] trust verify
-@run [rm -rf temp/] trust always
-@exec deploy() = @run [./deploy.sh] trust always
+run [rm -rf temp/] trust always
+@exec deploy() = run [./deploy.sh] trust always
 
 # With TTL
 @path data = https://api.example.com/data.json (30m) trust verify
@@ -104,14 +104,14 @@ All tail keywords are syntactic sugar for `with` clause properties.
 
 ### Single Property (Sugar Allowed)
 ```mlld
-@run [echo "Hello"] trust always           # → with { trust: always }
-@run [echo "Hello"] | @uppercase           # → with { pipeline: [@uppercase] }
+run [echo "Hello"] trust always           # → with { trust: always }
+run [echo "Hello"] | @uppercase           # → with { pipeline: [@uppercase] }
 @path url = https://example.com trust verify
 ```
 
 ### Multiple Properties (Object Required)
 ```mlld
-@run [curl api.com] with {
+run [curl api.com] with {
   trust: verify,
   pipeline: [@validate, @parse]
 }
@@ -123,9 +123,9 @@ The `|` operator is an alias for `pipeline`:
 
 ```mlld
 # These are equivalent
-@run [echo "hello"] | @uppercase @capitalize
-@run [echo "hello"] pipeline [@uppercase, @capitalize]
-@run [echo "hello"] with { pipeline: [@uppercase, @capitalize] }
+run [echo "hello"] | @uppercase @capitalize
+run [echo "hello"] pipeline [@uppercase, @capitalize]
+run [echo "hello"] with { pipeline: [@uppercase, @capitalize] }
 ```
 
 ## Grammar Implementation Notes
@@ -140,7 +140,7 @@ The `|` operator is an alias for `pipeline`:
 All syntactic sugar is normalized to `with` clause in the AST:
 
 ```javascript
-// Input: @run [cmd] trust always
+// Input: run [cmd] trust always
 {
   "kind": "run",
   "values": {

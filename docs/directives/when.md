@@ -24,7 +24,7 @@ The simplest form evaluates a single condition and executes an action if true:
 
 Example:
 ```mlld
-/text @is_production = "true"
+/var @is_production = "true"
 /when @is_production => /add "⚠️  Running in production mode!"
 ```
 
@@ -46,7 +46,7 @@ Evaluates conditions in order and executes only the first matching action:
 
 Example:
 ```mlld
-/text @env = "production"
+/var @env = "production"
 /when @env first: [
   "development" => /add "Dev mode"
   "production" => /add "Prod mode"  
@@ -70,9 +70,9 @@ Checks if any condition is true, then executes a single block action:
 
 Example:
 ```mlld
-/text @is_admin = ""
-/text @is_moderator = "true"
-/text @is_verified = ""
+/var @is_admin = ""
+/var @is_moderator = "true"
+/var @is_verified = ""
 
 /when @user any: [
   @is_admin
@@ -100,9 +100,9 @@ Executes the block action only if ALL conditions are true:
 
 Example:
 ```mlld
-/text @has_license = "true"
-/text @is_active = "yes"
-/text @is_paid = "1"
+/var @has_license = "true"
+/var @is_active = "yes"
+/var @is_paid = "1"
 
 /when @user all: [
   @has_license
@@ -126,9 +126,9 @@ Executes individual actions for each true condition (no ALL requirement):
 
 Example:
 ```mlld
-/text @feature_chat = "enabled"
-/text @feature_video = ""
-/text @feature_screen = "true"
+/var @feature_chat = "enabled"
+/var @feature_video = ""
+/var @feature_screen = "true"
 
 /when @features all: [
   @feature_chat => /add "Chat is enabled"
@@ -160,9 +160,9 @@ This is unique to the bare form - it executes ALL matching conditions:
 
 Example:
 ```mlld
-/text @debug = "true"
-/text @verbose = "yes"
-/text @trace = ""
+/var @debug = "true"
+/var @verbose = "yes"
+/var @trace = ""
 
 /when @config: [
   @debug => /add "Debug mode active"
@@ -194,7 +194,7 @@ All forms support multi-line formatting for better readability:
 
 ```mlld
 # Complex condition checking with first:
-/exec @get_request_type() = bash {
+/exe @get_request_type() = bash {
   if [[ "$REQUEST_METHOD" == "GET" && "$REQUEST_PATH" == "/api/users" ]]; then
     echo "list_users"
   elif [[ "$REQUEST_METHOD" == "POST" && "$REQUEST_PATH" == "/api/users" ]]; then
@@ -204,22 +204,22 @@ All forms support multi-line formatting for better readability:
   fi
 }
 
-/text @request_type = /run @get_request_type()
+/var @request_type = /run @get_request_type()
 /when @request_type first: [
   "list_users" => 
-    /add "Handling GET users request"
+    /show "Handling GET users request"
   
   "create_user" => 
-    /add "Creating new user"
+    /show "Creating new user"
   
   "delete_user" => 
-    /add "Deleting user"
+    /show "Deleting user"
 ]
 
 # Multiple conditions with any:
-/text @ip_blocked = ""
-/text @rate_limit_exceeded = "true"
-/text @invalid_token = ""
+/var @ip_blocked = ""
+/var @rate_limit_exceeded = "true"
+/var @invalid_token = ""
 
 /when @security any: [
   @ip_blocked
@@ -228,19 +228,19 @@ All forms support multi-line formatting for better readability:
 ] => /add "Access denied: Security policy violation"
 
 # Feature flags with bare form
-/text @new_ui = "true"
-/text @beta_features = "true"
-/text @analytics = ""
+/var @new_ui = "true"
+/var @beta_features = "true"
+/var @analytics = ""
 
 /when @flags: [
   @new_ui => 
-    /add [[/import { NewHeader, NewFooter } from "./components/new"]]
+    /show [[/import { NewHeader, NewFooter } from "./components/new"]]
   
   @beta_features => 
-    /add [[/import { BetaTools } from "./components/beta"]]
+    /show [[/import { BetaTools } from "./components/beta"]]
   
   @analytics => 
-    /add [[/import { Analytics } from "./services/analytics"]]
+    /show [[/import { Analytics } from "./services/analytics"]]
 ]
 ```
 
@@ -249,7 +249,7 @@ All forms support multi-line formatting for better readability:
 Conditions can use command execution results:
 
 ```mlld
-/exec @is_installed(cmd) = bash {command -v @cmd > /dev/null && echo "true" || echo ""}
+/exe @is_installed(cmd) = bash {command -v @cmd > /dev/null && echo "true" || echo ""}
 
 /when @package_manager first: [
   @is_installed("npm") => /run "npm install"
@@ -264,7 +264,7 @@ Conditions can use command execution results:
 The optional variable in block form captures the condition value:
 
 ```mlld
-/text @options = "verbose"
+/var @options = "verbose"
 
 /when @options first: [
   "debug" => /add "Deep debugging mode"
@@ -304,11 +304,11 @@ Values are considered truthy/falsy as follows:
 The `!` operator negates the truthiness of a value:
 
 ```mlld
-/text @hasFeature = ""
+/var @hasFeature = ""
 /when !@hasFeature => /add "Feature is disabled"
 # Output: Feature is disabled (empty string is falsy, !falsy is truthy)
 
-/text @isDisabled = "false"  
+/var @isDisabled = "false"  
 /when !@isDisabled => /add "Not disabled"
 # No output (string "false" is falsy, !falsy is truthy)
 ```
@@ -317,7 +317,7 @@ The `!` operator negates the truthiness of a value:
 
 ### Switch-like Behavior
 ```mlld
-/text @command = "build"
+/var @command = "build"
 
 /when @command first: [
   "build" => /run "npm run build"
@@ -329,12 +329,12 @@ The `!` operator negates the truthiness of a value:
 
 ### Permission Checking
 ```mlld
-/data @user = { "role": "editor", "id": 123 }
-/data @resource = { "owner_id": 123 }
+/var @user = { "role": "editor", "id": 123 }
+/var @resource = { "owner_id": 123 }
 
-/exec @is_admin() = js {return @user.role === "admin" ? "true" : ""}
-/exec @is_owner() = js {return @user.role === "owner" ? "true" : ""}
-/exec @owns_resource() = js {return @user.id === @resource.owner_id ? "true" : ""}
+/exe @is_admin() = js {return @user.role === "admin" ? "true" : ""}
+/exe @is_owner() = js {return @user.role === "owner" ? "true" : ""}
+/exe @owns_resource() = js {return @user.id === @resource.owner_id ? "true" : ""}
 
 /when @permission any: [
   @is_admin()
@@ -345,7 +345,7 @@ The `!` operator negates the truthiness of a value:
 
 ### Progressive Enhancement
 ```mlld
-/data @browser = {
+/var @browser = {
   "supports": {
     "webgl2": true,
     "webgl": true,
@@ -401,8 +401,8 @@ The following patterns will produce helpful error messages:
 
 2. **Keep Conditions Simple**: Each condition should check one thing
    ```mlld
-   /text @has_git = "true"
-   /text @is_git_repo = "true"
+   /var @has_git = "true"
+   /var @is_git_repo = "true"
    
    # Good: Separate conditions
    /when @repo all: [
@@ -422,7 +422,7 @@ The following patterns will produce helpful error messages:
 
 4. **Use Meaningful Conditions**: Make conditions readable
    ```mlld
-   /text @version = "2.1.0"
+   /var @version = "2.1.0"
    /when @version first: [
      "1.0.0" => /add "Legacy version"
      "2.0.0" => /add "Current version"
@@ -434,8 +434,8 @@ The following patterns will produce helpful error messages:
 
 ### With /exec Commands
 ```mlld
-/exec @is_ci() = bash {test -n "$CI" && echo "true" || echo ""}
-/exec @is_main_branch() = bash {git branch --show-current | grep -q "^main$" && echo "true" || echo ""}
+/exe @is_ci() = bash {test -n "$CI" && echo "true" || echo ""}
+/exe @is_main_branch() = bash {git branch --show-current | grep -q "^main$" && echo "true" || echo ""}
 
 /when @ci_state all: [
   @is_ci() => /add "Running in CI"
@@ -445,7 +445,7 @@ The following patterns will produce helpful error messages:
 
 ### With /import
 ```mlld
-/text @environment = "production"
+/var @environment = "production"
 /when @environment first: [
   "development" => /import { dev_config } from "./config/dev.mld"
   "production" => /import { prod_config } from "./config/prod.mld"
@@ -455,8 +455,8 @@ The following patterns will produce helpful error messages:
 
 ### With Templates
 ```mlld
-/text @user_type = "premium"
-/exec @greeting(type) = [[Welcome, {{type}} user!]]
+/var @user_type = "premium"
+/exe @greeting(type) = [[Welcome, {{type}} user!]]
 
 /when @user_type first: [
   "premium" => /add @greeting("premium")

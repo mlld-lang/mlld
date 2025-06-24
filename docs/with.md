@@ -10,7 +10,7 @@ With clauses provide powerful execution modifiers for `/run` and `/exec` command
   needs: {<dependencies>}
 }
 
-/exec @name(params) = /run {command} with {
+/exe @name(params) = /run {command} with {
   pipeline: [@transformer, ...],
   needs: {<dependencies>}
 }
@@ -32,15 +32,15 @@ Pipelines allow you to chain multiple transformations on command output, creatin
 ### Example: API Data Processing
 
 ```mlld
-/exec @validate_json(data) = /run {
+/exe @validate_json(data) = /run {
   node -e 'try { JSON.parse(`@data`); console.log(`@data`); } catch { }'
 }
 
-/exec @extract_field(data, field) = /run {
+/exe @extract_field(data, field) = /run {
   node -e 'const d = JSON.parse(`@data`); console.log(JSON.stringify(d["@field"])))'
 }
 
-/text @users = /run {curl https://api.example.com/users} with {
+/var @users = /run {curl https://api.example.com/users} with {
   pipeline: [
     @validate_json(@input),
     @extract_field(@input, "users"),
@@ -54,7 +54,7 @@ Pipelines allow you to chain multiple transformations on command output, creatin
 If any transformer returns empty output (falsy), the pipeline stops and returns an empty string:
 
 ```mlld
-/text @data = /run {fetch-unstable-api} with {
+/var @data = /run {fetch-unstable-api} with {
   pipeline: [
     @validate_json(@input),  >> Returns empty if invalid JSON
     @parse_data(@input)      >> Never runs if validation failed
@@ -90,7 +90,7 @@ Supported languages: `node`, `python`
 ### Example
 
 ```mlld
-/exec @process_data(file) = /run {node process.js @file} with {
+/exe @process_data(file) = /run {node process.js @file} with {
   needs: {
     "node": {
       "lodash": "^4.17.0",
@@ -99,7 +99,7 @@ Supported languages: `node`, `python`
   }
 }
 
-/exec @analyze(data) = /run python {analyze.py} with {
+/exe @analyze(data) = /run python {analyze.py} with {
   needs: {
     "python": {
       "pandas": ">=1.3.0",
@@ -112,7 +112,7 @@ Supported languages: `node`, `python`
 ## Combining Pipelines and Dependencies
 
 ```mlld
-/exec @fetch_and_process(url) = /run {curl @url} with {
+/exe @fetch_and_process(url) = /run {curl @url} with {
   pipeline: [
     @validate_response(@input),
     @parse_json(@input),
@@ -134,7 +134,7 @@ Supported languages: `node`, `python`
 Perfect for working with REST APIs:
 
 ```mlld
-/text @api_data = /run {curl -s https://api.example.com/data} with {
+/var @api_data = /run {curl -s https://api.example.com/data} with {
   pipeline: [
     @validate_json(@input),
     @extract_field(@input, "results"),
@@ -149,7 +149,7 @@ Perfect for working with REST APIs:
 Ensure data integrity through multiple validation steps:
 
 ```mlld
-/exec @validate_config(file) = /run {cat @file} with {
+/exe @validate_config(file) = /run {cat @file} with {
   pipeline: [
     @validate_json(@input),
     @check_required_fields(@input, ["name", "version", "config"]),
@@ -164,7 +164,7 @@ Ensure data integrity through multiple validation steps:
 Build complex data processing workflows:
 
 ```mlld
-/text @report = /run {generate-raw-report} with {
+/var @report = /run {generate-raw-report} with {
   pipeline: [
     @parse_csv(@input),
     @aggregate_by_date(@input),
@@ -200,17 +200,17 @@ Build complex data processing workflows:
 ### With foreach
 
 ```mlld
-/data @files = ["data1.json", "data2.json", "data3.json"]
-/exec @process_file(file) = /run {cat @file} with {
+/var @files = ["data1.json", "data2.json", "data3.json"]
+/exe @process_file(file) = /run {cat @file} with {
   pipeline: [@validate_json(@input), @extract_metrics(@input)]
 }
-/data @results = foreach @process_file(@files)
+/var @results = foreach @process_file(@files)
 ```
 
 ### With /when
 
 ```mlld
-/text @api_response = /run {curl api.example.com} with {
+/var @api_response = /run {curl api.example.com} with {
   pipeline: [@validate_json(@input)]
 }
 
@@ -225,7 +225,7 @@ Create standard processing pipelines you can reuse:
 
 ```mlld
 >> Define a standard API pipeline
-/exec @api_pipeline(response) = /run {echo "@response"} with {
+/exe @api_pipeline(response) = /run {echo "@response"} with {
   pipeline: [
     @check_status_200(@input),
     @validate_json(@input),
@@ -235,7 +235,7 @@ Create standard processing pipelines you can reuse:
 }
 
 >> Use it with any API call
-/text @users = /run {curl api.example.com/users} with {
+/var @users = /run {curl api.example.com/users} with {
   pipeline: [@api_pipeline(@input)]
 }
 ```

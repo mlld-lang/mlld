@@ -83,7 +83,7 @@ mlld is a simple scripting language designed to work within markdown-like docume
 /show [file.md # Section]         # Show specific section from file
 /run [command]                    # Run a shell command
 /import { * } from [file.mld]     # Import another mlld file
-/exe @cmd = @run [echo "hi"]      # Define a reusable command
+/exe @cmd = run [echo "hi"]      # Define a reusable command
 ```
 
 ### Variables & Interpolation

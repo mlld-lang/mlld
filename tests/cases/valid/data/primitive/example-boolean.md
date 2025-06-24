@@ -1,2 +1,2 @@
-/var @isEnabled.value = true
+/var @isEnabled = { value: true }
 /show @isEnabled.value

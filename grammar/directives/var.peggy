@@ -74,6 +74,12 @@ SlashVar "var directive"
         metaInfo.inferredType = 'computed';
         metaInfo.hasRunKeyword = value.hasRunKeyword;
       }
+      // Handle foreach expressions
+      else if (value && value.type === 'foreach-command') {
+        processedValue = value.value;
+        metaInfo.inferredType = 'computed';
+        metaInfo.isForeach = true;
+      }
       // Handle other types
       else {
         processedValue = value;

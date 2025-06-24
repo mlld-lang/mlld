@@ -277,7 +277,7 @@ Minimal error output, maximum performance.
 ```mlld
 @pragma stacktrace off  # Future feature
 
-@text largeData = @run [cat huge-file.json]
+@text largeData = run [cat huge-file.json]
 @data processed = foreach @transform(@largeData)
 ```
 
@@ -322,7 +322,7 @@ FieldAccessError: Cannot access field "questions" on object
    Available fields: above, below
 
 🔄 Execution Trace:
-   1. @data reply = @run [(claude -p "@prompt")] (line 9)
+   1. @data reply = run [(claude -p "@prompt")] (line 9)
    2. @add foreach @getQuestions(@reply.questions) (line 15)
 
 💡 Try: @reply.below

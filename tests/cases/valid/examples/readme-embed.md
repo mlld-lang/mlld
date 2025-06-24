@@ -7,5 +7,5 @@ TypeBlorp is lightweight state management library built with TypeScript, with a 
 Here's the structure of the codebase:
 /run {tree --gitignore}
 
-/add [@./docs/dev/ARCHITECTURE.md # Architecture]
-/add [@./docs/dev/TESTS.md # Tests]
+/show [@./docs/dev/ARCHITECTURE.md # Architecture]
+/show [@./docs/dev/TESTS.md # Tests]

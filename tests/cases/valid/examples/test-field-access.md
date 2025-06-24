@@ -1,10 +1,10 @@
-/data @person = {
+/var @person = {
   "name": "John",
   "age": 30
 }
 
 ## Direct field access test:
-/add @person.name
+/show @person.name
 
 ## Age: 
-/add @person.age
+/show @person.age

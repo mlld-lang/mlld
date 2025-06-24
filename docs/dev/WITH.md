@@ -12,15 +12,15 @@ The `with` clause is part of a unified "tail syntax" system where directives can
 
 ```mlld
 # Single property syntactic sugar
-@run [cmd] trust always                    # → with { trust: always }
-@run [cmd] pipeline [@transform]           # → with { pipeline: [@transform] }
-@run [cmd] | @filter @formatter           # → with { pipeline: [@filter, @formatter] }
+run [cmd] trust always                    # → with { trust: always }
+run [cmd] pipeline [@transform]           # → with { pipeline: [@transform] }
+run [cmd] | @filter @formatter           # → with { pipeline: [@filter, @formatter] }
 
 # Multiple properties require with object
-@run [cmd] with { trust: always, pipeline: [@transform] }
+run [cmd] with { trust: always, pipeline: [@transform] }
 
 # Exec-defined command invocations
-@exec process(data) = @run [(python process.py @data)]
+@exec process(data) = run [(python process.py @data)]
 @run @process(input) trust always          # → with { trust: always }
 @run @process(input) | @validate @save     # → with { pipeline: [@validate, @save] }
 
@@ -434,7 +434,7 @@ Add to `grammar/tests/`:
 // grammar/tests/with-clause.test.ts
 describe('With Clause Grammar', () => {
   test('parses pipeline only', () => {
-    const input = '@run [(echo "test")] with { pipeline: [@transform(@input)] }';
+    const input = 'run [(echo "test")] with { pipeline: [@transform(@input)] }';
     const ast = parseDocument(input);
     
     expect(ast).toMatchObject({
@@ -454,7 +454,7 @@ describe('With Clause Grammar', () => {
   });
   
   test('parses needs only', () => {
-    const input = '@run [(node script.js)] with { needs: { "node": { "lodash": "^4.0.0" } } }';
+    const input = 'run [(node script.js)] with { needs: { "node": { "lodash": "^4.0.0" } } }';
     const ast = parseDocument(input);
     
     expect(ast.values.withClause.needs).toEqual({
@@ -463,7 +463,7 @@ describe('With Clause Grammar', () => {
   });
   
   test('parses combined pipeline and needs', () => {
-    const input = `@run [(curl api.com)] with {
+    const input = `run [(curl api.com)] with {
       pipeline: [@validate(@input), @parse(@input)],
       needs: { "node": { "jsonschema": ">=1.0.0" } }
     }`;
@@ -488,10 +488,10 @@ Add test cases to `tests/cases/valid/run/`:
 
 ```markdown
 <!-- tests/cases/valid/run/with-pipeline/example.md -->
-@exec validate_json(data) = @run [(echo "@data")]
-@exec extract_field(data, field) = @run [(echo "extracted")]
+@exec validate_json(data) = run [(echo "@data")]
+@exec extract_field(data, field) = run [(echo "extracted")]
 
-@text result = @run [(echo '{"users": ["alice", "bob")]}'] with {
+@text result = run [(echo '{"users": ["alice", "bob")]}'] with {
   pipeline: [
     @validate_json(@input),
     @extract_field(@input, "users")
@@ -581,9 +581,9 @@ export class MlldPipelineError extends MlldWithClauseError {
 
 ```mlld
 # Define exec commands
-@exec fetchData(url) = @run [(curl @url)]
+@exec fetchData(url) = run [(curl @url)]
 @exec processJSON(data) = @run python [(json.loads(@data))]
-@exec deploy(env) = @run [(./scripts/deploy.sh @env)]
+@exec deploy(env) = run [(./scripts/deploy.sh @env)]
 
 # Exec invocations with tail modifiers (no @run wrapper needed)
 @text apiResponse = @fetchData("https://api.example.com") | @validateJSON
@@ -612,8 +612,8 @@ export class MlldPipelineError extends MlldWithClauseError {
 @add foreach @processItem(@items) | @format
 
 # Direct @run commands still support tail modifiers
-@text cmd = @run [(cat config.json)] trust always
-@output @run [(generate-report)] | @format [report.md]
+@text cmd = run [(cat config.json)] trust always
+@output run [(generate-report)] | @format [report.md]
 
 # Path and import with TTL/trust
 @path api = https://internal.api.com/v2 (1h) trust always
@@ -628,7 +628,7 @@ export class MlldPipelineError extends MlldWithClauseError {
 ```typescript
 // Pipeline transformers work with foreach results
 @data files = ["a.json", "b.json"]
-@exec process_file(file) = @run [(cat @file)] with {
+@exec process_file(file) = run [(cat @file)] with {
   pipeline: [@validate_json(@input), @extract_data(@input)]
 }
 @data results = foreach @process_file(@files)
@@ -638,10 +638,10 @@ export class MlldPipelineError extends MlldWithClauseError {
 
 ```typescript
 // Conditional pipeline execution
-@text response = @run [(curl api.com)] with {
+@text response = run [(curl api.com)] with {
   pipeline: [@validate_response(@input)]
 }
-@when @response => @text data = @run [(echo "@response")] with {
+@when @response => @text data = run [(echo "@response")] with {
   pipeline: [@parse_json(@input)]
 }
 ```
@@ -654,11 +654,11 @@ As of version 1.4.2, mlld includes built-in transformers that work seamlessly wi
 
 ```mlld
 # Basic transformer usage
-@text formatted = @run [(cat data.json)] | @JSON
-@text xmlData = @run [(cat report.md)] | @XML
+@text formatted = run [(cat data.json)] | @JSON
+@text xmlData = run [(cat report.md)] | @XML
 
 # Chaining transformers
-@text result = @run [(curl api.com/users)] | @json | @csv
+@text result = run [(curl api.com/users)] | @json | @csv
 
 # With custom functions
 @exec addSummary(data) = [[
@@ -668,7 +668,7 @@ Total items: {{data.length}}
 {{INPUT}}
 ]]
 
-@text report = @run [(cat data.json)] | @json | @addSummary | @md
+@text report = run [(cat data.json)] | @json | @addSummary | @md
 ```
 
 ### Transformer Implementation

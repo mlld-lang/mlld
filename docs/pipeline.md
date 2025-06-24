@@ -7,8 +7,8 @@ mlld supports Unix-style pipelines for chaining commands and transformations tog
 Use the `|` operator to chain commands:
 
 ```mlld
-/text @result = /run "echo hello world" | @uppercase
-/add @result
+/var @result = /run "echo hello world" | @uppercase
+/show @result
 ```
 
 Output:
@@ -29,12 +29,12 @@ HELLO WORLD
 When piping to multi-parameter functions, mlld intelligently handles JSON data:
 
 ```mlld
-/exec @process(items, filter) = [[
+/exe @process(items, filter) = [[
 Processing {{items}} with filter {{filter}}
 ]]
 
-/text @result = /run "echo '{\"items\": [1,2,3], \"filter\": \"active\"}'" | @process
-/add @result
+/var @result = /run "echo '{\"items\": [1,2,3], \"filter\": \"active\"}'" | @process
+/show @result
 ```
 
 Output:
@@ -64,25 +64,25 @@ Processing [1,2,3] with filter active
 
 ### Multi-Step Pipeline
 ```mlld
-/text @result = /run "cat data.json" | @json | @uppercase | @md
-/add @result
+/var @result = /run "cat data.json" | @json | @uppercase | @md
+/show @result
 ```
 
 ### With Functions
 ```mlld
-/exec @addHeader(content) = [[# Report
+/exe @addHeader(content) = [[# Report
 {{content}}]]
 
-/text @report = /run "cat stats.txt" | @addHeader | @md
-/add @report
+/var @report = /run "cat stats.txt" | @addHeader | @md
+/show @report
 ```
 
 ### JSON Processing
 ```mlld
-/exec @extractName(data) = [[Name: {{data.user.name}}]]
+/exe @extractName(data) = [[Name: {{data.user.name}}]]
 
-/text @info = /run "curl -s api.example.com/user" | @extractName
-/add @info
+/var @info = /run "curl -s api.example.com/user" | @extractName
+/show @info
 ```
 
 ## Alternative Syntax
@@ -91,9 +91,9 @@ The pipeline operator is syntactic sugar for the `with` clause:
 
 ```mlld
 # These are equivalent:
-/text @result1 = /run "echo hello" | @uppercase
+/var @result1 = /run "echo hello" | @uppercase
 
-/text @result2 = /run "echo hello" with { pipeline: [@uppercase] }
+/var @result2 = /run "echo hello" with { pipeline: [@uppercase] }
 ```
 
 ## Pipeline Format Feature
@@ -121,7 +121,7 @@ Pipeline functions receive an input object with:
 ### Example: JSON Format
 
 ```mlld
-@exec getUsers() = @run [(echo '[{"name":"Alice"},{"name":"Bob"}]')]
+@exec getUsers() = run [(echo '[{"name":"Alice"},{"name":"Bob"}]')]
 
 @exec processUsers(input) = js [(
   // Access parsed JSON via input.data
@@ -136,7 +136,7 @@ Pipeline functions receive an input object with:
 ### Example: CSV Format
 
 ```mlld
-@exec getCSV() = @run [(echo 'name,age\nAlice,30\nBob,25')]
+@exec getCSV() = run [(echo 'name,age\nAlice,30\nBob,25')]
 
 @exec processCSV(input) = js [(
   // Access as 2D array via input.csv
@@ -153,7 +153,7 @@ Pipeline errors include context about which step failed:
 
 ```mlld
 # Error will show "Pipeline step 2 failed"
-@text data = @run [(cat data.json)] | @invalidTransformer
+@text data = run [(cat data.json)] | @invalidTransformer
 ```
 
 ## Best Practices

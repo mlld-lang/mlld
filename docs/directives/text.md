@@ -10,11 +10,11 @@ The `/text` directive defines a text variable that can store string values.
 ## Syntax
 
 ```mlld
-/text @identifier = "value"
-/text @identifier = "Hello @name!"
-/text @identifier = `Template with @variable`
-/text @identifier = [[Template with {{variable}}]]
-/text @identifier = /run "command"
+/var @identifier = "value"
+/var @identifier = "Hello @name!"
+/var @identifier = `Template with @variable`
+/var @identifier = [[Template with {{variable}}]]
+/var @identifier = /run "command"
 ```
 
 Where:
@@ -37,17 +37,17 @@ Where:
 Text values can be defined using different quote styles:
 
 ```mlld
-/text @simple = "Plain string"              # Double quotes
-/text @interpolated = "Hello @name!"        # @ interpolation in double quotes
-/text @literal = 'Single quotes @name'      # Single quotes (no interpolation)
-/text @backtick = `Hello @name!`            # Backtick template with @ interpolation
-/text @template = [[Hello {{name}}!]]       # Double-bracket template with {{}} interpolation
+/var @simple = "Plain string"              # Double quotes
+/var @interpolated = "Hello @name!"        # @ interpolation in double quotes
+/var @literal = 'Single quotes @name'      # Single quotes (no interpolation)
+/var @backtick = `Hello @name!`            # Backtick template with @ interpolation
+/var @template = [[Hello {{name}}!]]       # Double-bracket template with {{}} interpolation
 ```
 
 For multi-line templates, use double brackets:
 
 ```mlld
-/text @multiline = [[
+/var @multiline = [[
   This is a
   multi-line
   template with {{variables}}
@@ -63,11 +63,11 @@ Text variables are referenced differently based on context:
 - In double-bracket templates `[[...]]`: `{{identifier}}`
 
 ```mlld
-/text @name = "World"
-/text @greeting = "Hello, @name!"           # @ interpolation
-/text @welcome = `Welcome, @name!`           # @ in backticks
-/text @message = [[Greetings, {{name}}!]]   # {{}} in double brackets
-/add @greeting
+/var @name = "World"
+/var @greeting = "Hello, @name!"           # @ interpolation
+/var @welcome = `Welcome, @name!`           # @ in backticks
+/var @message = [[Greetings, {{name}}!]]   # {{}} in double brackets
+/show @greeting
 ```
 
 ## Variable Interpolation
@@ -89,27 +89,27 @@ Different template styles support different interpolation syntax:
 
 Basic text variable:
 ```mlld
-/text @title = "My Document"
-/text @author = "Jane Smith"
+/var @title = "My Document"
+/var @author = "Jane Smith"
 ```
 
 Using @ interpolation:
 ```mlld
-/text @user = "Alice"
-/text @greeting = "Welcome back, @user!"
+/var @user = "Alice"
+/var @greeting = "Welcome back, @user!"
 ```
 
 Using the result of a command:
 ```mlld
-/text @date = /run "date +%Y-%m-%d"
+/var @date = /run "date +%Y-%m-%d"
 ```
 
 Using different template styles:
 ```mlld
-/text @name = "World"
-/text @msg1 = "Hello, @name!"              # @ in double quotes
-/text @msg2 = `Greetings, @name!`          # @ in backticks
-/text @msg3 = [[Welcome, {{name}}!]]       # {{}} in double brackets
+/var @name = "World"
+/var @msg1 = "Hello, @name!"              # @ in double quotes
+/var @msg2 = `Greetings, @name!`          # @ in backticks
+/var @msg3 = [[Welcome, {{name}}!]]       # {{}} in double brackets
 ```
 
 ## Error Handling

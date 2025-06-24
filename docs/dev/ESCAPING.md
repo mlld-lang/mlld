@@ -36,7 +36,7 @@ Each layer operates independently and in sequence, ensuring predictable behavior
 # Result: contact@example.com
 
 # Include literal brackets
-@run [echo "array\[0\] = value"]
+run [echo "array\[0\] = value"]
 # Command sees: echo "array[0] = value"
 
 # Literal backslash
@@ -102,7 +102,7 @@ Different contexts use different variable syntax:
 ```mlld
 # In commands - use @variable
 @text name = "Alice"
-@run [echo "Hello @name"]
+run [echo "Hello @name"]
 # Executes: echo "Hello Alice"
 
 # In templates - use {{variable}}
@@ -112,7 +112,7 @@ Different contexts use different variable syntax:
 
 # Field access
 @data user = { "name": "Bob", "age": 30 }
-@run [echo "@user.name is @user.age years old"]
+run [echo "@user.name is @user.age years old"]
 # Executes: echo "Bob is 30 years old"
 ```
 
@@ -132,11 +132,11 @@ For shell commands, mlld uses the `shell-quote` library to ensure safe execution
 
 ```mlld
 @text file = "my file.txt"
-@run [cat @file]
+run [cat @file]
 # Executes: cat 'my file.txt'
 
 @text danger = "'; rm -rf /"
-@run [echo @danger]
+run [echo @danger]
 # Executes: echo ''\''; rm -rf /'
 # (Single quotes with proper escaping)
 ```
@@ -150,17 +150,17 @@ To maintain security and clarity, mlld restricts shell operators:
 
 ```mlld
 # ALLOWED - pipes for data flow
-@run [ls -la | grep "test" | wc -l]
+run [ls -la | grep "test" | wc -l]
 
 # ERROR - use mlld control flow instead
-@run [mkdir test && cd test]  # Error: Use separate @run commands
-@run [test -f file || echo "missing"]  # Error: Use @when
+run [mkdir test && cd test]  # Error: Use separate @run commands
+run [test -f file || echo "missing"]  # Error: Use @when
 
 # Do it the mlld way
-@run [mkdir test]
-@run [cd test]
+run [mkdir test]
+run [cd test]
 
-@when @run [test -f file] => @add "file exists"
+@when run [test -f file] => @add "file exists"
 ```
 
 ### Other Contexts
@@ -186,7 +186,7 @@ Here's how all layers work together:
 # Layer 3: @user and @file are interpolated
 # Layer 4: Shell escaping applied to final values
 
-@run [echo "User: @user, File: @file"]
+run [echo "User: @user, File: @file"]
 # Executes: echo 'User: Alice, File: data[2024].txt'
 
 @add @message
@@ -238,9 +238,9 @@ When converting shell scripts to mlld:
 mkdir -p "$OUTPUT_DIR" && cd "$OUTPUT_DIR" && echo "Ready"
 
 # mlld equivalent
-@run [mkdir -p @OUTPUT_DIR]
-@run [cd @OUTPUT_DIR]
-@run [echo "Ready"]
+run [mkdir -p @OUTPUT_DIR]
+run [cd @OUTPUT_DIR]
+run [echo "Ready"]
 ```
 
 The mlld version is more verbose but also more explicit, easier to debug, and safer from injection attacks.

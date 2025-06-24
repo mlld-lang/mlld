@@ -29,7 +29,7 @@ Path variables are used for filesystem paths and command arguments:
 Example:
 ```mlld
 /path @docs = "./docs"
-/add [@docs/guide.md]
+/show [@docs/guide.md]
 /path @output = "build/@version"
 ```
 
@@ -38,7 +38,7 @@ Example:
 Text variables store unstructured text:
 
 ```mlld
-/text @greeting = "Hello"          # Define with @ prefix
+/var @greeting = "Hello"          # Define with @ prefix
 @greeting                          # Reference in directives
 "Message: @greeting"               # Reference in double quotes
 `Welcome: @greeting`               # Reference in backticks
@@ -53,10 +53,10 @@ Text variables store unstructured text:
 
 Example:
 ```mlld
-/text @greeting = "Hello"
-/text @name = "World"
-/text @message1 = "@greeting, @name!"          # @ interpolation
-/text @message2 = [[{{greeting}}, {{name}}!]]  # {{}} in templates
+/var @greeting = "Hello"
+/var @name = "World"
+/var @message1 = "@greeting, @name!"          # @ interpolation
+/var @message2 = [[{{greeting}}, {{name}}!]]  # {{}} in templates
 ```
 
 ### Data Variables
@@ -64,7 +64,7 @@ Example:
 Data variables store structured data:
 
 ```mlld
-/data @user = { "name": "Alice" }   # Define with @ prefix
+/var @user = { "name": "Alice" }   # Define with @ prefix
 @user                              # Reference in directives
 @user.name                         # Field access in directives
 "User: @user.name"                 # Field access in double quotes
@@ -79,9 +79,9 @@ Data variables store structured data:
 
 Example:
 ```mlld
-/data @user = { "name": "Alice", "id": 123 }
-/text @greeting1 = "Hello, @user.name! ID: @user.id"           # @ interpolation
-/text @greeting2 = [[Hello, {{user.name}}! Your ID is {{user.id}}.]]  # {{}} in templates
+/var @user = { "name": "Alice", "id": 123 }
+/var @greeting1 = "Hello, @user.name! ID: @user.id"           # @ interpolation
+/var @greeting2 = [[Hello, {{user.name}}! Your ID is {{user.id}}.]]  # {{}} in templates
 ```
 
 ### Array Access
@@ -89,10 +89,10 @@ Example:
 When working with arrays, use dot notation to access array elements by index:
 
 ```mlld
-/data @items = ["apple", "banana", "cherry"]
-/text @first = "First item: @items.0"               # @ interpolation with dot notation
-/text @second = [[Second item: {{items.1}}]]        # {{}} in templates
-/add "Third item: @items.2"                         # Direct reference
+/var @items = ["apple", "banana", "cherry"]
+/var @first = "First item: @items.0"               # @ interpolation with dot notation
+/var @second = [[Second item: {{items.1}}]]        # {{}} in templates
+/show "Third item: @items.2"                         # Direct reference
 ```
 
 Note: Only dot notation is supported for array access. Bracket notation (`items[0]`) is not supported.
@@ -107,9 +107,9 @@ Variables can be converted between types automatically in many contexts:
 - Objects and arrays convert to JSON string representation
 
 ```mlld
-/data @config = { "name": "test", "version": 1 }
-/text @simple = "Name: @config.name"              # Outputs: Name: test
-/text @object = [[Config: {{config}}]]            # Outputs: Config: {"name":"test","version":1}
+/var @config = { "name": "test", "version": 1 }
+/var @simple = "Name: @config.name"              # Outputs: Name: test
+/var @object = [[Config: {{config}}]]            # Outputs: Config: {"name":"test","version":1}
 ```
 
 ### Object and Array Formatting
@@ -121,26 +121,26 @@ When referencing complete objects or arrays (rather than their individual fields
 When referencing an entire array:
 
 ```mlld
-/data @fruits = ["apple", "banana", "orange"]
+/var @fruits = ["apple", "banana", "orange"]
 ```
 
 - **Inline context** (within text, templates):
   ```mlld
-  /text @list1 = "My fruits: @fruits"      # @ interpolation
-  /text @list2 = [[My fruits: {{fruits}}]] # {{}} in templates
+  /var @list1 = "My fruits: @fruits"      # @ interpolation
+  /var @list2 = [[My fruits: {{fruits}}]] # {{}} in templates
   ```
   Arrays are formatted as comma-separated values with spaces.
 
 - **Block context** (in embed directives, standalone references):
   ```mlld
-  /add @fruits
+  /show @fruits
   ```
   Simple arrays (of strings, numbers) use comma-separated values with spaces.
   
   Arrays of objects are formatted as properly indented JSON:
   ```mlld
-  /data @people = [{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }]
-  /add @people
+  /var @people = [{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }]
+  /show @people
   ```
   This outputs the array as properly indented JSON:
   ```json
@@ -161,18 +161,18 @@ When referencing an entire array:
 When referencing an entire object:
 
 ```mlld
-/data @config = { "host": "localhost", "port": 8080 }
+/var @config = { "host": "localhost", "port": 8080 }
 ```
 
 - **Inline context**:
   ```mlld
-  /text @settings = [[My config: {{config}}]]  # Outputs: My config: {"host":"localhost","port":8080}
+  /var @settings = [[My config: {{config}}]]  # Outputs: My config: {"host":"localhost","port":8080}
   ```
   Objects are formatted as compact JSON without whitespace.
 
 - **Block context** (in embed directives, standalone references):
   ```mlld
-  /add @config
+  /show @config
   ```
   Objects are formatted as properly indented JSON:
   ```json
@@ -188,10 +188,10 @@ When referencing an entire object:
 - Text variables can also be used as object keys
 
 ```mlld
-/text @name = "Alice"
-/text @key = "username"
+/var @name = "Alice"
+/var @key = "username"
 
-/data @user = {
+/var @user = {
   @key: @name,              # Dynamic key from text
   "id": 123,
   "settings": {

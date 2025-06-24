@@ -6,16 +6,16 @@ This example demonstrates how to use URLs in Meld directives.
 /import { * } from "https://raw.githubusercontent.com/example/repo/main/config.mld"
 
 ## Text from URL
-/text @readme = [https://raw.githubusercontent.com/example/repo/main/README.md]
+/var @readme = [https://raw.githubusercontent.com/example/repo/main/README.md]
 
 ## Add content from URL
-/add [https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md]
+/show [https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md]
 
 ## Path assignment with URL
 /path @apiEndpoint = "https://api.example.com/v1"
 
 ## Complex data with URL-fetching directives
-/data @projectInfo = {
+/var @projectInfo = {
   "readme": [https://raw.githubusercontent.com/example/repo/main/README.md],
   "version": run {curl -s https://api.example.com/version},
   "apiBase": @apiEndpoint

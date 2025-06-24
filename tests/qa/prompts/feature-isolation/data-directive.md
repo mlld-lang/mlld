@@ -121,7 +121,7 @@ Test foreach with data:
 Test data from command output:
 
 ```mlld
-@data json_data = @run [echo '{"key": "value"}']
+@data json_data = run [echo '{"key": "value"}']
 @add [[JSON key: {{json_data.key}}]]
 ```
 

@@ -48,7 +48,7 @@ Features are stored as complex variables and evaluated only when accessed:
 @when @condition => @action              // Condition not checked until here
 
 // with pipelines execute in sequence
-@run [cmd] with { pipeline: [@t1, @t2] } // Transformers run on demand
+run [cmd] with { pipeline: [@t1, @t2] } // Transformers run on demand
 ```
 
 ### Error Context
@@ -392,7 +392,7 @@ The features are designed to work together seamlessly:
 @data models = ["gpt-4", "claude"]
 
 # Parameterized command with dependencies
-@exec analyze(topic, model) = @run [
+@exec analyze(topic, model) = run [
   python analyze.py --topic @topic --model @model
 ] with {
   needs: { "python": { "openai": ">=1.0.0", "anthropic": ">=0.5.0" } }
@@ -402,7 +402,7 @@ The features are designed to work together seamlessly:
 @data results = foreach @analyze(@topics, @models)
 
 @when @results all: [
-  @result => @text summary = @run [(echo "@result")] with {
+  @result => @text summary = run [(echo "@result")] with {
     pipeline: [@extract_summary(@input), @format_markdown(@input)]
   }
 ]
@@ -465,7 +465,7 @@ Each feature introduces variables into child scopes:
 ]
 
 # with pipeline binds @input
-@run [cmd] with { pipeline: [@transform(@input)] }
+run [cmd] with { pipeline: [@transform(@input)] }
 # '@input' available in transform scope
 ```
 
@@ -526,7 +526,7 @@ MlldError
 @data results = foreach @analyze(@topics, @models) with { parallel: 4 }
 
 // Pipeline streaming for large data
-@run [cat huge.json] with { 
+run [cat huge.json] with { 
   pipeline: [@stream_parse(@input), @stream_filter(@input)],
   streaming: true
 }
@@ -555,13 +555,13 @@ MlldError
 
 1. **Named Operations**: Define reusable commands with `@exec`
 ```meld
-@exec validate_json(data) = @run [(jq . <<< "@data")]
-@exec extract_field(data, field) = @run [(jq .@field <<< "@data")]
+@exec validate_json(data) = run [(jq . <<< "@data")]
+@exec extract_field(data, field) = run [(jq .@field <<< "@data")]
 ```
 
 2. **Composable Pipelines**: Build complex flows from simple parts
 ```meld
-@text result = @run [fetch_data] with {
+@text result = run [fetch_data] with {
   pipeline: [@validate_json(@input), @extract_field(@input, "users")]
 }
 ```

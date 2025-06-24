@@ -15,9 +15,9 @@ This file tests the new output management features.
 ## Test 3: Error Handling
 
 ### Halt Mode (comment out to test)
-/text @mode = "Testing halt mode"
+/var @mode = "Testing halt mode"
 /run {echo "This runs"}
-<!-- @run {nonexistent-command} -->
+<!-- run {nonexistent-command} -->
 /run {echo "This won't run if error above is uncommented"}
 
 ### Continue Mode

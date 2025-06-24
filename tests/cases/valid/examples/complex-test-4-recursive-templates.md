@@ -1,16 +1,16 @@
 # Complex Test 4: Recursive Templates and Variable References
 
-/text @name = "Recursive Test"
-/text @version = "1.0.0"
-/text @current_date = run {date +%Y-%m-%d}
+/var @name = "Recursive Test"
+/var @version = "1.0.0"
+/var @current_date = run {date +%Y-%m-%d}
 
 # Template that references another template
-/text @header_template = [[
+/var @header_template = [[
 ===================================
 {{name}} v{{version}}
 ===================================]]
 
-/exec @section_template(title, content) = @add [[
+/exe @section_template(title, content) = @add [[
 {{header_template}}
 
 ## {{title}}
@@ -21,7 +21,7 @@ Generated at: {{current_date}}
 ]]
 
 # Data with template references
-/data @doc_sections = {
+/var @doc_sections = {
   "intro": {
     "title": "Introduction",
     "content": "This tests recursive template expansion with {{name}}"
@@ -33,7 +33,7 @@ Generated at: {{current_date}}
 }
 
 # Complex nested template usage
-/text @full_doc = [[
+/var @full_doc = [[
 {{header_template}}
 
 # Documentation for {{name}}
@@ -50,4 +50,4 @@ This document demonstrates:
 - Data: Pulled from {{doc_sections}}
 ]]
 
-/add @full_doc
+/show @full_doc

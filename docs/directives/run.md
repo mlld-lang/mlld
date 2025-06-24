@@ -115,7 +115,7 @@ Basic command execution:
 
 Using variables in commands:
 ```mlld
-/text @name = "Alice"
+/var @name = "Alice"
 /run "echo Hello, @name!"
 ```
 
@@ -137,20 +137,20 @@ Multi-line commands:
 
 Using command output in variables:
 ```mlld
-/text @date = /run "date +%Y-%m-%d"
-/data @files = /run "ls -la | jq -R -s -c 'split(\"\\n\")[:-1]'"
+/var @date = /run "date +%Y-%m-%d"
+/var @files = /run "ls -la | jq -R -s -c 'split(\"\\n\")[:-1]'"
 ```
 
 Using defined commands:
 ```mlld
-/exec @listFiles(dir) = "ls -la @dir"
+/exe @listFiles(dir) = "ls -la @dir"
 /run @listFiles(@PROJECTPATH)
 ```
 
 Using code execution:
 ```mlld
-/exec @calculate(x, y) = js {return @x + @y}
-/text @result = /run @calculate(5, 3)
+/exe @calculate(x, y) = js {return @x + @y}
+/var @result = /run @calculate(5, 3)
 
 /run js {
   const users = ["Alice", "Bob", "Charlie"];

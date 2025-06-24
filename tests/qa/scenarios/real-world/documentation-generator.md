@@ -77,7 +77,7 @@ Create `generate-docs.mld`:
 
 @import { * } from "./package.json"
 
-@data files = @run [find ./src -name "*.js" -type f | sort]
+@data files = run [find ./src -name "*.js" -type f | sort]
 
 @text file_template(file) = [[
 ## {{file}}
@@ -88,7 +88,7 @@ Create `generate-docs.mld`:
 
 ]]
 
-@text extract_content(file) = @run [cat {{file}}]
+@text extract_content(file) = run [cat {{file}}]
 
 # Generate documentation for each file
 @data file_docs = foreach @file_template(@files) with {
@@ -96,7 +96,7 @@ Create `generate-docs.mld`:
 }
 
 # Extract function names
-@exec extract_functions(file) = @run [grep -E "^function|^const.*=.*function" {{file}} | sed 's/function /- /g' | sed 's/(.*//' | sed 's/const /- /' | sed 's/ =.*//' | sort]
+@exec extract_functions(file) = run [grep -E "^function|^const.*=.*function" {{file}} | sed 's/function /- /g' | sed 's/(.*//' | sed 's/const /- /' | sed 's/ =.*//' | sort]
 
 @text functions_template(file) = [[
 ### Functions in {{file}}:

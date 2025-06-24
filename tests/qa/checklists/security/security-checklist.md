@@ -9,11 +9,11 @@
 ## Command Injection Tests
 
 ### Basic Injection Attempts
-- [ ] Test: `@text cmd = "; ls -la"` then `@run [echo {{cmd}}]`
-- [ ] Test: `@text cmd = "| cat /etc/passwd"` then `@run [echo {{cmd}}]`
-- [ ] Test: `@text cmd = "&& rm -rf /"` then `@run [echo {{cmd}}]`
-- [ ] Test: `@text cmd = "$(whoami)"` then `@run [echo {{cmd}}]`
-- [ ] Test: `@text cmd = "\`id\`"` then `@run [echo {{cmd}}]`
+- [ ] Test: `@text cmd = "; ls -la"` then `run [echo {{cmd}}]`
+- [ ] Test: `@text cmd = "| cat /etc/passwd"` then `run [echo {{cmd}}]`
+- [ ] Test: `@text cmd = "&& rm -rf /"` then `run [echo {{cmd}}]`
+- [ ] Test: `@text cmd = "$(whoami)"` then `run [echo {{cmd}}]`
+- [ ] Test: `@text cmd = "\`id\`"` then `run [echo {{cmd}}]`
 - [ ] Verify: Commands are properly escaped and not executed
 
 ### Advanced Injection

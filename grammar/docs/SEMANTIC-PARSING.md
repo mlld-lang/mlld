@@ -46,7 +46,7 @@ These patterns know their parsing context:
 
 #### SemanticCommandBracketContent
 - **Purpose**: Parse shell commands
-- **Context**: `@run [echo "test"]`, `@exec cmd = @run [grep -v error]`
+- **Context**: `run [echo "test"]`, `@exec cmd = run [grep -v error]`
 - **Features**: 
   - Preserves quotes for shell semantics
   - Allows @variable interpolation
@@ -233,7 +233,7 @@ When debugging parsing issues:
 4. Use `--debug` flag to see parser decisions
 
 ```bash
-npm run ast -- '@run [echo test]' --debug
+npm run ast -- 'run [echo test]' --debug
 ```
 
 ## Future Considerations

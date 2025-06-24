@@ -31,11 +31,11 @@ Once installed, import modules in your `.mld.md` or `.mld` files:
 ```mlld
 /import { formatDate, capitalize } from @alice/utils
 
-/text @greeting = `Hello @capitalize("world")!`
-/text @today = `Today is @formatDate(@TIME)`
+/var @greeting = `Hello @capitalize("world")!`
+/var @today = `Today is @formatDate(@TIME)`
 
-/add @greeting
-/add @today
+/show @greeting
+/show @today
 ```
 
 ### Listing Modules
@@ -587,9 +587,9 @@ mlld supports multiple export patterns to fit different module design needs:
 The `@data module = { ... }` pattern gives you complete control over exports:
 
 ```mlld
-@exec internal_helper(x) = @run [echo "Internal: @x"]
-@exec get(url) = @run [curl -s "@url"]
-@exec post(url, data) = @run [curl -X POST -d '@data' "@url"]
+@exec internal_helper(x) = run [echo "Internal: @x"]
+@exec get(url) = run [curl -s "@url"]
+@exec post(url, data) = run [curl -X POST -d '@data' "@url"]
 
 @data module = {
   get: @get,
@@ -607,9 +607,9 @@ The `@data module = { ... }` pattern gives you complete control over exports:
 Create a named object alongside individual exports for maximum flexibility:
 
 ```mlld
-@exec get(url) = @run [curl -s "@url"]
-@exec post(url, data) = @run [curl -X POST -d '@data' "@url"]
-@exec delete(url) = @run [curl -X DELETE "@url"]
+@exec get(url) = run [curl -s "@url"]
+@exec post(url, data) = run [curl -X POST -d '@data' "@url"]
+@exec delete(url) = run [curl -X DELETE "@url"]
 
 # Named export object
 @data http = {
@@ -634,12 +634,12 @@ This pattern is ideal when you want to provide both:
 Create logical groupings within your module:
 
 ```mlld
-@exec auth_login(user, pass) = @run [...]
-@exec auth_logout(token) = @run [...]
-@exec auth_refresh(token) = @run [...]
+@exec auth_login(user, pass) = run [...]
+@exec auth_logout(token) = run [...]
+@exec auth_refresh(token) = run [...]
 
-@exec api_get(endpoint) = @run [...]
-@exec api_post(endpoint, data) = @run [...]
+@exec api_get(endpoint) = run [...]
+@exec api_post(endpoint, data) = run [...]
 
 @data module = {
   auth: {
@@ -663,7 +663,7 @@ If no `@data module` is defined, mlld automatically creates one with all top-lev
 ```mlld
 # Without explicit module export:
 @text hello = "world"
-@exec greet(name) = @run [echo "Hello @name"]
+@exec greet(name) = run [echo "Hello @name"]
 
 # Automatically generates:
 # module = {

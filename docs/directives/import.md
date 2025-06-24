@@ -100,14 +100,14 @@ Resolver path import:
 Environment variables:
 ```mlld
 /import { GITHUB_TOKEN, NODE_ENV } from @INPUT
-/text @message = "Running in @NODE_ENV mode"
+/var @message = "Running in @NODE_ENV mode"
 ```
 
 Using imported variables:
 ```mlld
 /import { importedName, importedCommand } from "./utils.mld"
 
-/text @message = [[Hello, {{importedName}}!]]
+/var @message = [[Hello, {{importedName}}!]]
 /run @importedCommand(@param)
 ```
 

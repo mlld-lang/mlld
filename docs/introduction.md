@@ -21,7 +21,7 @@ mlld works by processing only lines that begin with directives (like `/text`, `/
 ## Basic Example
 
 ```mlld
-/text @name = "World"
+/var @name = "World"
 /path @docs = "$./docs"
 
 This line will be interpreted as plain text.
@@ -30,11 +30,11 @@ This line will be interpreted as plain text.
 This will remain a codefence.
 ```
 
-/add [[
+/show [[
     Hello, {{name}}!
 ]]
 
-/add [@docs/example.md]
+/show [@docs/example.md]
 
 /run "echo Current time: $(date)"
 ```

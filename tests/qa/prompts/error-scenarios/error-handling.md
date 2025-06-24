@@ -20,7 +20,7 @@ Test various syntax errors and document the error messages:
 @invalid directive = "test"
 
 # Unclosed brackets
-@run [echo "hello"
+run [echo "hello"
 
 # Missing variable name
 @text = "anonymous"
@@ -44,10 +44,10 @@ Test runtime error scenarios:
 @add @missing
 
 # Invalid command
-@run [this-command-does-not-exist]
+run [this-command-does-not-exist]
 
 # Permission denied (create read-only file first)
-@run [touch readonly.txt && chmod 444 readonly.txt]
+run [touch readonly.txt && chmod 444 readonly.txt]
 @path content = "./readonly.txt"
 @text content = "new content"
 @output { file: "./readonly.txt" }
@@ -103,7 +103,7 @@ Test security violations:
 
 # Command injection attempt
 @text user_input = "; rm -rf /"
-@run [echo {{user_input}}]
+run [echo {{user_input}}]
 
 # Blocked URL access (if URL restrictions are configured)
 @text content = @url "http://malicious-site.com"

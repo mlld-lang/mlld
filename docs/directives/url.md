@@ -17,7 +17,7 @@ mlld supports fetching content from remote URLs using the `/add` and `/import` d
 URLs can be used directly in `/add` and `/path` directives:
 
 ```mlld
-/add [https://example.com/content.md]
+/show [https://example.com/content.md]
 /path @readme = "https://raw.githubusercontent.com/example/repo/main/README.md"
 ```
 ## Examples
@@ -25,13 +25,13 @@ URLs can be used directly in `/add` and `/path` directives:
 ### Basic URL Embedding
 
 ```mlld
-/add [https://raw.githubusercontent.com/example/repo/main/README.md]
+/show [https://raw.githubusercontent.com/example/repo/main/README.md]
 ```
 
 ### URL in Path Variables
 
 ```mlld
 /path @docs = "https://raw.githubusercontent.com/example/repo/main/docs.md"
-/add [@docs]
+/show [@docs]
 ```
 

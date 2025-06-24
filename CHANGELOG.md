@@ -101,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `@JSON` / `@json` - Pretty-print JSON or convert markdown structures to JSON
   - `@CSV` / `@csv` - Convert JSON/markdown tables to CSV format
   - `@MD` / `@md` - Format markdown using prettier
-  - Transformers can be chained in pipelines: `@run [(cmd)] | @json | @csv`
+  - Transformers can be chained in pipelines: `run [(cmd)] | @json | @csv`
   - Both uppercase (canonical) and lowercase (convenience) forms available
 - **Smart Pipeline Parameter Handling**: Pipelines now intelligently pass data to multi-parameter functions
   - Single parameter functions continue to work as before (pass @INPUT as first param)

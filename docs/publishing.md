@@ -66,8 +66,8 @@ Helpful functions for string manipulation.
 ## Module
 
 ```mlld-run
-/exec @slugify(text) = /run js {@text.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
-/exec @truncate(text, length) = /run js {@text.length > @length ? @text.slice(0, @length) + '...' : @text}
+/exe @slugify(text) = /run js {@text.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
+/exe @truncate(text, length) = /run js {@text.length > @length ? @text.slice(0, @length) + '...' : @text}
 ```
 
 ### Module Metadata
@@ -289,11 +289,11 @@ Modules auto-export all top-level variables, or use explicit patterns:
 
 ```mlld
 >> Auto-export pattern
-/exec @helper1(...) = ...
-/exec @helper2(...) = ...
+/exe @helper1(...) = ...
+/exe @helper2(...) = ...
 
 >> Explicit export
-/data @module = {
+/var @module = {
   helper1: @helper1,
   helper2: @helper2
 }

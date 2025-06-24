@@ -10,12 +10,12 @@ The `/exec` directive creates reusable commands, templates, and functions that c
 ## Syntax
 
 ```mlld
-/exec @commandName = "shell command"                    # Simple command
-/exec @commandName(param) = "command with @param"       # Parameterized command
-/exec @funcName(param) = js {return @param * 2}         # Code function
-/exec @template(name) = `Hello @name!`                  # Template function
-/exec @section(file) = [@file # Introduction]           # Section reference
-/exec @js = { func1, func2 }                            # Shadow environment
+/exe @commandName = "shell command"                    # Simple command
+/exe @commandName(param) = "command with @param"       # Parameterized command
+/exe @funcName(param) = js {return @param * 2}         # Code function
+/exe @template(name) = `Hello @name!`                  # Template function
+/exe @section(file) = [@file # Introduction]           # Section reference
+/exe @js = { func1, func2 }                            # Shadow environment
 ```
 
 Where:
@@ -28,8 +28,8 @@ Where:
 
 Define a simple command without parameters:
 ```mlld
-/exec @buildProject = "npm run build"
-/exec @listFiles = "ls -la"
+/exe @buildProject = "npm run build"
+/exe @listFiles = "ls -la"
 
 # Execute the command
 /run @buildProject()
@@ -40,15 +40,15 @@ Define a simple command without parameters:
 
 Define commands that accept parameters:
 ```mlld
-/exec @greet(name) = "echo Hello, @name!"
-/exec @makeDir(dirname) = "mkdir -p @dirname"
+/exe @greet(name) = "echo Hello, @name!"
+/exe @makeDir(dirname) = "mkdir -p @dirname"
 
 # Execute with arguments
 /run @greet("World")
 /run @makeDir("new-folder")
 
 # Multi-line commands use braces
-/exec @deploy(env, version) = {
+/exe @deploy(env, version) = {
   echo "Deploying @version to @env"
   npm run deploy:@env -- --version=@version
 }
@@ -58,11 +58,11 @@ Define commands that accept parameters:
 
 Define JavaScript code blocks:
 ```mlld
-/exec @sum(a, b) = js {
+/exe @sum(a, b) = js {
   return Number(@a) + Number(@b);
 }
 
-/exec @format(name) = js {
+/exe @format(name) = js {
   const words = "@name".split(' ');
   const titled = words.map(word => {
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
@@ -71,8 +71,8 @@ Define JavaScript code blocks:
 }
 
 # Execute functions
-/text @result = /run @sum(5, 3)
-/text @formatted = /run @format("john doe")
+/var @result = /run @sum(5, 3)
+/var @formatted = /run @format("john doe")
 ```
 
 ## Parameter Rules
@@ -86,44 +86,44 @@ Define JavaScript code blocks:
 
 Create reusable templates:
 ```mlld
-/exec @greeting(name, time) = `Good @time, @name!`
-/exec @link(text, url) = `[@text](@url)`
-/exec @section(title, content) = [[
+/exe @greeting(name, time) = `Good @time, @name!`
+/exe @link(text, url) = `[@text](@url)`
+/exe @section(title, content) = [[
 # {{title}}
 
 {{content}}
 ]]
 
 # Use templates
-/text @msg = @greeting("Alice", "morning")
-/add @link("Documentation", "https://example.com/docs")
+/var @msg = @greeting("Alice", "morning")
+/show @link("Documentation", "https://example.com/docs")
 ```
 
 ## Examples
 
 System information commands:
 ```mlld
-/exec @getDate() = "date +%Y-%m-%d"
-/exec @getUser() = "whoami"
-/exec @getPath() = "pwd"
+/exe @getDate() = "date +%Y-%m-%d"
+/exe @getUser() = "whoami"
+/exe @getPath() = "pwd"
 
-/text @today = /run @getDate()
-/text @currentUser = /run @getUser()
+/var @today = /run @getDate()
+/var @currentUser = /run @getUser()
 ```
 
 File operations:
 ```mlld
-/exec @backup(file) = "cp @file @file.bak"
-/exec @count(pattern) = "grep -c '@pattern' *.txt"
+/exe @backup(file) = "cp @file @file.bak"
+/exe @count(pattern) = "grep -c '@pattern' *.txt"
 
 /run @backup("important.txt")
-/text @matches = /run @count("TODO")
+/var @matches = /run @count("TODO")
 ```
 
 Complex operations:
 ```mlld
-/exec @analyze(file) = "wc -l @file | awk '{print $1 \" lines\"}'"
-/exec @process(input, output) = {
+/exe @analyze(file) = "wc -l @file | awk '{print $1 \" lines\"}'"
+/exe @process(input, output) = {
   cat @input | 
   tr '[:lower:]' '[:upper:]' | 
   sort | 
@@ -138,7 +138,7 @@ Complex operations:
 
 Create a collection of related functions:
 ```mlld
-/exec @utils = {
+/exe @utils = {
   capitalize(str) = js {return str.charAt(0).toUpperCase() + str.slice(1)},
   reverse(str) = js {return str.split('').reverse().join('')},
   count(arr) = js {return arr.length}
@@ -155,10 +155,10 @@ Create a collection of related functions:
 
 Commands can be used within data structures:
 ```mlld
-/exec @getStatus() = "echo active"
-/exec @getVersion() = "echo 1.0.0"
+/exe @getStatus() = "echo active"
+/exe @getVersion() = "echo 1.0.0"
 
-/data @systemInfo = {
+/var @systemInfo = {
   "status": /run @getStatus(),
   "version": /run @getVersion(),
   "timestamp": /run "date -u +%Y-%m-%dT%H:%M:%SZ"

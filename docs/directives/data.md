@@ -10,7 +10,7 @@ The `/data` directive defines a structured data variable that can store objects,
 ## Syntax
 
 ```mlld
-/data @identifier = value
+/var @identifier = value
 ```
 
 Where:
@@ -39,13 +39,13 @@ The /data directive supports all standard JSON data types:
 Data objects can be defined using JSON syntax:
 
 ```mlld
-/data @config = { "name": "test", "version": 1 }
+/var @config = { "name": "test", "version": 1 }
 ```
 
 For multi-line objects:
 
 ```mlld
-/data @user = {
+/var @user = {
   "name": "Alice",
   "id": 123,
   "roles": ["admin", "editor"],
@@ -59,7 +59,7 @@ For multi-line objects:
 Arrays can be defined as well:
 
 ```mlld
-/data @colors = ["red", "green", "blue"]
+/var @colors = ["red", "green", "blue"]
 ```
 
 ## Variable Interpolation in Data
@@ -67,9 +67,9 @@ Arrays can be defined as well:
 Data structures can contain variable references in both keys and values:
 
 ```mlld
-/text @name = "John"
-/text @keyName = "username"
-/data @user = {
+/var @name = "John"
+/var @keyName = "username"
+/var @user = {
   @keyName: @name,    >> Dynamic key name
   "id": 123,
   "active": true
@@ -83,10 +83,10 @@ Data structures can reference and execute executable variables using the univers
 - `@execVar()` - executes immediately and stores the result
 
 ```mlld
-/exec @getTimestamp() = "date +%s"
-/exec @formatName(name) = [[{{name}} (formatted)]]
+/exe @getTimestamp() = "date +%s"
+/exe @formatName(name) = [[{{name}} (formatted)]]
 
-/data @info = {
+/var @info = {
   >> Store executable references (not executed)
   "timestampCmd": @getTimestamp,
   "formatter": @formatName,
@@ -98,7 +98,7 @@ Data structures can reference and execute executable variables using the univers
 
 >> Later, execute stored executables
 /run @info.timestampCmd()
-/add @info.formatter("Bob")
+/show @info.formatter("Bob")
 ```
 
 This pattern allows for powerful composition and lazy evaluation strategies.
@@ -110,21 +110,21 @@ Data variables are referenced differently based on context:
 - In templates `[[...]]`: `{{identifier}}` or `{{identifier.field}}`
 
 ```mlld
-/data @user = { "name": "Alice", "id": 123 }
-/text @greeting = [[Hello, {{user.name}}!]]
-/add @user.name
+/var @user = { "name": "Alice", "id": 123 }
+/var @greeting = [[Hello, {{user.name}}!]]
+/show @user.name
 ```
 
 You can access nested fields using dot notation:
 
 ```mlld
-/data @config = { 
+/var @config = { 
   "app": { 
     "name": "MyApp",
     "version": "1.0.0"
   }
 }
-/text @appInfo = [[App: {{config.app.name}} v{{config.app.version}}]]
+/var @appInfo = [[App: {{config.app.name}} v{{config.app.version}}]]
 ```
 
 ### Accessing Array Elements
@@ -132,9 +132,9 @@ You can access nested fields using dot notation:
 Use dot notation to access array elements:
 
 ```mlld
-/data @fruits = ["apple", "banana", "cherry"]
-/text @favorite = [[My favorite fruit is {{fruits.0}}]]
-/text @list = [[Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}]]
+/var @fruits = ["apple", "banana", "cherry"]
+/var @favorite = [[My favorite fruit is {{fruits.0}}]]
+/var @list = [[Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}]]
 ```
 
 Note: Currently, only dot notation is supported for array access. Bracket notation (`fruits[0]`) is not supported.
@@ -144,14 +144,14 @@ Note: Currently, only dot notation is supported for array access. Bracket notati
 Values can also be provided as JSON strings which are parsed:
 
 ```mlld
-/data @config = '{"key": "value"}'
+/var @config = '{"key": "value"}'
 ```
 
 ## Examples
 
 Basic data variable:
 ```mlld
-/data @settings = { 
+/var @settings = { 
   "darkMode": true,
   "fontSize": 16
 }
@@ -159,8 +159,8 @@ Basic data variable:
 
 Using variables in data:
 ```mlld
-/text @name = "John"
-/data @user = { 
+/var @name = "John"
+/var @user = { 
   "username": @name,
   "active": true 
 }
@@ -168,22 +168,22 @@ Using variables in data:
 
 Using command output as data:
 ```mlld
-/data @gitInfo = /run "git log -1 --format='%H,%an,%ae,%s'"
+/var @gitInfo = /run "git log -1 --format='%H,%an,%ae,%s'"
 ```
 
 Using executable variables:
 ```mlld
-/exec @getDate() = "date"
-/exec @getUser() = "whoami"
+/exe @getDate() = "date"
+/exe @getUser() = "whoami"
 
 >> Store references to executables
-/data @commands = {
+/var @commands = {
   "date": @getDate,
   "user": @getUser
 }
 
 >> Execute and store results
-/data @results = {
+/var @results = {
   "date": @getDate(),
   "user": @getUser()
 }

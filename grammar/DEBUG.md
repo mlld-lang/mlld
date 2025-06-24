@@ -108,13 +108,13 @@ The repository includes a debug script at `scripts/ast-output.js` that lets you 
 
 ```bash
 # Quick parse with minimal quoting
-npm run ast -- "@run [echo 'Hello World']"
+npm run ast -- "run [echo 'Hello World']"
 
 # Same, but show grammar debug logs
-npm run ast:debug -- "@run [echo 'Hello']"
+npm run ast:debug -- "run [echo 'Hello']"
 
 # Avoid quotes entirely
-echo @run [echo 'Hello'] | npm run ast
+echo run [echo 'Hello'] | npm run ast
 
 # Read from a file
 npm run ast -- "$(cat snippet.mld)"

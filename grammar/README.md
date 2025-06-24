@@ -299,7 +299,7 @@ The grammar includes a sophisticated context detection system (`base/context.peg
 **Key Contexts:**
 - `DirectiveContext` - Top-level directives (`@run`, `@text`)
 - `VariableContext` - Variable references (`@varName`)
-- `RHSContext` - Right-hand side of assignments (`= @run [cmd]`)
+- `RHSContext` - Right-hand side of assignments (`= run [cmd]`)
 - `RunCodeBlockContext` - Language + code patterns
 
 **Usage:**
@@ -488,7 +488,7 @@ The token-based approach ensures that:
 ### /text Directive
 
 ```
-/text @name = ...
+/var @name = ...
 ├─ "[[" detected?
 │  ├─ YES: Template
 │  │  └─ [[TemplateContent]]
@@ -541,7 +541,7 @@ Examples:
 ### /data Directive
 
 ```
-/data @obj = ...
+/var @obj = ...
 ├─ "{" detected?
 │  ├─ YES: ObjectLiteral
 │  │  └─ { key: DataValue, ... }
@@ -582,7 +582,7 @@ Examples:
 ### /exec Directive
 
 ```
-/exec @name(params) = ...
+/exe @name(params) = ...
 ├─ RHS patterns (no /run prefix needed):
 │  │
 │  ├─ Language keyword detected (js, python, bash, etc.)?
@@ -696,7 +696,7 @@ Examples:
 ### /add Directive
 
 ```
-/add ...
+/show ...
 ├─ "foreach" detected? (HIGHEST PRIORITY)
 │  ├─ YES: ForeachExpression variants
 │  │  ├─ foreach @command(@arrays)
@@ -847,28 +847,28 @@ Examples:
 ```
 Context         Brackets Mean           Double Quotes Mean       Single Quotes Mean       Backticks Mean
 -------         -------------           ------------------       ------------------       --------------
-/text =         Load file contents      String literal (no interp) String literal (no interp) Multi-line template with @var
-/data =         Load file/Array literal String literal (no interp) String literal (no interp) Multi-line template with @var
-/add            Include file contents   Output literal text      Output literal text      Multi-line template with @var
+/var =         Load file contents      String literal (no interp) String literal (no interp) Multi-line template with @var
+/var =         Load file/Array literal String literal (no interp) String literal (no interp) Multi-line template with @var
+/show            Include file contents   Output literal text      Output literal text      Multi-line template with @var
 /import from    Load module/file        File path (loads too)    File path (loads too)    Multi-line path with @var
 /path =         NOT ALLOWED             Path literal (no interp) Path literal (no interp) Multi-line path with @var
 /run            Command execution       Command WITH @var interp Command literal (no interp) Multi-line command with @var
-/exec           Command definition      Command WITH @var interp Command literal (no interp) Multi-line template with @var
+/exe           Command definition      Command WITH @var interp Command literal (no interp) Multi-line template with @var
 ```
 
 ### Examples Showing Distinction
 
 ```mlld
 # Store path vs load contents
-/text @configPath = "./config.json"      # Stores: "./config.json" (string literal, no @var)
-/text @configData = [./config.json]      # Loads file contents
+/var @configPath = "./config.json"      # Stores: "./config.json" (string literal, no @var)
+/var @configData = [./config.json]      # Loads file contents
 
 # Variable interpolation in strings (CONSISTENT behavior)
-/text @message = "Hello @name!"          # String with interpolation: @name expanded
-/text @literal = 'Hello @name!'          # String literal: "Hello @name!" (NO interpolation)
-/text @multiline = `Hello @name!
+/var @message = "Hello @name!"          # String with interpolation: @name expanded
+/var @literal = 'Hello @name!'          # String literal: "Hello @name!" (NO interpolation)
+/var @multiline = `Hello @name!
 Welcome to the system!`                 # Multi-line with @name expanded
-/text @template = [[Hello {{name}}!]]     # Template with {{name}} expanded (NOT @name)
+/var @template = [[Hello {{name}}!]]     # Template with {{name}} expanded (NOT @name)
 
 # Commands with interpolation (SAME as /text!)
 /run "echo Hello @name"                  # @name gets expanded
@@ -877,8 +877,8 @@ Welcome to the system!`                 # Multi-line with @name expanded
 echo "Welcome!"`                        # Multi-line command with @name expanded
 
 # Output text vs include file
-/add "Welcome @user to the system"       # Outputs text with @user expanded
-/add [README.md]                         # Includes README file contents
+/show "Welcome @user to the system"       # Outputs text with @user expanded
+/show [README.md]                         # Includes README file contents
 
 # Path references with interpolation
 /path @config = "./configs/@env/settings.json"  # Path with @env expanded

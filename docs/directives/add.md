@@ -10,15 +10,15 @@ The `/add` directive includes content from external files, variables, or templat
 ## Syntax
 
 ```mlld
-/add [path]
-/add [path # section]
-/add [path # section] as "# New Title"
-/add "Section Title" from [path]
-/add "Section Title" from [path] as "# New Title"
-/add @variable
-/add "literal text"
-/add [[template content with {{variables}}]]
-/add @templateFunction(param1, param2)
+/show [path]
+/show [path # section]
+/show [path # section] as "# New Title"
+/show "Section Title" from [path]
+/show "Section Title" from [path] as "# New Title"
+/show @variable
+/show "literal text"
+/show [[template content with {{variables}}]]
+/show @templateFunction(param1, param2)
 ```
 
 Where:
@@ -32,8 +32,8 @@ Where:
 
 Basic file inclusion:
 ```mlld
-/add [README.md]
-/add [docs/guide.md]
+/show [README.md]
+/show [docs/guide.md]
 ```
 
 ## Section Extraction
@@ -42,14 +42,14 @@ Extract specific sections from files:
 
 ```mlld
 # Extract a section keeping its original title
-/add [guide.md # Getting Started]
+/show [guide.md # Getting Started]
 
 # Extract a section with a new title
-/add [guide.md # Getting Started] as "# Quick Start"
+/show [guide.md # Getting Started] as "# Quick Start"
 
 # Extract by section title from the beginning
-/add "Getting Started" from [guide.md]
-/add "Getting Started" from [guide.md] as "# Quick Start"
+/show "Getting Started" from [guide.md]
+/show "Getting Started" from [guide.md] as "# Quick Start"
 ```
 
 ## Including Variables
@@ -57,11 +57,11 @@ Extract specific sections from files:
 Add content from variables:
 
 ```mlld
-/text @greeting = "Hello, world!"
-/add @greeting
+/var @greeting = "Hello, world!"
+/show @greeting
 
-/data @user = { "name": "Alice", "role": "Admin" }
-/add @user.name
+/var @user = { "name": "Alice", "role": "Admin" }
+/show @user.name
 ```
 
 ## Template Content
@@ -69,9 +69,9 @@ Add content from variables:
 Add content with variable interpolation:
 
 ```mlld
-/text @name = "Alice"
-/text @role = "Admin"
-/add [[Welcome {{name}}! Your role is: {{role}}]]
+/var @name = "Alice"
+/var @role = "Admin"
+/show [[Welcome {{name}}! Your role is: {{role}}]]
 ```
 
 ## Template Functions
@@ -79,11 +79,11 @@ Add content with variable interpolation:
 Use template functions defined with /exec:
 
 ```mlld
-/exec @greet(name) = [[Hello, {{name}}!]]
-/add @greet("World")
+/exe @greet(name) = [[Hello, {{name}}!]]
+/show @greet("World")
 
-/exec @message(user, action) = [[{{user}} {{action}} successfully!]]
-/add @message("Alice", "logged in")
+/exe @message(user, action) = [[{{user}} {{action}} successfully!]]
+/show @message("Alice", "logged in")
 ```
 
 ## Path Types
@@ -108,32 +108,32 @@ The implementation handles these error scenarios:
 
 Include entire file:
 ```mlld
-/add [README.md]
-/add [@./docs/architecture.md]
+/show [README.md]
+/show [@./docs/architecture.md]
 ```
 
 Include specific sections:
 ```mlld
-/add [docs/api.md # Authentication]
-/add "## Installation" from [README.md]
+/show [docs/api.md # Authentication]
+/show "## Installation" from [README.md]
 ```
 
 Include with renamed sections:
 ```mlld
-/add [guide.md # Getting Started] as "# Quick Start Guide"
-/add "Installation" from [README.md] as "## Setup Instructions"
+/show [guide.md # Getting Started] as "# Quick Start Guide"
+/show "Installation" from [README.md] as "## Setup Instructions"
 ```
 
 Include from URLs:
 ```mlld
-/add [https://raw.githubusercontent.com/example/repo/main/README.md]
+/show [https://raw.githubusercontent.com/example/repo/main/README.md]
 ```
 
 Include literal text and variables:
 ```mlld
-/text @status = "active"
-/add "System status: @status"
-/add @status
+/var @status = "active"
+/show "System status: @status"
+/show @status
 ```
 
 ## Notes

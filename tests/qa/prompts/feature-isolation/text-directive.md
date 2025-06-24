@@ -56,7 +56,7 @@ Test assignment from @path:
 
 Test assignment from @run:
 ```mlld
-@text timestamp = @run [date +%Y-%m-%d]
+@text timestamp = run [date +%Y-%m-%d]
 @add @timestamp
 ```
 

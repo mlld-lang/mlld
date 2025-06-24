@@ -75,12 +75,12 @@ When developing functions for use in pipelines, test with different formats:
 )]
 
 # Test with different formats
-@data jsonTest = @run [(echo '{"test": true}')] with { 
+@data jsonTest = run [(echo '{"test": true}')] with { 
   format: "json", 
   pipeline: [@debugInput] 
 }
 
-@data csvTest = @run [(echo 'a,b\n1,2')] with { 
+@data csvTest = run [(echo 'a,b\n1,2')] with { 
   format: "csv", 
   pipeline: [@debugInput] 
 }

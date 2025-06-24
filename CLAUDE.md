@@ -136,7 +136,7 @@ const identifier = await interpolate(identifierNodes, env);
 - trying to treat mlld like a template langauge -- it's not; it's a programming language embedded in markdown, so it only works for lines starting with a / directive
 - ❌ `/run echo "hello"` → ✅ `/run {echo "hello"}` or `/run "echo hello"`
 - ❌ `/var myvar = "value"` → ✅ `/var @myvar = "value"`
-- ❌ `/var @result = @run {cmd}` → ✅ `/var @result = run {cmd}`
+- ❌ `/var @result = run {cmd}` → ✅ `/var @result = run {cmd}`
 - ❌ `Hello @name!` → ✅ `/var @greeting = "Hello @name!"` then `/show @greeting`
 - ❌ `{{@variable}}` → ✅ `{{variable}}`
 - ❌ `/path @config = env.paths.dev` → ✅ `/path @config = @env.paths.dev`

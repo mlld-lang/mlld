@@ -123,7 +123,7 @@ needs-sh:
     - awk
 ---
 
-@exec findFiles(pattern) = @run [(find . -name "@pattern")]
+@exec findFiles(pattern) = run [(find . -name "@pattern")]
 @exec processJSON(file) = @run js [(
   const fs = require('fs-extra');
   const data = fs.readJSONSync(file);
@@ -141,7 +141,7 @@ The publish command should automatically detect runtime usage if not explicitly 
 1. **Parse the module AST**
 2. **Walk all nodes looking for `@run` and `@exec` directives**
 3. **Identify runtime from directive syntax**:
-   - `@run [(command)]` → `sh`
+   - `run [(command)]` → `sh`
    - `@run js [(code)]` → `js`
    - `@run javascript [(code)]` → `js`
    - `@run py [(code)]` → `py`

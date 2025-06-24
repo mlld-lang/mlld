@@ -1,10 +1,10 @@
-/data @roles = {
+/var @roles = {
     "architect": "You are a senior software architect skilled in assessing TypeScript codebases.",
     "security": "You are a security engineer focused on identifying vulnerabilities.",
     "reviewer": "You are a code reviewer focused on quality and best practices."
 }
 
-/data @tasks = {
+/var @tasks = {
     "codereview": "Carefully review the code and test results and advise on the quality of the code and areas of improvement.",
     "architecture": "Analyze the architecture and suggest improvements.",
     "security": "Review for security vulnerabilities and suggest fixes."

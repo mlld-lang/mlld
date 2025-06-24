@@ -5,7 +5,7 @@
 In December 2024, we discovered that commands containing brackets were being truncated:
 
 ```mlld
-@run [if [ ! -d "/tmp/test" ]; then echo "Missing"; fi]
+run [if [ ! -d "/tmp/test" ]; then echo "Missing"; fi]
 #           ^ Parser stopped here, truncating the command
 ```
 
@@ -49,12 +49,12 @@ isCommandEndingBracket(input: string, pos: number): boolean {
 
 **Results**: 
 - ✅ Fixed multi-line commands (69% test improvement)
-- ❌ Single-line RHS still failed: `@text x = @run [echo @.]`
+- ❌ Single-line RHS still failed: `@text x = run [echo @.]`
 - ❌ Felt like a band-aid, not a solution
 
 ### Discovery 1: The `@.` Problem
 
-While debugging, we found that `@run [echo @.]` failed to parse entirely. The issue:
+While debugging, we found that `run [echo @.]` failed to parse entirely. The issue:
 - `@.` should become `@PROJECTPATH`
 - But `.` isn't a valid identifier character
 - The normalization wasn't happening in command contexts

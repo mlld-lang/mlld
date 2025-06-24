@@ -60,8 +60,8 @@
 - [ ] Test with non-existent path
 
 ### From @run
-- [ ] Simple command: `@text date = @run [date]`
-- [ ] Command with output: `@text result = @run [echo "test"]`
+- [ ] Simple command: `@text date = run [date]`
+- [ ] Command with output: `@text result = run [echo "test"]`
 - [ ] Failed command behavior
 - [ ] Empty output behavior
 

@@ -190,7 +190,7 @@ LLM output: First/last 100 chars + size
 **Format example**:
 ```
 📍 mlld execution trace:
-   @data items = @run [curl api.example.com/items]  (main.mld:5)
+   @data items = run [curl api.example.com/items]  (main.mld:5)
    └─ @data results = foreach @process(@items)      (main.mld:8)
       └─ foreach iteration 42 of 150
          └─ @exec process(item)                      (lib.mld:12)

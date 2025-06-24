@@ -4,14 +4,14 @@ This example shows how to create reusable HTTP request commands using @exec and 
 
 ## Define the API call commands
 
-/exec @get(url) = {curl -s -X GET @url}
-/exec @post(url, data) = {curl -s -X POST @url -H "Content-Type: application/json" -d '@data'}
-/exec @put(url, data) = {curl -s -X PUT @url -H "Content-Type: application/json" -d '@data'}
-/exec @delete(url) = {curl -s -X DELETE @url}
+/exe @get(url) = {curl -s -X GET @url}
+/exe @post(url, data) = {curl -s -X POST @url -H "Content-Type: application/json" -d '@data'}
+/exe @put(url, data) = {curl -s -X PUT @url -H "Content-Type: application/json" -d '@data'}
+/exe @delete(url) = {curl -s -X DELETE @url}
 
 ## Create a call object with all methods
 
-/data @call = {
+/var @call = {
 get: @get,
 post: @post,
 put: @put,
@@ -24,7 +24,7 @@ delete: @delete
 /run @call.get("https://api.example.com/users")
 
 ### POST request with data
-/data @newUser = {"name": "John Doe", "email": "john@example.com"}
+/var @newUser = {"name": "John Doe", "email": "john@example.com"}
 /run @call.post("https://api.example.com/users", @newUser)
 
 ### Or with inline data
@@ -32,7 +32,7 @@ delete: @delete
 
 ## Even better: Create a full API client
 
-/data @api = {
+/var @api = {
 baseUrl: "https://api.example.com",
   
 # Methods attached to the object
@@ -47,11 +47,11 @@ delete: @exec(id) = run {curl -s -X DELETE @api.baseUrl/users/@id}
 
 ## This could be in a module: @mlld/api
 
-/text @module = [[
-/exec @get(url, headers) = {curl -s -X GET @url {{headers ? "-H '" + headers + "'" : ""}}}
-/exec @post(url, data, headers) = {curl -s -X POST @url -H "Content-Type: application/json" {{headers ? "-H '" + headers + "'" : ""}} -d '@data'}
+/var @module = [[
+/exe @get(url, headers) = {curl -s -X GET @url {{headers ? "-H '" + headers + "'" : ""}}}
+/exe @post(url, data, headers) = {curl -s -X POST @url -H "Content-Type: application/json" {{headers ? "-H '" + headers + "'" : ""}} -d '@data'}
 
-/data @call = {
+/var @call = {
 get: @get,
 post: @post
 }

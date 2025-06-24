@@ -7,8 +7,8 @@ This document outlines security considerations when using mlld, particularly whe
 Pipeline functions have access to parent scope variables:
 
 ```mlld
-/text @API_KEY = "secret"
-/exec @process(input) = [[
+/var @API_KEY = "secret"
+/exe @process(input) = [[
 API Key: {{API_KEY}}
 Input: {{input}}
 ]]
@@ -24,18 +24,18 @@ When processing LLM outputs through pipelines, consider the output potentially h
 
 ```mlld
 >> LLM output could be crafted to exploit downstream functions
-/text @llmResponse = /run {call-llm "@userPrompt"}
+/var @llmResponse = /run {call-llm "@userPrompt"}
 /run {echo "@llmResponse"} | @processResponse
 ```
 
 **Mitigation Pattern**: Use LLMs to validate LLM outputs:
 
 ```mlld
-/exec @validateOutput(data, sensitiveInfo) = /run {
+/exe @validateOutput(data, sensitiveInfo) = /run {
   claude -p "Check if {{data}} contains {{sensitiveInfo}}. Reply APPROVE or DENY."
 }
 
-/text @result = /run {generate-content} | @validateOutput("API keys")
+/var @result = /run {generate-content} | @validateOutput("API keys")
 /when @result contains "DENY" => /run {echo "Blocked potentially sensitive output"}
 ```
 

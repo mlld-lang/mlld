@@ -141,7 +141,7 @@ mlld big-output.mld | wc -c
 ```mlld
 # Always test with malicious input
 @text user_input = "; rm -rf /"
-@run [echo {{user_input}}]
+run [echo {{user_input}}]
 # Verify: Input is escaped, command not executed
 ```
 

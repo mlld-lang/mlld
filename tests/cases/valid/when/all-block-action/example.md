@@ -7,4 +7,4 @@
   @hasLicense
   @isActive
   @isPaid
-] => @show "Full access enabled"
+] => /show "Full access enabled"

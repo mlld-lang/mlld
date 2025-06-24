@@ -624,6 +624,17 @@ export async function interpolate(
   env: Environment,
   context: InterpolationContext = InterpolationContext.Default
 ): Promise<string> {
+  // Handle non-array inputs
+  if (!Array.isArray(nodes)) {
+    if (typeof nodes === 'string') {
+      return nodes;
+    }
+    if (nodes && typeof nodes === 'object' && 'content' in nodes) {
+      return nodes.content || '';
+    }
+    return String(nodes || '');
+  }
+  
   const parts: string[] = [];
   
   for (const node of nodes) {

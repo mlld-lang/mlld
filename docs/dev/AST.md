@@ -117,7 +117,7 @@ Directive nodes can appear at different levels with different meanings:
 - **Detection**: `meta.isDataValue === true`
 - **Example**:
   ```javascript
-  // In @data results = { test: @run [(cmd)] }
+  // In @data results = { test: run [(cmd)] }
   {
     type: 'object',
     properties: {
@@ -133,7 +133,7 @@ Directive nodes can appear at different levels with different meanings:
 #### RHS Reference Directives
 - **Context**: Right-hand side of assignments
 - **Detection**: `meta.isRHSRef === true`
-- **Example**: `@text content = @run [(echo "hello")]`
+- **Example**: `@text content = run [(echo "hello")]`
 
 ### Text Nodes
 
@@ -238,7 +238,7 @@ function isTopLevelDirective(node: any, parent: any): boolean {
 
 Example of data directive value structure:
 ```javascript
-// @data config = { name: "app", version: 1.0, test: @run [(npm test)] }
+// @data config = { name: "app", version: 1.0, test: run [(npm test)] }
 {
   "type": "object",
   "properties": {
@@ -386,11 +386,11 @@ if (Array.isArray(value)) {
 }
 ```
 
-#### Directive: `@run [(test)]`
+#### Directive: `run [(test)]`
 
 **Top-Level**:
 ```javascript
-// @run [(test)]
+// run [(test)]
 {
   type: 'Directive',
   kind: 'run',
@@ -401,7 +401,7 @@ if (Array.isArray(value)) {
 
 **As Data Value**:
 ```javascript
-// @data result = { cmd: @run [(test)] }
+// @data result = { cmd: run [(test)] }
 {
   type: 'Directive',
   kind: 'run',
@@ -412,7 +412,7 @@ if (Array.isArray(value)) {
 
 **As RHS Reference**:
 ```javascript
-// @text output = @run [(test)]
+// @text output = run [(test)]
 {
   type: 'Directive',
   kind: 'run',

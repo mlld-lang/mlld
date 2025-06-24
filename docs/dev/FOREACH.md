@@ -471,7 +471,7 @@ Located in `tests/cases/valid/data/`:
 ```markdown
 <!-- Example test case -->
 @data topics = ["security", "performance"]
-@exec analyze(topic) = @run [(echo "Analyzing @topic")]
+@exec analyze(topic) = run [(echo "Analyzing @topic")]
 @data results = foreach @analyze(@topics)
 @add @results
 ```

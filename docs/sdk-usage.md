@@ -20,7 +20,7 @@ Parse raw mlld content into an Abstract Syntax Tree (AST):
 import { parsemlld } from 'mlld';
 
 const content = `
-/text @name = "World"
+/var @name = "World"
 Hello, {{name}}!
 `;
 

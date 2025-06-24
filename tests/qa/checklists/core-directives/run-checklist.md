@@ -9,17 +9,17 @@
 ## Basic Command Execution
 
 ### Simple Commands
-- [ ] Echo test: `@run [echo "Hello World"]`
-- [ ] Date command: `@run [date]`
-- [ ] PWD: `@run [pwd]`
-- [ ] List files: `@run [ls -la]`
+- [ ] Echo test: `run [echo "Hello World"]`
+- [ ] Date command: `run [date]`
+- [ ] PWD: `run [pwd]`
+- [ ] List files: `run [ls -la]`
 - [ ] Verify output captured correctly
 
 ### Command Syntax
-- [ ] With brackets: `@run [command]`
+- [ ] With brackets: `run [command]`
 - [ ] Without brackets (should fail): `@run command`
-- [ ] Empty command: `@run []`
-- [ ] Whitespace handling: `@run [  echo   "test"  ]`
+- [ ] Empty command: `run []`
+- [ ] Whitespace handling: `run [  echo   "test"  ]`
 
 ### Output Handling
 - [ ] Single line output
@@ -31,41 +31,41 @@
 ## Variable Interpolation
 
 ### Basic Interpolation
-- [ ] `@text name = "Alice"` then `@run [echo "Hello {{name}}"]`
-- [ ] Multiple variables: `@run [echo "{{var1}} {{var2}}"]`
-- [ ] Variable in middle: `@run [echo "pre{{var}}post"]`
+- [ ] `@text name = "Alice"` then `run [echo "Hello {{name}}"]`
+- [ ] Multiple variables: `run [echo "{{var1}} {{var2}}"]`
+- [ ] Variable in middle: `run [echo "pre{{var}}post"]`
 
 ### Complex Interpolation
-- [ ] Field access: `@run [echo "{{user.name}}"]`
-- [ ] Array elements: `@run [echo "{{items.0}}"]`
-- [ ] Nested fields: `@run [echo "{{config.db.host}}"]`
+- [ ] Field access: `run [echo "{{user.name}}"]`
+- [ ] Array elements: `run [echo "{{items.0}}"]`
+- [ ] Nested fields: `run [echo "{{config.db.host}}"]`
 - [ ] Special characters in values
 
 ## Shell Features
 
 ### Operators and Pipes
-- [ ] Pipe: `@run [echo "test" | wc -l]`
-- [ ] Redirect: `@run [echo "test" > output.txt]`
-- [ ] And operator: `@run [echo "1" && echo "2"]`
-- [ ] Or operator: `@run [false || echo "fallback"]`
-- [ ] Semicolon: `@run [echo "1"; echo "2"]`
+- [ ] Pipe: `run [echo "test" | wc -l]`
+- [ ] Redirect: `run [echo "test" > output.txt]`
+- [ ] And operator: `run [echo "1" && echo "2"]`
+- [ ] Or operator: `run [false || echo "fallback"]`
+- [ ] Semicolon: `run [echo "1"; echo "2"]`
 
 ### Environment Variables
-- [ ] Set and use: `@run [VAR=value echo $VAR]`
-- [ ] Export: `@run [export TEST=123 && echo $TEST]`
-- [ ] PATH usage: `@run [echo $PATH]`
-- [ ] HOME usage: `@run [cd ~ && pwd]`
+- [ ] Set and use: `run [VAR=value echo $VAR]`
+- [ ] Export: `run [export TEST=123 && echo $TEST]`
+- [ ] PATH usage: `run [echo $PATH]`
+- [ ] HOME usage: `run [cd ~ && pwd]`
 
 ### Working Directory
-- [ ] Change directory: `@run [cd /tmp && pwd]`
-- [ ] Relative paths: `@run [cd .. && pwd]`
-- [ ] Create and enter: `@run [mkdir testdir && cd testdir && pwd]`
+- [ ] Change directory: `run [cd /tmp && pwd]`
+- [ ] Relative paths: `run [cd .. && pwd]`
+- [ ] Create and enter: `run [mkdir testdir && cd testdir && pwd]`
 
 ## Advanced Features
 
 ### Multiline Commands
 ```mlld
-@run [
+run [
   echo "Line 1"
   echo "Line 2"
   echo "Line 3"
@@ -76,28 +76,28 @@
 - [ ] Test with pipes between lines
 
 ### Command Substitution
-- [ ] Backticks: `@run [echo `date`]`
-- [ ] $() syntax: `@run [echo $(whoami)]`
-- [ ] Nested: `@run [echo $(echo $(date))]`
+- [ ] Backticks: `run [echo `date`]`
+- [ ] $() syntax: `run [echo $(whoami)]`
+- [ ] Nested: `run [echo $(echo $(date))]`
 
 ### Script Execution
-- [ ] Inline script: `@run [bash -c "for i in 1 2 3; do echo $i; done"]`
-- [ ] Python: `@run [python3 -c "print('Hello from Python')"]`
+- [ ] Inline script: `run [bash -c "for i in 1 2 3; do echo $i; done"]`
+- [ ] Python: `run [python3 -c "print('Hello from Python')"]`
 - [ ] Other interpreters if available
 
 ## Error Handling
 
 ### Command Failures
-- [ ] Non-existent command: `@run [nosuchcommand]`
-- [ ] Command returns error: `@run [false]`
-- [ ] Command killed: `@run [sleep 1000]` (then interrupt)
-- [ ] Permission denied: `@run [/etc/shadow]`
+- [ ] Non-existent command: `run [nosuchcommand]`
+- [ ] Command returns error: `run [false]`
+- [ ] Command killed: `run [sleep 1000]` (then interrupt)
+- [ ] Permission denied: `run [/etc/shadow]`
 
 ### Syntax Errors
-- [ ] Unmatched quotes: `@run [echo "test]`
-- [ ] Invalid operators: `@run [echo "test" ||| invalid]`
+- [ ] Unmatched quotes: `run [echo "test]`
+- [ ] Invalid operators: `run [echo "test" ||| invalid]`
 - [ ] Missing closing bracket
-- [ ] Empty variable interpolation: `@run [echo {{}}]`
+- [ ] Empty variable interpolation: `run [echo {{}}]`
 
 ### Error Messages
 For each error:
@@ -109,20 +109,20 @@ For each error:
 ## Security Tests
 
 ### Command Injection
-- [ ] Test with user input: `@text input = "; rm -rf /"` then `@run [echo {{input}}]`
+- [ ] Test with user input: `@text input = "; rm -rf /"` then `run [echo {{input}}]`
 - [ ] Verify proper escaping
 - [ ] Test with backticks in input
 - [ ] Test with $() in input
 
 ### Path Traversal
-- [ ] `@run [cat ../../../etc/passwd]`
+- [ ] `run [cat ../../../etc/passwd]`
 - [ ] Verify restrictions (if any)
 - [ ] Document security model
 
 ### Resource Limits
-- [ ] Long running: `@run [sleep 60]`
-- [ ] High memory: `@run [yes | head -n 1000000]`
-- [ ] Many processes: `@run [for i in {1..100}; do echo $i & done]`
+- [ ] Long running: `run [sleep 60]`
+- [ ] High memory: `run [yes | head -n 1000000]`
+- [ ] Many processes: `run [for i in {1..100}; do echo $i & done]`
 - [ ] Document any limits
 
 ## Performance Tests
@@ -147,13 +147,13 @@ For each error:
 ## Integration Tests
 
 ### With @text Assignment
-- [ ] `@text result = @run [echo "test"]`
+- [ ] `@text result = run [echo "test"]`
 - [ ] Verify assignment works
 - [ ] Test with multi-line output
 - [ ] Test with empty output
 
 ### With @when Conditions
-- [ ] `@when @run [test -f file.txt] => @add "File exists"`
+- [ ] `@when run [test -f file.txt] => @add "File exists"`
 - [ ] Test with command success/failure
 - [ ] Test with output comparison
 
@@ -185,8 +185,8 @@ For each error:
 - [ ] Control characters
 
 ### Empty/Null Cases
-- [ ] Empty command: `@run []`
-- [ ] Whitespace only: `@run [   ]`
+- [ ] Empty command: `run []`
+- [ ] Whitespace only: `run [   ]`
 - [ ] Null byte handling
 - [ ] Zero-length output
 

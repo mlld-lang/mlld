@@ -11,11 +11,11 @@ Create `large-data.mld`:
 
 ```mlld
 # Generate large array
-@data numbers = @run [seq 1 10000 | jq -s '.']
+@data numbers = run [seq 1 10000 | jq -s '.']
 
 # Process each number
 @text format_number(n) = [[Number: {{n}} squared is {{squared}}]]
-@exec square(n) = @run [echo "$(({{n}} * {{n}}))" ]
+@exec square(n) = run [echo "$(({{n}} * {{n}}))" ]
 
 # This will create 10,000 operations
 @data results = foreach @format_number(@numbers) with {

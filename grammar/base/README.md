@@ -8,7 +8,7 @@ The context detection system (`context.peggy`) provides predicates for disambigu
 
 - **Directive Context**: Top-level directives like `@run`, `@text`
 - **Variable Context**: Variable references like `@varName` within content
-- **RHS Context**: Right-hand side expressions like `value = @run [command]`
+- **RHS Context**: Right-hand side expressions like `value = run [command]`
 - **Plain Text Context**: Regular text containing `@` characters
 
 ### Using Context Predicates

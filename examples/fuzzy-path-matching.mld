@@ -37,9 +37,9 @@ This creates a resolver configuration in your `mlld.lock.json`:
 
 Now you can reference files without worrying about case:
 
-/text @file1 = [@desktop/my-projects/readme.md]
-/text @file2 = [@desktop/MY-PROJECTS/README.MD]
-/text @file3 = [@desktop/My-Projects/Readme.md]
+/var @file1 = [@desktop/my-projects/readme.md]
+/var @file2 = [@desktop/MY-PROJECTS/README.MD]
+/var @file3 = [@desktop/My-Projects/Readme.md]
 
 All three references point to the same file: `~/Desktop/My Projects/README.md`
 
@@ -47,10 +47,10 @@ All three references point to the same file: `~/Desktop/My Projects/README.md`
 
 Spaces, dashes, and underscores are treated as interchangeable:
 
-/text @notes = [@desktop/meeting-notes/2024-planning.md]
+/var @notes = [@desktop/meeting-notes/2024-planning.md]
 # Works even if the actual file is "Meeting Notes/2024 Planning.md"
 
-/text @todo = [@desktop/my_important_tasks.md]
+/var @todo = [@desktop/my_important_tasks.md]
 # Works even if the actual file is "My Important Tasks.md"
 
 ## Ambiguity Detection
@@ -59,7 +59,7 @@ If multiple files could match, mlld will tell you:
 
 ```
 # If you have both "test-file.md" and "test_file.md":
-/text @content = [@desktop/test-file.md]
+/var @content = [@desktop/test-file.md]
 
 # Error: Ambiguous path 'test-file' matches multiple files:
 #   - test-file.md (exact match)
@@ -73,7 +73,7 @@ If multiple files could match, mlld will tell you:
 When a file isn't found, mlld suggests similar files:
 
 ```
-/text @doc = [@desktop/projekt/readme.md]
+/var @doc = [@desktop/projekt/readme.md]
 
 # Error: File not found: projekt/readme.md
 #

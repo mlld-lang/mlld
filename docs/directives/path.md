@@ -61,7 +61,7 @@ Path variables are referenced using the `@identifier` syntax:
 
 ```mlld
 /path @docs = "./docs"
-/add [@docs/guide.md]
+/show [@docs/guide.md]
 ```
 
 Path variables can be used:
@@ -87,13 +87,13 @@ Using path variables in commands:
 Embedding files with path variables:
 ```mlld
 /path @templates = "./templates"
-/add [@templates/header.md]
+/show [@templates/header.md]
 ```
 
 Using path segments:
 ```mlld
 /path @src = "./src"
-/add [@src/components/button.js]
+/show [@src/components/button.js]
 ```
 
 ## Error Handling
@@ -107,7 +107,7 @@ The following errors are possible with path directives:
 Paths can include variables with @ interpolation in double quotes:
 
 ```mlld
-/text @dir = "docs"
+/var @dir = "docs"
 /path @docs = "./@dir"
 /path @output = "build/@version/output.txt"
 ```

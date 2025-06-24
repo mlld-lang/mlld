@@ -2,12 +2,12 @@
 
 ## Option 1: Namespace Object Pattern (Recommended)
 
-/exec @llm_basic(prompt, system) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}}}
-/exec @llm_media(prompt, system, media) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media}
-/exec @llm_tools(prompt, system, tools) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools}
-/exec @llm_full(prompt, parameters) = {llm "@prompt" @parameters}
+/exe @llm_basic(prompt, system) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}}}
+/exe @llm_media(prompt, system, media) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media}
+/exe @llm_tools(prompt, system, tools) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools}
+/exe @llm_full(prompt, parameters) = {llm "@prompt" @parameters}
 
-/data @llm = {
+/var @llm = {
 # Default function behavior
 query: @llm_basic,
   
@@ -31,7 +31,7 @@ reviewer: @exec(prompt) = run {llm "@prompt" -s "You are a thorough code reviewe
 /run @llm.media("Describe this image", "You are an image analyst", "photo.jpg")
 
 # With tools
-/data @tools = ["search", "calculate", "browse"]
+/var @tools = ["search", "calculate", "browse"]
 /run @llm.tools("Help me plan a trip", "You are a travel agent", @tools)
 
 # Presets
@@ -40,7 +40,7 @@ reviewer: @exec(prompt) = run {llm "@prompt" -s "You are a thorough code reviewe
 
 ## Option 2: Builder Pattern
 
-/data @llm = {
+/var @llm = {
 # Store configuration
 _system: "",
 _media: [],
@@ -57,21 +57,21 @@ run: @exec(prompt) = run {llm "@prompt" -s "@llm._system" {{llm._media ? "-a " +
 
 ## Option 3: Factory Functions
 
-/exec @createLLM(config) = @data {
+/exe @createLLM(config) = @data {
 prompt: @exec(text) = run {llm "@text" -s "@config.system" {{config.media ? "-a " + config.media : ""}}},
 withTools: @exec(text, tools) = run {llm "@text" -s "@config.system" --tool @tools}
 }
 
-/data @codingLLM = @createLLM({system: "You are an expert programmer"})
+/var @codingLLM = @createLLM({system: "You are an expert programmer"})
 /run @codingLLM.prompt("Write a sorting algorithm")
 
 ## For a module (@mlld/llm), Option 1 is cleanest:
 
-/exec @_llm(prompt, system) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}}}
-/exec @_llm_media(prompt, system, media) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media}
-/exec @_llm_tools(prompt, system, tools) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools}
+/exe @_llm(prompt, system) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}}}
+/exe @_llm_media(prompt, system, media) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} -a @media}
+/exe @_llm_tools(prompt, system, tools) = {llm "@prompt" {{system ? "-s \"" + system + "\"" : ""}} --tool @tools}
 
-/data @llm = {
+/var @llm = {
 # Call directly: @run @llm("prompt")
 __call__: @_llm,  # Special property (if supported)
   

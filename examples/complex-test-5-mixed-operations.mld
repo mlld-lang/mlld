@@ -1,12 +1,12 @@
 # Complex Test 5: Mixed Operations and Error Handling
 
 # Setup various data types
-/text @string_var = "Hello, World!"
-/data @number_var = 42
-/data @boolean_var = true
-/data @null_var = null
-/data @array_var = ["first", "second", "third"]
-/data @object_var = {"key": "value", "nested": {"deep": "data"}}
+/var @string_var = "Hello, World!"
+/var @number_var = 42
+/var @boolean_var = true
+/var @null_var = null
+/var @array_var = ["first", "second", "third"]
+/var @object_var = {"key": "value", "nested": {"deep": "data"}}
 
 # Path variables with special characters
 /path @home = @~
@@ -14,7 +14,7 @@
 /path @parent = @../
 
 # Test various operations
-/text @operations_test = [[
+/var @operations_test = [[
 # Mixed Operations Test
 
 ## Variable Types
@@ -46,16 +46,16 @@ Object keys: {{object_var}}
 ]]
 
 # Test exec with complex parameters
-/exec @process_data(arr, obj) = {echo "Array: @arr, Object: @obj" | wc -l}
+/exe @process_data(arr, obj) = {echo "Array: @arr, Object: @obj" | wc -l}
 
 # Test add with various sources
-/add @operations_test
+/show @operations_test
 
 ## Command with Variables
 /run {echo "String: @string_var, Number: @number_var"}
 
 # Test command execution
-/text @command_result = run @process_data(@array_var, @object_var)
+/var @command_result = run @process_data(@array_var, @object_var)
 
 ## Command Result
 Lines counted: @add @command_result

@@ -3,7 +3,8 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 VarRHSContent "var assignment value"
-  = CodeExecution               // Language + code patterns (run keyword and shortcuts)
+  = ForeachCommandExpression    // foreach @command(@arrays)
+  / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateStyleInterpolation  // Handles backtick, [[...]], double/single quotes
   / ObjectLiteral               // Object literal { key: value }
   / BracketAmbiguous            // NEW: Array vs path disambiguation

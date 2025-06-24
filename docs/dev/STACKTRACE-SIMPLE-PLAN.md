@@ -188,7 +188,7 @@ function extractTraceInfo(directive: DirectiveNode): {
       break;
       
     case 'run':
-      // @run @execName or @run [command]
+      // @run @execName or run [command]
       if (directive.subtype === 'runExec') {
         const execId = directive.values?.identifier?.[0];
         if (execId?.type === 'Text') {

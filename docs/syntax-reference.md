@@ -13,13 +13,13 @@ This document provides a comprehensive reference for the mlld syntax.
 
 Directives must appear at start of line (no indentation) and use the `/` prefix:
 ```
-/add      - Include content from files
+/show      - Include content from files
 /run      - Execute shell commands
 /import   - Import variables and commands from other mlld files
-/exec     - Create reusable commands
-/text     - Define text variables
+/exe     - Create reusable commands
+/var     - Define text variables
 /path     - Define filesystem path variables
-/data     - Define structured data variables
+/var     - Define structured data variables
 /when     - Conditional actions
 /output   - Write content to files or streams
 ```
@@ -29,7 +29,7 @@ Directives must appear at start of line (no indentation) and use the `/` prefix:
 Comments use `>>` (two greater-than signs) and can appear at start of line or end of line:
 ```mlld
 >> This is a comment at start of line
-/text @message = "Hello"  >> This is an end-of-line comment
+/var @message = "Hello"  >> This is an end-of-line comment
 ```
 
 - Start-of-line: `>> This is a comment`
@@ -86,7 +86,7 @@ Syntax: Variables are created with `@identifier` and referenced with `@identifie
 
 Variables are created with `@identifier` prefix and referenced differently based on context:
 ```mlld
-/text @name = "Alice"              # Create text variable
+/var @name = "Alice"              # Create text variable
 @name                              # Reference in directives
 "Hello @name"                     # Reference in double quotes
 `Welcome @name!`                   # Reference in backtick templates
@@ -97,7 +97,7 @@ Variables are created with `@identifier` prefix and referenced differently based
 
 Variables are created with `@identifier` prefix and support field access:
 ```mlld
-/data @config = { "port": 3000 }   # Create data variable
+/var @config = { "port": 3000 }   # Create data variable
 @config                            # Reference data variable
 @config.port                       # Field access with dot notation
 @users.0                           # Array element access
@@ -126,14 +126,14 @@ def hello():
 ### /add
 
 ```mlld
-/add [path]
-/add [path # section_text]
-/add [path] as "# New Title"           # Rename section
-/add "Section" from [path]
-/add "Section" from [path] as "# New Title"
-/add @variable                          # Add variable content
-/add "Literal text"                    # Add literal text
-/add [[Template with {{var}}]]          # Add template
+/show [path]
+/show [path # section_text]
+/show [path] as "# New Title"           # Rename section
+/show "Section" from [path]
+/show "Section" from [path] as "# New Title"
+/show @variable                          # Add variable content
+/show "Literal text"                    # Add literal text
+/show [[Template with {{var}}]]          # Add template
 ```
 
 ### /run
@@ -159,25 +159,25 @@ def hello():
 ### /exec
 
 ```mlld
-/exec @deploy(env) = "deploy.sh @env"              # Command executable
-/exec @greet(name) = `Hello @name!`                # Template executable  
-/exec @build(type) = {                             # Multi-line command
+/exe @deploy(env) = "deploy.sh @env"              # Command executable
+/exe @greet(name) = `Hello @name!`                # Template executable  
+/exe @build(type) = {                             # Multi-line command
   npm run build:@type
   npm test
 }
-/exec @calculate(x) = js {return @x * 2}           # Code executable
-/exec @getIntro(file) = [@file # Introduction]     # Section executable
-/exec @js = { formatDate, parseJSON }               # Shadow environment
+/exe @calculate(x) = js {return @x * 2}           # Code executable
+/exe @getIntro(file) = [@file # Introduction]     # Section executable
+/exe @js = { formatDate, parseJSON }               # Shadow environment
 ```
 
 ### /text
 
 ```mlld
-/text @name = "value"                    # Simple text
-/text @greeting = "Hello @name!"         # With @ interpolation
-/text @template = `Welcome @user!`       # Backtick template
-/text @content = [[Hello {{name}}!]]     # Double-bracket template
-/text @result = /run "date"              # From command output
+/var @name = "value"                    # Simple text
+/var @greeting = "Hello @name!"         # With @ interpolation
+/var @template = `Welcome @user!`       # Backtick template
+/var @content = [[Hello {{name}}!]]     # Double-bracket template
+/var @result = /run "date"              # From command output
 ```
 
 ### /path
@@ -192,24 +192,24 @@ def hello():
 ### /data 
 
 ```mlld
-/data @config = { "port": 3000 }         # JSON object
-/data @users = ["Alice", "Bob"]         # Array
-/data @settings : schema = value         # With schema validation
-/data @result = /run "ls -la"           # From command output
+/var @config = { "port": 3000 }         # JSON object
+/var @users = ["Alice", "Bob"]         # Array
+/var @settings : schema = value         # With schema validation
+/var @result = /run "ls -la"           # From command output
 ```
 
 ## Templates
 
 ### Backtick Templates (Primary - with @ interpolation)
 ```mlld
-/text @message = `Hello @name, welcome to @place!`
-/text @link = `[@title](@url)`
+/var @message = `Hello @name, welcome to @place!`
+/var @link = `[@title](@url)`
 ```
 
 ### Double-Bracket Templates (For @ heavy content)
 ```mlld
-/text @tweet = [[Hey {{user}}, check out {{handle}}'s new post!]]
-/text @prompt = [[
+/var @tweet = [[Hey {{user}}, check out {{handle}}'s new post!]]
+/var @prompt = [[
   System: {{role}}
   Context: {{context.data}}
   User: {{username}}

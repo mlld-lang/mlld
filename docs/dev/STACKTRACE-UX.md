@@ -34,7 +34,7 @@ FieldAccessError: Cannot access field "questions" on object
    Available fields: above, below
 
 🔄 mlld Trace:
-   @data reply = @run [(claude -p "@prompt")]    (line 9)
+   @data reply = run [(claude -p "@prompt")]    (line 9)
    └─ Received JSON object with fields: above, below
    @add foreach @getQuestions(@reply.questions)  (line 15)
    └─ ❌ Field "questions" not found
@@ -145,7 +145,7 @@ Full display as shown in examples above.
 ### Async Operations
 ```
 🔄 mlld Trace:
-   @data results = @run [fetch-api.sh]  (line 10)
+   @data results = run [fetch-api.sh]  (line 10)
    └─ Command started at 14:23:05.123
    └─ Command failed after 2.5s
    └─ Exit code: 1

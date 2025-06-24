@@ -1,6 +1,6 @@
 # Complex Test 2: Dynamic Path Resolution and Conditional Content
 
-/data @env = {
+/var @env = {
   "mode": "development",
   "paths": {
     "dev": "./files/dev-config",
@@ -17,11 +17,11 @@
 /path @docs_file = [[{{config_dir}}/README.md]]
 
 >> Test path operations with dynamic paths
-/text @settings = @config_file
-/text @documentation = @docs_file # Section Extraction
+/var @settings = @config_file
+/var @documentation = @docs_file # Section Extraction
 
 >> Complex template with nested conditionals (simulated)
-/text @report = [[
+/var @report = [[
 # Configuration Report
 
 Environment: {{env.mode}}
@@ -41,4 +41,4 @@ Config Directory: {{config_dir}}
 ## All .mld files in examples:
 /run {find . -name "*.mld" -type f | head -10}
 
-/add @report
+/show @report

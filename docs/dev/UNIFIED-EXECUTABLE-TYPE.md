@@ -25,7 +25,7 @@ interface ExecutableVariable {
 }
 
 type ExecutableDefinition = 
-  | CommandExecutable      // @exec name(params) = @run [command]
+  | CommandExecutable      // @exec name(params) = run [command]
   | CommandRefExecutable   // @exec name(params) = @otherCommand(args)
   | CodeExecutable        // @exec name(params) = @run language [code]
   | TemplateExecutable;   // @text name(params) = [[template]]
@@ -89,4 +89,4 @@ During the transition period:
 
 ## Known Issues
 
-1. Grammar bug: `@exec name() = @run [...]` is sometimes parsed as `execResolver` instead of `execCommand` (tracked separately)
+1. Grammar bug: `@exec name() = run [...]` is sometimes parsed as `execResolver` instead of `execCommand` (tracked separately)

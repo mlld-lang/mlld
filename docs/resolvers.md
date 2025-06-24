@@ -88,7 +88,7 @@ mlld files with exportable variables and templates:
 ```mlld
 # utils.mld - module content
 @text greeting = "Hello"
-@exec formatName(name) = @run [echo "Name: {{name}}"]
+@exec formatName(name) = run [echo "Name: {{name}}"]
 @data config = { "version": "1.0.0" }
 ```
 
