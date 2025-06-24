@@ -335,6 +335,29 @@ export async function evaluateVar(
     }
   }
 
+  // Check if the directive has a withClause for pipeline processing
+  if (directive.values?.withClause && directive.values.withClause.pipeline) {
+    const { executePipeline } = await import('./pipeline');
+    const format = directive.values.withClause.format as string | undefined;
+    
+    // Get the current variable value as string
+    const { resolveVariableValue: resolveVarValue } = await import('../core/interpreter');
+    const currentValue = await resolveVarValue(variable, env);
+    const stringValue = typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue);
+    
+    // Execute the pipeline
+    const pipelineResult = await executePipeline(
+      stringValue,
+      directive.values.withClause.pipeline,
+      env,
+      directive.location,
+      format
+    );
+    
+    // Update the variable with the pipeline result
+    variable = createSimpleTextVariable(identifier, pipelineResult, source, metadata);
+  }
+
   env.setVariable(identifier, variable);
 
   // Return empty string - var directives don't produce output

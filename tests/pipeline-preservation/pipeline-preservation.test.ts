@@ -209,8 +209,8 @@ Bob,25,LA]]
     it('6.1 Format Transformers - JSON pretty print', async () => {
       const input = `
 /var @obj = { users: ["Alice", "Bob"], count: 2 }
-/var @json = @obj | @JSON
-/show @json`;
+/var @jsonResult = @obj | @JSON
+/show @jsonResult`;
 
       const result = await interpret(input, { fileSystem, pathService });
       const parsed = JSON.parse(result.trim());
