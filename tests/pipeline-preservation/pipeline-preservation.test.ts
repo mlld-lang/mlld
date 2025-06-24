@@ -39,9 +39,9 @@ describe('Pipeline Preservation Tests - Pre-Refactor Baseline', () => {
   return \`\${rows.length} rows, \${rows[0].length} columns\`;
 }
 
-/var @csvData = [[Name,Age,City
+/var @csvData = \`Name,Age,City
 Alice,30,NYC
-Bob,25,LA]]
+Bob,25,LA\`
 /var @analysis = @csvData with { format: "csv", pipeline: [@countCSVRows] }
 /show @analysis`;
 
@@ -125,7 +125,7 @@ Bob,25,LA]]
   return String(input).substring(0, 5);
 }
 
-/var @data = [[{"complex": "data"}]]
+/var @data = '{"complex": "data"}'
 /var @result = @data with { format: "json", pipeline: [@testStringify] }
 /show @result`;
 
@@ -150,7 +150,7 @@ Bob,25,LA]]
   return \`Total users: \${data.count}\`;
 }
 
-/var @users = [[{"name": "Alice"}, {"name": "Bob"}]]
+/var @users = [{"name": "Alice"}, {"name": "Bob"}]
 /var @result = @users with { 
   format: "json", 
   pipeline: [@stage1, @stage2] 
@@ -171,7 +171,7 @@ Bob,25,LA]]
   return \`Result: \${num}\`;
 }
 
-/var @data = [[{"value": 21}]]
+/var @data = [{"value": 21}]
 /var @result = @data with { 
   format: "json", 
   pipeline: [@jsonStage, @textStage] 
@@ -194,7 +194,7 @@ Bob,25,LA]]
   return input.data.value * mult;
 }
 
-/var @data = [[{"value": 10}]]
+/var @data = [{"value": 10}]
 /var @result = @data with { 
   format: "json", 
   pipeline: [@useParent] 
@@ -223,8 +223,8 @@ Bob,25,LA]]
     it('7.1 Pipeline with foreach operations', async () => {
       const input = `
 /var @items = [
-  [[{"id": 1, "value": 10}]],
-  [[{"id": 2, "value": 20}]]
+  [{"id": 1, "value": 10}],
+  [{"id": 2, "value": 20}]
 ]
 
 /exe @processItem(json) = js {
