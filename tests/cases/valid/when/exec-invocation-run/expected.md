@@ -1,6 +1,6 @@
-# When Directive with @run Exec Invocation
+# When Directive with run Exec Invocation
 
-Test that @when actions can use @run with exec command invocations.
+Test that @when actions can use run with exec command invocations.
 
 Hello, World!
 

@@ -1,4 +1,4 @@
-# Test exec invocation without @run
+# Test exec invocation without run
 
 /exe @greet() = {echo "Hello, direct exec!"}
 /exe @withParam(name) = {echo "Hello, @name!"}

@@ -1,2 +1,2 @@
-/var @result = @run {echo "Command output"}
+/var @result = run {echo "Command output"}
 /show @result

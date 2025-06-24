@@ -14,7 +14,7 @@ This tests security options on various directives.
 
 ## @text with security (on RHS)
 /var (24h) cachedTemplate = @add (1h) "./template.md"
-/var @dynamicMsg = @run (live) trust verify {echo "Dynamic message"}
+/var @dynamicMsg = run (live) trust verify {echo "Dynamic message"}
 
 ## @exec with trust
 /exe trust always @safeCmd() = {echo "Safe command"}

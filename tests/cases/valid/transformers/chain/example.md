@@ -9,7 +9,7 @@
 ]
 ]]
 
-/var @report = @run {echo "@jsonData"} with { pipeline: [@json, @csv] }
+/var @report = run {echo "@jsonData"} with { pipeline: [@json, @csv] }
 /show @report
 
 ## Multiple transformations
@@ -20,5 +20,5 @@
 - Keyboard: $75
 ]]
 
-/var @xmlReport = @run {echo "@mdData"} with { pipeline: [@md, @xml] }
+/var @xmlReport = run {echo "@mdData"} with { pipeline: [@md, @xml] }
 /show @xmlReport

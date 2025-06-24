@@ -1,6 +1,6 @@
-# Output with @run @command Syntax Test
+# Output with run @command Syntax Test
 
-This tests the @output directive with @run @command syntax.
+This tests the @output directive with run @command syntax.
 
 /exe @generateList() = {ls -la}
 /exe @showDate() = {date}

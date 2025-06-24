@@ -9,7 +9,7 @@
 ]
 ]]
 
-/var @csvResult = @run {echo "@jsonData"} with { pipeline: [@csv] }
+/var @csvResult = run {echo "@jsonData"} with { pipeline: [@csv] }
 /show @csvResult
 
 ## Convert markdown table to CSV
@@ -20,5 +20,5 @@
 | Bob | 25 | LA |
 ]]
 
-/var @csvTable = @run {echo "@mdTable"} with { pipeline: [@CSV] }
+/var @csvTable = run {echo "@mdTable"} with { pipeline: [@CSV] }
 /show @csvTable

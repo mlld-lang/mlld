@@ -1,4 +1,4 @@
-# Test exec invocation without @run
+# Test exec invocation without run
 
 ## Direct exec invocation in text
 

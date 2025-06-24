@@ -3,11 +3,11 @@
 
 /var @testAllFixes = {
 message: @add @messageTemplate("Alice", "logged in"),
-version: @run @getVersion,
+version: run @getVersion,
 nullable: null,
 complex: {
 greeting: @add @messageTemplate("Bob", "signed up"),
-build: @run @getVersion,
+build: run @getVersion,
 empty: null,
 flag: true
   }

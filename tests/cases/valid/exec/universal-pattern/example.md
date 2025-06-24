@@ -26,7 +26,7 @@
 /var @execMsg = [[
 
 Executing stored command:]]
-/var @result = @run @demo.valueCmd()
+/var @result = run @demo.valueCmd()
 /var @resultMsg = [[Result: {{result}}]]
 
 /show @execMsg

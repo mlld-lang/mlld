@@ -6,7 +6,7 @@ This is a test document.
 It has multiple lines.
 ]]
 
-/var @xmlResult = @run {echo "@content"} with { pipeline: [@xml] }
+/var @xmlResult = run {echo "@content"} with { pipeline: [@xml] }
 /show @xmlResult
 
 ## Markdown with headers (llmxml conversion)
@@ -17,10 +17,10 @@ It has multiple lines.
 - Keyboard: $75
 ]]
 
-/var @xmlMd = @run {echo "@mdContent"} with { pipeline: [@XML] }
+/var @xmlMd = run {echo "@mdContent"} with { pipeline: [@XML] }
 /show @xmlMd
 
 ## JSON to XML
 /var @jsonData = [[{"name": "Alice", "age": 30}]]
-/var @xmlJson = @run {echo "@jsonData"} with { pipeline: [@xml] }
+/var @xmlJson = run {echo "@jsonData"} with { pipeline: [@xml] }
 /show @xmlJson

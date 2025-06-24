@@ -1,10 +1,10 @@
-# Test: @run with template executables
+# Test: run with template executables
 
 This test verifies that template executables can be invoked with @run.
 
 ## Define executables
 
-## Test @run with different exec types
+## Test run with different exec types
 
 ### Command exec (should work)
 Hello, Alice!

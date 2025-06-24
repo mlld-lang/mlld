@@ -1,4 +1,4 @@
-# Test: @run with template executables
+# Test: run with template executables
 
 This test verifies that template executables can be invoked with @run.
 
@@ -7,7 +7,7 @@ This test verifies that template executables can be invoked with @run.
 /exe @templateGreet(name) = [[Template says: {{name}}!]]
 /exe @backtickGreet(name) = `Backtick says: @name!`
 
-## Test @run with different exec types
+## Test run with different exec types
 
 ### Command exec (should work)
 /run @greet("Alice")

@@ -6,7 +6,7 @@ Tests that multi-parameter functions fall back to passing text as first paramete
 
 ```mlld
 /exe @greet(name, title) = [[Hello {{title}} {{name}}!]]
-/var @result = @run {echo "Smith"} | @greet
+/var @result = run {echo "Smith"} | @greet
 /show @result
 ```
 

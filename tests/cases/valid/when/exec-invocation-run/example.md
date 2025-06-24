@@ -1,6 +1,6 @@
-# When Directive with @run Exec Invocation
+# When Directive with run Exec Invocation
 
-Test that @when actions can use @run with exec command invocations.
+Test that @when actions can use run with exec command invocations.
 
 /var @isTrue = true
 /exe @greet(name) = {echo "Hello, @name!"}
@@ -8,6 +8,6 @@ Test that @when actions can use @run with exec command invocations.
 
 /var @condition = "true"
 
-/when @condition => @run @greet("World")
+/when @condition => run @greet("World")
 
-/when @isTrue => @run @capitalize("test message")
+/when @isTrue => run @capitalize("test message")

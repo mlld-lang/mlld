@@ -6,7 +6,7 @@ Tests that JSON with missing fields provides empty strings for missing parameter
 
 ```mlld
 /exe @format(first, middle, last) = [[Name: {{first}} {{middle}} {{last}}]]
-/var @result = @run {echo '{"first": "John", "last": "Doe"}'} | @format
+/var @result = run {echo '{"first": "John", "last": "Doe"}'} | @format
 /show @result
 ```
 
