@@ -1,7 +1,7 @@
 import type { Environment } from '../env/Environment';
 import type { PipelineCommand } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
-import { resolveVariableValue } from '../core/interpreter';
+import { resolveVariableValue, interpolate } from '../core/interpreter';
 import { createPipelineInput, isPipelineInput } from '../utils/pipeline-input';
 import { 
   createSimpleTextVariable, 
@@ -92,6 +92,45 @@ export async function executePipeline(
       
       // Execute the command with @INPUT as the first argument if no args provided
       let args = command.args || [];
+      
+      // Evaluate arguments if they are variable references or other nodes
+      const evaluatedArgs = [];
+      for (const arg of args) {
+        if (typeof arg === 'string') {
+          evaluatedArgs.push({ type: 'Text', content: arg });
+        } else if (arg && typeof arg === 'object') {
+          if (arg.type === 'VariableReference') {
+            // Handle variable references directly
+            const varRef = arg as any;
+            const variable = env.getVariable(varRef.identifier);
+            if (!variable) {
+              throw new Error(`Variable not found: ${varRef.identifier}`);
+            }
+            
+            // Resolve the variable value
+            const value = await resolveVariableValue(variable, env);
+            
+            // Apply field access if present
+            let finalValue = value;
+            if (varRef.fields && varRef.fields.length > 0) {
+              const { accessField } = await import('../utils/field-access');
+              finalValue = await accessField(value, varRef.fields, varRef.identifier);
+            }
+            
+            // Convert to string
+            const stringValue = typeof finalValue === 'string' ? finalValue :
+                              typeof finalValue === 'object' ? JSON.stringify(finalValue) :
+                              String(finalValue);
+            
+            evaluatedArgs.push({ type: 'Text', content: stringValue });
+          } else {
+            // For other node types, interpolate
+            const value = await interpolate([arg], env);
+            evaluatedArgs.push({ type: 'Text', content: value });
+          }
+        }
+      }
+      args = evaluatedArgs;
       
       // Check if this is a direct command definition that expects parameters
       if (args.length === 0) {
@@ -444,8 +483,10 @@ async function executeCommandVariable(
         }
       } else {
         // Regular parameter handling
+        // Note: argValue has already been evaluated and has { type: 'Text', content: actualValue } structure
         const textValue = argValue === null ? '' :
                          typeof argValue === 'string' ? argValue :
+                         argValue.type === 'Text' && argValue.content !== undefined ? argValue.content :
                          argValue.content !== undefined ? argValue.content : String(argValue);
         
         if (process.env.MLLD_DEBUG === 'true') {

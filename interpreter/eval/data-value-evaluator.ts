@@ -141,6 +141,12 @@ export async function evaluateDataValue(
       }
     } else if (isImportVariable(variable)) {
       result = variable.value;
+    } else if (variable.type === 'array') {
+      // Handle new array variable type
+      result = variable.value;
+    } else if (variable.type === 'object') {
+      // Handle new object variable type
+      result = variable.value;
     } else {
       throw new Error(`Unknown variable type in data evaluation: ${(variable as any).type}`);
     }
@@ -224,6 +230,12 @@ export async function evaluateDataValue(
     } else if (isExecutableVariable(variable)) {
       result = variable; // Already handled above but included for completeness
     } else if (isImportVariable(variable)) {
+      result = variable.value;
+    } else if (variable.type === 'array') {
+      // Handle new array variable type
+      result = variable.value;
+    } else if (variable.type === 'object') {
+      // Handle new object variable type
       result = variable.value;
     } else {
       throw new Error(`Unknown variable type in data evaluation: ${(variable as any).type}`);
@@ -553,24 +565,34 @@ async function invokeParameterizedCommand(
   // Create a child environment with parameter bindings
   const childEnv = env.createChild();
   
+  // Import variable creation functions
+  const { createSimpleTextVariable, createObjectVariable, createArrayVariable } = await import('@core/types/variable');
+  const { VariableSource } = await import('@core/types/variable');
+  
+  // Create default source for parameter variables
+  const paramSource: VariableSource = {
+    directive: 'var',
+    syntax: 'quoted',
+    hasInterpolation: false,
+    isMultiLine: false
+  };
+  
   // Bind arguments to parameter names
   for (const [paramName, paramValue] of Object.entries(argMap)) {
     // Create appropriate variable type based on the parameter value
     if (typeof paramValue === 'string') {
-      childEnv.setVariable(paramName, {
-        type: 'text',
-        name: paramName,
-        value: paramValue,
-        definedAt: null
-      });
+      const variable = createSimpleTextVariable(paramName, paramValue, paramSource, { isParameter: true });
+      childEnv.setParameterVariable(paramName, variable);
+    } else if (Array.isArray(paramValue)) {
+      const variable = createArrayVariable(paramName, paramValue, false, paramSource, { isParameter: true });
+      childEnv.setParameterVariable(paramName, variable);
+    } else if (typeof paramValue === 'object' && paramValue !== null) {
+      const variable = createObjectVariable(paramName, paramValue, false, paramSource, { isParameter: true });
+      childEnv.setParameterVariable(paramName, variable);
     } else {
-      childEnv.setVariable(paramName, {
-        type: 'data',
-        name: paramName,
-        value: paramValue,
-        definedAt: null,
-        isFullyEvaluated: true
-      });
+      // For numbers, booleans, etc., convert to text
+      const variable = createSimpleTextVariable(paramName, String(paramValue), paramSource, { isParameter: true });
+      childEnv.setParameterVariable(paramName, variable);
     }
   }
   

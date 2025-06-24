@@ -229,6 +229,12 @@ export async function evaluateVar(
     variableType = 'text';
     resolvedValue = valueNode.content;
     
+  } else if (valueNode && valueNode.type === 'foreach-command') {
+    // Handle foreach expressions
+    const { evaluateForeachCommand } = await import('./data-value-evaluator');
+    variableType = 'data';
+    resolvedValue = await evaluateForeachCommand(valueNode, env);
+    
   } else if (valueNode && valueNode.type === 'VariableReferenceWithTail') {
     // Variable with tail modifiers (e.g., @var @result = @data with { pipeline: [@transform] })
     const varWithTail = valueNode;
