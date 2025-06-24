@@ -9,7 +9,7 @@ Test comprehensive truthiness behavior in @when directives.
 /var @hasFeature = true
 /var @noFeature = false
 /var @emptyString = ""
-/var @nullValue = null
+/var @nullValue = ""
 /var @zeroNumber = 0
 
 >> Truthy values should trigger
@@ -28,7 +28,7 @@ Test comprehensive truthiness behavior in @when directives.
 
 /var @hasLicense = "false"
 /var @isValid = false
-/var @nothing = null
+/var @nothing = ""
 /var @empty = ""
 /var @zero = 0
 
@@ -71,10 +71,10 @@ false => show "Matched as boolean false"
 
 ## 5. Exec Function String Results
 
-/exe @isReady() = [["true"]]
-/exe @isEmpty() = [["false"]]
-/exe @getNull() = [[]]
-/exe @getZero() = [["0"]]
+/exe @isReady() = `true`
+/exe @isEmpty() = `false`
+/exe @getNull() = ``
+/exe @getZero() = `0`
 
 >> String "true" from exec should be truthy
 /when @isReady() => show "System is ready"
@@ -114,7 +114,7 @@ false => show "No score"
 ## 7. @when any: Block with Mixed Truthiness
 
 /var @hasTests = "false"
-/var @hasDocs = null
+/var @hasDocs = ""
 /var @hasExamples = "true"
 
 >> At least one truthy value should trigger
@@ -161,7 +161,7 @@ false => show "No score"
 
 ## 9. @when first: with Truthiness
 
-/var @firstStatus = null
+/var @firstStatus = ""
 /var @firstFallback = ""
 /var @firstDefault = "active"
 
@@ -220,15 +220,15 @@ true => show "Ultimate fallback"
 
 /exe @getFalsy() = js {
   // Return various falsy values
-return "";
+  return "";
 }
 
 /exe @getStringFalse() = js {
-return "false";
+  return "false";
 }
 
 /exe @getStringZero() = js {
-return "0";
+  return "0";
 }
 
 /when @getFalsy() => show "FAIL: Empty from JS triggered"

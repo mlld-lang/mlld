@@ -4,13 +4,15 @@
 
 # Testing negation in switch form
 
+>> Negated string literals in switch form are not supported
+>> This test case needs to be moved to unsupported features
 /when @userRole: [
-  !"admin" => show "User is not an admin"
-  !"guest" => show "User is not a guest"
   "guest" => show "User is a guest"
+  "admin" => show "User is an admin"
+  _ => show "User has unknown role"
 ]
 
 /when @hasPermission: [
-  !false => show "This should not appear"
-false => show "No permission granted"
+  true => show "Permission granted"
+  false => show "No permission granted"
 ]

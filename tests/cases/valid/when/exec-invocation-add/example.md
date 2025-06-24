@@ -3,8 +3,8 @@
 Test that @when actions can use @add with exec command invocations.
 
 /var @isTrue = true
-/exe @formatHeader(title) = {echo "=== @title ==="}
-/exe @getVersion() = [[v1.2.3]]
+/exe @formatHeader(title) = run {echo "=== @title ==="}
+/exe @getVersion() = `v1.2.3`
 
 /var @showHeader = "true"
 

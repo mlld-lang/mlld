@@ -1,4 +1,4 @@
-# Test: @add @variable inside @when actions
+# Test: show @variable inside @when actions
 
 This test verifies that simple variable references work correctly inside @when actions.
 

@@ -888,7 +888,7 @@ export class Environment {
           const debugValue = this.createDebugObject(3); // Use markdown format
           return {
             ...variable,
-            type: 'text', // Markdown is text type
+            type: 'simple-text', // Markdown is simple text type
             value: debugValue
           };
         }

@@ -15,6 +15,7 @@ describe('Fuzzy Local File Imports', () => {
     await fileSystem.writeFile('/My-Utils.mld', '/var @greeting = "Hello from utils"');
     await fileSystem.writeFile('/test_config.json', '{"debug": true}');
     await fileSystem.writeFile('/My Important File.md', '# Important Content');
+    await fileSystem.mkdir('/sub-folder');
     await fileSystem.writeFile('/sub-folder/nested-file.mld', '/var @value = 42');
     
     // Create directory structure with spaces

@@ -36,8 +36,18 @@ export async function evaluateDataValue(
   // Handle command objects (from run directives in objects)
   if (value && typeof value === 'object' && value.type === 'command' && 'command' in value) {
     // Execute the command
-    const command = value.command as string;
-    const result = await env.executeCommand(command);
+    // command might be a string or an array of text nodes
+    let commandStr: string;
+    if (typeof value.command === 'string') {
+      commandStr = value.command;
+    } else if (Array.isArray(value.command)) {
+      // Interpolate the command array
+      const { interpolate } = await import('../core/interpreter');
+      commandStr = await interpolate(value.command, env);
+    } else {
+      throw new Error('Invalid command format in lazy evaluation');
+    }
+    const result = await env.executeCommand(commandStr);
     return result;
   }
   
@@ -63,8 +73,17 @@ export async function evaluateDataValue(
   // Handle command nodes (from run {command})
   if (value?.type === 'command') {
     // Execute the command directly
-    const command = value.command || '';
-    const result = await env.executeCommand(command);
+    let commandStr: string;
+    if (typeof value.command === 'string') {
+      commandStr = value.command || '';
+    } else if (Array.isArray(value.command)) {
+      // Interpolate the command array
+      const { interpolate } = await import('../core/interpreter');
+      commandStr = await interpolate(value.command, env) || '';
+    } else {
+      commandStr = '';
+    }
+    const result = await env.executeCommand(commandStr);
     return result;
   }
   
