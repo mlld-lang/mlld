@@ -131,7 +131,7 @@ describe('URL Support', () => {
       // Mock the URL content
       const mockResponse = {
         ok: true,
-        text: vi.fn().mockResolvedValue(`/text @greeting = "Hello from URL"`)
+        text: vi.fn().mockResolvedValue(`/var @greeting = "Hello from URL"`)
       };
       (global.fetch as any).mockResolvedValue(mockResponse);
 
@@ -172,7 +172,7 @@ describe('URL Support', () => {
       (global.fetch as any).mockResolvedValue(mockResponse);
 
       // This test assumes the grammar supports URL paths in text directives
-      const source = `/text @content = [https://example.com/content.md]`;
+      const source = `/var @content = [https://example.com/content.md]`;
       
       // For now, we'll test the readFile method directly
       const content = await env.readFile('https://example.com/content.md');

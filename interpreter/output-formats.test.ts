@@ -51,10 +51,10 @@ describe('Output Format Tests', () => {
   describe('Markdown Format', () => {
     it('should output clean markdown by default', async () => {
       const source = `
-    /text @message = "Hello Markdown"
-    /data @config = {"name": "MyApp", "version": "1.0.0"}
-    /add @message
-    /add @config
+    /var @message = "Hello Markdown"
+    /var @config = {"name": "MyApp", "version": "1.0.0"}
+    /show @message
+    /show @config
 `;
       
       const result = await interpret(source, {
@@ -149,9 +149,9 @@ describe('Integration Scenarios', () => {
       
       const source = `
     /import {*} from [/imported.mld]
-    /add @greeting
-    /add " by "
-    /add @author
+    /show @greeting
+    /show " by "
+    /show @author
 `;
       
       const result = await interpret(source, {
@@ -168,14 +168,14 @@ describe('Integration Scenarios', () => {
     
     it('should import only selected variables', async () => {
       await fileSystem.writeFile('/utils.mld', `
-    /text @helper = "Utility Function"
-    /text @private = "Should not be imported"
-    /data @config = {"debug": true}
+    /var @helper = "Utility Function"
+    /var @private = "Should not be imported"
+    /var @config = {"debug": true}
 `);
       
       const source = `
     /import {helper, config} from [/utils.mld]
-    /add @helper
+    /show @helper
 `;
       
       const result = await interpret(source, {

@@ -28,10 +28,10 @@ describe('URL Cache Integration', () => {
     /path @(30m) trust always template = "https://example.com/template.md"
 
 First use:
-    /add @template
+    /show @template
 
 Second use:
-    /add @template
+    /show @template
 `;
 
     const urlConfig = {
@@ -94,7 +94,7 @@ Second use:
     const mlldContent = `
     /path @(5m) trust verify template = "http://insecure.example.com/template.md"
 
-    /add @template
+    /show @template
 `;
 
     const urlConfig = {
@@ -138,8 +138,8 @@ Second use:
     const mlldContent = `
     /path @(live) trust always template = "https://example.com/live.md"
 
-    /add @template
-    /add @template
+    /show @template
+    /show @template
 `;
 
     const urlConfig = {
@@ -181,7 +181,7 @@ Second use:
     const mlldContent = `
     /path @(static) trust always template = "https://example.com/static.md"
 
-    /add @template
+    /show @template
 `;
 
     const urlConfig = {
@@ -240,8 +240,8 @@ Second use:
     } as Response);
 
     const mlldContent = `
-    /add (10m) trust always "https://example.com/direct.md"
-    /add (10m) trust always "https://example.com/direct.md"
+    /show (10m) trust always "https://example.com/direct.md"
+    /show (10m) trust always "https://example.com/direct.md"
 `;
 
     const urlConfig = {

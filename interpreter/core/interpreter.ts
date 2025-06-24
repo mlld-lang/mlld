@@ -681,6 +681,9 @@ export async function interpolate(
       
       if (value === null) {
         stringValue = 'null';
+      } else if (typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
+        // Handle wrapped strings (quotes, backticks, brackets)
+        stringValue = await interpolate(value.content as InterpolationNode[], env, context);
       } else if (typeof value === 'object' && 'type' in value) {
         const nodeValue = value as Record<string, unknown>;
         if (nodeValue.type === 'Null') {

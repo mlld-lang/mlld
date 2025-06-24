@@ -33,6 +33,14 @@ export async function evaluateDataValue(
     return await interpolate(value.content, env);
   }
   
+  // Handle command objects (from run directives in objects)
+  if (value && typeof value === 'object' && value.type === 'command' && 'command' in value) {
+    // Execute the command
+    const command = value.command as string;
+    const result = await env.executeCommand(command);
+    return result;
+  }
+  
   // Handle directive nodes (both marked as data values and regular directives)
   if (value?.type === 'Directive') {
     const directive = value as DirectiveNode;
@@ -209,6 +217,16 @@ export function hasUnevaluatedDirectives(value: DataValue): boolean {
   
   // Check for ExecInvocation nodes
   if (value && typeof value === 'object' && value.type === 'ExecInvocation') {
+    return true;
+  }
+  
+  // Check for command objects (from run directives)
+  if (value && typeof value === 'object' && value.type === 'command' && 'command' in value) {
+    return true;
+  }
+  
+  // Check for wrapped strings (quotes, backticks, brackets)
+  if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
     return true;
   }
   
