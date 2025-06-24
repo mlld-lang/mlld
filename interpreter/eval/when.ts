@@ -86,9 +86,17 @@ async function evaluateWhenSimple(
 ): Promise<EvalResult> {
   const conditionResult = await evaluateCondition(node.values.condition, env);
   
+  if (process.env.DEBUG_WHEN) {
+    console.log('When condition result:', conditionResult);
+  }
+  
   if (conditionResult) {
     // Execute the action if condition is true
-    return await evaluate(node.values.action, env);
+    const result = await evaluate(node.values.action, env);
+    if (process.env.DEBUG_WHEN) {
+      console.log('When action result:', result);
+    }
+    return result;
   }
   
   // Return empty string if condition is false
@@ -484,8 +492,16 @@ async function evaluateCondition(
     }
   }
   
+  if (process.env.DEBUG_WHEN) {
+    console.log('Evaluating condition:', condition);
+  }
+  
   // Evaluate the condition
   const result = await evaluate(condition, childEnv);
+  
+  if (process.env.DEBUG_WHEN) {
+    console.log('Condition evaluation result:', JSON.stringify(result, null, 2));
+  }
   
   // For command execution results, check stdout or exit code
   if (result.stdout !== undefined) {
@@ -500,7 +516,11 @@ async function evaluateCondition(
       return isTruthy(result.value);
     }
     // Otherwise check stdout - trim whitespace
-    return isTruthy(result.stdout.trim());
+    const trimmedStdout = result.stdout.trim();
+    if (process.env.DEBUG_WHEN) {
+      console.log('Trimmed stdout for truthiness:', JSON.stringify(trimmedStdout));
+    }
+    return isTruthy(trimmedStdout);
   }
   
   // Convert result to boolean

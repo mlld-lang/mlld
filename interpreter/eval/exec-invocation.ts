@@ -16,6 +16,10 @@ export async function evaluateExecInvocation(
   node: ExecInvocation,
   env: Environment
 ): Promise<EvalResult> {
+  if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
+    console.log('evaluateExecInvocation called with:', node.commandRef);
+  }
+  
   // Get the command name from the command reference
   let commandName: string;
   
@@ -84,7 +88,11 @@ export async function evaluateExecInvocation(
     };
   }
   
-  const definition = variable.value as ExecutableDefinition;
+  // Get the full executable definition from metadata
+  const definition = variable.metadata?.executableDef as ExecutableDefinition;
+  if (!definition) {
+    throw new MlldInterpreterError(`Executable ${commandName} has no definition in metadata`);
+  }
   
   // Create a child environment for parameter substitution
   const execEnv = env.createChild();
@@ -187,6 +195,11 @@ export async function evaluateExecInvocation(
   else if (isCommandExecutable(definition)) {
     // Interpolate the command template with parameters
     const command = await interpolate(definition.commandTemplate, execEnv);
+    
+    if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
+      console.log('Executing command:', command);
+      console.log('Command template:', definition.commandTemplate);
+    }
     
     // Build environment variables from parameters for shell execution
     const envVars: Record<string, string> = {};

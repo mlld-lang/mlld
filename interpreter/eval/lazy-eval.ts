@@ -29,9 +29,6 @@ export async function evaluateDataValue(
   // This needs to be before other object checks because these objects don't have a type field
   if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
     // This is a wrapped string (quotes, backticks, or brackets)
-    if (process.env.DEBUG_LAZY_EVAL) {
-      console.log('Found wrapped string:', { wrapperType: value.wrapperType, contentLength: value.content.length });
-    }
     const { interpolate } = await import('../core/interpreter');
     return await interpolate(value.content, env);
   }
