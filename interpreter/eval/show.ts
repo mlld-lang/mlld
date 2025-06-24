@@ -47,6 +47,7 @@ export async function evaluateShow(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
+  
   let content = '';
   
   if (directive.subtype === 'showVariable') {
@@ -403,7 +404,18 @@ export async function evaluateShow(
       // This is an executable invocation - use exec-invocation handler
       const { evaluateExecInvocation } = await import('./exec-invocation');
       const result = await evaluateExecInvocation(invocation, env);
-      content = String(result.value);
+      
+      // Convert result to string appropriately
+      if (typeof result.value === 'string') {
+        content = result.value;
+      } else if (result.value === null || result.value === undefined) {
+        content = '';
+      } else if (typeof result.value === 'object') {
+        // For objects and arrays, use JSON.stringify
+        content = JSON.stringify(result.value);
+      } else {
+        content = String(result.value);
+      }
     } else {
       throw new Error(`Variable ${name} is not executable (type: ${variable.type})`);
     }
@@ -521,7 +533,7 @@ export async function evaluateShow(
     content = await evaluateForeachAsText(foreachExpression, env, options);
     
   } else if (directive.subtype === 'addExecInvocation') {
-    // Handle exec invocation nodes
+    // Handle exec invocation nodes (legacy subtype)
     const execInvocation = directive.values?.execInvocation;
     if (!execInvocation) {
       throw new Error('Add exec invocation directive missing exec invocation');
@@ -530,7 +542,18 @@ export async function evaluateShow(
     // Evaluate the exec invocation
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execInvocation, env);
-    content = String(result.value);
+    
+    // Convert result to string appropriately
+    if (typeof result.value === 'string') {
+      content = result.value;
+    } else if (result.value === null || result.value === undefined) {
+      content = '';
+    } else if (typeof result.value === 'object') {
+      // For objects and arrays, use JSON.stringify
+      content = JSON.stringify(result.value);
+    } else {
+      content = String(result.value);
+    }
     
   } else if (directive.subtype === 'showForeach') {
     // Handle foreach expressions for direct output
