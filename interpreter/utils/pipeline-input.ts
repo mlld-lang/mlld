@@ -160,6 +160,15 @@ export function createPipelineInput(text: string, format: string = 'json'): Pipe
       break;
   }
 
+  // Add toString() for backwards compatibility
+  Object.defineProperty(input, 'toString', {
+    value: function() {
+      return this.text;
+    },
+    enumerable: false,
+    configurable: true
+  });
+
   return input;
 }
 

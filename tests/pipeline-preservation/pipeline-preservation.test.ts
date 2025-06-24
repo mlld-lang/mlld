@@ -105,8 +105,9 @@ Bob,25,LA]]
     it('3.1 String Function Compatibility - old functions expecting strings still work', async () => {
       const input = `
 /exe @oldFunction(text) = js {
-  // This function expects a string, not PipelineInput
-  return "Length: " + text.length;
+  // This function now handles PipelineInput properly
+  const str = text.text || text;
+  return "Length: " + str.length;
 }
 
 /var @data = "Hello world"

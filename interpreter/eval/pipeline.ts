@@ -448,6 +448,15 @@ async function executeCommandVariable(
                          typeof argValue === 'string' ? argValue :
                          argValue.content !== undefined ? argValue.content : String(argValue);
         
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('Regular parameter handling:', {
+            paramName,
+            textValue,
+            argValueType: typeof argValue,
+            hasContent: argValue?.content !== undefined
+          });
+        }
+        
         const paramSource: VariableSource = {
           directive: 'var',
           syntax: 'quoted',
