@@ -3,6 +3,6 @@
 
 # Invalid: any: modifier cannot have individual actions
 /when @condition1 any: [
-  @condition1 => @add "Action 1"
-  @condition2 => @add "Action 2"
+  @condition1 => @show "Action 1"
+  @condition2 => @show "Action 2"
 ]

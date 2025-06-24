@@ -418,7 +418,7 @@ export function isExternal(variable: Variable): variable is FileContentVariable 
 /**
  * Create a SimpleTextVariable
  */
-export function createSimpleText(
+export function createSimpleTextVariable(
   name: string,
   value: string,
   source: VariableSource,
@@ -438,7 +438,7 @@ export function createSimpleText(
 /**
  * Create an InterpolatedTextVariable
  */
-export function createInterpolatedText(
+export function createInterpolatedTextVariable(
   name: string,
   value: string,
   interpolationPoints: Array<{ start: number; end: number; expression: string }>,
@@ -460,7 +460,7 @@ export function createInterpolatedText(
 /**
  * Create a TemplateVariable
  */
-export function createTemplate(
+export function createTemplateVariable(
   name: string,
   value: string,
   parameters: string[] | undefined,
@@ -484,7 +484,7 @@ export function createTemplate(
 /**
  * Create an ObjectVariable
  */
-export function createObject(
+export function createObjectVariable(
   name: string,
   value: Record<string, any>,
   isComplex: boolean,
@@ -506,7 +506,7 @@ export function createObject(
 /**
  * Create an ArrayVariable
  */
-export function createArray(
+export function createArrayVariable(
   name: string,
   value: any[],
   isComplex: boolean,
@@ -528,7 +528,7 @@ export function createArray(
 /**
  * Create a PathVariable
  */
-export function createPath(
+export function createPathVariable(
   name: string,
   resolvedPath: string,
   originalPath: string,
@@ -558,7 +558,7 @@ export function createPath(
 /**
  * Create a PipelineInputVariable
  */
-export function createPipelineInput(
+export function createPipelineInputVariable(
   name: string,
   value: PipelineInput,
   format: 'json' | 'csv' | 'xml' | 'text',
@@ -579,6 +579,162 @@ export function createPipelineInput(
       isPipelineInput: true,
       pipelineStage
     }
+  };
+}
+
+/**
+ * Create a FileContentVariable
+ */
+export function createFileContentVariable(
+  name: string,
+  value: string,
+  filePath: string,
+  source: VariableSource,
+  metadata?: VariableMetadata
+): FileContentVariable {
+  return {
+    type: 'file-content',
+    name,
+    value,
+    filePath,
+    source,
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    metadata
+  };
+}
+
+/**
+ * Create a SectionContentVariable
+ */
+export function createSectionContentVariable(
+  name: string,
+  value: string,
+  filePath: string,
+  sectionName: string,
+  sectionSyntax: 'hash' | 'bracket',
+  source: VariableSource,
+  metadata?: VariableMetadata
+): SectionContentVariable {
+  return {
+    type: 'section-content',
+    name,
+    value,
+    filePath,
+    sectionName,
+    sectionSyntax,
+    source,
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    metadata
+  };
+}
+
+/**
+ * Create a ComputedVariable
+ */
+export function createComputedVariable(
+  name: string,
+  value: any,
+  language: 'js' | 'node' | 'python' | 'sh',
+  sourceCode: string,
+  source: VariableSource,
+  metadata?: VariableMetadata
+): ComputedVariable {
+  return {
+    type: 'computed',
+    name,
+    value,
+    language,
+    sourceCode,
+    source,
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    metadata
+  };
+}
+
+/**
+ * Create a CommandResultVariable
+ */
+export function createCommandResultVariable(
+  name: string,
+  value: string,
+  command: string,
+  source: VariableSource,
+  exitCode?: number,
+  stderr?: string,
+  metadata?: VariableMetadata
+): CommandResultVariable {
+  return {
+    type: 'command-result',
+    name,
+    value,
+    command,
+    exitCode,
+    stderr,
+    source,
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    metadata
+  };
+}
+
+/**
+ * Create an ImportedVariable
+ */
+export function createImportedVariable(
+  name: string,
+  value: any,
+  originalType: VariableTypeDiscriminator,
+  importPath: string,
+  isModule: boolean,
+  variableName: string,
+  source: VariableSource,
+  metadata?: VariableMetadata
+): ImportedVariable {
+  return {
+    type: 'imported',
+    name,
+    value,
+    originalType,
+    importSource: {
+      path: importPath,
+      isModule,
+      variableName
+    },
+    source,
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    metadata
+  };
+}
+
+/**
+ * Create an ExecutableVariable
+ */
+export function createExecutableVariable(
+  name: string,
+  type: 'command' | 'code',
+  template: string,
+  paramNames: string[],
+  language: 'js' | 'node' | 'python' | 'sh' | 'bash' | undefined,
+  source: VariableSource,
+  metadata?: VariableMetadata
+): ExecutableVariable {
+  return {
+    type: 'executable',
+    name,
+    value: {
+      type,
+      template,
+      language
+    },
+    paramNames,
+    source,
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    metadata
   };
 }
 

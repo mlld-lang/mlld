@@ -13,16 +13,16 @@ Test comprehensive truthiness behavior in @when directives.
 /var @zeroNumber = 0
 
 >> Truthy values should trigger
-/when @isEnabled => @add "String 'true' is truthy"
+/when @isEnabled => @show "String 'true' is truthy"
 
-/when @hasFeature => @add "Boolean true is truthy"
+/when @hasFeature => @show "Boolean true is truthy"
 
 >> Falsy values should NOT trigger
-/when @isDisabled => @add "FAIL: String 'false' triggered"
-/when @noFeature => @add "FAIL: Boolean false triggered"
-/when @emptyString => @add "FAIL: Empty string triggered"
-/when @nullValue => @add "FAIL: Null triggered"
-/when @zeroNumber => @add "FAIL: Zero triggered"
+/when @isDisabled => @show "FAIL: String 'false' triggered"
+/when @noFeature => @show "FAIL: Boolean false triggered"
+/when @emptyString => @show "FAIL: Empty string triggered"
+/when @nullValue => @show "FAIL: Null triggered"
+/when @zeroNumber => @show "FAIL: Zero triggered"
 
 ## 2. Negation Tests
 
@@ -33,24 +33,24 @@ Test comprehensive truthiness behavior in @when directives.
 /var @zero = 0
 
 >> Negating falsy values should trigger
-/when !@hasLicense => @add "No license (string 'false')"
+/when !@hasLicense => @show "No license (string 'false')"
 
-/when !@isValid => @add "Not valid (boolean false)"
+/when !@isValid => @show "Not valid (boolean false)"
 
-/when !@nothing => @add "Not null"
+/when !@nothing => @show "Not null"
 
-/when !@empty => @add "Not empty"
+/when !@empty => @show "Not empty"
 
-/when !@zero => @add "Not zero"
+/when !@zero => @show "Not zero"
 
 ## 3. Switch with String/Boolean Equivalence
 
 /var @mode = "true"
 
 /when @mode: [
-true => @add "Matched as boolean true"
-false => @add "Matched as boolean false"
-  "production" => @add "Matched production"
+true => @show "Matched as boolean true"
+false => @show "Matched as boolean false"
+  "production" => @show "Matched production"
 ]
 
 ## 4. Number/String Equivalence in Switch
@@ -60,13 +60,13 @@ false => @add "Matched as boolean false"
 
 >> Numbers and strings should match
 /when @count: [
-  "42" => @add "Count is 42"
-  "100" => @add "Count is 100"
+  "42" => @show "Count is 42"
+  "100" => @show "Count is 100"
 ]
 
 /when @version: [
-  "1" => @add "Version 1"
-  "2" => @add "Version 2"
+  "1" => @show "Version 1"
+  "2" => @show "Version 2"
 ]
 
 ## 5. Exec Function String Results
@@ -77,16 +77,16 @@ false => @add "Matched as boolean false"
 /exe @getZero() = [["0"]]
 
 >> String "true" from exec should be truthy
-/when @isReady() => @add "System is ready"
+/when @isReady() => @show "System is ready"
 
 >> String "false" from exec should be falsy
-/when @isEmpty() => @add "FAIL: false string triggered"
+/when @isEmpty() => @show "FAIL: false string triggered"
 
 >> Empty string should be falsy
-/when @getNull() => @add "FAIL: empty triggered"
+/when @getNull() => @show "FAIL: empty triggered"
 
 >> String "0" should be falsy
-/when @getZero() => @add "FAIL: zero string triggered"
+/when @getZero() => @show "FAIL: zero string triggered"
 
 ## 6. Complex Truthiness in Switches
 
@@ -95,20 +95,20 @@ false => @add "Matched as boolean false"
 /var @score = 0
 
 /when @userResponse: [
-  "yes" => @add "User agreed"
-  "no" => @add "User declined"
-true => @add "Truthy response"
+  "yes" => @show "User agreed"
+  "no" => @show "User declined"
+true => @show "Truthy response"
 ]
 
 >> Empty string and zero shouldn't match true
 /when @permission: [
-true => @add "FAIL: empty matched true"
-false => @add "No permission"
+true => @show "FAIL: empty matched true"
+false => @show "No permission"
 ]
 
 /when @score: [
-true => @add "FAIL: zero matched true"
-false => @add "No score"
+true => @show "FAIL: zero matched true"
+false => @show "No score"
 ]
 
 ## 7. @when any: Block with Mixed Truthiness
@@ -122,7 +122,7 @@ false => @add "No score"
   @hasTests
   @hasDocs
   @hasExamples
-] => @add "Has at least one artifact"
+] => @show "Has at least one artifact"
 
 >> All falsy should not trigger
 /var @a = ""
@@ -133,7 +133,7 @@ false => @add "No score"
   @a
   @b
   @c
-] => @add "FAIL: All falsy triggered any"
+] => @show "FAIL: All falsy triggered any"
 
 ## 8. @when all: Block with Mixed Values
 
@@ -146,7 +146,7 @@ false => @add "No score"
   @allValid
   @allSecure
   @allReady
-] => @add "All checks passed"
+] => @show "All checks passed"
 
 >> One falsy should prevent trigger
 /var @check1 = "true"
@@ -157,7 +157,7 @@ false => @add "No score"
   @check1
   @check2
   @check3
-] => @add "FAIL: Not all truthy but triggered"
+] => @show "FAIL: Not all truthy but triggered"
 
 ## 9. @when first: with Truthiness
 
@@ -167,10 +167,10 @@ false => @add "No score"
 
 >> Should find first truthy
 /when first: [
-  @firstStatus => @add "Status: {{firstStatus}}"
-  @firstFallback => @add "Fallback: {{firstFallback}}"
-  @firstDefault => @add "Default: {{firstDefault}}"
-true => @add "Ultimate fallback"
+  @firstStatus => @show "Status: {{firstStatus}}"
+  @firstFallback => @show "Fallback: {{firstFallback}}"
+  @firstDefault => @show "Default: {{firstDefault}}"
+true => @show "Ultimate fallback"
 ]
 
 ## 10. Negation in Block Forms
@@ -184,14 +184,14 @@ true => @add "Ultimate fallback"
   !@hasError
   !@hasWarning
   !@hasInfo
-] => @add "At least one log level is clean"
+] => @show "At least one log level is clean"
 
 >> Negated in all block
 /when all: [
   !@hasError
   !@hasWarning
   !@hasInfo
-] => @add "All log levels are clean"
+] => @show "All log levels are clean"
 
 ## 11. Edge Cases with Empty Arrays
 
@@ -208,13 +208,13 @@ true => @add "Ultimate fallback"
   @feature1
   !@feature2
   @feature3
-] => @add "Mixed negation: any triggered"
+] => @show "Mixed negation: any triggered"
 
 /when all: [
   @feature1
   !@feature2
   !@feature3
-] => @add "Mixed negation: all triggered"
+] => @show "Mixed negation: all triggered"
 
 ## 13. Deeply Falsy Values
 
@@ -231,6 +231,6 @@ return "false";
 return "0";
 }
 
-/when @getFalsy() => @add "FAIL: Empty from JS triggered"
-/when @getStringFalse() => @add "FAIL: 'false' from JS triggered"
-/when @getStringZero() => @add "FAIL: '0' from JS triggered"
+/when @getFalsy() => @show "FAIL: Empty from JS triggered"
+/when @getStringFalse() => @show "FAIL: 'false' from JS triggered"
+/when @getStringZero() => @show "FAIL: '0' from JS triggered"

@@ -15,7 +15,7 @@ describe('Pipeline Preservation Tests - Pre-Refactor Baseline', () => {
   describe('1. Basic Pipeline Format Tests', () => {
     it('1.1 JSON Format Pipeline - should parse JSON lazily and process', async () => {
       const input = `
-/exe extractNames(input) = js {
+/exe @extractNames(input) = js {
   // Verify input is PipelineInput object
   if (!input.text || !input.type || !input.data) {
     throw new Error("Missing PipelineInput properties");
@@ -24,8 +24,8 @@ describe('Pipeline Preservation Tests - Pre-Refactor Baseline', () => {
   return users.map(u => u.name).join(", ");
 }
 
-/var jsonData = [[{"name": "Alice"}, {"name": "Bob"}]]
-/var names = @jsonData with { format: "json", pipeline: [@extractNames] }
+/var @jsonData = [[{"name": "Alice"}, {"name": "Bob"}]]
+/var @names = @jsonData with { format: "json", pipeline: [@extractNames] }
 /show @names`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -34,7 +34,7 @@ describe('Pipeline Preservation Tests - Pre-Refactor Baseline', () => {
 
     it('1.2 CSV Format Pipeline - should parse CSV lazily', async () => {
       const input = `
-/exe countCSVRows(input) = js {
+/exe @countCSVRows(input) = js {
   const rows = input.csv;  // Should parse CSV lazily
   return \`\${rows.length} rows, \${rows[0].length} columns\`;
 }
@@ -51,7 +51,7 @@ Bob,25,LA]]
 
     it('1.3 XML Format Pipeline - should handle XML format', async () => {
       const input = `
-/exe processXML(input) = js {
+/exe @processXML(input) = js {
   // For now, XML just wraps in DOCUMENT tags
   return input.xml || input.text;
 }
@@ -66,7 +66,7 @@ Bob,25,LA]]
 
     it('1.4 Text Format Pipeline - should work with default text format', async () => {
       const input = `
-/exe uppercase(input) = js {
+/exe @uppercase(input) = js {
   // Should work with both string and PipelineInput
   const text = typeof input === 'string' ? input : input.text;
   return text.toUpperCase();
@@ -83,7 +83,7 @@ Bob,25,LA]]
   describe('2. Lazy Parsing Tests', () => {
     it('2.1 Parse Error Handling - should throw on access, not creation', async () => {
       const input = `
-/exe tryParse(input) = js {
+/exe @tryParse(input) = js {
   try {
     const data = input.data;  // Should throw here
     return "Parsed successfully";
@@ -104,7 +104,7 @@ Bob,25,LA]]
   describe('3. Backwards Compatibility Tests', () => {
     it('3.1 String Function Compatibility - old functions expecting strings still work', async () => {
       const input = `
-/exe oldFunction(text) = js {
+/exe @oldFunction(text) = js {
   // This function expects a string, not PipelineInput
   return "Length: " + text.length;
 }
@@ -119,7 +119,7 @@ Bob,25,LA]]
 
     it('3.2 toString() Behavior - PipelineInput stringifies correctly', async () => {
       const input = `
-/exe testStringify(input) = js {
+/exe @testStringify(input) = js {
   // Force string conversion
   return String(input).substring(0, 5);
 }
@@ -137,14 +137,14 @@ Bob,25,LA]]
   describe('4. Multi-Stage Pipeline Tests', () => {
     it('4.1 Format Preservation Across Stages', async () => {
       const input = `
-/exe stage1(input) = js {
+/exe @stage1(input) = js {
   return JSON.stringify({
     users: input.data,
     count: input.data.length
   });
 }
 
-/exe stage2(input) = js {
+/exe @stage2(input) = js {
   const data = input.data;  // Should parse stage1's output
   return \`Total users: \${data.count}\`;
 }
@@ -162,11 +162,11 @@ Bob,25,LA]]
 
     it('4.2 Mixed Pipeline Types - wrapped and unwrapped stages', async () => {
       const input = `
-/exe jsonStage(input) = js {
+/exe @jsonStage(input) = js {
   return input.data.value * 2;
 }
 
-/exe textStage(num) = js {
+/exe @textStage(num) = js {
   return \`Result: \${num}\`;
 }
 
@@ -187,7 +187,7 @@ Bob,25,LA]]
       const input = `
 /var multiplier = "3"
 
-/exe useParent(input) = js {
+/exe @useParent(input) = js {
   // Should be able to access @multiplier from parent
   const mult = parseInt(@multiplier);
   return input.data.value * mult;
@@ -226,12 +226,12 @@ Bob,25,LA]]
   [[{"id": 2, "value": 20}]]
 ]
 
-/exe processItem(json) = js {
+/exe @processItem(json) = js {
   const data = json.data;  // Should parse correctly
   return data.value * 2;
 }
 
-/exe processWithFormat(item) = @item with { 
+/exe @processWithFormat(item) = @item with { 
   format: "json", 
   pipeline: [@processItem] 
 }
@@ -247,15 +247,15 @@ Bob,25,LA]]
   describe('8. Error Context Tests', () => {
     it('8.1 Pipeline Stage Errors - should include context', async () => {
       const input = `
-/exe uppercase(input) = js {
+/exe @uppercase(input) = js {
   return input.toUpperCase();
 }
 
-/exe failingStage(input) = js {
+/exe @failingStage(input) = js {
   throw new Error("Stage failed: " + input);
 }
 
-/exe lowercase(input) = js {
+/exe @lowercase(input) = js {
   return input.toLowerCase();
 }
 

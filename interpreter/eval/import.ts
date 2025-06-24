@@ -8,6 +8,12 @@ import { VariableRedefinitionError, MlldError } from '@core/errors';
 import { HashUtils } from '@core/registry/utils/HashUtils';
 import { checkMlldVersion, formatVersionError } from '@core/utils/version-checker';
 import { version as currentMlldVersion } from '@core/version';
+import { 
+  createImportedVariable, 
+  createObjectVariable,
+  type VariableSource,
+  type VariableTypeDiscriminator 
+} from '@core/types/variable';
 
 type ContentNodeArray = ContentNode[];
 
@@ -79,7 +85,7 @@ function createNamespaceVariable(
   alias: string, 
   moduleObject: Record<string, any>, 
   importPath: string
-): MlldVariable {
+): any {
   // Unwrap the module object values for clean namespace access
   const unwrappedObject: Record<string, any> = {};
   
@@ -93,19 +99,29 @@ function createNamespaceVariable(
     }
   }
   
-  return {
-    type: 'data',
-    identifier: alias,
-    value: unwrappedObject,
-    nodeId: '',
-    location: { line: 0, column: 0 },
-    metadata: {
+  const source: VariableSource = {
+    directive: 'var',
+    syntax: 'object',
+    hasInterpolation: false,
+    isMultiLine: false
+  };
+  
+  // Create imported variable that wraps an object
+  return createImportedVariable(
+    alias,
+    unwrappedObject,
+    'object', // Namespace imports are always objects
+    importPath,
+    false, // Not a module
+    alias, // Variable name in the source
+    source,
+    {
       isImported: true,
       importPath: importPath,
       isNamespace: true,
       definedAt: { line: 0, column: 0, filePath: importPath }
     }
-  };
+  );
 }
 
 /**
@@ -395,18 +411,39 @@ async function importFromPath(
           }
         }
         
-        const importedVariable: MlldVariable = {
-          type: varType,
-          identifier: name,
-          value: varValue,
-          nodeId: '',
-          location: { line: 0, column: 0 },
-          metadata: {
+        // Map old variable type to new discriminator
+        const typeMap: Record<string, VariableTypeDiscriminator> = {
+          'text': 'simple-text',
+          'data': Array.isArray(varValue) ? 'array' : 'object',
+          'path': 'path',
+          'command': 'command-result',
+          'executable': 'executable',
+          'import': 'imported'
+        };
+        
+        const originalType = typeMap[varType] || 'simple-text';
+        
+        const source: VariableSource = {
+          directive: 'var',
+          syntax: varType === 'data' ? (Array.isArray(varValue) ? 'array' : 'object') : 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        };
+        
+        const importedVariable = createImportedVariable(
+          name,
+          varValue,
+          originalType,
+          resolvedPath,
+          false, // Not a module
+          name, // Variable name in source
+          source,
+          {
             isImported: true,
             importPath: resolvedPath,
             definedAt: { line: 0, column: 0, filePath: resolvedPath }
           }
-        };
+        );
         
         // For executable variables, restore the full structure
         if (varType === 'executable' && value && typeof value === 'object') {
@@ -479,18 +516,39 @@ async function importFromPath(
             }
           }
           
-          const importedVariable: MlldVariable = {
-            type: varType,
-            identifier: targetName,
-            value: varValue,
-            nodeId: '',
-            location: { line: 0, column: 0 },
-            metadata: {
+          // Map old variable type to new discriminator
+          const typeMap: Record<string, VariableTypeDiscriminator> = {
+            'text': 'simple-text',
+            'data': Array.isArray(varValue) ? 'array' : 'object',
+            'path': 'path',
+            'command': 'command-result',
+            'executable': 'executable',
+            'import': 'imported'
+          };
+          
+          const originalType = typeMap[varType] || 'simple-text';
+          
+          const source: VariableSource = {
+            directive: 'var',
+            syntax: varType === 'data' ? (Array.isArray(varValue) ? 'array' : 'object') : 'quoted',
+            hasInterpolation: false,
+            isMultiLine: false
+          };
+          
+          const importedVariable = createImportedVariable(
+            targetName,
+            varValue,
+            originalType,
+            resolvedPath,
+            false, // Not a module
+            varName, // Original variable name in source
+            source,
+            {
               isImported: true,
               importPath: resolvedPath,
               definedAt: { line: 0, column: 0, filePath: resolvedPath }
             }
-          };
+          );
           
           // For executable variables, restore the full structure
           if (varType === 'executable' && value && typeof value === 'object') {

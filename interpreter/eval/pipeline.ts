@@ -4,6 +4,11 @@ import { createTextVariable } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import { resolveVariableValue } from '../core/interpreter';
 import { createPipelineInput, isPipelineInput } from '../utils/pipeline-input';
+import { 
+  createSimpleTextVariable, 
+  createPipelineInputVariable,
+  type VariableSource 
+} from '@core/types/variable';
 
 /**
  * Execute a pipeline of transformation commands with @input threading
@@ -339,17 +344,22 @@ async function executeCommandVariable(
           });
         }
         
-        // Create a special variable that holds the wrapped input
-        // The value must be a string for mlld variable system, but we'll store the wrapped input in metadata
-        const pipelineVar = {
-          type: 'text' as const,
-          name: paramName,
-          value: textValue, // Store the raw string as the value
-          metadata: { 
-            isPipelineInput: true,
-            pipelineInput: wrappedInput // Store the wrapped input in metadata
-          }
+        // Create a pipeline input variable
+        const pipelineSource: VariableSource = {
+          directive: 'var',
+          syntax: 'template',
+          hasInterpolation: false,
+          isMultiLine: false
         };
+        
+        const pipelineVar = createPipelineInputVariable(
+          paramName,
+          wrappedInput,
+          format as 'json' | 'csv' | 'xml' | 'text',
+          textValue,
+          pipelineSource,
+          pipelineCtx?.stage
+        );
         
         if (process.env.MLLD_DEBUG === 'true') {
           console.log('Setting pipeline parameter variable:', {
@@ -367,7 +377,21 @@ async function executeCommandVariable(
                          typeof argValue === 'string' ? argValue :
                          argValue.content !== undefined ? argValue.content : String(argValue);
         
-        execEnv.setParameterVariable(paramName, createTextVariable(paramName, textValue));
+        const paramSource: VariableSource = {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        };
+        
+        const paramVar = createSimpleTextVariable(
+          paramName,
+          textValue,
+          paramSource,
+          { isParameter: true }
+        );
+        
+        execEnv.setParameterVariable(paramName, paramVar);
       }
     }
   }

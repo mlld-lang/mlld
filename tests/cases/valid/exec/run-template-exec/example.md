@@ -1,6 +1,6 @@
 # Test: run with template executables
 
-This test verifies that template executables can be invoked with @run.
+This test verifies that template executables can be invoked with run.
 
 ## Define executables
 /exe @greet(name) = {echo "Hello, @name!"}

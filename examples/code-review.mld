@@ -2,7 +2,7 @@
 
 /text @arch = @add [files/README.md # Architecture]
 /text @standards = @add [files/README.md # Code Standards]
-/text @diff = @run {git diff | cat}
+/text @diff = run {git diff | cat}
 
 /text @prompt = [[
 Read our docs: {{arch}} {{standards}}

@@ -47,28 +47,28 @@ This example demonstrates the new capabilities in mlld 1.4.1+ with return values
 
 ```mlld-run
 # JSON transformer for pretty printing
-/text @userJson = @run {echo '{"name":"test","items":[1,2,3}}'] with {
+/text @userJson = run {echo '{"name":"test","items":[1,2,3}}'] with {
   pipeline: [@JSON(@input)]
 }
 /add [[Formatted JSON:]]
 /add @userJson
 
 # CSV transformer
-/text @csvData = @run {echo 'name,price\napple,1.50\nbanana,0.75'} with {
+/text @csvData = run {echo 'name,price\napple,1.50\nbanana,0.75'} with {
   pipeline: [@CSV(@input)]
 }
 /add [[CSV as array:]]
 /add [[{{csvData}}]]
 
 # XML transformer
-/text @xmlData = @run {echo '<root><item>test</item></root>'} with {
+/text @xmlData = run {echo '<root><item>test</item></root>'} with {
   pipeline: [@XML(@input)]
 }
 /add [[XML as object:]]
 /add [[{{xmlData}}]]
 
 # Markdown transformer
-/text @mdData = @run {echo '# Title\n\nSome **bold** text'} with {
+/text @mdData = run {echo '# Title\n\nSome **bold** text'} with {
   pipeline: [@MD(@input)]
 }
 /add [[Markdown AST:]]
@@ -81,7 +81,7 @@ This example demonstrates the new capabilities in mlld 1.4.1+ with return values
 /import { fixRelativeLinks } from @mlld/fix-relative-links
 
 # Chain transformers together
-/text @processedDoc = @run {cat README.md} with {
+/text @processedDoc = run {cat README.md} with {
   pipeline: [
     @fixRelativeLinks(@input, ".", "docs"),
     @MD(@input)  # Parse to AST

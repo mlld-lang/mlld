@@ -3,8 +3,8 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
-import { createExecutableVariable } from '@core/types/executable';
 import { astLocationToSourceLocation } from '@core/types';
+import { createExecutableVariable, type VariableSource } from '@core/types/variable';
 
 /**
  * Extract parameter names from the params array.
@@ -265,10 +265,50 @@ export async function evaluateExe(
     throw new Error(`Unsupported exec subtype: ${directive.subtype}`);
   }
   
+  // Create variable source metadata
+  const source: VariableSource = {
+    directive: 'var', // exe directives create variables in the new system
+    syntax: 'code', // Default to code syntax
+    hasInterpolation: false,
+    isMultiLine: false
+  };
+  
+  // Adjust syntax based on executable type
+  if (executableDef.type === 'command' || executableDef.type === 'commandRef') {
+    source.syntax = 'command';
+  } else if (executableDef.type === 'template') {
+    source.syntax = 'template';
+  }
+  
+  // Extract language for code executables
+  const language = executableDef.type === 'code' 
+    ? (executableDef.language as 'js' | 'node' | 'python' | 'sh' | undefined)
+    : undefined;
+  
   // Create and store the executable variable
-  const variable = createExecutableVariable(identifier, executableDef, {
-    definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
-  });
+  const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
+  const variable = createExecutableVariable(
+    identifier,
+    executableDef.type,
+    '', // Template will be filled from executableDef
+    executableDef.paramNames || [],
+    language,
+    source,
+    {
+      definedAt: location,
+      executableDef // Store the full definition in metadata
+    }
+  );
+  
+  // Set the actual template/command content
+  if (executableDef.type === 'command') {
+    variable.value.template = executableDef.commandTemplate;
+  } else if (executableDef.type === 'code') {
+    variable.value.template = executableDef.codeTemplate;
+  } else if (executableDef.type === 'template') {
+    variable.value.template = executableDef.template;
+  }
+  
   env.setVariable(identifier, variable);
   
   // Return the executable definition (no output for variable definitions)

@@ -1,4 +1,6 @@
 import type { MlldNode, MlldVariable, SourceLocation, DirectiveNode } from '@core/types';
+import type { Variable, VariableSource } from '@core/types/variable';
+import { createSimpleTextVariable, createObjectVariable, createPathVariable } from '@core/types/variable';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import type { ResolvedURLConfig } from '@core/config/types';
@@ -62,7 +64,7 @@ interface CollectedError {
  * This replaces StateService, ResolutionService, and capability injection.
  */
 export class Environment {
-  private variables = new Map<string, MlldVariable>();
+  private variables = new Map<string, MlldVariable | Variable>();
   private nodes: MlldNode[] = [];
   private parent?: Environment;
   private urlCache: Map<string, { content: string; timestamp: number; ttl?: number }> = new Map();
@@ -77,7 +79,7 @@ export class Environment {
   private resolverManager?: ResolverManager; // New resolver system
   private urlCacheManager?: URLCache; // URL cache manager
   private reservedNames: Set<string> = new Set(); // Now dynamic based on registered resolvers
-  private resolverVariableCache = new Map<string, MlldVariable>(); // Cache for resolver variables
+  private resolverVariableCache = new Map<string, MlldVariable | Variable>(); // Cache for resolver variables
   private initialNodeCount: number = 0; // Track initial nodes to prevent duplicate merging
   
   // Shadow environments for language-specific function injection
@@ -359,49 +361,70 @@ export class Environment {
     }
     
     // Initialize @TIME with current timestamp
-    const timeVar: MlldVariable = {
-      type: 'text',
-      value: getTimeValue(), // Delegate to utility function
-      nodeId: '',
-      location: { line: 0, column: 0 },
-      metadata: {
+    const timeSource: VariableSource = {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    const timeVar = createSimpleTextVariable(
+      'TIME',
+      getTimeValue(),
+      timeSource,
+      {
         isReserved: true,
         definedAt: { line: 0, column: 0, filePath: '<reserved>' }
       }
-    };
+    );
     // Direct assignment for reserved variables during initialization
     this.variables.set('TIME', timeVar);
     // Note: lowercase 'time' is handled in getVariable() to avoid conflicts
     
     // Initialize @DEBUG with environment information
     // This is a lazy variable that generates its value when accessed
-    const debugVar: MlldVariable = {
-      type: 'data',
-      value: null, // Will be computed dynamically
-      nodeId: '',
-      location: { line: 0, column: 0 },
-      metadata: {
+    const debugSource: VariableSource = {
+      directive: 'var',
+      syntax: 'object',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    const debugVar = createObjectVariable(
+      'DEBUG',
+      {}, // Empty object, will be computed dynamically
+      false, // Not complex
+      debugSource,
+      {
         isReserved: true,
         isLazy: true, // Indicates value should be computed on access
         definedAt: { line: 0, column: 0, filePath: '<reserved>' }
       }
-    };
+    );
     // Direct assignment for reserved variables during initialization
     this.variables.set('DEBUG', debugVar);
     // Note: lowercase 'debug' is handled in getVariable() to avoid conflicts
     
     // Initialize @PROJECTPATH with project root path
     // For now, use basePath as the value (tests override this in fixture setup)
-    const projectPathVar: MlldVariable = {
-      type: 'text',
-      value: getProjectPathValue(this.basePath),
-      nodeId: '',
-      location: { line: 0, column: 0 },
-      metadata: {
+    const projectPathSource: VariableSource = {
+      directive: 'var',
+      syntax: 'path',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    const projectPath = getProjectPathValue(this.basePath);
+    const projectPathVar = createPathVariable(
+      'PROJECTPATH',
+      projectPath,
+      projectPath,
+      false, // Not a URL
+      true, // Is absolute
+      projectPathSource,
+      undefined, // No security metadata
+      {
         isReserved: true,
         definedAt: { line: 0, column: 0, filePath: '<reserved>' }
       }
-    };
+    );
     // Direct assignment for reserved variables during initialization
     this.variables.set('PROJECTPATH', projectPathVar);
     // Note: lowercase 'projectpath' is handled in getVariable() to avoid conflicts
@@ -762,7 +785,7 @@ export class Environment {
   
   // --- Variable Management ---
   
-  setVariable(name: string, variable: MlldVariable): void {
+  setVariable(name: string, variable: MlldVariable | Variable): void {
     // Check if the name is reserved (but allow system variables to be set)
     if (this.reservedNames.has(name) && !variable.metadata?.isReserved && !variable.metadata?.isSystem) {
       throw new Error(`Cannot create variable '${name}': this name is reserved for system use`);
@@ -818,7 +841,7 @@ export class Environment {
    * Set a parameter variable without checking for import conflicts.
    * Used for temporary parameter variables in exec functions.
    */
-  setParameterVariable(name: string, variable: MlldVariable): void {
+  setParameterVariable(name: string, variable: MlldVariable | Variable): void {
     // Only check if variable already exists in this scope
     if (this.variables.has(name)) {
       const existing = this.variables.get(name)!;
@@ -833,7 +856,7 @@ export class Environment {
     this.variables.set(name, variable);
   }
   
-  getVariable(name: string): MlldVariable | undefined {
+  getVariable(name: string): MlldVariable | Variable | undefined {
     // FAST PATH: Check local variables first (most common case)
     let variable = this.variables.get(name);
     
@@ -893,7 +916,7 @@ export class Environment {
    * Create a synthetic variable for a resolver reference
    * This allows resolvers to be used in variable contexts
    */
-  private createResolverVariable(resolverName: string): MlldVariable {
+  private createResolverVariable(resolverName: string): MlldVariable | Variable {
     // For resolver variables, we check if there's already a reserved variable
     // This handles TIME, DEBUG, INPUT, PROJECTPATH which are pre-initialized
     const existingVar = this.variables.get(resolverName);
@@ -965,7 +988,7 @@ export class Environment {
    * Get a resolver variable with proper async resolution
    * This handles context-dependent behavior for resolvers like @TIME
    */
-  async getResolverVariable(name: string): Promise<MlldVariable | undefined> {
+  async getResolverVariable(name: string): Promise<MlldVariable | Variable | undefined> {
     const upperName = name.toUpperCase();
     
     // Check if it's a reserved resolver name

@@ -4,7 +4,7 @@
 /var @isTest = ""
 
 /when first: [
-  @isDev => @add "Dev mode"
-  @isProd => @add "Prod mode"  
-  @isTest => @add "Test mode"
+  @isDev => @show "Dev mode"
+  @isProd => @show "Prod mode"  
+  @isTest => @show "Test mode"
 ]

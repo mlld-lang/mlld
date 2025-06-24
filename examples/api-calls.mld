@@ -39,9 +39,9 @@ baseUrl: "https://api.example.com",
 users: {
 list: @get(@api.baseUrl + "/users"),
 create: @post(@api.baseUrl + "/users"),
-get: @exec(id) = @run {curl -s @api.baseUrl/users/@id},
-update: @exec(id, data) = @run {curl -s -X PUT @api.baseUrl/users/@id -d '@data'},
-delete: @exec(id) = @run {curl -s -X DELETE @api.baseUrl/users/@id}
+get: @exec(id) = run {curl -s @api.baseUrl/users/@id},
+update: @exec(id, data) = run {curl -s -X PUT @api.baseUrl/users/@id -d '@data'},
+delete: @exec(id) = run {curl -s -X DELETE @api.baseUrl/users/@id}
   }
 }
 

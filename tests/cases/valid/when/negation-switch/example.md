@@ -5,12 +5,12 @@
 # Testing negation in switch form
 
 /when @userRole: [
-  !"admin" => @add "User is not an admin"
-  !"guest" => @add "User is not a guest"
-  "guest" => @add "User is a guest"
+  !"admin" => @show "User is not an admin"
+  !"guest" => @show "User is not a guest"
+  "guest" => @show "User is a guest"
 ]
 
 /when @hasPermission: [
-  !false => @add "This should not appear"
-false => @add "No permission granted"
+  !false => @show "This should not appear"
+false => @show "No permission granted"
 ]

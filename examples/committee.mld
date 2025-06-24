@@ -79,7 +79,7 @@ echo "{{serviceAnalysisPrompt}}" | llm --model gpt-4}
   @is_production()
   @tests_passing()
   @approved_for_deploy()
-] => @run {npm run deploy}
+] => run {npm run deploy}
 
 ## Generate Summary Report
 /text @summaryTemplate = [[
@@ -105,7 +105,7 @@ foreach @not_healthy(@services)
 /when @is_production() => @add "- Monitor production metrics"
 /when first: [
   @tests_passing() => @add "- Ready for deployment"
-  @run {echo "true"} => @add "- Fix failing tests before deployment"
+  run {echo "true"} => @add "- Fix failing tests before deployment"
 ]
 ]]
 

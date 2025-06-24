@@ -2,8 +2,9 @@ import type { DirectiveNode, TextNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
-import { createPathVariable, astLocationToSourceLocation } from '@core/types';
+import { astLocationToSourceLocation } from '@core/types';
 import type { SecurityOptions } from '@core/types/primitives';
+import { createPathVariable, type VariableSource } from '@core/types/variable';
 
 /**
  * Evaluate @path directives.
@@ -102,13 +103,26 @@ export async function evaluatePath(
     resolvedPath = resolvedPath.replace(/^\.\//, '');
   }
   
+  // Create variable source metadata
+  const source: VariableSource = {
+    directive: 'var', // Path directives create variables in the new system
+    syntax: 'path',
+    hasInterpolation: false,
+    isMultiLine: false
+  };
+  
   // Create and store the variable with security metadata
-  const variable = createPathVariable(identifier, resolvedPath, {
-    isURL: isURL || env.isURL(resolvedPath),
-    security: security
-  }, {
-    definedAt: astLocationToSourceLocation(directive.location, env.getCurrentFilePath())
-  });
+  const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
+  const variable = createPathVariable(
+    identifier,
+    resolvedPath,
+    interpolatedPath, // Original path before resolution
+    isURL || env.isURL(resolvedPath),
+    resolvedPath.startsWith('/'), // Is absolute
+    source,
+    security,
+    { definedAt: location }
+  );
   
   env.setVariable(identifier, variable);
   

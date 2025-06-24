@@ -41,6 +41,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     // Map fixture names to example directory paths
     const exampleDirMappings: Record<string, string> = {
       'text-assignment-add': 'text/assignment-add',
+      'text-assignment-add-section-bracket': 'text/assignment-add',
+      'text-assignment-add-section-bracket-rename': 'text/assignment-add',
       'text-assignment-path': 'text/assignment-path',
       'text-assignment-run': 'text/assignment-run',
       'text-path': 'text/path',

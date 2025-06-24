@@ -31,4 +31,4 @@
 /add @task.code_review
 
 >> this doesn't work but should
->> @run @text codecat("./examples")
+>> run @text codecat("./examples")

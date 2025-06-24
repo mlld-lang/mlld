@@ -572,6 +572,31 @@ export async function resolveVariableValue(variable: MlldVariable, env: Environm
     return variable.value;
   }
   
+  // Handle new discriminated union variable types
+  const anyVariable = variable as any;
+  if (anyVariable && typeof anyVariable === 'object' && 'type' in anyVariable) {
+    switch (anyVariable.type) {
+      case 'simple-text':
+      case 'interpolated-text':
+      case 'template':
+      case 'file-content':
+      case 'section-content':
+      case 'object':
+      case 'array':
+      case 'computed':
+      case 'command-result':
+      case 'imported':
+      case 'pipeline-input':
+        return anyVariable.value;
+      case 'path':
+        // Path variables have a complex value structure
+        return anyVariable.value.resolvedPath || anyVariable.value;
+      case 'executable':
+        // Executable variables store their definition
+        return anyVariable.value;
+    }
+  }
+  
   // This should never happen with proper typing
   const varType = (variable as Record<string, unknown>).type || 'unknown';
   throw new Error(`Unknown variable type: ${String(varType)}`);
@@ -676,9 +701,42 @@ export async function interpolate(
         }
         value = `[executable: ${variable.name}]`;
       } else {
-        // This should never happen with proper typing
-        const varType = (variable as MlldVariable).type;
-        throw new Error(`Unknown variable type for interpolation: ${varType}`);
+        // Handle new discriminated union variable types
+        const anyVariable = variable as any;
+        if (anyVariable && typeof anyVariable === 'object' && 'type' in anyVariable) {
+          switch (anyVariable.type) {
+            case 'simple-text':
+            case 'interpolated-text':
+            case 'template':
+            case 'file-content':
+            case 'section-content':
+            case 'command-result':
+            case 'imported':
+              value = anyVariable.value;
+              break;
+            case 'object':
+            case 'array':
+            case 'computed':
+            case 'pipeline-input':
+              value = anyVariable.value;
+              break;
+            case 'path':
+              // Path variables have a complex value structure
+              value = anyVariable.value.resolvedPath || anyVariable.value;
+              break;
+            case 'executable':
+              // Executables don't interpolate - they need to be invoked
+              value = `[executable: ${anyVariable.identifier}]`;
+              break;
+            default:
+              // This should never happen with proper typing
+              throw new Error(`Unknown variable type for interpolation: ${anyVariable.type}`);
+          }
+        } else {
+          // This should never happen with proper typing
+          const varType = (variable as MlldVariable).type;
+          throw new Error(`Unknown variable type for interpolation: ${varType}`);
+        }
       }
       
       // Handle field access if present

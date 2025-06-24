@@ -1,2 +1,2 @@
-/var @intro = @add [file.md # Original Title] as "# Renamed Section"
+/var @intro = [section-file.md # Original Title]
 /show @intro

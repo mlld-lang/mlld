@@ -33,9 +33,9 @@
 4. {{users.3.name}} ({{users.3.role}}) - Active: {{users.3.active}}
 ]]
 
-/text @role = @run @count_by_role(admin)
-/text @users = @run @count_by_role(user)
-/text @active = @run @get_active_users
+/text @role = run @count_by_role(admin)
+/text @users = run @count_by_role(user)
+/text @active = run @get_active_users
 
 /text @user_counts = [[
 ## Computed Values

@@ -17,9 +17,9 @@ tools: @llm_tools,
 full: @llm_full,
   
 # Convenience presets
-assistant: @exec(prompt) = @run {llm "@prompt" -s "You are a helpful assistant"},
-coder: @exec(prompt) = @run {llm "@prompt" -s "You are an expert programmer"},
-reviewer: @exec(prompt) = @run {llm "@prompt" -s "You are a thorough code reviewer"}
+assistant: @exec(prompt) = run {llm "@prompt" -s "You are a helpful assistant"},
+coder: @exec(prompt) = run {llm "@prompt" -s "You are an expert programmer"},
+reviewer: @exec(prompt) = run {llm "@prompt" -s "You are a thorough code reviewer"}
 }
 
 ## Usage examples:
@@ -52,14 +52,14 @@ media: @exec(files) = @data llm = {...@llm, _media: @files},
 tools: @exec(tools) = @data llm = {...@llm, _tools: @tools},
   
 # Execute with current config
-run: @exec(prompt) = @run {llm "@prompt" -s "@llm._system" {{llm._media ? "-a " + llm._media : ""}} {{llm._tools ? "--tool " + llm._tools : ""}}}
+run: @exec(prompt) = run {llm "@prompt" -s "@llm._system" {{llm._media ? "-a " + llm._media : ""}} {{llm._tools ? "--tool " + llm._tools : ""}}}
 }
 
 ## Option 3: Factory Functions
 
 /exec @createLLM(config) = @data {
-prompt: @exec(text) = @run {llm "@text" -s "@config.system" {{config.media ? "-a " + config.media : ""}}},
-withTools: @exec(text, tools) = @run {llm "@text" -s "@config.system" --tool @tools}
+prompt: @exec(text) = run {llm "@text" -s "@config.system" {{config.media ? "-a " + config.media : ""}}},
+withTools: @exec(text, tools) = run {llm "@text" -s "@config.system" --tool @tools}
 }
 
 /data @codingLLM = @createLLM({system: "You are an expert programmer"})

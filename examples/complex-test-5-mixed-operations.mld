@@ -55,7 +55,7 @@ Object keys: {{object_var}}
 /run {echo "String: @string_var, Number: @number_var"}
 
 # Test command execution
-/text @command_result = @run @process_data(@array_var, @object_var)
+/text @command_result = run @process_data(@array_var, @object_var)
 
 ## Command Result
 Lines counted: @add @command_result

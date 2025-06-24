@@ -68,8 +68,8 @@ This should fail because:
 
 # Invalid: any: modifier cannot have individual actions
 /when @condition1 any: [
-  @condition1 => @add "Action 1"
-  @condition2 => @add "Action 2"
+  @condition1 => @show "Action 1"
+  @condition2 => @show "Action 2"
 ]
 ```
 
@@ -82,20 +82,20 @@ This should fail because:
 The @when directive requires a variable to evaluate, not a literal value.
 
 ## Invalid: Using literal true
-/when true => @add "This is invalid syntax"
+/when true => @show "This is invalid syntax"
 
 ## Invalid: Using literal false  
-/when false => @add "This is also invalid"
+/when false => @show "This is also invalid"
 
 ## Invalid: Using literal null
-/when null => @add "This too is invalid"
+/when null => @show "This too is invalid"
 
 ## Invalid: Using literal string
-/when "value" => @add "String literals are not allowed"
+/when "value" => @show "String literals are not allowed"
 
 ## Valid: Using a variable
 /var @myCondition = "true"
-/when @myCondition => @add "This is valid syntax"
+/when @myCondition => @show "This is valid syntax"
 ```
 
 ## Valid
@@ -137,7 +137,7 @@ The @when directive requires a variable to evaluate, not a literal value.
 /add @task.code_review
 
 >> this doesn't work but should
->> @run @text codecat("./examples")
+>> run @text codecat("./examples")
 ```
 
 ### Valid Exec invocation module

@@ -1,2 +1,2 @@
 /exe @is_true() = {echo "true"}
-/when @is_true() => @add "Success!"
+/when @is_true() => @show "Success!"

@@ -3,17 +3,17 @@
 The @when directive requires a variable to evaluate, not a literal value.
 
 ## Invalid: Using literal true
-/when true => @add "This is invalid syntax"
+/when true => @show "This is invalid syntax"
 
 ## Invalid: Using literal false  
-/when false => @add "This is also invalid"
+/when false => @show "This is also invalid"
 
 ## Invalid: Using literal null
-/when null => @add "This too is invalid"
+/when null => @show "This too is invalid"
 
 ## Invalid: Using literal string
-/when "value" => @add "String literals are not allowed"
+/when "value" => @show "String literals are not allowed"
 
 ## Valid: Using a variable
 /var @myCondition = "true"
-/when @myCondition => @add "This is valid syntax"
+/when @myCondition => @show "This is valid syntax"

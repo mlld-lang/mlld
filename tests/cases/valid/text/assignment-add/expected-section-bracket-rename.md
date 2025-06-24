@@ -1,2 +1,2 @@
-# Renamed Section
+# Original Title
 Content under this section

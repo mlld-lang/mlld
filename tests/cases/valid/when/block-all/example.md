@@ -5,7 +5,7 @@
 /var @hasChat = ""
 
 /when @hasAuth all: [
-  @hasAuth => @add "Authentication enabled\n"
-  @hasPayments => @add "Payments enabled\n"
-  @hasChat => @add "Chat enabled\n"
+  @hasAuth => @show "Authentication enabled\n"
+  @hasPayments => @show "Payments enabled\n"
+  @hasChat => @show "Chat enabled\n"
 ]

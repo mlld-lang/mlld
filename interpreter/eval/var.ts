@@ -2,12 +2,72 @@ import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
+import { astLocationToSourceLocation } from '@core/types';
 import { 
-  createTextVariable, 
-  createDataVariable, 
-  createComplexDataVariable,
-  astLocationToSourceLocation 
-} from '@core/types';
+  Variable,
+  VariableSource,
+  createSimpleTextVariable,
+  createInterpolatedTextVariable,
+  createTemplateVariable,
+  createArrayVariable,
+  createObjectVariable,
+  createFileContentVariable,
+  createSectionContentVariable,
+  createComputedVariable,
+  createCommandResultVariable
+} from '@core/types/variable';
+
+/**
+ * Create VariableSource metadata based on the value node type
+ */
+function createVariableSource(valueNode: any, directive: DirectiveNode): VariableSource {
+  const baseSource: VariableSource = {
+    directive: 'var',
+    syntax: 'quoted', // default
+    hasInterpolation: false,
+    isMultiLine: false
+  };
+
+  // Determine syntax type based on AST node
+  if (valueNode.type === 'array') {
+    baseSource.syntax = 'array';
+    baseSource.wrapperType = 'brackets';
+  } else if (valueNode.type === 'object') {
+    baseSource.syntax = 'object';
+    baseSource.wrapperType = 'brackets';
+  } else if (valueNode.type === 'command') {
+    baseSource.syntax = 'command';
+    baseSource.wrapperType = 'brackets';
+  } else if (valueNode.type === 'code') {
+    baseSource.syntax = 'code';
+    baseSource.wrapperType = 'brackets';
+  } else if (valueNode.type === 'path') {
+    baseSource.syntax = 'path';
+    baseSource.wrapperType = 'brackets';
+  } else if (valueNode.type === 'section') {
+    baseSource.syntax = 'path'; // sections are path-based
+    baseSource.wrapperType = 'brackets';
+  } else if (valueNode.type === 'VariableReference') {
+    baseSource.syntax = 'reference';
+  } else if (directive.meta?.wrapperType) {
+    // Use wrapper type from directive metadata
+    baseSource.wrapperType = directive.meta.wrapperType;
+    if (directive.meta.wrapperType === 'singleQuote') {
+      baseSource.syntax = 'quoted';
+      baseSource.hasInterpolation = false;
+    } else if (directive.meta.wrapperType === 'doubleQuote' || directive.meta.wrapperType === 'backtick') {
+      baseSource.syntax = 'template';
+      baseSource.hasInterpolation = true; // Assume interpolation for these types
+    }
+  }
+
+  // Check for multi-line content
+  if (typeof valueNode === 'string' && valueNode.includes('\n')) {
+    baseSource.isMultiLine = true;
+  }
+
+  return baseSource;
+}
 
 /**
  * Evaluate @var directives.
@@ -162,29 +222,72 @@ export async function evaluateVar(
 
   // Create and store the appropriate variable type
   const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
-  
-  if (variableType === 'data') {
-    // Check if this is complex data that needs lazy evaluation
-    const needsLazyEval = valueNode.type === 'code' || 
-                         (valueNode.type === 'object' && hasComplexValues(valueNode.properties));
+  const source = createVariableSource(valueNode, directive);
+  const metadata = { definedAt: location };
+
+  let variable: Variable;
+
+  // Create specific variable types based on AST node type
+  if (valueNode.type === 'array') {
+    const isComplex = hasComplexArrayItems(resolvedValue);
+    variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);
     
-    if (needsLazyEval && valueNode.type !== 'code') {
-      // Store raw value for lazy evaluation
-      const variable = createComplexDataVariable(identifier, valueNode, { definedAt: location });
-      env.setVariable(identifier, variable);
+  } else if (valueNode.type === 'object') {
+    const isComplex = hasComplexValues(valueNode.properties);
+    variable = createObjectVariable(identifier, resolvedValue, isComplex, source, metadata);
+    
+  } else if (valueNode.type === 'command') {
+    variable = createCommandResultVariable(identifier, resolvedValue, valueNode.command, source, 
+      undefined, undefined, metadata);
+    
+  } else if (valueNode.type === 'code') {
+    // Need to get source code from the value node
+    const sourceCode = valueNode.code || ''; // TODO: Verify how to extract source code
+    variable = createComputedVariable(identifier, resolvedValue, 
+      valueNode.language || 'js', sourceCode, source, metadata);
+    
+  } else if (valueNode.type === 'path') {
+    const filePath = await interpolate(valueNode.segments, env);
+    variable = createFileContentVariable(identifier, resolvedValue, filePath, source, metadata);
+    
+  } else if (valueNode.type === 'section') {
+    const filePath = await interpolate(valueNode.path, env);
+    const sectionName = await interpolate(valueNode.section, env);
+    variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
+      sectionName, 'hash', source, metadata);
+    
+  } else if (valueNode.type === 'VariableReference') {
+    // For now, create a variable based on the resolved type
+    if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+      if (Array.isArray(resolvedValue)) {
+        variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+      } else {
+        variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
+      }
     } else {
-      // Simple data variable
-      const variable = createDataVariable(identifier, resolvedValue, { definedAt: location });
-      env.setVariable(identifier, variable);
+      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
     }
+    
   } else {
-    // Text variable
-    const variable = createTextVariable(identifier, String(resolvedValue), {
-      definedAt: location,
-      ...(directive.meta?.isTemplateContent ? { isTemplateContent: true } : {})
-    });
-    env.setVariable(identifier, variable);
+    // Text variables - need to determine specific type
+    const strValue = String(resolvedValue);
+    
+    if (directive.meta?.wrapperType === 'singleQuote') {
+      variable = createSimpleTextVariable(identifier, strValue, source, metadata);
+    } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick') {
+      // Template variable
+      variable = createTemplateVariable(identifier, strValue, undefined, 'backtick', source, metadata);
+    } else if (directive.meta?.wrapperType === 'doubleQuote' || source.hasInterpolation) {
+      // Interpolated text - need to track interpolation points
+      // For now, create without interpolation points - TODO: extract these from AST
+      variable = createInterpolatedTextVariable(identifier, strValue, [], source, metadata);
+    } else {
+      // Default to simple text
+      variable = createSimpleTextVariable(identifier, strValue, source, metadata);
+    }
   }
+
+  env.setVariable(identifier, variable);
 
   // Return empty string - var directives don't produce output
   return { value: '', env };
@@ -203,6 +306,36 @@ function hasComplexValues(properties: any): boolean {
         value.type === 'command' || 
         value.type === 'VariableReference'
       )) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Check if array items contain complex values
+ */
+function hasComplexArrayItems(items: any[]): boolean {
+  if (!items || items.length === 0) return false;
+  
+  for (const item of items) {
+    if (item && typeof item === 'object') {
+      if ('type' in item && (
+        item.type === 'code' || 
+        item.type === 'command' || 
+        item.type === 'VariableReference' ||
+        item.type === 'array' ||
+        item.type === 'object'
+      )) {
+        return true;
+      }
+      // Check nested arrays and objects
+      if (Array.isArray(item) && hasComplexArrayItems(item)) {
+        return true;
+      }
+      if (item.constructor === Object && hasComplexValues(item)) {
         return true;
       }
     }

@@ -10,4 +10,4 @@
   !@features.darkMode
   !@features.experimental  
   @features.analytics
-] => @add "At least one condition is true"
+] => @show "At least one condition is true"

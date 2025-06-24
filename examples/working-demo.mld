@@ -15,7 +15,7 @@ Project: @add @config.name
 Version: @add @config.version
 
 ## Command Example
-/text @date = @run {date +%Y-%m-%d}
+/text @date = run {date +%Y-%m-%d}
 Today's date: @add @date
 
 ## Template Example

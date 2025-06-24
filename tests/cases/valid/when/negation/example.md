@@ -9,11 +9,11 @@
 
 # Testing negation in @when
 
-/when !@isProduction => @add "Not in production mode"
-/when !@emptyString => @add "Empty string is falsy"
-/when !@hasValue => @add "This should not appear"
-/when !@nullValue => @add "Null is falsy"
-/when !@trueValue => @add "This should not appear"
-/when !@falseValue => @add "False is falsy"
-/when !@zeroValue => @add "Zero is falsy"
-/when !@oneValue => @add "This should not appear"
+/when !@isProduction => @show "Not in production mode"
+/when !@emptyString => @show "Empty string is falsy"
+/when !@hasValue => @show "This should not appear"
+/when !@nullValue => @show "Null is falsy"
+/when !@trueValue => @show "This should not appear"
+/when !@falseValue => @show "False is falsy"
+/when !@zeroValue => @show "Zero is falsy"
+/when !@oneValue => @show "This should not appear"

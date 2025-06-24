@@ -8,13 +8,13 @@ Test that @when actions can use @add with exec command invocations.
 
 /var @showHeader = "true"
 
-/when @showHeader => @add @formatHeader("Welcome")
+/when @showHeader => @show @formatHeader("Welcome")
 
-/when @isTrue => @add "Current version: "
-/when @isTrue => @add @getVersion()
+/when @isTrue => @show "Current version: "
+/when @isTrue => @show @getVersion()
 
 /when @isTrue first: [
-  "dev" => @add @formatHeader("Development Mode")
-  "prod" => @add @formatHeader("Production Mode")
-  @isTrue => @add @formatHeader("Default Mode")
+  "dev" => @show @formatHeader("Development Mode")
+  "prod" => @show @formatHeader("Production Mode")
+  @isTrue => @show @formatHeader("Default Mode")
 ]

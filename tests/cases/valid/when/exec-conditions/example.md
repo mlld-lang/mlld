@@ -2,8 +2,8 @@
 /exe @is_false() = {echo ""}
 
 ## Test 1: Simple conditional
-/when @is_true() => @add "This should appear"
-/when @is_false() => @add "This should NOT appear"
+/when @is_true() => @show "This should appear"
+/when @is_false() => @show "This should NOT appear"
 
 ## Test 2: Block with first modifier
 /var @env = "development"
@@ -11,9 +11,9 @@
 /exe @is_prod() = {echo ""}
 
 /when @mode first: [
-  @is_prod() => @add "Production mode"
-  @is_dev() => @add "Development mode"
-  "true" => @add "Unknown mode"
+  @is_prod() => @show "Production mode"
+  @is_dev() => @show "Development mode"
+  "true" => @show "Unknown mode"
 ]
 
 ## Test 3: any modifier
@@ -25,10 +25,10 @@
   @has_node()
   @has_npm()
   @has_yarn()
-] => @add "Package manager found"
+] => @show "Package manager found"
 
 ## Test 4: all modifier
 /when @tools all: [
-  @has_node() => @add "Node.js installed"
-  @has_npm() => @add "npm installed"
+  @has_node() => @show "Node.js installed"
+  @has_npm() => @show "npm installed"
 ]

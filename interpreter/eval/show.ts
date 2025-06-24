@@ -1,8 +1,26 @@
-import type { DirectiveNode, TextNode } from '@core/types';
+import type { DirectiveNode, TextNode, Variable } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
-import { isTextVariable, isDataVariable, isPathVariable, isExecutableVariable, isImportVariable } from '@core/types';
+import { 
+  isTextVariable, 
+  isDataVariable, 
+  isPathVariable, 
+  isExecutableVariable, 
+  isImportVariable,
+  isSimpleText,
+  isInterpolatedText,
+  isFileContent,
+  isSectionContent,
+  isObject,
+  isArray,
+  isComputed,
+  isCommandResult,
+  isPipelineInput,
+  isImported,
+  isPath,
+  isExecutable
+} from '@core/types';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
@@ -52,20 +70,40 @@ export async function evaluateShow(
     let originalValue: any; // Keep track of the original value before evaluation
     let isForeachSection = false; // Track if this came from a foreach-section
     
-    if (isTextVariable(variable)) {
-      // Text variables contain string content - use directly
+    // Handle new variable types
+    if (isSimpleText(variable)) {
+      // Simple text - use directly
       value = variable.value;
-      // Template normalization is now handled in the grammar at parse time
-    } else if (isDataVariable(variable)) {
-      // Data variables contain structured data
+    } else if (isInterpolatedText(variable)) {
+      // Interpolated text - use directly (already interpolated)
       value = variable.value;
-      originalValue = value; // Store original value for later checking
-      
-      // Check if this is a foreach-section expression
-      if (value && typeof value === 'object' && value.type === 'foreach-section') {
-        isForeachSection = true;
-      }
-    } else if (isPathVariable(variable)) {
+    } else if (isFileContent(variable)) {
+      // File content - use directly
+      value = variable.value;
+    } else if (isSectionContent(variable)) {
+      // Section content - use directly
+      value = variable.value;
+    } else if (isObject(variable)) {
+      // Object - use the value
+      value = variable.value;
+      originalValue = value;
+    } else if (isArray(variable)) {
+      // Array - use the value
+      value = variable.value;
+      originalValue = value;
+    } else if (isComputed(variable)) {
+      // Computed value from code execution
+      value = variable.value;
+    } else if (isCommandResult(variable)) {
+      // Command result - use the output
+      value = variable.value;
+    } else if (isPipelineInput(variable)) {
+      // Pipeline input - use the raw text
+      value = variable.rawText;
+    } else if (isImported(variable)) {
+      // Imported variable - use the value
+      value = variable.value;
+    } else if (isPath(variable)) {
       // Path variables contain file path info - read the file
       const pathValue = variable.value.resolvedPath;
       const isURL = variable.value.isURL;
@@ -83,12 +121,21 @@ export async function evaluateShow(
         // If it's not a file or can't be read, use the path itself
         value = pathValue;
       }
-    } else if (isImportVariable(variable)) {
-      // Import variables contain imported data
-      value = variable.value;
-    } else if (isExecutableVariable(variable)) {
+    } else if (isExecutable(variable)) {
       // Executable variables - should probably not be used directly in add
       throw new Error(`Cannot add executable variable directly. Executables need to be invoked first.`);
+    } else if (isTextVariable(variable)) {
+      // Legacy text variable - use directly
+      value = variable.value;
+    } else if (isDataVariable(variable)) {
+      // Legacy data variable
+      value = variable.value;
+      originalValue = value;
+      
+      // Check if this is a foreach-section expression
+      if (value && typeof value === 'object' && value.type === 'foreach-section') {
+        isForeachSection = true;
+      }
     } else {
       throw new Error(`Unknown variable type in add evaluator: ${(variable as any).type}`);
     }
