@@ -167,7 +167,9 @@ Bob,25,LA\`
   return input.data.value * 2;
 }
 /exe @textStage(num) = js {
-  return \`Result: \${num}\`;
+  // Handle both raw numbers and PipelineInput objects
+  const value = typeof num === 'object' && num.text ? num.text : num;
+  return \`Result: \${value}\`;
 }
 /var @data = [{"value": 21},]
 /var @result = @data with { format: "json", pipeline: [@jsonStage, @textStage] }
