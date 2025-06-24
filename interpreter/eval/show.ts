@@ -192,14 +192,8 @@ export async function evaluateShow(
         content = value.join('\n\n');
       } else {
         // For other arrays, use JSON format (this preserves the original behavior)
-        // Check if it's a simple array of primitives
-        const isSimpleArray = value.every(item => 
-          typeof item === 'string' || typeof item === 'number' || 
-          typeof item === 'boolean' || item === null
-        );
-        
-        // Use single-line format for simple arrays, pretty-print for complex ones
-        const indent = isSimpleArray ? undefined : 2;
+        // Always use compact format for arrays
+        const indent = undefined;
         
         content = JSON.stringify(value, (key, val) => {
           // Convert VariableReference nodes to their string representation
