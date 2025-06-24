@@ -57,6 +57,8 @@ export async function evaluateDataValue(
     // Resolve path segments and read file
     const { interpolate } = await import('../core/interpreter');
     const resolvedPath = await interpolate(value.segments || [], env);
+    console.log('DEBUG: About to read file:', resolvedPath);
+    console.log('DEBUG: Path node:', JSON.stringify(value, null, 2));
     // Read the file content
     const content = await env.fileSystem.readFile(resolvedPath);
     return content;
@@ -77,7 +79,10 @@ export async function evaluateDataValue(
     // Apply field access if present
     if (value.fields && value.fields.length > 0) {
       const { accessField } = await import('../utils/field-access');
-      result = await accessField(result, value.fields, value.identifier);
+      // Apply each field access in sequence
+      for (const field of value.fields) {
+        result = accessField(result, field);
+      }
     }
     
     return result;
@@ -160,6 +165,9 @@ export async function evaluateDataValue(
   if (value?.type === 'object' && 'properties' in value) {
     const evaluatedObject: Record<string, any> = {};
     for (const [key, propValue] of Object.entries(value.properties)) {
+      if (process.env.DEBUG_LAZY_EVAL) {
+        console.log(`Evaluating object property ${key}:`, JSON.stringify(propValue, null, 2).substring(0, 200));
+      }
       evaluatedObject[key] = await evaluateDataValue(propValue, env);
     }
     return evaluatedObject;

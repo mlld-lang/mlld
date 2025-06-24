@@ -67,11 +67,10 @@ ObjectPropertyValue "object property value"
   = RunCommandValue
   / CodeExecutionValue
   / ObjectLiteral
-  / PathReferenceValue
+  / BracketAmbiguous            // Use ambiguous bracket handling for array/path disambiguation
   / ObjectVariableReference     // Variable references without context checks (moved before exec)
   / "@" invocation:ExecInvocationWithTail { return invocation; }  // Exec invocations @func()
   / TemplateStyleInterpolation
-  / ArrayLiteral
   / PrimitiveValue
 
 // Variable references in object context (no context checks needed)
@@ -113,28 +112,6 @@ CodeExecutionValue
       };
     }
 
-// Path reference - unambiguous in object context
-PathReferenceValue
-  = "[" _ path:PathParts _ "]" {
-      return helpers.createPathDereference(path, location());
-    }
-
-
-// Array literal with proper comma handling
-ArrayLiteral
-  = "[" _ items:ArrayLiteralItems _ "]" {
-      return helpers.createArrayFromContent(items, location());
-    }
-
-// Array items - must have commas between elements
-ArrayLiteralItems
-  = first:ObjectPropertyValue rest:(_ "," _ v:ObjectPropertyValue { return v; })* {
-      return [first, ...rest];
-    }
-  / item:ObjectPropertyValue _ "," {
-      // Single item with trailing comma
-      return [item];
-    }
 
 // Object literal { key: value }
 ObjectLiteral
