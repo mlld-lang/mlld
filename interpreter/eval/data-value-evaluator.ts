@@ -508,7 +508,8 @@ export async function evaluateForeachCommand(
   
   // 4. Check parameter count matches array count
   const definition = cmdVariable.value;
-  const paramCount = definition.paramNames?.length || 0;
+  // For ExecutableVariable, paramNames is on the variable itself, not in value
+  const paramCount = cmdVariable.paramNames?.length || definition.paramNames?.length || 0;
   if (evaluatedArrays.length !== paramCount) {
     const paramType = definition.sourceDirective === 'text' ? 'Text template' : 'Command';
     throw new Error(`${paramType} '${command.identifier}' expects ${paramCount} parameter${paramCount !== 1 ? 's' : ''}, but foreach is passing ${evaluatedArrays.length} array${evaluatedArrays.length !== 1 ? 's' : ''}`);
@@ -525,7 +526,8 @@ export async function evaluateForeachCommand(
     try {
       // Create argument map for parameter substitution
       const argMap: Record<string, any> = {};
-      const params = definition.paramNames || [];
+      // For ExecutableVariable, paramNames is on the variable itself
+      const params = cmdVariable.paramNames || definition.paramNames || [];
       params.forEach((param: string, index: number) => {
         argMap[param] = tuple[index];
       });
@@ -535,7 +537,7 @@ export async function evaluateForeachCommand(
       results.push(result);
     } catch (error) {
       // Include iteration context in error message
-      const params = definition.paramNames || [];
+      const params = cmdVariable.paramNames || definition.paramNames || [];
       const iterationContext = params.map((param: string, index: number) => 
         `${param}: ${JSON.stringify(tuple[index])}`
       ).join(', ');
