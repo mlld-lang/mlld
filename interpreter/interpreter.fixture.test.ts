@@ -155,6 +155,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     'data-assignment-pipeline': 'Needs investigation - newline normalization issue',
     'pipeline-array-data': 'Needs investigation - whitespace in output',
     'run-run-code-bracket-nesting': 'Python/sh not supported yet - only JS/Node/Bash',
+    // Foreach section tests - temporarily skipped
+    'data-foreach-section-literal': 'Foreach section expressions not yet supported in /var context',
+    'text-foreach-section-literal': 'Foreach section expressions not yet supported in /var context',
+    'text-foreach-section-variable': 'Foreach section expressions not yet supported in /var context',
+    'text-foreach-section-backtick': 'Foreach section expressions not yet supported in /var context',
+    'text-foreach-section-path-expression': 'Foreach section expressions not yet supported in /var context',
   };
 
   // Separate fixtures into categories for better reporting

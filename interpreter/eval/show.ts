@@ -520,6 +520,24 @@ export async function evaluateShow(
     const result = await evaluateExecInvocation(execInvocation, env);
     content = String(result.value);
     
+  } else if (directive.subtype === 'showForeach') {
+    // Handle foreach expressions for direct output
+    const foreachExpression = directive.values?.foreach;
+    if (!foreachExpression) {
+      throw new Error('Show foreach directive missing foreach expression');
+    }
+    
+    // Parse options from with clause if present
+    const options = parseForeachOptions(foreachExpression.with);
+    
+    // For @show, we want each result on its own line without the heavy separator
+    if (!options.separator) {
+      options.separator = '\n';
+    }
+    
+    // Evaluate foreach and format as text
+    content = await evaluateForeachAsText(foreachExpression, env, options);
+    
   } else if (directive.subtype === 'showForeachSection') {
     // Handle foreach section expressions: @add foreach [@array.field # section] as [[template]]
     const foreachExpression = directive.values?.foreach;

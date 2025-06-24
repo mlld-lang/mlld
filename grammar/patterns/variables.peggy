@@ -148,7 +148,7 @@ FrontmatterAccess
 
 // Variable reference with optional tail modifiers (for pipeline support)
 VariableReferenceWithTail "variable reference with tail modifiers"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* tail:TailModifiers? {
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* tail:TailModifiers? {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,

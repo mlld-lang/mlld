@@ -3,7 +3,9 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 VarRHSContent "var assignment value"
-  = ForeachCommandExpression    // foreach @command(@arrays)
+  = ForeachSectionExpression    // foreach [@array.field # section] as [[template]]
+  / ForeachCommandExpression    // foreach @command(@arrays)
+  / "@" invocation:ExecInvocationWithTail { return invocation; }  // Exec invocations @func()
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateStyleInterpolation  // Handles backtick, [[...]], double/single quotes
   / ObjectLiteral               // Object literal { key: value }

@@ -2,11 +2,11 @@
 /exe @farewell(name, when) = [[Goodbye {{name}}, see you {{when}}!]]
 
 /var @messages = {
-welcome: @add @greeting("Alice"),
-goodbye: @add @farewell("Bob", "tomorrow"),
+welcome: @greeting("Alice"),
+goodbye: @farewell("Bob", "tomorrow"),
 nested: {
-morning: @add @greeting("Charlie"),
-evening: @add @farewell("David", "next week")
+morning: @greeting("Charlie"),
+evening: @farewell("David", "next week")
   }
 }
 
