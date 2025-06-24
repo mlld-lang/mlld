@@ -24,7 +24,7 @@ describe('Pipeline Preservation Tests - Pre-Refactor Baseline', () => {
   return users.map(u => u.name).join(", ");
 }
 
-/var @jsonData = [[{"name": "Alice"}, {"name": "Bob"}]]
+/var @jsonData = \`[{"name": "Alice"}, {"name": "Bob"}]\`
 /var @names = @jsonData with { format: "json", pipeline: [@extractNames] }
 /show @names`;
 
@@ -39,10 +39,10 @@ describe('Pipeline Preservation Tests - Pre-Refactor Baseline', () => {
   return \`\${rows.length} rows, \${rows[0].length} columns\`;
 }
 
-/var csvData = [[Name,Age,City
+/var @csvData = [[Name,Age,City
 Alice,30,NYC
 Bob,25,LA]]
-/var analysis = @csvData with { format: "csv", pipeline: [@countCSVRows] }
+/var @analysis = @csvData with { format: "csv", pipeline: [@countCSVRows] }
 /show @analysis`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -56,8 +56,8 @@ Bob,25,LA]]
   return input.xml || input.text;
 }
 
-/var xmlData = "test data"
-/var xmlTest = @xmlData with { format: "xml", pipeline: [@processXML] }
+/var @xmlData = "test data"
+/var @xmlTest = @xmlData with { format: "xml", pipeline: [@processXML] }
 /show @xmlTest`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -72,7 +72,7 @@ Bob,25,LA]]
   return text.toUpperCase();
 }
 
-/var result = "hello" with { pipeline: [@uppercase] }
+/var @result = "hello" with { pipeline: [@uppercase] }
 /show @result`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -92,8 +92,8 @@ Bob,25,LA]]
   }
 }
 
-/var invalid = "{ invalid json"
-/var result = @invalid with { format: "json", pipeline: [@tryParse] }
+/var @invalid = "{ invalid json"
+/var @result = @invalid with { format: "json", pipeline: [@tryParse] }
 /show @result`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -109,8 +109,8 @@ Bob,25,LA]]
   return "Length: " + text.length;
 }
 
-/var data = "Hello world"
-/var result = @data with { pipeline: [@oldFunction] }
+/var @data = "Hello world"
+/var @result = @data with { pipeline: [@oldFunction] }
 /show @result`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -124,8 +124,8 @@ Bob,25,LA]]
   return String(input).substring(0, 5);
 }
 
-/var data = [[{"complex": "data"}]]
-/var result = @data with { format: "json", pipeline: [@testStringify] }
+/var @data = [[{"complex": "data"}]]
+/var @result = @data with { format: "json", pipeline: [@testStringify] }
 /show @result`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -149,8 +149,8 @@ Bob,25,LA]]
   return \`Total users: \${data.count}\`;
 }
 
-/var users = [[{"name": "Alice"}, {"name": "Bob"}]]
-/var result = @users with { 
+/var @users = [[{"name": "Alice"}, {"name": "Bob"}]]
+/var @result = @users with { 
   format: "json", 
   pipeline: [@stage1, @stage2] 
 }
@@ -170,8 +170,8 @@ Bob,25,LA]]
   return \`Result: \${num}\`;
 }
 
-/var data = [[{"value": 21}]]
-/var result = @data with { 
+/var @data = [[{"value": 21}]]
+/var @result = @data with { 
   format: "json", 
   pipeline: [@jsonStage, @textStage] 
 }
@@ -185,7 +185,7 @@ Bob,25,LA]]
   describe('5. Environment Chain Tests', () => {
     it('5.1 Parent Variable Access - pipeline stages can access parent vars', async () => {
       const input = `
-/var multiplier = "3"
+/var @multiplier = "3"
 
 /exe @useParent(input) = js {
   // Should be able to access @multiplier from parent
@@ -193,8 +193,8 @@ Bob,25,LA]]
   return input.data.value * mult;
 }
 
-/var data = [[{"value": 10}]]
-/var result = @data with { 
+/var @data = [[{"value": 10}]]
+/var @result = @data with { 
   format: "json", 
   pipeline: [@useParent] 
 }
@@ -208,8 +208,8 @@ Bob,25,LA]]
   describe('6. Built-in Transformer Tests', () => {
     it('6.1 Format Transformers - JSON pretty print', async () => {
       const input = `
-/var obj = { users: ["Alice", "Bob"], count: 2 }
-/var json = @obj | @JSON
+/var @obj = { users: ["Alice", "Bob"], count: 2 }
+/var @json = @obj | @JSON
 /show @json`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -221,7 +221,7 @@ Bob,25,LA]]
   describe('7. Complex Integration Tests', () => {
     it('7.1 Pipeline with foreach operations', async () => {
       const input = `
-/var items = [
+/var @items = [
   [[{"id": 1, "value": 10}]],
   [[{"id": 2, "value": 20}]]
 ]
@@ -236,7 +236,7 @@ Bob,25,LA]]
   pipeline: [@processItem] 
 }
 
-/var results = foreach @processWithFormat(@items)
+/var @results = foreach @processWithFormat(@items)
 /show @results`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -259,7 +259,7 @@ Bob,25,LA]]
   return input.toLowerCase();
 }
 
-/var result = "test" with { 
+/var @result = "test" with { 
   pipeline: [@uppercase, @failingStage, @lowercase] 
 }`;
 

@@ -205,18 +205,66 @@ export async function evaluateVar(
     }
     
   } else if (Array.isArray(valueNode)) {
-    // Template or string content - need to interpolate
-    variableType = 'text';
-    resolvedValue = await interpolate(valueNode, env);
+    // For backtick templates, we should extract the text content directly
+    // Check if this is a simple text array (backtick template)
+    if (valueNode.length === 1 && valueNode[0].type === 'Text' && directive.meta?.wrapperType === 'backtick') {
+      variableType = 'text';
+      resolvedValue = valueNode[0].content;
+    } else {
+      // Template or string content - need to interpolate
+      variableType = 'text';
+      resolvedValue = await interpolate(valueNode, env);
+    }
     
   } else if (valueNode.type === 'Text' && 'content' in valueNode) {
     // Simple text content
     variableType = 'text';
     resolvedValue = valueNode.content;
     
+  } else if (valueNode && valueNode.type === 'VariableReferenceWithTail') {
+    // Variable with tail modifiers (e.g., @var @result = @data with { pipeline: [@transform] })
+    const varWithTail = valueNode;
+    const sourceVar = env.getVariable(varWithTail.variable.identifier);
+    if (!sourceVar) {
+      throw new Error(`Variable not found: ${varWithTail.variable.identifier}`);
+    }
+    
+    // Get the base value
+    const { resolveVariableValue } = await import('../core/interpreter');
+    let result = await resolveVariableValue(sourceVar, env);
+    
+    // Apply field access if present
+    if (varWithTail.variable.fields && varWithTail.variable.fields.length > 0) {
+      const { accessField } = await import('../utils/field-access');
+      result = await accessField(result, varWithTail.variable.fields, varWithTail.variable.identifier);
+    }
+    
+    // Apply pipeline if present
+    if (varWithTail.withClause && varWithTail.withClause.pipeline) {
+      const { executePipeline } = await import('./pipeline');
+      const format = varWithTail.withClause.format as string | undefined;
+      
+      // Convert result to string for pipeline
+      const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
+      
+      result = await executePipeline(
+        stringResult,
+        varWithTail.withClause.pipeline,
+        env,
+        directive.location,
+        format
+      );
+    }
+    
+    resolvedValue = result;
+    variableType = 'text'; // Pipeline output is always text
+    
   } else {
     // Default case - try to interpolate as text
     variableType = 'text';
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('var.ts: Default case for valueNode:', valueNode);
+    }
     resolvedValue = await interpolate([valueNode], env);
   }
 

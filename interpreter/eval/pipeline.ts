@@ -60,8 +60,8 @@ export async function executePipeline(
       }
     );
     
-    // Set the pipeline input variable
-    pipelineEnv.setVariable('INPUT', inputVar);
+    // Set the pipeline input variable as a parameter (allows overriding reserved names)
+    pipelineEnv.setParameterVariable('INPUT', inputVar);
     
     try {
       // Resolve the command reference
@@ -274,8 +274,36 @@ async function executeCommandVariable(
   let execDef: any;
   
   if (commandVar && commandVar.type === 'executable' && commandVar.value) {
-    // This is a wrapped executable variable
-    execDef = commandVar.value;
+    // Check if we have the full ExecutableDefinition in metadata
+    if (commandVar.metadata?.executableDef) {
+      // Use the full definition from metadata
+      execDef = commandVar.metadata.executableDef;
+      
+      // Also copy paramNames from the variable if not in execDef
+      if (!execDef.paramNames && commandVar.paramNames) {
+        execDef.paramNames = commandVar.paramNames;
+      }
+    } else {
+      // Fall back to the simplified value structure
+      // Map the simplified structure to what the pipeline expects
+      const simplifiedValue = commandVar.value;
+      if (simplifiedValue.type === 'code') {
+        execDef = {
+          type: 'code',
+          codeTemplate: simplifiedValue.template, // template is already nodes from exe.ts
+          language: simplifiedValue.language || 'javascript',
+          paramNames: commandVar.paramNames || []
+        };
+      } else if (simplifiedValue.type === 'command') {
+        execDef = {
+          type: 'command',
+          commandTemplate: simplifiedValue.template, // template is already nodes from exe.ts
+          paramNames: commandVar.paramNames || []
+        };
+      } else {
+        execDef = simplifiedValue;
+      }
+    }
     
     // Debug logging
     if (process.env.MLLD_DEBUG === 'true') {
@@ -285,7 +313,9 @@ async function executeCommandVariable(
         hasCommandTemplate: !!execDef?.commandTemplate,
         hasCodeTemplate: !!execDef?.codeTemplate,
         hasTemplateContent: !!execDef?.templateContent,
-        language: execDef?.language
+        hasTemplate: !!execDef?.template,
+        language: execDef?.language,
+        fromMetadata: !!commandVar.metadata?.executableDef
       });
     }
   } else if (commandVar && (commandVar.type === 'command' || commandVar.type === 'code' || commandVar.type === 'template') && (commandVar.commandTemplate || commandVar.codeTemplate || commandVar.templateContent)) {
@@ -297,13 +327,23 @@ async function executeCommandVariable(
       type: commandVar?.type,
       hasValue: !!commandVar?.value,
       valueType: commandVar?.value?.type,
+      valueKeys: commandVar?.value ? Object.keys(commandVar.value) : [],
       hasCommandTemplate: !!(commandVar?.commandTemplate),
       hasCodeTemplate: !!(commandVar?.codeTemplate),
       hasTemplateContent: !!(commandVar?.templateContent),
       hasTemplate: !!(commandVar?.template),
-      keys: commandVar ? Object.keys(commandVar) : []
+      keys: commandVar ? Object.keys(commandVar) : [],
+      // Deep inspection of value structure
+      valueStructure: commandVar?.value ? {
+        type: commandVar.value.type,
+        hasTemplate: !!(commandVar.value.template),
+        hasCodeTemplate: !!(commandVar.value.codeTemplate),
+        hasCommandTemplate: !!(commandVar.value.commandTemplate),
+        language: commandVar.value.language,
+        paramNames: commandVar.value.paramNames
+      } : null
     };
-    throw new Error(`Cannot execute non-executable variable in pipeline: ${JSON.stringify(varInfo)}`);
+    throw new Error(`Cannot execute non-executable variable in pipeline: ${JSON.stringify(varInfo, null, 2)}`);
   }
   
   // Create environment with parameter bindings
@@ -311,7 +351,7 @@ async function executeCommandVariable(
   
   // Get the format from the pipeline context
   const pipelineCtx = env.getPipelineContext();
-  const format = pipelineCtx?.format || 'json';
+  const format = pipelineCtx?.format; // Don't default to json - let it be undefined
   
   // Bind parameters if any
   if (execDef.paramNames) {
@@ -445,12 +485,19 @@ async function executeCommandVariable(
           }
           
           // Check if this is a pipeline input variable
-          if (paramVar.metadata?.isPipelineInput && paramVar.metadata?.pipelineInput) {
-            // Use the wrapped pipeline input from metadata
+          if (paramVar.type === 'pipeline-input') {
+            // PipelineInputVariable stores the PipelineInput object in value
+            params[paramName] = paramVar.value;
+            
+            if (process.env.MLLD_DEBUG === 'true') {
+              console.log('Using PipelineInputVariable value for param:', paramName);
+            }
+          } else if (paramVar.metadata?.isPipelineInput && paramVar.metadata?.pipelineInput) {
+            // Legacy: Use the wrapped pipeline input from metadata
             params[paramName] = paramVar.metadata.pipelineInput;
             
             if (process.env.MLLD_DEBUG === 'true') {
-              console.log('Using wrapped pipeline input for param:', paramName);
+              console.log('Using wrapped pipeline input from metadata for param:', paramName);
             }
           } else {
             // Regular variable - use the value directly

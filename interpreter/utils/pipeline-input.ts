@@ -93,8 +93,16 @@ export function createPipelineInput(text: string, format: string = 'json'): Pipe
         get() {
           if (this._parsed === undefined) {
             try {
+              if (process.env.MLLD_DEBUG === 'true') {
+                console.log('Parsing JSON from text:', this.text);
+                console.log('Text length:', this.text.length);
+              }
               this._parsed = JSON.parse(this.text);
             } catch (e: any) {
+              if (process.env.MLLD_DEBUG === 'true') {
+                console.error('Failed to parse JSON. Text was:', this.text);
+                console.error('First 100 chars:', this.text.substring(0, 100));
+              }
               throw new MlldInterpreterError(`Failed to parse JSON: ${e.message}`);
             }
           }

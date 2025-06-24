@@ -8,7 +8,7 @@ VarRHSContent "var assignment value"
   / TemplateStyleInterpolation  // Handles backtick, [[...]], double/single quotes
   / ObjectLiteral               // Object literal { key: value }
   / BracketAmbiguous            // NEW: Array vs path disambiguation
-  / VarRHSVariableRef           // Variable references @var (without context check)
+  / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
 
 // BRACKET AMBIGUOUS - The critical disambiguation logic
@@ -90,16 +90,6 @@ ObjectProperty
 PropertyKey
   = BaseIdentifier
   / StringLiteral
-
-// Variable reference @var for var RHS context (without context check)
-VarRHSVariableRef "var RHS variable reference"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
-      const normalizedId = helpers.normalizePathVar(id);
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-    }
 
 // Nested directive like @run
 NestedDirective
