@@ -209,8 +209,50 @@ export async function evaluateVar(
   } else if (valueNode.type === 'command') {
     // Shell command: run { echo "hello" }
     variableType = 'text';
-    const command = valueNode.command;
-    resolvedValue = await env.executeCommand(command);
+    let command = valueNode.command;
+    
+    // Interpolate variables in the command string
+    // This is a simplified approach - ideally we'd have AST nodes
+    const varPattern = /@(\w+)(?:\.[\w.[\]]+)?/g;
+    let interpolatedCommand = command;
+    
+    // Find all variable references
+    const matches = Array.from(command.matchAll(varPattern));
+    
+    // Process each match
+    for (const match of matches) {
+      const fullMatch = match[0];
+      const varName = match[1];
+      const variable = env.getVariable(varName);
+      
+      if (variable) {
+        // Resolve the variable value
+        const { resolveVariableValue } = await import('../core/interpreter');
+        let value = await resolveVariableValue(variable, env);
+        
+        // Handle field access if present (e.g., @user.name)
+        if (fullMatch.includes('.') && fullMatch !== `@${varName}`) {
+          // Extract field path
+          const fieldPath = fullMatch.substring(varName.length + 1); // Skip @varName
+          const fields = fieldPath.split('.').map(f => ({ type: 'field', value: f }));
+          
+          if (fields.length > 0) {
+            const { accessField } = await import('../utils/field-access');
+            value = await accessField(value, fields, varName);
+          }
+        }
+        
+        // Convert value to string for command substitution
+        const stringValue = typeof value === 'string' ? value :
+                           typeof value === 'object' ? JSON.stringify(value) :
+                           String(value);
+        
+        // Replace in command
+        interpolatedCommand = interpolatedCommand.replace(fullMatch, stringValue);
+      }
+    }
+    
+    resolvedValue = await env.executeCommand(interpolatedCommand);
     
   } else if (valueNode.type === 'VariableReference') {
     // Variable reference: @otherVar
