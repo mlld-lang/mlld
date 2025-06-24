@@ -262,6 +262,15 @@ export async function evaluateVar(
     variableType = 'data';
     resolvedValue = await evaluateForeachCommand(valueNode, env);
     
+  } else if (valueNode && valueNode.type === 'ExecInvocation') {
+    // Handle exec function invocations: @getConfig(), @transform(@data)
+    const { evaluateExecInvocation } = await import('./exec-invocation');
+    const result = await evaluateExecInvocation(valueNode, env);
+    resolvedValue = result.value;
+    
+    // Infer variable type from result
+    variableType = (typeof resolvedValue === 'object' && resolvedValue !== null) ? 'data' : 'text';
+    
   } else if (valueNode && valueNode.type === 'VariableReferenceWithTail') {
     // Variable with tail modifiers (e.g., @var @result = @data with { pipeline: [@transform] })
     const varWithTail = valueNode;
@@ -361,6 +370,18 @@ export async function evaluateVar(
     // Foreach expressions always return arrays
     const isComplex = false; // foreach results are typically simple values
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);
+    
+  } else if (valueNode.type === 'ExecInvocation') {
+    // Exec invocations can return any type
+    if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+      if (Array.isArray(resolvedValue)) {
+        variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+      } else {
+        variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
+      }
+    } else {
+      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+    }
     
   } else {
     // Text variables - need to determine specific type

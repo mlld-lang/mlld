@@ -69,11 +69,21 @@ ArrayValue
   = TemplateStyleInterpolation  // Templates
   / ObjectLiteral               // Objects  
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
-  / AtVar                       // Variable references (from variables.peggy) - moved before BracketAmbiguous
+  / ArrayVariableReference      // Variable references without context check for arrays
   / BracketAmbiguous            // Nested arrays or paths - moved after AtVar
   / NestedDirective             // Nested directives
   / CodeExecution               // Code execution (run keyword and shortcuts)
   / PrimitiveValue              // Strings, numbers, booleans, null
+
+// Variable references in array context (no context checks needed)
+ArrayVariableReference
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* {
+      // The !"(" ensures we don't match exec invocations like @func()
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: helpers.normalizePathVar(id),
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
 
 // Primitive values for arrays
 PrimitiveValue

@@ -212,7 +212,25 @@ export async function evaluateExecInvocation(
     }
     
     // Execute the command with environment variables
-    result = await execEnv.executeCommand(command, { env: envVars });
+    const commandOutput = await execEnv.executeCommand(command, { env: envVars });
+    
+    // Try to parse as JSON if it looks like JSON
+    if (typeof commandOutput === 'string' && commandOutput.trim()) {
+      const trimmed = commandOutput.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          result = JSON.parse(trimmed);
+        } catch {
+          // Not valid JSON, use as-is
+          result = commandOutput;
+        }
+      } else {
+        result = commandOutput;
+      }
+    } else {
+      result = commandOutput;
+    }
   }
   // Handle code executables
   else if (isCodeExecutable(definition)) {

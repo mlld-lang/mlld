@@ -179,6 +179,12 @@ export async function evaluateExe(
     const language = directive.meta?.language || 'javascript';
     
     // Store the code template (not interpolated yet)
+    if (process.env.DEBUG_EXEC) {
+      console.log('exe.ts creating code executable:');
+      console.log('  codeNodes:', codeNodes);
+      console.log('  language:', language);
+      console.log('  paramNames:', paramNames);
+    }
     executableDef = {
       type: 'code',
       codeTemplate: codeNodes,

@@ -219,7 +219,11 @@ export async function evaluateRun(
       execVar = variable;
     }
     
-    const definition = execVar.value;
+    // Get the executable definition from metadata
+    const definition = execVar.metadata?.executableDef as ExecutableDefinition;
+    if (!definition) {
+      throw new Error(`Executable ${commandName} has no definition in metadata`);
+    }
     
     // Get arguments from the run directive
     const args = directive.values?.args || [];
@@ -346,6 +350,12 @@ export async function evaluateRun(
       }
       
       const code = await interpolate(definition.codeTemplate, tempEnv, InterpolationContext.Default);
+      if (process.env.DEBUG_EXEC || !code || code.trim() === '') {
+        console.log('run.ts code execution debug:');
+        console.log('  definition.codeTemplate:', definition.codeTemplate);
+        console.log('  interpolated code:', code);
+        console.log('  argValues:', argValues);
+      }
       output = await env.executeCode(code, definition.language || 'javascript', argValues, executionContext);
     } else if (definition.type === 'template') {
       // Handle template executables

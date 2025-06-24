@@ -1650,8 +1650,26 @@ export class Environment {
           functionBody = `return (${functionBody})`;
         }
         
+        // Debug exec-code issue
+        if (process.env.DEBUG_EXEC || code.includes('console.log(Number(a) + Number(b))')) {
+          console.log('executeCode debug:');
+          console.log('  code:', code);
+          console.log('  functionBody:', functionBody);
+          console.log('  allParamNames:', allParamNames);
+          console.log('  allParamValues:', allParamValues);
+        }
+        
         // Create a function with dynamic parameters
-        const fn = new Function(...allParamNames, functionBody);
+        let fn: Function;
+        try {
+          fn = new Function(...allParamNames, functionBody);
+        } catch (syntaxError) {
+          console.error('Function creation failed:');
+          console.error('  allParamNames:', allParamNames);
+          console.error('  functionBody:', functionBody);
+          console.error('  Full function would be:', `function(${allParamNames.join(', ')}) { ${functionBody} }`);
+          throw syntaxError;
+        }
         
         // Execute the function
         let result = fn(...allParamValues);
