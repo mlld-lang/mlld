@@ -118,7 +118,7 @@ export async function evaluateExe(
   
   let executableDef: ExecutableDefinition;
   
-  if (directive.subtype === 'execCommand') {
+  if (directive.subtype === 'exeCommand') {
     // Check if this is a command reference
     const commandRef = directive.values?.commandRef;
     if (commandRef) {
@@ -160,7 +160,7 @@ export async function evaluateExe(
       } satisfies CommandExecutable;
     }
     
-  } else if (directive.subtype === 'execCode') {
+  } else if (directive.subtype === 'exeCode') {
     // Handle code definition
     const codeNodes = directive.values?.code;
     if (!codeNodes) {
@@ -183,7 +183,7 @@ export async function evaluateExe(
       sourceDirective: 'exec'
     } satisfies CodeExecutable;
     
-  } else if (directive.subtype === 'execResolver') {
+  } else if (directive.subtype === 'exeResolver') {
     // Handle resolver executable: @exec name(params) = @resolver/path { @payload }
     const resolverNodes = directive.values?.resolver;
     if (!resolverNodes) {
@@ -217,7 +217,7 @@ export async function evaluateExe(
       sourceDirective: 'exec'
     } satisfies ResolverExecutable;
     
-  } else if (directive.subtype === 'execTemplate') {
+  } else if (directive.subtype === 'exeTemplate') {
     // Handle template exec: @exec name(params) = [[template]]
     const templateNodes = directive.values?.template;
     if (!templateNodes) {
@@ -236,7 +236,7 @@ export async function evaluateExe(
       sourceDirective: 'exec'
     } satisfies TemplateExecutable;
     
-  } else if (directive.subtype === 'execSection') {
+  } else if (directive.subtype === 'exeSection') {
     // Handle section exec: @exec name(file, section) = [@file # @section]
     const pathNodes = directive.values?.path;
     const sectionNodes = directive.values?.section;
