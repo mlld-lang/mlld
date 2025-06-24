@@ -79,7 +79,11 @@ export async function evaluateExe(
         // Only create sync wrapper for JavaScript code (not commands or other types)
         if (funcVar.value.type === 'code' && 
             (funcVar.value.language === 'javascript' || funcVar.value.language === 'js')) {
-          effectiveWrapper = createSyncJsWrapper(funcName, funcVar.value, env);
+          // Get the executable definition from metadata
+          const execDef = (funcVar.metadata as any)?.executableDef;
+          if (execDef && execDef.type === 'code') {
+            effectiveWrapper = createSyncJsWrapper(funcName, execDef, env);
+          }
         }
       }
       
@@ -421,12 +425,15 @@ function createSyncJsWrapper(
  */
 function createExecWrapper(
   execName: string, 
-  execVar: { type: 'executable'; value: ExecutableDefinition },
+  execVar: ExecutableVariable,
   env: Environment
 ): Function {
   return async function(...args: any[]) {
-    // Get the executable definition
-    const definition = execVar.value;
+    // Get the executable definition from metadata
+    const definition = (execVar.metadata as any)?.executableDef;
+    if (!definition) {
+      throw new Error(`Executable ${execName} has no definition in metadata`);
+    }
     
     // Get parameter names from the definition
     const params = definition.paramNames || [];
