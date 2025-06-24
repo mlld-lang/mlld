@@ -2,6 +2,7 @@ import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
+import { InterpolationContext } from '../core/interpolation-context';
 import { astLocationToSourceLocation } from '@core/types';
 import { 
   Variable,
@@ -209,8 +210,16 @@ export async function evaluateVar(
   } else if (valueNode.type === 'command') {
     // Shell command: run { echo "hello" }
     variableType = 'text';
-    const command = valueNode.command;
-    resolvedValue = await env.executeCommand(command);
+    
+    // Check if we have parsed command nodes (new) or raw string (legacy)
+    if (Array.isArray(valueNode.command)) {
+      // New: command is an array of AST nodes that need interpolation
+      const interpolatedCommand = await interpolate(valueNode.command, env, InterpolationContext.ShellCommand);
+      resolvedValue = await env.executeCommand(interpolatedCommand);
+    } else {
+      // Legacy: command is a raw string (for backward compatibility)
+      resolvedValue = await env.executeCommand(valueNode.command);
+    }
     
   } else if (valueNode.type === 'VariableReference') {
     // Variable reference: @otherVar

@@ -105,11 +105,14 @@ ObjectVariableReference
 
 // Run command in object context
 RunCommandValue
-  = "run" _ "{" _ content:CodeBlockContent _ "}" {
+  = "run" _ content:UnifiedCommandBrackets {
+      // Use the same command parsing as regular /run directives
       return {
         type: 'command',
-        command: content,
-        hasRunKeyword: true
+        command: content.values.command,  // Parsed command nodes
+        commandBases: content.values.commandBases,
+        hasRunKeyword: true,
+        meta: content.meta
       };
     }
   / "run" _ "@" invocation:ExecInvocationWithTail {
@@ -198,24 +201,24 @@ BracketContentSimple
 
 // Code execution patterns (language + code without @run prefix)
 CodeExecution "code execution"
-  = "run" _ lang:VarCodeLanguage? _ "{" _ content:CodeBlockContent _ "}" {
-      // Return structure based on whether language is specified
-      if (lang) {
-        // Language-specific code execution
-        return {
-          type: 'code',
-          language: lang,
-          code: content,
-          hasRunKeyword: true
-        };
-      } else {
-        // Shell command (no language specified)
-        return {
-          type: 'command',
-          command: content,
-          hasRunKeyword: true
-        };
-      }
+  = "run" _ lang:VarCodeLanguage _ "{" _ content:CodeBlockContent _ "}" {
+      // Language-specific code execution (js, python, etc.)
+      return {
+        type: 'code',
+        language: lang,
+        code: content,
+        hasRunKeyword: true
+      };
+    }
+  / "run" _ content:UnifiedCommandBrackets {
+      // Shell command - use proper command parsing
+      return {
+        type: 'command',
+        command: content.values.command,  // Parsed command nodes
+        commandBases: content.values.commandBases,
+        hasRunKeyword: true,
+        meta: content.meta
+      };
     }
   / lang:VarCodeLanguage _ "{" _ code:CodeBlockContent _ "}" {
       // Shorthand: language + code without 'run' keyword
