@@ -14,6 +14,7 @@ import {
   isForeachSectionExpression
 } from '@core/types/data';
 import { isTextVariable, isDataVariable, isPathVariable, isImportVariable, isExecutableVariable } from '@core/types';
+import { isExecutable as isExecutableVar } from '@core/types/variable';
 import { evaluate, interpolate, resolveVariableValue } from '../core/interpreter';
 import { accessField } from '../utils/field-access';
 import { 
@@ -208,7 +209,7 @@ export async function evaluateDataValue(
     
     // For executable variables, return the variable itself (for lazy execution)
     // This preserves the executable for later execution rather than executing it now
-    if (variable.type === 'executable') {
+    if (isExecutableVar(variable)) {
       return variable;
     }
     

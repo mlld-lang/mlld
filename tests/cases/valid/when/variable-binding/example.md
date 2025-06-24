@@ -4,5 +4,5 @@
   "web1" in @servers
   "web2" in @servers
   "web3" in @servers
-=> /show "Found server: {{server}}"
+=> show "Found server: {{server}}"
 EOF < /dev/null

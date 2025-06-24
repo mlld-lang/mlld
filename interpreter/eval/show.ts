@@ -1,4 +1,5 @@
-import type { DirectiveNode, TextNode, Variable } from '@core/types';
+import type { DirectiveNode, TextNode } from '@core/types';
+import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
@@ -7,7 +8,11 @@ import {
   isDataVariable, 
   isPathVariable, 
   isExecutableVariable, 
-  isImportVariable,
+  isImportVariable
+} from '@core/types';
+import {
+  isTextLike,
+  isExecutable as isExecutableVar,
   isSimpleText,
   isInterpolatedText,
   isFileContent,
@@ -20,7 +25,7 @@ import {
   isImported,
   isPath,
   isExecutable
-} from '@core/types';
+} from '@core/types/variable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
@@ -401,7 +406,7 @@ export async function evaluateShow(
     }
     
     // Handle based on variable type
-    if (variable.type === 'executable') {
+    if (isExecutableVar(variable)) {
       // This is an executable invocation - use exec-invocation handler
       const { evaluateExecInvocation } = await import('./exec-invocation');
       const result = await evaluateExecInvocation(invocation, env);
@@ -459,7 +464,7 @@ export async function evaluateShow(
         if (!variable) {
           throw new Error(`Variable not found: ${varName}`);
         }
-        value = variable.type === 'text' ? variable.value : String(variable.value);
+        value = isTextLike(variable) ? variable.value : String(variable.value);
       } else if (typeof argValue === 'object' && argValue.type === 'string') {
         // Legacy format support
         value = argValue.value;
@@ -471,7 +476,7 @@ export async function evaluateShow(
         if (!variable) {
           throw new Error(`Variable not found: ${varName}`);
         }
-        value = variable.type === 'text' ? variable.value : String(variable.value);
+        value = isTextLike(variable) ? variable.value : String(variable.value);
       } else {
         value = String(argValue);
       }

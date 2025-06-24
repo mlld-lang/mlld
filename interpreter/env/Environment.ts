@@ -1,6 +1,13 @@
-import type { MlldNode, MlldVariable, SourceLocation, DirectiveNode } from '@core/types';
-import type { Variable, VariableSource } from '@core/types/variable';
-import { createSimpleTextVariable, createObjectVariable, createPathVariable } from '@core/types/variable';
+import type { MlldNode, SourceLocation, DirectiveNode } from '@core/types';
+import type { Variable, VariableSource, PipelineInput } from '@core/types/variable';
+import { 
+  createSimpleTextVariable, 
+  createObjectVariable, 
+  createPathVariable,
+  isPipelineInput,
+  isTextLike,
+  isStructured
+} from '@core/types/variable';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import type { ResolvedURLConfig } from '@core/config/types';
@@ -64,7 +71,7 @@ interface CollectedError {
  * This replaces StateService, ResolutionService, and capability injection.
  */
 export class Environment {
-  private variables = new Map<string, MlldVariable | Variable>();
+  private variables = new Map<string, Variable>();
   private nodes: MlldNode[] = [];
   private parent?: Environment;
   private urlCache: Map<string, { content: string; timestamp: number; ttl?: number }> = new Map();
@@ -79,7 +86,7 @@ export class Environment {
   private resolverManager?: ResolverManager; // New resolver system
   private urlCacheManager?: URLCache; // URL cache manager
   private reservedNames: Set<string> = new Set(); // Now dynamic based on registered resolvers
-  private resolverVariableCache = new Map<string, MlldVariable | Variable>(); // Cache for resolver variables
+  private resolverVariableCache = new Map<string, Variable>(); // Cache for resolver variables
   private initialNodeCount: number = 0; // Track initial nodes to prevent duplicate merging
   
   // Shadow environments for language-specific function injection
@@ -345,16 +352,21 @@ export class Environment {
     // Initialize @INPUT from merged stdin content and environment variables
     const inputValue = this.createInputValue();
     if (inputValue !== null) {
-      const inputVar: MlldVariable = {
-        type: inputValue.type,
-        value: inputValue.value,
-        nodeId: '',
-        location: { line: 0, column: 0 },
-        metadata: {
+      const inputSource: VariableSource = {
+        directive: 'var',
+        syntax: inputValue.type === 'data' ? 'object' : 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      };
+      const inputVar = inputValue.type === 'data' ? 
+        createObjectVariable('INPUT', inputValue.value, inputSource, undefined, {
           isReserved: true,
           definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-        }
-      };
+        }) :
+        createSimpleTextVariable('INPUT', inputValue.value, inputSource, {
+          isReserved: true,
+          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+        });
       // Direct assignment for reserved variables during initialization
       this.variables.set('INPUT', inputVar);
       // Note: lowercase 'input' is handled in getVariable() to avoid conflicts
@@ -570,9 +582,9 @@ export class Environment {
       const allVars = this.getAllVariables();
       
       // Separate variables by category
-      const reservedVars: Array<[string, MlldVariable]> = [];
-      const userVars: Array<[string, MlldVariable]> = [];
-      const importedVars: Array<[string, MlldVariable]> = [];
+      const reservedVars: Array<[string, Variable]> = [];
+      const userVars: Array<[string, Variable]> = [];
+      const importedVars: Array<[string, Variable]> = [];
       
       for (const [name, variable] of allVars) {
         if (variable.metadata?.isReserved) {
@@ -611,7 +623,7 @@ export class Environment {
         markdown += `**@${name}**\n`;
         markdown += `- type: ${variable.type}\n`;
         const value = this.truncateValue(variable.value, variable.type, 50);
-        if (variable.type === 'text' && typeof value === 'string') {
+        if (isTextLike(variable) && typeof value === 'string') {
           markdown += `- value: "${value}"\n`;
         } else {
           markdown += `- value: ${value}\n`;
@@ -626,7 +638,7 @@ export class Environment {
           markdown += `**@${name}**\n`;
           markdown += `- type: ${variable.type}\n`;
           const value = this.truncateValue(variable.value, variable.type, 50);
-          if (variable.type === 'text' && typeof value === 'string') {
+          if (isTextLike(variable) && typeof value === 'string') {
             markdown += `- value: "${value}"\n`;
           } else {
             markdown += `- value: ${value}\n`;
@@ -649,7 +661,7 @@ export class Environment {
           markdown += `**@${name}**\n`;
           markdown += `- type: ${variable.type}\n`;
           const value = this.truncateValue(variable.value, variable.type, 50);
-          if (variable.type === 'text' && typeof value === 'string') {
+          if (isTextLike(variable) && typeof value === 'string') {
             markdown += `- value: "${value}"\n`;
           } else {
             markdown += `- value: ${value}\n`;
@@ -785,7 +797,7 @@ export class Environment {
   
   // --- Variable Management ---
   
-  setVariable(name: string, variable: MlldVariable | Variable): void {
+  setVariable(name: string, variable: Variable): void {
     // Check if the name is reserved (but allow system variables to be set)
     if (this.reservedNames.has(name) && !variable.metadata?.isReserved && !variable.metadata?.isSystem) {
       throw new Error(`Cannot create variable '${name}': this name is reserved for system use`);
@@ -841,7 +853,7 @@ export class Environment {
    * Set a parameter variable without checking for import conflicts.
    * Used for temporary parameter variables in exec functions.
    */
-  setParameterVariable(name: string, variable: MlldVariable | Variable): void {
+  setParameterVariable(name: string, variable: Variable): void {
     // Only check if variable already exists in this scope
     if (this.variables.has(name)) {
       const existing = this.variables.get(name)!;
@@ -856,7 +868,7 @@ export class Environment {
     this.variables.set(name, variable);
   }
   
-  getVariable(name: string): MlldVariable | Variable | undefined {
+  getVariable(name: string): Variable | undefined {
     // FAST PATH: Check local variables first (most common case)
     let variable = this.variables.get(name);
     
@@ -916,7 +928,7 @@ export class Environment {
    * Create a synthetic variable for a resolver reference
    * This allows resolvers to be used in variable contexts
    */
-  private createResolverVariable(resolverName: string): MlldVariable | Variable {
+  private createResolverVariable(resolverName: string): Variable {
     // For resolver variables, we check if there's already a reserved variable
     // This handles TIME, DEBUG, INPUT, PROJECTPATH which are pre-initialized
     const existingVar = this.variables.get(resolverName);
@@ -927,19 +939,40 @@ export class Environment {
     // For dynamic resolver variables, we need to resolve them with 'variable' context
     // to get the correct content type and value
     // This is now handled asynchronously during evaluation
-    return {
-      type: 'text',
-      value: `@${resolverName}`, // Placeholder value
-      nodeId: '',
-      location: { line: 0, column: 0 },
-      metadata: {
+    const placeholderSource: VariableSource = {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    return createSimpleTextVariable(
+      resolverName,
+      `@${resolverName}`, // Placeholder value
+      placeholderSource,
+      {
         isReserved: true,
         isResolver: true,
         resolverName: resolverName,
         needsResolution: true, // Flag indicating this needs async resolution
         definedAt: { line: 0, column: 0, filePath: '<resolver>' }
       }
-    };
+    );
+  }
+  
+  /**
+   * Get the value of a variable, handling special cases
+   * This is a convenience method for consumers
+   */
+  getVariableValue(name: string): any {
+    const variable = this.getVariable(name);
+    if (!variable) return null;
+    
+    // Handle special cases
+    if (isPipelineInput(variable)) {
+      return variable.value.text; // Default to text representation
+    }
+    
+    return variable.value;
   }
   
   /**
@@ -988,7 +1021,7 @@ export class Environment {
    * Get a resolver variable with proper async resolution
    * This handles context-dependent behavior for resolvers like @TIME
    */
-  async getResolverVariable(name: string): Promise<MlldVariable | Variable | undefined> {
+  async getResolverVariable(name: string): Promise<Variable | undefined> {
     const upperName = name.toUpperCase();
     
     // Check if it's a reserved resolver name
@@ -1001,16 +1034,22 @@ export class Environment {
       const debugValue = this.createDebugObject(3); // Use markdown format
       
       
-      const debugVar: MlldVariable = {
-        type: 'data',
-        value: debugValue,
-        nodeId: '',
-        location: { line: 0, column: 0 },
-        metadata: {
+      const debugSource: VariableSource = {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      };
+      const debugVar = createObjectVariable(
+        'DEBUG',
+        debugValue,
+        debugSource,
+        undefined,
+        {
           isReserved: true,
           definedAt: { line: 0, column: 0, filePath: '<reserved>' }
         }
-      };
+      );
       return debugVar;
     }
     
@@ -1048,18 +1087,25 @@ export class Environment {
       }
       
       // Create the resolved variable
-      const resolvedVar: MlldVariable = {
-        type: varType,
-        value: varValue,
-        nodeId: '',
-        location: { line: 0, column: 0 },
-        metadata: {
+      const resolverSource: VariableSource = {
+        directive: 'var',
+        syntax: varType === 'data' ? 'object' : 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      };
+      const resolvedVar = varType === 'data' ?
+        createObjectVariable(upperName, varValue, resolverSource, undefined, {
           isReserved: true,
           isResolver: true,
           resolverName: upperName,
           definedAt: { line: 0, column: 0, filePath: '<resolver>' }
-        }
-      };
+        }) :
+        createSimpleTextVariable(upperName, varValue, resolverSource, {
+          isReserved: true,
+          isResolver: true,
+          resolverName: upperName,
+          definedAt: { line: 0, column: 0, filePath: '<resolver>' }
+        });
       
       // Cache the resolved variable
       this.resolverVariableCache.set(upperName, resolvedVar);
@@ -1094,18 +1140,24 @@ export class Environment {
    * Creates both @fm and @frontmatter as aliases to the same data
    */
   setFrontmatter(data: any): void {
-    const frontmatterVariable: MlldVariable = {
-      type: 'data',
-      value: data,
-      nodeId: '',
-      location: { line: 0, column: 0 },
-      metadata: { 
+    const frontmatterSource: VariableSource = {
+      directive: 'var',
+      syntax: 'object',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    const frontmatterVariable = createObjectVariable(
+      'frontmatter',
+      data,
+      frontmatterSource,
+      undefined,
+      { 
         isSystem: true, 
         immutable: true,
         source: 'frontmatter',
         definedAt: { line: 0, column: 0, filePath: '<frontmatter>' }
       }
-    };
+    );
     
     // Create both @fm and @frontmatter as aliases
     this.variables.set('fm', frontmatterVariable);
@@ -1346,16 +1398,21 @@ export class Environment {
       // Update the @INPUT variable with the new content
       const inputValue = this.createInputValue();
       if (inputValue !== null) {
-        const inputVar: MlldVariable = {
-          type: inputValue.type,
-          value: inputValue.value,
-          nodeId: '',
-          location: { line: 0, column: 0 },
-          metadata: {
+        const inputSource: VariableSource = {
+          directive: 'var',
+          syntax: inputValue.type === 'data' ? 'object' : 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        };
+        const inputVar = inputValue.type === 'data' ?
+          createObjectVariable('INPUT', inputValue.value, inputSource, undefined, {
             isReserved: true,
             definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-          }
-        };
+          }) :
+          createSimpleTextVariable('INPUT', inputValue.value, inputSource, {
+            isReserved: true,
+            definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+          });
         // Update the existing INPUT variable
         this.variables.set('INPUT', inputVar);
       }
@@ -1876,7 +1933,7 @@ ${code}
           // When no params are provided, include all text variables as environment variables
           // This allows bash code blocks to access mlld variables via $varname
           for (const [name, variable] of this.variables) {
-            if (variable.type === 'text' && typeof variable.value === 'string') {
+            if (isTextLike(variable) && typeof variable.value === 'string') {
               envVars[name] = variable.value;
             }
           }
@@ -2146,8 +2203,8 @@ ${code}
   
   // --- Utility Methods ---
   
-  getAllVariables(): Map<string, MlldVariable> {
-    const allVars = new Map<string, MlldVariable>();
+  getAllVariables(): Map<string, Variable> {
+    const allVars = new Map<string, Variable>();
     
     // Add parent variables first (so child can override)
     if (this.parent) {
@@ -2165,7 +2222,7 @@ ${code}
     return allVars;
   }
 
-  getCurrentVariables(): Map<string, MlldVariable> {
+  getCurrentVariables(): Map<string, Variable> {
     // Return only this environment's variables (not parent variables)
     return new Map(this.variables);
   }

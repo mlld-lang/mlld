@@ -1,6 +1,5 @@
 import type { Environment } from '../env/Environment';
 import type { PipelineCommand } from '@core/types';
-import { createTextVariable } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
 import { resolveVariableValue } from '../core/interpreter';
 import { createPipelineInput, isPipelineInput } from '../utils/pipeline-input';
@@ -39,18 +38,30 @@ export async function executePipeline(
     // Create child environment with @input variable
     const pipelineEnv = env.createChild();
     
-    // Check if INPUT already exists and update it, otherwise create it
-    const existingInput = pipelineEnv.getVariable('INPUT');
-    if (existingInput) {
-      // Update existing INPUT variable
-      existingInput.value = currentOutput;
-    } else {
-      // Create new INPUT variable
-      const inputVar = createTextVariable('INPUT', currentOutput);
-      // Mark as system variable to bypass reserved name check
-      inputVar.metadata = { ...inputVar.metadata, isSystem: true };
-      pipelineEnv.setVariable('INPUT', inputVar);
-    }
+    // Create pipeline input variable for this stage
+    const pipelineInputObj = createPipelineInput(currentOutput, format || 'text');
+    const inputSource: VariableSource = {
+      directive: 'var',
+      syntax: 'template',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    
+    const inputVar = createPipelineInputVariable(
+      'INPUT',
+      pipelineInputObj,
+      (format || 'text') as 'json' | 'csv' | 'xml' | 'text',
+      currentOutput,
+      inputSource,
+      i + 1, // stage number
+      {
+        isSystem: true,
+        isPipelineInput: true
+      }
+    );
+    
+    // Set the pipeline input variable
+    pipelineEnv.setVariable('INPUT', inputVar);
     
     try {
       // Resolve the command reference

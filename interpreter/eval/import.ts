@@ -1,4 +1,4 @@
-import type { DirectiveNode, TextNode, MlldVariable, ContentNode } from '@core/types';
+import type { DirectiveNode, TextNode, ContentNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate, evaluate } from '../core/interpreter';
@@ -11,6 +11,9 @@ import { version as currentMlldVersion } from '@core/version';
 import { 
   createImportedVariable, 
   createObjectVariable,
+  createSimpleTextVariable,
+  isExecutable as isExecutableVariable,
+  type Variable,
   type VariableSource,
   type VariableTypeDiscriminator 
 } from '@core/types/variable';
@@ -18,10 +21,42 @@ import {
 type ContentNodeArray = ContentNode[];
 
 /**
+ * Helper to create an imported variable with the appropriate type
+ */
+function createImportVariable(
+  name: string,
+  value: any,
+  importPath: string,
+  isNamespace: boolean = false
+): Variable {
+  const source: VariableSource = {
+    directive: 'var',
+    syntax: typeof value === 'string' ? 'quoted' : 
+            Array.isArray(value) ? 'array' : 'object',
+    hasInterpolation: false,
+    isMultiLine: false
+  };
+  
+  const metadata = {
+    isImported: true,
+    importPath,
+    isNamespace,
+    definedAt: { line: 0, column: 0, filePath: importPath }
+  };
+  
+  // Use createImportedVariable if available, otherwise create appropriate type
+  if (typeof value === 'string') {
+    return createSimpleTextVariable(name, value, source, metadata);
+  } else {
+    return createObjectVariable(name, value, source, undefined, metadata);
+  }
+}
+
+/**
  * Process module exports - either use explicit @data module or auto-generate
  */
 function processModuleExports(
-  childVars: Map<string, MlldVariable>,
+  childVars: Map<string, Variable>,
   parseResult: any
 ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null } {
   // Extract frontmatter if present
@@ -41,7 +76,7 @@ function processModuleExports(
       };
       
       // For executable variables, preserve the ExecutableDefinition structure
-      if (variable.type === 'executable') {
+      if (isExecutableVariable(variable)) {
         const execVar = variable as any;
         moduleObject[name].__definition = execVar.definition;
         moduleObject[name].__params = execVar.params;
@@ -57,7 +92,7 @@ function processModuleExports(
   
   // Then, if there's an explicit module export, add it as a structured export
   const moduleVar = childVars.get('module');
-  if (moduleVar && moduleVar.type === 'data') {
+  if (moduleVar && (moduleVar as any).type === 'data') {
     // Handle DataObject type that might have type/properties structure
     let moduleValue = moduleVar.value;
     if (moduleValue && typeof moduleValue === 'object' && 
@@ -209,18 +244,7 @@ async function importFromPath(
         if (directive.subtype === 'importAll') {
           // Import all properties
           for (const [name, value] of Object.entries(moduleObject)) {
-            env.setVariable(name, {
-              type: 'data',
-              identifier: name,
-              value: value,
-              nodeId: '',
-              location: { line: 0, column: 0 },
-              metadata: {
-                isImported: true,
-                importPath: resolvedPath,
-                definedAt: { line: 0, column: 0, filePath: resolvedPath }
-              }
-            });
+            env.setVariable(name, createImportVariable(name, value, resolvedPath));
           }
         } else if (directive.subtype === 'importNamespace') {
           // Import entire JSON under a namespace alias
@@ -234,19 +258,7 @@ async function importFromPath(
           
           // Create namespace variable with the JSON object
           // Note: For JSON files, we don't need to unwrap since the data is already plain
-          env.setVariable(alias, {
-            type: 'data',
-            identifier: alias,
-            value: moduleObject,
-            nodeId: '',
-            location: { line: 0, column: 0 },
-            metadata: {
-              isImported: true,
-              importPath: resolvedPath,
-              isNamespace: true,
-              definedAt: { line: 0, column: 0, filePath: resolvedPath }
-            }
-          });
+          env.setVariable(alias, createImportVariable(alias, moduleObject, resolvedPath, true));
         } else if (directive.subtype === 'importSelected') {
           // Import selected properties
           const imports = directive.values?.imports || [];
@@ -254,18 +266,7 @@ async function importFromPath(
             const varName = importNode.identifier;
             if (varName in moduleObject) {
               const targetName = importNode.alias || varName;
-              env.setVariable(targetName, {
-                type: 'data',
-                identifier: targetName,
-                value: moduleObject[varName],
-                nodeId: '',
-                location: { line: 0, column: 0 },
-                metadata: {
-                  isImported: true,
-                  importPath: resolvedPath,
-                  definedAt: { line: 0, column: 0, filePath: resolvedPath }
-                }
-              });
+              env.setVariable(targetName, createImportVariable(targetName, moduleObject[varName], resolvedPath));
             } else {
               const availableExports = Object.keys(moduleObject);
               throw new Error(

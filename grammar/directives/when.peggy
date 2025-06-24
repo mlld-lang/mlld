@@ -314,9 +314,9 @@ WhenActionBlock
 
 // Single directive as action - simplified inline directives
 WhenActionDirective
-  = "@output" _ source:WhenOutputSource? _ "to" _ target:WhenOutputTarget {
-      helpers.debug('WhenActionDirective: Enhanced @output matched!');
-      // Enhanced @output syntax in when actions (FIRST to match before bracket syntax)
+  = "output" _ source:WhenOutputSource? _ "to" _ target:WhenOutputTarget {
+      helpers.debug('WhenActionDirective: Enhanced output matched!');
+      // Enhanced output syntax in when actions (FIRST to match before bracket syntax)
       const values = {
         target: target
       };
@@ -349,17 +349,17 @@ WhenActionDirective
         location: location()
       })];
     }
-  // @add with simple variable reference (MUST come before exec invocation)
-  / "@add" _ "@" id:BaseIdentifier !("(") !TailModifiers fields:AnyFieldAccess* {
-      // @add with simple variable
+  // show with simple variable reference (MUST come before exec invocation)
+  / "show" _ "@" id:BaseIdentifier !("(") !TailModifiers fields:AnyFieldAccess* {
+      // show with simple variable
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
         ...(fields.length > 0 ? { fields: fields } : {})
       }, location());
       
       return [helpers.createNode(NodeType.Directive, {
-        kind: 'add',
-        subtype: 'addVariable',
+        kind: 'show',
+        subtype: 'showVariable',
         values: { 
           variable: [varRef]
         },
@@ -370,12 +370,12 @@ WhenActionDirective
         location: location()
       })];
     }
-  // @add with exec invocation (function call with parentheses or tail modifiers)
-  / "@add" _ "@" invocation:ExecInvocationWithTail {
-      // @add with exec invocation
+  // show with exec invocation (function call with parentheses or tail modifiers)
+  / "show" _ "@" invocation:ExecInvocationWithTail {
+      // show with exec invocation
       return [helpers.createNode(NodeType.Directive, {
-        kind: 'add',
-        subtype: 'addExecInvocation',
+        kind: 'show',
+        subtype: 'showExecInvocation',
         values: { 
           execInvocation: invocation
         },
@@ -386,10 +386,10 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "@add" _ content:StringLiteral {
+  / "show" _ content:StringLiteral {
       return [helpers.createNode(NodeType.Directive, {
-        kind: 'add',
-        subtype: 'addTemplate',
+        kind: 'show',
+        subtype: 'showTemplate',
         values: { 
           content: [helpers.createNode(NodeType.Text, { 
             content: content, 
@@ -401,27 +401,27 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "@text" _ id:BaseIdentifier _ "=" _ value:StringLiteral {
+  / "var" _ "@" id:BaseIdentifier _ "=" _ value:StringLiteral {
       return [helpers.createNode(NodeType.Directive, {
-        kind: 'text',
-        subtype: 'textAssignment',
+        kind: 'var',
+        subtype: 'var',
         values: { 
           identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          content: [helpers.createNode(NodeType.Text, { 
+          value: [helpers.createNode(NodeType.Text, { 
             content: value, 
             location: location() 
           })]
         },
         raw: {
           identifier: id,
-          content: value
+          value: value
         },
-        meta: {},
+        meta: { inferredType: 'text' },
         location: location()
       })];
     }
-  / "@run" _ "@" invocation:ExecInvocationWithTail {
-      // @run with exec invocation
+  / "run" _ "@" invocation:ExecInvocationWithTail {
+      // run with exec invocation
       return [helpers.createNode(NodeType.Directive, {
         kind: 'run',
         subtype: 'runExecReference',
@@ -437,8 +437,8 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "@run" _ "[" command:WhenCommandText "]" {
-      // Use simple command parsing for actions
+  / "run" _ "{" command:WhenBraceCommandText "}" {
+      // Use simple command parsing for actions with braces
       return [helpers.createNode(NodeType.Directive, {
         kind: 'run',
         subtype: 'runCommand',
@@ -453,9 +453,9 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "@output" _ source:WhenOutputSource? _ "[" path:WhenPathText "]" {
-      helpers.debug('WhenActionDirective: Bracket @output matched');
-      // Bracket @output syntax in when actions
+  / "output" _ source:WhenOutputSource? _ "[" path:WhenPathText "]" {
+      helpers.debug('WhenActionDirective: Bracket output matched');
+      // Bracket output syntax in when actions
       const values = {
         target: {
           type: 'file',
@@ -500,6 +500,12 @@ WhenActionDirective
 // Simple command text without interpolation for now
 WhenCommandText
   = chars:[^\]]+ {
+      return chars.join('');
+    }
+
+// Command text for braces
+WhenBraceCommandText
+  = chars:[^}]+ {
       return chars.join('');
     }
 

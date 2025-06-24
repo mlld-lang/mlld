@@ -49,6 +49,7 @@ ArrayValue
   = TemplateStyleInterpolation  // Templates
   / ObjectLiteral               // Objects  
   / BracketAmbiguous            // Nested arrays or paths
+  / "@" invocation:ExecInvocationWithTail { return invocation; }  // Exec invocations @func()
   / AtVar                       // Variable references (from variables.peggy)
   / NestedDirective             // Nested directives
   / CodeExecution               // Code execution (run keyword and shortcuts)

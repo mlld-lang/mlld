@@ -7,4 +7,4 @@
   @isAdmin
   @isModerator
   @isVerified
-] => /show "Access granted"
+] => show "Access granted"

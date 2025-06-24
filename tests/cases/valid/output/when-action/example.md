@@ -4,8 +4,8 @@
 /var @result = "Condition was true!"
 
 /when @condition: [
-  "yes" => @output @result [when-output.txt]
-  "no" => @output "Condition was false" [false-output.txt]
+  "yes" => output @result [when-output.txt]
+  "no" => output "Condition was false" [false-output.txt]
 ]
 
 Document continues after conditional outputs.
