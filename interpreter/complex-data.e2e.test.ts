@@ -13,8 +13,8 @@ describe('Complex Data Assignment', () => {
     
     const mlldContent = `
 /var @results = {
-  echo: @run {echo "hello world"},
-  date: @run {date}
+  echo: run {echo "hello world"},
+  date: run {date}
 }
 `;
     
@@ -25,7 +25,7 @@ describe('Complex Data Assignment', () => {
     // Get the results variable
     const resultsVar = env.getVariable('results');
     expect(resultsVar).toBeDefined();
-    expect(resultsVar?.type).toBe('var');
+    expect(resultsVar?.type).toBe('object');
     
     // The value should be evaluated lazily when accessed
     // For this test, we'll manually trigger evaluation
@@ -46,7 +46,7 @@ describe('Complex Data Assignment', () => {
     
     const mlldContent = `
 /var @docs = {
-  readme: @show [/test.txt]
+  readme: [/test.txt]
 }
 `;
     
@@ -135,7 +135,7 @@ describe('Complex Data Assignment', () => {
 /var @config = {
   app: {
     name: "MyApp",
-    version: @run {echo "1.0.0"}
+    version: run {echo "1.0.0"}
   },
   messages: {
     welcome: [[Welcome to MyApp!]]
@@ -165,7 +165,7 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-/var @tests = [@run {echo "test1"}, @run {echo "test2"}, @run {echo "test3"}]
+/var @tests = [run {echo "test1"}, run {echo "test2"}, run {echo "test3"}]
 `;
     
     const parseResult = await parse(mlldContent);
@@ -190,9 +190,9 @@ describe('Complex Data Assignment', () => {
     
     const mlldContent = `
 /var @results = {
-  success: @run {echo "ok"},
-  failure: @run {nonexistent-command},
-  another: @run {echo "still works"}
+  success: run {echo "ok"},
+  failure: run {nonexistent-command},
+  another: run {echo "still works"}
 }
 `;
     

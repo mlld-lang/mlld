@@ -402,7 +402,7 @@ export class Environment {
     };
     const debugVar = createObjectVariable(
       'DEBUG',
-      {}, // Empty object, will be computed dynamically
+      null as any, // Null for lazy evaluation
       false, // Not complex
       debugSource,
       {
