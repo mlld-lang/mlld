@@ -171,6 +171,14 @@ export async function evaluateDataValue(
     return result.value;
   }
   
+  // Handle runExec nodes (run @command() in object context)
+  if (value && typeof value === 'object' && value.type === 'runExec' && 'invocation' in value) {
+    // Import the evaluator from exec-invocation
+    const { evaluateExecInvocation } = await import('./exec-invocation');
+    const result = await evaluateExecInvocation(value.invocation as any, env);
+    return result.value;
+  }
+  
   // Handle arrays
   if (Array.isArray(value)) {
     const evaluatedArray = [];

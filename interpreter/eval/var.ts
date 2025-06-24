@@ -444,7 +444,9 @@ function hasComplexValues(properties: any): boolean {
         value.type === 'command' || 
         value.type === 'VariableReference' ||
         value.type === 'path' ||
-        value.type === 'section'
+        value.type === 'section' ||
+        value.type === 'runExec' ||
+        value.type === 'ExecInvocation'
       )) {
         return true;
       }
