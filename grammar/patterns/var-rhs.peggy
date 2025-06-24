@@ -48,9 +48,9 @@ BracketContentWithComma
 ArrayValue
   = TemplateStyleInterpolation  // Templates
   / ObjectLiteral               // Objects  
-  / BracketAmbiguous            // Nested arrays or paths
   / "@" invocation:ExecInvocationWithTail { return invocation; }  // Exec invocations @func()
-  / AtVar                       // Variable references (from variables.peggy)
+  / AtVar                       // Variable references (from variables.peggy) - moved before BracketAmbiguous
+  / BracketAmbiguous            // Nested arrays or paths - moved after AtVar
   / NestedDirective             // Nested directives
   / CodeExecution               // Code execution (run keyword and shortcuts)
   / PrimitiveValue              // Strings, numbers, booleans, null
@@ -61,6 +61,80 @@ PrimitiveValue
   / NumberLiteral
   / BooleanLiteral
   / NullLiteral
+
+// Object property values - specialized context for values inside objects
+ObjectPropertyValue "object property value"
+  = RunCommandValue
+  / CodeExecutionValue
+  / ObjectLiteral
+  / PathReferenceValue
+  / ObjectVariableReference     // Variable references without context checks (moved before exec)
+  / "@" invocation:ExecInvocationWithTail { return invocation; }  // Exec invocations @func()
+  / TemplateStyleInterpolation
+  / ArrayLiteral
+  / PrimitiveValue
+
+// Variable references in object context (no context checks needed)
+ObjectVariableReference
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* {
+      // The !"(" ensures we don't match exec invocations like @func()
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: helpers.normalizePathVar(id),
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+
+// Run command in object context
+RunCommandValue
+  = "run" _ "{" _ content:CodeBlockContent _ "}" {
+      return {
+        type: 'command',
+        command: content,
+        hasRunKeyword: true
+      };
+    }
+  / "run" _ "@" invocation:ExecInvocationWithTail {
+      // Handle run @command() syntax
+      return {
+        type: 'runExec',
+        invocation: invocation,
+        hasRunKeyword: true
+      };
+    }
+
+// Code execution in object context  
+CodeExecutionValue
+  = lang:VarCodeLanguage _ "{" _ code:CodeBlockContent _ "}" {
+      return {
+        type: 'code',
+        language: lang,
+        code: code,
+        hasRunKeyword: false
+      };
+    }
+
+// Path reference - unambiguous in object context
+PathReferenceValue
+  = "[" _ path:PathParts _ "]" {
+      return helpers.createPathDereference(path, location());
+    }
+
+
+// Array literal with proper comma handling
+ArrayLiteral
+  = "[" _ items:ArrayLiteralItems _ "]" {
+      return helpers.createArrayFromContent(items, location());
+    }
+
+// Array items - must have commas between elements
+ArrayLiteralItems
+  = first:ObjectPropertyValue rest:(_ "," _ v:ObjectPropertyValue { return v; })* {
+      return [first, ...rest];
+    }
+  / item:ObjectPropertyValue _ "," {
+      // Single item with trailing comma
+      return [item];
+    }
 
 // Object literal { key: value }
 ObjectLiteral
@@ -82,7 +156,7 @@ ObjectProperties
 
 // Object property key:value
 ObjectProperty
-  = key:PropertyKey _ ":" _ value:ArrayValue {
+  = key:PropertyKey _ ":" _ value:ObjectPropertyValue {
       return [key, value];
     }
 
