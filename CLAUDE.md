@@ -91,12 +91,12 @@ const identifier = await interpolate(identifierNodes, env);
 
 ### Core Syntax Principles
 1. **Directives only at start of lines** - mlld syntax is only interpreted in lines that start with a mlld directive
-   - Exception: `@run` can be used on RHS of `@text` and `@exec` definitions
-   - Exception: Directives can be used in RHS of `@data` object definitions
-2. **Variables are created without `@`** - `@text name = "value"` (not `@text @name`)
+   - Exception: `run` can be used on RHS of `/var` and `/exe` definitions (without `@`)
+   - Exception: Directives can be used in RHS of `/var` object definitions
+2. **Variables are created with `@`** - `/var @name = "value"` (not `/var name`)
 3. **Variables are referenced with `@`** - Use `@name` in directives, `{{name}}` in templates
-4. **Commands require brackets** - `@run [echo "hello"]` not `@run echo "hello"`
-5. **Only `@run` and `@add` produce output** - Other directives define or assign but don't output
+4. **Commands require braces or quotes** - `/run {echo "hello"}` or `/run "echo hello"`
+5. **Only `/run`, `/show`, and `/output` produce output** - Other directives define or assign but don't output
 6. **Markdown-first design** - Everything that isn't a directive line is treated as regular Markdown
 
 ### Variable References
@@ -114,52 +114,61 @@ const identifier = await interpolate(identifierNodes, env);
 - Field access: `{{user.name}}` or `{{items.0.value}}`
 - Backtick templates: `` `text with @var interpolation` `` - simpler alternative to `[[text with {{var}}]]`
 
-### Exec Commands
-- `@exec name(params) = @run [(command)]` - Defines a reusable command
-- `@run @name(args)` - Executes the defined command
+### Exe Commands
+- `/exe @name(params) = run {command}` - Defines a reusable command
+- `/run @name(args)` - Executes the defined command
 - Parameters are referenced with `@param` inside the command definition
-- Shadow environments: `@exec js = { func1, func2 }` - Makes functions available to call from JS code
-  - Functions can call each other within @run js blocks
+- Shadow environments: `/exe js = { func1, func2 }` - Makes functions available to call from JS code
+  - Functions can call each other within /run js blocks
   - Supports js and node (python/sh have grammar support but pending implementation)
 
 ### Import Syntax
-- File imports: `@import { var1, var2 } from "path/to/file.mld"`
-- Import all: `@import { * } from "path/to/file.mld"`
-- Module imports: `@import { func1, func2 } from @author/module`
-- Environment variables: `@import { GITHUB_TOKEN, NODE_ENV } from @INPUT`
+- File imports: `/import { var1, var2 } from "path/to/file.mld"`
+- Import all: `/import { * } from "path/to/file.mld"`
+- Module imports: `/import { func1, func2 } from @author/module`
+- Environment variables: `/import { GITHUB_TOKEN, NODE_ENV } from @INPUT`
   - Requires variables to be listed in `mlld.lock.json` security.allowedEnv
   - mlld validates required env vars exist at startup
 - Paths are relative to the importing file's directory
 - Modules use @ prefix for registry modules and private resolvers (no quotes)
 
 ### Common Mistakes to Avoid
-- trying to treat mlld like a template langauge -- it's not; it's a programming language embedded in markdown, so it only works for lines starting with a @ directive
-- ❌ `@run echo "hello"` → ✅ `@run [echo "hello"]`
-- ❌ `@text @myvar = "value"` → ✅ `@text myvar = "value"`
-- ❌ `Hello @name!` → ✅ `@text greeting = [[Hello {{name}}!]]` then `@add @greeting`
+- trying to treat mlld like a template langauge -- it's not; it's a programming language embedded in markdown, so it only works for lines starting with a / directive
+- ❌ `/run echo "hello"` → ✅ `/run {echo "hello"}` or `/run "echo hello"`
+- ❌ `/var myvar = "value"` → ✅ `/var @myvar = "value"`
+- ❌ `/var @result = @run {cmd}` → ✅ `/var @result = run {cmd}`
+- ❌ `Hello @name!` → ✅ `/var @greeting = "Hello @name!"` then `/show @greeting`
 - ❌ `{{@variable}}` → ✅ `{{variable}}`
-- ❌ `@path config = env.paths.dev` → ✅ `@path config = @env.paths.dev`
+- ❌ `/path @config = env.paths.dev` → ✅ `/path @config = @env.paths.dev`
 
-### Conditional Logic (@when)
-- `@when @condition => @action` - Simple one-line conditional
-- `@when @var first: [...]` - Execute first matching condition only
-- `@when @var any: [...]` - Execute all matching conditions
-- `@when @var all: [...]` - Execute action only if all conditions match
+### Conditional Logic (/when)
+- `/when @condition => @action` - Simple one-line conditional
+- `/when @condition [...]` - Execute each action for matching condition (all fire independently)
+  ```
+  /when @env [
+    "prod" => /show "Production"
+    "dev" => /show "Development"
+    _ => /show "Unknown"
+  ]
+  ```
+- `/when @var first: [...]` - Execute first matching condition only
+- `/when @var any: [...] => @action` - Execute if any condition matches
+- `/when @var all: [...] => @action` - Execute only if all conditions match
 - Conditions can be variables, expressions, or command results
 - Truthiness: empty strings, null, false, 0 are falsy; everything else is truthy
 
 ### Iteration (foreach)
-- `@data result = foreach @command(@array)` - Apply command to each element
-- `@data result = foreach @template(@array)` - Apply template to each element
+- `/var @result = foreach @command(@array)` - Apply command to each element
+- `/var @result = foreach @template(@array)` - Apply template to each element
 - Multiple arrays create cartesian product: `foreach @cmd(@arr1, @arr2)`
-- Works with parameterized `@exec` commands or `@text` templates
+- Works with parameterized `/exe` commands or template variables
 - Results are always arrays matching the iteration count
-- Parameter count must match array count: `@exec process(a, b)` requires 2 arrays
+- Parameter count must match array count: `/exe @process(a, b)` requires 2 arrays
 
 ### Module System (mlld Modules)
 - Install: `mlld install @author/module` or `mlld install` (from lock file)
 - List: `mlld ls` shows installed modules with metadata
-- Import: `@import { funcName } from @author/module` (no quotes!)
+- Import: `/import { funcName } from @author/module` (no quotes!)
 - Modules are cached locally in `.mlld-cache/`
 - Lock file: `mlld.lock.json` ensures reproducible installs
 - Publishing: See `docs/registering-modules.md`
@@ -169,21 +178,23 @@ const identifier = await interpolate(identifierNodes, env);
 - List allowed vars: `mlld env list` 
 - Remove access: `mlld env remove GITHUB_TOKEN`
 - Stored in `mlld.lock.json` under `security.allowedEnv`
-- Import in files: `@import { GITHUB_TOKEN } from @INPUT`
+- Import in files: `/import { GITHUB_TOKEN } from @INPUT`
 - Fail-fast: mlld validates required vars exist at startup
 
 ### With Clauses (when merged from feature branch)
-- Transform output: `@run [cmd] with { pipeline: [@transform1, @transform2] }`
-- Validate dependencies: `@run [cmd] with { needs: { file: "config.json" } }`
+- Transform output: `/run {cmd} with { pipeline: [@transform1, @transform2] }`
+- Validate dependencies: `/run {cmd} with { needs: { file: "config.json" } }`
 - Each pipeline stage receives previous output as `@input`
 - Can combine pipeline and needs in same with clause
-- Works with both `@run` and `@exec` directives
+- Works with both `/run` and `/exe` directives
 
 ## Key File Locations
 - **Grammar**: `grammar/mlld.peggy` (main), `grammar/directives/` (modular patterns)
 - **Interpreter**: `interpreter/core/interpreter.ts` (main), `interpreter/eval/` (directive evaluators)
   - `interpreter/eval/when.ts` - Conditional logic implementation
-  - `interpreter/eval/data.ts` - Handles foreach operations
+  - `interpreter/eval/var.ts` - Variable creation (handles all types)
+  - `interpreter/eval/show.ts` - Output/display implementation
+  - `interpreter/eval/exe.ts` - Executable definitions
   - `interpreter/eval/lazy-eval.ts` - Lazy evaluation for foreach/when
 - **Registry**: `core/registry/` - Module system implementation
 - **Error Classes**: `core/errors/` (definitions), see `docs/dev/ERRORS.md` for system overview
