@@ -91,7 +91,7 @@ describe('Output Format Tests', () => {
       expect(result).toContain('<MLLD_OUTPUT>');
       expect(result).toContain('<VARIABLES>');
       expect(result).toContain('<MESSAGE>'); 
-      expect(result).toContain('**Type**: text');
+      expect(result).toContain('**Type**: simple-text');
       expect(result).toContain('**Value**: Hello XML');
       expect(result).toContain('<CONTENT>');
       expect(result).toContain('Hello XML'); // The actual content
@@ -102,7 +102,7 @@ describe('Output Format Tests', () => {
     /var @message = "Hello"
     /var @config = {"version": "1.0"}
     /path @filePath = [./test.md]
-    /exe @cmd = run [(echo "test")]
+    /exe @cmd = {echo "test"}
 `;
       
       const result = await interpret(source, {
@@ -113,11 +113,11 @@ describe('Output Format Tests', () => {
       
       // Should include all variable types with llmxml structure (SCREAMING_SNAKE)
       expect(result).toContain('<MESSAGE>');
-      expect(result).toContain('**Type**: text');
+      expect(result).toContain('**Type**: simple-text');
       expect(result).toContain('**Value**: Hello');
       
       expect(result).toContain('<CONFIG>');
-      expect(result).toContain('**Type**: data');
+      expect(result).toContain('**Type**: object');
       expect(result).toContain('"version": "1.0"');
       
       expect(result).toContain('<FILEPATH>'); // Note: llmxml converts filePath to FILEPATH

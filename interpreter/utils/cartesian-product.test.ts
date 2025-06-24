@@ -102,7 +102,7 @@ describe('isWithinPerformanceLimit', () => {
 
   it('should handle edge case at the limit', () => {
     // Create arrays that generate exactly the limit
-    const exactLimitArrays = [[...Array(FOREACH_PERFORMANCE_LIMIT).keys()]];
+    const exactLimitArrays = [[...Array(FOREACH_PERFORMANCE_LIMIT).keys(}];
     expect(isWithinPerformanceLimit(exactLimitArrays)).toBe(true);
   });
 });
