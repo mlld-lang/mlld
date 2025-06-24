@@ -125,6 +125,35 @@ export async function evaluateDataValue(
     return await evaluateForeachSection(value, env);
   }
   
+  // Handle raw VariableReference nodes (not wrapped in array)
+  if (value && typeof value === 'object' && value.type === 'VariableReference') {
+    const variable = env.getVariable(value.identifier);
+    if (!variable) {
+      throw new Error(`Variable not found: ${value.identifier}`);
+    }
+    
+    // For executable variables, return the variable itself (for lazy execution)
+    if (isExecutable(variable)) {
+      return variable;
+    }
+    
+    // Extract the actual value
+    let result: any;
+    if (isTextLike(variable)) {
+      result = variable.value;
+    } else if (isPath(variable)) {
+      result = variable.value.resolvedPath;
+    } else if (isImported(variable)) {
+      result = variable.value;
+    } else if (isObject(variable) || isArray(variable)) {
+      result = await resolveVariableValue(variable, env);
+    } else {
+      result = await resolveVariableValue(variable, env);
+    }
+    
+    return result;
+  }
+  
   // Handle variable references with tail modifiers (pipelines, etc.)
   if (value && typeof value === 'object' && value.type === 'VariableReferenceWithTail') {
     // First resolve the variable value

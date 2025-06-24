@@ -5,13 +5,31 @@
 VarRHSContent "var assignment value"
   = ForeachSectionExpression    // foreach [@array.field # section] as [[template]]
   / ForeachCommandExpression    // foreach @command(@arrays)
-  / "@" invocation:ExecInvocationWithTail { return invocation; }  // Exec invocations @func()
+  / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateStyleInterpolation  // Handles backtick, [[...]], double/single quotes
   / ObjectLiteral               // Object literal { key: value }
   / BracketAmbiguous            // NEW: Array vs path disambiguation
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
+
+// EXEC INVOCATION PATTERN - Matches @func() specifically
+ExecInvocationPattern "exec invocation pattern"
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" tail:TailModifiers? {
+      // Create command reference with arguments
+      const ref = {
+        name,
+        identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
+        args: args || [],
+        isCommandReference: true
+      };
+      
+      return {
+        type: 'ExecInvocation',
+        commandRef: ref,
+        withClause: tail || null
+      };
+    }
 
 // BRACKET AMBIGUOUS - The critical disambiguation logic
 BracketAmbiguous "bracket content (array or path)"
@@ -50,7 +68,7 @@ BracketContentWithComma
 ArrayValue
   = TemplateStyleInterpolation  // Templates
   / ObjectLiteral               // Objects  
-  / "@" invocation:ExecInvocationWithTail { return invocation; }  // Exec invocations @func()
+  / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / AtVar                       // Variable references (from variables.peggy) - moved before BracketAmbiguous
   / BracketAmbiguous            // Nested arrays or paths - moved after AtVar
   / NestedDirective             // Nested directives
@@ -70,8 +88,8 @@ ObjectPropertyValue "object property value"
   / CodeExecutionValue
   / ObjectLiteral
   / BracketAmbiguous            // Use ambiguous bracket handling for array/path disambiguation
-  / ObjectVariableReference     // Variable references without context checks (moved before exec)
-  / "@" invocation:ExecInvocationWithTail { return invocation; }  // Exec invocations @func()
+  / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
+  / ObjectVariableReference     // Variable references without context checks
   / TemplateStyleInterpolation
   / PrimitiveValue
 
