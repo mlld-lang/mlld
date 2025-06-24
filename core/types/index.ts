@@ -28,6 +28,7 @@ export * from './data';
 export * from './run';
 export * from './output';
 export * from './when';
+export * from './var'; // New unified var directive
 
 // Import node types for the MlldNode union
 import {
@@ -80,6 +81,8 @@ export type MlldNode =
 // Export variable types and enums
 export * from './variables';
 export * from './executable';
+export * from './variable-legacy'; // Transitional @var runtime types
+export * from './variable'; // New discriminated union variable system
 
 // Simple variable type enum for the interpreter
 export enum VariableType {
@@ -103,6 +106,8 @@ export interface VariableMetadata {
 
 // Import ExecutableVariable for the union
 import { ExecutableVariable } from './executable';
+// Import ExtendedMlldVariable for the extended type guard
+import { ExtendedMlldVariable } from './variable';
 
 // Discriminated union for properly typed variables
 export type MlldVariable = 
@@ -373,6 +378,14 @@ export function isImportVariable(variable: MlldVariable): variable is ImportVari
 
 export function isExecutableVariable(variable: MlldVariable): variable is ExecutableVariable {
   return variable.type === VariableType.EXECUTABLE;
+}
+
+/**
+ * Type guard to check if a variable is using the extended type system
+ */
+export function isExtendedVariable(variable: any): variable is ExtendedMlldVariable {
+  return variable && typeof variable === 'object' && 'type' in variable &&
+    (Object.values(VariableType).includes(variable.type) || variable.type === 'var');
 }
 
 // =========================================================================
