@@ -426,6 +426,12 @@ function hasComplexValues(properties: any): boolean {
       if (value.type === 'array' && hasComplexArrayItems(value.items || value.elements || [])) {
         return true;
       }
+      // Check plain objects (without type field) recursively
+      if (!value.type && typeof value === 'object' && !Array.isArray(value)) {
+        if (hasComplexValues(value)) {
+          return true;
+        }
+      }
     }
   }
   

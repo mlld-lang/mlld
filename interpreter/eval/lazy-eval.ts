@@ -25,6 +25,17 @@ export async function evaluateDataValue(
     console.log('evaluateDataValue called with:', JSON.stringify(value, null, 2).substring(0, 200));
   }
   
+  // Handle wrapped string values FIRST (with content array and wrapperType)
+  // This needs to be before other object checks because these objects don't have a type field
+  if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
+    // This is a wrapped string (quotes, backticks, or brackets)
+    if (process.env.DEBUG_LAZY_EVAL) {
+      console.log('Found wrapped string:', { wrapperType: value.wrapperType, contentLength: value.content.length });
+    }
+    const { interpolate } = await import('../core/interpreter');
+    return await interpolate(value.content, env);
+  }
+  
   // Handle directive nodes (both marked as data values and regular directives)
   if (value?.type === 'Directive') {
     const directive = value as DirectiveNode;
@@ -93,12 +104,6 @@ export async function evaluateDataValue(
     return value.content;
   }
   
-  // Handle wrapped string values (with content array and wrapperType)
-  if (value?.content && Array.isArray(value.content) && value.wrapperType) {
-    // This is a wrapped string (quotes, backticks, or brackets)
-    const { interpolate } = await import('../core/interpreter');
-    return await interpolate(value.content, env);
-  }
   
   // Handle other content arrays (like template content)
   if (value?.content && Array.isArray(value.content)) {
@@ -165,9 +170,6 @@ export async function evaluateDataValue(
   if (value?.type === 'object' && 'properties' in value) {
     const evaluatedObject: Record<string, any> = {};
     for (const [key, propValue] of Object.entries(value.properties)) {
-      if (process.env.DEBUG_LAZY_EVAL) {
-        console.log(`Evaluating object property ${key}:`, JSON.stringify(propValue, null, 2).substring(0, 200));
-      }
       evaluatedObject[key] = await evaluateDataValue(propValue, env);
     }
     return evaluatedObject;
@@ -177,6 +179,10 @@ export async function evaluateDataValue(
   if (typeof value === 'object' && value !== null && !value.type) {
     const evaluatedObject: Record<string, any> = {};
     for (const [key, propValue] of Object.entries(value)) {
+      // Skip internal properties that shouldn't be in the result
+      if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
+        continue;
+      }
       evaluatedObject[key] = await evaluateDataValue(propValue, env);
     }
     return evaluatedObject;
