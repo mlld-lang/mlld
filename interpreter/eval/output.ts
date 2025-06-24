@@ -15,7 +15,7 @@ import type { EvalResult } from '../core/interpreter';
 import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
-import { isTextVariable, isExecutableVariable } from '@core/types';
+import { isTextLike, isExecutable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 
@@ -232,7 +232,7 @@ async function evaluateInvocationSource(
     );
   }
   
-  if (isTextVariable(variable) || variable.type === 'textTemplate') {
+  if (isTextLike(variable)) {
     // It's a text template - evaluate it with arguments
     let templateContent: string;
     let templateNodes: any[];
@@ -269,7 +269,7 @@ async function evaluateInvocationSource(
       return await childEnv.interpolate(templateContent);
     }
     
-  } else if (isExecutableVariable(variable)) {
+  } else if (isExecutable(variable)) {
     // It's an executable - need to invoke it properly
     const definition = variable.value;
     
@@ -352,7 +352,7 @@ async function evaluateSimpleVariableSource(
   // Get the variable value based on type
   let value: any;
   
-  if (isTextVariable(variable)) {
+  if (isTextLike(variable)) {
     value = variable.value;
   } else if ('value' in variable) {
     value = variable.value;

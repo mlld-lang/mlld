@@ -20,11 +20,9 @@ export * from './errors';
 
 // Re-export directive types
 export * from './import';
-export * from './text';
 export * from './show';
 export * from './exe';
 export * from './path';
-export * from './data';
 export * from './run';
 export * from './output';
 export * from './when';
@@ -81,18 +79,9 @@ export type MlldNode =
 // Export variable types and enums
 export * from './variables';
 export * from './executable';
-export * from './variable-legacy'; // Transitional @var runtime types
+// Variable-legacy removed during Phase 6 cleanup
 export * from './variable'; // New discriminated union variable system
 
-// Simple variable type enum for the interpreter
-export enum VariableType {
-  TEXT = 'text',
-  DATA = 'data',
-  PATH = 'path',
-  COMMAND = 'command',
-  IMPORT = 'import',
-  EXECUTABLE = 'executable'
-}
 
 // Base variable metadata interface
 export interface VariableMetadata {
@@ -109,40 +98,6 @@ import { ExecutableVariable } from './executable';
 // Import ExtendedMlldVariable for the extended type guard
 import { ExtendedMlldVariable } from './variable';
 
-// Discriminated union for properly typed variables
-export type MlldVariable = 
-  | TextVariable
-  | DataVariable
-  | PathVariable
-  | CommandVariable
-  | ImportVariable
-  | ExecutableVariable;
-
-// Individual variable types with strong typing
-export interface TextVariable {
-  type: VariableType.TEXT;
-  name: string;
-  value: string;
-  metadata?: VariableMetadata;
-}
-
-export interface DataVariable {
-  type: VariableType.DATA;
-  name: string;
-  value: unknown; // Data can be any JSON-serializable value
-  metadata?: VariableMetadata;
-}
-
-export interface PathVariable {
-  type: VariableType.PATH;
-  name: string;
-  value: {
-    resolvedPath: string;
-    isURL?: boolean;
-    security?: any; // SecurityOptions type if defined
-  };
-  metadata?: VariableMetadata;
-}
 
 // Command definition structure
 export interface BaseCommandDefinition {
@@ -169,31 +124,6 @@ export interface CodeDefinition extends BaseCommandDefinition {
 
 export type CommandDefinition = CommandTemplateDefinition | CommandRefDefinition | CodeDefinition;
 
-export interface CommandVariable {
-  type: VariableType.COMMAND;
-  name: string;
-  value: CommandDefinition;
-  metadata?: VariableMetadata;
-}
-
-export interface ImportVariable {
-  type: VariableType.IMPORT;
-  name: string;
-  value: {
-    source: string;
-    imported: string[];
-  };
-  metadata?: VariableMetadata;
-}
-
-// Legacy interface for backward compatibility (deprecated)
-/** @deprecated Use discriminated MlldVariable types instead */
-export interface LegacyMlldVariable {
-  type: VariableType;
-  name: string;
-  value: any;
-  metadata?: VariableMetadata;
-}
 
 // =========================================================================
 // VARIABLE FACTORY FUNCTIONS
@@ -216,176 +146,16 @@ export function astLocationToSourceLocation(
   };
 }
 
-/**
- * Create a text variable
- */
-export function createTextVariable(
-  name: string,
-  value: string,
-  metadata?: Partial<VariableMetadata>
-): TextVariable {
-  return {
-    type: VariableType.TEXT,
-    name,
-    value,
-    metadata: {
-      createdAt: Date.now(),
-      modifiedAt: Date.now(),
-      ...metadata
-    }
-  };
-}
-
-/**
- * Create a data variable (JSON value)
- */
-export function createDataVariable(
-  name: string,
-  value: unknown,
-  metadata?: Partial<VariableMetadata>
-): DataVariable {
-  return {
-    type: VariableType.DATA,
-    name,
-    value,
-    metadata: {
-      createdAt: Date.now(),
-      modifiedAt: Date.now(),
-      ...metadata
-    }
-  };
-}
-
-/**
- * Create a complex data variable (with lazy evaluation support)
- */
-export function createComplexDataVariable(
-  name: string,
-  value: unknown,
-  metadata?: Partial<VariableMetadata>
-): DataVariable {
-  return {
-    type: VariableType.DATA,
-    name,
-    value,
-    metadata: {
-      createdAt: Date.now(),
-      modifiedAt: Date.now(),
-      isComplex: true,
-      ...metadata
-    }
-  };
-}
-
-/**
- * Create a path variable
- */
-export function createPathVariable(
-  name: string,
-  resolvedPath: string,
-  options?: {
-    isURL?: boolean;
-    security?: any;
-  },
-  metadata?: Partial<VariableMetadata>
-): PathVariable {
-  return {
-    type: VariableType.PATH,
-    name,
-    value: {
-      resolvedPath,
-      isURL: options?.isURL || false,
-      ...(options?.security && { security: options.security })
-    },
-    metadata: {
-      createdAt: Date.now(),
-      modifiedAt: Date.now(),
-      ...metadata
-    }
-  };
-}
-
-/**
- * Create a command variable (from @exec directive)
- */
-export function createCommandVariable(
-  name: string,
-  commandDef: CommandDefinition,
-  metadata?: Partial<VariableMetadata>
-): CommandVariable {
-  return {
-    type: VariableType.COMMAND,
-    name,
-    value: commandDef,
-    metadata: {
-      createdAt: Date.now(),
-      modifiedAt: Date.now(),
-      ...metadata
-    }
-  };
-}
-
-/**
- * Create an import variable
- */
-export function createImportVariable(
-  name: string,
-  source: string,
-  imported: string[],
-  metadata?: Partial<VariableMetadata>
-): ImportVariable {
-  return {
-    type: VariableType.IMPORT,
-    name,
-    value: {
-      source,
-      imported
-    },
-    metadata: {
-      createdAt: Date.now(),
-      modifiedAt: Date.now(),
-      ...metadata
-    }
-  };
-}
 
 // =========================================================================
 // TYPE GUARD FUNCTIONS
 // =========================================================================
 
 /**
- * Type guard functions for safe runtime type checking
- */
-export function isTextVariable(variable: MlldVariable): variable is TextVariable {
-  return variable.type === VariableType.TEXT;
-}
-
-export function isDataVariable(variable: MlldVariable): variable is DataVariable {
-  return variable.type === VariableType.DATA;
-}
-
-export function isPathVariable(variable: MlldVariable): variable is PathVariable {
-  return variable.type === VariableType.PATH;
-}
-
-export function isCommandVariable(variable: MlldVariable): variable is CommandVariable {
-  return variable.type === VariableType.COMMAND;
-}
-
-export function isImportVariable(variable: MlldVariable): variable is ImportVariable {
-  return variable.type === VariableType.IMPORT;
-}
-
-export function isExecutableVariable(variable: MlldVariable): variable is ExecutableVariable {
-  return variable.type === VariableType.EXECUTABLE;
-}
-
-/**
  * Type guard to check if a variable is using the extended type system
  */
 export function isExtendedVariable(variable: any): variable is ExtendedMlldVariable {
-  return variable && typeof variable === 'object' && 'type' in variable &&
-    (Object.values(VariableType).includes(variable.type) || variable.type === 'var');
+  return variable && typeof variable === 'object' && 'type' in variable;
 }
 
 // =========================================================================

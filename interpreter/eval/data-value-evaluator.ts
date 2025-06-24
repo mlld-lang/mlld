@@ -1,18 +1,29 @@
 import type { Environment } from '../env/Environment';
 import type { 
   DataValue,
-  DataObject,
-  DataArray,
-  EvaluationState
-} from '@core/types/data';
+  DataObjectValue as DataObject,
+  DataArrayValue as DataArray
+} from '@core/types/var';
 import { 
   isDirectiveValue,
   isVariableReferenceValue,
   isTemplateValue,
-  isPrimitiveValue,
-  isForeachCommandExpression,
-  isForeachSectionExpression
-} from '@core/types/data';
+  isPrimitiveValue
+} from '@core/types/var';
+
+interface EvaluationState {
+  depth: number;
+  maxDepth: number;
+}
+
+// Type guards for foreach expressions
+function isForeachCommandExpression(value: any): boolean {
+  return typeof value === 'object' && value !== null && value.type === 'foreach';
+}
+
+function isForeachSectionExpression(value: any): boolean {
+  return typeof value === 'object' && value !== null && value.type === 'foreachSection';
+}
 import { 
   isExecutable,
   isArray,

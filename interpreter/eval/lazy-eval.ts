@@ -1,7 +1,7 @@
 import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
-import type { DataValue } from '@core/types/data';
-import { isDirectiveValue, isVariableReferenceValue, isTemplateValue } from '@core/types/data';
+import type { DataValue } from '@core/types/var';
+import { isDirectiveValue, isVariableReferenceValue, isTemplateValue } from '@core/types/var';
 import { evaluate } from '../core/interpreter';
 
 // Simple cache to prevent double evaluation of the same directive

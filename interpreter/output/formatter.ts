@@ -1,6 +1,7 @@
-import type { MlldNode, MlldVariable } from '@core/types';
+import type { MlldNode } from '@core/types';
+import type { Variable } from '@core/types/variable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
-import { isTextVariable, isDataVariable, isPathVariable, isExecutableVariable, isImportVariable } from '@core/types';
+import { isTextLike, isObject, isArray, isPath, isExecutable, isImported } from '@core/types/variable';
 import { formatMarkdown } from '../utils/markdown-formatter';
 import { normalizeOutputBlankLines } from '../utils/blank-line-normalizer';
 
@@ -9,7 +10,7 @@ import { normalizeOutputBlankLines } from '../utils/blank-line-normalizer';
  */
 export interface FormatOptions {
   format: 'markdown' | 'xml';
-  variables?: Map<string, MlldVariable>;
+  variables?: Map<string, Variable>;
   useMarkdownFormatter?: boolean; // Default: true - use prettier for formatting
   normalizeBlankLines?: boolean; // Default: true - normalize blank lines
 }
@@ -120,17 +121,17 @@ async function buildStructuredMarkdown(nodes: MlldNode[], options: FormatOptions
 /**
  * Get string value from variable using type-safe approach
  */
-function getVariableValue(variable: MlldVariable): string {
-  if (isTextVariable(variable)) {
+function getVariableValue(variable: Variable): string {
+  if (isTextLike(variable)) {
     return variable.value;
-  } else if (isDataVariable(variable)) {
+  } else if (isObject(variable) || isArray(variable)) {
     return JSON.stringify(variable.value, null, 2);
-  } else if (isPathVariable(variable)) {
-    return variable.value.resolvedPath;
-  } else if (isExecutableVariable(variable)) {
-    return JSON.stringify(variable.value);
-  } else if (isImportVariable(variable)) {
-    return JSON.stringify(variable.value);
+  } else if (isPath(variable)) {
+    return variable.value;
+  } else if (isExecutable(variable)) {
+    return JSON.stringify(variable.definition);
+  } else if (isImported(variable)) {
+    return `Imported from ${variable.source}`;
   } else {
     throw new Error(`Unknown variable type in formatter: ${(variable as any).type}`);
   }

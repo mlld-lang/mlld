@@ -3,13 +3,13 @@ import type {
   DataValue, 
   DataObjectValue, 
   DataArrayValue
-} from '@core/types/data';
+} from '@core/types/var';
 import {
   isDirectiveValue,
   isVariableReferenceValue,
   isTemplateValue,
   isPrimitiveValue 
-} from '@core/types/data';
+} from '@core/types/guards';
 import type { 
   BaseMlldNode,
   TextNode,
