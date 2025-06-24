@@ -1651,7 +1651,7 @@ export class Environment {
         }
         
         // Debug exec-code issue
-        if (process.env.DEBUG_EXEC || code.includes('console.log(Number(a) + Number(b))')) {
+        if (process.env.DEBUG_EXEC) {
           console.log('executeCode debug:');
           console.log('  code:', code);
           console.log('  functionBody:', functionBody);

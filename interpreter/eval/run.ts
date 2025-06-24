@@ -350,7 +350,7 @@ export async function evaluateRun(
       }
       
       const code = await interpolate(definition.codeTemplate, tempEnv, InterpolationContext.Default);
-      if (process.env.DEBUG_EXEC || !code || code.trim() === '') {
+      if (process.env.DEBUG_EXEC) {
         console.log('run.ts code execution debug:');
         console.log('  definition.codeTemplate:', definition.codeTemplate);
         console.log('  interpolated code:', code);
