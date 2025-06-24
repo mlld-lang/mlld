@@ -70,27 +70,22 @@ export async function evaluateForeachAsText(
         // Create a child environment with special variables
         const childEnv = env.createChild();
         
-        // Add template variables
-        childEnv.setVariable('result', {
-          type: 'text',
-          name: 'result',
-          value: result,
-          definedAt: null
-        });
+        // Import variable creation functions
+        const { createSimpleTextVariable, createObjectVariable } = await import('@core/types/variable');
+        const { VariableSource } = await import('@core/types/variable');
         
-        childEnv.setVariable('index', {
-          type: 'data',
-          name: 'index',
-          value: index,
-          definedAt: null
-        });
+        // Create default source for template variables
+        const templateSource: VariableSource = {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        };
         
-        childEnv.setVariable('item', {
-          type: 'text',
-          name: 'item',
-          value: result,
-          definedAt: null
-        });
+        // Add template variables using new Variable types
+        childEnv.setVariable('result', createSimpleTextVariable('result', result, templateSource));
+        childEnv.setVariable('index', createObjectVariable('index', index, false, templateSource));
+        childEnv.setVariable('item', createSimpleTextVariable('item', result, templateSource));
         
         // Parse and interpolate the template
         const templateNodes = parseTemplateString(finalOptions.template!);

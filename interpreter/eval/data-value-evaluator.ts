@@ -13,8 +13,15 @@ import {
   isForeachCommandExpression,
   isForeachSectionExpression
 } from '@core/types/data';
-import { isTextVariable, isDataVariable, isPathVariable, isImportVariable, isExecutableVariable } from '@core/types';
-import { isExecutable as isExecutableVar } from '@core/types/variable';
+import { 
+  isExecutable,
+  isArray,
+  isObject,
+  isTextLike,
+  isPath,
+  isImported,
+  Variable
+} from '@core/types/variable';
 import { evaluate, interpolate, resolveVariableValue } from '../core/interpreter';
 import { accessField } from '../utils/field-access';
 import { 
@@ -116,15 +123,14 @@ export async function evaluateDataValue(
       throw new Error(`Variable not found: ${varRef.identifier}`);
     }
     
-    // Get the base value
+    // Get the base value using new type guards
     let result: any;
-    if (isTextVariable(variable)) {
+    if (isTextLike(variable)) {
+      // All text-producing types
       result = variable.value;
-    } else if (isDataVariable(variable)) {
-      result = await resolveVariableValue(variable, env);
-    } else if (isPathVariable(variable)) {
+    } else if (isPath(variable)) {
       result = variable.value.resolvedPath;
-    } else if (isExecutableVariable(variable)) {
+    } else if (isExecutable(variable)) {
       // If we have a pipeline, we need to execute the variable to get its value
       if (value.withClause && value.withClause.pipeline) {
         // Execute the function to get its result
@@ -139,16 +145,14 @@ export async function evaluateDataValue(
         // For non-pipeline cases, return the variable for lazy evaluation
         result = variable;
       }
-    } else if (isImportVariable(variable)) {
+    } else if (isImported(variable)) {
       result = variable.value;
-    } else if (variable.type === 'array') {
-      // Handle new array variable type
-      result = variable.value;
-    } else if (variable.type === 'object') {
-      // Handle new object variable type
-      result = variable.value;
+    } else if (isObject(variable) || isArray(variable)) {
+      // Handle structured data - may need evaluation
+      result = await resolveVariableValue(variable, env);
     } else {
-      throw new Error(`Unknown variable type in data evaluation: ${(variable as any).type}`);
+      // Fallback for any other types
+      result = await resolveVariableValue(variable, env);
     }
     
     // Apply field access if present
@@ -215,39 +219,35 @@ export async function evaluateDataValue(
     
     // For executable variables, return the variable itself (for lazy execution)
     // This preserves the executable for later execution rather than executing it now
-    if (isExecutableVar(variable)) {
+    if (isExecutable(variable)) {
       return variable;
     }
     
-    // Extract value using type-safe approach
+    // Extract value using new type guards
     let result: any;
-    if (isTextVariable(variable)) {
+    if (isTextLike(variable)) {
+      // All text-producing types
       result = variable.value;
-    } else if (isDataVariable(variable)) {
-      result = await resolveVariableValue(variable, env);
-    } else if (isPathVariable(variable)) {
+    } else if (isPath(variable)) {
       result = variable.value.resolvedPath;
-    } else if (isExecutableVariable(variable)) {
+    } else if (isExecutable(variable)) {
       result = variable; // Already handled above but included for completeness
-    } else if (isImportVariable(variable)) {
+    } else if (isImported(variable)) {
       result = variable.value;
-    } else if (variable.type === 'array') {
-      // Handle new array variable type
-      result = variable.value;
-    } else if (variable.type === 'object') {
-      // Handle new object variable type
-      result = variable.value;
+    } else if (isObject(variable) || isArray(variable)) {
+      // Handle structured data - may need evaluation
+      result = await resolveVariableValue(variable, env);
     } else {
-      throw new Error(`Unknown variable type in data evaluation: ${(variable as any).type}`);
+      // Fallback for any other types
+      result = await resolveVariableValue(variable, env);
     }
     
     // Apply field access if present
     if (value.fields && value.fields.length > 0) {
-      // If the variable is a complex data variable that needs further evaluation
-      if (variable.type === 'data' && 'isFullyEvaluated' in variable && !variable.isFullyEvaluated) {
-        // For legacy complex data variables, we need to evaluate the raw value
-        const complexVar = variable as any;
-        result = await evaluateDataValue(complexVar.value, env);
+      // If the variable has complex metadata indicating it needs further evaluation
+      if ((variable as Variable).metadata?.isComplex) {
+        // For complex variables, we need to evaluate the raw value
+        result = await evaluateDataValue(result, env);
       }
       
       for (const field of value.fields) {
@@ -481,7 +481,7 @@ export async function evaluateForeachCommand(
     throw new Error(`Command not found: ${command.identifier}`);
   }
   
-  if (!isExecutableVariable(cmdVariable)) {
+  if (!isExecutable(cmdVariable)) {
     throw new Error(`Variable '${command.identifier}' cannot be used with foreach. Expected an @exec command or @text template with parameters, but got type: ${cmdVariable.type}`);
   }
   
@@ -676,7 +676,7 @@ export async function validateForeachExpression(
     throw new Error(`Command not found: ${command.identifier}`);
   }
   
-  if (!isExecutableVariable(cmdVariable)) {
+  if (!isExecutable(cmdVariable)) {
     throw new Error(`Variable '${command.identifier}' cannot be used with foreach. Expected an @exec command or @text template with parameters, but got type: ${cmdVariable.type}`);
   }
   

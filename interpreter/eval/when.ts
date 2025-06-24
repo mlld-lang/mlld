@@ -2,9 +2,17 @@ import type { WhenNode, WhenSimpleNode, WhenBlockNode, WhenSwitchNode, WhenCondi
 import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
+import type { Variable } from '@core/types/variable';
 import { MlldConditionError } from '@core/errors';
 import { isWhenSimpleNode, isWhenBlockNode, isWhenSwitchNode } from '@core/types/when';
 import { evaluate } from '../core/interpreter';
+import {
+  isTextLike,
+  isArray as isArrayVariable,
+  isObject as isObjectVariable,
+  isCommandResult,
+  isPipelineInput
+} from '@core/types/variable';
 
 /**
  * Compares two values according to mlld's when comparison rules
@@ -503,6 +511,28 @@ async function evaluateCondition(
  * Determines if a value is truthy according to mlld rules
  */
 function isTruthy(value: any): boolean {
+  // Handle Variable types
+  if (value && typeof value === 'object' && 'type' in value && 'name' in value) {
+    const variable = value as Variable;
+    
+    // Type-specific truthiness for Variables
+    if (isTextLike(variable)) {
+      return variable.value.length > 0;
+    } else if (isArrayVariable(variable)) {
+      return variable.value.length > 0;
+    } else if (isObjectVariable(variable)) {
+      return Object.keys(variable.value).length > 0;
+    } else if (isCommandResult(variable)) {
+      // Command results are truthy if they have output
+      return variable.value.trim().length > 0;
+    } else if (isPipelineInput(variable)) {
+      return variable.value.text.length > 0;
+    }
+    
+    // For other variable types, use their value
+    return isTruthy(variable.value);
+  }
+  
   // Handle null/undefined
   if (value === null || value === undefined) {
     return false;

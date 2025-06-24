@@ -3,13 +3,7 @@ import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
-import { 
-  isTextVariable, 
-  isDataVariable, 
-  isPathVariable, 
-  isExecutableVariable, 
-  isImportVariable
-} from '@core/types';
+// Remove old type imports - we'll use only the new ones
 import {
   isTextLike,
   isExecutable as isExecutableVar,
@@ -24,7 +18,9 @@ import {
   isPipelineInput,
   isImported,
   isPath,
-  isExecutable
+  isExecutable,
+  isTemplate,
+  isStructured
 } from '@core/types/variable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
@@ -75,18 +71,9 @@ export async function evaluateShow(
     let originalValue: any; // Keep track of the original value before evaluation
     let isForeachSection = false; // Track if this came from a foreach-section
     
-    // Handle new variable types
-    if (isSimpleText(variable)) {
-      // Simple text - use directly
-      value = variable.value;
-    } else if (isInterpolatedText(variable)) {
-      // Interpolated text - use directly (already interpolated)
-      value = variable.value;
-    } else if (isFileContent(variable)) {
-      // File content - use directly
-      value = variable.value;
-    } else if (isSectionContent(variable)) {
-      // Section content - use directly
+    // Handle all variable types using the new type guards
+    if (isTextLike(variable)) {
+      // All text-producing types: simple, interpolated, template, file, section, command result
       value = variable.value;
     } else if (isObject(variable)) {
       // Object - use the value
@@ -99,12 +86,9 @@ export async function evaluateShow(
     } else if (isComputed(variable)) {
       // Computed value from code execution
       value = variable.value;
-    } else if (isCommandResult(variable)) {
-      // Command result - use the output
-      value = variable.value;
     } else if (isPipelineInput(variable)) {
-      // Pipeline input - use the raw text
-      value = variable.rawText;
+      // Pipeline input - use the text representation
+      value = variable.value.text;
     } else if (isImported(variable)) {
       // Imported variable - use the value
       value = variable.value;
@@ -127,22 +111,10 @@ export async function evaluateShow(
         value = pathValue;
       }
     } else if (isExecutable(variable)) {
-      // Executable variables - should probably not be used directly in add
-      throw new Error(`Cannot add executable variable directly. Executables need to be invoked first.`);
-    } else if (isTextVariable(variable)) {
-      // Legacy text variable - use directly
-      value = variable.value;
-    } else if (isDataVariable(variable)) {
-      // Legacy data variable
-      value = variable.value;
-      originalValue = value;
-      
-      // Check if this is a foreach-section expression
-      if (value && typeof value === 'object' && value.type === 'foreach-section') {
-        isForeachSection = true;
-      }
+      // Executable variables cannot be used directly in show
+      throw new Error(`Cannot show executable variable directly. Use invocation: @${varName}()`);
     } else {
-      throw new Error(`Unknown variable type in add evaluator: ${(variable as any).type}`);
+      throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
     }
     
     // Handle field access if present in the variable node
@@ -473,7 +445,14 @@ export async function evaluateShow(
         if (!variable) {
           throw new Error(`Variable not found: ${varName}`);
         }
-        value = isTextLike(variable) ? variable.value : String(variable.value);
+        // Get value based on variable type
+        if (isTextLike(variable)) {
+          value = variable.value;
+        } else if (isObject(variable) || isArray(variable)) {
+          value = JSON.stringify(variable.value);
+        } else {
+          value = String(variable.value);
+        }
       } else if (typeof argValue === 'object' && argValue.type === 'string') {
         // Legacy format support
         value = argValue.value;
@@ -485,7 +464,14 @@ export async function evaluateShow(
         if (!variable) {
           throw new Error(`Variable not found: ${varName}`);
         }
-        value = isTextLike(variable) ? variable.value : String(variable.value);
+        // Get value based on variable type
+        if (isTextLike(variable)) {
+          value = variable.value;
+        } else if (isObject(variable) || isArray(variable)) {
+          value = JSON.stringify(variable.value);
+        } else {
+          value = String(variable.value);
+        }
       } else {
         value = String(argValue);
       }

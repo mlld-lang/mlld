@@ -4,9 +4,7 @@ import type {
   TextNode, 
   CommentNode, 
   MlldDocument, 
-  MlldVariable, 
   FrontmatterNode, 
-  DataVariable,
   VariableReferenceNode,
   CodeFenceNode,
   NewlineNode,
@@ -18,9 +16,10 @@ import type {
   ExecInvocation,
   BaseMlldNode
 } from '@core/types';
+import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
-import { isTextVariable, isDataVariable, isPathVariable, isExecutableVariable, isImportVariable, isExecInvocation, isCommandVariable } from '@core/types';
+import { isExecInvocation } from '@core/types';
 import { evaluateDataValue } from '../eval/data-value-evaluator';
 import { isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
@@ -489,16 +488,29 @@ async function evaluateText(node: TextNode, env: Environment): Promise<EvalResul
 /**
  * Resolve variable value with lazy evaluation support for complex data
  */
-export async function resolveVariableValue(variable: MlldVariable, env: Environment): Promise<VariableValue> {
-  // Check if this is a complex data variable that needs evaluation
-  if (isDataVariable(variable)) {
-    // For data variables, check if the value needs evaluation
-    const dataValue = variable.value;
-    
-    // If it's an AST structure (has type property), evaluate it
-    if (dataValue && typeof dataValue === 'object' && 'type' in dataValue) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const evaluatedValue = await evaluateDataValue(dataValue as MlldNode, env);
+export async function resolveVariableValue(variable: Variable, env: Environment): Promise<VariableValue> {
+  // Import type guards for the new Variable type system
+  const {
+    isTextLike,
+    isStructured,
+    isPath,
+    isPipelineInput,
+    isExecutable,
+    isImported,
+    isComputed,
+    isObject,
+    isArray
+  } = await import('@core/types/variable');
+  
+  // Type-specific resolution using new type guards
+  if (isTextLike(variable)) {
+    // All text-producing types return their string value directly
+    return variable.value;
+  } else if (isStructured(variable)) {
+    // Object and array variables
+    if (variable.metadata?.isComplex) {
+      // Complex data needs evaluation
+      const evaluatedValue = await evaluateDataValue(variable.value, env);
       
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
@@ -509,97 +521,26 @@ export async function resolveVariableValue(variable: MlldVariable, env: Environm
         });
       }
       
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       return evaluatedValue;
     }
-    
-    // Check legacy complex data variable format
-    if (typeof variable === 'object' && 'isFullyEvaluated' in variable) {
-      interface ComplexDataVariable extends DataVariable {
-        isFullyEvaluated?: boolean;
-        evaluationErrors?: Record<string, Error>;
-      }
-      
-      const complexVar = variable as ComplexDataVariable;
-      
-      if (!complexVar.isFullyEvaluated && complexVar.value) {
-        // Evaluate the complex data value
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          const evaluatedValue = await evaluateDataValue(complexVar.value as MlldNode, env);
-          
-          // Update the variable with the evaluated value
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          complexVar.value = evaluatedValue;
-          complexVar.isFullyEvaluated = true;
-          
-          // Check for any evaluation errors
-          const errors = collectEvaluationErrors(evaluatedValue);
-          if (Object.keys(errors).length > 0) {
-            complexVar.evaluationErrors = errors;
-          }
-          
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-          return evaluatedValue;
-        } catch (error) {
-          // Store the error but still mark as evaluated to prevent infinite loops
-          complexVar.isFullyEvaluated = true;
-          complexVar.evaluationErrors = { root: error as Error };
-          throw error;
-        }
-      }
-      
-      return complexVar.value as VariableValue;
-    }
-    
-    return dataValue as VariableValue;
-  }
-  
-  // Handle other variable types
-  if (isTextVariable(variable)) {
+    return variable.value;
+  } else if (isPath(variable)) {
+    // Path variables return the resolved path string
+    return variable.value.resolvedPath;
+  } else if (isPipelineInput(variable)) {
+    // Pipeline inputs return the text representation by default
+    return variable.value.text;
+  } else if (isExecutable(variable)) {
+    // Executables can't be directly interpolated
+    throw new Error(`Cannot interpolate executable ${variable.name}. Use invocation: @${variable.name}()`);
+  } else if (isImported(variable)) {
+    return variable.value;
+  } else if (isComputed(variable)) {
     return variable.value;
   }
   
-  if (isPathVariable(variable)) {
-    return variable.value;
-  }
-  
-  if (isExecutableVariable(variable)) {
-    return variable.value;
-  }
-  
-  if (isImportVariable(variable)) {
-    return variable.value;
-  }
-  
-  // Handle new discriminated union variable types
-  const anyVariable = variable as any;
-  if (anyVariable && typeof anyVariable === 'object' && 'type' in anyVariable) {
-    switch (anyVariable.type) {
-      case 'simple-text':
-      case 'interpolated-text':
-      case 'template':
-      case 'file-content':
-      case 'section-content':
-      case 'object':
-      case 'array':
-      case 'computed':
-      case 'command-result':
-      case 'imported':
-      case 'pipeline-input':
-        return anyVariable.value;
-      case 'path':
-        // Path variables have a complex value structure
-        return anyVariable.value.resolvedPath || anyVariable.value;
-      case 'executable':
-        // Executable variables store their definition
-        return anyVariable.value;
-    }
-  }
-  
-  // This should never happen with proper typing
-  const varType = (variable as Record<string, unknown>).type || 'unknown';
-  throw new Error(`Unknown variable type: ${String(varType)}`);
+  // Fallback - should not reach here with proper typing
+  return variable.value;
 }
 
 /**
@@ -669,84 +610,40 @@ export async function interpolate(
         continue;
       }
       
-      // Extract value based on variable type using type-safe approach
+      // Extract value based on variable type using new type guards
       let value: unknown = '';
-      if (isTextVariable(variable)) {
-        // Text variables contain string content - use directly
-        value = variable.value;
-      } else if (isDataVariable(variable)) {
-        // Handle both simple and complex data variables
+      
+      // Use the already imported resolveVariableValue function
+      try {
         value = await resolveVariableValue(variable, env);
-        
-        // Debug logging
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log('Variable resolved in template:', {
-            name: variable.name,
-            type: variable.type,
-            resolvedValue: value,
-            resolvedType: typeof value
-          });
-        }
-        
-        // Special handling for lazy reserved variables like DEBUG
-        if (value === null && variable.metadata?.isReserved && variable.metadata?.isLazy) {
-          // Need to resolve this as a resolver variable
-          const resolverVar = await env.getResolverVariable(varName);
-          if (resolverVar && resolverVar.value !== null) {
-            value = resolverVar.value;
+      } catch (error) {
+        // Handle executable variables specially in interpolation
+        if (error instanceof Error && error.message.includes('Cannot interpolate executable')) {
+          if (context === InterpolationContext.Default) {
+            console.warn(`Warning: Referenced executable '@${variable.name}' without calling it. Did you mean to use @${variable.name}() instead?`);
           }
-        }
-      } else if (isPathVariable(variable)) {
-        // For path variables in interpolation, use the resolved path string
-        value = variable.value.resolvedPath;
-      } else if (isCommandVariable(variable)) {
-        // Commands don't interpolate - they need to be run
-        value = `[command: ${variable.name}]`;
-      } else if (isImportVariable(variable)) {
-        // Import variables contain imported data - use their value
-        value = variable.value;
-      } else if (isExecutableVariable(variable)) {
-        // Executables (like transformers) don't interpolate - they need to be invoked
-        if (context === InterpolationContext.Default) {
-          console.warn(`Warning: Referenced executable '@${variable.name}' without calling it. Did you mean to use @${variable.name}() instead?`);
-        }
-        value = `[executable: ${variable.name}]`;
-      } else {
-        // Handle new discriminated union variable types
-        const anyVariable = variable as any;
-        if (anyVariable && typeof anyVariable === 'object' && 'type' in anyVariable) {
-          switch (anyVariable.type) {
-            case 'simple-text':
-            case 'interpolated-text':
-            case 'template':
-            case 'file-content':
-            case 'section-content':
-            case 'command-result':
-            case 'imported':
-              value = anyVariable.value;
-              break;
-            case 'object':
-            case 'array':
-            case 'computed':
-            case 'pipeline-input':
-              value = anyVariable.value;
-              break;
-            case 'path':
-              // Path variables have a complex value structure
-              value = anyVariable.value.resolvedPath || anyVariable.value;
-              break;
-            case 'executable':
-              // Executables don't interpolate - they need to be invoked
-              value = `[executable: ${anyVariable.identifier}]`;
-              break;
-            default:
-              // This should never happen with proper typing
-              throw new Error(`Unknown variable type for interpolation: ${anyVariable.type}`);
-          }
+          value = `[executable: ${variable.name}]`;
         } else {
-          // This should never happen with proper typing
-          const varType = (variable as MlldVariable).type;
-          throw new Error(`Unknown variable type for interpolation: ${varType}`);
+          throw error;
+        }
+      }
+      
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('Variable resolved in template:', {
+          name: variable.name,
+          type: variable.type,
+          resolvedValue: value,
+          resolvedType: typeof value
+        });
+      }
+      
+      // Special handling for lazy reserved variables like DEBUG
+      if (value === null && variable.metadata?.isReserved && variable.metadata?.isLazy) {
+        // Need to resolve this as a resolver variable
+        const resolverVar = await env.getResolverVariable(varName);
+        if (resolverVar && resolverVar.value !== null) {
+          value = resolverVar.value;
         }
       }
       
