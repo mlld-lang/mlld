@@ -79,10 +79,22 @@ export async function evaluateShow(
       // Object - use the value
       value = variable.value;
       originalValue = value;
+      
+      // Check if it's a lazy-evaluated object (still in AST form)
+      if (value && typeof value === 'object' && value.type === 'object' && 'properties' in value) {
+        // Evaluate the object to get the actual values
+        value = await evaluateDataValue(value, env);
+      }
     } else if (isArray(variable)) {
       // Array - use the value
       value = variable.value;
       originalValue = value;
+      
+      // Check if it's a lazy-evaluated array (still in AST form)
+      if (value && typeof value === 'object' && value.type === 'array' && ('items' in value || 'elements' in value)) {
+        // Evaluate the array to get the actual values
+        value = await evaluateDataValue(value, env);
+      }
     } else if (isComputed(variable)) {
       // Computed value from code execution
       value = variable.value;
