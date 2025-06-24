@@ -207,6 +207,15 @@ export async function evaluateShow(
         content = value.join('\n\n');
       } else {
         // For other arrays, use JSON format (this preserves the original behavior)
+        // Check if it's a simple array of primitives
+        const isSimpleArray = value.every(item => 
+          typeof item === 'string' || typeof item === 'number' || 
+          typeof item === 'boolean' || item === null
+        );
+        
+        // Use single-line format for simple arrays, pretty-print for complex ones
+        const indent = isSimpleArray ? undefined : 2;
+        
         content = JSON.stringify(value, (key, val) => {
           // Convert VariableReference nodes to their string representation
           if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
@@ -217,7 +226,7 @@ export async function evaluateShow(
             return val.properties;
           }
           return val;
-        }, 2);
+        }, indent);
       }
     } else if (value !== null && value !== undefined) {
       // For objects, use JSON with custom replacer for VariableReference nodes

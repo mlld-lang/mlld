@@ -607,11 +607,28 @@ async function invokeParameterizedCommand(
     return text;
   } else if (definition.type === 'command') {
     // Execute command template with bound parameters
-    const command = await interpolate(definition.commandTemplate, childEnv);
+    if (!definition.template) {
+      throw new Error(`Command executable has no template`);
+    }
+    const command = await interpolate(definition.template, childEnv);
     return await childEnv.executeCommand(command);
   } else if (definition.type === 'code') {
     // Execute code template with bound parameters
-    const code = await interpolate(definition.codeTemplate, childEnv);
+    if (!definition.template) {
+      throw new Error(`Code executable has no template`);
+    }
+    
+    const code = await interpolate(definition.template, childEnv);
+    
+    // Debug logging
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Foreach code execution:', {
+        code,
+        language: definition.language,
+        argMap
+      });
+    }
+    
     // Pass argMap as parameters for bash/shell to convert to environment variables
     const codeResult = await childEnv.executeCode(code, definition.language, argMap);
     

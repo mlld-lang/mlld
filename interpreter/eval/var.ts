@@ -330,6 +330,11 @@ export async function evaluateVar(
       variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
     }
     
+  } else if (valueNode.type === 'foreach-command') {
+    // Foreach expressions always return arrays
+    const isComplex = false; // foreach results are typically simple values
+    variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);
+    
   } else {
     // Text variables - need to determine specific type
     const strValue = String(resolvedValue);
