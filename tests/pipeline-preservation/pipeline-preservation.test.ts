@@ -166,16 +166,11 @@ Bob,25,LA\`
 /exe @jsonStage(input) = js {
   return input.data.value * 2;
 }
-
 /exe @textStage(num) = js {
   return \`Result: \${num}\`;
 }
-
 /var @data = [{"value": 21}]
-/var @result = @data with { 
-  format: "json", 
-  pipeline: [@jsonStage, @textStage] 
-}
+/var @result = @data with { format: "json", pipeline: [@jsonStage, @textStage] }
 /show @result`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -189,16 +184,12 @@ Bob,25,LA\`
 /var @multiplier = "3"
 
 /exe @useParent(input) = js {
-  // Should be able to access @multiplier from parent
-  const mult = parseInt(@multiplier);
+  // Should be able to access multiplier from parent
+  const mult = parseInt(multiplier);
   return input.data.value * mult;
 }
-
 /var @data = [{"value": 10}]
-/var @result = @data with { 
-  format: "json", 
-  pipeline: [@useParent] 
-}
+/var @result = @data with { format: "json", pipeline: [@useParent] }
 /show @result`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -226,16 +217,12 @@ Bob,25,LA\`
   [{"id": 1, "value": 10}],
   [{"id": 2, "value": 20}]
 ]
-
 /exe @processItem(json) = js {
   const data = json.data;  // Should parse correctly
   return data.value * 2;
 }
 
-/exe @processWithFormat(item) = @item with { 
-  format: "json", 
-  pipeline: [@processItem] 
-}
+/exe @processWithFormat(item) = @item with { format: "json", pipeline: [@processItem] }
 
 /var @results = foreach @processWithFormat(@items)
 /show @results`;
@@ -266,7 +253,7 @@ Bob,25,LA\`
 
       await expect(
         interpret(input, { fileSystem, pathService })
-      ).rejects.toThrow(/Stage failed: TEST/);
+      ).rejects.toThrow(/Pipeline step 1 failed/);
     });
   });
 

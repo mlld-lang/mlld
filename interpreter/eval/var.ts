@@ -138,6 +138,14 @@ export async function evaluateVar(
         // Each property value might need interpolation
         if (propValue && typeof propValue === 'object' && 'content' in propValue) {
           processedObject[key] = await interpolate(propValue.content as any, env);
+        } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
+          // Handle array values in objects
+          const processedArray = [];
+          for (const item of (propValue.items || [])) {
+            const evaluated = await evaluateArrayItem(item, env);
+            processedArray.push(evaluated);
+          }
+          processedObject[key] = processedArray;
         } else {
           processedObject[key] = propValue;
         }
@@ -421,6 +429,11 @@ function hasComplexArrayItems(items: any[]): boolean {
 async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
   if (!item || typeof item !== 'object') {
     return item;
+  }
+
+  // Handle wrapped content first (e.g., quoted strings in arrays)
+  if ('content' in item && Array.isArray(item.content)) {
+    return await interpolate(item.content, env);
   }
 
   switch (item.type) {
