@@ -20,7 +20,8 @@ import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
 import { isExecInvocation } from '@core/types';
-import { evaluateDataValue } from '../eval/data-value-evaluator';
+import { evaluateDataValue as evaluateDataValueOld } from '../eval/data-value-evaluator';
+import { evaluateDataValue } from '../eval/lazy-eval';
 import { isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
@@ -508,7 +509,8 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
     return variable.value;
   } else if (isStructured(variable)) {
     // Object and array variables
-    if (variable.metadata?.isComplex) {
+    const complexFlag = (variable as any).isComplex;
+    if (complexFlag) {
       // Complex data needs evaluation
       const evaluatedValue = await evaluateDataValue(variable.value, env);
       

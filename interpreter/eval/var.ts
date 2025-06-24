@@ -102,56 +102,74 @@ export async function evaluateVar(
   if (valueNode.type === 'array') {
     // Array literal: [1, 2, 3] or [,]
     variableType = 'data';
-    // Process array items - they might need interpolation
-    const processedItems = [];
-    for (const item of (valueNode.items || [])) {
-      if (item && typeof item === 'object') {
-        if ('content' in item && Array.isArray(item.content)) {
-          // This is wrapped content (like from a string literal)
-          const interpolated = await interpolate(item.content, env);
-          processedItems.push(interpolated);
-        } else if (item.type === 'Text' && 'content' in item) {
-          // Direct text content
-          processedItems.push(item.content);
-        } else if (typeof item === 'object' && item.type) {
-          // Other node types - evaluate them
-          const evaluated = await evaluateArrayItem(item, env);
-          processedItems.push(evaluated);
+    
+    // Check if this array has complex items that need lazy evaluation
+    const isComplex = hasComplexArrayItems(valueNode.items || valueNode.elements || []);
+    
+    if (isComplex) {
+      // For complex arrays, store the AST node for lazy evaluation
+      resolvedValue = valueNode;
+    } else {
+      // Process simple array items immediately
+      const processedItems = [];
+      for (const item of (valueNode.items || [])) {
+        if (item && typeof item === 'object') {
+          if ('content' in item && Array.isArray(item.content)) {
+            // This is wrapped content (like from a string literal)
+            const interpolated = await interpolate(item.content, env);
+            processedItems.push(interpolated);
+          } else if (item.type === 'Text' && 'content' in item) {
+            // Direct text content
+            processedItems.push(item.content);
+          } else if (typeof item === 'object' && item.type) {
+            // Other node types - evaluate them
+            const evaluated = await evaluateArrayItem(item, env);
+            processedItems.push(evaluated);
+          } else {
+            // Primitive values
+            processedItems.push(item);
+          }
         } else {
-          // Primitive values
+          // Direct primitive value
           processedItems.push(item);
         }
-      } else {
-        // Direct primitive value
-        processedItems.push(item);
       }
+      resolvedValue = processedItems;
     }
-    resolvedValue = processedItems;
     
   } else if (valueNode.type === 'object') {
     // Object literal: { "key": "value" }
     variableType = 'data';
-    // Process object properties
-    const processedObject: Record<string, any> = {};
-    if (valueNode.properties) {
-      for (const [key, propValue] of Object.entries(valueNode.properties)) {
-        // Each property value might need interpolation
-        if (propValue && typeof propValue === 'object' && 'content' in propValue) {
-          processedObject[key] = await interpolate(propValue.content as any, env);
-        } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
-          // Handle array values in objects
-          const processedArray = [];
-          for (const item of (propValue.items || [])) {
-            const evaluated = await evaluateArrayItem(item, env);
-            processedArray.push(evaluated);
+    
+    // Check if this object has complex values that need lazy evaluation
+    const isComplex = hasComplexValues(valueNode.properties);
+    
+    if (isComplex) {
+      // For complex objects, store the AST node for lazy evaluation
+      resolvedValue = valueNode;
+    } else {
+      // Process simple object properties immediately
+      const processedObject: Record<string, any> = {};
+      if (valueNode.properties) {
+        for (const [key, propValue] of Object.entries(valueNode.properties)) {
+          // Each property value might need interpolation
+          if (propValue && typeof propValue === 'object' && 'content' in propValue) {
+            processedObject[key] = await interpolate(propValue.content as any, env);
+          } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
+            // Handle array values in objects
+            const processedArray = [];
+            for (const item of (propValue.items || [])) {
+              const evaluated = await evaluateArrayItem(item, env);
+              processedArray.push(evaluated);
+            }
+            processedObject[key] = processedArray;
+          } else {
+            processedObject[key] = propValue;
           }
-          processedObject[key] = processedArray;
-        } else {
-          processedObject[key] = propValue;
         }
       }
+      resolvedValue = processedObject;
     }
-    resolvedValue = processedObject;
     
   } else if (valueNode.type === 'section') {
     // Section extraction: [file.md # Section]
@@ -291,7 +309,7 @@ export async function evaluateVar(
 
   // Create specific variable types based on AST node type
   if (valueNode.type === 'array') {
-    const isComplex = hasComplexArrayItems(resolvedValue);
+    const isComplex = hasComplexArrayItems(valueNode.items || valueNode.elements || []);
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);
     
   } else if (valueNode.type === 'object') {
@@ -394,8 +412,18 @@ function hasComplexValues(properties: any): boolean {
       if ('type' in value && (
         value.type === 'code' || 
         value.type === 'command' || 
-        value.type === 'VariableReference'
+        value.type === 'VariableReference' ||
+        value.type === 'path' ||
+        value.type === 'section'
       )) {
+        return true;
+      }
+      // Check if it's a nested object with complex values
+      if (value.type === 'object' && hasComplexValues(value.properties)) {
+        return true;
+      }
+      // Check if it's an array with complex items
+      if (value.type === 'array' && hasComplexArrayItems(value.items || value.elements || [])) {
         return true;
       }
     }
@@ -408,7 +436,7 @@ function hasComplexValues(properties: any): boolean {
  * Check if array items contain complex values
  */
 function hasComplexArrayItems(items: any[]): boolean {
-  if (!items || items.length === 0) return false;
+  if (!items || !Array.isArray(items) || items.length === 0) return false;
   
   for (const item of items) {
     if (item && typeof item === 'object') {
@@ -417,7 +445,9 @@ function hasComplexArrayItems(items: any[]): boolean {
         item.type === 'command' || 
         item.type === 'VariableReference' ||
         item.type === 'array' ||
-        item.type === 'object'
+        item.type === 'object' ||
+        item.type === 'path' ||
+        item.type === 'section'
       )) {
         return true;
       }

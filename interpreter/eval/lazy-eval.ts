@@ -20,6 +20,11 @@ export async function evaluateDataValue(
     return value;
   }
   
+  // Debug logging
+  if (process.env.DEBUG_LAZY_EVAL) {
+    console.log('evaluateDataValue called with:', JSON.stringify(value, null, 2).substring(0, 200));
+  }
+  
   // Handle directive nodes (both marked as data values and regular directives)
   if (value?.type === 'Directive') {
     const directive = value as DirectiveNode;
@@ -37,6 +42,64 @@ export async function evaluateDataValue(
     evaluationCache.set(directive, resultValue);
     
     return resultValue;
+  }
+  
+  // Handle command nodes (from run {command})
+  if (value?.type === 'command') {
+    // Execute the command directly
+    const command = value.command || '';
+    const result = await env.executeCommand(command);
+    return result;
+  }
+  
+  // Handle path nodes (from [/path/to/file])
+  if (value?.type === 'path') {
+    // Resolve path segments and read file
+    const { interpolate } = await import('../core/interpreter');
+    const resolvedPath = await interpolate(value.segments || [], env);
+    // Read the file content
+    const content = await env.fileSystem.readFile(resolvedPath);
+    return content;
+  }
+  
+  // Handle variable references (e.g., @user.name)
+  if (value?.type === 'VariableReference') {
+    // Get the base variable
+    const baseVar = env.getVariable(value.identifier);
+    if (!baseVar) {
+      throw new Error(`Variable not found: ${value.identifier}`);
+    }
+    
+    // Resolve the variable value
+    const { resolveVariableValue } = await import('../core/interpreter');
+    let result = await resolveVariableValue(baseVar, env);
+    
+    // Apply field access if present
+    if (value.fields && value.fields.length > 0) {
+      const { accessField } = await import('../utils/field-access');
+      result = await accessField(result, value.fields, value.identifier);
+    }
+    
+    return result;
+  }
+  
+  // Handle Text nodes (from quoted strings)
+  if (value?.type === 'Text') {
+    return value.content;
+  }
+  
+  // Handle wrapped string values (with content array and wrapperType)
+  if (value?.content && Array.isArray(value.content) && value.wrapperType) {
+    // This is a wrapped string (quotes, backticks, or brackets)
+    const { interpolate } = await import('../core/interpreter');
+    return await interpolate(value.content, env);
+  }
+  
+  // Handle other content arrays (like template content)
+  if (value?.content && Array.isArray(value.content)) {
+    // This might be a template with Text nodes
+    const { interpolate } = await import('../core/interpreter');
+    return await interpolate(value.content, env);
   }
   
   // Handle variable references (should be resolved by interpolation)
@@ -83,10 +146,11 @@ export async function evaluateDataValue(
     return evaluatedArray;
   }
   
-  // Handle DataArray type
-  if (value?.type === 'array' && 'elements' in value) {
+  // Handle DataArray type (both 'elements' and 'items' properties)
+  if (value?.type === 'array' && ('elements' in value || 'items' in value)) {
     const evaluatedArray = [];
-    for (const element of value.elements) {
+    const items = value.elements || value.items || [];
+    for (const element of items) {
       evaluatedArray.push(await evaluateDataValue(element, env));
     }
     return evaluatedArray;
