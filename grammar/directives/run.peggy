@@ -304,9 +304,17 @@ RunCommandArgument
       // Create a Text node directly
       return helpers.createNode(NodeType.Text, { content: str, location: location() });
     }
-  / varRef:Variable {
-      // Return the VariableReference directly
+  / varRef:SpecialVariable {
+      // Special variables like @INPUT work without context
       return varRef;
+    }
+  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      // Direct variable reference without context check for arguments
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
     }
   / val:$([^,)]+) {
       // Plain value - create a Text node directly

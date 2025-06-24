@@ -96,6 +96,15 @@ export async function executePipeline(
       // Evaluate arguments if they are variable references or other nodes
       const evaluatedArgs = [];
       for (const arg of args) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('Pipeline arg evaluation:', {
+            argType: typeof arg,
+            argNodeType: arg?.type,
+            argContent: typeof arg === 'string' ? arg : arg?.content,
+            argIdentifier: arg?.identifier
+          });
+        }
+        
         if (typeof arg === 'string') {
           evaluatedArgs.push({ type: 'Text', content: arg });
         } else if (arg && typeof arg === 'object') {
@@ -121,6 +130,14 @@ export async function executePipeline(
             const stringValue = typeof finalValue === 'string' ? finalValue :
                               typeof finalValue === 'object' ? JSON.stringify(finalValue) :
                               String(finalValue);
+            
+            if (process.env.MLLD_DEBUG === 'true') {
+              console.log('Evaluated variable reference:', {
+                identifier: varRef.identifier,
+                resolvedValue: value,
+                stringValue
+              });
+            }
             
             evaluatedArgs.push({ type: 'Text', content: stringValue });
           } else {
