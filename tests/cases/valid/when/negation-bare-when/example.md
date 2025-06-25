@@ -2,10 +2,7 @@
 /var @adminRole = "admin" 
 /var @hasPermission = "false"
 
-# Testing negation in switch form
-
->> Negated string literals in switch form are not supported
->> This test case needs to be moved to unsupported features
+# Testing bare when form (not a switch)
 /when @userRole: [
   "guest" => show "User is a guest"
   "admin" => show "User is an admin"
