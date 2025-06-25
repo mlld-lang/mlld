@@ -43,10 +43,51 @@ export async function evaluateExecInvocation(
     throw new MlldInterpreterError('ExecInvocation has no command identifier');
   }
   
-  // Look up the command in the environment
-  const variable = env.getVariable(commandName);
-  if (!variable) {
-    throw new MlldInterpreterError(`Command not found: ${commandName}`);
+  // Check if this is a field access exec invocation (e.g., @demo.valueCmd())
+  let variable;
+  const commandRefWithObject = node.commandRef as any; // Type assertion to handle objectReference
+  if (commandRefWithObject.objectReference) {
+    // Get the object first
+    const objectRef = commandRefWithObject.objectReference;
+    const objectVar = env.getVariable(objectRef.identifier);
+    if (!objectVar) {
+      throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
+    }
+    
+    // Resolve the object value
+    const objectValue = await resolveVariableValue(objectVar, env);
+    
+    // Access the field
+    if (objectRef.fields && objectRef.fields.length > 0) {
+      // Navigate through nested fields
+      let currentValue = objectValue;
+      for (const field of objectRef.fields) {
+        if (typeof currentValue === 'object' && currentValue !== null) {
+          currentValue = (currentValue as any)[field.value];
+        } else {
+          throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
+        }
+      }
+      // Now access the command field
+      if (typeof currentValue === 'object' && currentValue !== null) {
+        variable = (currentValue as any)[commandName];
+      }
+    } else {
+      // Direct field access on the object
+      if (typeof objectValue === 'object' && objectValue !== null) {
+        variable = (objectValue as any)[commandName];
+      }
+    }
+    
+    if (!variable) {
+      throw new MlldInterpreterError(`Method not found: ${commandName} on ${objectRef.identifier}`);
+    }
+  } else {
+    // Regular command lookup
+    variable = env.getVariable(commandName);
+    if (!variable) {
+      throw new MlldInterpreterError(`Command not found: ${commandName}`);
+    }
   }
   
   // Ensure it's an executable variable

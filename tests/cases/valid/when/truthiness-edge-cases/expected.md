@@ -41,7 +41,6 @@ User declined
 Truthy response
 FAIL: empty matched true
 FAIL: zero matched true
-
 ## 7. @when any: Block with Mixed Truthiness
 
 Has at least one artifact

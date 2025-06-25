@@ -5,6 +5,7 @@
 VarRHSContent "var assignment value"
   = ForeachSectionExpression    // foreach [@array.field # section] as [[template]]
   / ForeachCommandExpression    // foreach @command(@arrays)
+  / FieldAccessExecPattern      // NEW: Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateStyleInterpolation  // Handles backtick, [[...]], double/single quotes
@@ -12,6 +13,36 @@ VarRHSContent "var assignment value"
   / BracketAmbiguous            // NEW: Array vs path disambiguation
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
+
+// FIELD ACCESS EXEC PATTERN - Matches @obj.field() with nested field access
+FieldAccessExecPattern "field access exec invocation"
+  = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" tail:TailModifiers? {
+      // Extract the last field as the method name
+      const lastField = fields[fields.length - 1];
+      const methodName = lastField.value;
+      
+      // Create variable reference for the object path (all fields except last)
+      const objectFields = fields.slice(0, -1);
+      const objectRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(objectFields.length > 0 ? { fields: objectFields } : {})
+      }, location());
+      
+      // Create the exec invocation
+      const ref = {
+        name: methodName,
+        identifier: [helpers.createNode(NodeType.Text, { content: methodName, location: location() })],
+        args: args || [],
+        isCommandReference: true,
+        objectReference: objectRef
+      };
+      
+      return {
+        type: 'ExecInvocation',
+        commandRef: ref,
+        withClause: tail || null
+      };
+    }
 
 // EXEC INVOCATION PATTERN - Matches @func() specifically
 ExecInvocationPattern "exec invocation pattern"

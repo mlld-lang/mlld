@@ -534,8 +534,20 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
     // Pipeline inputs return the text representation by default
     return variable.value.text;
   } else if (isExecutableVariable(variable)) {
-    // Executables can't be directly interpolated
-    throw new Error(`Cannot interpolate executable ${variable.name}. Use invocation: @${variable.name}()`);
+    // Auto-execute executables when interpolated
+    if (process.env.DEBUG_EXEC) {
+      console.log('Auto-executing executable during interpolation:', variable.name);
+    }
+    const { evaluateExecInvocation } = await import('../eval/exec-invocation');
+    const invocation = {
+      type: 'ExecInvocation',
+      commandRef: {
+        identifier: variable.name,
+        args: []
+      }
+    };
+    const result = await evaluateExecInvocation(invocation as any, env);
+    return result.value;
   } else if (isImported(variable)) {
     return variable.value;
   } else if (isComputed(variable)) {
