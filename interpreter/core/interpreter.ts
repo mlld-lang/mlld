@@ -659,6 +659,12 @@ export async function interpolate(
             const nodeValue = value as Record<string, unknown>;
             if (nodeValue.type === 'Null') {
               value = null;
+            } else if (nodeValue.type === 'runExec' || nodeValue.type === 'ExecInvocation' || 
+                       nodeValue.type === 'command' || nodeValue.type === 'code' ||
+                       nodeValue.type === 'VariableReference' || nodeValue.type === 'path') {
+              // This is an unevaluated AST node from a complex object
+              // We need to evaluate it
+              value = await evaluateDataValue(value, env);
             }
           }
           

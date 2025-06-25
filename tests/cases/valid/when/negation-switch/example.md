@@ -1,6 +1,6 @@
 /var @userRole = "guest"
 /var @adminRole = "admin" 
-/var @hasPermission = false
+/var @hasPermission = "false"
 
 # Testing negation in switch form
 
@@ -9,10 +9,10 @@
 /when @userRole: [
   "guest" => show "User is a guest"
   "admin" => show "User is an admin"
-  _ => show "User has unknown role"
+  "_" => show "User has unknown role"
 ]
 
 /when @hasPermission: [
-  true => show "Permission granted"
-  false => show "No permission granted"
+  "true" => show "Permission granted"
+  "false" => show "No permission granted"
 ]

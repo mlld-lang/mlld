@@ -2,7 +2,7 @@
 
 Test that @when actions can use run with exec command invocations.
 
-/var @isTrue = true
+/var @isTrue = "true"
 /exe @greet(name) = run {echo "Hello, @name!"}
 /exe @capitalize(text) = run {echo "@text" | tr '[:lower:]' '[:upper:]'}
 

@@ -2,7 +2,7 @@
 
 Test that @when actions can use @add with exec command invocations.
 
-/var @isTrue = true
+/var @isTrue = "true"
 /exe @formatHeader(title) = run {echo "=== @title ==="}
 /exe @getVersion() = `v1.2.3`
 

@@ -6,11 +6,11 @@ Test comprehensive truthiness behavior in @when directives.
 
 /var @isEnabled = "true"
 /var @isDisabled = "false"
-/var @hasFeature = true
-/var @noFeature = false
+/var @hasFeature = "true"
+/var @noFeature = "false"
 /var @emptyString = ""
 /var @nullValue = ""
-/var @zeroNumber = 0
+/var @zeroNumber = "0"
 
 >> Truthy values should trigger
 /when @isEnabled => show "String 'true' is truthy"
@@ -27,10 +27,10 @@ Test comprehensive truthiness behavior in @when directives.
 ## 2. Negation Tests
 
 /var @hasLicense = "false"
-/var @isValid = false
+/var @isValid = "false"
 /var @nothing = ""
 /var @empty = ""
-/var @zero = 0
+/var @zero = "0"
 
 >> Negating falsy values should trigger
 /when !@hasLicense => show "No license (string 'false')"
@@ -48,14 +48,14 @@ Test comprehensive truthiness behavior in @when directives.
 /var @mode = "true"
 
 /when @mode: [
-true => show "Matched as boolean true"
-false => show "Matched as boolean false"
+"true" => show "Matched as boolean true"
+"false" => show "Matched as boolean false"
   "production" => show "Matched production"
 ]
 
 ## 4. Number/String Equivalence in Switch
 
-/var @count = 42
+/var @count = "42"
 /var @version = "1"
 
 >> Numbers and strings should match
@@ -92,23 +92,23 @@ false => show "Matched as boolean false"
 
 /var @userResponse = "yes"
 /var @permission = ""
-/var @score = 0
+/var @score = "0"
 
 /when @userResponse: [
   "yes" => show "User agreed"
   "no" => show "User declined"
-true => show "Truthy response"
+"true" => show "Truthy response"
 ]
 
 >> Empty string and zero shouldn't match true
 /when @permission: [
-true => show "FAIL: empty matched true"
-false => show "No permission"
+"true" => show "FAIL: empty matched true"
+"false" => show "No permission"
 ]
 
 /when @score: [
-true => show "FAIL: zero matched true"
-false => show "No score"
+"true" => show "FAIL: zero matched true"
+"false" => show "No score"
 ]
 
 ## 7. @when any: Block with Mixed Truthiness
@@ -126,8 +126,8 @@ false => show "No score"
 
 >> All falsy should not trigger
 /var @a = ""
-/var @b = 0
-/var @c = false
+/var @b = "0"
+/var @c = "false"
 
 /when any: [
   @a
@@ -138,7 +138,7 @@ false => show "No score"
 ## 8. @when all: Block with Mixed Values
 
 /var @allValid = "true"
-/var @allSecure = true
+/var @allSecure = "true"
 /var @allReady = "yes"
 
 >> All truthy should trigger
@@ -150,7 +150,7 @@ false => show "No score"
 
 >> One falsy should prevent trigger
 /var @check1 = "true"
-/var @check2 = false
+/var @check2 = "false"
 /var @check3 = "true"
 
 /when all: [
@@ -170,13 +170,13 @@ false => show "No score"
   @firstStatus => show "Status: {{firstStatus}}"
   @firstFallback => show "Fallback: {{firstFallback}}"
   @firstDefault => show "Default: {{firstDefault}}"
-true => show "Ultimate fallback"
+"true" => show "Ultimate fallback"
 ]
 
 ## 10. Negation in Block Forms
 
 /var @hasError = ""
-/var @hasWarning = false
+/var @hasWarning = "false"
 /var @hasInfo = "false"
 
 >> Negated conditions in any block
@@ -201,7 +201,7 @@ true => show "Ultimate fallback"
 ## 12. Mixed Negation in Same Block
 
 /var @feature1 = "true"
-/var @feature2 = false
+/var @feature2 = "false"
 /var @feature3 = ""
 
 /when any: [

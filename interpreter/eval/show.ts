@@ -526,11 +526,11 @@ export async function evaluateShow(
     // Evaluate foreach and format as text
     content = await evaluateForeachAsText(foreachExpression, env, options);
     
-  } else if (directive.subtype === 'addExecInvocation') {
-    // Handle exec invocation nodes (legacy subtype)
+  } else if (directive.subtype === 'addExecInvocation' || directive.subtype === 'showExecInvocation') {
+    // Handle exec invocation nodes (both legacy add and new show subtypes)
     const execInvocation = directive.values?.execInvocation;
     if (!execInvocation) {
-      throw new Error('Add exec invocation directive missing exec invocation');
+      throw new Error('Show exec invocation directive missing exec invocation');
     }
     
     // Evaluate the exec invocation

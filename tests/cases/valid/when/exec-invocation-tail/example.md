@@ -2,7 +2,7 @@
 
 Test that @when actions support exec invocations with tail modifiers like trust.
 
-/var @isTrue = true
+/var @isTrue = "true"
 /exe @transform(text) = run {echo "@text" | tr '[:lower:]' '[:upper:]'}
 
 /var @hasData = "true"

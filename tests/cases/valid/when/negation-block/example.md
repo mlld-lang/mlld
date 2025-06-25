@@ -1,7 +1,7 @@
 /var @features = {
-  "darkMode": false,
-  "analytics": true,
-  "experimental": false
+  "darkMode": "false",
+  "analytics": "true",
+  "experimental": "false"
 }
 
 # Testing negation in block form

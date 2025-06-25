@@ -1,10 +1,10 @@
-# Test: @add @variable inside @when actions
+# Test: show @variable inside @when actions
 
 This test verifies that simple variable references work correctly inside @when actions.
 
 ## Setup
 
-## Test 1: Direct @add (baseline - should work)
+## Test 1: Direct @show (baseline - should work)
 Hello from a text variable
 Hello from a template with Hello from a text variable
 {

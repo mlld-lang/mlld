@@ -2,10 +2,10 @@
 /var @emptyString = ""
 /var @hasValue = "yes"
 /var @nullValue = "null"
-/var @trueValue = true
-/var @falseValue = false
-/var @zeroValue = 0
-/var @oneValue = 1
+/var @trueValue = "true"
+/var @falseValue = "false"
+/var @zeroValue = "0"
+/var @oneValue = "1"
 
 # Testing negation in @when
 
