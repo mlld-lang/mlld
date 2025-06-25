@@ -20,7 +20,8 @@ import {
   isPath,
   isExecutable,
   isTemplate,
-  isStructured
+  isStructured,
+  createSimpleTextVariable
 } from '@core/types/variable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
@@ -495,7 +496,14 @@ export async function evaluateShow(
       }
       
       // Create a text variable for the parameter
-      childEnv.setVariable(paramName, { type: 'text', identifier: paramName, value });
+      const source = {
+        directive: 'var' as const,
+        syntax: 'quoted' as const,
+        hasInterpolation: false,
+        isMultiLine: false
+      };
+      const variable = createSimpleTextVariable(paramName, value, source);
+      childEnv.setVariable(paramName, variable);
     }
     
     // Interpolate the template content with the child environment

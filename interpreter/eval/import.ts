@@ -11,7 +11,9 @@ import { version as currentMlldVersion } from '@core/version';
 import { 
   createImportedVariable, 
   createObjectVariable,
+  createArrayVariable,
   createSimpleTextVariable,
+  createPathVariable,
   isExecutable as isExecutableVariable,
   type Variable,
   type VariableSource,
@@ -244,7 +246,26 @@ async function importFromPath(
         if (directive.subtype === 'importAll') {
           // Import all properties
           for (const [name, value] of Object.entries(moduleObject)) {
-            env.setVariable(name, createImportVariable(name, value, resolvedPath));
+            const source: VariableSource = {
+          directive: 'var',
+          syntax: typeof value === 'string' ? 'quoted' : 
+                  Array.isArray(value) ? 'array' : 'object',
+          hasInterpolation: false,
+          isMultiLine: false
+        };
+        const metadata = {
+          isImported: true,
+          importPath: resolvedPath,
+          definedAt: { line: 0, column: 0, filePath: resolvedPath }
+        };
+        
+        if (typeof value === 'string') {
+          env.setVariable(name, createSimpleTextVariable(name, value, source, metadata));
+        } else if (Array.isArray(value)) {
+          env.setVariable(name, createArrayVariable(name, value, false, source, metadata));
+        } else {
+          env.setVariable(name, createObjectVariable(name, value, false, source, metadata));
+        }
           }
         } else if (directive.subtype === 'importNamespace') {
           // Import entire JSON under a namespace alias
@@ -258,7 +279,19 @@ async function importFromPath(
           
           // Create namespace variable with the JSON object
           // Note: For JSON files, we don't need to unwrap since the data is already plain
-          env.setVariable(alias, createImportVariable(alias, moduleObject, resolvedPath, true));
+          const source: VariableSource = {
+            directive: 'var',
+            syntax: 'object',
+            hasInterpolation: false,
+            isMultiLine: false
+          };
+          const metadata = {
+            isImported: true,
+            importPath: resolvedPath,
+            isNamespace: true,
+            definedAt: { line: 0, column: 0, filePath: resolvedPath }
+          };
+          env.setVariable(alias, createObjectVariable(alias, moduleObject, false, source, metadata));
         } else if (directive.subtype === 'importSelected') {
           // Import selected properties
           const imports = directive.values?.imports || [];
@@ -266,7 +299,27 @@ async function importFromPath(
             const varName = importNode.identifier;
             if (varName in moduleObject) {
               const targetName = importNode.alias || varName;
-              env.setVariable(targetName, createImportVariable(targetName, moduleObject[varName], resolvedPath));
+              const value = moduleObject[varName];
+              const source: VariableSource = {
+                directive: 'var',
+                syntax: typeof value === 'string' ? 'quoted' : 
+                        Array.isArray(value) ? 'array' : 'object',
+                hasInterpolation: false,
+                isMultiLine: false
+              };
+              const metadata = {
+                isImported: true,
+                importPath: resolvedPath,
+                definedAt: { line: 0, column: 0, filePath: resolvedPath }
+              };
+              
+              if (typeof value === 'string') {
+                env.setVariable(targetName, createSimpleTextVariable(targetName, value, source, metadata));
+              } else if (Array.isArray(value)) {
+                env.setVariable(targetName, createArrayVariable(targetName, value, false, source, metadata));
+              } else {
+                env.setVariable(targetName, createObjectVariable(targetName, value, false, source, metadata));
+              }
             } else {
               const availableExports = Object.keys(moduleObject);
               throw new Error(
@@ -870,45 +923,105 @@ async function importFromResolverContent(
           }
         }
         
-        const importedVariable: MlldVariable = {
-          type: varType,
-          identifier: name,
-          value: varValue,
-          nodeId: '',
-          location: { line: 0, column: 0 },
-          metadata: {
-            isImported: true,
-            importPath: ref,
-            definedAt: { line: 0, column: 0, filePath: ref }
-          }
+        const source: VariableSource = {
+          directive: 'var',
+          syntax: varType === 'data' ? (Array.isArray(varValue) ? 'array' : 'object') : 
+                  varType === 'executable' ? 'code' : 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
         };
         
-        // For executable variables, restore the full structure
-        if (varType === 'executable' && value && typeof value === 'object') {
-          if ('__definition' in value) {
-            (importedVariable as any).definition = value.__definition;
+        const metadata = {
+          isImported: true,
+          importPath: ref,
+          definedAt: { line: 0, column: 0, filePath: ref },
+          originalType: varType
+        };
+        
+        let importedVariable: Variable;
+        
+        // Create the appropriate variable type based on varType
+        if (varType === 'text') {
+          importedVariable = createSimpleTextVariable(name, String(varValue), source, metadata);
+        } else if (varType === 'data') {
+          if (Array.isArray(varValue)) {
+            importedVariable = createArrayVariable(name, varValue, false, source, metadata);
           } else {
-            // Legacy textTemplate: create text type definition
-            (importedVariable as any).definition = {
-              type: 'text',
-              params: value.__params || [],
-              content: value.__content || []
-            };
+            importedVariable = createObjectVariable(name, varValue, false, source, metadata);
           }
-          (importedVariable as any).params = value.__params || [];
-          (importedVariable as any).content = value.__content || [];
-        }
-        // For legacy command variables, convert to executable
-        else if (varType === 'command' && value && typeof value === 'object') {
-          varType = 'executable';
-          importedVariable.type = varType;
+        } else if (varType === 'executable') {
+          // For executable variables, we need to use createImportedVariable
+          importedVariable = createImportedVariable(
+            name,
+            varValue,
+            'executable',
+            ref,
+            false,
+            name,
+            source,
+            metadata
+          );
+          
+          // Restore the full structure for executable variables
+          if (value && typeof value === 'object') {
+            if ('__definition' in value) {
+              (importedVariable as any).definition = value.__definition;
+            } else {
+              // Legacy textTemplate: create text type definition
+              (importedVariable as any).definition = {
+                type: 'text',
+                params: value.__params || [],
+                content: value.__content || []
+              };
+            }
+            (importedVariable as any).params = value.__params || [];
+            (importedVariable as any).content = value.__content || [];
+          }
+        } else if (varType === 'command' && value && typeof value === 'object') {
+          // Convert legacy command variables to executable
+          importedVariable = createImportedVariable(
+            name,
+            varValue,
+            'executable',
+            ref,
+            false,
+            name,
+            source,
+            metadata
+          );
           (importedVariable as any).definition = {
             type: 'command',
             params: value.__params || [],
             command: value.__value || value.__command || []
           };
           (importedVariable as any).params = value.__params || [];
+        } else if (varType === 'path') {
+          // Handle path variables
+          const pathValue = varValue as any;
+          importedVariable = createPathVariable(
+            name,
+            pathValue.resolvedPath || String(varValue),
+            pathValue.originalPath || String(varValue),
+            pathValue.isURL || false,
+            pathValue.isAbsolute || false,
+            source,
+            pathValue.security,
+            metadata
+          );
+        } else {
+          // Default to imported variable for other types
+          importedVariable = createImportedVariable(
+            name,
+            varValue,
+            varType as VariableTypeDiscriminator,
+            ref,
+            false,
+            name,
+            source,
+            metadata
+          );
         }
+        
         env.setVariable(name, importedVariable);
       }
     } else if (directive.subtype === 'importNamespace') {
@@ -952,19 +1065,23 @@ async function importFromResolverContent(
             }
           }
           
-          const importedVariable: MlldVariable = {
-            type: varType,
-            identifier: targetName,
-            value: varValue,
-            nodeId: '',
-            location: { line: 0, column: 0 },
-            metadata: {
-              isImported: true,
-              importPath: ref,
-              originalName: varName !== targetName ? varName : undefined,
-              definedAt: { line: 0, column: 0, filePath: ref }
-            }
+          const source: VariableSource = {
+            directive: 'var',
+            syntax: varType === 'data' ? (Array.isArray(varValue) ? 'array' : 'object') : 
+                    varType === 'executable' ? 'code' : 'quoted',
+            hasInterpolation: false,
+            isMultiLine: false
           };
+          
+          const metadata = {
+            isImported: true,
+            importPath: ref,
+            originalName: varName !== targetName ? varName : undefined,
+            definedAt: { line: 0, column: 0, filePath: ref },
+            originalType: varType
+          };
+          
+          let importedVariable: Variable;
           
           // For executable variables, restore the full structure
           if (varType === 'executable' && value && typeof value === 'object') {
@@ -981,22 +1098,100 @@ async function importFromResolverContent(
             (importedVariable as any).params = value.__params || [];
             (importedVariable as any).content = value.__content || [];
           }
-          // For legacy command variables, convert to executable
-          else if (varType === 'command' && value && typeof value === 'object') {
-            varType = 'executable';
-            importedVariable.type = varType;
+          // Create the appropriate variable type based on varType
+          if (varType === 'text') {
+            importedVariable = createSimpleTextVariable(targetName, String(varValue), source, metadata);
+          } else if (varType === 'data') {
+            if (Array.isArray(varValue)) {
+              importedVariable = createArrayVariable(targetName, varValue, false, source, metadata);
+            } else {
+              importedVariable = createObjectVariable(targetName, varValue, false, source, metadata);
+            }
+          } else if (varType === 'executable') {
+            // For executable variables, we need to use createImportedVariable
+            importedVariable = createImportedVariable(
+              targetName,
+              varValue,
+              'executable',
+              ref,
+              false,
+              varName,
+              source,
+              metadata
+            );
+            
+            // Restore the full structure for executable variables
+            if (value && typeof value === 'object') {
+              if ('__definition' in value) {
+                (importedVariable as any).definition = value.__definition;
+              } else {
+                // Legacy textTemplate: create text type definition
+                (importedVariable as any).definition = {
+                  type: 'text',
+                  params: value.__params || [],
+                  content: value.__content || []
+                };
+              }
+              (importedVariable as any).params = value.__params || [];
+              (importedVariable as any).content = value.__content || [];
+            }
+          } else if (varType === 'command' && value && typeof value === 'object') {
+            // Convert legacy command variables to executable
+            importedVariable = createImportedVariable(
+              targetName,
+              varValue,
+              'executable',
+              ref,
+              false,
+              varName,
+              source,
+              metadata
+            );
             (importedVariable as any).definition = {
               type: 'command',
               params: value.__params || [],
               command: value.__value || value.__command || []
             };
             (importedVariable as any).params = value.__params || [];
-          }
-          // Legacy textTemplate handling for backward compatibility
-          else if (varType === 'textTemplate' && value && typeof value === 'object') {
-            // This shouldn't happen anymore due to conversion above, but keeping for safety
+          } else if (varType === 'textTemplate' && value && typeof value === 'object') {
+            // Handle legacy textTemplate directly
+            importedVariable = createImportedVariable(
+              targetName,
+              varValue,
+              'executable',
+              ref,
+              false,
+              varName,
+              source,
+              metadata
+            );
             (importedVariable as any).params = value.__params;
             (importedVariable as any).content = value.__content;
+          } else if (varType === 'path') {
+            // Handle path variables
+            const pathValue = varValue as any;
+            importedVariable = createPathVariable(
+              targetName,
+              pathValue.resolvedPath || String(varValue),
+              pathValue.originalPath || String(varValue),
+              pathValue.isURL || false,
+              pathValue.isAbsolute || false,
+              source,
+              pathValue.security,
+              metadata
+            );
+          } else {
+            // Default to imported variable for other types
+            importedVariable = createImportedVariable(
+              targetName,
+              varValue,
+              varType as VariableTypeDiscriminator,
+              ref,
+              false,
+              varName,
+              source,
+              metadata
+            );
           }
           
           env.setVariable(targetName, importedVariable);
@@ -1099,17 +1294,30 @@ async function evaluateResolverImport(
           const value = exportData[format];
           
           if (value !== undefined) {
-            env.setVariable(varName, {
-              type: typeof value === 'string' ? 'text' : 'data',
-              value: value,
-              nodeId: '',
-              location: directive.location || { line: 0, column: 0 },
-              metadata: {
-                isImported: true,
-                importPath: `@${resolverName}`,
-                definedAt: directive.location || { line: 0, column: 0, filePath: env.getCurrentFilePath() }
-              }
-            });
+            const source: VariableSource = {
+              directive: 'var',
+              syntax: typeof value === 'string' ? 'quoted' : 
+                      Array.isArray(value) ? 'array' : 'object',
+              hasInterpolation: false,
+              isMultiLine: false
+            };
+            
+            const metadata = {
+              isImported: true,
+              importPath: `@${resolverName}`,
+              definedAt: directive.location || { line: 0, column: 0, filePath: env.getCurrentFilePath() }
+            };
+            
+            let variable: Variable;
+            if (typeof value === 'string') {
+              variable = createSimpleTextVariable(varName, value, source, metadata);
+            } else if (Array.isArray(value)) {
+              variable = createArrayVariable(varName, value, false, source, metadata);
+            } else {
+              variable = createObjectVariable(varName, value, false, source, metadata);
+            }
+            
+            env.setVariable(varName, variable);
           } else {
             throw new Error(`Format '${format}' not supported by resolver '${resolverName}'`);
           }
@@ -1148,20 +1356,33 @@ async function evaluateResolverImport(
   }
 
   // Convert export data to variables
-  const variables: Map<string, MlldVariable> = new Map();
+  const variables: Map<string, Variable> = new Map();
   
   for (const [key, value] of Object.entries(exportData)) {
-    variables.set(key, {
-      type: typeof value === 'string' ? 'text' : 'data',
-      value: value,
-      nodeId: '',
-      location: directive.location || { line: 0, column: 0 },
-      metadata: {
-        isImported: true,
-        importPath: `@${resolverName}`,
-        definedAt: directive.location || { line: 0, column: 0, filePath: env.getCurrentFilePath() }
-      }
-    });
+    const source: VariableSource = {
+      directive: 'var',
+      syntax: typeof value === 'string' ? 'quoted' : 
+              Array.isArray(value) ? 'array' : 'object',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    
+    const metadata = {
+      isImported: true,
+      importPath: `@${resolverName}`,
+      definedAt: directive.location || { line: 0, column: 0, filePath: env.getCurrentFilePath() }
+    };
+    
+    let variable: Variable;
+    if (typeof value === 'string') {
+      variable = createSimpleTextVariable(key, value, source, metadata);
+    } else if (Array.isArray(value)) {
+      variable = createArrayVariable(key, value, false, source, metadata);
+    } else {
+      variable = createObjectVariable(key, value, false, source, metadata);
+    }
+    
+    variables.set(key, variable);
   }
 
   // Handle variable merging based on import type
@@ -1235,36 +1456,62 @@ async function evaluateInputImport(
   }
   
   // Convert inputData to variables
-  const variables: Map<string, MlldVariable> = new Map();
+  const variables: Map<string, Variable> = new Map();
   
   if (typeof inputData === 'object' && inputData !== null && !Array.isArray(inputData)) {
     // Object data - extract fields as variables
     for (const [key, value] of Object.entries(inputData)) {
-      variables.set(key, {
-        type: 'data',
-        value: value,
-        nodeId: '',
-        location: { line: 0, column: 0 },
-        metadata: {
-          isImported: true,
-          importPath: '@INPUT',
-          definedAt: { line: 0, column: 0, filePath: '@INPUT' }
-        }
-      });
-    }
-  } else {
-    // Non-object data (array, string, number, etc.) - store as 'content'
-    variables.set('content', {
-      type: 'data',
-      value: inputData,
-      nodeId: '',
-      location: { line: 0, column: 0 },
-      metadata: {
+      const source: VariableSource = {
+        directive: 'var',
+        syntax: typeof value === 'string' ? 'quoted' : 
+                Array.isArray(value) ? 'array' : 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      };
+      
+      const metadata = {
         isImported: true,
         importPath: '@INPUT',
         definedAt: { line: 0, column: 0, filePath: '@INPUT' }
+      };
+      
+      let variable: Variable;
+      if (typeof value === 'string') {
+        variable = createSimpleTextVariable(key, value, source, metadata);
+      } else if (Array.isArray(value)) {
+        variable = createArrayVariable(key, value, false, source, metadata);
+      } else {
+        variable = createObjectVariable(key, value, false, source, metadata);
       }
-    });
+      
+      variables.set(key, variable);
+    }
+  } else {
+    // Non-object data (array, string, number, etc.) - store as 'content'
+    const source: VariableSource = {
+      directive: 'var',
+      syntax: typeof inputData === 'string' ? 'quoted' : 
+              Array.isArray(inputData) ? 'array' : 'object',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    
+    const metadata = {
+      isImported: true,
+      importPath: '@INPUT',
+      definedAt: { line: 0, column: 0, filePath: '@INPUT' }
+    };
+    
+    let variable: Variable;
+    if (typeof inputData === 'string') {
+      variable = createSimpleTextVariable('content', inputData, source, metadata);
+    } else if (Array.isArray(inputData)) {
+      variable = createArrayVariable('content', inputData, false, source, metadata);
+    } else {
+      variable = createObjectVariable('content', inputData, false, source, metadata);
+    }
+    
+    variables.set('content', variable);
   }
   
   // Handle variable merging based on import type
