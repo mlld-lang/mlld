@@ -272,20 +272,25 @@ async function evaluateWhenBlock(
     
     // Merge child environment nodes back to parent
     // This ensures output nodes created by actions are preserved
-    env.mergeChild(childEnv);
-    
-    // If the when evaluation produced output content, add it to the document
-    if (result.value && typeof result.value === 'string' && result.value.trim()) {
-      const textNode = {
-        type: 'Text' as const,
-        nodeId: `${node.nodeId || 'when'}-output`,
-        content: result.value
-      };
-      env.addNode(textNode);
+    if (process.env.DEBUG_WHEN) {
+      console.log('Before merge:');
+      console.log('  Parent nodes:', env.nodes.length);
+      console.log('  Child nodes:', childEnv.nodes.length);
+      console.log('  Child initial count:', childEnv.initialNodeCount);
+      console.log('  Result env nodes:', result.env.nodes.length);
     }
     
-    // Return the result value so unit tests can verify the output
-    return result;
+    // The result.env contains the updated environment from the evaluation
+    // We need to merge from result.env, not childEnv
+    env.mergeChild(result.env);
+    
+    if (process.env.DEBUG_WHEN) {
+      console.log('After merge, parent env nodes:', env.nodes.length);
+      console.log('Result value:', result.value);
+    }
+    
+    // Return the result with the updated parent environment
+    return { value: result.value, env };
   } finally {
     // Child environment goes out of scope
   }
@@ -408,7 +413,15 @@ async function evaluateAllMatches(
     
     // Execute block action only if all conditions matched
     if (allMatch) {
-      return await evaluate(blockAction, env);
+      if (process.env.DEBUG_WHEN) {
+        console.log('Executing block action with env nodes before:', env.nodes.length);
+      }
+      const result = await evaluate(blockAction, env);
+      if (process.env.DEBUG_WHEN) {
+        console.log('Block action result:', result);
+        console.log('Env nodes after block action:', env.nodes.length);
+      }
+      return result;
     }
     
     return { value: '', env };

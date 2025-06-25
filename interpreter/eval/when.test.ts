@@ -119,7 +119,8 @@ describe('evaluateWhen', () => {
   });
   
   describe('block form with all modifier', () => {
-    it('should execute all matching conditions', async () => {
+    it('should execute block action when all conditions match', async () => {
+      // all: modifier requires all conditions to be true and executes a single block action
       const node: WhenBlockNode = {
         type: 'Directive',
         kind: 'when',
@@ -129,18 +130,16 @@ describe('evaluateWhen', () => {
           modifier: [{ type: 'Text', content: 'all', nodeId: 'mod1' }],
           conditions: [
             {
-              condition: [{ type: 'Text', content: 'true', nodeId: 'cond1' }],
-              action: [{ type: 'Text', content: 'First action\n', nodeId: 'act1' }]
+              condition: [{ type: 'Text', content: 'true', nodeId: 'cond1' }]
             },
             {
-              condition: [{ type: 'Text', content: 'false', nodeId: 'cond2' }],
-              action: [{ type: 'Text', content: 'Second action\n', nodeId: 'act2' }]
+              condition: [{ type: 'Text', content: 'true', nodeId: 'cond2' }]
             },
             {
-              condition: [{ type: 'Text', content: 'true', nodeId: 'cond3' }],
-              action: [{ type: 'Text', content: 'Third action', nodeId: 'act3' }]
+              condition: [{ type: 'Text', content: 'true', nodeId: 'cond3' }]
             }
-          ]
+          ],
+          action: [{ type: 'Text', content: 'All conditions matched!', nodeId: 'blockAction' }]
         },
         meta: {
           modifier: 'all',
@@ -150,7 +149,7 @@ describe('evaluateWhen', () => {
       };
       
       const result = await evaluateWhen(node, env);
-      expect(result.value).toBe('First action\nThird action');
+      expect(result.value).toBe('All conditions matched!');
     });
   });
   

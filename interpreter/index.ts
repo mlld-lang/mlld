@@ -190,6 +190,13 @@ export async function interpret(
   // Get the final nodes from environment
   const nodes = env.getNodes();
   
+  if (process.env.DEBUG_WHEN) {
+    console.log('Final nodes count:', nodes.length);
+    nodes.forEach((node, i) => {
+      console.log(`Node ${i}:`, node.type, node.type === 'Text' ? node.content : '');
+    });
+  }
+  
   // Format the output
   const output = await formatOutput(nodes, {
     format: options.format || 'markdown',

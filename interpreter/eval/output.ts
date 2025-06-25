@@ -232,53 +232,15 @@ async function evaluateInvocationSource(
     );
   }
   
-  if (isTextLike(variable)) {
-    // It's a text template - evaluate it with arguments
-    let templateContent: string;
-    let templateNodes: any[];
-    
-    if (variable.type === 'textTemplate') {
-      // Parameterized text template - has content nodes instead of value string
-      templateNodes = variable.content || [];
-    } else {
-      // Regular text variable
-      templateContent = variable.value;
-    }
+  if (isTextLike(variable) && !isExecutable(variable)) {
+    // It's a regular text variable (not an executable template)
+    const templateContent = variable.value;
     
     // Create a child environment for parameter substitution
     const childEnv = env.createChild();
     
-    // If the template has parameters, bind them
-    if (variable.params && variable.params.length > 0) {
-      for (let i = 0; i < variable.params.length && i < args.length; i++) {
-        const paramName = variable.params[i];
-        const argValue = await evaluateDataValue(args[i], env);
-        const paramVar = createSimpleTextVariable(
-          paramName,
-          String(argValue),
-          {
-            directive: 'var',
-            syntax: 'quoted',
-            hasInterpolation: false,
-            isMultiLine: false
-          },
-          {
-            isSystem: true,
-            isParameter: true
-          }
-        );
-        childEnv.setVariable(paramName, paramVar);
-      }
-    }
-    
-    // Evaluate the template with the child environment
-    if (variable.type === 'textTemplate') {
-      // For parameterized templates, evaluate the content nodes
-      return await interpolate(templateNodes, childEnv);
-    } else {
-      // For regular text variables, interpolate the string
-      return await childEnv.interpolate(templateContent);
-    }
+    // For regular text variables, interpolate the string
+    return await childEnv.interpolate(templateContent);
     
   } else if (isExecutable(variable)) {
     // It's an executable - need to invoke it properly

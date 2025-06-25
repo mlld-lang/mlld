@@ -2160,10 +2160,9 @@ ${code}
       this.variables.set(name, variable);
     }
     
-    // Only merge nodes that were added to the child environment after its creation
-    // This prevents duplicate nodes when child inherits parent's nodes
-    const newNodes = child.nodes.slice(child.initialNodeCount);
-    this.nodes.push(...newNodes);
+    // Merge all nodes from the child environment
+    // Child environments don't inherit parent nodes, they start with empty arrays
+    this.nodes.push(...child.nodes);
   }
   
   // --- Special Variables ---

@@ -509,11 +509,12 @@ async function importFromPath(
           if ('__definition' in value) {
             (importedVariable as any).definition = value.__definition;
           } else {
-            // Legacy textTemplate: create text type definition
+            // Legacy textTemplate: create template type definition
             (importedVariable as any).definition = {
-              type: 'text',
-              params: value.__params || [],
-              content: value.__content || []
+              type: 'template',
+              paramNames: value.__params || [],
+              template: value.__content || [],
+              sourceDirective: 'text'
             };
           }
           (importedVariable as any).params = value.__params || [];
@@ -620,11 +621,12 @@ async function importFromPath(
             if ('__definition' in value) {
               executableDef = value.__definition;
             } else {
-              // Legacy textTemplate: create text type definition
+              // Legacy textTemplate: create template type definition
               executableDef = {
-                type: 'text',
-                params: value.__params || [],
-                content: value.__content || []
+                type: 'template',
+                paramNames: value.__params || [],
+                template: value.__content || [],
+                sourceDirective: 'text'
               };
             }
             
@@ -984,11 +986,12 @@ async function importFromResolverContent(
             if ('__definition' in value) {
               executableDef = value.__definition;
             } else {
-              // Legacy textTemplate: create text type definition
+              // Legacy textTemplate: create template type definition
               executableDef = {
-                type: 'text',
-                params: value.__params || [],
-                content: value.__content || []
+                type: 'template',
+                paramNames: value.__params || [],
+                template: value.__content || [],
+                sourceDirective: 'text'
               };
             }
             
@@ -1116,11 +1119,12 @@ async function importFromResolverContent(
             if ('__definition' in value) {
               executableDef = value.__definition;
             } else {
-              // Legacy textTemplate: create text type definition
+              // Legacy textTemplate: create template type definition
               executableDef = {
-                type: 'text',
-                params: value.__params || [],
-                content: value.__content || []
+                type: 'template',
+                paramNames: value.__params || [],
+                template: value.__content || [],
+                sourceDirective: 'text'
               };
             }
             
