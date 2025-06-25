@@ -228,10 +228,26 @@ async function evaluateWhenBlock(
         break;
         
       case 'all':
+        // all: modifier requires a block action
+        if (!node.values.action) {
+          throw new MlldConditionError(
+            'Invalid @when syntax: \'all:\' modifier requires a block action. Use either @when all: [...] => show "action" OR use a bare @when for individual actions',
+            'all',
+            node.location
+          );
+        }
         result = await evaluateAllMatches(conditions, childEnv, variableName, node.values.action);
         break;
         
       case 'any':
+        // any: modifier requires a block action
+        if (!node.values.action) {
+          throw new MlldConditionError(
+            'Invalid @when syntax: \'any:\' modifier requires a block action. Use @when any: [...] => show "action"',
+            'any',
+            node.location
+          );
+        }
         result = await evaluateAnyMatch(conditions, childEnv, variableName, node.values.action);
         break;
         

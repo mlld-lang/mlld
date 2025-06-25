@@ -6,7 +6,7 @@
 
 # Testing negation in block form
 
-/when @features any: [
+/when any: [
   !@features.darkMode
   !@features.experimental  
   @features.analytics
