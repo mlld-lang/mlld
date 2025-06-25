@@ -3,7 +3,7 @@
 /var @isVerified = ""
 
 # any: with block action - executes if ANY condition matches
-/when @isAdmin any: [
+/when any: [
   @isAdmin
   @isModerator
   @isVerified

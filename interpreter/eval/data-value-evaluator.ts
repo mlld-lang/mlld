@@ -10,6 +10,7 @@ import {
   isTemplateValue,
   isPrimitiveValue
 } from '@core/types/var';
+import { createObjectVariable, createArrayVariable } from '@core/types/variable';
 
 interface EvaluationState {
   depth: number;
@@ -786,13 +787,26 @@ export async function evaluateForeachSection(
     try {
       // 4. Create child environment with item bound to array variable name
       const childEnv = env.createChild();
-      childEnv.setParameterVariable(actualArrayVariable, {
-        type: 'data',
-        name: actualArrayVariable,
-        value: item,
-        definedAt: null,
-        isFullyEvaluated: true
-      });
+      const itemVar = Array.isArray(item) ?
+        createArrayVariable(actualArrayVariable, item, {
+          directive: 'var',
+          syntax: 'array',
+          hasInterpolation: false,
+          isMultiLine: false
+        }, {
+          isParameter: true,
+          isFullyEvaluated: true
+        }) :
+        createObjectVariable(actualArrayVariable, item, {
+          directive: 'var',
+          syntax: 'object',
+          hasInterpolation: false,
+          isMultiLine: false
+        }, {
+          isParameter: true,
+          isFullyEvaluated: true
+        });
+      childEnv.setParameterVariable(actualArrayVariable, itemVar);
       
       // 5. Get the path value
       let pathValue: string;

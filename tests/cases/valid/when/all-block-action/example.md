@@ -3,7 +3,7 @@
 /var @isPaid = "1"
 
 # all: with block action - executes if ALL conditions match
-/when @hasLicense all: [
+/when all: [
   @hasLicense
   @isActive
   @isPaid

@@ -11,7 +11,9 @@ import {
   isArray as isArrayVariable,
   isObject as isObjectVariable,
   isCommandResult,
-  isPipelineInput
+  isPipelineInput,
+  createSimpleTextVariable,
+  createObjectVariable
 } from '@core/types/variable';
 
 /**
@@ -448,12 +450,19 @@ async function evaluateAnyMatch(
         const conditionValue = conditionResult.value;
         
         // Create a variable from the condition value
-        const variable = {
-          type: typeof conditionValue === 'string' ? 'text' : 'data' as const,
-          value: conditionValue,
-          nodeId: '',
-          location: { line: 0, column: 0 }
-        };
+        const variable = typeof conditionValue === 'string' ?
+          createSimpleTextVariable(variableName, conditionValue, {
+            directive: 'var',
+            syntax: 'quoted',
+            hasInterpolation: false,
+            isMultiLine: false
+          }) :
+          createObjectVariable(variableName, conditionValue, {
+            directive: 'var',
+            syntax: 'object',
+            hasInterpolation: false,
+            isMultiLine: false
+          });
         env.setVariable(variableName, variable);
       }
       

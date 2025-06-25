@@ -2,8 +2,8 @@
 /var @condition2 = "yes"
 /var @condition3 = "1"
 
-# Bare @when with block action - like all:
-/when @condition1: [
+# Bare @when with block action - evaluates all conditions for truthiness
+/when all: [
   @condition1
   @condition2
   @condition3

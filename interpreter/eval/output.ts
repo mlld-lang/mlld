@@ -15,7 +15,7 @@ import type { EvalResult } from '../core/interpreter';
 import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
-import { isTextLike, isExecutable } from '@core/types/variable';
+import { isTextLike, isExecutable, createSimpleTextVariable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 
@@ -253,10 +253,21 @@ async function evaluateInvocationSource(
       for (let i = 0; i < variable.params.length && i < args.length; i++) {
         const paramName = variable.params[i];
         const argValue = await evaluateDataValue(args[i], env);
-        childEnv.setVariable(paramName, {
-          type: 'text',
-          value: String(argValue)
-        });
+        const paramVar = createSimpleTextVariable(
+          paramName,
+          String(argValue),
+          {
+            directive: 'var',
+            syntax: 'quoted',
+            hasInterpolation: false,
+            isMultiLine: false
+          },
+          {
+            isSystem: true,
+            isParameter: true
+          }
+        );
+        childEnv.setVariable(paramName, paramVar);
       }
     }
     
@@ -282,10 +293,21 @@ async function evaluateInvocationSource(
       for (let i = 0; i < params.length && i < args.length; i++) {
         const paramName = params[i];
         const argValue = await evaluateDataValue(args[i], env);
-        childEnv.setVariable(paramName, {
-          type: 'text',
-          value: String(argValue)
-        });
+        const paramVar = createSimpleTextVariable(
+          paramName,
+          String(argValue),
+          {
+            directive: 'var',
+            syntax: 'quoted',
+            hasInterpolation: false,
+            isMultiLine: false
+          },
+          {
+            isSystem: true,
+            isParameter: true
+          }
+        );
+        childEnv.setVariable(paramName, paramVar);
       }
     }
     
@@ -440,10 +462,21 @@ async function evaluateCommandSource(
     for (let i = 0; i < cmdVariable.params.length && i < cmdArgs.length; i++) {
       const paramName = cmdVariable.params[i];
       const argValue = await evaluateDataValue(cmdArgs[i], env);
-      cmdChildEnv.setVariable(paramName, {
-        type: 'text',
-        value: String(argValue)
-      });
+      const paramVar = createSimpleTextVariable(
+        paramName,
+        String(argValue),
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          isSystem: true,
+          isParameter: true
+        }
+      );
+      cmdChildEnv.setVariable(paramName, paramVar);
     }
   }
   

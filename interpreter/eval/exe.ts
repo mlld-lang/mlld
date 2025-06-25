@@ -4,7 +4,7 @@ import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, CodeExecutable, TemplateExecutable, SectionExecutable, ResolverExecutable } from '@core/types/executable';
 import { interpolate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
-import { createExecutableVariable, type VariableSource } from '@core/types/variable';
+import { createExecutableVariable, createSimpleTextVariable, type VariableSource } from '@core/types/variable';
 
 /**
  * Extract parameter names from the params array.
@@ -446,12 +446,21 @@ function createExecWrapper(
       const paramName = params[i];
       const argValue = args[i];
       if (argValue !== undefined) {
-        execEnv.setVariable(paramName, {
-          type: 'text',
-          value: argValue,
-          nodeId: '',
-          location: { line: 0, column: 0 }
-        });
+        const paramVar = createSimpleTextVariable(
+          paramName,
+          argValue,
+          {
+            directive: 'var',
+            syntax: 'quoted',
+            hasInterpolation: false,
+            isMultiLine: false
+          },
+          {
+            isSystem: true,
+            isParameter: true
+          }
+        );
+        execEnv.setVariable(paramName, paramVar);
       }
     }
     

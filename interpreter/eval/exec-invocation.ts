@@ -4,7 +4,7 @@ import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
 import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable } from '@core/types/executable';
 import { interpolate, resolveVariableValue } from '../core/interpreter';
-import { isExecutableVariable } from '@core/types/variable';
+import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError } from '@core/errors';
 import { extractSection } from './show';
@@ -214,15 +214,21 @@ export async function evaluateExecInvocation(
     const argValue = evaluatedArgs[i];
     
     if (argValue !== undefined) {
-      execEnv.setVariable(paramName, {
-        type: 'text',
-        name: paramName,
-        value: argValue,
-        metadata: {
+      const paramVar = createSimpleTextVariable(
+        paramName, 
+        argValue,
+        {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
           isSystem: true, // Mark as system variable to bypass reserved name check
           isParameter: true
         }
-      });
+      );
+      execEnv.setVariable(paramName, paramVar);
     }
   }
   

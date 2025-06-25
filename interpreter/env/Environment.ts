@@ -350,23 +350,8 @@ export class Environment {
    */
   private initializeReservedVariables(): void {
     // Initialize @INPUT from merged stdin content and environment variables
-    const inputValue = this.createInputValue();
-    if (inputValue !== null) {
-      const inputSource: VariableSource = {
-        directive: 'var',
-        syntax: inputValue.type === 'data' ? 'object' : 'quoted',
-        hasInterpolation: false,
-        isMultiLine: false
-      };
-      const inputVar = inputValue.type === 'data' ? 
-        createObjectVariable('INPUT', inputValue.value, inputSource, undefined, {
-          isReserved: true,
-          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-        }) :
-        createSimpleTextVariable('INPUT', inputValue.value, inputSource, {
-          isReserved: true,
-          definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-        });
+    const inputVar = this.createInputValue();
+    if (inputVar !== null) {
       // Direct assignment for reserved variables during initialization
       this.variables.set('INPUT', inputVar);
       // Note: lowercase 'input' is handled in getVariable() to avoid conflicts
@@ -1277,7 +1262,7 @@ export class Environment {
   /**
    * Create the @INPUT value by merging stdin content with environment variables
    */
-  private createInputValue(): { type: 'text' | 'data'; value: any } | null {
+  private createInputValue(): Variable | null {
     // Get environment variables if enabled
     const envVars = this.getEnvironmentVariables();
     
@@ -1293,37 +1278,49 @@ export class Environment {
       }
     }
     
+    // Create variable source metadata
+    const inputSource: VariableSource = {
+      directive: 'var',
+      syntax: 'object',
+      hasInterpolation: false,
+      isMultiLine: false
+    };
+    
+    const metadata: VariableMetadata = {
+      isReserved: true,
+      definedAt: { line: 0, column: 0, filePath: '<reserved>' }
+    };
+    
     // Determine the final @INPUT value
     if (Object.keys(envVars).length > 0 && stdinData !== null) {
       // Both env vars and stdin: merge them
       if (typeof stdinData === 'object' && stdinData !== null && !Array.isArray(stdinData)) {
         // Merge env vars into JSON object (env vars take precedence)
-        return {
-          type: 'data',
-          value: { ...stdinData, ...envVars }
-        };
+        return createObjectVariable('INPUT', { ...stdinData, ...envVars }, inputSource, undefined, metadata);
       } else {
         // Stdin is not an object, add it as 'content' alongside env vars
-        return {
-          type: 'data',
-          value: {
-            content: stdinData,
-            ...envVars
-          }
-        };
+        return createObjectVariable('INPUT', {
+          content: stdinData,
+          ...envVars
+        }, inputSource, undefined, metadata);
       }
     } else if (Object.keys(envVars).length > 0) {
       // Only env vars: return as data object
-      return {
-        type: 'data',
-        value: envVars
-      };
+      return createObjectVariable('INPUT', envVars, inputSource, undefined, metadata);
     } else if (stdinData !== null) {
       // Only stdin: preserve original stdin behavior for @INPUT when no env vars
-      return {
-        type: typeof stdinData === 'object' ? 'data' : 'text',
-        value: stdinData
-      };
+      if (typeof stdinData === 'object') {
+        return createObjectVariable('INPUT', stdinData, inputSource, undefined, metadata);
+      } else {
+        // Plain text input
+        const textSource: VariableSource = {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        };
+        return createSimpleTextVariable('INPUT', stdinData, textSource, metadata);
+      }
     }
     
     // No input available
@@ -1396,23 +1393,8 @@ export class Environment {
       }
       
       // Update the @INPUT variable with the new content
-      const inputValue = this.createInputValue();
-      if (inputValue !== null) {
-        const inputSource: VariableSource = {
-          directive: 'var',
-          syntax: inputValue.type === 'data' ? 'object' : 'quoted',
-          hasInterpolation: false,
-          isMultiLine: false
-        };
-        const inputVar = inputValue.type === 'data' ?
-          createObjectVariable('INPUT', inputValue.value, inputSource, undefined, {
-            isReserved: true,
-            definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-          }) :
-          createSimpleTextVariable('INPUT', inputValue.value, inputSource, {
-            isReserved: true,
-            definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-          });
+      const inputVar = this.createInputValue();
+      if (inputVar !== null) {
         // Update the existing INPUT variable
         this.variables.set('INPUT', inputVar);
       }
