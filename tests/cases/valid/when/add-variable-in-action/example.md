@@ -1,6 +1,6 @@
-# Test: show @variable inside @when actions
+# Test: show @variable inside /when actions
 
-This test verifies that simple variable references work correctly inside @when actions.
+This test verifies that simple variable references work correctly inside /when actions.
 
 ## Setup
 /var @greeting = "Hello from a text variable"
@@ -12,13 +12,13 @@ This test verifies that simple variable references work correctly inside @when a
 /show @template
 /show @config
 
-## Test 2: Inside @when actions (currently fails)
+## Test 2: Inside /when actions (currently fails)
 /var @isTrue = "true"
 /when @isTrue => show @greeting
 /when @isTrue => show @template
 /when @isTrue => show @config
 
-## Test 3: Inside @when first: actions
+## Test 3: Inside /when first: actions
 /var @testValue = "false"
 
 /when @testValue first: [
