@@ -43,17 +43,20 @@ Test comprehensive truthiness behavior in @when directives.
 
 /when !@zero => show "Not zero"
 
-## 3. Switch with String/Boolean Equivalence
+## 3. Variable Comparison (NOT a switch - bare when)
 
 /var @mode = "true"
 
+>> With /when @variable: [...], the variable's value is compared to each condition
+>> Only matching conditions fire their actions
+>> This is NOT a switch - ALL matching conditions fire
 /when @mode: [
 "true" => show "Matched as boolean true"
 "false" => show "Matched as boolean false"
   "production" => show "Matched production"
 ]
 
-## 4. Number/String Equivalence in Switch
+## 4. Number/String Variable Comparison
 
 /var @count = "42"
 /var @version = "1"
@@ -88,7 +91,7 @@ Test comprehensive truthiness behavior in @when directives.
 >> String "0" should be falsy
 /when @getZero() => show "FAIL: zero string triggered"
 
-## 6. Complex Truthiness in Switches
+## 6. Variable Comparison with Multiple Conditions
 
 /var @userResponse = "yes"
 /var @permission = ""

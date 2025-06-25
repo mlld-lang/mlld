@@ -3,6 +3,8 @@
 /var @condition3 = "yes"
 
 # Bare @when with individual actions - executes all matching
+>> @condition1's value ("true") is compared against each condition's value
+>> Only exact matches fire their actions
 /when @condition1: [
   @condition1 => show "Condition 1 matched"
   @condition2 => show "Condition 2 matched"

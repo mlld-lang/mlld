@@ -62,6 +62,7 @@ export async function evaluateWhen(
   node: WhenNode,
   env: Environment
 ): Promise<EvalResult> {
+  
   if (isWhenSimpleNode(node)) {
     return evaluateWhenSimple(node, env);
   } else if (isWhenSwitchNode(node)) {
@@ -199,13 +200,17 @@ async function evaluateWhenBlock(
     // The variable nodes contain the expression to evaluate
     expressionNodes = node.values.variable;
     
-    // Extract variable name from the nodes
-    const varResult = await evaluate(node.values.variable, env);
-    variableName = String(varResult.value || '').trim();
     
-    if (variableName) {
-      // Store original value to restore later
-      originalValue = env.hasVariable(variableName) ? env.getVariable(variableName) : undefined;
+    // Extract variable name from the VariableReference node
+    if (expressionNodes.length === 1 && expressionNodes[0].type === 'VariableReference') {
+      const varRef = expressionNodes[0] as any;
+      variableName = varRef.identifier;
+      
+      
+      if (variableName) {
+        // Store original value to restore later
+        originalValue = env.hasVariable(variableName) ? env.getVariable(variableName) : undefined;
+      }
     }
   }
   
@@ -405,7 +410,9 @@ async function evaluateAllMatches(
     }
   }
   
-  return { value: results.join(''), env };
+  // Join results with newlines, but only if we have multiple results
+  // If single result, don't add trailing newline
+  return { value: results.length > 1 ? results.join('\n') : results.join(''), env };
 }
 
 /**
@@ -501,6 +508,29 @@ async function evaluateCondition(
   
   if (process.env.DEBUG_WHEN) {
     console.log('Condition evaluation result:', JSON.stringify(result, null, 2));
+  }
+  
+  // If we have a variable to compare against
+  if (variableName && childEnv.hasVariable('_whenValue')) {
+    const whenValue = childEnv.getVariable('_whenValue');
+    
+    // Check if the condition is an executable (function call)
+    if (result.value && typeof result.value === 'object' && result.value.type === 'executable') {
+      // The executable should have already been evaluated with _whenValue as context
+      // Just check its boolean result
+      return isTruthy(result.value);
+    }
+    
+    // Get the actual value from the variable
+    let actualValue: any;
+    if (whenValue && typeof whenValue === 'object' && 'value' in whenValue) {
+      actualValue = whenValue.value;
+    } else {
+      actualValue = whenValue;
+    }
+    
+    // Compare the variable value with the condition value
+    return compareValues(actualValue, result.value);
   }
   
   // For command execution results, check stdout or exit code

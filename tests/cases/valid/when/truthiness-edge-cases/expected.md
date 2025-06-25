@@ -20,27 +20,20 @@ Not empty
 
 Not zero
 
-## 3. Switch with String/Boolean Equivalence
+## 3. Variable Comparison (NOT a switch - bare when)
 
 Matched as boolean true
-Matched production
-## 4. Number/String Equivalence in Switch
+## 4. Number/String Variable Comparison
 
 Count is 42
-Count is 100
 Version 1
-Version 2
 ## 5. Exec Function String Results
 
 System is ready
 
-## 6. Complex Truthiness in Switches
+## 6. Variable Comparison with Multiple Conditions
 
 User agreed
-User declined
-Truthy response
-FAIL: empty matched true
-FAIL: zero matched true
 ## 7. @when any: Block with Mixed Truthiness
 
 Has at least one artifact
