@@ -240,6 +240,20 @@ export async function evaluateVar(
       for (const field of valueNode.fields) {
         resolvedValue = accessField(resolvedValue, field);
       }
+      
+      // Check if the accessed field is an executable variable
+      if (resolvedValue && typeof resolvedValue === 'object' && 
+          resolvedValue.type === 'executable') {
+        // Preserve the executable variable
+        env.setVariable(identifier, resolvedValue);
+        return {
+          value: resolvedValue,
+          env,
+          stdout: '',
+          stderr: '',
+          exitCode: 0
+        };
+      }
     }
     
   } else if (Array.isArray(valueNode)) {

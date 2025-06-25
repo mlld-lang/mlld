@@ -125,8 +125,8 @@ export async function evaluateShow(
         value = pathValue;
       }
     } else if (isExecutable(variable)) {
-      // Executable variables cannot be used directly in show
-      throw new Error(`Cannot show executable variable directly. Use invocation: @${varName}()`);
+      // Show a representation of the executable
+      value = `[executable: ${variable.name}]`;
     } else {
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
     }

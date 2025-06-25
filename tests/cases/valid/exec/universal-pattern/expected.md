@@ -5,4 +5,4 @@ Demo object contains:
 - greeting result: Hello, World!
 
 Executing stored command:
-Result: test-value
+Result: [executable: getValue]
