@@ -127,7 +127,7 @@ describe('Context-Dependent Behavior', () => {
         config: { basePath: '/' }
       }]);
       
-      await fileSystem.writeFile('/module.mld', '/text @greeting = "Hello"');
+      await fileSystem.writeFile('/module.mld', '/var @greeting = "Hello"');
       await fileSystem.writeFile('/data.json', '{"key": "value"}');
       await fileSystem.writeFile('/text.txt', 'Plain text');
     });
@@ -187,7 +187,7 @@ describe('Context-Dependent Behavior', () => {
         if (url.includes('/utils.mld')) {
           return {
             ok: true,
-            text: async () => '/text @version = "1.0.0"'
+            text: async () => '/var @version = "1.0.0"'
           } as any;
         }
         throw new Error('Not found');
@@ -232,7 +232,7 @@ describe('Context-Dependent Behavior', () => {
     });
 
     it('supports import context for modules', async () => {
-      await fileSystem.writeFile('/project/lib.mld', '/text @name = "lib"');
+      await fileSystem.writeFile('/project/lib.mld', '/var @name = "lib"');
       
       resolverManager.configurePrefixes([{
         prefix: '@PROJECTPATH',

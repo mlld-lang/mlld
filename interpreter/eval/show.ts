@@ -374,11 +374,11 @@ export async function evaluateShow(
       }
     }
     
-  } else if (directive.subtype === 'addInvocation') {
+  } else if (directive.subtype === 'addInvocation' || directive.subtype === 'showInvocation') {
     // Handle unified invocation - could be template or exec
     const invocation = directive.values?.invocation;
     if (!invocation) {
-      throw new Error('Add invocation directive missing invocation');
+      throw new Error('Show invocation directive missing invocation');
     }
     
     // Get the invocation name

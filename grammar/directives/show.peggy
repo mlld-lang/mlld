@@ -419,7 +419,7 @@ SlashShow
       
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
-        'addInvocation', 
+        'showInvocation', 
         values, 
         raw, 
         meta, 

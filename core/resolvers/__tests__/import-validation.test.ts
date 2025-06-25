@@ -18,11 +18,11 @@ describe('Import Content Type Validation', () => {
 
   describe('Module Imports', () => {
     it('should accept module imports from .mld files', async () => {
-      await fileSystem.writeFile('/lib.mld', '/text @greeting = "Hello from module"');
+      await fileSystem.writeFile('/lib.mld', '/var @greeting = "Hello from module"');
       
       const code = `
 /import { greeting } from "./lib.mld"
-/add @greeting
+/show @greeting
 `;
       
       const result = await interpret(code, {
@@ -36,13 +36,13 @@ describe('Import Content Type Validation', () => {
 
     it('should accept module imports with auto-export', async () => {
       await fileSystem.writeFile('/utils.mld', `
-/text @helper = "Utility function"
-/data @config = { enabled: true }
+/var @helper = "Utility function"
+/var @config = { enabled: true }
 `);
       
       const code = `
 /import { * } from "./utils.mld"
-/add @helper
+/show @helper
 `;
       
       const result = await interpret(code, {
@@ -56,10 +56,10 @@ describe('Import Content Type Validation', () => {
 
     it('should accept module imports with explicit export', async () => {
       await fileSystem.writeFile('/module.mld', `
-/text @internal = "Internal value"
-/text @api = "Public API"
-/text @version = "1.0.0"
-/data @module = {
+/var @internal = "Internal value"
+/var @api = "Public API"
+/var @version = "1.0.0"
+/var @module = {
   api: @api,
   version: @version
 }
@@ -67,7 +67,7 @@ describe('Import Content Type Validation', () => {
       
       const code = `
 /import { api, version } from "./module.mld"
-/add [[API: {{api}}, Version: {{version}}]]
+/show [[API: {{api}}, Version: {{version}}]]
 `;
       
       const result = await interpret(code, {
@@ -85,7 +85,7 @@ describe('Import Content Type Validation', () => {
       await fileSystem.writeFile('/readme.txt', 'This is a plain text file');
       
       const code = `/import { * } from "./readme.txt"
-/add @content`;
+/show @content`;
       
       await expect(
         interpret(code, {
@@ -100,7 +100,7 @@ describe('Import Content Type Validation', () => {
       await fileSystem.writeFile('/config.json', '{"setting": "value"}');
       
       const code = `/import { setting } from "./config.json"
-/add @setting`;
+/show @setting`;
       
       const result = await interpret(code, {
         fileSystem,
@@ -115,7 +115,7 @@ describe('Import Content Type Validation', () => {
       await fileSystem.writeFile('/doc.md', '# Documentation\n\nNo mlld content here.');
       
       const code = `/import { * } from "./doc.md"
-/add @title`;
+/show @title`;
       
       await expect(
         interpret(code, {
@@ -152,7 +152,7 @@ describe('Import Content Type Validation', () => {
         if (url.includes('/utils.mld')) {
           return {
             ok: true,
-            text: async () => '/text @version = "1.0.0"\n/text @name = "Utils"'
+            text: async () => '/var @version = "1.0.0"\n/var @name = "Utils"'
           } as any;
         }
         if (url.includes('/data.json')) {
@@ -190,7 +190,7 @@ describe('Import Content Type Validation', () => {
       
       const code = `
 /import { version, name } from @test/utils
-/add [[{{name}} v{{version}}]]
+/show [[{{name}} v{{version}}]]
 `;
       
       const result = await interpret(code, {
@@ -211,7 +211,7 @@ describe('Import Content Type Validation', () => {
 
     it('should import registry data files but find no variables', async () => {
       const code = `/import { * } from @test/data
-/add @type`;
+/show @type`;
       
       await expect(
         interpret(code, {
@@ -233,7 +233,7 @@ describe('Import Content Type Validation', () => {
     it('should accept imports from TIME resolver', async () => {
       const code = `
 /import { iso, date } from @TIME
-/add [[Today is {{date}}]]
+/show [[Today is {{date}}]]
 `;
       
       const result = await interpret(code, {
@@ -248,7 +248,7 @@ describe('Import Content Type Validation', () => {
     it.skip('should accept imports from DEBUG resolver - needs investigation', async () => {
       const code = `
 /import { reduced } from @DEBUG
-/add @reduced
+/show @reduced
 `;
       
       const result = await interpret(code, {
@@ -265,7 +265,7 @@ describe('Import Content Type Validation', () => {
     it('should accept imports from INPUT resolver', async () => {
       const code = `
 /import { test } from @INPUT
-/add [[Input value: {{test}}]]
+/show [[Input value: {{test}}]]
 `;
       
       const result = await interpret(code, {
@@ -284,7 +284,7 @@ describe('Import Content Type Validation', () => {
       await fileSystem.writeFile('/plain.txt', 'Just text');
       
       const code = `/import { content } from "./plain.txt"
-/add @content`;
+/show @content`;
       
       try {
         await interpret(code, {

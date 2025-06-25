@@ -232,7 +232,7 @@ describe('Run directive', () => {
     });
     
     test('Command with variable arguments', async () => {
-      const content = '/run @processFile ({{filename}}, {{options}})';
+      const content = '/run @processFile(@filename, @options)';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);

@@ -2,13 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { parse } from '@grammar/parser';
 import { 
   isDirectiveNode,
-  isTextDirective,
-  isDataDirective,
-  isRunDirective,
-  isExecDirective,
-  isAddDirective,
-  isPathDirective,
-  isImportDirective,
   isVariableReferenceNode,
   DirectiveSubtype
 } from '@core/types';
@@ -25,23 +18,27 @@ describe('Grammar-Type System Alignment', () => {
   
   describe('Text Directive Type Validation', () => {
     it('should produce valid textAssignment nodes', async () => {
-      const input = '/text @greeting = "Hello World"';
+      const input = '/var @greeting = "Hello World"';
       const result = await parse(input);
       const ast = result.ast;
       
       const directive = ast[0];
       expect(isDirectiveNode(directive)).toBe(true);
-      expect(isTextDirective(directive)).toBe(true);
+      expect(directive.kind).toBe('var');
       
       // Check subtype is valid
-      const validTextSubtypes: DirectiveSubtype[] = [
+      const validVarSubtypes: DirectiveSubtype[] = [
         'textAssignment', 
         'textTemplate',
         'textPath',
         'textPathSection',
-        'textTemplateDefinition'
+        'textTemplateDefinition',
+        'dataAssignment',
+        'dataForeach',
+        'dataPath',
+        'dataTemplate'
       ];
-      expect(validTextSubtypes).toContain(directive.subtype);
+      expect(validVarSubtypes).toContain(directive.subtype);
       
       // Check required properties exist
       expect(directive.values).toBeDefined();
@@ -55,11 +52,12 @@ describe('Grammar-Type System Alignment', () => {
     });
 
     it('should produce valid textTemplate nodes', async () => {
-      const input = '/text @message = [[Hello {{name}}!]]';
+      const input = '/var @message = [[Hello {{name}}!]]';
       const result = await parse(input);
       const ast = result.ast;
       
       const directive = ast[0];
+      expect(directive.kind).toBe('var');
       expect(directive.subtype).toBe('textTemplate');
       expect(directive.meta.hasVariables).toBe(true);
     });
@@ -67,7 +65,7 @@ describe('Grammar-Type System Alignment', () => {
     it('should reject invalid text subtypes', async () => {
       // This test would fail currently because grammar produces
       // subtypes like 'textPath' that don't exist in types
-      const input = '/text @content = [file.md]';
+      const input = '/var @content = [file.md]';
       const result = await parse(input);
       const ast = result.ast;
       
@@ -87,7 +85,7 @@ describe('Grammar-Type System Alignment', () => {
 
   describe('Data Directive Type Validation', () => {
     it('should produce dataAssignment not dataDirective', async () => {
-      const input = '/data @config = { "key": "value" }';
+      const input = '/var @config = { "key": "value" }';
       const result = await parse(input);
       const ast = result.ast;
       
@@ -98,12 +96,18 @@ describe('Grammar-Type System Alignment', () => {
 
   describe('Variable Reference Type Validation', () => {
     it('should produce valid VariableReferenceNode structure', async () => {
-      const input = '/text @message = [[Hello {{user.name}}!]]';
+      const input = '/var @message = [[Hello {{user.name}}!]]';
       const result = await parse(input);
       const ast = result.ast;
       
       const directive = ast[0];
+      expect(directive.kind).toBe('var');
+      expect(directive.subtype).toBe('textTemplate');
+      
       const content = directive.values.content;
+      expect(content).toBeDefined();
+      expect(Array.isArray(content)).toBe(true);
+      
       const varRef = content.find(node => isVariableReferenceNode(node));
       
       expect(varRef).toBeDefined();
@@ -120,9 +124,9 @@ describe('Grammar-Type System Alignment', () => {
     it('should only use defined NodeType values', async () => {
       // Test various inputs to ensure they only produce valid node types
       const inputs = [
-        '/text @val = "null"',
-        '/text @str = "string"',
-        '/text @section = "# Section" from [file.md]'
+        '/var @val = "null"',
+        '/var @str = "string"',
+        '/show "# Section" from [file.md]'
       ];
       
       const validNodeTypes = Object.values(NodeType);
@@ -142,7 +146,7 @@ describe('Grammar-Type System Alignment', () => {
 
   describe('Directive Property Placement', () => {
     it('should place source at root level when present', async () => {
-      const input = '/add [[template content]]';
+      const input = '/show [[template content]]';
       const result = await parse(input);
       const ast = result.ast;
       

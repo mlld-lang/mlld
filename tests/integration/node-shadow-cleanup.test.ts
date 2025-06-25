@@ -20,7 +20,7 @@ describe('NodeShadowEnvironment process exit', () => {
     const content = `
 # Test Node Shadow Environment Cleanup
 
-/exec @createTimer(delay) = node {
+/exe @createTimer(delay) = node {
   console.error('Setting timer for ' + delay + 'ms');
   
   // This timer would normally keep the process alive
@@ -38,9 +38,9 @@ describe('NodeShadowEnvironment process exit', () => {
   return 'Timers set';
 }
 
-/exec @node = { createTimer }
+/exe node = { createTimer }
 
-/var @result = @createTimer(5000)
+/var @result = run @createTimer(5000)
 /show [[Result: {{result}}]]
 `;
     
@@ -66,21 +66,21 @@ describe('NodeShadowEnvironment process exit', () => {
     const content = `
 # Test Multiple Shadow Environments
 
-/exec @jsTimer() = js {
+/exe @jsTimer() = js {
   setTimeout(() => console.log('JS timer'), 1000);
   return 'JS timer set';
 }
 
-/exec @nodeTimer() = node {
+/exe @nodeTimer() = node {
   setTimeout(() => console.log('Node timer'), 1000);
   return 'Node timer set';
 }
 
-/exec @js = { jsTimer }
-/exec @node = { nodeTimer }
+/exe js = { jsTimer }
+/exe node = { nodeTimer }
 
-/var @jsResult = @jsTimer()
-/var @nodeResult = @nodeTimer()
+/var @jsResult = run @jsTimer()
+/var @nodeResult = run @nodeTimer()
 
 /show [[JS: {{jsResult}}]]
 /show [[Node: {{nodeResult}}]]
@@ -101,7 +101,7 @@ describe('NodeShadowEnvironment process exit', () => {
   it('should handle errors and still exit cleanly', async () => {
     const testFile = path.join(testDir, 'error-with-timer.mld');
     const content = `
-/exec @buggyTimer() = node {
+/exe @buggyTimer() = node {
   // Set a timer that would keep process alive
   setTimeout(() => {
     console.error('This should not execute');
@@ -111,9 +111,9 @@ describe('NodeShadowEnvironment process exit', () => {
   throw new Error('Intentional error');
 }
 
-/exec @node = { buggyTimer }
+/exe node = { buggyTimer }
 
-/var @result = @buggyTimer()
+/var @result = run @buggyTimer()
 `;
     
     await fs.writeFile(testFile, content);
