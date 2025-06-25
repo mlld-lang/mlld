@@ -782,6 +782,9 @@ Examples:
 │  │  ├─ @condition → Variable/invocation to test
 │  │  └─ action → Directive to execute if truthy
 │  │
+│  ├─ Bare block: /when [conditions]
+│  │  └─ Execute all matching conditions (no comparison variable)
+│  │
 │  ├─ Multi with mode: /when @var mode: [conditions]
 │  │  ├─ first: Execute first matching condition only
 │  │  ├─ any: Execute all matching conditions
@@ -800,6 +803,10 @@ Examples:
 Examples:
 - /when @isProduction => /deploy() trust always
 - /when @hasData => /output @report [report.md]
+- /when [
+    @has_node() => show "Node.js installed"
+    @has_npm() => show "npm installed"
+  ]
 - /when @results any: [
     @success => /notify("success"),
     @warning => /logWarning(),

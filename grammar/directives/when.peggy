@@ -26,6 +26,7 @@ Modifiers:
 SlashWhen
   = WhenSimpleForm
   / WhenBlockForm
+  / WhenBareBlockForm
   / WhenSwitchForm
 
 // -------------------------------------------------------------
@@ -142,6 +143,41 @@ WhenBlockForm
           modifier: modifier || 'default',  // Use 'default' when no modifier specified
           conditionCount: conditions.length,
           hasVariable: !!variable
+        },
+        location()
+      );
+    }
+
+// -------------------------------------------------------------
+// BARE BLOCK FORM: /when [...] - executes all matching conditions
+// -------------------------------------------------------------
+
+WhenBareBlockForm
+  = DirectiveContext "/when" _ "[" _ conditions:WhenConditionList _ "]" {
+      
+      helpers.debug('WhenBareBlockForm matched', { conditions });
+      
+      const values = {
+        conditions: conditions
+      };
+      
+      // Create raw representation
+      const raw = {
+        conditions: conditions.map(c => ({
+          condition: helpers.reconstructRawString(c.condition),
+          action: c.action ? helpers.reconstructRawString(c.action) : undefined
+        }))
+      };
+      
+      return helpers.createStructuredDirective(
+        'when',
+        'whenBlock',
+        values,
+        raw,
+        {
+          modifier: 'default',  // Bare when has default behavior (execute all matching)
+          conditionCount: conditions.length,
+          hasVariable: false
         },
         location()
       );

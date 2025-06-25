@@ -145,6 +145,11 @@ async function evaluateWhenSwitch(
       let conditionValue: any;
       if (actualCondition.length === 1 && actualCondition[0].type === 'Text') {
         conditionValue = actualCondition[0].content;
+      } else if (actualCondition.length === 1 && actualCondition[0].type === 'ExecInvocation') {
+        // Handle ExecInvocation as a condition
+        const execResult = await evaluateCondition(actualCondition, childEnv);
+        // For exec invocations, we want the boolean result
+        conditionValue = execResult;
       } else {
         // For more complex conditions, evaluate them
         const conditionResult = await evaluate(actualCondition, childEnv);
@@ -346,6 +351,11 @@ async function evaluateFirstMatch(
       // Evaluate the condition value
       if (actualCondition.length === 1 && actualCondition[0].type === 'Text') {
         conditionValue = (actualCondition[0] as any).content;
+      } else if (actualCondition.length === 1 && actualCondition[0].type === 'ExecInvocation') {
+        // Handle ExecInvocation as a condition
+        const execResult = await evaluateCondition(actualCondition, env);
+        // For exec invocations, we want the boolean result
+        conditionValue = execResult;
       } else {
         const conditionResult = await evaluate(actualCondition, env);
         conditionValue = conditionResult.value;
@@ -523,6 +533,75 @@ async function evaluateCondition(
     // Evaluate the inner condition and negate the result
     const innerResult = await evaluateCondition(innerCondition, env, variableName);
     return !innerResult;
+  }
+  
+  // Check if this is an ExecInvocation node
+  if (condition.length === 1 && condition[0].type === 'ExecInvocation') {
+    const execNode = condition[0] as any;
+    
+    // Import the exec invocation evaluator
+    const { evaluateExecInvocation } = await import('./exec-invocation');
+    
+    // Create a child environment for execution
+    const childEnv = env.createChild();
+    
+    // If we have a comparison variable, pass it as the first implicit argument
+    if (variableName) {
+      const variable = env.getVariable(variableName);
+      if (variable) {
+        // Modify the ExecInvocation to include the comparison value as the first argument
+        const modifiedExecNode = {
+          ...execNode,
+          commandRef: {
+            ...execNode.commandRef,
+            args: [
+              // Insert the variable's value as the first argument
+              {
+                type: 'VariableReference',
+                identifier: variableName,
+                nodeId: 'implicit-when-arg',
+                valueType: 'variable'
+              },
+              ...(execNode.commandRef.args || [])
+            ]
+          }
+        };
+        
+        // Execute the modified invocation
+        const result = await evaluateExecInvocation(modifiedExecNode, childEnv);
+        
+        // Check the result for truthiness
+        if (result.stdout !== undefined) {
+          // Command execution result
+          if (result.exitCode !== undefined && result.exitCode !== 0) {
+            return false;
+          }
+          if (result.value !== undefined && result.value !== result.stdout) {
+            return isTruthy(result.value);
+          }
+          return isTruthy(result.stdout.trim());
+        }
+        
+        return isTruthy(result.value);
+      }
+    }
+    
+    // No comparison variable - just execute the function and check its result
+    const result = await evaluateExecInvocation(execNode, childEnv);
+    
+    // Check the result for truthiness
+    if (result.stdout !== undefined) {
+      // Command execution result
+      if (result.exitCode !== undefined && result.exitCode !== 0) {
+        return false;
+      }
+      if (result.value !== undefined && result.value !== result.stdout) {
+        return isTruthy(result.value);
+      }
+      return isTruthy(result.stdout.trim());
+    }
+    
+    return isTruthy(result.value);
   }
   
   // Create a child environment for condition evaluation

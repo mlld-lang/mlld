@@ -28,7 +28,7 @@
 ] => show "Package manager found"
 
 ## Test 4: all modifier
-/when @tools all: [
+/when [
   @has_node() => show "Node.js installed"
   @has_npm() => show "npm installed"
 ]
