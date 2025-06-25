@@ -832,3 +832,38 @@ function extractLegacyValue(variable: Variable): any {
       return variable.value;
   }
 }
+
+// =========================================================================
+// PHASE 2 HELPERS - Executable type recognition
+// =========================================================================
+
+/**
+ * Check if variable is an executable, including imported executables
+ */
+export function isExecutableVariable(variable: Variable): boolean {
+  if (isExecutable(variable)) return true;
+  if (isImported(variable)) {
+    const imported = variable as ImportedVariable;
+    return imported.originalType === 'executable' || 
+           imported.metadata?.originalType === 'executable';
+  }
+  return false;
+}
+
+/**
+ * Get the effective type of a variable, considering imported variables
+ */
+export function getEffectiveType(variable: Variable): VariableTypeDiscriminator {
+  if (isImported(variable)) {
+    return (variable as ImportedVariable).originalType;
+  }
+  return variable.type;
+}
+
+/**
+ * Check for legacy variable types in imported variables
+ */
+export function hasLegacyType(variable: Variable): boolean {
+  return 'type' in variable && typeof variable.type === 'string' && 
+         ['text', 'data', 'path', 'command', 'import'].includes(variable.type);
+}

@@ -8,8 +8,7 @@ import { MlldCommandExecutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint';
 import type { CommandAnalyzer, CommandAnalysis, CommandRisk } from '@security/command/analyzer/CommandAnalyzer';
 import type { SecurityManager } from '@security/SecurityManager';
-import { isExecutable } from '@core/types/variable';
-import { createSimpleTextVariable } from '@core/types/variable';
+import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
 import { executePipeline } from './pipeline';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 
@@ -198,7 +197,7 @@ export async function evaluateRun(
       } else if (typeof value === 'string') {
         // String reference to an executable  
         const variable = env.getVariable(value);
-        if (!variable || !isExecutable(variable)) {
+        if (!variable || !isExecutableVariable(variable)) {
           throw new Error(`Executable variable not found: ${value}`);
         }
         execVar = variable;
@@ -213,7 +212,7 @@ export async function evaluateRun(
       }
       
       const variable = env.getVariable(commandName);
-      if (!variable || !isExecutable(variable)) {
+      if (!variable || !isExecutableVariable(variable)) {
         throw new Error(`Executable variable not found: ${commandName}`);
       }
       execVar = variable;
@@ -316,7 +315,7 @@ export async function evaluateRun(
     } else if (definition.type === 'commandRef') {
       // This command references another command
       const refExecVar = env.getVariable(definition.commandRef);
-      if (!refExecVar || !isExecutable(refExecVar)) {
+      if (!refExecVar || !isExecutableVariable(refExecVar)) {
         throw new Error(`Referenced executable not found: ${definition.commandRef}`);
       }
       

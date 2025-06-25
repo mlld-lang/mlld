@@ -4,6 +4,7 @@ import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
 import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable } from '@core/types/executable';
 import { interpolate, resolveVariableValue } from '../core/interpreter';
+import { isExecutableVariable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError } from '@core/errors';
 import { extractSection } from './show';
@@ -49,7 +50,7 @@ export async function evaluateExecInvocation(
   }
   
   // Ensure it's an executable variable
-  if (variable.type !== 'executable') {
+  if (!isExecutableVariable(variable)) {
     throw new MlldInterpreterError(`Variable ${commandName} is not executable (type: ${variable.type})`);
   }
   

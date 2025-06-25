@@ -79,10 +79,15 @@ function processModuleExports(
       
       // For executable variables, preserve the ExecutableDefinition structure
       if (isExecutableVariable(variable)) {
+        // Get the executable definition from metadata or the variable itself
         const execVar = variable as any;
-        moduleObject[name].__definition = execVar.definition;
-        moduleObject[name].__params = execVar.params;
-        moduleObject[name].__content = execVar.content;
+        const executableDef = execVar.metadata?.executableDef || execVar.definition;
+        
+        if (executableDef) {
+          moduleObject[name].__definition = executableDef;
+          moduleObject[name].__params = execVar.paramNames || execVar.params || [];
+          moduleObject[name].__content = execVar.content || [];
+        }
       }
       // For legacy textTemplate variables, preserve additional metadata
       else if (variable.type === 'textTemplate') {
@@ -518,12 +523,16 @@ async function importFromPath(
         else if (varType === 'command' && value && typeof value === 'object') {
           varType = 'executable';
           importedVariable.type = varType;
-          (importedVariable as any).definition = {
-            type: 'command',
-            params: value.__params || [],
-            command: value.__value || value.__command || []
+          // Store in metadata where evaluators expect it
+          importedVariable.metadata = {
+            ...importedVariable.metadata,
+            executableDef: {
+              type: 'command',
+              params: value.__params || [],
+              command: value.__value || value.__command || []
+            },
+            originalType: 'executable'
           };
-          (importedVariable as any).params = value.__params || [];
         }
         
         env.setVariable(name, importedVariable);
@@ -606,18 +615,25 @@ async function importFromPath(
           
           // For executable variables, restore the full structure
           if (varType === 'executable' && value && typeof value === 'object') {
+            // Store the executable definition in metadata where evaluators expect it
+            let executableDef;
             if ('__definition' in value) {
-              (importedVariable as any).definition = value.__definition;
+              executableDef = value.__definition;
             } else {
               // Legacy textTemplate: create text type definition
-              (importedVariable as any).definition = {
+              executableDef = {
                 type: 'text',
                 params: value.__params || [],
                 content: value.__content || []
               };
             }
-            (importedVariable as any).params = value.__params || [];
-            (importedVariable as any).content = value.__content || [];
+            
+            // Add executable definition to metadata
+            importedVariable.metadata = {
+              ...importedVariable.metadata,
+              executableDef,
+              originalType: 'executable'
+            };
           }
           // For legacy command variables, convert to executable
           else if (varType === 'command' && value && typeof value === 'object') {
@@ -964,18 +980,24 @@ async function importFromResolverContent(
           
           // Restore the full structure for executable variables
           if (value && typeof value === 'object') {
+            let executableDef;
             if ('__definition' in value) {
-              (importedVariable as any).definition = value.__definition;
+              executableDef = value.__definition;
             } else {
               // Legacy textTemplate: create text type definition
-              (importedVariable as any).definition = {
+              executableDef = {
                 type: 'text',
                 params: value.__params || [],
                 content: value.__content || []
               };
             }
-            (importedVariable as any).params = value.__params || [];
-            (importedVariable as any).content = value.__content || [];
+            
+            // Store in metadata where evaluators expect it
+            importedVariable.metadata = {
+              ...importedVariable.metadata,
+              executableDef,
+              originalType: 'executable'
+            };
           }
         } else if (varType === 'command' && value && typeof value === 'object') {
           // Convert legacy command variables to executable
@@ -989,12 +1011,16 @@ async function importFromResolverContent(
             source,
             metadata
           );
-          (importedVariable as any).definition = {
-            type: 'command',
-            params: value.__params || [],
-            command: value.__value || value.__command || []
+          // Store in metadata where evaluators expect it
+          importedVariable.metadata = {
+            ...importedVariable.metadata,
+            executableDef: {
+              type: 'command',
+              params: value.__params || [],
+              command: value.__value || value.__command || []
+            },
+            originalType: 'executable'
           };
-          (importedVariable as any).params = value.__params || [];
         } else if (varType === 'path') {
           // Handle path variables
           const pathValue = varValue as any;
@@ -1085,18 +1111,25 @@ async function importFromResolverContent(
           
           // For executable variables, restore the full structure
           if (varType === 'executable' && value && typeof value === 'object') {
+            // Store the executable definition in metadata where evaluators expect it
+            let executableDef;
             if ('__definition' in value) {
-              (importedVariable as any).definition = value.__definition;
+              executableDef = value.__definition;
             } else {
               // Legacy textTemplate: create text type definition
-              (importedVariable as any).definition = {
+              executableDef = {
                 type: 'text',
                 params: value.__params || [],
                 content: value.__content || []
               };
             }
-            (importedVariable as any).params = value.__params || [];
-            (importedVariable as any).content = value.__content || [];
+            
+            // Add executable definition to metadata
+            importedVariable.metadata = {
+              ...importedVariable.metadata,
+              executableDef,
+              originalType: 'executable'
+            };
           }
           // Create the appropriate variable type based on varType
           if (varType === 'text') {

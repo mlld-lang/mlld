@@ -497,6 +497,7 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
     isPath,
     isPipelineInput,
     isExecutable,
+    isExecutableVariable,
     isImported,
     isComputed,
     isObject,
@@ -532,7 +533,7 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
   } else if (isPipelineInput(variable)) {
     // Pipeline inputs return the text representation by default
     return variable.value.text;
-  } else if (isExecutable(variable)) {
+  } else if (isExecutableVariable(variable)) {
     // Executables can't be directly interpolated
     throw new Error(`Cannot interpolate executable ${variable.name}. Use invocation: @${variable.name}()`);
   } else if (isImported(variable)) {
