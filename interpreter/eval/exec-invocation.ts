@@ -242,10 +242,26 @@ export async function evaluateExecInvocation(
     const codeParams: Record<string, any> = {};
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
-      const argValue = evaluatedArgs[i];
-      // Always include the parameter, even if undefined
-      // This ensures the code can reference all declared parameters
-      codeParams[paramName] = argValue;
+      
+      // Check if this parameter is a pipeline input variable
+      const paramVar = execEnv.getVariable(paramName);
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('Checking parameter:', {
+          paramName,
+          hasParamVar: !!paramVar,
+          paramVarType: paramVar?.type,
+          isPipelineInput: paramVar?.type === 'pipeline-input'
+        });
+      }
+      if (paramVar && paramVar.type === 'pipeline-input') {
+        // Pass the pipeline input object directly for code execution
+        codeParams[paramName] = paramVar.value;
+      } else {
+        const argValue = evaluatedArgs[i];
+        // Always include the parameter, even if undefined
+        // This ensures the code can reference all declared parameters
+        codeParams[paramName] = argValue;
+      }
     }
     
     // Execute the code with parameters
@@ -417,7 +433,9 @@ export async function evaluateExecInvocation(
   
   // Apply withClause transformations if present
   if (node.withClause) {
-    return applyWithClause(result, node.withClause, env);
+    // applyWithClause expects a string input
+    const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
+    return applyWithClause(stringResult, node.withClause, env);
   }
   
   return {

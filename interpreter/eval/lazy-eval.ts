@@ -107,6 +107,15 @@ export async function evaluateDataValue(
       throw new Error(`Variable not found: ${value.identifier}`);
     }
     
+    // Import type guard to check if it's an executable
+    const { isExecutableVariable } = await import('@core/types/variable');
+    
+    // If it's an executable reference without invocation, return the variable itself
+    // This allows storing executable references in objects
+    if (isExecutableVariable(baseVar) && (!value.fields || value.fields.length === 0)) {
+      return baseVar;
+    }
+    
     // Resolve the variable value
     const { resolveVariableValue } = await import('../core/interpreter');
     let result = await resolveVariableValue(baseVar, env);

@@ -193,8 +193,8 @@ export async function evaluateShow(
         content = value.join('\n\n');
       } else {
         // For other arrays, use JSON format (this preserves the original behavior)
-        // Always use compact format for arrays
-        const indent = undefined;
+        // Use proper indentation for arrays (2 spaces)
+        const indent = 2;
         
         content = JSON.stringify(value, (key, val) => {
           // Convert VariableReference nodes to their string representation

@@ -236,7 +236,10 @@ export async function evaluateVar(
     // Handle field access if present
     if (valueNode.fields && valueNode.fields.length > 0) {
       const { accessField } = await import('../utils/field-access');
-      resolvedValue = await accessField(resolvedValue, valueNode.fields, valueNode.identifier);
+      // Apply each field access in sequence
+      for (const field of valueNode.fields) {
+        resolvedValue = accessField(resolvedValue, field);
+      }
     }
     
   } else if (Array.isArray(valueNode)) {

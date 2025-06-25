@@ -39,6 +39,15 @@ export async function executePipeline(
     const pipelineEnv = env.createChild();
     
     // Create pipeline input variable for this stage
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Creating pipeline input:', {
+        stage: i + 1,
+        currentOutputType: typeof currentOutput,
+        currentOutputLength: typeof currentOutput === 'string' ? currentOutput.length : 'N/A',
+        currentOutputSample: typeof currentOutput === 'string' ? currentOutput.substring(0, 100) : String(currentOutput),
+        format: format || 'text'
+      });
+    }
     const pipelineInputObj = createPipelineInput(currentOutput, format || 'text');
     const inputSource: VariableSource = {
       directive: 'var',
@@ -422,7 +431,7 @@ async function executeCommandVariable(
         console.log('Parameter binding check:', {
           i,
           paramName,
-          stdinInput: stdinInput ? stdinInput.substring(0, 50) + '...' : undefined,
+          stdinInput: stdinInput ? String(stdinInput).substring(0, 50) + '...' : undefined,
           hasPipelineCtx: !!pipelineCtx,
           isPipelineParam,
           argValue: argValue ? String(argValue).substring(0, 50) + '...' : null
@@ -465,7 +474,7 @@ async function executeCommandVariable(
             console.log('Creating pipeline parameter:', {
               paramName,
               format,
-              textValue: textValue.substring(0, 50) + '...',
+              textValue: typeof textValue === 'string' ? textValue.substring(0, 50) + '...' : String(textValue),
               wrappedInputKeys: Object.keys(wrappedInput)
             });
           }
@@ -592,6 +601,13 @@ async function executeCommandVariable(
           }
         }
       }
+    }
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Executing code with params:', {
+        paramNames: Object.keys(params),
+        paramTypes: Object.entries(params).map(([k, v]) => [k, typeof v, v?.constructor?.name])
+      });
     }
     
     const result = await env.executeCode(code, execDef.language || 'javascript', params);

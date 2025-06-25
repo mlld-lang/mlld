@@ -96,6 +96,10 @@ export function createPipelineInput(text: string, format: string = 'json'): Pipe
               if (process.env.MLLD_DEBUG === 'true') {
                 console.log('Parsing JSON from text:', this.text);
                 console.log('Text length:', this.text.length);
+                console.log('Text type:', typeof this.text);
+                console.log('this object:', this);
+                console.log('this.constructor:', this.constructor?.name);
+                console.log('First 200 chars:', typeof this.text === 'string' ? this.text.substring(0, 200) : 'NOT A STRING');
               }
               this._parsed = JSON.parse(this.text);
             } catch (e: any) {
@@ -163,6 +167,10 @@ export function createPipelineInput(text: string, format: string = 'json'): Pipe
   // Add toString() for backwards compatibility
   Object.defineProperty(input, 'toString', {
     value: function() {
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('PipelineInput.toString() called - returning text property');
+        console.trace('toString call stack');
+      }
       return this.text;
     },
     enumerable: false,
