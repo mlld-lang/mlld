@@ -717,7 +717,7 @@ export class Environment {
       return value;
     }
     
-    if (type === 'text' && typeof value === 'string') {
+    if ((type === 'text' || type === 'simple-text') && typeof value === 'string') {
       if (value.length > maxLength) {
         return `${value.substring(0, maxLength)}... (${value.length} chars)`;
       }
