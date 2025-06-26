@@ -302,7 +302,7 @@ describe('Import Content Type Validation', () => {
       await fileSystem.writeFile('/data.json', '{"key": "value"}');
       
       const code = `/import { key } from "./data.json"
-/add @key`;
+/show @key`;
       
       const result = await interpret(code, {
         fileSystem,

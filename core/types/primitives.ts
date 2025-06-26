@@ -135,24 +135,30 @@ export interface FormattingMetadata {
 export type DirectiveKind = 
   | 'run'
   | 'import'
-  | 'add'
-  | 'exec'
-  | 'text'
+  | 'var'
+  | 'show'
+  | 'exe'
   | 'path'
-  | 'data'
   | 'output'
   | 'when';
 
 export type DirectiveSubtype = 
+  // Import subtypes
   | 'importAll' | 'importSelected'
-  | 'addPath' | 'addVariable' | 'addTemplate' | 'addPathSection' | 'addTemplateInvocation'
-  | 'textAssignment' | 'textTemplate' | 'textPath' | 'textPathSection' | 'textTemplateDefinition'
-  | 'dataAssignment'
+  // Unified var subtype
+  | 'var'
+  // Unified show subtypes  
+  | 'show' | 'showInvocation' | 'showPath' | 'showVariable' | 'showTemplate'
+  // Unified exe subtype
+  | 'exe'
+  // Path subtypes
   | 'pathAssignment'
+  // Run subtypes
   | 'runCommand' | 'runExec' | 'runCode'
-  | 'execCode' | 'execCommand' | 'environment'
+  // Output subtypes
   | 'outputResolver' | 'outputFile' | 'outputCommand'
-  | 'whenSimple' | 'whenBlock';
+  // When subtypes
+  | 'whenSimple' | 'whenBlock' | 'whenSwitch';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

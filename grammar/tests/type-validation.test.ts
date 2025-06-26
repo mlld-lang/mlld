@@ -26,29 +26,18 @@ describe('Grammar-Type System Alignment', () => {
       expect(isDirectiveNode(directive)).toBe(true);
       expect(directive.kind).toBe('var');
       
-      // Check subtype is valid
-      const validVarSubtypes: DirectiveSubtype[] = [
-        'textAssignment', 
-        'textTemplate',
-        'textPath',
-        'textPathSection',
-        'textTemplateDefinition',
-        'dataAssignment',
-        'dataForeach',
-        'dataPath',
-        'dataTemplate'
-      ];
-      expect(validVarSubtypes).toContain(directive.subtype);
+      // Check subtype is valid - unified var system uses 'var' subtype
+      expect(directive.subtype).toBe('var');
       
       // Check required properties exist
       expect(directive.values).toBeDefined();
       expect(directive.raw).toBeDefined();
       expect(directive.meta).toBeDefined();
       
-      // Check values structure
+      // Check values structure - unified var has 'value' not 'content'
       expect(directive.values.identifier).toBeDefined();
-      expect(Array.isArray(directive.values.identifier)).toBe(true);
-      expect(directive.values.content).toBeDefined();
+      expect(directive.values.identifier.identifier).toBe('greeting');
+      expect(directive.values.value).toBeDefined();
     });
 
     it('should produce valid textTemplate nodes', async () => {
@@ -58,8 +47,10 @@ describe('Grammar-Type System Alignment', () => {
       
       const directive = ast[0];
       expect(directive.kind).toBe('var');
-      expect(directive.subtype).toBe('textTemplate');
-      expect(directive.meta.hasVariables).toBe(true);
+      // Unified var system uses 'var' subtype for all variables
+      expect(directive.subtype).toBe('var');
+      // Meta contains inferred type info
+      expect(directive.meta.inferredType).toBe('template');
     });
 
     it('should reject invalid text subtypes', async () => {
@@ -70,16 +61,8 @@ describe('Grammar-Type System Alignment', () => {
       const ast = result.ast;
       
       const directive = ast[0];
-      const validTextSubtypes: DirectiveSubtype[] = [
-        'textAssignment', 
-        'textTemplate',
-        'textPath',
-        'textPathSection',
-        'textTemplateDefinition'
-      ];
-      
-      // This should now pass
-      expect(validTextSubtypes).toContain(directive.subtype);
+      // Unified var system uses 'var' subtype
+      expect(directive.subtype).toBe('var');
     });
   });
 
@@ -90,7 +73,8 @@ describe('Grammar-Type System Alignment', () => {
       const ast = result.ast;
       
       const directive = ast[0];
-      expect(directive.subtype).toBe('dataAssignment'); // Currently fails
+      // Unified var system uses 'var' subtype for all variables
+      expect(directive.subtype).toBe('var');
     });
   });
 
@@ -102,20 +86,22 @@ describe('Grammar-Type System Alignment', () => {
       
       const directive = ast[0];
       expect(directive.kind).toBe('var');
-      expect(directive.subtype).toBe('textTemplate');
+      expect(directive.subtype).toBe('var');
       
-      const content = directive.values.content;
-      expect(content).toBeDefined();
-      expect(Array.isArray(content)).toBe(true);
+      // The value IS the template content (array of nodes)
+      const value = directive.values.value;
+      expect(value).toBeDefined();
+      expect(Array.isArray(value)).toBe(true);
       
-      const varRef = content.find(node => isVariableReferenceNode(node));
+      // Find variable reference in the template content
+      const varRef = findVariableReference(value);
       
       expect(varRef).toBeDefined();
       expect(varRef.identifier).toBe('user');
       expect(varRef.fields).toBeDefined();
       expect(Array.isArray(varRef.fields)).toBe(true);
       
-      // Should NOT have both valueType and isVariableReference
+      // Should NOT have deprecated properties
       expect(varRef.isVariableReference).toBeUndefined();
     });
   });
@@ -162,6 +148,25 @@ describe('Grammar-Type System Alignment', () => {
     });
   });
 });
+
+// Helper to find variable reference in nested structure
+function findVariableReference(nodes: any[]): any {
+  for (const node of nodes) {
+    if (isVariableReferenceNode(node)) {
+      return node;
+    }
+    if (Array.isArray(node)) {
+      const found = findVariableReference(node);
+      if (found) return found;
+    } else if (node && typeof node === 'object') {
+      if (node.content && Array.isArray(node.content)) {
+        const found = findVariableReference(node.content);
+        if (found) return found;
+      }
+    }
+  }
+  return null;
+}
 
 // Helper to walk AST
 function walkAst(node: any, visitor: (node: any) => void) {

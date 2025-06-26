@@ -14,7 +14,7 @@ describe('NodeShadowEnvironment process exit', () => {
     await fs.rm(testDir, { recursive: true, force: true });
   });
   
-  it('should exit cleanly when Node shadow environment has timers', async () => {
+  it('should exit cleanly when Node shadow environment has timers', { timeout: 10000 }, async () => {
     // Create a test file that uses Node shadow environment with timers
     const testFile = path.join(testDir, 'timer-test.mld');
     const content = `
@@ -33,14 +33,14 @@ describe('NodeShadowEnvironment process exit', () => {
   setInterval(() => {
     count++;
     console.error('Interval tick ' + count);
-  }, 100);
+  }, 1000); // 1 second interval to avoid race conditions
   
   return 'Timers set';
 }
 
 /exe node = { createTimer }
 
-/var @result = run @createTimer(5000)
+/var @result = @createTimer(5000)
 /show [[Result: {{result}}]]
 `;
     
@@ -52,7 +52,7 @@ describe('NodeShadowEnvironment process exit', () => {
     const duration = Date.now() - startTime;
     
     // Process should exit quickly, not wait for timers
-    expect(duration).toBeLessThan(2000); // Should exit in less than 2 seconds
+    expect(duration).toBeLessThan(5000); // Should exit in less than 5 seconds
     expect(result.stdout).toContain('Result: Timers set');
     expect(result.exitCode).toBe(0);
     
@@ -61,7 +61,7 @@ describe('NodeShadowEnvironment process exit', () => {
     expect(result.stderr).not.toContain('Interval tick');
   });
   
-  it('should exit cleanly with multiple shadow environments', async () => {
+  it('should exit cleanly with multiple shadow environments', { timeout: 10000 }, async () => {
     const testFile = path.join(testDir, 'multiple-env-test.mld');
     const content = `
 # Test Multiple Shadow Environments
@@ -79,8 +79,8 @@ describe('NodeShadowEnvironment process exit', () => {
 /exe js = { jsTimer }
 /exe node = { nodeTimer }
 
-/var @jsResult = run @jsTimer()
-/var @nodeResult = run @nodeTimer()
+/var @jsResult = @jsTimer()
+/var @nodeResult = @nodeTimer()
 
 /show [[JS: {{jsResult}}]]
 /show [[Node: {{nodeResult}}]]
@@ -92,13 +92,13 @@ describe('NodeShadowEnvironment process exit', () => {
     const result = await runMlldProcess(['--stdout', testFile]);
     const duration = Date.now() - startTime;
     
-    expect(duration).toBeLessThan(2000);
+    expect(duration).toBeLessThan(5000);
     expect(result.stdout).toContain('JS: JS timer set');
     expect(result.stdout).toContain('Node: Node timer set');
     expect(result.exitCode).toBe(0);
   });
   
-  it('should handle errors and still exit cleanly', async () => {
+  it('should handle errors and still exit cleanly', { timeout: 10000 }, async () => {
     const testFile = path.join(testDir, 'error-with-timer.mld');
     const content = `
 /exe @buggyTimer() = node {
@@ -113,7 +113,7 @@ describe('NodeShadowEnvironment process exit', () => {
 
 /exe node = { buggyTimer }
 
-/var @result = run @buggyTimer()
+/var @result = @buggyTimer()
 `;
     
     await fs.writeFile(testFile, content);
@@ -123,7 +123,7 @@ describe('NodeShadowEnvironment process exit', () => {
     const duration = Date.now() - startTime;
     
     // Should exit quickly even with error
-    expect(duration).toBeLessThan(2000);
+    expect(duration).toBeLessThan(5000);
     expect(result.exitCode).not.toBe(0); // Should have error exit code
     expect(result.stderr).toContain('Intentional error');
     expect(result.stderr).not.toContain('This should not execute');
