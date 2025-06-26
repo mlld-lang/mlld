@@ -98,11 +98,9 @@ export async function evaluateVar(
 
   // Type-based routing based on the AST structure
   let resolvedValue: any;
-  let variableType: 'text' | 'data' = 'text'; // Default to text
   
   if (valueNode.type === 'array') {
     // Array literal: [1, 2, 3] or [,]
-    variableType = 'data';
     
     // Check if this array has complex items that need lazy evaluation
     const isComplex = hasComplexArrayItems(valueNode.items || valueNode.elements || []);
@@ -140,7 +138,6 @@ export async function evaluateVar(
     
   } else if (valueNode.type === 'object') {
     // Object literal: { "key": "value" }
-    variableType = 'data';
     
     // Check if this object has complex values that need lazy evaluation
     const isComplex = hasComplexValues(valueNode.properties);
@@ -174,7 +171,6 @@ export async function evaluateVar(
     
   } else if (valueNode.type === 'section') {
     // Section extraction: [file.md # Section]
-    variableType = 'text';
     const filePath = await interpolate(valueNode.path, env);
     const sectionName = await interpolate(valueNode.section, env);
     
@@ -194,7 +190,6 @@ export async function evaluateVar(
     
   } else if (valueNode.type === 'path') {
     // Path dereference: [README.md]
-    variableType = 'text';
     const filePath = await interpolate(valueNode.segments, env);
     resolvedValue = await env.readFile(filePath);
     
@@ -205,11 +200,9 @@ export async function evaluateVar(
     resolvedValue = result.value;
     
     // Infer variable type from result
-    variableType = (typeof resolvedValue === 'object' && resolvedValue !== null) ? 'data' : 'text';
     
   } else if (valueNode.type === 'command') {
     // Shell command: run { echo "hello" }
-    variableType = 'text';
     
     // Check if we have parsed command nodes (new) or raw string (legacy)
     if (Array.isArray(valueNode.command)) {
@@ -229,7 +222,6 @@ export async function evaluateVar(
     }
     
     // Copy the variable type from source
-    variableType = sourceVar.type === 'data' ? 'data' : 'text';
     const { resolveVariableValue } = await import('../core/interpreter');
     resolvedValue = await resolveVariableValue(sourceVar, env);
     
@@ -260,23 +252,19 @@ export async function evaluateVar(
     // For backtick templates, we should extract the text content directly
     // Check if this is a simple text array (backtick template)
     if (valueNode.length === 1 && valueNode[0].type === 'Text' && directive.meta?.wrapperType === 'backtick') {
-      variableType = 'text';
-      resolvedValue = valueNode[0].content;
+        resolvedValue = valueNode[0].content;
     } else {
       // Template or string content - need to interpolate
-      variableType = 'text';
-      resolvedValue = await interpolate(valueNode, env);
+        resolvedValue = await interpolate(valueNode, env);
     }
     
   } else if (valueNode.type === 'Text' && 'content' in valueNode) {
     // Simple text content
-    variableType = 'text';
     resolvedValue = valueNode.content;
     
   } else if (valueNode && valueNode.type === 'foreach-command') {
     // Handle foreach expressions
     const { evaluateForeachCommand } = await import('./data-value-evaluator');
-    variableType = 'data';
     resolvedValue = await evaluateForeachCommand(valueNode, env);
     
   } else if (valueNode && valueNode.type === 'ExecInvocation') {
@@ -286,7 +274,6 @@ export async function evaluateVar(
     resolvedValue = result.value;
     
     // Infer variable type from result
-    variableType = (typeof resolvedValue === 'object' && resolvedValue !== null) ? 'data' : 'text';
     
   } else if (valueNode && valueNode.type === 'VariableReferenceWithTail') {
     // Variable with tail modifiers (e.g., @var @result = @data with { pipeline: [@transform] })
@@ -324,11 +311,9 @@ export async function evaluateVar(
     }
     
     resolvedValue = result;
-    variableType = 'text'; // Pipeline output is always text
     
   } else {
     // Default case - try to interpolate as text
-    variableType = 'text';
     if (process.env.MLLD_DEBUG === 'true') {
       console.log('var.ts: Default case for valueNode:', valueNode);
     }

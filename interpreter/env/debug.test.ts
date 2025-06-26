@@ -86,12 +86,13 @@ describe('@DEBUG variable', () => {
     const output1 = debug1?.value as string;
     
     // Add a user variable
-    env.setVariable('testVar', {
-      type: 'text',
-      value: 'test value',
-      nodeId: 'test-node',
-      location: { line: 1, column: 1 }
-    });
+    const { createSimpleTextVariable } = await import('@core/types/variable');
+    env.setVariable('testVar', createSimpleTextVariable(
+      'testVar',
+      'test value',
+      { directive: 'var', syntax: 'quoted', hasInterpolation: false, isMultiLine: false },
+      { definedAt: { line: 1, column: 1 } }
+    ));
     
     // Get DEBUG again - should include the new variable
     const debug2 = env.getVariable('DEBUG');

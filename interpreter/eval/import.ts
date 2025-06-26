@@ -867,17 +867,8 @@ async function evaluateResolverImport(
           const value = exportData[format];
           
           if (value !== undefined) {
-            env.setVariable(varName, {
-              type: typeof value === 'string' ? 'text' : 'data',
-              value: value,
-              nodeId: '',
-              location: directive.location || { line: 0, column: 0 },
-              metadata: {
-                isImported: true,
-                importPath: `@${resolverName}`,
-                definedAt: directive.location || { line: 0, column: 0, filePath: env.getCurrentFilePath() }
-              }
-            });
+            const importedVariable = createVariableFromValue(varName, value, `@${resolverName}`, format);
+            env.setVariable(varName, importedVariable);
           } else {
             throw new Error(`Format '${format}' not supported by resolver '${resolverName}'`);
           }
