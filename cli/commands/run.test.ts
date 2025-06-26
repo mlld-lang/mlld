@@ -14,15 +14,24 @@ vi.mock('@core/registry/LockFile', () => ({
     data: {}
   }))
 }));
+vi.mock('@core/utils/findProjectRoot', () => ({
+  findProjectRoot: vi.fn().mockResolvedValue('/test/project')
+}));
+vi.mock('@services/fs/NodeFileSystem', () => ({
+  NodeFileSystem: vi.fn().mockImplementation(() => ({}))
+}));
 
 describe('RunCommand', () => {
   let runCommand: RunCommand;
   const mockCwd = '/test/project';
   
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Ensure findProjectRoot is mocked before creating RunCommand
+    const { findProjectRoot } = await import('@core/utils/findProjectRoot');
+    vi.mocked(findProjectRoot).mockResolvedValue('/test/project');
+    
     runCommand = new RunCommand();
     vi.spyOn(process, 'cwd').mockReturnValue(mockCwd);
-    vi.clearAllMocks();
   });
   
   afterEach(() => {
@@ -34,7 +43,7 @@ describe('RunCommand', () => {
       vi.mocked(existsSync).mockReturnValue(false);
       
       const dir = await (runCommand as any).getScriptDirectory();
-      expect(dir).toBe('llm/run');
+      expect(dir).toBe('/test/project/llm/run');
     });
     
     it('should read script directory from lock file', async () => {
@@ -50,10 +59,14 @@ describe('RunCommand', () => {
         }
       } as any));
       
+      // Ensure findProjectRoot is mocked for new instance
+      const { findProjectRoot } = await import('@core/utils/findProjectRoot');
+      vi.mocked(findProjectRoot).mockResolvedValue('/test/project');
+      
       // Create a new instance to test
       const testCommand = new RunCommand();
       const dir = await (testCommand as any).getScriptDirectory();
-      expect(dir).toBe('custom/scripts');
+      expect(dir).toBe('/test/project/custom/scripts');
     });
   });
   
@@ -73,6 +86,10 @@ describe('RunCommand', () => {
         'readme.txt',
         'data.json'
       ] as any);
+      
+      // Ensure findProjectRoot is mocked for new instance
+      const { findProjectRoot } = await import('@core/utils/findProjectRoot');
+      vi.mocked(findProjectRoot).mockResolvedValue('/test/project');
       
       // Create a new instance to avoid issues with mocked LockFile
       const testCommand = new RunCommand();

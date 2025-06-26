@@ -13,6 +13,7 @@ import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { interpret } from '@interpreter/index';
 import { cliLogger } from '@core/utils/logger';
+import { findProjectRoot } from '@core/utils/findProjectRoot';
 
 export interface RunOptions {
   // Future options like --watch, --env, etc
@@ -20,12 +21,18 @@ export interface RunOptions {
 
 export class RunCommand {
   private scriptDir: string = 'llm/run';
+  private fileSystem: NodeFileSystem;
   
-  constructor() {}
+  constructor() {
+    this.fileSystem = new NodeFileSystem();
+  }
 
   private async getScriptDirectory(): Promise<string> {
+    // Find the project root first
+    const projectRoot = await findProjectRoot(process.cwd(), this.fileSystem);
+    
     // Check if mlld.lock.json exists and has script directory configured
-    const lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
+    const lockFilePath = path.join(projectRoot, 'mlld.lock.json');
     
     if (existsSync(lockFilePath)) {
       const lockFile = new LockFile(lockFilePath);
@@ -36,19 +43,19 @@ export class RunCommand {
       }
     }
     
-    return this.scriptDir;
+    // Return the script directory relative to project root
+    return path.join(projectRoot, this.scriptDir);
   }
 
   async listScripts(): Promise<string[]> {
     const scriptDir = await this.getScriptDirectory();
-    const fullPath = path.resolve(scriptDir);
     
-    if (!existsSync(fullPath)) {
+    if (!existsSync(scriptDir)) {
       return [];
     }
     
     try {
-      const files = await fs.readdir(fullPath);
+      const files = await fs.readdir(scriptDir);
       // Filter for .mld files and remove extension
       return files
         .filter(file => file.endsWith('.mld'))
@@ -61,16 +68,15 @@ export class RunCommand {
 
   async findScript(scriptName: string): Promise<string | null> {
     const scriptDir = await this.getScriptDirectory();
-    const fullPath = path.resolve(scriptDir);
     
     // Try with .mld extension
-    const scriptPath = path.join(fullPath, `${scriptName}.mld`);
+    const scriptPath = path.join(scriptDir, `${scriptName}.mld`);
     if (existsSync(scriptPath)) {
       return scriptPath;
     }
     
     // Try exact name (in case they included extension)
-    const exactPath = path.join(fullPath, scriptName);
+    const exactPath = path.join(scriptDir, scriptName);
     if (existsSync(exactPath) && exactPath.endsWith('.mld')) {
       return exactPath;
     }
