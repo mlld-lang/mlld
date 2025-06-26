@@ -85,34 +85,32 @@ const identifierNodes = directive.values?.identifier;
 const identifier = await interpolate(identifierNodes, env);
 ```
 
-## Meld Syntax Rules
+## Mlld Syntax Rules
 
-**Meld is a scripting language embedded in Markdown documents** - it enhances Markdown with dynamic content generation while preserving the readability of the source document.
+**Mlld is a scripting language embedded in Markdown documents** - it enhances Markdown with dynamic content generation while preserving the readability of the source document.
 
 ### Core Syntax Principles
-1. **Directives only at start of lines** - mlld syntax is only interpreted in lines that start with a mlld directive
+1. **Directives only at start of lines** - mlld syntax is only interpreted in lines that start with a `/` directive
    - Exception: `run` can be used on RHS of `/var` and `/exe` definitions (without `@`)
    - Exception: Directives can be used in RHS of `/var` object definitions
 2. **Variables are created with `@`** - `/var @name = "value"` (not `/var name`)
-3. **Variables are referenced with `@`** - Use `@name` in directives, `{{name}}` in templates
+3. **Variables are referenced with `@`** - Use `@name` in directives and backtick templates
 4. **Commands require braces or quotes** - `/run {echo "hello"}` or `/run "echo hello"`
 5. **Only `/run`, `/show`, and `/output` produce output** - Other directives define or assign but don't output
 6. **Markdown-first design** - Everything that isn't a directive line is treated as regular Markdown
+7. **Comments use `>>`** - `>> This is a comment` at line start or `code >> comment` at line end
 
 ### Variable References
 - In directives: `@variable` or `@object.field.subfield`
-- In templates `[[...]]`: `{{variable}}` or `{{object.field.subfield}}`
-- Context specific: "double brackets, double braces" is the rule: "literal text for @var and {{var}}",  [@var interpolation], [[template with {{var}} interpolation]]
-- No mixing: Can't do `{{variable.@other.field}}` or `@{{variable}}`
-- Plain text: `@variable` is literal text, not a reference
+- In backtick templates `` `...` ``: `@variable` or `@object.field`
+- In commands `{...}` or `"..."`: `@variable` interpolation works
+- Plain text: `@variable` in non-directive lines is literal text, not a reference
 
 ### Templates and Interpolation
-- Templates use double brackets: `[[...]]`
-- Only `{{variable}}` syntax works inside templates
-- `@` symbols in templates are literal characters
-- Directives inside templates are NOT executed - they're literal text
-- Field access: `{{user.name}}` or `{{items.0.value}}`
-- Backtick templates: `` `text with @var interpolation` `` - simpler alternative to `[[text with {{var}}]]`
+- **Primary syntax - Backtick templates**: `` `text with @var interpolation` `` - simple and clean
+- **Double quotes**: `"Hello @name"` - `@` variables are interpolated in commands and some contexts
+- **Single quotes**: `'Hello @name'` - No interpolation, literal text
+- Field access: `@user.name` in backticks and directives
 
 ### Exe Commands
 - `/exe @name(params) = run {command}` - Defines a reusable command
@@ -133,13 +131,13 @@ const identifier = await interpolate(identifierNodes, env);
 - Modules use @ prefix for registry modules and private resolvers (no quotes)
 
 ### Common Mistakes to Avoid
-- trying to treat mlld like a template langauge -- it's not; it's a programming language embedded in markdown, so it only works for lines starting with a / directive
+- Trying to treat mlld like a template language -- it's not; it's a scripting language embedded in markdown, so it only works for lines starting with a `/` directive
 - ❌ `/run echo "hello"` → ✅ `/run {echo "hello"}` or `/run "echo hello"`
 - ❌ `/var myvar = "value"` → ✅ `/var @myvar = "value"`
-- ❌ `/var @result = run {cmd}` → ✅ `/var @result = run {cmd}`
-- ❌ `Hello @name!` → ✅ `/var @greeting = "Hello @name!"` then `/show @greeting`
-- ❌ `{{@variable}}` → ✅ `{{variable}}`
-- ❌ `/path @config = env.paths.dev` → ✅ `/path @config = @env.paths.dev`
+- ❌ `/var @result = @run {cmd}` → ✅ `/var @result = run {cmd}` (no @ before run)
+- ❌ `Hello @name!` → ✅ `/show `Hello @name!`` or `/var @greeting = "Hello!"` then `/show @greeting`
+- ❌ Forgetting braces or quotes in commands
+- ❌ Trying to interpolate in plain text lines
 
 ### Conditional Logic (/when)
 - `/when @condition => @action` - Simple one-line conditional
@@ -180,6 +178,13 @@ const identifier = await interpolate(identifierNodes, env);
 - Stored in `mlld.lock.json` under `security.allowedEnv`
 - Import in files: `/import { GITHUB_TOKEN } from @INPUT`
 - Fail-fast: mlld validates required vars exist at startup
+
+### Output Directive (/output)
+- File output: `/output @content to "path/to/file.txt"`
+- Stream output: `/output @message to stdout` or `/output @error to stderr`
+- Environment variables: `/output @value to env:MY_VAR`
+- Format conversion: `/output @data to "file.json" as json`
+- Conditional output: `/when @condition => /output @result to "output.txt"`
 
 ### With Clauses (when merged from feature branch)
 - Transform output: `/run {cmd} with { pipeline: [@transform1, @transform2] }`

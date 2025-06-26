@@ -113,7 +113,7 @@ Create a new mlld module file with interactive setup. Creates `.mld.md` files by
 **Location-Aware Creation:**
 If you have a local module directory configured (via `mlld setup --local`), the init command will prompt you to create the module there:
 ```
-Create module in llm/modules? [Y/n] (Lets you @import @local/modulename)
+Create module in llm/modules? [Y/n] (Lets you /import @local/modulename)
 ```
 
 This makes your module immediately available for import without additional configuration.
@@ -394,7 +394,7 @@ When working with mlld modules, it's important to understand how relative paths 
 
 This means:
 - If your module is at `/projects/mymodule/utils.mld`
-- And it contains `@import { config } from "./config.mld"`
+- And it contains `/import { config } from "./config.mld"`
 - The path resolves to `/projects/mymodule/config.mld`
 
 This behavior ensures modules are:
@@ -404,14 +404,14 @@ This behavior ensures modules are:
 
 **Example:**
 ```mlld
-# In file: /home/user/modules/string-utils.mld
+>> In file: /home/user/modules/string-utils.mld
 
-# This always resolves relative to string-utils.mld's location
-@import { helpers } from "./lib/helpers.mld"  # → /home/user/modules/lib/helpers.mld
+>> This always resolves relative to string-utils.mld's location
+/import { helpers } from "./lib/helpers.mld"  >> → /home/user/modules/lib/helpers.mld
 
-# Even if you run mlld from a different directory:
-# cd /tmp && mlld /home/user/modules/string-utils.mld
-# The import still resolves to /home/user/modules/lib/helpers.mld
+>> Even if you run mlld from a different directory:
+>> cd /tmp && mlld /home/user/modules/string-utils.mld
+>> The import still resolves to /home/user/modules/lib/helpers.mld
 ```
 
 This design makes modules reliable and reusable across different projects and execution contexts.
@@ -437,20 +437,20 @@ Utility functions for text formatting and dates. Perfect for blogs, documentatio
 ## tldr
 
 ```mlld-run
-@import { formatDate, capitalize, greeting } from @alice/utils
+/import { formatDate, capitalize, greeting } from @alice/utils
 
-@text today = [[Today is {{formatDate(@TIME)}}]]
-@add @today
+/var @today = [[Today is {{formatDate(@TIME)}}]]
+/show @today
 ```
 
 ## export
 
 ```mlld-run
-@text formatDate(dateStr) = [[{{dateStr | format("YYYY-MM-DD")}}]]
-@text capitalize(text) = [[{{text | title}}]]
-@text greeting(name) = [[Hello, {{capitalize(@name)}}!]]
+/exe @formatDate(dateStr) = [[{{dateStr | format("YYYY-MM-DD")}}]]
+/exe @capitalize(text) = [[{{text | title}}]]
+/exe @greeting(name) = [[Hello, {{capitalize(@name)}}!]]
 
-@data module = {
+/var @module = {
   formatDate: @formatDate,
   capitalize: @capitalize,
   greeting: @greeting
@@ -464,8 +464,8 @@ Utility functions for text formatting and dates. Perfect for blogs, documentatio
 Formats a date string to YYYY-MM-DD format.
 
 ```mlld
-@text myDate = [[{{formatDate("2024-01-15T10:30:00Z")}}]]
-@add @myDate
+/var @myDate = [[{{formatDate("2024-01-15T10:30:00Z")}}]]
+/show @myDate
 ```
 
 Output: `2024-01-15`
@@ -475,8 +475,8 @@ Output: `2024-01-15`
 Capitalizes the first letter of each word.
 
 ```mlld
-@text title = [[{{capitalize("hello world")}}]]
-@add @title
+/var @title = [[{{capitalize("hello world")}}]]
+/show @title
 ```
 
 Output: `Hello World`
@@ -486,8 +486,8 @@ Output: `Hello World`
 Creates a personalized greeting message.
 
 ```mlld
-@text welcome = [[{{greeting("Alice")}}]]
-@add @welcome
+/var @welcome = [[{{greeting("Alice")}}]]
+/show @welcome
 ```
 
 Output: `Hello, Alice!`
@@ -547,14 +547,14 @@ license: CC0
 mlld-version: 1.0.0-rc-12
 ---
 
-@text formatDate(dateStr) = [[{{dateStr | format("YYYY-MM-DD")}}]]
+/exe @formatDate(dateStr) = [[{{dateStr | format("YYYY-MM-DD")}}]]
 
-@text capitalize(text) = [[{{text | title}}]]
+/exe @capitalize(text) = [[{{text | title}}]]
 
-@text greeting(name) = [[Hello, {{capitalize(@name)}}!]]
+/exe @greeting(name) = [[Hello, {{capitalize(@name)}}!]]
 
-# Explicit module export - defines what's available to importers
-@data module = {
+>> Explicit module export - defines what's available to importers
+/var @module = {
   formatDate: @formatDate,
   capitalize: @capitalize,
   greeting: @greeting
@@ -582,48 +582,48 @@ This automatically detects JavaScript packages, Python imports, shell commands, 
 
 mlld supports multiple export patterns to fit different module design needs:
 
-##### 1. Explicit Module Export (`@data module`)
+##### 1. Explicit Module Export (`/var @module`)
 
-The `@data module = { ... }` pattern gives you complete control over exports:
+The `/var @module = { ... }` pattern gives you complete control over exports:
 
 ```mlld
-@exec internal_helper(x) = run [echo "Internal: @x"]
-@exec get(url) = run [curl -s "@url"]
-@exec post(url, data) = run [curl -X POST -d '@data' "@url"]
+/exe @internal_helper(x) = run {echo "Internal: @x"}
+/exe @get(url) = run {curl -s "@url"}
+/exe @post(url, data) = run {curl -X POST -d '@data' "@url"}
 
-@data module = {
+/var @module = {
   get: @get,
   post: @post
-  # Note: internal_helper is not exported
+  >> Note: internal_helper is not exported
 }
 ```
 
 **Import options:**
-- `@import { get, post } from @user/api` - Direct function access
-- `@import { * as api } from @user/api` - Namespace import: `api.get()`, `api.post()`
+- `/import { get, post } from @user/api` - Direct function access
+- `/import { * as api } from @user/api` - Namespace import: `api.get()`, `api.post()`
 
 ##### 2. Named Export Object Pattern
 
 Create a named object alongside individual exports for maximum flexibility:
 
 ```mlld
-@exec get(url) = run [curl -s "@url"]
-@exec post(url, data) = run [curl -X POST -d '@data' "@url"]
-@exec delete(url) = run [curl -X DELETE "@url"]
+/exe @get(url) = run {curl -s "@url"}
+/exe @post(url, data) = run {curl -X POST -d '@data' "@url"}
+/exe @delete(url) = run {curl -X DELETE "@url"}
 
-# Named export object
-@data http = {
+>> Named export object
+/var @http = {
   get: @get,
   post: @post,
   delete: @delete
 }
-# This creates both individual exports AND the http object
+>> This creates both individual exports AND the http object
 ```
 
 **Import options:**
-- `@import { http } from @user/http-client` - Use as `http.get()`, `http.post()`
-- `@import { get, post } from @user/http-client` - Use functions directly
-- `@import { * as client } from @user/http-client` - Access both: `client.http.get()` or `client.get()`
+- `/import { http } from @user/http-client` - Use as `http.get()`, `http.post()`
+- `/import { get, post } from @user/http-client` - Use functions directly
+- `/import { * as client } from @user/http-client` - Access both: `client.http.get()` or `client.get()`
 
 This pattern is ideal when you want to provide both:
 - A convenient grouped interface (`http.get()`)
@@ -634,14 +634,14 @@ This pattern is ideal when you want to provide both:
 Create logical groupings within your module:
 
 ```mlld
-@exec auth_login(user, pass) = run [...]
-@exec auth_logout(token) = run [...]
-@exec auth_refresh(token) = run [...]
+/exe @auth_login(user, pass) = run {...}
+/exe @auth_logout(token) = run {...}
+/exe @auth_refresh(token) = run {...}
 
-@exec api_get(endpoint) = run [...]
-@exec api_post(endpoint, data) = run [...]
+/exe @api_get(endpoint) = run {...}
+/exe @api_post(endpoint, data) = run {...}
 
-@data module = {
+/var @module = {
   auth: {
     login: @auth_login,
     logout: @auth_logout,
@@ -658,18 +658,18 @@ Create logical groupings within your module:
 
 #### Automatic Module Generation
 
-If no `@data module` is defined, mlld automatically creates one with all top-level variables:
+If no `/var @module` is defined, mlld automatically creates one with all top-level variables:
 
 ```mlld
-# Without explicit module export:
-@text hello = "world"
-@exec greet(name) = run [echo "Hello @name"]
+>> Without explicit module export:
+/var @hello = "world"
+/exe @greet(name) = run {echo "Hello @name"}
 
-# Automatically generates:
-# module = {
-#   hello: @hello,
-#   greet: @greet
-# }
+>> Automatically generates:
+>> module = {
+>>   hello: @hello,
+>>   greet: @greet
+>> }
 ```
 
 #### Module Metadata
@@ -677,11 +677,11 @@ If no `@data module` is defined, mlld automatically creates one with all top-lev
 Module frontmatter is always available via the `__meta__` property:
 
 ```mlld
-@import { utils } from @alice/utils
+/import { utils } from @alice/utils
 
-# Access metadata
-@add [[Author: {{utils.__meta__.author}}]]
-@add [[Version: {{utils.__meta__.version}}]]
+>> Access metadata
+/show [[Author: {{utils.__meta__.author}}]]
+/show [[Version: {{utils.__meta__.version}}]]
 ```
 
 ### Publishing Modules
@@ -763,16 +763,16 @@ needs: []
 license: CC0
 ---
 
-# Internal helpers (not exported)
-@text _validateFormat(format) = [[...]]
+>> Internal helpers (not exported)
+/var @_validateFormat(format) = [[...]]
 
-# Public functions
-@text formatDate(input, format) = [[...]]
-@text validateEmail(email) = [[...]]
-@text parseJSON(jsonStr) = [[...]]
+>> Public functions
+/exe @formatDate(input, format) = [[...]]
+/exe @validateEmail(email) = [[...]]
+/exe @parseJSON(jsonStr) = [[...]]
 
-# Module export - defines the public API
-@data module = {
+>> Module export - defines the public API
+/var @module = {
   formatDate: @formatDate,
   validateEmail: @validateEmail,
   parseJSON: @parseJSON
@@ -963,15 +963,15 @@ mlld install @community/string-utils
 ```
 
 ```mlld
-@import { slugify, truncate } from @community/string-utils
+/import { slugify, truncate } from @community/string-utils
 
-@text title = "My Blog Post Title!"
-@text slug = [[{{slugify(@title)}}]]
-@text summary = [[{{truncate("This is a long description...", 50)}}]]
+/var @title = "My Blog Post Title!"
+/var @slug = [[{{slugify(@title)}}]]
+/var @summary = [[{{truncate("This is a long description...", 50)}}]]
 
-# Output
-@add [[Slug: {{@slug}}]]
-@add [[Summary: {{@summary}}]]
+>> Output
+/show [[Slug: {{@slug}}]]
+/show [[Summary: {{@summary}}]]
 ```
 
 ### Template System
@@ -983,17 +983,17 @@ mlld install @templates/blog
 ```
 
 ```mlld
-@import { postTemplate, authorBio } from @templates/blog
+/import { postTemplate, authorBio } from @templates/blog
 
-@data post = {
+/var @post = {
   "title": "Introduction to mlld Modules",
   "author": "Alice Developer", 
   "date": "2024-01-15",
   "content": "Modules make code reusable..."
 }
 
-@add {{postTemplate(@post)}}
-@add {{authorBio(@post.author)}}
+/show {{postTemplate(@post)}}
+/show {{authorBio(@post.author)}}
 ```
 
 ### Development Workflow
@@ -1100,14 +1100,14 @@ Example manifest.json:
 Team members with repository access can import private modules using file paths:
 
 ```mlld
-# Import from same repository
-@import { formatData } from "./mlld/modules/utils.mld.md"
+>> Import from same repository
+/import { formatData } from "./mlld/modules/utils.mld.md"
 
-# Import from another private repository (must be cloned locally)
-@import { validate } from "../other-private-repo/mlld/modules/validator.mld.md"
+>> Import from another private repository (must be cloned locally)
+/import { validate } from "../other-private-repo/mlld/modules/validator.mld.md"
 
-# Import using relative paths from module location
-@import { shared } from "../../shared/modules/common.mld.md"
+>> Import using relative paths from module location
+/import { shared } from "../../shared/modules/common.mld.md"
 ```
 
 ### Private Module Workflows
@@ -1250,14 +1250,14 @@ Create custom path prefixes that map to specific directories in your project:
 
 Usage in your mlld files:
 ```mlld
-# Resolves to ./src/lib/string-utils.mld
-@import { slugify, truncate } from @lib/string-utils
+>> Resolves to ./src/lib/string-utils.mld
+/import { slugify, truncate } from @lib/string-utils
 
-# Resolves to ./src/components/mlld/header.mld
-@import { renderHeader } from @components/header
+>> Resolves to ./src/components/mlld/header.mld
+/import { renderHeader } from @components/header
 
-# Resolves to ../shared-modules/validators.mld
-@import { validateEmail } from @shared/validators
+>> Resolves to ../shared-modules/validators.mld
+/import { validateEmail } from @shared/validators
 ```
 
 ### GitHub Resolver for Private Modules
@@ -1303,14 +1303,14 @@ Configure private GitHub repositories as module sources. Requires authentication
 
 Usage:
 ```mlld
-# Resolves to: https://github.com/myorg/private-mlld-modules/blob/main/modules/auth/jwt.mld
-@import { generateToken, verifyToken } from @myorg/auth/jwt
+>> Resolves to: https://github.com/myorg/private-mlld-modules/blob/main/modules/auth/jwt.mld
+/import { generateToken, verifyToken } from @myorg/auth/jwt
 
-# Nested paths work naturally
-@import { formatCurrency } from @myorg/utils/finance/currency
+>> Nested paths work naturally
+/import { formatCurrency } from @myorg/utils/finance/currency
 
-# Import from partner organization
-@import { processOrder } from @partner/ecommerce/orders
+>> Import from partner organization
+/import { processOrder } from @partner/ecommerce/orders
 ```
 
 ### HTTP Resolver for Remote Modules
@@ -1482,29 +1482,29 @@ Shadow environments in mlld allow you to define reusable functions in mlld that 
 The JavaScript shadow environment enables lightweight, synchronous function execution:
 
 ```mlld
-# Define mlld functions
-@exec add(a, b) = @run javascript [(return a + b;)]
-@exec multiply(x, y) = @run javascript [(return x * y;)]
-@exec calculate(n) = @run javascript [(
-  const sum = add(n, 10);
+>> Define mlld functions
+/exe @add(a, b) = js {return @a + @b;}
+/exe @multiply(x, y) = js {return @x * @y;}
+/exe @calculate(n) = js {(
+  const sum = add(@n, 10);
   const product = multiply(sum, 2);
   return product;
-)]
+)}
 
-# Create shadow environment
-@exec js = { add, multiply, calculate }
+>> Create shadow environment
+/exe js = { add, multiply, calculate }
 
-# Use shadow functions in JavaScript
-@data result = @run javascript [(
+>> Use shadow functions in JavaScript
+/var @result = run js {(
   // All shadow functions are available
   const r1 = add(5, 3);        // returns 8
   const r2 = multiply(4, 7);   // returns 28
   const r3 = calculate(5);     // returns 30: (5+10)*2
   
   return { r1, r2, r3 };
-)]
+)}
 
-@add @result
+/show @result
 ```
 
 **Key features:**
@@ -1518,33 +1518,33 @@ The JavaScript shadow environment enables lightweight, synchronous function exec
 The Node.js shadow environment provides full Node.js API access with VM isolation:
 
 ```mlld
-# Define Node.js functions with full API access
-@exec readConfig(filename) = @run node [(
+>> Define Node.js functions with full API access
+/exe @readConfig(filename) = node {(
   const fs = require('fs');
   const path = require('path');
   
-  const configPath = path.resolve(filename);
+  const configPath = path.resolve(@filename);
   const content = fs.readFileSync(configPath, 'utf8');
   return JSON.parse(content);
-)]
+)}
 
-@exec fetchData(url) = @run node [(
+/exe @fetchData(url) = node {(
   const https = require('https');
   
   return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
+    https.get(@url, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => resolve(JSON.parse(data)));
     }).on('error', reject);
   });
-)]
+)}
 
-# Create Node.js shadow environment
-@exec node = { readConfig, fetchData }
+>> Create Node.js shadow environment
+/exe node = { readConfig, fetchData }
 
-# Use in Node.js code blocks
-@data config = @run node [(
+>> Use in Node.js code blocks
+/var @config = run node {(
   // Access Node.js APIs and shadow functions
   const config = await readConfig('./config.json');
   const apiData = await fetchData(config.apiUrl);
@@ -1553,7 +1553,7 @@ The Node.js shadow environment provides full Node.js API access with VM isolatio
     ...config,
     apiData
   };
-)]
+)}
 ```
 
 **Key features:**
@@ -1595,16 +1595,16 @@ The Node.js shadow environment provides full Node.js API access with VM isolatio
 When using JavaScript or Node.js functions in pipelines with the `format` option, functions receive a structured input object:
 
 ```mlld
-@exec processJSON(input) = @run js [(
+/exe @processJSON(input) = js {(
   // With format: "json", input has these properties:
   // input.text - raw text
   // input.type - "json"
   // input.data - parsed JSON object (lazy-loaded)
-  const users = input.data;
+  const users = @input.data;
   return users.map(u => u.name).join(', ');
-)]
+)}
 
-@data names = @getData() with { format: "json", pipeline: [@processJSON] }
+/var @names = @getData() with { format: "json", pipeline: [@processJSON] }
 ```
 
 See [Pipeline Format Feature](pipeline.md#pipeline-format-feature) for complete details.
@@ -1617,30 +1617,30 @@ See [Pipeline Format Feature](pipeline.md#pipeline-format-feature) for complete 
 
 2. **Keep shadow functions focused:**
    ```mlld
-   # Good: Single responsibility
-   @exec formatDate(date) = @run js [(return new Date(date).toISOString())]
+   >> Good: Single responsibility
+   /exe @formatDate(date) = js {return new Date(@date).toISOString()}
    
-   # Avoid: Too many responsibilities
-   @exec doEverything(data) = @run js [(/* complex logic */)]
+   >> Avoid: Too many responsibilities
+   /exe @doEverything(data) = js {/* complex logic */}
    ```
 
 3. **Handle errors gracefully:**
    ```mlld
-   @exec safeDiv(a, b) = @run js [(
-     if (b === 0) return { error: "Division by zero" };
-     return { result: a / b };
-   )]
+   /exe @safeDiv(a, b) = js {(
+     if (@b === 0) return { error: "Division by zero" };
+     return { result: @a / @b };
+   )}
    ```
 
 4. **Document shadow functions:**
    ```mlld
-   # Calculate compound interest
-   # @param principal - Initial amount
-   # @param rate - Annual interest rate (as decimal)
-   # @param time - Time period in years
-   @exec compound(principal, rate, time) = @run js [(
-     return principal * Math.pow(1 + rate, time);
-   )]
+   >> Calculate compound interest
+   >> @param principal - Initial amount
+   >> @param rate - Annual interest rate (as decimal)
+   >> @param time - Time period in years
+   /exe @compound(principal, rate, time) = js {(
+     return @principal * Math.pow(1 + @rate, @time);
+   )}
    ```
 
 ## Future Considerations
