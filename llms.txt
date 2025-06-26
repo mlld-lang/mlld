@@ -33,7 +33,7 @@ Think of mlld as having two distinct modes:
 
 This design keeps documents readable as regular Markdown while enabling programmatic capabilities where needed.
 
-## The 10 Commandments of mlld
+## The 11 Commandments of mlld
 
 ### 1. Directives Must Start Lines
 ```mlld
@@ -74,11 +74,11 @@ This design keeps documents readable as regular Markdown while enabling programm
 ```
 
 ### 5. Context-Specific Variable Syntax
-Remember: "Double brackets, double braces"
+**Primary template syntax**: Use single backtick templates with @ interpolation
+- Backtick templates: `` `Hello @name!` `` - @name IS interpolated (PREFERRED)
 - String literals: `/var @msg = "Hello @name"` - @name is NOT interpolated (literal text)
 - Command context: `{echo "Hello @name"}` - @name IS interpolated (variable value)
-- Template context: `[[Hello {{name}}]]` - {{name}} is interpolated
-- Backtick templates: `` `Hello @name!` `` - @name IS interpolated (simpler syntax)
+- Double-bracket escape hatch: `[[Hello {{name}}]]` - For social media with many @ symbols
 
 ### 6. Field Access Rules
 ```mlld
@@ -103,7 +103,23 @@ Remember: "Double brackets, double braces"
 /show @welcome("Bob", "developer")
 ```
 
-### 8. Import Patterns
+### 8. File Dereferencing with Brackets
+
+**Key Concept**: Brackets `[...]` mean "give me the contents of this file", not the filename itself.
+
+```mlld
+/var @content = [README.md]      << Loads file contents into @content
+/var @path = "README.md"         << Stores the string "README.md" in @path
+
+/show [config.json]              << Shows contents of config.json
+/show "config.json"              << Shows the text "config.json"
+
+>> Same principle applies everywhere:
+/import { data } from [local/data.json]    << Imports from file contents
+/exe @docs = [./documentation.md]          << Loads documentation content
+```
+
+### 9. Import Patterns
 
 **CRITICAL DISTINCTION**: mlld has two different import syntaxes - one for modules and one for paths.
 
@@ -127,7 +143,7 @@ Remember: "Double brackets, double braces"
 
 Without brackets, `@./file` would be treated as trying to import from a user named "." - which is why you might see errors like "User '.' not found in registry".
 
-### 9. Conditional Logic with /when
+### 10. Conditional Logic with /when
 
 /when is mlld's decision-making directive. It's NOT an if-statement - it's a routing table.
 
@@ -184,7 +200,7 @@ Important: /when doesn't support inline comparisons. Create helper functions:
 /when @isHighScore(@score) => /show `🏆 High score!`
 ```
 
-### 10. Iteration with foreach
+### 11. Iteration with foreach
 ```mlld
 /var @names = ["Alice", "Bob", "Charlie"]
 /exe @greetTemplate(name) = [[Hello, {{name}}!]]
@@ -243,9 +259,10 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /var @date = run "date"
 /var @files = run {ls -la | head -5}
 
->> File content
-/var @readme = [README.md]
-/var @section = [docs.md # Installation]
+>> File content - brackets dereference (load file contents)
+/var @readme = [README.md]              << Gets file contents
+/var @section = [docs.md # Installation]  << Gets specific section
+/var @filename = "README.md"            << Gets literal string "README.md"
 
 >> Code execution
 /var @result = js { return Math.random() * 100; }
@@ -253,15 +270,27 @@ The unified `/var` directive creates variables with types inferred from syntax:
 
 ## Templates and Interpolation
 
-### Backtick templates (primary - with @ interpolation)
+### Backtick templates (PRIMARY - use this!)
 ```mlld
 /var @message = `Hello @name, welcome to @place!`
 /var @link = `[@title](@url)`
+/var @result = `The answer is @calculate(42)`  << Can call executables!
+
+>> Backticks support:
+>> - @ variable interpolation
+>> - @ executable calls
+>> - Clean, simple syntax
 ```
 
-### Double-bracket templates (fallback - for @ heavy content)
+### Double-bracket templates (ESCAPE HATCH ONLY)
 ```mlld
-/var @tweet = [[Hey {{user}}, check out {{handle}}'s new post!]]
+>> ONLY use [[...]] when you have many @ symbols to escape (social media)
+/var @tweet = [[Hey @{{handle}}, check out @{{otherHandle}}'s post!]]
+
+>> Limitations of [[...]] templates:
+>> - Cannot call @executables
+>> - More verbose {{variable}} syntax
+>> - Only for avoiding @ symbol conflicts
 ```
 
 ### @ interpolation in double quotes

@@ -5,6 +5,28 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0]
+
+Represents an overhaul and consolidation of all syntax. 
+
+The `/` command approach creates clear disambiguiation between commands and variables/executables, while also setting the stage for using mlld in chat contexts. We are moving to a simple variable definition model with `/var` while allowing rich expression for different types based on the provided syntax.
+
+## Updated Syntax:
+- Directives: Changed from @ prefix to / prefix (e.g., @text → /var, @add → /show)
+- Variable creation: Now requires @ prefix (e.g., /var @name = "value")
+- Command syntax: Changed from [(command)] to {command} or "command" (single-line, non-shellscript)
+- Code syntax: must use {...} for code blocks
+- Unified /var: Replaced multiple directives (@text, @data) with single /var
+- Renamed directives: @add → /show, @exec → /exe
+- /output for file output
+- Comments: Use >> for line start/end comments (but not in params/objects/templates)
+
+## Updated Interpolation:
+- Double quotes: Now support @variable interpolation
+- Backticks: Primary template syntax with @variable interpolation
+- Double brackets: Fallback for @-heavy content, still uses {{variable}}
+- Commands: Use @variable in both {...} and "..." forms
+
 ## [1.4.11]
 
 ### Fixed
