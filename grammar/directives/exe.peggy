@@ -216,7 +216,7 @@ SlashExe
         'command'
       );
     }
-  / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? comment:InlineComment? {
+  / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@"? "/"? "run" _ content:UnifiedCommandBrackets withClause:WithClause? trust:(_ t:TrustOption { return t; })? comment:InlineComment? {
       // Command syntax: /exec cmd() = @run {command}
       helpers.debug('SlashExe matched with command', { id, params, content, trust });
       
@@ -273,7 +273,7 @@ SlashExe
         'command'
       );
     }
-  / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@run" _ "@" commandRef:CommandReference withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@"? "/"? "run" _ "@" commandRef:CommandReference withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('SlashExe matched command reference', { id, params, commandRef, trust });
       
       // Create identifier node

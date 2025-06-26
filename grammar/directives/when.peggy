@@ -350,7 +350,7 @@ WhenActionBlock
 
 // Single directive as action - simplified inline directives
 WhenActionDirective
-  = "output" _ source:WhenOutputSource? _ "to" _ target:WhenOutputTarget {
+  = "/"? "output" _ source:WhenOutputSource? _ "to" _ target:WhenOutputTarget {
       helpers.debug('WhenActionDirective: Enhanced output matched!');
       // Enhanced output syntax in when actions (FIRST to match before bracket syntax)
       const values = {
@@ -386,7 +386,7 @@ WhenActionDirective
       })];
     }
   // show with simple variable reference (MUST come before exec invocation)
-  / "show" _ "@" id:BaseIdentifier !("(") !TailModifiers fields:AnyFieldAccess* {
+  / "/"? "show" _ "@" id:BaseIdentifier !("(") !TailModifiers fields:AnyFieldAccess* {
       // show with simple variable
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
@@ -407,7 +407,7 @@ WhenActionDirective
       })];
     }
   // show with exec invocation (function call with parentheses or tail modifiers)
-  / "show" _ "@" invocation:ExecInvocationWithTail {
+  / "/"? "show" _ "@" invocation:ExecInvocationWithTail {
       // show with exec invocation
       return [helpers.createNode(NodeType.Directive, {
         kind: 'show',
@@ -422,22 +422,18 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "show" _ content:StringLiteral {
+  / "/"? "show" _ template:TemplateCore {
+      // Use the same abstraction as /show directive
       return [helpers.createNode(NodeType.Directive, {
         kind: 'show',
         subtype: 'showTemplate',
-        values: { 
-          content: [helpers.createNode(NodeType.Text, { 
-            content: content, 
-            location: location() 
-          })]
-        },
-        raw: { content: content },
-        meta: {},
+        values: template.values,
+        raw: template.raw,
+        meta: template.meta,
         location: location()
       })];
     }
-  / "var" _ "@" id:BaseIdentifier _ "=" _ value:StringLiteral {
+  / "/"? "var" _ "@" id:BaseIdentifier _ "=" _ value:StringLiteral {
       return [helpers.createNode(NodeType.Directive, {
         kind: 'var',
         subtype: 'var',
@@ -456,7 +452,7 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "run" _ "@" invocation:ExecInvocationWithTail {
+  / "/"? "run" _ "@" invocation:ExecInvocationWithTail {
       // run with exec invocation
       return [helpers.createNode(NodeType.Directive, {
         kind: 'run',
@@ -473,23 +469,18 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "run" _ "{" command:WhenBraceCommandText "}" {
-      // Use simple command parsing for actions with braces
+  / "/"? "run" _ command:UnifiedCommandBrackets {
+      // Use the same abstraction as /run directive
       return [helpers.createNode(NodeType.Directive, {
         kind: 'run',
         subtype: 'runCommand',
-        values: { 
-          command: [helpers.createNode(NodeType.Text, {
-            content: command,
-            location: location()
-          })]
-        },
-        raw: { command: command },
-        meta: {},
+        values: command.values,
+        raw: command.raw,
+        meta: command.meta,
         location: location()
       })];
     }
-  / "output" _ source:WhenOutputSource? _ "[" path:WhenPathText "]" {
+  / "/"? "output" _ source:WhenOutputSource? _ "[" path:WhenPathText "]" {
       helpers.debug('WhenActionDirective: Bracket output matched');
       // Bracket output syntax in when actions
       const values = {
