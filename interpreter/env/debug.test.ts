@@ -120,12 +120,13 @@ describe('@DEBUG variable', () => {
 
     // Add a variable with a very long value
     const longValue = 'x'.repeat(100);
-    env.setVariable('longVar', {
-      type: 'text',
-      value: longValue,
-      nodeId: 'long-node',
-      location: { line: 1, column: 1 }
-    });
+    const { createSimpleTextVariable: createText2 } = await import('@core/types/variable');
+    env.setVariable('longVar', createText2('longVar', longValue, {
+      directive: 'var',
+      syntax: 'quoted',
+      hasInterpolation: false,
+      isMultiLine: false
+    }));
     
     // Get DEBUG
     const debugVar = env.getVariable('DEBUG');

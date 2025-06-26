@@ -71,29 +71,8 @@ function processModuleExports(
   for (const [name, variable] of childVars) {
     // Skip the 'module' variable itself
     if (name !== 'module') {
-      // Preserve variable type information for proper import
-      moduleObject[name] = {
-        __variableType: variable.type,
-        __value: variable.value
-      };
-      
-      // For executable variables, preserve the ExecutableDefinition structure
-      if (isExecutableVariable(variable)) {
-        // Get the executable definition from metadata or the variable itself
-        const execVar = variable as any;
-        const executableDef = execVar.metadata?.executableDef || execVar.definition;
-        
-        if (executableDef) {
-          moduleObject[name].__definition = executableDef;
-          moduleObject[name].__params = execVar.paramNames || execVar.params || [];
-          moduleObject[name].__content = execVar.content || [];
-        }
-      }
-      // For legacy textTemplate variables, preserve additional metadata
-      else if (variable.type === 'textTemplate') {
-        moduleObject[name].__params = (variable as any).params;
-        moduleObject[name].__content = (variable as any).content;
-      }
+      // Export the variable value directly
+      moduleObject[name] = variable.value;
     }
   }
   
@@ -108,10 +87,7 @@ function processModuleExports(
     }
     
     // Add the module structured export (this enables @module.something access)
-    moduleObject.module = {
-      __variableType: 'data',
-      __value: moduleValue
-    };
+    moduleObject.module = moduleValue;
   }
   
   return {
@@ -128,18 +104,8 @@ function createNamespaceVariable(
   moduleObject: Record<string, any>, 
   importPath: string
 ): any {
-  // Unwrap the module object values for clean namespace access
-  const unwrappedObject: Record<string, any> = {};
-  
-  for (const [key, value] of Object.entries(moduleObject)) {
-    if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
-      // Unwrap the wrapped variable format
-      unwrappedObject[key] = value.__value;
-    } else {
-      // Keep the value as-is for non-wrapped values
-      unwrappedObject[key] = value;
-    }
-  }
+  // Module object values are already unwrapped
+  const unwrappedObject = moduleObject;
   
   const source: VariableSource = {
     directive: 'var',
@@ -456,35 +422,24 @@ async function importFromPath(
         if (name === '__meta__') continue;
         
         // Create variable for each module export
-        // Check if this is a variable with preserved type information
-        let varType: 'text' | 'data' | 'path' | 'command' | 'import' | 'executable' = 'data';
+        // Infer type from the value
         let varValue = value;
+        let originalType: VariableTypeDiscriminator = 'simple-text';
         
-        if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
-          varType = value.__variableType;
-          varValue = value.__value;
-          
-          // Handle backward compatibility: convert textTemplate to executable
-          if (varType === 'textTemplate') {
-            varType = 'executable';
-          }
+        if (Array.isArray(varValue)) {
+          originalType = 'array';
+        } else if (varValue && typeof varValue === 'object') {
+          originalType = 'object';
+        } else if (typeof varValue === 'string') {
+          originalType = 'simple-text';
+        } else if (typeof varValue === 'number' || typeof varValue === 'boolean') {
+          originalType = 'simple-text'; // Convert to string
+          varValue = String(varValue);
         }
-        
-        // Map old variable type to new discriminator
-        const typeMap: Record<string, VariableTypeDiscriminator> = {
-          'text': 'simple-text',
-          'data': Array.isArray(varValue) ? 'array' : 'object',
-          'path': 'path',
-          'command': 'command-result',
-          'executable': 'executable',
-          'import': 'imported'
-        };
-        
-        const originalType = typeMap[varType] || 'simple-text';
         
         const source: VariableSource = {
           directive: 'var',
-          syntax: varType === 'data' ? (Array.isArray(varValue) ? 'array' : 'object') : 'quoted',
+          syntax: originalType === 'array' ? 'array' : originalType === 'object' ? 'object' : 'quoted',
           hasInterpolation: false,
           isMultiLine: false
         };
@@ -504,37 +459,7 @@ async function importFromPath(
           }
         );
         
-        // For executable variables, restore the full structure
-        if (varType === 'executable' && value && typeof value === 'object') {
-          if ('__definition' in value) {
-            (importedVariable as any).definition = value.__definition;
-          } else {
-            // Legacy textTemplate: create template type definition
-            (importedVariable as any).definition = {
-              type: 'template',
-              paramNames: value.__params || [],
-              template: value.__content || [],
-              sourceDirective: 'text'
-            };
-          }
-          (importedVariable as any).params = value.__params || [];
-          (importedVariable as any).content = value.__content || [];
-        }
-        // For legacy command variables, convert to executable
-        else if (varType === 'command' && value && typeof value === 'object') {
-          varType = 'executable';
-          importedVariable.type = varType;
-          // Store in metadata where evaluators expect it
-          importedVariable.metadata = {
-            ...importedVariable.metadata,
-            executableDef: {
-              type: 'command',
-              params: value.__params || [],
-              command: value.__value || value.__command || []
-            },
-            originalType: 'executable'
-          };
-        }
+        // No special handling needed - executables can't be imported as values
         
         env.setVariable(name, importedVariable);
       }
@@ -567,34 +492,23 @@ async function importFromPath(
           
           // Create imported variable
           // Check if this is a variable with preserved type information
-          let varType: 'text' | 'data' | 'path' | 'command' | 'import' | 'executable' = 'data';
           let varValue = value;
+          let originalType: VariableTypeDiscriminator = 'simple-text';
           
-          if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
-            varType = value.__variableType;
-            varValue = value.__value;
-            
-            // Handle backward compatibility: convert textTemplate to executable
-            if (varType === 'textTemplate') {
-              varType = 'executable';
-            }
+          if (Array.isArray(varValue)) {
+            originalType = 'array';
+          } else if (varValue && typeof varValue === 'object') {
+            originalType = 'object';
+          } else if (typeof varValue === 'string') {
+            originalType = 'simple-text';
+          } else if (typeof varValue === 'number' || typeof varValue === 'boolean') {
+            originalType = 'simple-text'; // Convert to string
+            varValue = String(varValue);
           }
-          
-          // Map old variable type to new discriminator
-          const typeMap: Record<string, VariableTypeDiscriminator> = {
-            'text': 'simple-text',
-            'data': Array.isArray(varValue) ? 'array' : 'object',
-            'path': 'path',
-            'command': 'command-result',
-            'executable': 'executable',
-            'import': 'imported'
-          };
-          
-          const originalType = typeMap[varType] || 'simple-text';
           
           const source: VariableSource = {
             directive: 'var',
-            syntax: varType === 'data' ? (Array.isArray(varValue) ? 'array' : 'object') : 'quoted',
+            syntax: originalType === 'array' ? 'array' : originalType === 'object' ? 'object' : 'quoted',
             hasInterpolation: false,
             isMultiLine: false
           };
@@ -928,46 +842,41 @@ async function importFromResolverContent(
       for (const [name, value] of Object.entries(moduleObject)) {
         if (name === '__meta__') continue;
         
-        let varType: 'text' | 'data' | 'path' | 'command' | 'import' | 'executable' = 'data';
         let varValue = value;
+        let originalType: VariableTypeDiscriminator = 'simple-text';
         
-        if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
-          varType = value.__variableType;
-          varValue = value.__value;
-          
-          // Handle backward compatibility: convert textTemplate to executable
-          if (varType === 'textTemplate') {
-            varType = 'executable';
-          }
+        if (Array.isArray(varValue)) {
+          originalType = 'array';
+        } else if (varValue && typeof varValue === 'object') {
+          originalType = 'object';
+        } else if (typeof varValue === 'string') {
+          originalType = 'simple-text';
+        } else if (typeof varValue === 'number' || typeof varValue === 'boolean') {
+          originalType = 'simple-text'; // Convert to string
+          varValue = String(varValue);
         }
         
         const source: VariableSource = {
           directive: 'var',
-          syntax: varType === 'data' ? (Array.isArray(varValue) ? 'array' : 'object') : 
-                  varType === 'executable' ? 'code' : 'quoted',
+          syntax: originalType === 'array' ? 'array' : originalType === 'object' ? 'object' : 'quoted',
           hasInterpolation: false,
           isMultiLine: false
         };
         
-        const metadata = {
-          isImported: true,
-          importPath: ref,
-          definedAt: { line: 0, column: 0, filePath: ref },
-          originalType: varType
-        };
-        
-        let importedVariable: Variable;
-        
-        // Create the appropriate variable type based on varType
-        if (varType === 'text') {
-          importedVariable = createSimpleTextVariable(name, String(varValue), source, metadata);
-        } else if (varType === 'data') {
-          if (Array.isArray(varValue)) {
-            importedVariable = createArrayVariable(name, varValue, false, source, metadata);
-          } else {
-            importedVariable = createObjectVariable(name, varValue, false, source, metadata);
+        const importedVariable = createImportedVariable(
+          name,
+          varValue,
+          originalType,
+          ref,
+          false, // Not a module
+          name, // Variable name in source
+          source,
+          {
+            isImported: true,
+            importPath: ref,
+            definedAt: { line: 0, column: 0, filePath: ref }
           }
-        } else if (varType === 'executable') {
+        );
           // For executable variables, we need to use createImportedVariable
           importedVariable = createImportedVariable(
             name,
@@ -1083,15 +992,16 @@ async function importFromResolverContent(
           let varType: 'text' | 'data' | 'path' | 'command' | 'import' | 'executable' = 'data';
           let varValue = value;
           
-          // Extract the actual variable type from the module export
-          if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
-            varType = value.__variableType;
-            varValue = value.__value;
-            
-            // Handle backward compatibility: convert textTemplate to executable
-            if (varType === 'textTemplate') {
-              varType = 'executable';
-            }
+          // Infer type from the value
+          if (Array.isArray(varValue)) {
+            varType = 'data';
+          } else if (varValue && typeof varValue === 'object') {
+            varType = 'data';
+          } else if (typeof varValue === 'string') {
+            varType = 'text';
+          } else if (typeof varValue === 'number' || typeof varValue === 'boolean') {
+            varType = 'text'; // Convert to string
+            varValue = String(varValue);
           }
           
           const source: VariableSource = {

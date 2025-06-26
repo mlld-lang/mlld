@@ -17,12 +17,13 @@ describe('evaluateWhen', () => {
   describe('simple form', () => {
     it('should execute action when condition is true', async () => {
       // Set up a variable for the condition
-      env.setVariable('isEnabled', {
-        type: 'text',
-        value: 'true',
-        nodeId: '',
-        location: { line: 0, column: 0 }
-      });
+      const { createSimpleTextVariable } = await import('@core/types/variable');
+      env.setVariable('isEnabled', createSimpleTextVariable('isEnabled', 'true', {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      }));
       
       const node: WhenSimpleNode = {
         type: 'Directive',
@@ -50,12 +51,13 @@ describe('evaluateWhen', () => {
     
     it('should return empty string when condition is false', async () => {
       // Set up a variable for the condition
-      env.setVariable('isEnabled', {
-        type: 'text',
-        value: 'false',
-        nodeId: '',
-        location: { line: 0, column: 0 }
-      });
+      const { createSimpleTextVariable } = await import('@core/types/variable');
+      env.setVariable('isEnabled', createSimpleTextVariable('isEnabled', 'false', {
+        directive: 'var',
+        syntax: 'quoted',
+        hasInterpolation: false,
+        isMultiLine: false
+      }));
       
       const node: WhenSimpleNode = {
         type: 'Directive',

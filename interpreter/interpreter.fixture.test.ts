@@ -375,7 +375,13 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // This fixture seems to be missing context - create the expected variable
         // TODO: This fixture may be incorrectly named or incomplete
         const env = (fileSystem as any).environment || {};
-        env.result = { type: 'text', value: 'Command output' };
+        const { createSimpleTextVariable } = await import('@core/types/variable');
+        env.result = createSimpleTextVariable('result', 'Command output', {
+          directive: 'var',
+          syntax: 'quoted',
+          hasInterpolation: false,
+          isMultiLine: false
+        });
       } else if (fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
         // Enable bash mocking for bash tests and bracket nesting tests that use bash
         process.env.MOCK_BASH = 'true';
