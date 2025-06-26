@@ -9,12 +9,12 @@ import type { DirectiveNode } from '@core/types';
 describe('Directive Base Structure', () => {
   const directiveExamples = [
     '/import { * } from [file.md]',
-    '/add "path/to/file.md"',
-    '/text @myvar = "some text"',
-    '/data @myvar = { "key": "value" }',
+    '/show "path/to/file.md"',
+    '/var @myvar = "some text"',
+    '/var @myvar = { "key": "value" }',
     '/path @myvar = [/path/to/file]',
     '/run {echo "hello world"}',
-    '/exec @mycommand (param) = /run {echo "hello"}'
+    '/exe @mycommand (param) = run {echo "hello"}'
   ];
 
   for (const input of directiveExamples) {

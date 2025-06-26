@@ -616,8 +616,9 @@ ExecParameterList
     }
 
 ExecParameter
-  = paramName:BaseIdentifier {
+  = "@"? paramName:BaseIdentifier {
       // Create a proper Parameter node
+      // Accept both @param and param syntax for consistency
       return helpers.createNode(NodeType.Parameter, {
         name: paramName,
         location: location()

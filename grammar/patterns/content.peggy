@@ -183,6 +183,9 @@ DoubleQuotedChar
 BacktickInterpolation
   = BacktickExecInvocation    // @func(args) - must come before variable
   / UnquotedPathVar           // @var or @var.field
+  / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
+      return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
+    }
   / BacktickTextSegment       // Plain text
 
 // Function call in backtick template
