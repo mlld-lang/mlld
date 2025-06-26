@@ -55,7 +55,7 @@ export async function languageServerCommand(): Promise<void> {
  *    - Import resolution errors
  * 
  * 3. Completion (Autocomplete)
- *    - Directives: @text, @data, @run, etc.
+ *    - Directives: /var, /show, /run, etc.
  *    - Variables: @varname references
  *    - File paths: [./file.mld] completions
  *    - Template variables: {{varname}} in templates
@@ -94,7 +94,7 @@ export interface MlldLanguageServerConfig {
 
 export interface VariableInfo {
   name: string;
-  kind: 'text' | 'data' | 'path' | 'exec';
+  kind: 'var' | 'path' | 'exe';
   value?: any;
   location: {
     uri: string;

@@ -149,14 +149,14 @@ export class SetupCommand {
         if (setupType === 'github' || setupType === 'both') {
           const githubResolver = resolverRegistries.find(r => r.resolver === 'GITHUB');
           if (githubResolver) {
-            console.log(chalk.gray(`  @import { auth } from ${githubResolver.prefix}auth/login`));
+            console.log(chalk.gray(`  /import { auth } from ${githubResolver.prefix}auth/login`));
           }
         }
         
         if (setupType === 'local' || setupType === 'both') {
           const localResolver = resolverRegistries.find(r => r.resolver === 'LOCAL');
           if (localResolver) {
-            console.log(chalk.gray(`  @import { helper } from ${localResolver.prefix}helper`));
+            console.log(chalk.gray(`  /import { helper } from ${localResolver.prefix}helper`));
           }
         }
       }
@@ -345,22 +345,19 @@ A sample module to demonstrate loading from a path alias.
 ## tldr
 
 \`\`\`mlld-run
-@import { greeting, info } from @local/example
+/import { greeting, info } from @local/example
 
-@add [[{{greeting}}]]
-@add [[{{info}}]]
+/show [[{{greeting}}]]
+/show [[{{info}}]]
 \`\`\`
 
 ## export
 
 \`\`\`mlld-run
-@text greeting = "Hello from path alias!"
-@text info = "This module was loaded from a path alias"
+/var @greeting = "Hello from path alias!"
+/var @info = "This module was loaded from a path alias"
 
-@data module = {
-  greeting: @greeting,
-  info: @info
-}
+>> All variables are automatically exported
 \`\`\`
 
 ## interface
@@ -430,11 +427,11 @@ Information about this module.
 
 A simple mlld script example.
 
-@text greeting = "Hello from mlld script!"
-@text timestamp = [[Script run at: {{TIME}}]]
+/var @greeting = "Hello from mlld script!"
+/var @timestamp = [[Script run at: {{TIME}}]]
 
-@add @greeting
-@add @timestamp
+/show @greeting
+/show @timestamp
 `;
           await fs.writeFile(samplePath, sampleContent);
           console.log(chalk.gray(`Created sample script: ${path.join(scriptDir, 'hello.mld')}`));

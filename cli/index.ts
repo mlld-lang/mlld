@@ -653,10 +653,10 @@ Test Discovery:
 Test Format:
   Tests are written in mlld files using @mlld/test assertions:
   
-  @import { eq, ok, includes } from @mlld/test
-  @data result = @myFunction("input")
-  @data test_returns_correct_value = @eq(@result, "expected")
-  @data test_not_empty = @ok(@result)
+  /import { eq, ok, includes } from @mlld/test
+  /var @result = @myFunction("input")
+  /var @test_returns_correct_value = @eq(@result, "expected")
+  /var @test_not_empty = @ok(@result)
 
 Examples:
   mlld test                    # Run all tests

@@ -214,8 +214,8 @@ Creating Scripts:
   3. Run with: mlld run <script-name>
 
 Example script (llm/run/hello.mld):
-  @text greeting = "Hello from mlld script!"
-  @add @greeting
+  /var @greeting = "Hello from mlld script!"
+  /show @greeting
         `);
         return;
       }

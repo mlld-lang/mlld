@@ -91,7 +91,7 @@ export class AliasCommand {
     const scope = options.global ? 'global' : 'local';
     console.log(chalk.green(`✔ Created ${scope} path alias: ${prefix} → ${resolvedPath}`));
     console.log(chalk.gray(`\nYou can now import from this directory:`));
-    console.log(chalk.gray(`  @import { something } from ${prefix}module`));
+    console.log(chalk.gray(`  /import { something } from ${prefix}module`));
     
     if (!options.global) {
       console.log(chalk.gray(`\nThis path alias is only available in this project.`));
@@ -141,8 +141,8 @@ Examples:
   mlld alias --name home --path ~/my-modules
 
 After creating an alias, you can import from it:
-  @import { utils } from @shared/utils
-  @import { data } from @desktop/my-data
+  /import { utils } from @shared/utils
+  /import { data } from @desktop/my-data
 
 Local aliases:
   - Stored in project's mlld.lock.json

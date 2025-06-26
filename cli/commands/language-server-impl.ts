@@ -239,17 +239,16 @@ export async function startLanguageServer(): Promise<void> {
     // Walk the AST to extract variables and imports
     for (const node of ast) {
       if (node.type === 'Directive') {
-        const directive = node.directive;
+        const directive = node as any;
         
-        if (directive && directive.type) {
-          const line = node.line || 1;
-          const column = node.column || 1;
+        if (directive.kind) {
+          const line = directive.location?.start?.line || 1;
+          const column = directive.location?.start?.column || 1;
           
-          switch (directive.type) {
-            case 'TextDirective':
-            case 'DataDirective':
-            case 'PathDirective':
-            case 'ExecDirective':
+          switch (directive.kind) {
+            case 'var':
+            case 'path':
+            case 'exe':
               // Extract variable name
               const identifierNodes = directive.values?.identifier;
               if (identifierNodes && Array.isArray(identifierNodes)) {
@@ -257,7 +256,7 @@ export async function startLanguageServer(): Promise<void> {
                 if (varName) {
                   const varInfo: VariableInfo = {
                     name: varName,
-                    kind: directive.type.replace('Directive', '').toLowerCase() as any,
+                    kind: directive.kind as any,
                     location: {
                       uri: document.uri,
                       line: line - 1,
@@ -266,14 +265,14 @@ export async function startLanguageServer(): Promise<void> {
                     source: 'local'
                   };
                   
-                  // For exec directives, check if it has parameters (for foreach support)
-                  if (directive.type === 'ExecDirective' && directive.values?.params) {
+                  // For exe directives, check if it has parameters (for foreach support)
+                  if (directive.kind === 'exe' && directive.values?.params) {
                     (varInfo as any).hasParameters = true;
                     (varInfo as any).paramCount = Array.isArray(directive.values.params) ? directive.values.params.length : 1;
                   }
                   
-                  // Check for shadow environment syntax: @exec name = { ... }
-                  if (directive.type === 'ExecDirective' && directive.values?.shadowEnv) {
+                  // Check for shadow environment syntax: /exe name = { ... }
+                  if (directive.kind === 'exe' && directive.values?.shadowEnv) {
                     (varInfo as any).isShadowEnvironment = true;
                   }
                   
@@ -282,7 +281,7 @@ export async function startLanguageServer(): Promise<void> {
               }
               break;
               
-            case 'ImportDirective':
+            case 'import':
               // Extract import path
               const fromNodes = directive.values?.from;
               if (fromNodes) {
@@ -327,19 +326,32 @@ export async function startLanguageServer(): Promise<void> {
     const completions: CompletionItem[] = [];
 
     // Check context for appropriate completions
-    if (line.match(/@$/)) {
-      // After @ - suggest directives, variables, and resolvers
+    if (line.match(/\/$/)) {
+      // After / - suggest directives
       completions.push(...getDirectiveCompletions());
+    } else if (line.match(/@$/)) {
+      // After @ - suggest variables and resolvers
       completions.push(...await getVariableCompletions(document));
       completions.push(...await getResolverCompletions(document));
     } else if (line.match(/\{\{[^}]*$/)) {
       // Inside template interpolation
       completions.push(...await getVariableCompletions(document, false));
+    } else if (line.match(/\/var\s+$/)) {
+      // After '/var ' - suggest @ prefix for variable creation
+      completions.push({
+        label: '@',
+        kind: CompletionItemKind.Operator,
+        detail: 'Variable name prefix',
+        insertText: '@'
+      });
+    } else if (line.match(/\/(\w*)$/)) {
+      // Partial directive
+      const partial = line.match(/\/(\w*)$/)?.[1] || '';
+      completions.push(...getDirectiveCompletions().filter(c => c.label.startsWith(`/${partial}`)));
     } else if (line.match(/@\w*$/)) {
-      // Partial directive, variable, or resolver
+      // Partial variable or resolver
       const partial = line.match(/@(\w*)$/)?.[1] || '';
-      completions.push(...getDirectiveCompletions().filter(c => c.label.startsWith(partial)));
-      completions.push(...(await getVariableCompletions(document)).filter(c => c.label.startsWith(partial)));
+      completions.push(...(await getVariableCompletions(document)).filter(c => c.label.startsWith(`@${partial}`)));
       completions.push(...(await getResolverCompletions(document)).filter(c => c.label.startsWith(`@${partial}`)));
     } else if (line.match(/\[\s*$/)) {
       // After opening bracket - suggest files
@@ -365,7 +377,7 @@ export async function startLanguageServer(): Promise<void> {
     } else if (line.match(/foreach\s+@\w+\s*\($/)) {
       // After 'foreach @command(' - suggest array variables
       completions.push(...await getArrayVariableCompletions(document));
-    } else if (line.match(/@data\s+\w+\s*=\s*foreach/)) {
+    } else if (line.match(/\/var\s+@\w+\s*=\s*foreach/)) {
       // In a data foreach context - suggest parameterized definitions
       completions.push(...await getParameterizedDefinitions(document));
     }
@@ -375,15 +387,14 @@ export async function startLanguageServer(): Promise<void> {
 
   function getDirectiveCompletions(): CompletionItem[] {
     const directives = [
-      { name: 'text', desc: 'Define a text variable' },
-      { name: 'data', desc: 'Define structured data' },
-      { name: 'path', desc: 'Define a file path' },
-      { name: 'run', desc: 'Execute a command' },
-      { name: 'exec', desc: 'Define a reusable command' },
-      { name: 'add', desc: 'Add content to output' },
-      { name: 'import', desc: 'Import from files or modules' },
-      { name: 'when', desc: 'Conditional execution' },
-      { name: 'output', desc: 'Define output target' }
+      { name: '/var', desc: 'Define a variable (replaces @text/@data)' },
+      { name: '/show', desc: 'Display content (replaces @add)' },
+      { name: '/path', desc: 'Define a file path' },
+      { name: '/run', desc: 'Execute a command' },
+      { name: '/exe', desc: 'Define a reusable command (replaces @exec)' },
+      { name: '/import', desc: 'Import from files or modules' },
+      { name: '/when', desc: 'Conditional execution' },
+      { name: '/output', desc: 'Define output target' }
     ];
 
     return directives.map(d => ({
@@ -611,11 +622,11 @@ export async function startLanguageServer(): Promise<void> {
     
     // Find variables that are arrays (data directives)
     for (const [name, variable] of analysis.variables) {
-      if (variable.kind === 'data') {
+      if (variable.kind === 'var') {
         completions.push({
           label: `@${name}`,
           kind: CompletionItemKind.Variable,
-          detail: 'Data variable (may be array)',
+          detail: 'Variable (may be array)',
           insertText: `@${name}`
         });
       }
@@ -630,7 +641,7 @@ export async function startLanguageServer(): Promise<void> {
     
     // Find exec and text variables that have parameters
     for (const [name, variable] of analysis.variables) {
-      if (variable.kind === 'exec' && (variable as any).hasParameters) {
+      if (variable.kind === 'exe' && (variable as any).hasParameters) {
         const paramCount = (variable as any).paramCount || 0;
         completions.push({
           label: `@${name}`,
@@ -638,7 +649,7 @@ export async function startLanguageServer(): Promise<void> {
           detail: `Exec command with ${paramCount} parameter${paramCount !== 1 ? 's' : ''}`,
           insertText: `@${name}`
         });
-      } else if (variable.kind === 'text' && (variable as any).hasParameters) {
+      } else if (variable.kind === 'var' && (variable as any).hasParameters) {
         completions.push({
           label: `@${name}`,
           kind: CompletionItemKind.Function,

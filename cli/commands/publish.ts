@@ -420,7 +420,7 @@ export class PublishCommand {
               console.log(chalk.green('\n✔ Module published to private repository!'));
               console.log(chalk.bold('Module location:'));
               console.log(`  Path: ${path.join(options.path || 'llm/modules', filename)}`);
-              console.log(`  Import: @import { ... } from "${sourceUrl}"`);
+              console.log(`  Import: /import { ... } from "${sourceUrl}"`);
               if (!options.pr) {
                 console.log(chalk.gray('\nTip: Team members with repo access can now import this module directly.'));
               }
@@ -461,7 +461,7 @@ export class PublishCommand {
                 console.log(chalk.green('\n✔ Module published to private repository!'));
                 console.log(chalk.bold('Module location:'));
                 console.log(`  Path: ${path.join(options.path || 'llm/modules', filename)}`);
-                console.log(`  Import: @import { ... } from "${sourceUrl}"`);
+                console.log(`  Import: /import { ... } from "${sourceUrl}"`);
                 if (!options.pr) {
                   console.log(chalk.gray('\nTip: Team members with repo access can now import this module directly.'));
                 }
@@ -872,8 +872,8 @@ export class PublishCommand {
         
         const directive = node as any;
         
-        // Check for variable definitions (@text, @data, @path, @exec)
-        if (['text', 'data', 'path', 'exec'].includes(directive.kind)) {
+        // Check for variable definitions (/var, /path, /exe)
+        if (['var', 'path', 'exe'].includes(directive.kind)) {
           // Extract the identifier from the directive
           const identifierNodes = directive.values?.identifier;
           if (identifierNodes && Array.isArray(identifierNodes)) {

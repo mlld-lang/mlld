@@ -145,7 +145,7 @@ describe('RunCommand', () => {
         return p.toString().endsWith('hello.mld');
       });
       
-      vi.mocked(fs.readFile).mockResolvedValue('@add "Hello World"');
+      vi.mocked(fs.readFile).mockResolvedValue('/show "Hello World"');
       
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       

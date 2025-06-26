@@ -484,7 +484,7 @@ More detailed usage examples and documentation.
 ## module
 
 \`\`\`mlld-run
-@text greeting = "Hello from ${metadata.name}!"
+/var @greeting = "Hello from ${metadata.name}!"
 
 >> Add your mlld code here
 >> All variables are automatically exported
