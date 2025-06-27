@@ -74,6 +74,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'import-namespace-shorthand': 'import/namespace-shorthand',
       'import-namespace-special-chars': 'import/namespace-special-chars',
       'import-stdin-shorthand': 'import/stdin',
+      'data-array-path-disambiguation': 'data/array-path-disambiguation',
+      'data-object-literals-in-arrays': 'data/object-literals-in-arrays',
     };
     
     // Check if we have a mapping for this fixture
@@ -394,6 +396,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           hasInterpolation: false,
           isMultiLine: false
         });
+      } else if (fixture.name === 'data-array-path-disambiguation' || fixture.name === 'data-object-literals-in-arrays') {
+        // Mock /etc/hosts for tests that reference it
+        await fileSystem.mkdir('/etc');
+        await fileSystem.writeFile('/etc/hosts', '##\n# Host Database\n#\n# localhost is used to configure the loopback interface\n# when the system is booting.  Do not change this entry.\n##\n127.0.0.1\tlocalhost\n255.255.255.255\tbroadcasthost\n::1             localhost');
       } else if (fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
         // Enable bash mocking for bash tests and bracket nesting tests that use bash
         process.env.MOCK_BASH = 'true';
