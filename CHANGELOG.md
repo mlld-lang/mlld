@@ -28,6 +28,12 @@ The `/` command approach creates clear disambiguiation between commands and vari
 - Commands: Use @variable in both {...} and "..." forms
 
 ### Added:
+- **Namespace Imports**: Import entire files or modules as namespaced objects
+  - File imports: `/import [./file.mld]` creates namespace from filename (e.g., `@file`)
+  - Custom alias: `/import [./file.mld] as myname` creates `@myname` namespace
+  - Module imports: `/import @author/module` creates `@module` namespace
+  - Access fields: `@namespace.field` to access imported variables
+  - Replaces deprecated wildcard syntax `/import { * } from [file]`
 - **Primitive Value Support**: Direct assignment of unquoted numbers, booleans, and null
   - Numbers: `/var @count = 42`, `/var @price = 19.99`
   - Booleans: `/var @active = true`, `/var @disabled = false`

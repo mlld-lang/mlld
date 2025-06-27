@@ -739,10 +739,9 @@ async function importFromResolverContent(
         }
       );
     } else if (directive.subtype === 'importNamespace') {
-      // Import entire module under a namespace alias
-      const imports = directive.values?.imports || [];
-      const importNode = imports[0]; // Should be single wildcard with alias
-      const alias = importNode?.alias;
+      // Import entire module under a namespace
+      // For shorthand imports, namespace is stored directly in values.namespace
+      const alias = directive.values?.namespace || directive.values?.imports?.[0]?.alias;
       
       if (!alias) {
         throw new Error('Namespace import missing alias');
