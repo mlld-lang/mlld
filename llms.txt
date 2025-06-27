@@ -343,9 +343,6 @@ The unified `/var` directive creates variables with types inferred from syntax:
 
 >> Section executable
 /exe @getIntro(file) = [@file # Introduction]
-
->> Environment declaration (shadow functions)
-/exe js = { formatDate, parseJSON }
 ```
 
 ## Conditional Logic (/when)
@@ -528,16 +525,83 @@ When you need utility functions, create them with /exe instead of trying to work
 >> For bash operations
 /exe @countFiles(dir) = run {find @dir -type f | wc -l}
 /var @fileCount = @countFiles("./src")
-
->> Shadow Environment: Make functions available to each other (JavaScript/Node.js only)
-/exe js = { join, capitalize, fileList }  # These can now call each other!
-/run js {  
-  // Now join() and capitalize() are available here
-  capitalize(join(["hello", "world"], " "))
-}  # Returns: "Hello world"
 ```
 
-Remember: If you're wishing mlld had a feature, you can probably create it as a helper function!
+### Shadow Environments: Making JavaScript Functions Available to Each Other
+
+Shadow environments are a powerful feature that lets JavaScript functions and variables defined in `/exe` blocks become available inside other `js {}` blocks. This solves the common need for utility functions to work together.
+
+**Key Concepts:**
+- Each language (`js` and `node`) has its own separate shadow environment
+- Each module has its own isolated shadow environment (no cross-module pollution)
+- You explicitly declare which functions/variables to expose using `/exe js = { ... }`
+
+**Basic Example:**
+```mlld
+>> Step 1: Define your functions
+/exe @double(n) = js { return n * 2; }
+/exe @triple(n) = js { return n * 3; }
+/exe @capitalize(s) = js { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+>> Step 2: Add them to the shadow environment
+/exe js = { double, triple, capitalize }
+
+>> Step 3: Now they're available in all js blocks in this module!
+/var @result = js {
+  // All three functions are available here
+  const doubled = double(5);        // 10
+  const tripled = triple(doubled);  // 30
+  const text = capitalize("hello"); // "Hello"
+  return `${text}: ${tripled}`;    // "Hello: 30"
+}
+```
+
+**Advanced Pattern - Functions Calling Each Other:**
+```mlld
+>> Define interdependent functions
+/exe @formatName(first, last) = js { return `${first} ${last}`; }
+/exe @greetUser(first, last) = js { 
+  // This will only work after we add formatName to shadow env
+  return `Hello, ${formatName(first, last)}!`; 
+}
+
+>> Add both to shadow environment
+/exe js = { formatName, greetUser }
+
+>> Now greetUser can call formatName
+/var @greeting = js { greetUser("Jane", "Doe") }  // "Hello, Jane Doe!"
+```
+
+**Module Isolation Example:**
+```mlld
+>> In module A
+/exe @secretHelper() = js { return "Module A secret"; }
+/exe js = { secretHelper }
+
+>> In module B  
+/exe @secretHelper() = js { return "Module B secret"; }
+/exe js = { secretHelper }
+
+>> Each module's js blocks see their own secretHelper - no conflicts!
+```
+
+**Node.js Has Its Own Environment:**
+```mlld
+>> JavaScript environment
+/exe @parseData(json) = js { return JSON.parse(json); }
+/exe js = { parseData }
+
+>> Node.js environment (completely separate)
+/exe @readConfig() = node { 
+  const fs = require('fs');
+  return fs.readFileSync('config.json', 'utf8');
+}
+/exe node = { readConfig }
+
+>> js blocks can't see node functions and vice versa
+```
+
+Remember: If you're wishing mlld had a feature, you can probably create it as a helper function and add it to the shadow environment!
 
 ## Additional Essential Features
 

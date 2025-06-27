@@ -666,6 +666,7 @@ export async function interpolate(
   
   for (const node of nodes) {
     if (node.type === 'Text') {
+      // Handle Text nodes - directly use string content
       parts.push(node.content || '');
     } else if (node.type === 'PathSeparator') {
       parts.push(node.value || '/');
@@ -826,32 +827,15 @@ export async function interpolate(
         } else {
           // For other contexts, use JSON representation with custom replacer
           // Note: No indentation for template interpolation - keep it compact
-          stringValue = JSON.stringify(value, (key, val) => {
-            // Convert VariableReference nodes to their string representation
-            if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
-              return `@${val.identifier}`;
-            }
-            // Convert nested DataObject types to plain objects
-            if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
-              return val.properties;
-            }
-            // Convert nested DataArray types to plain arrays
-            if (val && typeof val === 'object' && val.type === 'array' && val.items) {
-              return val.items;
-            }
-            // Hide raw executable details in JSON output
-            if (val && typeof val === 'object' && val.__executable) {
-              const params = val.paramNames || [];
-              return `<function(${params.join(', ')})>`;
-            }
-            return val;
-          });
+          const { JSONFormatter } = await import('./json-formatter');
+          stringValue = JSONFormatter.stringify(value);
         }
       } else if (typeof value === 'object') {
         // Check if this is a namespace object (only if no field access)
         const hadFieldAccess = node.fields && node.fields.length > 0;
         if (variable && variable.metadata?.isNamespace && !hadFieldAccess) {
-          stringValue = cleanNamespaceForDisplay(value);
+          const { JSONFormatter } = await import('./json-formatter');
+          stringValue = JSONFormatter.stringifyNamespace(value);
         } else if (value.__executable) {
           // This is a raw executable object (from field access on namespace)
           const params = value.paramNames || [];
@@ -862,26 +846,8 @@ export async function interpolate(
             stringValue = value.resolvedPath;
           } else {
             // For objects, use compact JSON in templates (no indentation)
-            stringValue = JSON.stringify(value, (key, val) => {
-              // Convert VariableReference nodes to their string representation
-              if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
-                return `@${val.identifier}`;
-              }
-              // Convert nested DataObject types to plain objects
-              if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
-                return val.properties;
-              }
-              // Convert nested DataArray types to plain arrays
-              if (val && typeof val === 'object' && val.type === 'array' && val.items) {
-                return val.items;
-              }
-              // Hide raw executable details in JSON output
-              if (val && typeof val === 'object' && val.__executable) {
-                const params = val.paramNames || [];
-                return `<function(${params.join(', ')})>`;
-              }
-              return val;
-            });
+            const { JSONFormatter } = await import('./json-formatter');
+            stringValue = JSONFormatter.stringify(value);
           }
         }
       } else {

@@ -3,6 +3,7 @@ import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
+import { JSONFormatter } from '../core/json-formatter';
 // Remove old type imports - we'll use only the new ones
 import {
   isTextLike,
@@ -196,29 +197,13 @@ export async function evaluateShow(
         // Use proper indentation for arrays (2 spaces)
         const indent = 2;
         
-        content = JSON.stringify(value, (key, val) => {
-          // Convert VariableReference nodes to their string representation
-          if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
-            return `@${val.identifier}`;
-          }
-          // Convert nested DataObject types to plain objects
-          if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
-            return val.properties;
-          }
-          // Convert nested DataArray types to plain arrays
-          if (val && typeof val === 'object' && val.type === 'array' && val.items) {
-            return val.items;
-          }
-          return val;
-        }, indent);
+        content = JSONFormatter.stringify(value, { pretty: true, indent });
       }
     } else if (value !== null && value !== undefined) {
       // Check if this is a namespace object that needs special formatting
       // BUT NOT if we've accessed a field on it - in that case, value is no longer the namespace
       const hadFieldAccess = variableNode.fields && variableNode.fields.length > 0;
       if (variable && variable.metadata?.isNamespace && !hadFieldAccess) {
-        // Import the cleaning function from interpreter
-        const { cleanNamespaceForDisplay } = await import('../core/interpreter');
         if (process.env.DEBUG_NAMESPACE) {
           console.log('DEBUG: Cleaning namespace for display:', {
             varName: variable.name,
@@ -227,7 +212,7 @@ export async function evaluateShow(
             valueKeys: Object.keys(value)
           });
         }
-        content = cleanNamespaceForDisplay(value);
+        content = JSONFormatter.stringifyNamespace(value);
       } else {
         // Check if the top-level value itself is an executable that needs cleaning
         if (value && typeof value === 'object' && value.__executable) {
@@ -235,26 +220,7 @@ export async function evaluateShow(
           content = `<function(${params.join(', ')})>`;
         } else {
           // For objects, use JSON with custom replacer for VariableReference nodes
-          content = JSON.stringify(value, (key, val) => {
-            // Convert VariableReference nodes to their string representation
-            if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
-              return `@${val.identifier}`;
-            }
-            // Convert nested DataObject types to plain objects
-            if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
-              return val.properties;
-            }
-            // Convert nested DataArray types to plain arrays
-            if (val && typeof val === 'object' && val.type === 'array' && val.items) {
-              return val.items;
-            }
-            // Hide raw executable details in JSON output
-            if (val && typeof val === 'object' && val.__executable) {
-              const params = val.paramNames || [];
-              return `<function(${params.join(', ')})>`;
-            }
-            return val;
-          }, 2);
+          content = JSONFormatter.stringify(value, { pretty: true });
         }
       }
     } else {

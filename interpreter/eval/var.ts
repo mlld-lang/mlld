@@ -582,6 +582,24 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
   if ('content' in item && Array.isArray(item.content)) {
     return await interpolate(item.content, env);
   }
+  
+  // Handle raw Text nodes that may appear in objects
+  if (item.type === 'Text' && 'content' in item) {
+    return item.content;
+  }
+
+  // Handle objects without explicit type property (plain objects from parser)
+  if (!item.type && typeof item === 'object' && item.constructor === Object) {
+    const nestedObj: Record<string, any> = {};
+    for (const [key, value] of Object.entries(item)) {
+      // Skip internal properties
+      if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
+        continue;
+      }
+      nestedObj[key] = await evaluateArrayItem(value, env);
+    }
+    return nestedObj;
+  }
 
   switch (item.type) {
     case 'array':
