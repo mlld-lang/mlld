@@ -9,8 +9,8 @@ VarRHSContent "var assignment value"
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateStyleInterpolation  // Handles backtick, [[...]], double/single quotes
-  / ObjectLiteral               // Object literal { key: value }
-  / BracketAmbiguous            // NEW: Array vs path disambiguation
+  / DataObjectLiteral           // Use data-context object parsing for proper typing
+  / DataBracketAmbiguous        // Use data context version for proper string unwrapping
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
   / PrimitiveValue              // Direct primitives: 42, true, false, null
@@ -99,7 +99,7 @@ BracketContentWithComma
 // Array value - any valid value for array items
 ArrayValue
   = TemplateStyleInterpolation  // Templates
-  / ObjectLiteral               // Objects  
+  / DataObjectLiteral           // Use data-context object parsing for proper typing
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / ArrayVariableReference      // Variable references without context check for arrays
   / BracketAmbiguous            // Nested arrays or paths - moved after AtVar
@@ -124,16 +124,9 @@ PrimitiveValue
   / BooleanLiteral
   / NullLiteral
 
-// Object property values - specialized context for values inside objects
+// Object property values - use data context patterns for proper typing and unwrapping
 ObjectPropertyValue "object property value"
-  = RunCommandValue
-  / CodeExecutionValue
-  / ObjectLiteral
-  / BracketAmbiguous            // Use ambiguous bracket handling for array/path disambiguation
-  / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
-  / ObjectVariableReference     // Variable references without context checks
-  / TemplateStyleInterpolation
-  / PrimitiveValue
+  = DataPropertyValue           // Delegate to data-context patterns
 
 // Variable references in object context (no context checks needed)
 ObjectVariableReference
@@ -178,31 +171,7 @@ CodeExecutionValue
     }
 
 
-// Object literal { key: value }
-ObjectLiteral
-  = "{" _ props:ObjectProperties? _ "}" {
-      const result = {};
-      if (props) {
-        for (const [key, value] of props) {
-          result[key] = value;
-        }
-      }
-      return result;
-    }
-
-// Object properties
-ObjectProperties
-  = first:ObjectProperty rest:(_ "," _ p:ObjectProperty { return p; })* {
-      return [first, ...rest];
-    }
-
-// Object property key:value
-ObjectProperty
-  = key:PropertyKey _ ":" _ value:ObjectPropertyValue {
-      return [key, value];
-    }
-
-// Property key
+// Property key - shared between old ObjectLiteral and DataObjectLiteral
 PropertyKey
   = BaseIdentifier
   / StringLiteral

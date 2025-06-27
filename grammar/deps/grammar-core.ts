@@ -681,4 +681,12 @@ export const helpers = {
       location
     };
   },
+  
+  createObjectFromProperties(properties: any, location: any) {
+    return {
+      type: 'object',
+      properties: properties || {},
+      location
+    };
+  },
 };

@@ -19,12 +19,9 @@ SlashVar "var directive"
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
       }
-      // Handle object literals
-      else if (value && typeof value === 'object' && !Array.isArray(value) && !value.type) {
-        processedValue = {
-          type: 'object',
-          properties: value
-        };
+      // Handle object literals (already typed by DataObjectLiteral)
+      else if (value && value.type === 'object') {
+        processedValue = value;
         metaInfo.inferredType = 'object';
       }
       // Handle array literals
