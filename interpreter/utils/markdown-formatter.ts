@@ -1,5 +1,8 @@
 import * as prettier from 'prettier';
 
+// Track if we've warned about prettier hanging issue
+let hasWarnedAboutHanging = false;
+
 /**
  * Format markdown content using Prettier
  * This ensures consistent formatting of the output
@@ -9,7 +12,27 @@ export async function formatMarkdown(content: string): Promise<string> {
     // First check if the content has intentional trailing spaces
     // We'll preserve them by replacing with a placeholder
     const TRAILING_SPACE_MARKER = '⟪MLLD_TRAILING_SPACE⟫';
-    const lines = content.split('\n');
+    const JSON_BLOCK_MARKER = '⟪MLLD_JSON_BLOCK_';
+    const JSON_BLOCK_END = '⟫';
+    
+    // Find and protect multiline JSON blocks
+    const jsonBlocks: string[] = [];
+    let protectedContent = content;
+    
+    // Match JSON that spans multiple lines (has newlines inside)
+    // Look for opening brace followed by content with newlines, then closing brace
+    const multilineJsonRegex = /(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})/g;
+    protectedContent = protectedContent.replace(multilineJsonRegex, (match) => {
+      // Only protect if it looks like pretty-printed JSON (has consistent indentation)
+      if (match.includes('\n  ')) {
+        const index = jsonBlocks.length;
+        jsonBlocks.push(match);
+        return `${JSON_BLOCK_MARKER}${index}${JSON_BLOCK_END}`;
+      }
+      return match;
+    });
+    
+    const lines = protectedContent.split('\n');
     const trailingSpaceInfo = lines.map(line => {
       const match = line.match(/(\s+)$/);
       return match ? match[1].length : 0;
@@ -35,11 +58,20 @@ export async function formatMarkdown(content: string): Promise<string> {
       // Single quotes in code blocks
       singleQuote: true,
       // Preserve empty lines
-      endOfLine: 'lf'
+      endOfLine: 'lf',
+      // Try to preserve formatting in certain contexts
+      embeddedLanguageFormatting: 'auto'
+    });
+    
+    // Restore JSON blocks
+    let restoredContent = formatted;
+    jsonBlocks.forEach((block, index) => {
+      const marker = `${JSON_BLOCK_MARKER}${index}${JSON_BLOCK_END}`;
+      restoredContent = restoredContent.replace(marker, block);
     });
     
     // Restore trailing spaces
-    const formattedLines = formatted.split('\n');
+    const formattedLines = restoredContent.split('\n');
     const restoredLines = formattedLines.map((line, index) => {
       if (line.includes(TRAILING_SPACE_MARKER)) {
         // Find the original line index (may have changed due to formatting)
@@ -52,6 +84,13 @@ export async function formatMarkdown(content: string): Promise<string> {
       }
       return line.replace(new RegExp(TRAILING_SPACE_MARKER, 'g'), '');
     });
+    
+    // Add a small note about the hanging issue if in CLI mode
+    if (!hasWarnedAboutHanging && process.env.MLLD_CLI_MODE === 'true') {
+      hasWarnedAboutHanging = true;
+      // This is a known issue with Prettier v3 - it can prevent Node.js from exiting
+      // The CLI works around this with process.exit()
+    }
     
     return restoredLines.join('\n');
   } catch (error) {
@@ -85,7 +124,27 @@ export async function formatMarkdownWithOptions(
   try {
     // First check if the content has intentional trailing spaces
     const TRAILING_SPACE_MARKER = '⟪MLLD_TRAILING_SPACE⟫';
-    const lines = content.split('\n');
+    const JSON_BLOCK_MARKER = '⟪MLLD_JSON_BLOCK_';
+    const JSON_BLOCK_END = '⟫';
+    
+    // Find and protect multiline JSON blocks
+    const jsonBlocks: string[] = [];
+    let protectedContent = content;
+    
+    // Match JSON that spans multiple lines (has newlines inside)
+    // Look for opening brace followed by content with newlines, then closing brace
+    const multilineJsonRegex = /(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})/g;
+    protectedContent = protectedContent.replace(multilineJsonRegex, (match) => {
+      // Only protect if it looks like pretty-printed JSON (has consistent indentation)
+      if (match.includes('\n  ')) {
+        const index = jsonBlocks.length;
+        jsonBlocks.push(match);
+        return `${JSON_BLOCK_MARKER}${index}${JSON_BLOCK_END}`;
+      }
+      return match;
+    });
+    
+    const lines = protectedContent.split('\n');
     const trailingSpaceInfo = lines.map(line => {
       const match = line.match(/(\s+)$/);
       return match ? match[1].length : 0;
@@ -110,8 +169,15 @@ export async function formatMarkdownWithOptions(
     
     const formatted = await prettier.format(markedContent, prettierOptions);
     
+    // Restore JSON blocks
+    let restoredContent = formatted;
+    jsonBlocks.forEach((block, index) => {
+      const marker = `${JSON_BLOCK_MARKER}${index}${JSON_BLOCK_END}`;
+      restoredContent = restoredContent.replace(marker, block);
+    });
+    
     // Restore trailing spaces
-    const formattedLines = formatted.split('\n');
+    const formattedLines = restoredContent.split('\n');
     const restoredLines = formattedLines.map((line, index) => {
       if (line.includes(TRAILING_SPACE_MARKER)) {
         // Find the original line index (may have changed due to formatting)

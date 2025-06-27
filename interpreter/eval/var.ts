@@ -165,7 +165,8 @@ export async function evaluateVar(
       if (valueNode.properties) {
         for (const [key, propValue] of Object.entries(valueNode.properties)) {
           // Each property value might need interpolation
-          if (propValue && typeof propValue === 'object' && 'content' in propValue) {
+          if (propValue && typeof propValue === 'object' && 'content' in propValue && Array.isArray(propValue.content)) {
+            // Handle wrapped string content (quotes, backticks, etc.)
             processedObject[key] = await interpolate(propValue.content as any, env);
           } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
             // Handle array values in objects
@@ -175,7 +176,17 @@ export async function evaluateVar(
               processedArray.push(evaluated);
             }
             processedObject[key] = processedArray;
+          } else if (propValue && typeof propValue === 'object' && propValue.type === 'object') {
+            // Handle nested objects recursively
+            const nestedObj: Record<string, any> = {};
+            if (propValue.properties) {
+              for (const [nestedKey, nestedValue] of Object.entries(propValue.properties)) {
+                nestedObj[nestedKey] = await evaluateArrayItem(nestedValue, env);
+              }
+            }
+            processedObject[key] = nestedObj;
           } else {
+            // For other types (numbers, booleans, null), use as-is
             processedObject[key] = propValue;
           }
         }
@@ -561,6 +572,13 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
   }
 
   // Handle wrapped content first (e.g., quoted strings in arrays)
+  // This includes strings in objects: {"name": "alice"} where "alice" becomes
+  // {content: [{type: 'Text', content: 'alice'}], wrapperType: 'doubleQuote'}
+  if ('content' in item && Array.isArray(item.content) && 'wrapperType' in item) {
+    return await interpolate(item.content, env);
+  }
+
+  // Also handle the case where we just have content array without wrapperType
   if ('content' in item && Array.isArray(item.content)) {
     return await interpolate(item.content, env);
   }

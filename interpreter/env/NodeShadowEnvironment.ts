@@ -18,6 +18,8 @@ export class NodeShadowEnvironment {
     this.shadowFunctions = new Map();
     
     // Create base context with Node.js globals
+    // NOTE: Including timer functions (setTimeout, etc.) in the context
+    // may cause the process to hang if they create timers that aren't cleaned up
     this.context = vm.createContext({
       // Console and basic I/O
       console,

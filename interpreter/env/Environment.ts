@@ -118,6 +118,9 @@ export class Environment {
   // Import approval bypass flag
   private approveAllImports: boolean = false;
   
+  // Track child environments for cleanup
+  private childEnvironments: Set<Environment> = new Set();
+  
   // Blank line normalization flag
   private normalizeBlankLines: boolean = true;
   
@@ -2151,6 +2154,10 @@ ${code}
     );
     // Track the current node count so we know which nodes are new in the child
     child.initialNodeCount = this.nodes.length;
+    
+    // Track child environment for cleanup
+    this.childEnvironments.add(child);
+    
     return child;
   }
   
@@ -2687,22 +2694,31 @@ ${code}
    * Clean up resources that might keep the event loop alive
    */
   cleanup(): void {
+    console.log('DEBUG: Environment cleanup called');
+    
     // Clean up NodeShadowEnvironment if it exists
     if (this.nodeShadowEnv) {
+      console.log('DEBUG: Cleaning up NodeShadowEnvironment');
       this.nodeShadowEnv.cleanup();
       this.nodeShadowEnv = undefined;
     }
     
     // Clean up child environments recursively
-    // Note: We don't track child environments currently, so this would need
-    // to be implemented if we want full cleanup of all child environments
+    console.log(`DEBUG: Cleaning up ${this.childEnvironments.size} child environments`);
+    for (const child of this.childEnvironments) {
+      child.cleanup();
+    }
+    this.childEnvironments.clear();
     
     // Clear any other resources that might keep event loop alive
+    console.log('DEBUG: Clearing caches and shadow envs');
     this.urlCache.clear();
     this.resolverVariableCache.clear();
     this.shadowEnvs.clear();
     
     // Clear import stack to prevent memory leaks
     this.importStack.clear();
+    
+    console.log('DEBUG: Cleanup complete');
   }
 }

@@ -67,8 +67,8 @@ describe('Output Format Tests', () => {
       // Note: Current implementation adds extra newlines
       expect(result.trim()).toBe(`Hello Markdown
 {
-"name": "MyApp",
-"version": "1.0.0"
+  "name": "MyApp",
+  "version": "1.0.0"
 }`);
     });
   });

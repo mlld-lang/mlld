@@ -169,6 +169,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     // TODO: revisit section logic - section extraction in bracket syntax not working correctly
     'text-assignment-add-section-bracket-rename': 'Section extraction in bracket syntax needs investigation',
     'text-path-section-bracket-rename': 'Section extraction in bracket syntax needs investigation',
+    // Module import tests that need published modules
+    'data-object-strings-array-functions': 'Issue #254: Registry tests need isolation - @mlld/array not published yet',
   };
 
   // Separate fixtures into categories for better reporting

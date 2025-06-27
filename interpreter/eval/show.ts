@@ -93,7 +93,7 @@ export async function evaluateShow(
       originalValue = value;
       
       // Check if it's a lazy-evaluated array (still in AST form)
-      if (value && typeof value === 'object' && value.type === 'array' && ('items' in value || 'elements' in value)) {
+      if (value && typeof value === 'object' && value.type === 'array' && 'items' in value) {
         // Evaluate the array to get the actual values
         value = await evaluateDataValue(value, env);
       }
@@ -205,22 +205,58 @@ export async function evaluateShow(
           if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
             return val.properties;
           }
+          // Convert nested DataArray types to plain arrays
+          if (val && typeof val === 'object' && val.type === 'array' && val.items) {
+            return val.items;
+          }
           return val;
         }, indent);
       }
     } else if (value !== null && value !== undefined) {
-      // For objects, use JSON with custom replacer for VariableReference nodes
-      content = JSON.stringify(value, (key, val) => {
-        // Convert VariableReference nodes to their string representation
-        if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
-          return `@${val.identifier}`;
+      // Check if this is a namespace object that needs special formatting
+      // BUT NOT if we've accessed a field on it - in that case, value is no longer the namespace
+      const hadFieldAccess = variableNode.fields && variableNode.fields.length > 0;
+      if (variable && variable.metadata?.isNamespace && !hadFieldAccess) {
+        // Import the cleaning function from interpreter
+        const { cleanNamespaceForDisplay } = await import('../core/interpreter');
+        if (process.env.DEBUG_NAMESPACE) {
+          console.log('DEBUG: Cleaning namespace for display:', {
+            varName: variable.name,
+            hasMetadata: !!variable.metadata,
+            isNamespace: variable.metadata?.isNamespace,
+            valueKeys: Object.keys(value)
+          });
         }
-        // Convert nested DataObject types to plain objects
-        if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
-          return val.properties;
+        content = cleanNamespaceForDisplay(value);
+      } else {
+        // Check if the top-level value itself is an executable that needs cleaning
+        if (value && typeof value === 'object' && value.__executable) {
+          const params = value.paramNames || [];
+          content = `<function(${params.join(', ')})>`;
+        } else {
+          // For objects, use JSON with custom replacer for VariableReference nodes
+          content = JSON.stringify(value, (key, val) => {
+            // Convert VariableReference nodes to their string representation
+            if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
+              return `@${val.identifier}`;
+            }
+            // Convert nested DataObject types to plain objects
+            if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
+              return val.properties;
+            }
+            // Convert nested DataArray types to plain arrays
+            if (val && typeof val === 'object' && val.type === 'array' && val.items) {
+              return val.items;
+            }
+            // Hide raw executable details in JSON output
+            if (val && typeof val === 'object' && val.__executable) {
+              const params = val.paramNames || [];
+              return `<function(${params.join(', ')})>`;
+            }
+            return val;
+          }, 2);
         }
-        return val;
-      }, 2);
+      }
     } else {
       // Handle null/undefined
       content = '';

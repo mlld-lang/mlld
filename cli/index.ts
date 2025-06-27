@@ -1115,6 +1115,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     
     // Clean up environment to prevent event loop from staying alive
     if (environment && 'cleanup' in environment) {
+      console.log('DEBUG: Calling environment cleanup');
       (environment as any).cleanup();
     }
     
@@ -1124,9 +1125,17 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       await new Promise(resolve => setTimeout(resolve, 10));
       process.exit(0);
     }
+    
+    // Force exit if not in stdout mode but cleanup is complete
+    // This is a workaround for a Prettier v3 bug where the process doesn't exit naturally
+    // after formatting markdown content. The issue persists in v3.6.2.
+    console.log('DEBUG: Forcing process exit after cleanup');
+    await new Promise(resolve => setTimeout(resolve, 50));
+    process.exit(0);
   } catch (error: any) {
     // Clean up environment even on error
     if (environment && 'cleanup' in environment) {
+      console.log('DEBUG: Calling environment cleanup (error path)');
       environment.cleanup();
     }
     await handleError(error, cliOptions);

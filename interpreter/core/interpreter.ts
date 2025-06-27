@@ -530,6 +530,10 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
       
       return evaluatedValue;
     }
+    
+    // Don't clean namespace objects here - they need to remain as objects
+    // for field access to work. Cleaning should only happen during display.
+    
     return variable.value;
   } else if (isPath(variable)) {
     // Path variables return the resolved path string
@@ -560,6 +564,69 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
   
   // Fallback - should not reach here with proper typing
   return variable.value;
+}
+
+/**
+ * Clean up namespace objects for display
+ * Shows only frontmatter and exported variables, not internal structure
+ */
+export function cleanNamespaceForDisplay(namespaceObject: any): string {
+  const cleaned: any = {
+    frontmatter: {},
+    exports: {
+      variables: {},
+      executables: {}
+    }
+  };
+  
+  // Add frontmatter if present
+  const fm = namespaceObject.fm || namespaceObject.frontmatter || namespaceObject.__meta__;
+  if (fm && Object.keys(fm).length > 0) {
+    cleaned.frontmatter = fm;
+  }
+  
+  // Separate variables and executables
+  const internalFields = ['fm', 'frontmatter', '__meta__'];
+  let hasExports = false;
+  
+  for (const [key, value] of Object.entries(namespaceObject)) {
+    if (!internalFields.includes(key)) {
+      hasExports = true;
+      // Check if it's an executable
+      if (value && typeof value === 'object' && (value as any).__executable) {
+        const params = (value as any).paramNames || [];
+        cleaned.exports.executables[key] = `<function(${params.join(', ')})>`;
+      } else if (value && typeof value === 'object' && value.type === 'executable') {
+        // Alternative executable format
+        const def = value.value || value.definition;
+        const params = def?.paramNames || [];
+        cleaned.exports.executables[key] = `<function(${params.join(', ')})>`;
+      } else {
+        // Regular variable - extract just the value, not the whole AST
+        if (value && typeof value === 'object' && value.value !== undefined) {
+          // This is a Variable object with a value property
+          cleaned.exports.variables[key] = value.value;
+        } else {
+          // Direct value
+          cleaned.exports.variables[key] = value;
+        }
+      }
+    }
+  }
+  
+  // If namespace is completely empty, return {}
+  const hasFrontmatter = fm && Object.keys(fm).length > 0;
+  if (!hasFrontmatter && !hasExports) {
+    return '{}';
+  }
+  
+  // Remove empty frontmatter if no data
+  if (!hasFrontmatter) {
+    delete cleaned.frontmatter;
+  }
+  
+  // Pretty print the JSON with 2-space indentation
+  return JSON.stringify(cleaned, null, 2);
 }
 
 /**
@@ -757,15 +824,65 @@ export async function interpolate(
           parts.push(stringValue);
           continue;
         } else {
-          // For other contexts, use JSON representation
-          stringValue = JSON.stringify(value);
+          // For other contexts, use JSON representation with custom replacer
+          // Note: No indentation for template interpolation - keep it compact
+          stringValue = JSON.stringify(value, (key, val) => {
+            // Convert VariableReference nodes to their string representation
+            if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
+              return `@${val.identifier}`;
+            }
+            // Convert nested DataObject types to plain objects
+            if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
+              return val.properties;
+            }
+            // Convert nested DataArray types to plain arrays
+            if (val && typeof val === 'object' && val.type === 'array' && val.items) {
+              return val.items;
+            }
+            // Hide raw executable details in JSON output
+            if (val && typeof val === 'object' && val.__executable) {
+              const params = val.paramNames || [];
+              return `<function(${params.join(', ')})>`;
+            }
+            return val;
+          });
         }
       } else if (typeof value === 'object') {
-        // For path objects, try to extract the resolved path first
-        if (isPathValue(value)) {
-          stringValue = value.resolvedPath;
+        // Check if this is a namespace object (only if no field access)
+        const hadFieldAccess = node.fields && node.fields.length > 0;
+        if (variable && variable.metadata?.isNamespace && !hadFieldAccess) {
+          stringValue = cleanNamespaceForDisplay(value);
+        } else if (value.__executable) {
+          // This is a raw executable object (from field access on namespace)
+          const params = value.paramNames || [];
+          stringValue = `<function(${params.join(', ')})>`;
         } else {
-          stringValue = JSON.stringify(value);
+          // For path objects, try to extract the resolved path first
+          if (isPathValue(value)) {
+            stringValue = value.resolvedPath;
+          } else {
+            // For objects, use compact JSON in templates (no indentation)
+            stringValue = JSON.stringify(value, (key, val) => {
+              // Convert VariableReference nodes to their string representation
+              if (val && typeof val === 'object' && val.type === 'VariableReference' && val.identifier) {
+                return `@${val.identifier}`;
+              }
+              // Convert nested DataObject types to plain objects
+              if (val && typeof val === 'object' && val.type === 'object' && val.properties) {
+                return val.properties;
+              }
+              // Convert nested DataArray types to plain arrays
+              if (val && typeof val === 'object' && val.type === 'array' && val.items) {
+                return val.items;
+              }
+              // Hide raw executable details in JSON output
+              if (val && typeof val === 'object' && val.__executable) {
+                const params = val.paramNames || [];
+                return `<function(${params.join(', ')})>`;
+              }
+              return val;
+            });
+          }
         }
       } else {
         stringValue = String(value);

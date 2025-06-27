@@ -57,6 +57,15 @@ export async function evaluateExecInvocation(
     // Resolve the object value
     const objectValue = await resolveVariableValue(objectVar, env);
     
+    if (process.env.DEBUG_EXEC) {
+      console.log('DEBUG: Object reference in exec invocation', {
+        objectRef: objectRef.identifier,
+        objectValueType: typeof objectValue,
+        isString: typeof objectValue === 'string',
+        objectKeys: typeof objectValue === 'object' && objectValue !== null ? Object.keys(objectValue) : 'not-object'
+      });
+    }
+    
     // Access the field
     if (objectRef.fields && objectRef.fields.length > 0) {
       // Navigate through nested fields
