@@ -70,12 +70,54 @@ export async function evaluateExecInvocation(
       }
       // Now access the command field
       if (typeof currentValue === 'object' && currentValue !== null) {
-        variable = (currentValue as any)[commandName];
+        const fieldValue = (currentValue as any)[commandName];
+        // Check if this is a raw executable object that needs conversion
+        if (fieldValue && typeof fieldValue === 'object' && fieldValue.__executable) {
+          // Convert raw executable to ExecutableVariable
+          const { createExecutableVariable } = await import('@core/types/variable');
+          variable = createExecutableVariable(
+            commandName,
+            fieldValue.value.type,
+            fieldValue.value.template,
+            fieldValue.paramNames || [],
+            fieldValue.value.language,
+            {
+              directive: 'exec',
+              syntax: 'code',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            fieldValue.metadata
+          );
+        } else {
+          variable = fieldValue;
+        }
       }
     } else {
       // Direct field access on the object
       if (typeof objectValue === 'object' && objectValue !== null) {
-        variable = (objectValue as any)[commandName];
+        const fieldValue = (objectValue as any)[commandName];
+        // Check if this is a raw executable object that needs conversion
+        if (fieldValue && typeof fieldValue === 'object' && fieldValue.__executable) {
+          // Convert raw executable to ExecutableVariable
+          const { createExecutableVariable } = await import('@core/types/variable');
+          variable = createExecutableVariable(
+            commandName,
+            fieldValue.value.type,
+            fieldValue.value.template,
+            fieldValue.paramNames || [],
+            fieldValue.value.language,
+            {
+              directive: 'exec',
+              syntax: 'code',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            fieldValue.metadata
+          );
+        } else {
+          variable = fieldValue;
+        }
       }
     }
     
