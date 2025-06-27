@@ -84,7 +84,7 @@ Data structures can reference and execute executable variables using the univers
 
 ```mlld
 /exe @getTimestamp() = "date +%s"
-/exe @formatName(name) = [[{{name}} (formatted)]]
+/exe @formatName(name) = ::{{name}} (formatted)::
 
 /var @info = {
   >> Store executable references (not executed)
@@ -107,11 +107,11 @@ This pattern allows for powerful composition and lazy evaluation strategies.
 
 Data variables are referenced differently based on context:
 - In directives: `@identifier` or `@identifier.field`
-- In templates `[[...]]`: `{{identifier}}` or `{{identifier.field}}`
+- In templates `::...::`: `{{identifier}}` or `{{identifier.field}}`
 
 ```mlld
 /var @user = { "name": "Alice", "id": 123 }
-/var @greeting = [[Hello, {{user.name}}!]]
+/var @greeting = ::Hello, {{user.name}}!::
 /show @user.name
 ```
 
@@ -124,7 +124,7 @@ You can access nested fields using dot notation:
     "version": "1.0.0"
   }
 }
-/var @appInfo = [[App: {{config.app.name}} v{{config.app.version}}]]
+/var @appInfo = ::App: {{config.app.name}} v{{config.app.version}}::
 ```
 
 ### Accessing Array Elements
@@ -133,8 +133,8 @@ Use dot notation to access array elements:
 
 ```mlld
 /var @fruits = ["apple", "banana", "cherry"]
-/var @favorite = [[My favorite fruit is {{fruits.0}}]]
-/var @list = [[Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}]]
+/var @favorite = ::My favorite fruit is {{fruits.0}}::
+/var @list = ::Items: {{fruits.0}}, {{fruits.1}}, and {{fruits.2}}::
 ```
 
 Note: Currently, only dot notation is supported for array access. Bracket notation (`fruits[0]`) is not supported.

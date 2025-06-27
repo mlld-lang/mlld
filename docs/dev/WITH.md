@@ -661,12 +661,12 @@ As of version 1.4.2, mlld includes built-in transformers that work seamlessly wi
 @text result = run [(curl api.com/users)] | @json | @csv
 
 # With custom functions
-@exec addSummary(data) = [[
+@exec addSummary(data) = ::
 # Summary
 Total items: {{data.length}}
 
 {{INPUT}}
-]]
+::
 
 @text report = run [(cat data.json)] | @json | @addSummary | @md
 ```

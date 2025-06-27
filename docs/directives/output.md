@@ -111,12 +111,12 @@ The `/output` directive provides flexible ways to write content to various desti
 ### Parameterized Template Output
 
 ```mlld
-/exe @taskTemplate(issue, assignee) = [[
+/exe @taskTemplate(issue, assignee) = ::
 # Task {{issue}}
 Assigned to: {{assignee}}
 
 Please review the issue and provide updates.
-]]
+::
 
 # Enhanced syntax
 /output @taskTemplate("123", "Alice") to "tasks/task-123.md"

@@ -150,7 +150,7 @@ The plugin uses standard highlight groups that work with any color scheme:
 >> This is a comment
 
 @text greeting = "Hello, World!"
-@text message = [[Welcome {{user}}!]]
+@text message = ::Welcome {{user}}!::
 
 @data config = {
   "name": "MyApp",

@@ -13,7 +13,7 @@ The `/text` directive defines a text variable that can store string values.
 /var @identifier = "value"
 /var @identifier = "Hello @name!"
 /var @identifier = `Template with @variable`
-/var @identifier = [[Template with {{variable}}]]
+/var @identifier = ::Template with {{variable}}::
 /var @identifier = /run "command"
 ```
 
@@ -41,17 +41,17 @@ Text values can be defined using different quote styles:
 /var @interpolated = "Hello @name!"        # @ interpolation in double quotes
 /var @literal = 'Single quotes @name'      # Single quotes (no interpolation)
 /var @backtick = `Hello @name!`            # Backtick template with @ interpolation
-/var @template = [[Hello {{name}}!]]       # Double-bracket template with {{}} interpolation
+/var @template = ::Hello {{name}}!::       # Double-bracket template with {{}} interpolation
 ```
 
 For multi-line templates, use double brackets:
 
 ```mlld
-/var @multiline = [[
+/var @multiline = ::
   This is a
   multi-line
   template with {{variables}}
-]]
+::
 ```
 
 ## Referencing Text Variables
@@ -60,13 +60,13 @@ Text variables are referenced differently based on context:
 - In directives: `@identifier`
 - In double quotes: `@identifier`
 - In backtick templates: `@identifier`
-- In double-bracket templates `[[...]]`: `{{identifier}}`
+- In double-bracket templates `::...::`: `{{identifier}}`
 
 ```mlld
 /var @name = "World"
 /var @greeting = "Hello, @name!"           # @ interpolation
 /var @welcome = `Welcome, @name!`           # @ in backticks
-/var @message = [[Greetings, {{name}}!]]   # {{}} in double brackets
+/var @message = ::Greetings, {{name}}!::   # {{}} in double brackets
 /show @greeting
 ```
 
@@ -80,9 +80,9 @@ Different template styles support different interpolation syntax:
 - Array access: `"Score: @scores.0"`
 
 ### Double-Bracket Templates ({{}} interpolation)
-- Text variables: `[[Hello, {{name}}!]]`
-- Field access: `[[User: {{user.name}}]]`
-- Array access: `[[Score: {{scores.0}}]]`
+- Text variables: `::Hello, {{name}}!::`
+- Field access: `::User: {{user.name}}::`
+- Array access: `::Score: {{scores.0}}::`
 
 
 ## Examples
@@ -109,7 +109,7 @@ Using different template styles:
 /var @name = "World"
 /var @msg1 = "Hello, @name!"              # @ in double quotes
 /var @msg2 = `Greetings, @name!`          # @ in backticks
-/var @msg3 = [[Welcome, {{name}}!]]       # {{}} in double brackets
+/var @msg3 = ::Welcome, {{name}}!::       # {{}} in double brackets
 ```
 
 ## Error Handling
@@ -125,5 +125,5 @@ Using different template styles:
 - Text variables cannot have field access (use data variables for structured data)
 - Double quotes and backticks support @ interpolation
 - Single quotes treat @ as literal text (no interpolation)
-- Double-bracket templates `[[...]]` require `{{var}}` syntax for interpolation
+- Double-bracket templates `::...::` require `{{var}}` syntax for interpolation
 - The key rule: "Double brackets, double braces"

@@ -46,7 +46,7 @@ echo "$healthy"
 /when @all_services_healthy() => @add "✅ All services healthy - proceeding with analysis"
 
 ## Analyze Each Service
-/var @serviceAnalysisPrompt = [[
+/var @serviceAnalysisPrompt = ::
 Analyze the {{serviceName}} service:
 - Description: {{serviceDescription}}
 - Configuration: {{serviceConfig}}
@@ -59,7 +59,7 @@ Please provide:
 2. Performance considerations
 3. Integration points
 4. Recommendations
-]]
+::
 
 ## Generate Analysis for Each Service
 /when all: [
@@ -82,7 +82,7 @@ echo "{{serviceAnalysisPrompt}}" | llm --model gpt-4}
 ] => run {npm run deploy}
 
 ## Generate Summary Report
-/var @summaryTemplate = [[
+/var @summaryTemplate = ::
 # Service Analysis Summary
 
 Generated: {{TIME}}
@@ -107,6 +107,6 @@ foreach @not_healthy(@services)
   @tests_passing() => @add "- Ready for deployment"
   run {echo "true"} => @add "- Fix failing tests before deployment"
 ]
-]]
+::
 
 /show @summaryTemplate

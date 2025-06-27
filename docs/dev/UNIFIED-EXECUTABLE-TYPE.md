@@ -28,7 +28,7 @@ type ExecutableDefinition =
   | CommandExecutable      // @exec name(params) = run [command]
   | CommandRefExecutable   // @exec name(params) = @otherCommand(args)
   | CodeExecutable        // @exec name(params) = @run language [code]
-  | TemplateExecutable;   // @text name(params) = [[template]]
+  | TemplateExecutable;   // @text name(params) = ::template::
 ```
 
 Each executable definition includes:

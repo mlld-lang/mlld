@@ -78,7 +78,7 @@ This design keeps documents readable as regular Markdown while enabling programm
 - Backtick templates: `` `Hello @name!` `` - @name IS interpolated (PREFERRED)
 - String literals: `/var @msg = "Hello @name"` - @name is NOT interpolated (literal text)
 - Command context: `{echo "Hello @name"}` - @name IS interpolated (variable value)
-- Double-bracket escape hatch: `[[Hello {{name}}]]` - For social media with many @ symbols
+- Double-bracket escape hatch: `::Hello {{name}}::` - For social media with many @ symbols
 
 ### 6. Field Access Rules
 ```mlld
@@ -89,7 +89,7 @@ This design keeps documents readable as regular Markdown while enabling programm
 /show @user.scores.1       << 20 (array access with dot notation)
 
 >> In templates:
-/show [[{{user.name}} scored {{user.scores.0}}]]
+/show ::{{user.name}} scored {{user.scores.0}}::
 ```
 
 ### 7. Parameterized Content
@@ -99,7 +99,7 @@ This design keeps documents readable as regular Markdown while enabling programm
 /run @greet("Alice")
 
 >> For templates, use /exe:
-/exe @welcome(name, role) = [[Welcome {{name}}, our new {{role}}!]]
+/exe @welcome(name, role) = ::Welcome {{name}}, our new {{role}}!::
 /show @welcome("Bob", "developer")
 ```
 
@@ -203,7 +203,7 @@ Important: /when doesn't support inline comparisons. Create helper functions:
 ### 11. Iteration with foreach
 ```mlld
 /var @names = ["Alice", "Bob", "Charlie"]
-/exe @greetTemplate(name) = [[Hello, {{name}}!]]
+/exe @greetTemplate(name) = ::Hello, {{name}}!::
 /var @greetings = foreach @greetTemplate(@names)
 >> greetings = ["Hello, Alice!", "Hello, Bob!", "Hello, Charlie!"]
 ```
@@ -302,10 +302,10 @@ The unified `/var` directive creates variables with types inferred from syntax:
 
 ### Double-bracket templates (ESCAPE HATCH ONLY)
 ```mlld
->> ONLY use [[...]] when you have many @ symbols to escape (social media)
-/var @tweet = [[Hey @{{handle}}, check out @{{otherHandle}}'s post!]]
+>> ONLY use ::...:: when you have many @ symbols to escape (social media)
+/var @tweet = ::Hey @{{handle}}, check out @{{otherHandle}}'s post!::
 
->> Limitations of [[...]] templates:
+>> Limitations of ::...:: templates:
 >> - Cannot call @executables
 >> - More verbose {{variable}} syntax
 >> - Only for avoiding @ symbol conflicts
@@ -425,12 +425,12 @@ The unified `/var` directive creates variables with types inferred from syntax:
 
 ### Template with many @ symbols
 ```mlld
->> Use [[...]] when you have many @ symbols to escape
-/var @twitterTemplate = [[
+>> Use ::...:: when you have many @ symbols to escape
+/var @twitterTemplate = ::
   Hey @{{handle}}, love your work!
   @{{otherHandle}} you should check this out.
   Reply to this tweet @{{originalAuthor}}
-]]
+::
 ```
 
 ### Field access
@@ -692,7 +692,7 @@ Single parameter functions automatically receive @INPUT:
 
 Multi-parameter functions with JSON get automatic destructuring:
 ```mlld
-/exe @greet(name, age) = [[{{name}} is {{age}} years old]]
+/exe @greet(name, age) = ::{{name}} is {{age}} years old::
 /var @result = run {echo '{"name":"Alice","age":30}'} | @greet
 >> name = "Alice", age = 30
 ```
@@ -711,7 +711,7 @@ mlld includes transformers for common formats (both UPPERCASE and lowercase):
 /var @users = run {curl api.com/users} | @json | @csv
 
 >> Chain with custom functions
-/exe @addTotal(data) = [[Total: {{data.length}} items\n{{INPUT}}]]
+/exe @addTotal(data) = ::Total: {{data.length}} items\n{{INPUT}}::
 /var @report = run {cat data.json} | @json | @addTotal | @md
 ```
 
@@ -755,7 +755,7 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 ### 1. Treating mlld as a Template Language
 ```mlld
 ❌ This is {{name}}'s document     # Won't work - no / directive
-✅ /show [[This is {{name}}'s document]]
+✅ /show ::This is {{name}}'s document::
 ```
 
 ### 2. Forgetting Command Braces
@@ -776,9 +776,9 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 
 ### 4. Mixing Variable Syntaxes
 ```mlld
-❌ /show [[Hello @name]]           # Wrong syntax in template
+❌ /show ::Hello @name::           # Wrong syntax in template
 ❌ /run {echo "{{message}}"}       # Wrong syntax in command
-✅ /show [[Hello {{name}}]]        # Correct template syntax
+✅ /show ::Hello {{name}}::        # Correct template syntax
 ✅ /run {echo "@message"}          # Correct command syntax
 
 >> String literal vs command context example:
@@ -810,7 +810,7 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 >> Attempting to build strings piece by piece
 
 ✅ RIGHT: Use templates
-/exe @greeting(name, time) = [[Good {{time}}, {{name}}!]]
+/exe @greeting(name, time) = ::Good {{time}}, {{name}}!::
 /show @greeting("Alice", "morning")
 ```
 
@@ -1272,7 +1272,7 @@ Understanding where different variable syntaxes work is crucial:
 
 | Context | Syntax | Example | Notes |
 |---------|--------|---------|-------|
-| Templates `[[...]]` | `{{variable}}` | `[[Hello {{name}}!]]` | Double brackets, double braces |
+| Templates `::...::` | `{{variable}}` | `::Hello {{name}}!::` | Double brackets, double braces |
 | Backtick templates | `@variable` | `` `Hello @name!` `` | Simpler template syntax |
 | Commands `{...}` | `@variable` | `{echo "@message"}` | @ prefix for interpolation |
 | JavaScript | Plain names | `{(@array.join(@sep))}` | Parameters are JS variables |

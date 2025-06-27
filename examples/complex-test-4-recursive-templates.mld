@@ -5,12 +5,12 @@
 /var @current_date = run {date +%Y-%m-%d}
 
 # Template that references another template
-/var @header_template = [[
+/var @header_template = ::
 ===================================
 {{name}} v{{version}}
-===================================]]
+===================================::
 
-/exe @section_template(title, content) = @add [[
+/exe @section_template(title, content) = @add ::
 {{header_template}}
 
 ## {{title}}
@@ -18,7 +18,7 @@
 {{content}}
 
 Generated at: {{current_date}}
-]]
+::
 
 # Data with template references
 /var @doc_sections = {
@@ -33,7 +33,7 @@ Generated at: {{current_date}}
 }
 
 # Complex nested template usage
-/var @full_doc = [[
+/var @full_doc = ::
 {{header_template}}
 
 # Documentation for {{name}}
@@ -48,6 +48,6 @@ This document demonstrates:
 - Header: Uses {{header_template}}
 - Sections: Generated with section_template
 - Data: Pulled from {{doc_sections}}
-]]
+::
 
 /show @full_doc

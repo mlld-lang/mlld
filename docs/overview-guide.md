@@ -61,9 +61,9 @@ Meld processes directives sequentially, building up state as it goes:
   "language": "Python"
 }
 
-/var @prompt = [[
+/var @prompt = ::
 You are helping {{name}}, a {{role}}, working on {{context.project}} using {{context.language}}.
-]]
+::
 
 /show @prompt
 ```
@@ -76,7 +76,7 @@ This is crucial - most directives just set up state. Only `/add` and `/run` actu
 /var @hidden = "This won't appear in output"
 /var @config = { "debug": true }
 
-/show [[This WILL appear in output]]
+/show ::This WILL appear in output::
 /run "echo This command output WILL appear"
 ```
 
@@ -127,7 +127,7 @@ Import and combine modules to build sophisticated prompts:
 /var @codebase = /run "find src -name '*.py' -exec cat {} \;"
 /var @recent_changes = /run "git diff main..HEAD"
 
-/var @full_prompt = [[
+/var @full_prompt = ::
 {{architect}}
 
 Here's our codebase:
@@ -141,7 +141,7 @@ Recent changes:
 ```
 
 {{analyze_code}}
-]]
+::
 
 /run "claude --message '@full_prompt'"
 ```
@@ -232,11 +232,11 @@ mlld supports explicit step-by-step processing through transformation pipelines:
 
 ```mlld
 # Define transformation stages
-@exec checkAccuracy(response) = @run @claude([[Review this response for factual accuracy: {{response}}]])
+@exec checkAccuracy(response) = @run @claude(::Review this response for factual accuracy: {{response}}::)
 
-@exec improveClarity(response) = @run @claude([[Rewrite this for clarity, preserving all facts: {{response}}]])
+@exec improveClarity(response) = @run @claude(::Rewrite this for clarity, preserving all facts: {{response}}::)
 
-@exec addExamples(response) = @run @claude([[Add concrete examples to illustrate points: {{response}}]])
+@exec addExamples(response) = @run @claude(::Add concrete examples to illustrate points: {{response}}::)
 
 # Apply pipeline to ensure quality
 @text answer = @run @claude("Explain how DNS works") with {
@@ -284,7 +284,7 @@ Use `@map` to gather diverse viewpoints efficiently:
 @data reviews = @map @analyze(@perspectives)
 
 # Synthesize all perspectives
-@text synthesis = @run @claude([[Synthesize these reviews into actionable recommendations: {{reviews}}]])
+@text synthesis = @run @claude(::Synthesize these reviews into actionable recommendations: {{reviews}}::)
 
 @add @synthesis
 ```
@@ -385,7 +385,7 @@ Import modules from the public registry using `@user/module` syntax:
 
 @text current_pr = run [(gh pr view --json body -q .body)]
 
-@text review_prompt = [[
+@text review_prompt = ::
 {{senior_reviewer}}
 
 Our coding standards:
@@ -393,7 +393,7 @@ Our coding standards:
 
 Please review this PR:
 {{current_pr}}
-]]
+::
 ```
 
 **How it works:**

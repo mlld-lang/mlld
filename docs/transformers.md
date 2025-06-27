@@ -8,7 +8,7 @@ mlld provides built-in transformers for common data format conversions. These ar
 Converts content to SCREAMING_SNAKE_CASE XML using llmxml.
 
 ```mlld
-/var @data = [[{"user": {"firstName": "Alice", "lastName": "Smith"}}]]
+/var @data = ::{"user": {"firstName": "Alice", "lastName": "Smith"}}::
 /var @result = @data | @XML
 /show @result
 ```
@@ -25,7 +25,7 @@ Output:
 Formats JSON data with proper indentation.
 
 ```mlld
-/var @data = [[{"name":"Alice","age":30,"active":true}]]
+/var @data = ::{"name":"Alice","age":30,"active":true}::
 /var @result = @data | @JSON
 /show @result
 ```
@@ -43,7 +43,7 @@ Output:
 Converts JSON arrays to CSV format.
 
 ```mlld
-/var @data = [[[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]]]
+/var @data = ::[{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}::]
 /var @result = @data | @CSV
 /show @result
 ```
@@ -59,12 +59,12 @@ Bob,25
 Formats content as clean Markdown using prettier.
 
 ```mlld
-/var @data = [[# Hello World
+/var @data = ::# Hello World
 
 This is a paragraph with **bold** and *italic* text.
 
 - Item 1
-- Item 2]]
+- Item 2::
 
 /var @result = @data | @MD
 /show @result
@@ -99,10 +99,10 @@ Transformers work seamlessly in pipelines:
 Combine transformers with custom functions:
 
 ```mlld
-/exe @processUsers(data) = [[
+/exe @processUsers(data) = ::
 Total users: {{data.length}}
 First user: {{data.0.name}}
-]]
+::
 
 /var @result = /run {cat users.json} | @json | @processUsers
 /show @result

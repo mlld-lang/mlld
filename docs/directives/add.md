@@ -17,7 +17,7 @@ The `/add` directive includes content from external files, variables, or templat
 /show "Section Title" from [path] as "# New Title"
 /show @variable
 /show "literal text"
-/show [[template content with {{variables}}]]
+/show ::template content with {{variables}}::
 /show @templateFunction(param1, param2)
 ```
 
@@ -26,7 +26,7 @@ Where:
 - `section` is optional text that identifies a specific section to extract
 - `"# New Title"` is an optional replacement title for the section
 - `@variable` is a variable reference
-- `[[...]]` is a template with variable interpolation
+- `::...::` is a template with variable interpolation
 
 ## Including Files
 
@@ -71,7 +71,7 @@ Add content with variable interpolation:
 ```mlld
 /var @name = "Alice"
 /var @role = "Admin"
-/show [[Welcome {{name}}! Your role is: {{role}}]]
+/show ::Welcome {{name}}! Your role is: {{role}}::
 ```
 
 ## Template Functions
@@ -79,10 +79,10 @@ Add content with variable interpolation:
 Use template functions defined with /exec:
 
 ```mlld
-/exe @greet(name) = [[Hello, {{name}}!]]
+/exe @greet(name) = ::Hello, {{name}}!::
 /show @greet("World")
 
-/exe @message(user, action) = [[{{user}} {{action}} successfully!]]
+/exe @message(user, action) = ::{{user}} {{action}} successfully!::
 /show @message("Alice", "logged in")
 ```
 
@@ -142,4 +142,4 @@ Include literal text and variables:
 - Section matching is case-sensitive
 - For non-markdown files, the entire file content is included
 - The implementation protects against circular file inclusions
-- Template variables use `{{variable}}` syntax inside `[[...]]` blocks
+- Template variables use `{{variable}}` syntax inside `::...::` blocks

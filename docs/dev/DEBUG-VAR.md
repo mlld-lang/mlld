@@ -146,7 +146,7 @@ To prevent overwhelming output, values are truncated:
 ### Store and Manipulate
 ```mlld
 @text debugInfo = @DEBUG
-@add [[Debug at {{TIME}}: {{debugInfo}}]]
+@add ::Debug at {{TIME}}: {{debugInfo}}::
 ```
 
 ### Conditional Debugging

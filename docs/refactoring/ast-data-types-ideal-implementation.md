@@ -188,7 +188,7 @@ MlldExpression = DataContext (
   / ExecInvocation      // @exec(), @transform(@data)
   / CommandExpression   // run {echo "hello"}
   / PathExpression      // [file.md] or [file.md # section]
-  / TemplateExpression  // `template @var` or [[template {{var}}]]
+  / TemplateExpression  // `template @var` or ::template {{var}}::
 )
 
 // Single-line constraint for object values

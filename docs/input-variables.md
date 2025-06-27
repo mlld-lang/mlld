@@ -12,7 +12,7 @@ API_KEY=secret123 DATABASE_URL=postgres://localhost mlld deploy.mld
 
 ```mlld
 /import { API_KEY, DATABASE_URL } from @input
-/var @config = [[API Key: {{API_KEY}}, Database: {{DATABASE_URL}}]]
+/var @config = ::API Key: {{API_KEY}}, Database: {{DATABASE_URL}}::
 /show @config
 ```
 
@@ -32,7 +32,7 @@ NODE_ENV=production mlld build.mld
 
 ```mlld
 /import { NODE_ENV } from @input
-/var @env = [[Building for: {{NODE_ENV}}]]
+/var @env = ::Building for: {{NODE_ENV}}::
 /show @env
 ```
 
@@ -43,7 +43,7 @@ API_KEY=abc123 DB_HOST=localhost DB_PORT=5432 mlld app.mld
 
 ```mlld
 /import { API_KEY, DB_HOST, DB_PORT } from @input
-/var @dbUrl = [[postgres://{{DB_HOST}}:{{DB_PORT}}/myapp]]
+/var @dbUrl = ::postgres://{{DB_HOST}}:{{DB_PORT}}/myapp::
 /show @dbUrl
 ```
 
@@ -58,7 +58,7 @@ echo '{"version": "1.0.0", "author": "Alice"}' | mlld release.mld
 
 ```mlld
 /import { version, author } from @input
-/var @release = [[Release {{version}} by {{author}}]]
+/var @release = ::Release {{version}} by {{author}}::
 /show @release
 ```
 
@@ -69,7 +69,7 @@ echo "Hello World" | mlld process.mld
 
 ```mlld
 /import { content } from @input
-/show [[Received: {{content}}]]
+/show ::Received: {{content}}::
 ```
 
 ## Combining Environment Variables and Stdin
@@ -82,7 +82,7 @@ echo '{"config": "production"}' | API_KEY=secret123 mlld deploy.mld
 
 ```mlld
 /import { API_KEY, config } from @input
-/var @deployment = [[Deploying {{config}} with key {{API_KEY}}]]
+/var @deployment = ::Deploying {{config}} with key {{API_KEY}}::
 /show @deployment
 ```
 
@@ -116,7 +116,7 @@ USER_DATA='{"name": "Alice", "role": "admin"}' mlld user.mld
 
 ```mlld
 /import { USER_DATA } from @input
-/var @welcome = [[Welcome {{USER_DATA.name}} ({{USER_DATA.role}})]]
+/var @welcome = ::Welcome {{USER_DATA.name}} ({{USER_DATA.role}})::
 /show @welcome
 ```
 
@@ -137,9 +137,9 @@ When using pipelines, an `@INPUT` variable is created in each step containing th
 ### How It Works
 
 ```mlld
-/exe @showInput() = [[
+/exe @showInput() = ::
 Received via @INPUT: {{INPUT}}
-]]
+::
 
 /var @result = /run {echo "Hello, World!"} | @showInput
 /show @result
@@ -163,7 +163,7 @@ When piping to functions without providing arguments, mlld intelligently handles
 
 **Multi-parameter functions with JSON** - Automatically destructured:
 ```mlld
-/exe @greet(name, title) = [[Hello {{title}} {{name}}!]]
+/exe @greet(name, title) = ::Hello {{title}} {{name}}!::
 /var @result = /run {echo '{"name": "Smith", "title": "Dr."}'} | @greet
 >> greet receives: name = "Smith", title = "Dr."
 ```
@@ -192,6 +192,6 @@ Each pipeline step runs in a child environment where:
 ```mlld
 /import { NODE_ENV } from @input
 /var @environment = @NODE_ENV || "development"
-/var @message = [[Running in {{environment}} mode]]
+/var @message = ::Running in {{environment}} mode::
 /show @message
 ```

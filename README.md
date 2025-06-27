@@ -55,7 +55,7 @@ const mlldContent = `
   /var @greeting = "Hello"
   /var @name = "World"
   
-  /show [[{{greeting}}, {{name}}!]]
+  /show ::{{greeting}}, {{name}}!::
 `;
 
 // Simple usage
@@ -101,7 +101,7 @@ Must be inside a / directive to be interpolated
 {{datavar.field}}       << Access data field in templates
 
 >> Variables can be used in templates and commands:
-/var @greeting = [[Hello {{name}}!]]
+/var @greeting = ::Hello {{name}}!::
 /run [cat @file]
 ```
 
@@ -126,11 +126,11 @@ def hello():
 - Use backticks for template strings with variables:
 ```mlld
 /var @simple = "Hello"
-/var @template = [[Hello {{name}}!]]
-/var @multiline = [[
+/var @template = ::Hello {{name}}!::
+/var @multiline = ::
   Multi-line
   template with {{vars}}
-]]
+::
 ```
 
 ### Path Variables
@@ -151,7 +151,7 @@ def hello():
 - Support field access
 ```mlld
 /var @user = { "name": "Alice", "id": 123 }
-/var @name = [[User: {{user.name}}]]
+/var @name = ::User: {{user.name}}::
 ```
 
 ## Module System & Registry

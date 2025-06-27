@@ -164,7 +164,7 @@ The same resolver can behave differently based on how it's used:
 ```mlld
 # @PROJECTPATH as variable - returns the path
 @text projectRoot = @PROJECTPATH
-@add [[Project is at: {{projectRoot}}]]
+@add ::Project is at: {{projectRoot}}::
 # Output: Project is at: /Users/adam/dev/my-project
 
 # @PROJECTPATH in path context - reads file content  

@@ -68,7 +68,7 @@ VariableReference nodes appear in many contexts with different `valueType` value
 - **Context**: Variable inside template interpolation using `{{}}` syntax
 - **Examples**: `{{name}}`, `{{user.email}}`
 - **Appears in**:
-  - Template content: `[[Hello {{name}}!]]`
+  - Template content: `::Hello {{name}}!::`
   - Quoted strings in templates
 
 #### `valueType: 'identifier'`
@@ -274,7 +274,7 @@ Example of data directive value structure:
 | `isRHSRef` | Directive used as RHS reference | RHS reference rules |
 | `hasVariables` | Contains variable interpolation | Various content validators |
 | `isMultiLine` | Content spans multiple lines | Content parsing rules |
-| `isTemplateContent` | Content uses template syntax `[[...]]` | Template detection |
+| `isTemplateContent` | Content uses template syntax `::...::` | Template detection |
 | `hasExtension` | Path includes file extension | Path validation |
 | `isAbsolute` | Path is absolute | Path validation |
 
@@ -368,7 +368,7 @@ if (Array.isArray(value)) {
 
 **In Template**:
 ```javascript
-// [[Settings: {{config}}]]
+// ::Settings: {{config}}::
 {
   type: 'VariableReference',
   valueType: 'varInterpolation',

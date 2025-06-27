@@ -142,7 +142,7 @@ Mlld modules use a dual export pattern that provides both flat access to individ
 ```mlld
 # In module.mld
 @text greeting = "Hello"
-@text sayHello(name) = @add [[Hello, {{name}}!]]
+@text sayHello(name) = @add ::Hello, {{name}}!::
 @exec build() = run [npm run build]
 
 # These are ALL automatically available for import:
@@ -158,7 +158,7 @@ The `@data module` pattern creates an **additional** structured export (not a re
 ```mlld
 # In module.mld
 @text greeting = "Hello"
-@text sayHello(name) = @add [[Hello, {{name}}!]]
+@text sayHello(name) = @add ::Hello, {{name}}!::
 @exec build() = run [npm run build]
 
 # Optional: Create a structured interface
@@ -257,7 +257,7 @@ The module system preserves variable types through the export/import process:
 ```mlld
 # In module.mld
 @text greeting = "Hello"                    # Type: text
-@text greet(name) = @add [[Hi {{name}}!]]  # Type: textTemplate (invokable)
+@text greet(name) = @add ::Hi {{name}}!::  # Type: textTemplate (invokable)
 @exec build() = run [make]                # Type: command (invokable)
 @data config = { port: 3000 }              # Type: data
 @path srcDir = "./src"                     # Type: path

@@ -15,8 +15,8 @@ Version: {{fm.version}}
 
 ## Tags
 
-/var @tagList = [[- {{fm.tags[0]}}
+/var @tagList = ::- {{fm.tags[0]}}
 - {{fm.tags[1]}}
-- {{fm.tags[2]}}]]
+- {{fm.tags[2]}}::
 
 /show @tagList

@@ -92,7 +92,7 @@ When parentheses are added (`@getDate()`), the parser creates an `ExecInvocation
 
 ### In @add directives
 ```mlld
-@exec header(title) = [[# {{title}}]]
+@exec header(title) = ::# {{title}}::
 @add @header("Welcome")    # Executes and outputs result
 ```
 
@@ -114,7 +114,7 @@ This reference vs execution pattern is consistent throughout mlld:
 ```mlld
 @exec timestamp = [date +%s]
 @exec log(msg) = [echo "[@msg]"]
-@exec format(text) = [[**{{text}}**]]
+@exec format(text) = ::**{{text}}**::
 
 # 1. Storing executables
 @data tools = {

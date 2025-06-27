@@ -29,9 +29,9 @@ HELLO WORLD
 When piping to multi-parameter functions, mlld intelligently handles JSON data:
 
 ```mlld
-/exe @process(items, filter) = [[
+/exe @process(items, filter) = ::
 Processing {{items}} with filter {{filter}}
-]]
+::
 
 /var @result = /run "echo '{\"items\": [1,2,3], \"filter\": \"active\"}'" | @process
 /show @result
@@ -70,8 +70,8 @@ Processing [1,2,3] with filter active
 
 ### With Functions
 ```mlld
-/exe @addHeader(content) = [[# Report
-{{content}}]]
+/exe @addHeader(content) = ::# Report
+{{content}}::
 
 /var @report = /run "cat stats.txt" | @addHeader | @md
 /show @report
@@ -79,7 +79,7 @@ Processing [1,2,3] with filter active
 
 ### JSON Processing
 ```mlld
-/exe @extractName(data) = [[Name: {{data.user.name}}]]
+/exe @extractName(data) = ::Name: {{data.user.name}}::
 
 /var @info = /run "curl -s api.example.com/user" | @extractName
 /show @info

@@ -90,12 +90,12 @@ tests/cases/
 
 `tests/cases/invalid/text/missing-bracket/example.md`:
 ```markdown
-@text greeting = [[Hello, {{name}}
+@text greeting = ::Hello, {{name}}
 ```
 
 `tests/cases/invalid/text/missing-bracket/error.md`:
 ```
-Expected closing template delimiter "]]" after template content.
+Expected closing template delimiter "::" after template content.
 ```
 
 ### Test Execution Flow
@@ -129,7 +129,7 @@ try {
 
 **When**: Grammar/syntax errors during AST generation
 **Examples**:
-- Missing closing brackets: `@text foo = [[bar`
+- Missing closing brackets: `@text foo = ::bar`
 - Invalid directive syntax: `@unknown directive`
 - Malformed data structures: `@data x = [1, 2,`
 
@@ -175,9 +175,9 @@ ErrorType: Brief description
 
 **Parse Error:**
 ```
-MlldParseError: Expected closing template delimiter "]]" after template content.
+MlldParseError: Expected closing template delimiter "::" after template content.
 
-  5 | @text greeting = [[Hello, {{name}}
+  5 | @text greeting = ::Hello, {{name}}
                                        ^
 ```
 
@@ -185,7 +185,7 @@ MlldParseError: Expected closing template delimiter "]]" after template content.
 ```
 VariableResolutionError: Variable 'missing' is not defined
 
-  3 | @text output = [[Hello, {{missing}}]]
+  3 | @text output = ::Hello, {{missing}}::
                               ^^^^^^^^^
 
 Available variables: name, title, date
@@ -287,12 +287,12 @@ tests/cases/[category]/[error-name]/
 
 `example.md` - Use invalid mlld syntax:
 ```markdown
-@text broken = [[missing closing bracket
+@text broken = ::missing closing bracket
 ```
 
 `error.md` - Write exact expected error:
 ```
-Expected closing template delimiter "]]" after template content.
+Expected closing template delimiter "::" after template content.
 ```
 
 ### 3. Generate Fixture

@@ -42,13 +42,13 @@ Text variables store unstructured text:
 @greeting                          # Reference in directives
 "Message: @greeting"               # Reference in double quotes
 `Welcome: @greeting`               # Reference in backticks
-[[Text: {{greeting}}]]             # Reference in double-bracket templates
+::Text: {{greeting}}::             # Reference in double-bracket templates
 ```
 
 - Defined with `/text` directive with `@` prefix
 - No field access (text is atomic)
 - In directives and double quotes: use `@variable`
-- In double-bracket templates `[[...]]`: use `{{variable}}`
+- In double-bracket templates `::...::`: use `{{variable}}`
 - Key rule: "Double brackets, double braces"
 
 Example:
@@ -56,7 +56,7 @@ Example:
 /var @greeting = "Hello"
 /var @name = "World"
 /var @message1 = "@greeting, @name!"          # @ interpolation
-/var @message2 = [[{{greeting}}, {{name}}!]]  # {{}} in templates
+/var @message2 = ::{{greeting}}, {{name}}!::  # {{}} in templates
 ```
 
 ### Data Variables
@@ -81,7 +81,7 @@ Example:
 ```mlld
 /var @user = { "name": "Alice", "id": 123 }
 /var @greeting1 = "Hello, @user.name! ID: @user.id"           # @ interpolation
-/var @greeting2 = [[Hello, {{user.name}}! Your ID is {{user.id}}.]]  # {{}} in templates
+/var @greeting2 = ::Hello, {{user.name}}! Your ID is {{user.id}}.::  # {{}} in templates
 ```
 
 ### Array Access
@@ -91,7 +91,7 @@ When working with arrays, use dot notation to access array elements by index:
 ```mlld
 /var @items = ["apple", "banana", "cherry"]
 /var @first = "First item: @items.0"               # @ interpolation with dot notation
-/var @second = [[Second item: {{items.1}}]]        # {{}} in templates
+/var @second = ::Second item: {{items.1}}::        # {{}} in templates
 /show "Third item: @items.2"                         # Direct reference
 ```
 
@@ -109,7 +109,7 @@ Variables can be converted between types automatically in many contexts:
 ```mlld
 /var @config = { "name": "test", "version": 1 }
 /var @simple = "Name: @config.name"              # Outputs: Name: test
-/var @object = [[Config: {{config}}]]            # Outputs: Config: {"name":"test","version":1}
+/var @object = ::Config: {{config}}::            # Outputs: Config: {"name":"test","version":1}
 ```
 
 ### Object and Array Formatting
@@ -127,7 +127,7 @@ When referencing an entire array:
 - **Inline context** (within text, templates):
   ```mlld
   /var @list1 = "My fruits: @fruits"      # @ interpolation
-  /var @list2 = [[My fruits: {{fruits}}]] # {{}} in templates
+  /var @list2 = ::My fruits: {{fruits}}:: # {{}} in templates
   ```
   Arrays are formatted as comma-separated values with spaces.
 
@@ -166,7 +166,7 @@ When referencing an entire object:
 
 - **Inline context**:
   ```mlld
-  /var @settings = [[My config: {{config}}]]  # Outputs: My config: {"host":"localhost","port":8080}
+  /var @settings = ::My config: {{config}}::  # Outputs: My config: {"host":"localhost","port":8080}
   ```
   Objects are formatted as compact JSON without whitespace.
 
@@ -212,8 +212,8 @@ Variable references are context-specific:
 - In object values: `/data @config = { "user": @name }`
 
 ### {{}} Interpolation contexts:
-- In double-bracket templates: `[[Hello {{name}}!]]`
-- ONLY in `[[...]]` templates
+- In double-bracket templates: `::Hello {{name}}!::`
+- ONLY in `::...::` templates
 
 ### NOT allowed in:
 - Plain text lines (not starting with `/`)

@@ -195,11 +195,11 @@ All forms support multi-line formatting for better readability:
 ```mlld
 # Complex condition checking with first:
 /exe @get_request_type() = bash {
-  if [[ "$REQUEST_METHOD" == "GET" && "$REQUEST_PATH" == "/api/users" ]]; then
+  if :: "$REQUEST_METHOD" == "GET" && "$REQUEST_PATH" == "/api/users" ::; then
     echo "list_users"
-  elif [[ "$REQUEST_METHOD" == "POST" && "$REQUEST_PATH" == "/api/users" ]]; then
+  elif :: "$REQUEST_METHOD" == "POST" && "$REQUEST_PATH" == "/api/users" ::; then
     echo "create_user"
-  elif [[ "$REQUEST_METHOD" == "DELETE" && "$REQUEST_PATH" =~ ^/api/users/[0-9]+$ ]]; then
+  elif :: "$REQUEST_METHOD" == "DELETE" && "$REQUEST_PATH" =~ ^/api/users/[0-9]+$ ::; then
     echo "delete_user"
   fi
 }
@@ -234,13 +234,13 @@ All forms support multi-line formatting for better readability:
 
 /when @flags: [
   @new_ui => 
-    /show [[/import { NewHeader, NewFooter } from "./components/new"]]
+    /show ::/import { NewHeader, NewFooter } from "./components/new"::
   
   @beta_features => 
-    /show [[/import { BetaTools } from "./components/beta"]]
+    /show ::/import { BetaTools } from "./components/beta"::
   
   @analytics => 
-    /show [[/import { Analytics } from "./services/analytics"]]
+    /show ::/import { Analytics } from "./services/analytics"::
 ]
 ```
 
@@ -354,9 +354,9 @@ The `!` operator negates the truthiness of a value:
 }
 
 /when @browser: [
-  @browser.supports.webgl2 => /add [[/import { Viewer3D } from "./3d-viewer"]]
-  @browser.supports.webgl => /add [[/import { Basic3D } from "./basic-3d"]]
-  @browser.supports.canvas => /add [[/import { Viewer2D } from "./2d-viewer"]]
+  @browser.supports.webgl2 => /add ::/import { Viewer3D } from "./3d-viewer"::
+  @browser.supports.webgl => /add ::/import { Basic3D } from "./basic-3d"::
+  @browser.supports.canvas => /add ::/import { Viewer2D } from "./2d-viewer"::
 ]
 ```
 
@@ -456,7 +456,7 @@ The following patterns will produce helpful error messages:
 ### With Templates
 ```mlld
 /var @user_type = "premium"
-/exe @greeting(type) = [[Welcome, {{type}} user!]]
+/exe @greeting(type) = ::Welcome, {{type}} user!::
 
 /when @user_type first: [
   "premium" => /add @greeting("premium")

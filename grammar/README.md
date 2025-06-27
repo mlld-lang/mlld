@@ -489,9 +489,9 @@ The token-based approach ensures that:
 
 ```
 /var @name = ...
-├─ "[[" detected?
+├─ "::" detected?
 │  ├─ YES: Template
-│  │  └─ [[TemplateContent]]
+│  │  └─ ::TemplateContent::
 │  │     └─ {{var}} interpolation only
 │  │
 ├─ "[" detected?
@@ -511,14 +511,14 @@ The token-based approach ensures that:
 ├─ "`" detected?
 │  ├─ YES: BacktickTemplate
 │  │  └─ `Multi-line template with @var and @func(args)`
-│  │     ├─ @var interpolation (simpler than [[{{var}}]])
+│  │     ├─ @var interpolation (simpler than ::{{var}}::)
 │  │     ├─ @func(args) function calls supported
 │  │     └─ Multi-line capable (spans newlines)
 │  │
 ├─ "`" detected?
 │  ├─ YES: BacktickTemplate  
 │  │  └─ `Multi-line template with @var and @func(args)`
-│  │     ├─ @var interpolation (simpler than [[{{var}}]])
+│  │     ├─ @var interpolation (simpler than ::{{var}}::)
 │  │     ├─ @func(args) function calls supported
 │  │     └─ Multi-line capable (spans newlines)
 │  │
@@ -531,7 +531,7 @@ Examples:
 - /text @greeting = "Hello, world!"          # String literal (no @vars)
 - /text @welcome = "Hello @name!"            # String with @name expansion
 - /text @literal = 'Hello @name!'            # String literal (NO expansion)
-- /text @content = [[Welcome {{user}}!]]      # Template with {{user}} expansion
+- /text @content = ::Welcome {{user}}!::      # Template with {{user}} expansion
 - /text @fileData = [./config.json]           # LOADS file contents
 - /text @dynamic = "./configs/@env/data.json" # String with @env expansion
 - /text @link = `[@url.path](@url.name)`      # Backtick template
@@ -597,8 +597,8 @@ Examples:
 │  │  ├─ YES: "/exec @cmd(p) = "command @p""
 │  │  │  └─ Quoted command mode WITH @p interpolation
 │  │  │
-│  ├─ "[[" detected?
-│  │  ├─ YES: "/exec @greeting(name) = [[template]]"
+│  ├─ "::" detected?
+│  │  ├─ YES: "/exec @greeting(name) = ::template::"
 │  │  │  └─ Template executable
 │  │  │
 │  ├─ "`" detected?
@@ -621,7 +621,7 @@ Examples:
 - /exec @deploy(env) = {./deploy.sh @env}
 - /exec @deploy(env) = "./deploy.sh @env"      # Double quotes WITH @env expansion
 - /exec @literal(cmd) = './script.sh @cmd'     # Single quotes (no expansion)
-- /exec @greet(name) = [[Hello {{name}}!]]
+- /exec @greet(name) = ::Hello {{name}}!::
 - /exec @greet2(name) = `Hello @name!`
 - /exec @getIntro(file) = [@file # Introduction]  # Loads & extracts
 - /exec @js = { formatDate, parseJSON }
@@ -705,7 +705,7 @@ Examples:
 │  │  │  ├─ Default separator: "\n"
 │  │  │  └─ Tail modifiers supported
 │  │  │
-│  │  └─ foreach [@array.field # section] as [[template]]
+│  │  └─ foreach [@array.field # section] as ::template::
 │  │     └─ Section extraction foreach
 │  │        ├─ Extract sections from paths
 │  │        └─ Apply template to each
@@ -725,9 +725,9 @@ Examples:
 │  │     └─ SemanticPathContent
 │  │        └─ [path/with/@vars]
 │  │
-├─ "[[" detected?
+├─ "::" detected?
 │  ├─ YES: TemplateContent
-│  │  └─ [[text with {{vars}}]]
+│  │  └─ ::text with {{vars}}::
 │  │
 ├─ '"' detected?
 │  ├─ YES: Literal text output
@@ -745,10 +745,10 @@ Examples:
 - /add [file.md # Introduction]        # Load and extract section
 - /add [README.md]                     # Load entire file
 - /add "This is literal text"          # Output text as-is
-- /add [[Welcome {{user}}!]]           # Template output
+- /add ::Welcome {{user}}!::           # Template output
 - /add @greeting                       # Variable output
 - /add foreach @process(@items)        # Foreach command
-- /add foreach [@files.path # tldr] as [[### {{files.name}}]]  # Section foreach
+- /add foreach [@files.path # tldr] as ::### {{files.name}}::  # Section foreach
 ```
 
 ### /output Directive
@@ -838,9 +838,9 @@ Examples:
    - Supports function calls: `` `Result: @process(data)` ``
    - Multi-line capable
 
-4. **Double brackets `[[...]]`** (for `/text` only): Templates with `{{mustache}}` interpolation
-   - Example: `/text @msg = [[Hello {{name}}!]]` → `{{name}}` gets expanded
-   - NO `@var` interpolation - `@var` is literal text inside `[[...]]`
+4. **Double brackets `::...::`** (for `/text` only): Templates with `{{mustache}}` interpolation
+   - Example: `/text @msg = ::Hello {{name}}!::` → `{{name}}` gets expanded
+   - NO `@var` interpolation - `@var` is literal text inside `::...::`
    - Multi-line capable
 
 5. **Curly braces `{...}`** (for `/run` and `/exec`): Commands WITH `@var` interpolation
@@ -875,7 +875,7 @@ Context         Brackets Mean           Double Quotes Mean       Single Quotes M
 /var @literal = 'Hello @name!'          # String literal: "Hello @name!" (NO interpolation)
 /var @multiline = `Hello @name!
 Welcome to the system!`                 # Multi-line with @name expanded
-/var @template = [[Hello {{name}}!]]     # Template with {{name}} expanded (NOT @name)
+/var @template = ::Hello {{name}}!::     # Template with {{name}} expanded (NOT @name)
 
 # Commands with interpolation (SAME as /text!)
 /run "echo Hello @name"                  # @name gets expanded
@@ -1191,7 +1191,7 @@ Before committing grammar changes:
 
 ### The Delimiter Standardization Disaster
 
-**What We Tried**: Standardize delimiter semantics (`"..."` = literal, `[...]` = interpolated, `[[...]]` = templates) across the grammar.
+**What We Tried**: Standardize delimiter semantics (`"..."` = literal, `[...]` = interpolated, `::...::` = templates) across the grammar.
 
 **What Went Wrong**: We violated every core grammar principle and turned 11 failing tests into 50+ failing tests.
 

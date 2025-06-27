@@ -38,7 +38,7 @@ The `build-syntax.js` script reads the Peggy grammar files and extracts:
 The script generates regex patterns for each token type:
 - `@directive` - Reserved directives (@text, @data, @run, etc.)
 - `@variable` - Any @identifier that's not a directive
-- `[[...]]` - Template blocks with {{variable}} interpolation
+- `::...::` - Template blocks with {{variable}} interpolation
 - `[...]` - Path/URL brackets
 - `"..."` - String literals
 - `>>` - Comments
@@ -94,7 +94,7 @@ The generator will automatically:
 |------------|-------------|--------------|-----------|
 | @directive | keyword | keyword.control.directive.mlld | mlldDirective |
 | @variable | variable | variable.other.mlld | mlldVariable |
-| [[...]] | template-block | string.template.mlld | mlldTemplate |
+| ::...:: | template-block | string.template.mlld | mlldTemplate |
 | {{...}} | template-variable | variable.template.mlld | mlldTemplateVar |
 | [...] | path | string.path.mlld | mlldPath |
 | "..." | string | string.quoted.double.mlld | mlldString |
@@ -135,7 +135,7 @@ cat > test-syntax.mld << 'EOF'
 @data config = { name: "test", count: 42 }
 @path docs = [@~/Documents]
 run [(echo "test")]
-@add [[Welcome {{greeting}}!]]
+@add ::Welcome {{greeting}}!::
 @import all from [config.mld]
 @exec cmd(param) = run [(echo @param)]
 @url api = [https://api.example.com]

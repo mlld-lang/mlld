@@ -88,11 +88,11 @@ Create reusable templates:
 ```mlld
 /exe @greeting(name, time) = `Good @time, @name!`
 /exe @link(text, url) = `[@text](@url)`
-/exe @section(title, content) = [[
+/exe @section(title, content) = ::
 # {{title}}
 
 {{content}}
-]]
+::
 
 # Use templates
 /var @msg = @greeting("Alice", "morning")

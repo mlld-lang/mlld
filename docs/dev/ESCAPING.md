@@ -106,7 +106,7 @@ run [echo "Hello @name"]
 # Executes: echo "Hello Alice"
 
 # In templates - use {{variable}}
-@text greeting = [[Hello {{name}}!]]
+@text greeting = ::Hello {{name}}!::
 @add @greeting
 # Output: Hello Alice!
 

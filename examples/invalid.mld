@@ -27,7 +27,7 @@ This is some text. Now I'm going to say:
 /show @myvar
 
 Or with templates:
-/var @greeting = [[Hello {{myvar}}!]]
+/var @greeting = ::Hello {{myvar}}!::
 /show @greeting
 
 The key insight: mlld is a **programming language embedded IN markdown**, not a **template language**. 

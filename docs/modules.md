@@ -439,16 +439,16 @@ Utility functions for text formatting and dates. Perfect for blogs, documentatio
 ```mlld-run
 /import { formatDate, capitalize, greeting } from @alice/utils
 
-/var @today = [[Today is {{formatDate(@TIME)}}]]
+/var @today = ::Today is {{formatDate(@TIME)}}::
 /show @today
 ```
 
 ## export
 
 ```mlld-run
-/exe @formatDate(dateStr) = [[{{dateStr | format("YYYY-MM-DD")}}]]
-/exe @capitalize(text) = [[{{text | title}}]]
-/exe @greeting(name) = [[Hello, {{capitalize(@name)}}!]]
+/exe @formatDate(dateStr) = ::{{dateStr | format("YYYY-MM-DD")}}::
+/exe @capitalize(text) = ::{{text | title}}::
+/exe @greeting(name) = ::Hello, {{capitalize(@name)}}!::
 
 /var @module = {
   formatDate: @formatDate,
@@ -464,7 +464,7 @@ Utility functions for text formatting and dates. Perfect for blogs, documentatio
 Formats a date string to YYYY-MM-DD format.
 
 ```mlld
-/var @myDate = [[{{formatDate("2024-01-15T10:30:00Z")}}]]
+/var @myDate = ::{{formatDate("2024-01-15T10:30:00Z")}}::
 /show @myDate
 ```
 
@@ -475,7 +475,7 @@ Output: `2024-01-15`
 Capitalizes the first letter of each word.
 
 ```mlld
-/var @title = [[{{capitalize("hello world")}}]]
+/var @title = ::{{capitalize("hello world")}}::
 /show @title
 ```
 
@@ -486,7 +486,7 @@ Output: `Hello World`
 Creates a personalized greeting message.
 
 ```mlld
-/var @welcome = [[{{greeting("Alice")}}]]
+/var @welcome = ::{{greeting("Alice")}}::
 /show @welcome
 ```
 
@@ -547,11 +547,11 @@ license: CC0
 mlld-version: 1.0.0-rc-12
 ---
 
-/exe @formatDate(dateStr) = [[{{dateStr | format("YYYY-MM-DD")}}]]
+/exe @formatDate(dateStr) = ::{{dateStr | format("YYYY-MM-DD")}}::
 
-/exe @capitalize(text) = [[{{text | title}}]]
+/exe @capitalize(text) = ::{{text | title}}::
 
-/exe @greeting(name) = [[Hello, {{capitalize(@name)}}!]]
+/exe @greeting(name) = ::Hello, {{capitalize(@name)}}!::
 
 >> Explicit module export - defines what's available to importers
 /var @module = {
@@ -680,8 +680,8 @@ Module frontmatter is always available via the `__meta__` property:
 /import { utils } from @alice/utils
 
 >> Access metadata
-/show [[Author: {{utils.__meta__.author}}]]
-/show [[Version: {{utils.__meta__.version}}]]
+/show ::Author: {{utils.__meta__.author}}::
+/show ::Version: {{utils.__meta__.version}}::
 ```
 
 ### Publishing Modules
@@ -764,12 +764,12 @@ license: CC0
 ---
 
 >> Internal helpers (not exported)
-/var @_validateFormat(format) = [[...]]
+/var @_validateFormat(format) = ::...::
 
 >> Public functions
-/exe @formatDate(input, format) = [[...]]
-/exe @validateEmail(email) = [[...]]
-/exe @parseJSON(jsonStr) = [[...]]
+/exe @formatDate(input, format) = ::...::
+/exe @validateEmail(email) = ::...::
+/exe @parseJSON(jsonStr) = ::...::
 
 >> Module export - defines the public API
 /var @module = {
@@ -966,12 +966,12 @@ mlld install @community/string-utils
 /import { slugify, truncate } from @community/string-utils
 
 /var @title = "My Blog Post Title!"
-/var @slug = [[{{slugify(@title)}}]]
-/var @summary = [[{{truncate("This is a long description...", 50)}}]]
+/var @slug = ::{{slugify(@title)}}::
+/var @summary = ::{{truncate("This is a long description...", 50)}}::
 
 >> Output
-/show [[Slug: {{@slug}}]]
-/show [[Summary: {{@summary}}]]
+/show ::Slug: {{@slug}}::
+/show ::Summary: {{@summary}}::
 ```
 
 ### Template System

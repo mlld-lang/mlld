@@ -34,13 +34,13 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 
 - Start-of-line: `>> This is a comment`
 - End-of-line: `/text @name = "Alice" >> This is also a comment`
-- Inside templates/strings: `[[Hello >> World]]` - >> is treated as literal text, not a comment
+- Inside templates/strings: `::Hello >> World::` - >> is treated as literal text, not a comment
 
 ### Delimiters
 
 ```
 [ ]     Path boundaries and resolver paths
-[[ ]]   Template boundaries (double-bracket templates)
+:: ::   Template boundaries (double-bracket templates)
 { }     Command boundaries (braces for multi-line)
 " "     Command boundaries (quotes for single-line)
 ` `     Backtick templates (with @ interpolation)
@@ -61,7 +61,7 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 - Single-line strings (', ") cannot contain newlines
 - Double quotes (") support @ interpolation: "Hello @name"
 - Backtick templates (`) support @ interpolation: `Hello @name!`
-- Double-bracket templates support {{}} interpolation: [[Hello {{name}}!]]
+- Double-bracket templates support {{}} interpolation: ::Hello {{name}}!::
 
 ### Identifiers
 
@@ -90,7 +90,7 @@ Variables are created with `@identifier` prefix and referenced differently based
 @name                              # Reference in directives
 "Hello @name"                     # Reference in double quotes
 `Welcome @name!`                   # Reference in backtick templates
-[[Content with {{name}}]]          # Reference in double-bracket templates
+::Content with {{name}}::          # Reference in double-bracket templates
 ```
 
 ### Data Variables
@@ -101,7 +101,7 @@ Variables are created with `@identifier` prefix and support field access:
 @config                            # Reference data variable
 @config.port                       # Field access with dot notation
 @users.0                           # Array element access
-[[Port: {{config.port}}]]          # Reference in template
+::Port: {{config.port}}::          # Reference in template
 ```
 
 ## Code Fences
@@ -133,7 +133,7 @@ def hello():
 /show "Section" from [path] as "# New Title"
 /show @variable                          # Add variable content
 /show "Literal text"                    # Add literal text
-/show [[Template with {{var}}]]          # Add template
+/show ::Template with {{var}}::          # Add template
 ```
 
 ### /run
@@ -176,7 +176,7 @@ def hello():
 /var @name = "value"                    # Simple text
 /var @greeting = "Hello @name!"         # With @ interpolation
 /var @template = `Welcome @user!`       # Backtick template
-/var @content = [[Hello {{name}}!]]     # Double-bracket template
+/var @content = ::Hello {{name}}!::     # Double-bracket template
 /var @result = /run "date"              # From command output
 ```
 
@@ -208,12 +208,12 @@ def hello():
 
 ### Double-Bracket Templates (For @ heavy content)
 ```mlld
-/var @tweet = [[Hey {{user}}, check out {{handle}}'s new post!]]
-/var @prompt = [[
+/var @tweet = ::Hey {{user}}, check out {{handle}}'s new post!::
+/var @prompt = ::
   System: {{role}}
   Context: {{context.data}}
   User: {{username}}
-]]
+::
 ```
 
 ## Variable Interpolation Rules
@@ -222,9 +222,9 @@ def hello():
 - **Double quotes**: `"Hello @name"` - @ interpolation works
 - **Single quotes**: `'Hello @name'` - @ is literal text (no interpolation)
 - **Backtick templates**: `` `Hello @name!` `` - @ interpolation works
-- **Double-bracket templates**: `[[Hello {{name}}!]]` - Use {{}} for variables
+- **Double-bracket templates**: `::Hello {{name}}!::` - Use {{}} for variables
 - **Commands in braces**: `{echo "User: @name"}` - @ interpolation works
 - **Directives**: `/add @greeting` - Direct @ reference
 
 ### Key Rule: "Double brackets, double braces"
-In `[[...]]` templates, always use `{{variable}}` syntax.
+In `::...::` templates, always use `{{variable}}` syntax.

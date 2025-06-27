@@ -19,11 +19,11 @@ Version: @add @config.version
 Today's date: @add @date
 
 ## Template Example
-/var @summary = [[
+/var @summary = ::
 === {{config.name}} ===
 Version: {{config.version}}
 Features: {{config.features.0}}, {{config.features.1}}, {{config.features.2}}
 Date: {{date}}
-]]
+::
 
 /show @summary

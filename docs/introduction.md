@@ -30,9 +30,9 @@ This line will be interpreted as plain text.
 This will remain a codefence.
 ```
 
-/show [[
+/show ::
     Hello, {{name}}!
-]]
+::
 
 /show [@docs/example.md]
 
