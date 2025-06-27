@@ -163,6 +163,14 @@ export async function evaluateVar(
       // Process simple object properties immediately
       const processedObject: Record<string, any> = {};
       if (valueNode.properties) {
+        // Debug logging for Phase 2
+        if (process.env.MLLD_DEBUG === 'true' && identifier === 'complex') {
+          console.log('DEBUG: Processing object properties for @complex:', {
+            propertyKeys: Object.keys(valueNode.properties),
+            users: valueNode.properties.users
+          });
+        }
+        
         for (const [key, propValue] of Object.entries(valueNode.properties)) {
           // Each property value might need interpolation
           if (propValue && typeof propValue === 'object' && 'content' in propValue && Array.isArray(propValue.content)) {
@@ -171,6 +179,15 @@ export async function evaluateVar(
           } else if (propValue && typeof propValue === 'object' && propValue.type === 'array') {
             // Handle array values in objects
             const processedArray = [];
+            
+            // Debug logging for Phase 2
+            if (process.env.MLLD_DEBUG === 'true' && identifier === 'complex' && key === 'users') {
+              console.log('DEBUG: Processing users array items:', {
+                itemCount: (propValue.items || []).length,
+                firstItem: propValue.items?.[0]
+              });
+            }
+            
             for (const item of (propValue.items || [])) {
               const evaluated = await evaluateArrayItem(item, env);
               processedArray.push(evaluated);
@@ -571,6 +588,15 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
     return item;
   }
 
+  // Debug logging for Phase 2
+  if (process.env.MLLD_DEBUG === 'true' && item.type === 'object') {
+    console.log('DEBUG: evaluateArrayItem processing object:', {
+      hasProperties: !!item.properties,
+      propertyKeys: item.properties ? Object.keys(item.properties) : [],
+      sampleProperty: item.properties?.name
+    });
+  }
+
   // Handle wrapped content first (e.g., quoted strings in arrays)
   // This includes strings in objects: {"name": "alice"} where "alice" becomes
   // {content: [{type: 'Text', content: 'alice'}], wrapperType: 'doubleQuote'}
@@ -630,6 +656,20 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
       return await resolveVariableValue(variable, env);
 
     default:
+      // Handle plain objects without type property
+      if (!item.type && typeof item === 'object' && item.constructor === Object) {
+        // This is a plain object with properties that might have wrapped content
+        const plainObj: Record<string, any> = {};
+        for (const [key, value] of Object.entries(item)) {
+          // Skip internal properties
+          if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
+            continue;
+          }
+          plainObj[key] = await evaluateArrayItem(value, env);
+        }
+        return plainObj;
+      }
+      
       // Try to interpolate as a node array
       return await interpolate([item], env);
   }

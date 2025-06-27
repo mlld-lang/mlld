@@ -330,7 +330,8 @@ export async function evaluateDataValue(
     
     for (let i = 0; i < value.items.length; i++) {
       try {
-        evaluatedElements.push(await evaluateDataValue(value.items[i], env));
+        const evaluatedItem = await evaluateDataValue(value.items[i], env);
+        evaluatedElements.push(evaluatedItem);
       } catch (error) {
         // Store error information but continue evaluating other elements
         evaluatedElements.push({
@@ -341,7 +342,9 @@ export async function evaluateDataValue(
       }
     }
     
-    return evaluatedElements;
+    // Use ASTEvaluator to ensure we return plain JavaScript arrays
+    const { ASTEvaluator } = await import('../core/ast-evaluator');
+    return await ASTEvaluator.evaluateToRuntime(evaluatedElements, env);
   }
   
   // Check if it's an array that needs interpolation (template content) or contains foreach

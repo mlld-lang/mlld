@@ -357,6 +357,9 @@ export async function evaluateExecInvocation(
     // Interpolate the code template with parameters
     const code = await interpolate(definition.codeTemplate, execEnv);
     
+    // Import ASTEvaluator for normalizing array values
+    const { ASTEvaluator } = await import('../core/ast-evaluator');
+    
     // Build params object for code execution
     const codeParams: Record<string, any> = {};
     for (let i = 0; i < params.length; i++) {
@@ -377,7 +380,9 @@ export async function evaluateExecInvocation(
         codeParams[paramName] = paramVar.value;
       } else if (paramVar && paramVar.metadata?.actualValue !== undefined) {
         // Use the actual value from the parameter variable if available
-        codeParams[paramName] = paramVar.metadata.actualValue;
+        // Normalize arrays to ensure plain JavaScript values
+        const actualValue = paramVar.metadata.actualValue;
+        codeParams[paramName] = await ASTEvaluator.evaluateToRuntime(actualValue, execEnv);
         
         // Debug primitive values
         if (process.env.DEBUG_EXEC) {
@@ -389,7 +394,8 @@ export async function evaluateExecInvocation(
       } else {
         // Use the evaluated argument value directly - this preserves primitives
         const argValue = evaluatedArgs[i];
-        codeParams[paramName] = argValue;
+        // Normalize arrays to ensure plain JavaScript values
+        codeParams[paramName] = await ASTEvaluator.evaluateToRuntime(argValue, execEnv);
         
         // Debug primitive values
         if (process.env.DEBUG_EXEC) {

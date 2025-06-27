@@ -7,14 +7,19 @@
  * This is used to ensure consistent serialization across the codebase
  */
 export function createASTAwareJSONReplacer() {
-  return (key: string, val: any): any => {
+  const replacer = (key: string, val: any): any => {
     // Handle wrapped strings (quotes, backticks, brackets)
     if (val && typeof val === 'object' && 'wrapperType' in val && 'content' in val && Array.isArray(val.content)) {
       // Extract the string content from wrapped strings
       if (val.content.length > 0 && val.content[0].type === 'Text') {
         return val.content[0].content;
       }
+      // Handle empty content - return empty string instead of the wrapper object
+      if (val.content.length === 0) {
+        return '';
+      }
       // TODO: Handle interpolated content in wrapped strings
+      return ''; // Fallback for unhandled content
     }
     
     // Handle raw Text nodes
@@ -50,8 +55,28 @@ export function createASTAwareJSONReplacer() {
       return `<function(${params.join(', ')})>`;
     }
     
+    // Handle plain objects that might contain wrapped values
+    // This is important for objects in arrays that don't have a 'type' property
+    if (val && typeof val === 'object' && val.constructor === Object && !val.type) {
+      // Check if any property has wrapped content
+      const hasWrappedContent = Object.values(val).some(v => 
+        v && typeof v === 'object' && 'wrapperType' in v && 'content' in v
+      );
+      
+      if (hasWrappedContent) {
+        // Process the object's properties
+        const processed: any = {};
+        for (const [k, v] of Object.entries(val)) {
+          processed[k] = replacer(k, v); // Recursively call the replacer
+        }
+        return processed;
+      }
+    }
+    
     return val;
   };
+  
+  return replacer;
 }
 
 /**
