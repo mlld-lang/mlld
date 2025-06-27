@@ -112,6 +112,8 @@ export class RunCommand {
     
     console.log(chalk.gray(`Running ${path.relative(process.cwd(), scriptPath)}...\n`));
     
+    let environment: any = null; // Define outside try block for cleanup access
+    
     try {
       // Read the script file
       const content = await fs.readFile(scriptPath, 'utf8');
@@ -127,15 +129,34 @@ export class RunCommand {
         format: 'markdown',
         fileSystem,
         pathService,
-        returnEnvironment: false,
+        returnEnvironment: true,
         enableTrace: true,
         useMarkdownFormatter: false // Scripts should output raw results
       });
       
+      // Extract output and environment
+      const output = typeof result === 'string' ? result : result.output;
+      environment = typeof result === 'string' ? null : result.environment;
+      
       // Output the result
-      console.log(result);
+      console.log(output);
+      
+      // Clean up environment to prevent Node shadow env timers from keeping process alive
+      if (environment && 'cleanup' in environment) {
+        environment.cleanup();
+      }
+      
+      // For run command, ensure clean exit after script completes
+      // This prevents timers in JS shadow environments from keeping the process alive
+      await new Promise(resolve => setTimeout(resolve, 10));
+      process.exit(0);
       
     } catch (error) {
+      // Clean up environment even on error
+      if (environment && 'cleanup' in environment) {
+        environment.cleanup();
+      }
+      
       if (error instanceof MlldError) {
         throw error;
       }
