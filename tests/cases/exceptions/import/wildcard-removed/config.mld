@@ -1,0 +1,2 @@
+/var @greeting = "Hello, world!"
+/var @message = "This won't be imported"

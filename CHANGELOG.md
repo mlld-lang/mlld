@@ -11,7 +11,7 @@ Represents an overhaul and consolidation of all syntax.
 
 The `/` command approach creates clear disambiguiation between commands and variables/executables, while also setting the stage for using mlld in chat contexts. We are moving to a simple variable definition model with `/var` while allowing rich expression for different types based on the provided syntax.
 
-## Updated Syntax:
+### Updated Syntax:
 - Directives: Changed from @ prefix to / prefix (e.g., @text → /var, @add → /show)
 - Variable creation: Now requires @ prefix (e.g., /var @name = "value")
 - Command syntax: Changed from [(command)] to {command} or "command" (single-line, non-shellscript)
@@ -21,11 +21,20 @@ The `/` command approach creates clear disambiguiation between commands and vari
 - /output for file output
 - Comments: Use >> for line start/end comments (but not in params/objects/templates)
 
-## Updated Interpolation:
+### Updated Interpolation:
 - Double quotes: Now support @variable interpolation
 - Backticks: Primary template syntax with @variable interpolation
 - Double brackets: Fallback for @-heavy content, still uses {{variable}}
 - Commands: Use @variable in both {...} and "..." forms
+
+### Added:
+- **Primitive Value Support**: Direct assignment of unquoted numbers, booleans, and null
+  - Numbers: `/var @count = 42`, `/var @price = 19.99`
+  - Booleans: `/var @active = true`, `/var @disabled = false`
+  - Null: `/var @empty = null`
+  - Type preservation: Primitives maintain their JavaScript types through the system
+  - JavaScript semantics: Type coercion follows JavaScript rules (e.g., `"text" + 5 = "text5"`)
+  - Exec invocation support: Primitive literals in function calls (e.g., `@add(@num, 8)`)
 
 ## [1.4.11]
 

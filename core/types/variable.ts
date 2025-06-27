@@ -65,7 +65,8 @@ export type VariableTypeDiscriminator =
   | 'path'
   | 'imported'
   | 'executable'
-  | 'pipeline-input';
+  | 'pipeline-input'
+  | 'primitive';
 
 // =========================================================================
 // TEXT VARIABLE TYPES
@@ -249,6 +250,16 @@ export interface PipelineInputVariable extends BaseVariable {
 }
 
 /**
+ * Primitive values (numbers, booleans, null)
+ */
+export interface PrimitiveVariable extends BaseVariable {
+  type: 'primitive';
+  value: number | boolean | null;
+  primitiveType: 'number' | 'boolean' | 'null';
+  metadata?: VariableMetadata;
+}
+
+/**
  * Pipeline input wrapper interface
  */
 export interface PipelineInput {
@@ -280,7 +291,8 @@ export type Variable =
   | PathVariable
   | ImportedVariable
   | ExecutableVariable
-  | PipelineInputVariable;
+  | PipelineInputVariable
+  | PrimitiveVariable;
 
 // =========================================================================
 // TYPE GUARDS
@@ -375,6 +387,13 @@ export function isExecutable(variable: Variable): variable is ExecutableVariable
  */
 export function isPipelineInput(variable: Variable): variable is PipelineInputVariable {
   return variable.type === 'pipeline-input';
+}
+
+/**
+ * Type guard for PrimitiveVariable
+ */
+export function isPrimitive(variable: Variable): variable is PrimitiveVariable {
+  return variable.type === 'primitive';
 }
 
 // =========================================================================
@@ -738,6 +757,27 @@ export function createExecutableVariable(
   };
 }
 
+/**
+ * Create a PrimitiveVariable
+ */
+export function createPrimitiveVariable(
+  name: string,
+  value: number | boolean | null,
+  source: VariableSource,
+  metadata?: VariableMetadata
+): PrimitiveVariable {
+  return {
+    type: 'primitive',
+    name,
+    value,
+    primitiveType: value === null ? 'null' : typeof value as 'number' | 'boolean',
+    source,
+    createdAt: Date.now(),
+    modifiedAt: Date.now(),
+    metadata
+  };
+}
+
 // =========================================================================
 // CONVERSION HELPERS
 // =========================================================================
@@ -773,6 +813,7 @@ function mapToLegacyType(type: VariableTypeDiscriminator): string {
     case 'array':
     case 'computed':
     case 'pipeline-input':
+    case 'primitive':
       return 'data';
     
     case 'path':

@@ -29,6 +29,15 @@ function createVariableSource(valueNode: any, directive: DirectiveNode): Variabl
     isMultiLine: false
   };
 
+  // Handle primitive values (numbers, booleans, null)
+  if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
+    // For primitives, use the directive metadata to determine syntax
+    if (directive.meta?.primitiveType) {
+      baseSource.syntax = 'quoted'; // Primitives are treated like quoted values
+    }
+    return baseSource;
+  }
+  
   // Determine syntax type based on AST node
   if (valueNode.type === 'array') {
     baseSource.syntax = 'array';
@@ -92,14 +101,19 @@ export async function evaluateVar(
 
   // Get the value node - this contains type information from the parser
   const valueNode = directive.values?.value;
-  if (!valueNode) {
+  if (valueNode === undefined) {
     throw new Error('Var directive missing value');
   }
 
   // Type-based routing based on the AST structure
   let resolvedValue: any;
   
-  if (valueNode.type === 'array') {
+  // Check for primitive values first (numbers, booleans, null)
+  if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
+    // Direct primitive values from the grammar
+    resolvedValue = valueNode;
+    
+  } else if (valueNode.type === 'array') {
     // Array literal: [1, 2, 3] or [,]
     
     // Check if this array has complex items that need lazy evaluation
@@ -328,7 +342,18 @@ export async function evaluateVar(
   let variable: Variable;
 
   // Create specific variable types based on AST node type
-  if (valueNode.type === 'array') {
+  // Handle primitives first (they don't have a .type property)
+  if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
+    // Direct primitive values - we need to preserve their types
+    const { createPrimitiveVariable } = await import('@core/types/variable');
+    variable = createPrimitiveVariable(
+      identifier,
+      valueNode, // Use the actual primitive value
+      source,
+      metadata
+    );
+    
+  } else if (valueNode.type === 'array') {
     const isComplex = hasComplexArrayItems(valueNode.items || valueNode.elements || []);
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);
     
@@ -385,6 +410,18 @@ export async function evaluateVar(
       variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
     }
     
+  } else if (valueNode.type === 'VariableReferenceWithTail') {
+    // Variable with tail modifiers - create based on resolved type
+    if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+      if (Array.isArray(resolvedValue)) {
+        variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+      } else {
+        variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
+      }
+    } else {
+      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+    }
+    
   } else {
     // Text variables - need to determine specific type
     const strValue = String(resolvedValue);
@@ -428,6 +465,17 @@ export async function evaluateVar(
   }
 
   env.setVariable(identifier, variable);
+  
+  // Debug logging for primitive values
+  if (process.env.MLLD_DEBUG === 'true' && identifier === 'sum') {
+    console.log('DEBUG: Setting variable @sum:', {
+      identifier,
+      resolvedValue,
+      valueType: typeof resolvedValue,
+      variableType: variable.type,
+      variableValue: variable.value
+    });
+  }
 
   // Return empty string - var directives don't produce output
   return { value: '', env };

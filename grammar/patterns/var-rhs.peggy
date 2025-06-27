@@ -13,6 +13,7 @@ VarRHSContent "var assignment value"
   / BracketAmbiguous            // NEW: Array vs path disambiguation
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
+  / PrimitiveValue              // Direct primitives: 42, true, false, null
 
 // FIELD ACCESS EXEC PATTERN - Matches @obj.field() with nested field access
 FieldAccessExecPattern "field access exec invocation"

@@ -80,6 +80,12 @@ SlashVar "var directive"
         metaInfo.inferredType = 'computed';
         metaInfo.isForeach = true;
       }
+      // Handle primitive values (numbers, booleans, null)
+      else if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+        processedValue = value;
+        metaInfo.inferredType = 'primitive';
+        metaInfo.primitiveType = value === null ? 'null' : typeof value;
+      }
       // Handle other types
       else {
         processedValue = value;

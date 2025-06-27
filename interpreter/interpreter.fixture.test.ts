@@ -51,7 +51,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'add-section': 'add/section',
       'add-section-rename': 'add/section',
       'import-all': 'import/all',
-      'import-all-variable': 'import/all-variable',
+      'import-all-variable': 'import/all',
+      'import-alias': 'import/alias',
       'import-selected': 'import/selected',
       'path-assignment': 'path/assignment',
       'path-assignment-absolute': 'path/assignment',
@@ -70,6 +71,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'env-vars-allowed': 'input/env-vars-allowed',
       'import-namespace-json': 'import/namespace-json',
       'import-namespace-nested': 'import/namespace-nested',
+      'import-namespace-shorthand': 'import/namespace-shorthand',
+      'import-namespace-special-chars': 'import/namespace-special-chars',
+      'import-stdin-shorthand': 'import/stdin',
     };
     
     // Check if we have a mapping for this fixture
@@ -287,27 +291,22 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     const skipReason = skipTests[fixture.name] ? ` (Skipped: ${skipTests[fixture.name]})` : '';
 
     testFn(`should handle ${fixture.name}${isSmokeTest ? ' (smoke test)' : ''}${skipReason}`, async () => {
-      // First, set up any files from the examples directory
-      await setupExampleFiles(fixtureFile);
-      
-      // Then, set up any required files specified in the fixture
-      if (fixture.files) {
-        for (const [filePath, content] of Object.entries(fixture.files)) {
-          await fileSystem.writeFile(filePath, content as string);
-        }
-      }
-      
-      // Always copy shared files from the files directory
+      // First, copy shared files from the files directory as a base
       try {
         const sharedFilesPath = path.join(__dirname, '../tests/cases/files');
         if (fs.existsSync(sharedFilesPath)) {
           const sharedFiles = fs.readdirSync(sharedFilesPath);
           
           for (const file of sharedFiles) {
+            // Skip config.mlld which uses old syntax
+            if (file === 'config.mlld') {
+              continue;
+            }
+            
             const filePath = path.join(sharedFilesPath, file);
             const stat = fs.statSync(filePath);
             
-            if (stat.isFile() && !await fileSystem.exists(`/${file}`)) {
+            if (stat.isFile()) {
               const content = fs.readFileSync(filePath, 'utf8');
               await fileSystem.writeFile(`/${file}`, content);
             }
@@ -315,6 +314,16 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         }
       } catch (error) {
         // Ignore if shared files directory doesn't exist
+      }
+      
+      // Then, set up any files from the examples directory (overrides shared files)
+      await setupExampleFiles(fixtureFile);
+      
+      // Finally, set up any required files specified in the fixture (highest priority)
+      if (fixture.files) {
+        for (const [filePath, content] of Object.entries(fixture.files)) {
+          await fileSystem.writeFile(filePath, content as string);
+        }
       }
       
       // Copy examples files directory for examples that reference files/

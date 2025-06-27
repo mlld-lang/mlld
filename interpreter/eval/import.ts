@@ -16,7 +16,7 @@ import type { EvalResult } from '../core/interpreter';
 import { interpolate, evaluate } from '../core/interpreter';
 import { parse } from '@grammar/parser';
 import * as path from 'path';
-import { VariableRedefinitionError, MlldError } from '@core/errors';
+import { VariableRedefinitionError, MlldError, MlldImportError } from '@core/errors';
 import { HashUtils } from '@core/registry/utils/HashUtils';
 import { checkMlldVersion, formatVersionError } from '@core/utils/version-checker';
 import { version as currentMlldVersion } from '@core/version';
@@ -271,16 +271,18 @@ async function importFromPath(
         
         // Handle variable merging based on import type
         if (directive.subtype === 'importAll') {
-          // Import all properties
-          for (const [name, value] of Object.entries(moduleObject)) {
-            const variable = createVariableFromValue(name, value, resolvedPath);
-            env.setVariable(name, variable);
-          }
+          throw new MlldImportError(
+            "Wildcard imports '/import { * }' are no longer supported. " +
+            "Use namespace imports instead: '/import [file]' or '/import [file] as name'",
+            directive.location,
+            {
+              suggestion: "Change '/import { * } from [file]' to '/import [file]'"
+            }
+          );
         } else if (directive.subtype === 'importNamespace') {
           // Import entire JSON under a namespace alias
-          const imports = directive.values?.imports || [];
-          const importNode = imports[0]; // Should be single wildcard with alias
-          const alias = importNode?.alias;
+          // For shorthand imports, namespace is stored directly in values.namespace
+          const alias = directive.values?.namespace || directive.values?.imports?.[0]?.alias;
           
           if (!alias) {
             throw new Error('Namespace import missing alias');
@@ -422,29 +424,26 @@ async function importFromPath(
     
     // Handle variable merging based on import type
     if (directive.subtype === 'importAll') {
-      // Import all properties from the module object
-      for (const [name, value] of Object.entries(moduleObject)) {
-        // Skip __meta__ from being a direct import
-        if (name === '__meta__') continue;
-        
-        // Create variable using the new type system
-        const importedVariable = createVariableFromValue(name, value, resolvedPath);
-        env.setVariable(name, importedVariable);
-      }
-      
+      throw new MlldImportError(
+        "Wildcard imports '/import { * }' are no longer supported. " +
+        "Use namespace imports instead: '/import [file]' or '/import [file] as name'",
+        directive.location,
+        {
+          suggestion: "Change '/import { * } from [file]' to '/import [file]'"
+        }
+      );
     } else if (directive.subtype === 'importNamespace') {
-      // Import entire module under a namespace alias
-      const imports = directive.values?.imports || [];
-      const importNode = imports[0]; // Should be single wildcard with alias
-      const alias = importNode?.alias;
+      // Import entire module under a namespace
+      // For shorthand imports, namespace is stored directly in values.namespace
+      const namespace = directive.values?.namespace || directive.values?.imports?.[0]?.alias;
       
-      if (!alias) {
+      if (!namespace) {
         throw new Error('Namespace import missing alias');
       }
       
       // Create namespace variable with the module object
-      const namespaceVariable = createNamespaceVariable(alias, moduleObject, resolvedPath);
-      env.setVariable(alias, namespaceVariable);
+      const namespaceVariable = createNamespaceVariable(namespace, moduleObject, resolvedPath);
+      env.setVariable(namespace, namespaceVariable);
       
     } else if (directive.subtype === 'importSelected') {
       // Import selected variables from the module object
@@ -731,14 +730,14 @@ async function importFromResolverContent(
     
     // Handle variable merging based on import type (same as importFromPath)
     if (directive.subtype === 'importAll') {
-      // Import all properties from the module object
-      for (const [name, value] of Object.entries(moduleObject)) {
-        if (name === '__meta__') continue;
-        
-        // Create variable using the new type system
-        const importedVariable = createVariableFromValue(name, value, ref);
-        env.setVariable(name, importedVariable);
-      }
+      throw new MlldImportError(
+        "Wildcard imports '/import { * }' are no longer supported. " +
+        "Use namespace imports instead: '/import [file]' or '/import [file] as name'",
+        directive.location,
+        {
+          suggestion: "Change '/import { * } from [file]' to '/import [file]'"
+        }
+      );
     } else if (directive.subtype === 'importNamespace') {
       // Import entire module under a namespace alias
       const imports = directive.values?.imports || [];
@@ -916,10 +915,14 @@ async function evaluateResolverImport(
 
   // Handle variable merging based on import type
   if (directive.subtype === 'importAll') {
-    // Import all variables
-    for (const [name, variable] of variables) {
-      env.setVariable(name, variable);
-    }
+    throw new MlldImportError(
+      "Wildcard imports '/import { * }' are no longer supported. " +
+      "Use namespace imports instead: '/import [file]' or '/import [file] as name'",
+      directive.location,
+      {
+        suggestion: "Change '/import { * } from [file]' to '/import [file]'"
+      }
+    );
   } else if (directive.subtype === 'importSelected') {
     // Import selected variables
     const imports = directive.values?.imports || [];
@@ -1001,10 +1004,14 @@ async function evaluateInputImport(
   
   // Handle variable merging based on import type
   if (directive.subtype === 'importAll') {
-    // Import all variables
-    for (const [name, variable] of variables) {
-      env.setVariable(name, variable);
-    }
+    throw new MlldImportError(
+      "Wildcard imports '/import { * }' are no longer supported. " +
+      "Use namespace imports instead: '/import [file]' or '/import [file] as name'",
+      directive.location,
+      {
+        suggestion: "Change '/import { * } from [file]' to '/import [file]'"
+      }
+    );
   } else if (directive.subtype === 'importSelected') {
     // Import selected variables
     const imports = directive.values?.imports || [];

@@ -43,6 +43,7 @@ CommandArgument "command argument"
       // Return the VariableReference directly
       return varRef;
     }
+  / PrimitiveValue       // Direct primitives: 42, true, false, null
   / EscapedArgument      // Escaped characters in unquoted arguments
   / RawArgument          // Fallback for unquoted arguments
 

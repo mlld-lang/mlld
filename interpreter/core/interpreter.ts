@@ -501,11 +501,15 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
     isImported,
     isComputed,
     isObject,
-    isArray
+    isArray,
+    isPrimitive
   } = await import('@core/types/variable');
   
   // Type-specific resolution using new type guards
-  if (isTextLike(variable)) {
+  if (isPrimitive(variable)) {
+    // Primitive variables return their raw value (number, boolean, null)
+    return variable.value;
+  } else if (isTextLike(variable)) {
     // All text-producing types return their string value directly
     return variable.value;
   } else if (isStructured(variable)) {
@@ -714,6 +718,15 @@ export async function interpolate(
           valueType: typeof value,
           isNull: value === null
         });
+        
+        // Special debug for @sum
+        if (node.identifier === 'sum') {
+          console.log('DEBUG: Interpolating @sum:', {
+            rawValue: value,
+            stringValue: String(value),
+            willBe: `"${String(value)}"`
+          });
+        }
       }
       
       if (value === null) {

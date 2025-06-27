@@ -148,10 +148,10 @@ describe('Integration Scenarios', () => {
 `);
       
       const source = `
-    /import {*} from "/imported.mld"
-    /show @greeting
+    /import [/imported.mld]
+    /show @imported.greeting
     /show " by "
-    /show @author
+    /show @imported.author
 `;
       
       const result = await interpret(source, {
@@ -235,7 +235,7 @@ describe('Integration Scenarios', () => {
       
       const source = `
     /var @conflict = "Original"
-    /import {*} from "/defs.mld"
+    /import [/defs.mld]
 `;
       
       await expect(interpret(source, {

@@ -166,13 +166,27 @@ describe('RunCommand', () => {
       
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       
-      await runCommand.run('hello');
+      // Mock process.exit to prevent it from actually exiting
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
+        throw new Error(`process.exit unexpectedly called with "${code}"`);
+      });
+      
+      try {
+        await runCommand.run('hello');
+      } catch (error) {
+        // Expected to throw due to process.exit mock
+        if (!error.message.includes('process.exit unexpectedly called with "0"')) {
+          throw error;
+        }
+      }
       
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Running'));
       expect(interpret).toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledWith('Script output');
+      expect(exitSpy).toHaveBeenCalledWith(0);
       
       consoleSpy.mockRestore();
+      exitSpy.mockRestore();
     });
   });
 });

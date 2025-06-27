@@ -2,6 +2,6 @@
 
 This example demonstrates the shorthand import syntax for stdin.
 
-/import @stdin
+/import @INPUT
 
-/show [[Name: {{name}}, Version: {{version}}]]
+/show `Name: @INPUT.name, Version: @INPUT.version`

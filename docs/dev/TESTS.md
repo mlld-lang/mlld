@@ -194,6 +194,26 @@ To convert an example smoke test to a full validation test:
 4. **Test error conditions** with exception and invalid test cases
 5. **Document complex scenarios** with comments in test files
 
+### Test File Naming Requirements
+
+**CRITICAL**: All test support files (`.mld`, `.json`, etc.) must have unique names across the entire test suite. This is because the test runner copies all files to a single virtual filesystem root.
+
+**❌ BAD - Generic names that cause collisions:**
+```
+tests/cases/valid/import/all/config.mld
+tests/cases/valid/import/namespace/config.mld
+tests/cases/valid/modules/config.mld
+```
+
+**✅ GOOD - Unique names prefixed with test context:**
+```
+tests/cases/valid/import/all/import-all-config.mld
+tests/cases/valid/import/namespace/namespace-test-config.mld
+tests/cases/valid/modules/modules-test-config.mld
+```
+
+**Why this matters**: When tests run, files from different test directories are copied to the same virtual filesystem. If multiple tests use `config.mld`, they will overwrite each other, causing tests to import the wrong files and fail with confusing errors.
+
 ### Maintaining Tests
 
 1. **Run full build after changes** to regenerate fixtures

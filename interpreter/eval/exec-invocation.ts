@@ -144,29 +144,40 @@ export async function evaluateExecInvocation(
   const params = definition.paramNames || [];
   
   // Evaluate arguments to get their actual values
-  const evaluatedArgs: string[] = [];
+  // Changed: Store actual values instead of always stringifying
+  const evaluatedArgs: any[] = [];
+  const evaluatedArgStrings: string[] = []; // For command/template execution that needs strings
+  
   for (const arg of args) {
     if (typeof arg === 'string') {
       evaluatedArgs.push(arg);
+      evaluatedArgStrings.push(arg);
+    } else if (typeof arg === 'number' || typeof arg === 'boolean' || arg === null) {
+      // Handle primitive arguments directly
+      evaluatedArgs.push(arg);
+      evaluatedArgStrings.push(String(arg));
     } else if (arg && typeof arg === 'object') {
       // Check if this is a nested ExecInvocation
       if (arg.type === 'ExecInvocation') {
         // Recursively evaluate the nested function call
         const nestedResult = await evaluateExecInvocation(arg, env);
-        // Convert result to string appropriately
         const resultValue = nestedResult.value;
+        
+        // Store the actual value
+        evaluatedArgs.push(resultValue);
+        
+        // Create string representation for templates/commands
         let stringValue: string;
         if (typeof resultValue === 'string') {
           stringValue = resultValue;
         } else if (resultValue === null || resultValue === undefined) {
           stringValue = String(resultValue);
         } else if (typeof resultValue === 'object') {
-          // For objects and arrays, use JSON.stringify
           stringValue = JSON.stringify(resultValue);
         } else {
           stringValue = String(resultValue);
         }
-        evaluatedArgs.push(stringValue);
+        evaluatedArgStrings.push(stringValue);
       } else if (arg.type === 'VariableReference') {
         // Handle variable references directly
         const varRef = arg as any;
@@ -185,26 +196,31 @@ export async function evaluateExecInvocation(
           finalValue = await accessField(value, varRef.fields, varRef.identifier);
         }
         
-        // Convert to string appropriately
+        // Store the actual value
+        evaluatedArgs.push(finalValue);
+        
+        // Create string representation for templates/commands
         let stringValue: string;
         if (typeof finalValue === 'string') {
           stringValue = finalValue;
         } else if (finalValue === null || finalValue === undefined) {
           stringValue = String(finalValue);
         } else if (typeof finalValue === 'object') {
-          // For objects and arrays, use JSON.stringify
           stringValue = JSON.stringify(finalValue);
         } else {
           stringValue = String(finalValue);
         }
-        evaluatedArgs.push(stringValue);
+        evaluatedArgStrings.push(stringValue);
       } else {
         // Otherwise interpolate as usual
         const evaluated = await interpolate([arg], env);
         evaluatedArgs.push(evaluated);
+        evaluatedArgStrings.push(evaluated);
       }
     } else {
-      evaluatedArgs.push(String(arg));
+      const stringValue = String(arg);
+      evaluatedArgs.push(arg);
+      evaluatedArgStrings.push(stringValue);
     }
   }
   
@@ -212,11 +228,14 @@ export async function evaluateExecInvocation(
   for (let i = 0; i < params.length; i++) {
     const paramName = params[i];
     const argValue = evaluatedArgs[i];
+    const argStringValue = evaluatedArgStrings[i];
     
     if (argValue !== undefined) {
+      // For template/command execution, we need string values
+      // But we should preserve the actual value in the variable for code execution
       const paramVar = createSimpleTextVariable(
         paramName, 
-        argValue,
+        argStringValue,
         {
           directive: 'var',
           syntax: 'quoted',
@@ -225,7 +244,9 @@ export async function evaluateExecInvocation(
         },
         {
           isSystem: true, // Mark as system variable to bypass reserved name check
-          isParameter: true
+          isParameter: true,
+          // Store the actual value (not stringified) for code execution
+          actualValue: argValue
         }
       );
       execEnv.setVariable(paramName, paramVar);
@@ -253,7 +274,7 @@ export async function evaluateExecInvocation(
     const envVars: Record<string, string> = {};
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
-      const argValue = evaluatedArgs[i];
+      const argValue = evaluatedArgStrings[i]; // Use string version for env vars
       if (argValue !== undefined) {
         envVars[paramName] = String(argValue);
       }
@@ -303,11 +324,32 @@ export async function evaluateExecInvocation(
       if (paramVar && paramVar.type === 'pipeline-input') {
         // Pass the pipeline input object directly for code execution
         codeParams[paramName] = paramVar.value;
+      } else if (paramVar && paramVar.metadata?.actualValue !== undefined) {
+        // Use the actual value from the parameter variable if available
+        codeParams[paramName] = paramVar.metadata.actualValue;
+        
+        // Debug primitive values
+        if (process.env.DEBUG_EXEC) {
+          console.log(`Using actualValue for ${paramName}:`, {
+            actualValue: paramVar.metadata.actualValue,
+            type: typeof paramVar.metadata.actualValue
+          });
+        }
       } else {
+        // Use the evaluated argument value directly - this preserves primitives
         const argValue = evaluatedArgs[i];
-        // Always include the parameter, even if undefined
-        // This ensures the code can reference all declared parameters
         codeParams[paramName] = argValue;
+        
+        // Debug primitive values
+        if (process.env.DEBUG_EXEC) {
+          console.log(`Code parameter ${paramName}:`, {
+            argValue,
+            type: typeof argValue,
+            isNumber: typeof argValue === 'number',
+            evaluatedArgs_i: evaluatedArgs[i],
+            evaluatedArgStrings_i: evaluatedArgStrings[i]
+          });
+        }
       }
     }
     

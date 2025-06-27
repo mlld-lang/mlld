@@ -1633,12 +1633,14 @@ export class Environment {
         }
         
         // Debug exec-code issue
-        if (process.env.DEBUG_EXEC) {
+        if (process.env.DEBUG_EXEC || process.env.DEBUG_PRIMITIVES) {
           console.log('executeCode debug:');
           console.log('  code:', code);
           console.log('  functionBody:', functionBody);
           console.log('  allParamNames:', allParamNames);
           console.log('  allParamValues:', allParamValues);
+          console.log('  param types:', allParamValues.map(v => typeof v));
+          console.log('  param values detail:', allParamValues.map(v => ({ value: v, type: typeof v })));
         }
         
         // Create a function with dynamic parameters

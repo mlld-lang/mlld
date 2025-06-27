@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { isImportAllDirective, isImportSelectedDirective } from '@core/types/guards';
+import { isImportSelectedDirective } from '@core/types/guards';
 import { parse } from '@grammar/parser';
 import { importFixtures } from './fixtures/import';
 import { parseDirective } from './utils/test-helpers';
 
 describe('Import Directive Debug', () => {
   it('should log the import directive structure', async () => {
-    const input = '/import { * } from [path/to/file.mlld]';
+    const input = '/import [path/to/file.mlld]';
     const result = (await parse(input)).ast[0];
     
     // Log the structure so we can see what it looks like
@@ -15,61 +15,67 @@ describe('Import Directive Debug', () => {
 });
 
 describe('Import Directive Syntax Tests', () => {
-  describe('Import All', () => {
-    it('should parse a wildcard import', async () => {
-      const input = '/import { * } from [path/to/file.mlld]';
+  describe('Import Namespace (Shorthand)', () => {
+    it('should parse a shorthand namespace import', async () => {
+      const input = '/import [path/to/file.mlld]';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('import');
-      expect(result.subtype).toBe('importAll');
+      expect(result.subtype).toBe('importNamespace');
       expect(result.source).toBe('path'); // Check new source field
       
       // Check values
-      expect(result.values.imports).toHaveLength(1);
-      // The identifier is part of the VariableReference but not in the expected place
-      // Just check that we have an import array item of the right type
-      expect(result.values.imports[0].type).toBe('VariableReference');
-      expect(result.values.imports[0].valueType).toBe('import');
       expect(result.values.path).toBeDefined();
+      expect(result.values.namespace).toBe('file'); // Auto-derived from filename
       
       // Check raw
-      expect(result.raw.imports).toBe('*');
       expect(result.raw.path).toBeDefined();
+      expect(result.raw.namespace).toBe('file');
       
       // Check meta
       expect(result.meta.path).toBeDefined();
       expect(result.meta.path.hasVariables).toBe(false);
-      
-      // Check type guard
-      expect(isImportAllDirective(result)).toBe(true);
     });
     
-    it('should parse a wildcard import with path variable', async () => {
-      const input = '/import { * } from [@pathVar]';
+    it('should parse a namespace import with explicit alias', async () => {
+      const input = '/import [path/to/file.mlld] as myModule';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
       expect(result.kind).toBe('import');
-      expect(result.subtype).toBe('importAll');
+      expect(result.subtype).toBe('importNamespace');
       expect(result.source).toBe('path'); // Check new source field
       
       // Check values
-      expect(result.values.imports).toHaveLength(1);
-      // The identifier is part of the VariableReference but not in the expected place
-      // Just check that we have an import array item of the right type
-      expect(result.values.imports[0].type).toBe('VariableReference');
-      expect(result.values.imports[0].valueType).toBe('import');
+      expect(result.values.path).toBeDefined();
+      expect(result.values.namespace).toBe('myModule'); // Explicit alias
+      
+      // Check raw
+      expect(result.raw.path).toBeDefined();
+      expect(result.raw.namespace).toBe('myModule');
+      
+      // Check meta
+      expect(result.meta.path).toBeDefined();
+      expect(result.meta.path.hasVariables).toBe(false);
+    });
+    
+    it('should parse a namespace import with path variable and alias', async () => {
+      const input = '/import [@pathVar] as config';
+      const result = (await parse(input)).ast[0];
+      
+      expect(result.type).toBe('Directive');
+      expect(result.kind).toBe('import');
+      expect(result.subtype).toBe('importNamespace');
+      expect(result.source).toBe('path'); // Check new source field
       
       // Check path has a variable
       expect(result.values.path).toHaveLength(1);
       expect(result.values.path[0].type).toBe('VariableReference');
+      expect(result.values.namespace).toBe('config'); // Explicit alias required for variable paths
       
       // Check meta
       expect(result.meta.path.hasVariables).toBe(true);
-      
-      // Check type guard
-      expect(isImportAllDirective(result)).toBe(true);
     });
   });
   
@@ -139,7 +145,12 @@ describe('Import Directive AST Structure', () => {
         // Check that expected keys exist in values
         for (const key of Object.keys(fixture.expected.values)) {
           expect(node.values).toHaveProperty(key);
-          expect(Array.isArray(node.values[key])).toBe(true);
+          // Special case: namespace field in importNamespace is a string, not an array
+          if (node.subtype === 'importNamespace' && key === 'namespace') {
+            expect(typeof node.values[key]).toBe('string');
+          } else {
+            expect(Array.isArray(node.values[key])).toBe(true);
+          }
         }
         
         // Sample check (specific nodes will be verified in implementation tests)

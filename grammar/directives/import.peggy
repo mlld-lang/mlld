@@ -22,20 +22,33 @@ SlashImport
   = SlashImportShorthand
   / SlashImportFull
 
-// Shorthand import: /import [path] or /import @input
+// Shorthand import: /import [path] or /import @input or /import [path] as name
 SlashImportShorthand
-  = DirectiveContext "/import" _ path:ImportPath ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashImportShorthand matched', { path, ttl, tail });
+  = DirectiveContext "/import" _ path:ImportPath alias:(_ "as" _ name:BaseIdentifier { return name; })? ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashImportShorthand matched', { path, alias, ttl, tail });
       
-      // Shorthand always imports all (*)
-      const imports = ["*"];
-      const importsRaw = "*";
+      // NEW: Derive namespace from path if no alias provided
+      let namespace = alias;
+      if (!namespace) {
+        // Extract namespace from path
+        const pathStr = path.raw?.path || path.raw?.module || '';
+        if (pathStr.startsWith('@') && pathStr.includes('/')) {
+          // @author/module -> 'module'
+          const parts = pathStr.split('/');
+          namespace = parts[parts.length - 1].split('@')[0]; // Remove hash
+        } else if (pathStr.includes('/')) {
+          // ./path/to/file.mld -> 'file'
+          const basename = pathStr.split('/').pop() || '';
+          namespace = basename.replace(/\.(mlld|mld|md|json)$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+        } else {
+          // Simple filename
+          namespace = pathStr.replace(/\.(mlld|mld|md|json)$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+        }
+      }
       
-      // Create values object with variable references
+      // Create values object with namespace import structure
       const values = {
-        imports: [helpers.createVariableReferenceNode('import', { 
-          identifier: '*'
-        })],
+        namespace: namespace,  // Store namespace directly for shorthand imports
         path: path.values?.path || path.values?.module || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
       
@@ -51,7 +64,7 @@ SlashImportShorthand
       
       // Create raw object with text segments
       const raw = {
-        imports: importsRaw,
+        namespace: namespace,  // Store namespace in raw as well
         path: path.raw?.path || path.raw?.module || path // Handle string paths like @input
       };
       
@@ -62,7 +75,7 @@ SlashImportShorthand
       
       return helpers.createStructuredDirective(
         'import',
-        'importAll',
+        'importNamespace',  // CHANGED from 'importAll'
         values,
         raw,
         meta,
@@ -333,14 +346,9 @@ ShortHash
 
 // Using standard list pattern from patterns/lists.peggy
 ImportsList
-  = "*" alias:(" as " aliasName:BaseIdentifier { return aliasName; })? {
-      if (alias) {
-        // * as alias means import all variables under a namespace alias
-        return [{ original: "*", alias: alias }];
-      } else {
-        // * means import all variables with their original names
-        return ["*"];
-      }
+  = "*" _ "as" _ aliasName:BaseIdentifier {
+      // Only allow * with explicit alias
+      return [{ original: "*", alias: aliasName }];
     }
   / first:ImportItem rest:(CommaSpace item:ImportItem { return item; })* {
       return [first, ...rest];

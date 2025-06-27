@@ -8,7 +8,7 @@ import type { DirectiveNode } from '@core/types';
  */
 describe('Directive Base Structure', () => {
   const directiveExamples = [
-    '/import { * } from [file.md]',
+    '/import [file.md]',
     '/show "path/to/file.md"',
     '/var @myvar = "some text"',
     '/var @myvar = { "key": "value" }',

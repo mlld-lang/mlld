@@ -446,9 +446,15 @@ function createExecWrapper(
       const paramName = params[i];
       const argValue = args[i];
       if (argValue !== undefined) {
+        // For template interpolation, we need string representation
+        const stringValue = typeof argValue === 'string' ? argValue :
+                           argValue === null || argValue === undefined ? String(argValue) :
+                           typeof argValue === 'object' ? JSON.stringify(argValue) :
+                           String(argValue);
+        
         const paramVar = createSimpleTextVariable(
           paramName,
-          argValue,
+          stringValue,
           {
             directive: 'var',
             syntax: 'quoted',

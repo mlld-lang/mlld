@@ -1,4 +1,4 @@
-/path @configPath = [config.mld]
-/import {*} from [@configPath]
-/show @greeting
-/show @count
+/path @configPath = [import-all-config.mld]
+/import [@configPath] as myconfig
+/show @myconfig.greeting
+/show @myconfig.count

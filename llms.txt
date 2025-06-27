@@ -255,6 +255,20 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /var @array = [1, 2, 3]
 /var @object = {"key": "value"}
 
+>> Primitive values (mlld 2.0+)
+/var @count = 42                    << Number
+/var @price = 19.99                 << Decimal
+/var @active = true                 << Boolean
+/var @disabled = false              << Boolean
+/var @empty = null                  << Null
+
+>> Type preservation - primitives keep their JavaScript types
+/var @num = 42
+/var @bool = true
+/exe @add(a, b) = js { return a + b; }
+/var @result = @add(@num, 8)        << Result is 50 (number)
+/var @concat = @add("text", 5)      << Result is "text5" (JS coercion)
+
 >> Command results (no @ before run!)
 /var @date = run "date"
 /var @files = run {ls -la | head -5}
@@ -280,6 +294,10 @@ The unified `/var` directive creates variables with types inferred from syntax:
 >> - @ variable interpolation
 >> - @ executable calls
 >> - Clean, simple syntax
+
+>> Important: All values become strings in templates
+/var @count = 42
+/show `Count: @count`  << Shows "Count: 42" (number → string)
 ```
 
 ### Double-bracket templates (ESCAPE HATCH ONLY)
@@ -313,6 +331,13 @@ The unified `/var` directive creates variables with types inferred from syntax:
 >> Code executable (js/node without 'run' prefix)
 /exe @calculate(x) = js {return @x * 2}
 
+>> Type preservation in code executables
+/exe @add(a, b) = js { return a + b; }
+/var @result = @add(42, 8)          << Result is 50 (number) 
+/var @concat = @add("text", 5)      << Result is "text5" (JS coercion)
+/exe @isActive(val) = js { return val === true; }
+/var @check = @isActive(true)       << Result is true (boolean preserved)
+
 >> Template executable
 /exe @greet(name) = `Hello @name!`
 
@@ -340,12 +365,18 @@ The unified `/var` directive creates variables with types inferred from syntax:
 ## Import System
 
 ```mlld
->> File imports
+>> Namespace imports (NEW - prevents variable collisions)
+/import "shared.mld"              << Creates @shared namespace
+/import "./config.mld"            << Creates @config namespace
+/import "data/users.mld" as db    << Creates @db namespace
+
+>> Selected imports (when you know what you need)
 /import { greeting, config } from "shared.mld"
-/import { * } from "utils.mld"
 
 >> Module imports (no quotes)
 /import { fetchData, parseJSON } from @corp/utils
+/import @corp/utils               << Creates @utils namespace
+/import @corp/utils as corpUtils  << Custom namespace
 
 >> Environment variables (must be in mlld.lock.json)
 /import { API_KEY, NODE_ENV } from @INPUT

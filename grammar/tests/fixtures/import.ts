@@ -18,21 +18,13 @@ export interface DirectiveFixture {
 
 export const importFixtures: DirectiveFixture[] = [
   {
-    name: 'import-all',
-    description: 'Import directive with wildcard import',
-    input: '/import { * } from [file.md]',
+    name: 'import-namespace',
+    description: 'Import directive with namespace (shorthand)',
+    input: '/import [file.md]',
     expected: {
       kind: 'import',
-      subtype: 'importAll',
+      subtype: 'importNamespace',
       values: {
-        imports: [
-          {
-            type: 'VariableReference',
-            identifier: '*',
-            valueType: 'import',
-            isVariableReference: true
-          }
-        ],
         path: [
           {
             type: 'Text',
@@ -46,11 +38,12 @@ export const importFixtures: DirectiveFixture[] = [
             type: 'Text',
             content: 'md'
           }
-        ]
+        ],
+        namespace: 'file'  // This should be an array according to the test
       },
       raw: {
-        imports: '*',
-        path: 'file.md'
+        path: 'file.md',
+        namespace: 'file'
       },
       meta: {
         path: {

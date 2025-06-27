@@ -41,8 +41,8 @@ describe('Import Content Type Validation', () => {
 `);
       
       const code = `
-/import { * } from "./utils.mld"
-/show @helper
+/import [./utils.mld]
+/show @utils.helper
 `;
       
       const result = await interpret(code, {
@@ -81,19 +81,20 @@ describe('Import Content Type Validation', () => {
   });
 
   describe('Non-Module Import Behavior', () => {
-    it('should import plain text files but find no variables', async () => {
+    it('should import plain text files as namespace with empty exports', async () => {
       await fileSystem.writeFile('/readme.txt', 'This is a plain text file');
       
-      const code = `/import { * } from "./readme.txt"
-/show @content`;
+      const code = `/import [./readme.txt] as text
+/show @text`;
       
-      await expect(
-        interpret(code, {
-          fileSystem,
-          pathService,
-          basePath: '/'
-        })
-      ).rejects.toThrow(/Variable.*not found/);
+      const result = await interpret(code, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      // Plain text files should create an empty namespace object
+      expect(result.trim()).toBe('{}');
     });
 
     it('should import JSON data files and access their properties', async () => {
@@ -111,19 +112,20 @@ describe('Import Content Type Validation', () => {
       expect(result.trim()).toBe('value');
     });
 
-    it('should import markdown files without mlld but find no variables', async () => {
+    it('should import markdown files without mlld directives as empty namespace', async () => {
       await fileSystem.writeFile('/doc.md', '# Documentation\n\nNo mlld content here.');
       
-      const code = `/import { * } from "./doc.md"
-/show @title`;
+      const code = `/import [./doc.md]
+/show @doc`;
       
-      await expect(
-        interpret(code, {
-          fileSystem,
-          pathService,
-          basePath: '/'
-        })
-      ).rejects.toThrow(/Variable.*not found/);
+      const result = await interpret(code, {
+        fileSystem,
+        pathService,
+        basePath: '/'
+      });
+      
+      // Markdown files without mlld directives should create an empty namespace
+      expect(result.trim()).toBe('{}');
     });
   });
 
@@ -209,8 +211,30 @@ describe('Import Content Type Validation', () => {
       expect(result.trim()).toBe('Utils v1.0.0');
     });
 
-    it('should import registry data files but find no variables', async () => {
-      const code = `/import { * } from @test/data
+    it('should reject imports from non-module registry entries', async () => {
+      // Set up resolver manager for this test
+      const resolverManager = new ResolverManager();
+      resolverManager.registerResolver(new LocalResolver(fileSystem));
+      resolverManager.registerResolver(new HTTPResolver());
+      resolverManager.registerResolver(new RegistryResolver());
+      
+      // Configure the test registry
+      resolverManager.configurePrefixes([{
+        prefix: '@test/',
+        resolver: 'REGISTRY',
+        config: {
+          registryUrl: 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules'
+        }
+      }]);
+      
+      // Also configure HTTP resolver for the registry URLs
+      resolverManager.configurePrefixes([{
+        prefix: 'https:',
+        resolver: 'HTTP',
+        config: { baseUrl: 'https://example.com', headers: {} }
+      }]);
+      
+      const code = `/import { type } from @test/data
 /show @type`;
       
       await expect(
@@ -223,9 +247,10 @@ describe('Import Content Type Validation', () => {
             allowedProtocols: ['https'],
             allowedDomains: [],
             blockedDomains: []
-          }
+          },
+          resolverManager
         })
-      ).rejects.toThrow(/Variable.*not found/);
+      ).rejects.toThrow(/Variable.*not found|Field.*not found/);
     });
   });
 

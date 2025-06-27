@@ -2,7 +2,7 @@
 
 This tests backward compatibility with @stdin syntax.
 
-/import { * } from @stdin
-/show @config.greeting
+/import @stdin as input
+/show @input.config.greeting
 
-/show @data.message
+/show @input.data.message

@@ -435,6 +435,49 @@ export interface FieldAccess {
 }
 ```
 
+## Primitive Types Support (v2.0.0+)
+
+mlld now supports primitive types (numbers, booleans, null) as first-class values:
+
+```mlld
+/var @count = 42          # Number primitive
+/var @active = true       # Boolean primitive  
+/var @empty = null        # Null primitive
+
+# Type preservation in JavaScript
+/exe @add(a, b) = js { return a + b; }
+/var @sum = @add(@count, 8)  # Result: 50 (not "428")
+```
+
+### Architecture
+
+**Variable Type**: Added `PrimitiveVariable` to the discriminated union:
+```typescript
+export interface PrimitiveVariable extends BaseVariable {
+  type: 'primitive';
+  value: number | boolean | null;
+  primitiveType: 'number' | 'boolean' | 'null';
+  metadata?: VariableMetadata;
+}
+```
+
+**Key Integration Points**:
+1. **Grammar**: `PrimitiveValue` added to `VarRHSContent`
+2. **Interpreter**: `createPrimitiveVariable()` for type preservation
+3. **Resolution**: `isPrimitive()` returns raw value, not stringified
+4. **Interpolation**: Converts to string only in template contexts
+5. **Exec Parameters**: Passes actual primitive values to JS/Node
+
+### Type Coercion
+
+JavaScript type coercion rules apply:
+```mlld
+/var @text = "ham"
+/var @num = 5
+/exe @concat(a, b) = js { return a + b; }
+/var @result = @concat(@text, @num)  # "ham5"
+```
+
 ## Data Flow Architecture
 
 ### Pipeline Execution Model
