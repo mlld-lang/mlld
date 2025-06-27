@@ -9,7 +9,7 @@ Input content: @add @INPUT
 Input lowercase: @add @input
 
 ## Template Usage
-/var @greeting = [[Received input: {{INPUT}}]]
+/var @greeting = ::Received input: {{INPUT}}::
 /show @greeting
 
 ## Import from @INPUT

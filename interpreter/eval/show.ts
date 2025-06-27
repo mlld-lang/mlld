@@ -578,7 +578,7 @@ export async function evaluateShow(
     content = await evaluateForeachAsText(foreachExpression, env, options);
     
   } else if (directive.subtype === 'showForeachSection') {
-    // Handle foreach section expressions: @add foreach [@array.field # section] as [[template]]
+    // Handle foreach section expressions: @add foreach [@array.field # section] as ::template::
     const foreachExpression = directive.values?.foreach;
     if (!foreachExpression) {
       throw new Error('Add foreach section directive missing foreach expression');

@@ -3,24 +3,24 @@ name: template-newline-normalization
 description: Test template newline normalization
 ---
 
-/var @greeting = [[
+/var @greeting = ::
 Hello World!
-]]
+::
 
-/var @multiline = [[
+/var @multiline = ::
 First line
 
 Second line
 
 
 Third line
-]]
+::
 
-/var @trailing = [[
+/var @trailing = ::
 Content with trailing blank lines
 
 
-]]
+::
 
 /show @greeting
 /show @multiline

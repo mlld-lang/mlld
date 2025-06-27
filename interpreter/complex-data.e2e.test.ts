@@ -106,8 +106,8 @@ describe('Complex Data Assignment', () => {
 /var @name = "World"
 
 /var @messages = {
-  greeting: [[Hello {{name}}!]],
-  farewell: [[Goodbye {{name}}!]]
+  greeting: ::Hello {{name}}!::,
+  farewell: ::Goodbye {{name}}!::
 }
 `;
     
@@ -138,7 +138,7 @@ describe('Complex Data Assignment', () => {
     version: run {echo "1.0.0"}
   },
   messages: {
-    welcome: [[Welcome to MyApp!]]
+    welcome: ::Welcome to MyApp!::
   }
 }
 `;

@@ -166,7 +166,7 @@ The @when directive requires a variable to evaluate, not a literal value.
 /show @result
 
 ## In text template
-/var @message = [[Output: {{greeting}}]]
+/var @message = ::Output: {{greeting}}::
 /show @message
 
 ## Verify regular variable import works
@@ -315,11 +315,11 @@ Starting deployment process...
 
 ## TIME as variable (returns text)
 /var @timestamp = @TIME
-/show [[Variable TIME: {{timestamp}}]]
+/show ::Variable TIME: {{timestamp}}::
 
 ## TIME as import (returns data with multiple formats)
 /import { iso, unix, date } from @TIME
-/show [[Import TIME - ISO: {{iso}}, Date: {{date}}]]
+/show ::Import TIME - ISO: {{iso}}, Date: {{date}}::
 ```
 
 **Expected Output:**

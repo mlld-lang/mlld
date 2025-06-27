@@ -1,7 +1,7 @@
 # Test: Markdown formatter
 
 ## Format unformatted markdown
-/var @uglyMd = [[
+/var @uglyMd = ::
 #  Header with extra spaces  
 
 This is    a paragraph with     irregular spacing.
@@ -13,7 +13,7 @@ This is    a paragraph with     irregular spacing.
 | Col1|Col2 |Col3|
 |---|---|---|
 |A|B|C|
-]]
+::
 
 /var @prettyMd = run {echo "@uglyMd"} with { pipeline: [@md] }
 /show @prettyMd

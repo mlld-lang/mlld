@@ -23,7 +23,7 @@ return data.map(p => p.name).join(', ');
 }
 
 /var @names = @getData() | @processJSON
-/show [[JSON Names: {{names}}]]
+/show ::JSON Names: {{names}}::
 
 >> CSV format
 /exe @processCSV(input) = js {
@@ -33,19 +33,19 @@ return input.csv.slice(1).map(row => row[0]).join(', ');
 }
 
 /var @csvNames = @getCSV() with { format: "csv", pipeline: [@processCSV] }
-/show [[CSV Names: {{csvNames}}]]
+/show ::CSV Names: {{csvNames}}::
 
 >> Format conversion
 /exe @csvToJSON(input) = js {
 if (input.type !== 'csv') throw new Error('Expected CSV input');
 const [headers, ...rows] = input.csv;
 return JSON.stringify(rows.map(row => 
-Object.fromEntries(headers.map((h, i) => [h, row[i]]))
+Object.fromEntries(headers.map((h, i) => [h, row[i::))
   ));
 }
 
 /var @converted = @getCSV() with { format: "csv", pipeline: [@csvToJSON, @processJSON] }
-/show [[Converted: {{converted}}]]
+/show ::Converted: {{converted}}::
 
 >> Text format (no parsing)
 /exe @processText(input) = js {
@@ -55,4 +55,4 @@ return 'Text length: ' + input.text.length;
 }
 
 /var @textResult = @getData() with { format: "text", pipeline: [@processText] }
-/show [[Text Result: {{textResult}}]]
+/show ::Text Result: {{textResult}}::

@@ -30,7 +30,7 @@ CommandArgumentList "command arguments list"
     }
 
 CommandArgument "command argument"
-  = CommandTemplateArgument     // Template arguments [[...]]
+  = CommandTemplateArgument     // Template arguments ::...::
   / NestedExecInvocation       // Nested function calls @func(args)
   / str:StringLiteral {
       // Create a Text node directly
@@ -67,9 +67,9 @@ NestedExecInvocation "nested exec invocation"
       });
     }
 
-// Template argument - [[template content]]
+// Template argument - ::template content::
 CommandTemplateArgument "command template argument"
-  = "[[" content:CommandTemplateContent* "]]" {
+  = "::" content:CommandTemplateContent* "::" {
       return helpers.createNode(NodeType.Text, {
         content: content.map(c => c.content || c.identifier || '').join(''),
         isTemplate: true,
@@ -89,7 +89,7 @@ CommandTemplateContent
     }
 
 CommandTemplateChar
-  = !("}}" / "]]") char:. { return char; }
+  = !("}}" / "::") char:. { return char; }
 
 // Escaped argument - supports backslash escaping
 EscapedArgument "escaped argument"

@@ -1,4 +1,4 @@
 /var @user = { "name": "John", "age": 30 }
-/show [[
+/show ::
 {{user.name}} is {{user.age}}.
-]]
+::

@@ -7,4 +7,4 @@ adminName: @users[0].name,
 adminLevel: @users[0].role.level,
 userCount: 2
 }
-/show [[{{permissions.adminName}} has level {{permissions.adminLevel}} access]]
+/show ::{{permissions.adminName}} has level {{permissions.adminLevel}} access::

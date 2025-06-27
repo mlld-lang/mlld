@@ -5,11 +5,11 @@
 /show @data
 
 ## Convert markdown to JSON
-/var @mdContent = [[
+/var @mdContent = ::
 name: Alice
 age: 30
 city: NYC
-]]
+::
 
 /var @converted = run {echo "@mdContent"} with { pipeline: [@JSON] }
 /show @converted

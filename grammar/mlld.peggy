@@ -143,8 +143,7 @@ TextPart
     } !(
        "{{"           /* still block the opening of a text-var */
      / "}}"           /* …and its closing */
-     / "[["           /* block multiline-template opening */
-     / "]]"           /* …and its closing */
+     / "::"           /* block multiline-template opening */
      / BacktickSequence  /* keep blocking fence openers (``, ``` etc.) */
     ) &{
       const pos = offset();

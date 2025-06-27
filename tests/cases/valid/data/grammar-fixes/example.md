@@ -1,4 +1,4 @@
-/exe @messageTemplate(user, action) = [[{{user}} {{action}} successfully!]]
+/exe @messageTemplate(user, action) = ::{{user}} {{action}} successfully!::
 /exe @getVersion = {echo "v1.2.3"}
 
 /var @testAllFixes = {

@@ -4,7 +4,7 @@ import { parse } from '@grammar/parser';
 describe('Parameterized Text Templates', () => {
   describe('Template Definition', () => {
     it('should parse basic parameterized template definition', async () => {
-      const input = '/exe @greetingTemplate(name, title) = [[Hello {{title}} {{name}}!]]';
+      const input = '/exe @greetingTemplate(name, title) = ::Hello {{title}} {{name}}!::';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
@@ -28,7 +28,7 @@ describe('Parameterized Text Templates', () => {
     });
 
     it('should handle template with no parameters', async () => {
-      const input = '/exe @staticTemplate() = [[Static content here]]';
+      const input = '/exe @staticTemplate() = ::Static content here::';
       const parseResult = await parse(input);
       const result = parseResult.ast;
       
@@ -37,7 +37,7 @@ describe('Parameterized Text Templates', () => {
     });
 
     it('should handle multiline template with parameter reuse', async () => {
-      const input = `/exe @emailTemplate(name, subject) = [[
+      const input = `/exe @emailTemplate(name, subject) = ::
 Subject: {{subject}}
 
 Dear {{name}},
@@ -46,7 +46,7 @@ Thank you for your interest in {{subject}}.
 
 Best regards,
 The {{name}} Team
-]]`;
+::`;
       const parseResult = await parse(input);
       const result = parseResult.ast;
       

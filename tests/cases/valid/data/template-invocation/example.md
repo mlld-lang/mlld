@@ -1,5 +1,5 @@
-/exe @greeting(name) = [[Hello, {{name}}!]]
-/exe @farewell(name, when) = [[Goodbye {{name}}, see you {{when}}!]]
+/exe @greeting(name) = ::Hello, {{name}}!::
+/exe @farewell(name, when) = ::Goodbye {{name}}, see you {{when}}!::
 
 /var @messages = {
 welcome: @greeting("Alice"),
@@ -10,7 +10,7 @@ evening: @farewell("David", "next week")
   }
 }
 
-/show [[{{messages.welcome}}
+/show ::{{messages.welcome}}
 {{messages.goodbye}}
 {{messages.nested.morning}}
-{{messages.nested.evening}}]]
+{{messages.nested.evening}}::

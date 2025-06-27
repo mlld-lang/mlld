@@ -22,8 +22,8 @@
 
 # Direct call (should work)
 /var @direct = @showData(@getItems())
-/show [[Direct: {{direct}}]]
+/show ::Direct: {{direct}}::
 
 # Pipeline (should now also work)  
 /var @piped = @getItems() | @showData
-/show [[Piped: {{piped}}]]
+/show ::Piped: {{piped}}::

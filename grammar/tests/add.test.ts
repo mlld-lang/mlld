@@ -155,7 +155,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic template add', async () => {
-    const content = `/show [[# Template Content]]`;
+    const content = `/show ::# Template Content::`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -179,7 +179,7 @@ describe('Add Directive', () => {
   });
   
   test('Template add with variable interpolation', async () => {
-    const content = `/show [[Hello {{name}}!]]`;
+    const content = `/show ::Hello {{name}}!::`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -200,7 +200,7 @@ describe('Add Directive', () => {
   });
   
   test('Template add with headerLevel', async () => {
-    const content = `/show [[# Content]] as ##`;
+    const content = `/show ::# Content:: as ##`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -355,11 +355,11 @@ describe('Add Directive', () => {
   // ====================
   
   test('Multiline template add', async () => {
-    const content = `/show [[
+    const content = `/show ::
 # Multiline Content
 - Item 1
 - Item 2
-]]`;
+::`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging

@@ -12,11 +12,11 @@ backup_user: run @getUser()
   }
 }
 
-/show [[System Information:
+/show ::System Information:
 Date: {{systemInfo.date}}
 User: {{systemInfo.user}}
 Status: {{systemInfo.status}}
 
 Backup Info:
 Date: {{systemInfo.nested.backup_date}}
-User: {{systemInfo.nested.backup_user}}]]
+User: {{systemInfo.nested.backup_user}}::

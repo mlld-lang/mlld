@@ -1,7 +1,7 @@
 /var @variable = "value"
-/var @multiline = [[
+/var @multiline = ::
 This is a
 multi-line template
 with {{variable}}
-]]
+::
 /show @multiline

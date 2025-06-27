@@ -6,7 +6,7 @@ Project root:
 /show @PROJECTPATH
 
 /path @configPath = [@PROJECTPATH/config]
-/show [[Config location: {{configPath}}]]
+/show ::Config location: {{configPath}}::
 
-/var @readme = [[Project README is at {{PROJECTPATH}}/README.md]]
+/var @readme = ::Project README is at {{PROJECTPATH}}/README.md::
 /show @readme

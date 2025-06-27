@@ -20,11 +20,12 @@ The `/` command approach creates clear disambiguiation between commands and vari
 - Renamed directives: @add → /show, @exec → /exe
 - /output for file output
 - Comments: Use >> for line start/end comments (but not in params/objects/templates)
+- Template syntax: Changed from [[...]] to ::...:: to avoid array parsing ambiguity
 
 ### Updated Interpolation:
 - Double quotes: Now support @variable interpolation
 - Backticks: Primary template syntax with @variable interpolation
-- Double brackets: Fallback for @-heavy content, still uses {{variable}}
+- Double colons: Template syntax for @-heavy content, uses {{variable}}
 - Commands: Use @variable in both {...} and "..." forms
 
 ### Added:

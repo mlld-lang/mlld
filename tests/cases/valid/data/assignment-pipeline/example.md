@@ -20,12 +20,12 @@
 
 # Direct invocation works
 /var @direct = @process(@items)
-/show [[Direct: {{direct}}]]
+/show ::Direct: {{direct}}::
 
 # Pipeline should also work
 /var @piped = @items | @process
-/show [[Piped: {{piped}}]]
+/show ::Piped: {{piped}}::
 
 # With explicit format
 /var @formatted = @items with { format: "json", pipeline: [@process] }
-/show [[Formatted: {{formatted}}]]
+/show ::Formatted: {{formatted}}::

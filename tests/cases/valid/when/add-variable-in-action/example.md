@@ -4,7 +4,7 @@ This test verifies that simple variable references work correctly inside /when a
 
 ## Setup
 /var @greeting = "Hello from a text variable"
-/var @template = [[Hello from a template with {{greeting}}]]
+/var @template = ::Hello from a template with {{greeting}}::
 /var @config = { "message": "Hello from data" }
 
 ## Test 1: Direct /show (baseline - should work)
@@ -27,7 +27,7 @@ This test verifies that simple variable references work correctly inside /when a
 ]
 
 ## Test 4: Mixed with exec invocations
-/exe @greet(name) = [[Hello, {{name}}!]]
+/exe @greet(name) = ::Hello, {{name}}!::
 /var @simpleVar = "Simple value"
 
 /when @isTrue => show @greet("Alice")

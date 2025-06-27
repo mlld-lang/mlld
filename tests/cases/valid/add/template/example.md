@@ -1,1 +1,1 @@
-/show [[This is template content]]
+/show ::This is template content::

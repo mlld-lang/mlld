@@ -2,11 +2,11 @@
 /exe @get_user() = {echo "test-user"}
 /exe @format_greeting(name) = {echo "Welcome, @name!"}
 
-/show [[Current time: ]]
+/show ::Current time: ::
 /show @get_time()
-/show [[
-User: ]]
+/show ::
+User: ::
 /show @get_user()
-/show [[
-]]
+/show ::
+::
 /show @format_greeting("Alice")

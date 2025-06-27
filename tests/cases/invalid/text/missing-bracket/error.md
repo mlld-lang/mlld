@@ -1,1 +1,1 @@
-Expected closing template delimiter "]]" after template content.
+Expected closing template delimiter "::" after template content.

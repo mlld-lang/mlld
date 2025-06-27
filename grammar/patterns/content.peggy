@@ -230,10 +230,10 @@ CommandBracketChar
 
 
 
-// Content inside double brackets with {{var}} interpolation
-DoubleBracketContent "Content with {{var}} interpolation"
-  = '[[' parts:(InterpolationVar / TemplateTextSegment)* ']]' {
-      helpers.debug('DoubleBracketContent matched [[...]]', { 
+// Content inside double colons with {{var}} interpolation
+DoubleColonContent "Content with {{var}} interpolation"
+  = '::' parts:(InterpolationVar / TemplateTextSegment)* '::' {
+      helpers.debug('DoubleColonContent matched ::...::', { 
         parts: parts,
         isArray: Array.isArray(parts),
         length: Array.isArray(parts) ? parts.length : 'not array',
@@ -375,9 +375,9 @@ InterpolatedDoubleQuoteContent "Double quoted content with @var interpolation"
 InterpolatedPathContent "Path content with @var interpolation" 
   = BracketContent  // Already exists: [...]
 
-// Template content with {{var}} interpolation (double brackets only)
+// Template content with {{var}} interpolation (double colons only)
 InterpolatedTemplateContent "Template content with {{var}} interpolation"
-  = DoubleBracketContent  // Already exists: [[...]]
+  = DoubleColonContent  // Already exists: ::...:::
 
 // -------------------------------------------------------------
 // COMBO PATTERNS - Combine different types of patterns with clear semantics

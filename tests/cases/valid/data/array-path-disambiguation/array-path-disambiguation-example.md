@@ -10,7 +10,7 @@
 /show @exec
 
 ## Single nested array is array
-/var @nested = [[1, 2, 3]]
+/var @nested = ::1, 2, 3::
 /show @nested
 
 ## Single string is path

@@ -76,7 +76,7 @@ describe('Fuzzy Local File Imports', () => {
     });
 
     it('should handle nested paths with mixed separators', async () => {
-      const source = '/import { value } from "./sub_folder/nested-file"\n/show [[Value: {{value}}]]';
+      const source = '/import { value } from "./sub_folder/nested-file"\n/show ::Value: {{value}}::';
       
       const result = await interpret(source, {
         fileSystem,

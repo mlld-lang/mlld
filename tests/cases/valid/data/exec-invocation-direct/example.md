@@ -6,12 +6,12 @@
 
 ## Direct exec in data
 /var @numValue = @getValue()
-/show [[Number value: {{numValue}}]]
+/show ::Number value: {{numValue}}::
 
 ## JSON result
 /var @jsonResult = @getJSON()
-/show [[Status: {{jsonResult.status}}, Value: {{jsonResult.value}}]]
+/show ::Status: {{jsonResult.status}}, Value: {{jsonResult.value}}::
 
 ## With parameter
 /var @paramResult = @withParam("test-key")
-/show [[Key: {{paramResult.key}}, Timestamp: {{paramResult.timestamp}}]]
+/show ::Key: {{paramResult.key}}, Timestamp: {{paramResult.timestamp}}::

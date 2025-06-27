@@ -19,7 +19,7 @@
 /show @result
 
 ## In text template
-/var @message = [[Output: {{greeting}}]]
+/var @message = ::Output: {{greeting}}::
 /show @message
 
 ## Verify regular variable import works

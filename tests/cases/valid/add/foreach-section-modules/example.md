@@ -4,4 +4,4 @@
 ]
 
 ## Modules
-/show foreach [@files.path # Section Title] as [[### [{{files.frontmatter.name}}](./{{files.name}})]]
+/show foreach [@files.path # Section Title] as ::### [{{files.frontmatter.name}}](./{{files.name}})::
