@@ -3,7 +3,7 @@
 /var @project_name = "Meld Complex Test"
 
 # Create a library file that imports another file
-/var @lib_content = [[
+/var @lib_content = ::
 /import { imported_title } from "files/imports.mld"
 /var @lib_message = "Library says: {{imported_title}}"
 /var @lib_config = {
@@ -11,7 +11,7 @@
   "version": "1.0.0",
   "imported": @imported_title
 }
-]]
+::
 
 >> Simulate creating the lib file (in real usage, this would be a separate file)
 /exe @write_lib(content) = {echo '@lib_content @content' > ./files/lib.mld}
@@ -22,11 +22,11 @@
 /import { lib_message, lib_config } from "./files/lib.mld"
 
 >> Test if nested imports work and variable scoping is correct
-/var @final_output = [[
+/var @final_output = ::
 Project: {{project_name}}
 Library Message: {{lib_message}}
 Library Config: {{lib_config.name}} v{{lib_config.version}}
 Imported Value in Config: {{lib_config.imported}}
-]]
+::
 
 /show @final_output

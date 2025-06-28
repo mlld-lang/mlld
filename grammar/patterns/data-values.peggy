@@ -93,7 +93,7 @@ DataArrayValue
   = RunCommandValue              // run {command} - preserve as-is
   / CodeExecutionValue           // js {code} - preserve as-is  
   / DataObjectLiteral            // Objects get typed
-  / DataBracketArray             // Nested arrays (recursive)
+  / DataBracketAmbiguous         // Arrays OR paths - use ambiguous version for consistency
   / ExecInvocationPattern        // @func() - preserve as-is
   / ArrayVariableReference       // @var - preserve as-is
   / NestedDirective              // Other embedded directives - preserve as-is
@@ -101,11 +101,8 @@ DataArrayValue
   / DataStringValue              // Plain strings (unwrapped)
   / PrimitiveValue               // Numbers, booleans, null - preserve as-is
 
-// DATA BRACKET ARRAY - For nested arrays in data context
-DataBracketArray
-  = "[" _ content:DataArrayContent? _ "]" {
-      return helpers.createArrayFromContent(content || [], location());
-    }
+// Note: DataBracketArray removed - use DataBracketAmbiguous for consistency
+// This ensures proper array vs path disambiguation at all nesting levels
 
 // DATA BRACKET AMBIGUOUS - Data context version of BracketAmbiguous
 // Handles array vs path disambiguation with data context array parsing
@@ -125,6 +122,10 @@ DataBracketAmbiguous "data bracket content (array or path)"
   / "[" _ content:BracketContentWithSection _ "]" {
       // Has # = section extraction (no change needed)
       return helpers.createSectionExtraction(content, location());
+    }
+  / "[" _ value:DataArrayValue _ "]" {
+      // Single array value (object, array, string, etc.) = array with one element
+      return helpers.createArrayFromContent([value], location());
     }
   / "[" _ content:BracketContentSimple _ "]" {
       // No comma, no # = file path (no change needed)

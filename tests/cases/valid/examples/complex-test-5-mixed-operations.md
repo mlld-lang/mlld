@@ -14,7 +14,7 @@
 /path @parent = @../
 
 # Test various operations
-/var @operations_test = [[
+/var @operations_test = ::
 # Mixed Operations Test
 
 ## Variable Types
@@ -43,7 +43,7 @@
 The answer is {{number_var}} and the message is "{{string_var}}"
 Array has {{array_var}} items
 Object keys: {{object_var}}
-]]
+::
 
 # Test exec with complex parameters
 /exe @process_data(arr, obj) = {echo "Array: @arr, Object: @obj" | wc -l}

@@ -13,15 +13,15 @@
 /path @config_dir = @env.paths.dev
 
 >> Build dynamic file paths
-/path @config_file = [[{{config_dir}}/settings.json]]
-/path @docs_file = [[{{config_dir}}/README.md]]
+/path @config_file = ::{{config_dir}}/settings.json::
+/path @docs_file = ::{{config_dir}}/README.md::
 
 >> Test path operations with dynamic paths
 /var @settings = @config_file
 /var @documentation = @docs_file # Section Extraction
 
 >> Complex template with nested conditionals (simulated)
-/var @report = [[
+/var @report = ::
 # Configuration Report
 
 Environment: {{env.mode}}
@@ -30,7 +30,7 @@ Config Directory: {{config_dir}}
 ## Would load from:
 - Settings: {{config_file}}
 - Documentation: {{docs_file}}
-]]
+::
 
 ## Directory Contents:
 /run {ls -la @config_dir 2>/dev/null || echo "Directory not found"}

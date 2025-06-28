@@ -18,7 +18,7 @@
 /exe @get_active_users = {echo '@users' | jq '[.[] | select(.active == true)] | length']}
 
 # Test array access and data operations
-/var @user_report = [[
+/var @user_report = ::
 # User Management Report
 
 ## Statistics
@@ -31,20 +31,20 @@
 2. {{users.1.name}} ({{users.1.role}}) - Active: {{users.1.active}}
 3. {{users.2.name}} ({{users.2.role}}) - Active: {{users.2.active}}
 4. {{users.3.name}} ({{users.3.role}}) - Active: {{users.3.active}}
-]]
+::
 
 /var @role = run @count_by_role(admin)
 /var @users = run @count_by_role(user)
 /var @active = run @get_active_users
 
-/var @user_counts = [[
+/var @user_counts = ::
 ## Computed Values
 Admin Count: {{role}}
 User Count: {{users}}
 Active Users: {{active}}
-]]
+::
 
-/show [[ 
+/show :: 
 {{user_report}}
 {{user_counts}}
-]]
+::

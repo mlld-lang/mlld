@@ -47,7 +47,7 @@ delete: @exec(id) = run {curl -s -X DELETE @api.baseUrl/users/@id}
 
 ## This could be in a module: @mlld/api
 
-/var @module = [[
+/var @module = ::
 /exe @get(url, headers) = {curl -s -X GET @url {{headers ? "-H '" + headers + "'" : ""}}}
 /exe @post(url, data, headers) = {curl -s -X POST @url -H "Content-Type: application/json" {{headers ? "-H '" + headers + "'" : ""}} -d '@data'}
 
@@ -55,4 +55,4 @@ delete: @exec(id) = run {curl -s -X DELETE @api.baseUrl/users/@id}
 get: @get,
 post: @post
 }
-]]
+::

@@ -9,7 +9,7 @@ description: "A comprehensive demonstration of Meld capabilities",
 tags: ["demo", "api", "documentation"]
 }
 
-/var @intro_content = [[
+/var @intro_content = ::
 # {{title}}
 
 **Author:** {{author}}  
@@ -19,7 +19,7 @@ tags: ["demo", "api", "documentation"]
 ## Introduction
 
 This document demonstrates the core capabilities of Meld, a directive-based scripting language for embedding small "@directives" inside plain text documents.
-]]
+::
 
 /show @intro_content
 
@@ -27,7 +27,7 @@ This document demonstrates the core capabilities of Meld, a directive-based scri
 
 /var @greeting = "Hello"
 /var @name = "World"
-/var @message = [[{{greeting}}, {{name}}!]]
+/var @message = ::{{greeting}}, {{name}}!::
 
 Text variables can be defined and referenced:
 - Greeting: @greeting
@@ -53,13 +53,13 @@ features: ["text", "data", "path", "import", "add", "run", "exec"]
 env: "production"
 }
 
-/var @data_content = [[
+/var @data_content = ::
 Data variables store structured data:
 - App name: {{config.app.name}}
 - Version: {{config.app.version}}
 - Environment: {{config.env}}
 - Features count: {{config.app.features}}
-]]
+::
 
 /show @data_content
 
@@ -135,9 +135,9 @@ Still in outer fence
 /exe @calculateTotal = run javascript {[
 const values = [100, 200, 300};
 return values.reduce((a, b) => a + b, 0);
-]]
+::
 
-/var @complex_template = [[
+/var @complex_template = ::
 Here's how you might represent data:
 
 | Item | Value |
@@ -147,17 +147,17 @@ Here's how you might represent data:
 | {{items[2].name}} | {{items[2].value}} |
 
 Total value: {{calculateTotal}}
-]]
+::
 
 ## Templating
 
-/var @template = [[
+/var @template = ::
 This is a multi-line
 template with variable
 interpolation: {{greeting}}, {{name}}!
 
 Data reference: {{config.app.name}}
-]]
+::
 
 /show @template
 
