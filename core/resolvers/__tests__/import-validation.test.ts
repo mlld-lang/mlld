@@ -67,7 +67,7 @@ describe('Import Content Type Validation', () => {
       
       const code = `
 /import { api, version } from "./module.mld"
-/show [[API: {{api}}, Version: {{version}}]]
+/show ::API: {{api}}, Version: {{version}}::
 `;
       
       const result = await interpret(code, {
@@ -192,7 +192,7 @@ describe('Import Content Type Validation', () => {
       
       const code = `
 /import { version, name } from @test/utils
-/show [[{{name}} v{{version}}]]
+/show ::{{name}} v{{version}}::
 `;
       
       const result = await interpret(code, {
@@ -258,7 +258,7 @@ describe('Import Content Type Validation', () => {
     it('should accept imports from TIME resolver', async () => {
       const code = `
 /import { iso, date } from @TIME
-/show [[Today is {{date}}]]
+/show ::Today is {{date}}::
 `;
       
       const result = await interpret(code, {
@@ -290,7 +290,7 @@ describe('Import Content Type Validation', () => {
     it('should accept imports from INPUT resolver', async () => {
       const code = `
 /import { test } from @INPUT
-/show [[Input value: {{test}}]]
+/show ::Input value: {{test}}::
 `;
       
       const result = await interpret(code, {

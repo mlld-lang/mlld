@@ -41,7 +41,7 @@ describe('NodeShadowEnvironment process exit', () => {
 /exe node = { createTimer }
 
 /var @result = @createTimer(5000)
-/show [[Result: {{result}}]]
+/show ::Result: {{result}}::
 `;
     
     await fs.writeFile(testFile, content);
@@ -82,8 +82,8 @@ describe('NodeShadowEnvironment process exit', () => {
 /var @jsResult = @jsTimer()
 /var @nodeResult = @nodeTimer()
 
-/show [[JS: {{jsResult}}]]
-/show [[Node: {{nodeResult}}]]
+/show ::JS: {{jsResult}}::
+/show ::Node: {{nodeResult}}::
 `;
     
     await fs.writeFile(testFile, content);
