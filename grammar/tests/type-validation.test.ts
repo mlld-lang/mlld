@@ -41,7 +41,7 @@ describe('Grammar-Type System Alignment', () => {
     });
 
     it('should produce valid textTemplate nodes', async () => {
-      const input = '/var @message = [[Hello {{name}}!]]';
+      const input = '/var @message = ::Hello {{name}}!::';
       const result = await parse(input);
       const ast = result.ast;
       
@@ -80,7 +80,7 @@ describe('Grammar-Type System Alignment', () => {
 
   describe('Variable Reference Type Validation', () => {
     it('should produce valid VariableReferenceNode structure', async () => {
-      const input = '/var @message = [[Hello {{user.name}}!]]';
+      const input = '/var @message = ::Hello {{user.name}}!::';
       const result = await parse(input);
       const ast = result.ast;
       
@@ -132,7 +132,7 @@ describe('Grammar-Type System Alignment', () => {
 
   describe('Directive Property Placement', () => {
     it('should place source at root level when present', async () => {
-      const input = '/show [[template content]]';
+      const input = '/show ::template content::';
       const result = await parse(input);
       const ast = result.ast;
       
