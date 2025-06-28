@@ -16,7 +16,7 @@
 }
 
 /exe @regexTest(x) = js {
-  const match = x.match(/\[([^\::+)\]/);
+  const match = x.match(/\[([^\]]+)\]/);
   return match ? match[1] : "no match";
 }
 

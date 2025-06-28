@@ -40,7 +40,7 @@ return input.csv.slice(1).map(row => row[0]).join(', ');
 if (input.type !== 'csv') throw new Error('Expected CSV input');
 const [headers, ...rows] = input.csv;
 return JSON.stringify(rows.map(row => 
-Object.fromEntries(headers.map((h, i) => [h, row[i::))
+Object.fromEntries(headers.map((h, i) => [h, row[i]]))
   ));
 }
 
