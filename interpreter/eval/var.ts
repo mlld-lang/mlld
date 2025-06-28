@@ -655,6 +655,27 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
       const { resolveVariableValue } = await import('../core/interpreter');
       return await resolveVariableValue(variable, env);
 
+    case 'path':
+      // Path node in array - read the file content
+      const filePath = await interpolate(item.segments || [], env);
+      return await env.readFile(filePath);
+
+    case 'section':
+      // Section extraction in array
+      const sectionFilePath = await interpolate(item.path || [], env);
+      const sectionName = await interpolate(item.section || [], env);
+      const fileContent = await env.readFile(sectionFilePath);
+      const { llmxmlInstance } = await import('../utils/llmxml-instance');
+      try {
+        return await llmxmlInstance.getSection(fileContent, sectionName, {
+          includeNested: true,
+          includeTitle: true
+        });
+      } catch (error) {
+        // Fallback to basic extraction
+        return extractSection(fileContent, sectionName);
+      }
+
     default:
       // Handle plain objects without type property
       if (!item.type && typeof item === 'object' && item.constructor === Object) {
