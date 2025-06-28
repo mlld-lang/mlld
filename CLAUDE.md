@@ -205,6 +205,7 @@ const identifier = await interpolate(identifierNodes, env);
 - **Registry**: `core/registry/` - Module system implementation
 - **Error Classes**: `core/errors/` (definitions), see `docs/dev/ERRORS.md` for system overview
 - **Tests**: `tests/cases/` (markdown examples), `tests/fixtures/` (generated), `interpreter/interpreter.fixture.test.ts` (runner)
+  - **Test File Setup**: Supporting files (not `example.md` or `expected.md`) in tests/cases directories are copied to the root of the virtual filesystem. For example, files in `tests/cases/valid/data/my-test/` are available as `/filename.md` in the test, not `./filename.md`.
 - **CLI**: `cli/index.ts` (entry point), `api/index.ts` (programmatic interface)
   - `cli/commands/install.ts` - Module installation
   - `cli/commands/ls.ts` - Module listing

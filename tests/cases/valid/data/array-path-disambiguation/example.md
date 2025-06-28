@@ -4,7 +4,7 @@
 /var @obj = [{"type": "test"}]
 /show @obj
 
-## Single exec invocation is array  
+## Single exec invocation is array
 /exe @getTime() = run {echo "12:00"}
 /var @exec = [@getTime()]
 /show @exec
@@ -19,14 +19,14 @@
 
 ## Absolute path is path
 /var @absPath = [/etc/hosts]
-/show `First 30 chars: @absPath`
+/show @absPath
 
 ## Path with spaces needs quotes
 /var @spacePath = ["path with spaces.txt"]
 /show @spacePath
 
-## Multiple items always array
-/var @multi1 = [array-path-disambiguation-test.md, array-path-disambiguation-section.md]
+## Multiple items always array (with quotes)
+/var @multi1 = ["array-path-disambiguation-test.md", "array-path-disambiguation-section.md"]
 /show @multi1
 
 ## Comma makes it array

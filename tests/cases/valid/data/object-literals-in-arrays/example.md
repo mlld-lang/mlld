@@ -53,9 +53,9 @@
 /var @withVars = [{"name": @userName, "age": @userAge, "active": true}]
 /show @withVars
 
-## Run command in object
-/var @withCommand = [{"timestamp": run {date +%s}, "status": "generated"}]
-/show @withCommand
+## Static values in object
+/var @staticObj = [{"version": "1.0.0", "status": "stable"}]
+/show @staticObj
 
 ## Path reference still works
 /var @pathTest = [/etc/hosts]

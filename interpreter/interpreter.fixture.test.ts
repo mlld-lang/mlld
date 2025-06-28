@@ -76,6 +76,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'import-stdin-shorthand': 'import/stdin',
       'data-array-path-disambiguation': 'data/array-path-disambiguation',
       'data-object-literals-in-arrays': 'data/object-literals-in-arrays',
+      'data-array-valid-patterns': 'data/array-valid-patterns',
     };
     
     // Check if we have a mapping for this fixture

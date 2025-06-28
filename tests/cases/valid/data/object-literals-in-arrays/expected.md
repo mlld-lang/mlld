@@ -1,14 +1,15 @@
 # Comprehensive Object Literals in Arrays Test
 
 ## Basic object in array
+
 [
   {
     "name": "alice",
     "age": 30
   }
 ]
-
 ## Multiple objects in array
+
 [
   {
     "name": "alice",
@@ -23,8 +24,8 @@
     "age": 35
   }
 ]
-
 ## Mixed types in array
+
 [
   1,
   "text",
@@ -38,8 +39,8 @@
     6
   ]
 ]
-
 ## Nested objects in array
+
 [
   {
     "user": {
@@ -51,8 +52,8 @@
     }
   }
 ]
-
 ## Array of arrays with objects
+
 [
   [
     {
@@ -69,8 +70,8 @@
   ],
   []
 ]
-
 ## Object with array field
+
 [
   {
     "items": [
@@ -81,13 +82,13 @@
     "count": 3
   }
 ]
-
 ## Empty object in array
+
 [
   {}
 ]
-
 ## Complex nested structure
+
 [
   {
     "type": "user",
@@ -116,8 +117,8 @@
     }
   }
 ]
-
 ## Variables in object values
+
 [
   {
     "name": "dynamic-user",
@@ -125,17 +126,22 @@
     "active": true
   }
 ]
+## Static values in object
 
-## Run command in object
 [
   {
-    "timestamp": "1735077331",
-    "status": "generated"
+    "version": "1.0.0",
+    "status": "stable"
   }
 ]
-
 ## Path reference still works
+
 Path test (first 50 chars): ##
 # Host Database
 #
-# localhost is used to con
+# localhost is used to configure the loopback interface
+# when the system is booting.  Do not change this entry.
+##
+127.0.0.1	localhost
+255.255.255.255	broadcasthost
+::1             localhost
