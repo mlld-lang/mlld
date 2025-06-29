@@ -585,6 +585,41 @@ SlashExe
         'resolver'
       );
     }
+  // Error recovery: Missing @ before identifier
+  / DirectiveContext "/exe" _ id:BaseIdentifier _ "=" {
+      error("Invalid /exe syntax. Variable names must start with '@'. Use: /exe @" + id + " = ...");
+    }
+  // Error recovery: Missing = after identifier with parameters
+  / DirectiveContext "/exe" _ "@" id:BaseIdentifier _ "(" [^)]* ")" _ !"=" {
+      error("Invalid /exe syntax. Expected '=' after parameters. Use: /exe @" + id + "(params) = ...");
+    }
+  // Error recovery: Unclosed parameters
+  / DirectiveContext "/exe" _ "@" id:BaseIdentifier _ "(" &{
+      // Check if we hit newline or EOF before closing paren
+      let i = peg$currPos;
+      let parenDepth = 1;
+      while (i < input.length && parenDepth > 0) {
+        if (input[i] === '(') parenDepth++;
+        else if (input[i] === ')') parenDepth--;
+        else if (input[i] === '\n' && parenDepth > 0) return true;
+        i++;
+      }
+      return parenDepth > 0;
+    } {
+      error("Unclosed parameters in /exe directive. Expected ')' to close the parameter list.");
+    }
+  // Error recovery: Missing value after =
+  / DirectiveContext "/exe" _ "@" id:BaseIdentifier params:ExecParameters? _ "=" _ !. {
+      error("Missing value in /exe directive. Expected command, code, template, or reference after '='.");
+    }
+  // Error recovery: Generic catch-all
+  / DirectiveContext "/exe" {
+      error("Invalid /exe syntax. Examples:\\n" +
+            "  /exe @cmd(param) = {echo @param}\\n" +
+            "  /exe @greet(name) = `Hello @name!`\\n" +
+            "  /exe @calc(x) = js {return @x * 2}\\n" +
+            "  /exe @alias() = @otherCommand");
+    }
 
 // -------------------------------------------------------------
 // HELPER RULES
