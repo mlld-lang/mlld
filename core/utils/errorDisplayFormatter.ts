@@ -100,7 +100,7 @@ export class ErrorDisplayFormatter {
         });
 
         if (sourceContext) {
-          const contextDisplay = this.formatSourceContext(sourceContext, useColors);
+          const contextDisplay = this.formatSourceContext(sourceContext, useColors, error.details?.mlldLocation);
           parts.push(contextDisplay);
         }
       } else if (formattedLocation.file) {
@@ -127,7 +127,7 @@ export class ErrorDisplayFormatter {
             ...sourceContext,
             file: formattedLocation.displayPath || formattedLocation.file // Use smart path for display
           };
-          const contextDisplay = this.formatSourceContext(enhancedSourceContext, useColors);
+          const contextDisplay = this.formatSourceContext(enhancedSourceContext, useColors, error.details?.mlldLocation);
           parts.push(contextDisplay);
         }
       } else {
@@ -179,7 +179,7 @@ export class ErrorDisplayFormatter {
     return `${errorName}: ${error.message}`;
   }
 
-  private formatSourceContext(context: SourceContext, useColors: boolean): string {
+  private formatSourceContext(context: SourceContext, useColors: boolean, mlldLocation?: any): string {
     const parts: string[] = [];
 
     // File header
@@ -210,7 +210,8 @@ export class ErrorDisplayFormatter {
           prefix.length, 
           context.errorColumn, 
           line.content,
-          useColors
+          useColors,
+          mlldLocation
         );
         if (indicator) {
           parts.push(indicator);
@@ -227,10 +228,37 @@ export class ErrorDisplayFormatter {
     return parts.join('\n');
   }
 
-  private createErrorIndicator(prefixLength: number, column: number, lineContent: string, useColors: boolean): string | null {
+  private createErrorIndicator(
+    prefixLength: number, 
+    column: number, 
+    lineContent: string, 
+    useColors: boolean,
+    mlldLocation?: any
+  ): string | null {
     if (column < 1) return null;
 
-    // Create spacing to align with the error column
+    // If we have mlldLocation with precise position info, use it
+    if (mlldLocation && mlldLocation.column && mlldLocation.length) {
+      // Use the precise column from mlldLocation
+      const actualColumn = mlldLocation.column;
+      const errorLength = mlldLocation.length || 1;
+      
+      // Create spacing to align with the error position
+      const spaces = ' '.repeat(prefixLength + actualColumn - 1);
+      const arrows = '^'.repeat(Math.min(errorLength, lineContent.length - actualColumn + 1));
+      
+      // Add expected token hint if available
+      let hint = '';
+      if (mlldLocation.expectedToken) {
+        hint = ` Expected: ${mlldLocation.expectedToken}`;
+      }
+      
+      return useColors 
+        ? `${spaces}${chalk.red.bold(arrows)}${chalk.yellow(hint)}`
+        : `${spaces}${arrows}${hint}`;
+    }
+
+    // Fallback to simple indicator
     const spaces = ' '.repeat(prefixLength + column - 1);
     const indicator = '^';
     
@@ -294,6 +322,8 @@ export class ErrorDisplayFormatter {
       if (key === 'sourceContent') continue;
       // Skip peggyFormatted as it's handled separately
       if (key === 'peggyFormatted') continue;
+      // Skip mlldLocation as it's used for arrow indicators
+      if (key === 'mlldLocation') continue;
       if (value === undefined || value === null) continue;
 
       // Format location objects specially with smart paths

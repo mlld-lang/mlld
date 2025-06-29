@@ -587,11 +587,11 @@ SlashExe
     }
   // Error recovery: Missing @ before identifier
   / DirectiveContext "/exe" _ id:BaseIdentifier _ "=" {
-      error("Invalid /exe syntax. Variable names must start with '@'. Use: /exe @" + id + " = ...");
+      helpers.mlldError("Invalid /exe syntax. Variable names must start with '@'. Use: /exe @" + id + " = ...", "@", location());
     }
   // Error recovery: Missing = after identifier with parameters
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier _ "(" [^)]* ")" _ !"=" {
-      error("Invalid /exe syntax. Expected '=' after parameters. Use: /exe @" + id + "(params) = ...");
+      helpers.mlldError("Invalid /exe syntax. Expected '=' after parameters. Use: /exe @" + id + "(params) = ...", "=", location());
     }
   // Error recovery: Unclosed parameters
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier _ "(" &{
@@ -606,19 +606,19 @@ SlashExe
       }
       return parenDepth > 0;
     } {
-      error("Unclosed parameters in /exe directive. Expected ')' to close the parameter list.");
+      helpers.mlldError("Unclosed parameters in /exe directive. Expected ')' to close the parameter list.", ")", location());
     }
   // Error recovery: Missing value after =
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier params:ExecParameters? _ "=" _ !. {
-      error("Missing value in /exe directive. Expected command, code, template, or reference after '='.");
+      helpers.mlldError("Missing value in /exe directive. Expected command, code, template, or reference after '='.", "value", location());
     }
   // Error recovery: Generic catch-all
   / DirectiveContext "/exe" {
-      error("Invalid /exe syntax. Examples:\\n" +
+      helpers.mlldError("Invalid /exe syntax. Examples:\\n" +
             "  /exe @cmd(param) = {echo @param}\\n" +
             "  /exe @greet(name) = `Hello @name!`\\n" +
             "  /exe @calc(x) = js {return @x * 2}\\n" +
-            "  /exe @alias() = @otherCommand");
+            "  /exe @alias() = @otherCommand", "@", location());
     }
 
 // -------------------------------------------------------------

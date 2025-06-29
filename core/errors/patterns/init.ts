@@ -59,6 +59,13 @@ export async function enhanceParseError(
     return null;
   }
   
+  // Handle our custom mlldError which has mlldErrorLocation instead of location
+  if ((error as any).isMlldError && (error as any).mlldErrorLocation) {
+    const mlldError = error as any;
+    // Copy mlldErrorLocation to location so the pattern matcher can use it
+    error.location = mlldError.mlldErrorLocation;
+  }
+  
   // matcher.enhance always returns an error (with fallback)
   // but we can return it as potentially null for future flexibility
   return patternMatcher.enhance(error, source, filePath) as MlldParseError;

@@ -214,7 +214,7 @@ MlldRunFence
       const rest = input.substring(peg$currPos);
       return rest.startsWith('`') && rest.match(/^`+mlld-run/);
     } {
-      error('mlld-run blocks must use exactly 3 backticks (```). Nested backticks are not supported.');
+      helpers.mlldError('mlld-run blocks must use exactly 3 backticks (```). Nested backticks are not supported.');
     }
 
 CodeFence

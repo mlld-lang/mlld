@@ -121,47 +121,40 @@ SlashVar "var directive"
   / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      error("Unclosed array in /var directive. Expected ']' to close the array.");
-    }
-    
-  // Error: Multiline array without double brackets
-  / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "[" &{
-      return helpers.isMultilineArrayStart(input, peg$currPos);
-    } {
-      error("Multiline arrays require double brackets. Use [[ ... ]] for arrays spanning multiple lines.");
+      helpers.mlldError("Unclosed array in /var directive. Expected ']' to close the array.", "]", location());
     }
     
   // Error: Unclosed object literal
   / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "{" &{
       return helpers.isUnclosedObject(input, peg$currPos);
     } {
-      error("Unclosed object in /var directive. Expected closing brace to close the object.");
+      helpers.mlldError("Unclosed object in /var directive. Expected closing brace to close the object.", String.fromCharCode(125), location());
     }
     
   // Error: Unclosed string (double quotes)
   / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ '"' &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
-      error("Unclosed string in /var directive. Expected closing double quote (\").");
+      helpers.mlldError("Unclosed string in /var directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed string (single quotes)
   / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "'" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, "'");
     } {
-      error("Unclosed string in /var directive. Expected closing single quote.");
+      helpers.mlldError("Unclosed string in /var directive. Expected closing single quote.", "'", location());
     }
     
   // Error: Unclosed template
   / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "::" &{
       return helpers.isUnclosedTemplate(input, peg$currPos);
     } {
-      error("Unclosed template in /var directive. Expected closing '::' delimiter.");
+      helpers.mlldError("Unclosed template in /var directive. Expected closing '::' delimiter.", "::", location());
     }
     
   // Error: Missing value after =
   / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ &(LineTerminator / EOF) {
-      error("Missing value in /var directive. Expected a value after '=' for variable '@" + id + "'.");
+      helpers.mlldError("Missing value in /var directive. Expected a value after '=' for variable '@" + id + "'.", "value", location());
     }
     
   // Error: Missing = after variable name
@@ -170,12 +163,13 @@ SlashVar "var directive"
       const rest = input.substring(peg$currPos).trim();
       return rest.length > 0 && rest[0] !== '=';
     } {
-      error("Invalid /var syntax. Expected '=' after variable name '@" + id + "'.");
+      helpers.mlldError("Invalid /var syntax. Expected '=' after variable name '@" + id + "'.", "=", location());
     }
     
   // Error: Missing @ before variable name
   / DirectiveContext "/var" _ id:BaseIdentifier _ "=" {
-      error("Missing '@' before variable name in /var directive. Use: /var @" + id + " = value");
+      const varLoc = location(); // Use built-in location() function
+      helpers.mlldError("Missing '@' before variable name in /var directive. Use: /var @" + id + " = value", "@", varLoc);
     }
     
   // Error: Missing variable name after @
@@ -184,10 +178,11 @@ SlashVar "var directive"
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
-      error("Invalid variable name in /var directive. Variable names must start with a letter or underscore.");
+      const atLoc = location(); // Use built-in location() function
+      helpers.mlldError("Invalid variable name in /var directive. Variable names must start with a letter or underscore.", "identifier", atLoc);
     }
     
   // Error: Generic /var syntax error
   / DirectiveContext "/var" {
-      error("Invalid /var syntax. Expected: /var @name = value");
+      helpers.mlldError("Invalid /var syntax. Expected: /var @name = value", "@", location());
     }

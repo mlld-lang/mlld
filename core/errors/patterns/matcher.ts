@@ -71,7 +71,8 @@ export class ErrorPatternMatcher {
       location,
       {
         severity: ErrorSeverity.Fatal,
-        cause: error
+        cause: error,
+        filePath: filePath
       }
     );
   }

@@ -38,50 +38,50 @@ SlashImport
       }
       return depth > 0;
     } {
-      error("Unclosed import list in /import directive. Expected closing brace for import list.");
+      helpers.mlldError("Unclosed import list in /import directive. Expected closing brace for import list.", String.fromCharCode(125), location());
     }
     
   // Error: Missing 'from' keyword
   / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ &{
       return helpers.isMissingFromKeyword(input, peg$currPos);
     } {
-      error("Missing 'from' keyword in /import directive. Expected: /import { items } from \"path\"");
+      helpers.mlldError("Missing 'from' keyword in /import directive. Expected: /import { items } from \"path\"", "from", location());
     }
     
   // Error: Missing path after 'from'
   / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ &(LineTerminator / EOF) {
-      error("Missing path in /import directive. Expected a path after 'from' keyword.");
+      helpers.mlldError("Missing path in /import directive. Expected a path after 'from' keyword.", "path", location());
     }
     
   // Error: Unclosed quoted path
   / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ "\"" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
-      error("Unclosed quoted path in /import directive. Expected closing double quote (\").");
+      helpers.mlldError("Unclosed quoted path in /import directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed single quoted path
   / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ "'" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, "'");
     } {
-      error("Unclosed quoted path in /import directive. Expected closing single quote.");
+      helpers.mlldError("Unclosed quoted path in /import directive. Expected closing single quote.", "'", location());
     }
     
   // Error: Unclosed bracket path
   / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      error("Unclosed path bracket in /import directive. Expected closing bracket for path.");
+      helpers.mlldError("Unclosed path bracket in /import directive. Expected closing bracket for path.", "]", location());
     }
     
   // Error: Invalid wildcard syntax (missing alias)
   / DirectiveContext "/import" _ "{" _ "*" _ "}" {
-      error("Wildcard imports must have an alias. Use: /import { * as name } from \"path\"");
+      helpers.mlldError("Wildcard imports must have an alias. Use: /import { * as name } from \"path\"", "as", location());
     }
     
   // Error: Missing content after /import
   / DirectiveContext "/import" _ &(LineTerminator / EOF) {
-      error("Missing content in /import directive. Expected import list or path.");
+      helpers.mlldError("Missing content in /import directive. Expected import list or path.", String.fromCharCode(123), location());
     }
     
   // Error: Invalid @ usage in shorthand
@@ -94,19 +94,19 @@ SlashImport
       const isValidModule = /^[a-zA-Z_][a-zA-Z0-9_-]*\//.test(rest);
       return !isValidSpecial && !isValidModule;
     } {
-      error("Invalid import source. Expected @INPUT, @TIME, or module reference like @author/module");
+      helpers.mlldError("Invalid import source. Expected @INPUT, @TIME, module reference (@author/module), or configured resolver path", "INPUT", location());
     }
     
   // Error: Unclosed shorthand path bracket
   / DirectiveContext "/import" _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      error("Unclosed path bracket in /import shorthand. Expected closing bracket.");
+      helpers.mlldError("Unclosed path bracket in /import shorthand. Expected closing bracket.", "]", location());
     }
     
   // Error: Generic /import syntax error (catch-all)
   / DirectiveContext "/import" {
-      error("Invalid /import syntax. Expected: /import [path], /import @module, or /import { items } from \"path\"");
+      helpers.mlldError("Invalid /import syntax. Expected: /import [path], /import @module, or /import { items } from \"path\"", "[", location());
     }
 
 // Shorthand import: /import [path] or /import @input or /import [path] as name
@@ -437,9 +437,9 @@ ImportsList
       // Only allow * with explicit alias
       return [{ original: "*", alias: aliasName }];
     }
-  / "*" _ &"}" {
+  / "*" _ &{ return input[peg$currPos] === String.fromCharCode(125); } {
       // Provide helpful error for wildcard imports without alias
-      error(`Wildcard imports must have an alias. Use '/import { * as name }' or the shorthand '/import "path/to/file.mld" as name'`);
+      helpers.mlldError(`Wildcard imports must have an alias. Use '/import { * as name }' or the shorthand '/import "path/to/file.mld" as name'`, "as", location());
     }
   / first:ImportItem rest:(CommaSpace item:ImportItem { return item; })* {
       return [first, ...rest];

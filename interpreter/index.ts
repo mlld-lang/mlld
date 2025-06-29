@@ -124,18 +124,20 @@ export async function interpret(
       }
     }
     
+    // Check if we have enhanced location metadata from mlldError
+    const mlldLocation = (parseError as any).mlldLocation;
+    
     // Use pattern-based error enhancement
     const enhancedError = await enhanceParseError(parseError, source, options.filePath);
     
-    // If we got an enhanced error, add peggyFormatted to its details
+    // If we got an enhanced error, add peggyFormatted and mlldLocation to its details
     if (enhancedError) {
-      if (peggyFormatted) {
-        enhancedError.details = {
-          ...enhancedError.details,
-          peggyFormatted,
-          sourceContent: source // Store source for error display
-        };
-      }
+      enhancedError.details = {
+        ...enhancedError.details,
+        ...(peggyFormatted && { peggyFormatted }),
+        ...(mlldLocation && { mlldLocation }),
+        sourceContent: source // Store source for error display
+      };
       throw enhancedError;
     }
     
@@ -160,7 +162,11 @@ export async function interpret(
         severity: ErrorSeverity.Fatal,
         cause: parseError,
         filePath: options.filePath,
-        context: peggyFormatted ? { peggyFormatted, sourceContent: source } : undefined
+        context: { 
+          ...(peggyFormatted && { peggyFormatted }), 
+          sourceContent: source 
+        },
+        mlldLocation
       }
     );
   }

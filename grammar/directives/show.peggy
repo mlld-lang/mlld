@@ -584,14 +584,14 @@ SlashShow
       }
       return depth > 0;
     } {
-      error("Unclosed double brackets in /show directive. Expected closing ']]' for path section expression.");
+      helpers.mlldError("Unclosed double brackets in /show directive. Expected closing ']]' for path section expression.", "]]", location());
     }
     
   // Error: Unclosed single bracket [
   / DirectiveContext "/show" _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      error("Unclosed path bracket in /show directive. Expected closing ']' for path specification.");
+      helpers.mlldError("Unclosed path bracket in /show directive. Expected closing ']' for path specification.", "]", location());
     }
     
   // Error: Missing 'from' keyword in section syntax
@@ -607,12 +607,12 @@ SlashShow
       }
       return false;
     } {
-      error("Invalid section syntax in /show directive. Expected 'from' keyword after section title. Use: /show \"Section Title\" from [path]");
+      helpers.mlldError("Invalid section syntax in /show directive. Expected 'from' keyword after section title. Use: /show \"Section Title\" from [path]", "from", location());
     }
     
   // Error: Missing path after 'from' in section syntax
   / DirectiveContext "/show" _ QuotedContent _ "from" _ &(LineTerminator / EOF) {
-      error("Missing path in /show section syntax. Expected a path after 'from' keyword.");
+      helpers.mlldError("Missing path in /show section syntax. Expected a path after 'from' keyword.", "path", location());
     }
     
   // Error: Invalid @ usage (not followed by valid identifier)
@@ -620,7 +620,7 @@ SlashShow
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
-      error("Invalid variable reference in /show directive. Variable names must start with a letter or underscore.");
+      helpers.mlldError("Invalid variable reference in /show directive. Variable names must start with a letter or underscore.", "identifier", location());
     }
     
   // Error: Unclosed backtick template
@@ -633,19 +633,19 @@ SlashShow
       }
       return true; // Unclosed at end of input
     } {
-      error("Unclosed backtick template in /show directive. Expected closing backtick (`).");
+      helpers.mlldError("Unclosed backtick template in /show directive. Expected closing backtick (`).", "`", location());
     }
     
   // Error: Unclosed double-colon template
   / DirectiveContext "/show" _ "::" &{
       return helpers.isUnclosedTemplate(input, peg$currPos);
     } {
-      error("Unclosed double-colon template in /show directive. Expected closing '::' delimiter.");
+      helpers.mlldError("Unclosed double-colon template in /show directive. Expected closing '::' delimiter.", "::", location());
     }
     
   // Error: Missing content after /show
   / DirectiveContext "/show" _ &(LineTerminator / EOF) {
-      error("Missing content in /show directive. Expected template, variable, or path to show.");
+      helpers.mlldError("Missing content in /show directive. Expected template, variable, or path to show.", "@", location());
     }
     
   // Error: Invalid foreach syntax
@@ -654,12 +654,12 @@ SlashShow
       const rest = input.substring(peg$currPos).trim();
       return !rest.startsWith('@') && !rest.startsWith('[');
     } {
-      error("Invalid foreach syntax in /show directive. Expected '@command(@arrays)' or '[@array.field # section]' after 'foreach'.");
+      helpers.mlldError("Invalid foreach syntax in /show directive. Expected '@command(@arrays)' or '[@array.field # section]' after 'foreach'.", "foreach", location());
     }
     
   // Error: Generic /show syntax error (catch-all)
   / DirectiveContext "/show" {
-      error("Invalid /show syntax. Expected: /show `template`, /show @variable, /show [path], or /show \"section\" from [path]");
+      helpers.mlldError("Invalid /show syntax. Expected: /show `template`, /show @variable, /show [path], or /show \"section\" from [path]", "`", location());
     }
 
 // -------------------------------------------------------------

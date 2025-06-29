@@ -185,17 +185,17 @@ ShellCommandLineContent
         } else if (!inQuote) {
           // Check for banned operators
           if (char === '&' && next === '&') {
-            error(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+            helpers.mlldError(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
           } else if (char === '|' && next === '|') {
-            error(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+            helpers.mlldError(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
           } else if (char === ';') {
-            error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+            helpers.mlldError(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
           } else if (char === '>' && next === '>') {
-            error(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
+            helpers.mlldError(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
           } else if (char === '>' || char === '<') {
-            error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+            helpers.mlldError(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
           } else if (char === '&' && next !== '&' && next !== '>') {
-            error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+            helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
           } else {
             current += char;
           }
@@ -362,25 +362,25 @@ UnifiedCommandWordChar
       // Check for banned operators (skip if escaped)
       if (!isEscaped) {
         if (ahead.startsWith('&&')) {
-          error(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+          helpers.mlldError(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
         }
         if (ahead.startsWith('||')) {
-          error(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+          helpers.mlldError(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
         }
         if (ahead.startsWith('>>')) {
-          error(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
+          helpers.mlldError(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
         }
         if (char === ';') {
-          error(`Shell operator semicolon (;) is not allowed in mlld commands. Use @run sh [(script)] for shell scripts or separate @run commands.`);
+          helpers.mlldError(`Shell operator semicolon (;) is not allowed in mlld commands. Use @run sh [(script)] for shell scripts or separate @run commands.`);
         }
         if (char === '>' && input[pos + 1] !== '>') {
-          error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+          helpers.mlldError(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
         }
         if (char === '<') {
-          error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+          helpers.mlldError(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
         }
         if (char === '&' && input[pos + 1] !== '&' && input[pos + 1] !== '>') {
-          error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+          helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
         }
       }
       // Note: Single pipe | is allowed for command piping

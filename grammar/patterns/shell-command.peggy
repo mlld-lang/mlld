@@ -48,7 +48,7 @@ ChainOperator
       const opName = op === '&&' ? 'AND (&&)' : 
                      op === '||' ? 'OR (||)' : 
                      'semicolon (;)';
-      error(`Shell operator ${opName} is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+      helpers.mlldError(`Shell operator ${opName} is not allowed in mlld. Use separate @run commands or @when for control flow.`);
     }
 
 // Redirection operators - BANNED for security
@@ -60,14 +60,14 @@ RedirectionOperator
                      op === '>' ? 'redirect (>)' : 
                      op === '<' ? 'input (<)' :
                      'error redirect (&>)';
-      error(`Shell ${opName} operator is not allowed in mlld. Use @output directive for file operations.`);
+      helpers.mlldError(`Shell ${opName} operator is not allowed in mlld. Use @output directive for file operations.`);
     }
 
 // Background operator - BANNED for security  
 BackgroundOperator
   = "&" ![&>] {
       // Background execution is banned in mlld
-      error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+      helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
     }
 
 // -------------------------------------------------------------
@@ -172,21 +172,21 @@ UnquotedWordWithCheck
       // Check ahead for banned operators only in unquoted context
       const ahead = input.substring(peg$currPos, peg$currPos + 3);
       if (ahead.startsWith('&&') || ahead.startsWith('||')) {
-        error(`Shell operators are not allowed in mlld. Use separate @run commands or @when for control flow.`);
+        helpers.mlldError(`Shell operators are not allowed in mlld. Use separate @run commands or @when for control flow.`);
       }
       if (ahead.startsWith('>>') || ahead.startsWith('>&')) {
-        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+        helpers.mlldError(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
       }
       if (ahead.startsWith(';')) {
-        error(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+        helpers.mlldError(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
       }
       // Check for single character operators
       const char = input[peg$currPos];
       if (char === '>' || char === '<') {
-        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+        helpers.mlldError(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
       }
       if (char === '&' && input[peg$currPos + 1] !== '&' && input[peg$currPos + 1] !== '>') {
-        error(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
+        helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
       }
       return true;
     } word:UnquotedWord {
@@ -240,10 +240,10 @@ UnquotedWord
   = word:$([^@|&;<> \t\n\r"']+) {
       // Check for banned operators that might appear as part of a word
       if (word.includes('&&') || word.includes('||')) {
-        error(`Shell operators are not allowed in mlld. Use separate @run commands or @when for control flow.`);
+        helpers.mlldError(`Shell operators are not allowed in mlld. Use separate @run commands or @when for control flow.`);
       }
       if (word.includes('>>') || (word.includes('>') && !word.includes('>&'))) {
-        error(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+        helpers.mlldError(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
       }
       return word;
     }

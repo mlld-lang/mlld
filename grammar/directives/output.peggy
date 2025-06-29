@@ -169,43 +169,43 @@ SlashOutput
       return rest.startsWith('"') || rest.startsWith('[') || rest.startsWith('stdout') || 
              rest.startsWith('stderr') || rest.startsWith('env') || rest.startsWith('@');
     } {
-      error("Missing 'to' keyword in /output directive. Expected: /output @variable to \"path\"");
+      helpers.mlldError("Missing 'to' keyword in /output directive. Expected: /output @variable to \"path\"", "to", location());
     }
     
   // Error: Missing target after 'to'
   / DirectiveContext "/output" _ OutputSource _ "to" _ &(LineTerminator / EOF) {
-      error("Missing target in /output directive. Expected path, stdout, stderr, or env after 'to'.");
+      helpers.mlldError("Missing target in /output directive. Expected path, stdout, stderr, or env after 'to'.", "path", location());
     }
     
   // Error: Missing target after 'to' (without source)
   / DirectiveContext "/output" _ "to" _ &(LineTerminator / EOF) {
-      error("Missing target in /output directive. Expected path, stdout, stderr, or env after 'to'.");
+      helpers.mlldError("Missing target in /output directive. Expected path, stdout, stderr, or env after 'to'.", "path", location());
     }
     
   // Error: Unclosed quoted path
   / DirectiveContext "/output" _ OutputSource _ "to" _ "\"" &{
       return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
     } {
-      error("Unclosed quoted path in /output directive. Expected closing double quote (\").");
+      helpers.mlldError("Unclosed quoted path in /output directive. Expected closing double quote (\").", "\"", location());
     }
     
   // Error: Unclosed bracket path (legacy syntax)
   / DirectiveContext "/output" _ OutputSource _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      error("Unclosed path bracket in /output directive. Expected closing bracket.]");
+      helpers.mlldError("Unclosed path bracket in /output directive. Expected closing bracket.]", "]", location());
     }
     
   // Error: Unclosed bracket path (legacy syntax without source)
   / DirectiveContext "/output" _ "[" &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
-      error("Unclosed path bracket in /output directive. Expected closing bracket.]");
+      helpers.mlldError("Unclosed path bracket in /output directive. Expected closing bracket.]", "]", location());
     }
     
   // Error: Invalid format specification
   / DirectiveContext "/output" _ OutputSource _ "to" _ OutputTarget _ "as" _ &(LineTerminator / EOF) {
-      error("Missing format in /output directive. Expected format type after 'as' (e.g., json, xml, csv).");
+      helpers.mlldError("Missing format in /output directive. Expected format type after 'as' (e.g., json, xml, csv).", "format", location());
     }
     
   // Error: Invalid @ usage
@@ -213,12 +213,12 @@ SlashOutput
       const nextChar = input[peg$currPos];
       return !/[a-zA-Z_]/.test(nextChar);
     } {
-      error("Invalid variable reference in /output directive. Variable names must start with a letter or underscore.");
+      helpers.mlldError("Invalid variable reference in /output directive. Variable names must start with a letter or underscore.", "identifier", location());
     }
     
   // Error: Missing content after /output
   / DirectiveContext "/output" _ &(LineTerminator / EOF) {
-      error("Missing content in /output directive. Expected source or target specification.");
+      helpers.mlldError("Missing content in /output directive. Expected source or target specification.", "@", location());
     }
     
   // Error: Invalid environment variable syntax
@@ -227,12 +227,12 @@ SlashOutput
       const rest = input.substring(peg$currPos).trim();
       return rest.length === 0 || /[^A-Z0-9_]/.test(rest[0]);
     } {
-      error("Invalid environment variable name in /output directive. Expected: env:VARIABLE_NAME");
+      helpers.mlldError("Invalid environment variable name in /output directive. Expected: env:VARIABLE_NAME", "VARIABLE_NAME", location());
     }
     
   // Error: Generic /output syntax error (catch-all)
   / DirectiveContext "/output" {
-      error("Invalid /output syntax. Expected: /output @variable to \"path\", /output [path], or /output @variable to stdout/stderr/env");
+      helpers.mlldError("Invalid /output syntax. Expected: /output @variable to \"path\", /output [path], or /output @variable to stdout/stderr/env", "@", location());
     }
 
 // Output source types

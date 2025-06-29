@@ -749,4 +749,16 @@ export const helpers = {
         }
         return false;
     },
+    /**
+     * Create an error with enhanced location tracking
+     * Since we can't access parser internals from here, we'll just throw
+     * a regular error and let the parser enhance it
+     */
+    mlldError(message, expectedToken, loc) {
+        const error = new Error(message);
+        error.isMlldError = true;
+        error.expectedToken = expectedToken;
+        error.mlldErrorLocation = loc;
+        throw error;
+    },
 };
