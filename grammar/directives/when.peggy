@@ -28,6 +28,14 @@ SlashWhen
   / WhenBlockForm
   / WhenBareBlockForm
   / WhenSwitchForm
+  // Error recovery: Missing => in simple form
+  / DirectiveContext "/when" _ condition:WhenSimpleCondition _ !"=>" {
+      error("Invalid /when syntax. Expected '=>' after condition. Use: /when @condition => action");
+    }
+  // Error recovery: Missing action after =>
+  / DirectiveContext "/when" _ condition:WhenSimpleCondition _ "=>" _ !. {
+      error("Missing action in /when directive. Expected a directive after '=>'.");
+    }
 
 // -------------------------------------------------------------
 // SIMPLE FORM: /when <condition> => <action>
