@@ -19,6 +19,7 @@ export interface MlldParseErrorOptions {
   severity?: ErrorSeverity;
   context?: any;
   filePath?: string; // Add filePath to options
+  peggyFormatted?: string; // Add this for Peggy's formatted output
 }
 
 /**

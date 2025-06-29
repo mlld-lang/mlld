@@ -82,6 +82,33 @@ export async function interpret(
       process.exit(1);
     }
     
+    // Check if Peggy's format method is available
+    let peggyFormatted: string | undefined;
+    if (typeof (parseError as any).format === 'function') {
+      try {
+        // Peggy expects the source to match location.source, but our parser doesn't set it
+        // We need to manually set the source in the error's location for format() to work
+        const peggyError = parseError as any;
+        if (peggyError.location && !peggyError.location.source) {
+          peggyError.location.source = options.filePath || 'stdin';
+        }
+        
+        peggyFormatted = peggyError.format([{
+          source: options.filePath || 'stdin',
+          text: source
+        }]);
+        
+        // Debug: Log what Peggy's format returns
+        if (process.env.DEBUG_PEGGY) {
+          console.log('Peggy formatted output:');
+          console.log(peggyFormatted);
+          console.log('---');
+        }
+      } catch (e) {
+        // Fallback - format not available or failed
+      }
+    }
+    
     // Create a proper MlldParseError with location information
     const location = (parseError as any).location;
     const position = location?.start || location || undefined;
@@ -100,8 +127,15 @@ export async function interpret(
     // Use pattern-based error enhancement
     const enhancedError = await enhanceParseError(parseError, source, options.filePath);
     
-    // If we got an enhanced error, throw it
+    // If we got an enhanced error, add peggyFormatted to its details
     if (enhancedError) {
+      if (peggyFormatted) {
+        enhancedError.details = {
+          ...enhancedError.details,
+          peggyFormatted,
+          sourceContent: source // Store source for error display
+        };
+      }
       throw enhancedError;
     }
     
@@ -125,7 +159,8 @@ export async function interpret(
       {
         severity: ErrorSeverity.Fatal,
         cause: parseError,
-        filePath: options.filePath
+        filePath: options.filePath,
+        context: peggyFormatted ? { peggyFormatted, sourceContent: source } : undefined
       }
     );
   }

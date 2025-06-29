@@ -41,8 +41,23 @@ export class ErrorDisplayFormatter {
     const errorHeader = this.formatErrorHeader(error, useColors);
     parts.push(errorHeader);
 
-    // Add source context if available and requested
-    if (showSourceContext && error.sourceLocation) {
+    // Add Peggy formatted section if available (right after header for parse errors)
+    if (error.details?.peggyFormatted) {
+      // Add parse error indicator
+      const parseErrorIndicator = useColors 
+        ? chalk.red.bold('✘ Parse Error')
+        : '✘ Parse Error';
+      parts.push('\n' + parseErrorIndicator);
+      
+      // Extract and add the source code section from Peggy's format
+      const sourceSection = this.extractPeggySourceSection(error.details.peggyFormatted, useColors);
+      if (sourceSection) {
+        parts.push(sourceSection);
+      }
+    }
+
+    // Add source context if available and requested (skip if we have Peggy formatting)
+    if (showSourceContext && error.sourceLocation && !error.details?.peggyFormatted) {
       logger.debug('[ErrorDisplay] Formatting source context:', {
         sourceLocation: error.sourceLocation,
         errorDetails: error.details,
@@ -224,6 +239,43 @@ export class ErrorDisplayFormatter {
       : `${spaces}${indicator}`;
   }
 
+  private extractPeggySourceSection(peggyFormatted: string, useColors: boolean): string | null {
+    // Parse Peggy's format to extract the full source code display with arrows
+    const lines = peggyFormatted.split('\n');
+    const sourceLines: string[] = [];
+    let inSourceSection = false;
+    
+    for (const line of lines) {
+      // Start collecting after the location line (e.g., " --> file.mld:5:10")
+      if (line.trim().startsWith('-->')) {
+        // Include the location line itself
+        sourceLines.push(line);
+        inSourceSection = true;
+        continue;
+      }
+      
+      // Collect ALL lines in source section (including arrows and empty lines)
+      if (inSourceSection) {
+        // Check if we've hit the end of the source section
+        // This is typically a completely empty line after the arrow indicators
+        if (line === '' && sourceLines.length > 2 && 
+            sourceLines[sourceLines.length - 1].includes('^')) {
+          // We've likely hit the end of the source section
+          break;
+        }
+        
+        // Include all lines that are part of the source display:
+        // - Lines with line numbers (e.g., "1 | /var @items = [")
+        // - Lines with pipe separators (e.g., "  |")
+        // - Lines with arrow indicators (e.g., "  | ^^^^^^^")
+        // - Empty lines within the section
+        sourceLines.push(line);
+      }
+    }
+    
+    return sourceLines.length > 0 ? sourceLines.join('\n') : null;
+  }
+
   private async formatErrorDetails(
     error: MlldError, 
     useColors: boolean,
@@ -240,6 +292,8 @@ export class ErrorDisplayFormatter {
       if (key === 'suggestion') continue;
       // Skip sourceContent as it's only for internal use
       if (key === 'sourceContent') continue;
+      // Skip peggyFormatted as it's handled separately
+      if (key === 'peggyFormatted') continue;
       if (value === undefined || value === null) continue;
 
       // Format location objects specially with smart paths

@@ -38,7 +38,6 @@ class Environment {
 ### Activation Strategies (Future)
 - CLI flag: `mlld --stacktrace=on|off script.mld`
 - Environment variable: `MLLD_STACKTRACE=false`
-- Per-script: `@pragma stacktrace off`
 - Auto-disable in production mode
 - Auto-enable in development/debug mode
 
