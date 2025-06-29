@@ -350,6 +350,10 @@ ImportsList
       // Only allow * with explicit alias
       return [{ original: "*", alias: aliasName }];
     }
+  / "*" _ &"}" {
+      // Provide helpful error for wildcard imports without alias
+      error(`Wildcard imports must have an alias. Use '/import { * as name }' or the shorthand '/import "path/to/file.mld" as name'`);
+    }
   / first:ImportItem rest:(CommaSpace item:ImportItem { return item; })* {
       return [first, ...rest];
     }

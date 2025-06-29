@@ -19,6 +19,8 @@ interface TestSummary {
   failed: number;
   skipped: number;
   errors: number;
+  parseErrors: TestResult[];
+  successfulFiles: number;
 }
 
 /**
@@ -146,7 +148,9 @@ function reportResults(results: TestResult[]): TestSummary {
     passed: 0,
     failed: 0,
     skipped: 0,
-    errors: 0
+    errors: 0,
+    parseErrors: [],
+    successfulFiles: 0
   };
   
   // Group results by directory
@@ -169,16 +173,21 @@ function reportResults(results: TestResult[]): TestSummary {
       const relativePath = path.relative(dir, result.file);
       
       if (result.error) {
-        // Test file had an error
+        // Test file had an error (likely parse error)
         console.log(`  ${chalk.red('✗')} ${relativePath}`);
         console.log(chalk.red(`    Error: ${result.error}`));
         summary.errors++;
+        summary.parseErrors.push(result);
       } else {
+        summary.successfulFiles++;
         // Report individual test results
         const testNames = Object.keys(result.tests).sort();
         const allPassed = testNames.every(name => result.tests[name]);
         
-        if (allPassed && testNames.length > 0) {
+        if (testNames.length === 0) {
+          // File ran but no tests were found
+          console.log(`  ${chalk.yellow('○')} ${relativePath} ${chalk.dim(`(${result.duration}ms) - no tests found`)}`);
+        } else if (allPassed) {
           console.log(`  ${chalk.green('✓')} ${relativePath} ${chalk.dim(`(${result.duration}ms)`)}`);
         } else {
           console.log(`  ${relativePath} ${chalk.dim(`(${result.duration}ms)`)}`);
@@ -208,13 +217,30 @@ function reportResults(results: TestResult[]): TestSummary {
 /**
  * Display test summary
  */
-function displaySummary(summary: TestSummary, duration: number) {
-  const { total, passed, failed, errors } = summary;
+function displaySummary(summary: TestSummary, duration: number, totalFiles: number) {
+  const { total, passed, failed, errors, successfulFiles } = summary;
   
   console.log(chalk.dim('─'.repeat(50)));
   
   if (errors > 0) {
-    console.log(chalk.red(`\n${errors} test file(s) failed to execute`));
+    console.log(chalk.red(`\n${errors} test file(s) failed to parse`));
+    
+    // Show parse error details
+    console.log('\nParse errors:');
+    for (const result of summary.parseErrors) {
+      console.log(`  ${chalk.red('✗')} ${result.file}`);
+      if (result.error) {
+        // Extract line/column info if available
+        const match = result.error.match(/at line (\d+), column (\d+)/);
+        if (match) {
+          console.log(`    ${chalk.dim(`Line ${match[1]}, Column ${match[2]}`)}`);
+        }
+      }
+    }
+  }
+  
+  if (successfulFiles > 0) {
+    console.log(`\n${chalk.green(successfulFiles)} file(s) ran successfully`);
   }
   
   if (total === 0 && errors === 0) {
@@ -232,10 +258,13 @@ function displaySummary(summary: TestSummary, duration: number) {
     parts.push(chalk.red(`${failed} failed`));
   }
   
-  const time = duration > 1000 ? `${(duration / 1000).toFixed(2)}s` : `${duration}ms`;
+  if (total > 0) {
+    const time = duration > 1000 ? `${(duration / 1000).toFixed(2)}s` : `${duration}ms`;
+    console.log(`\nTests: ${parts.join(', ')} (${total} total)`);
+    console.log(`Time:  ${time}`);
+  }
   
-  console.log(`\nTests: ${parts.join(', ')} (${total} total)`);
-  console.log(`Time:  ${time}`);
+  console.log(`\nSummary: ${totalFiles} file(s), ${successfulFiles} succeeded, ${errors} parse errors`);
   
   if (failed > 0 || errors > 0) {
     process.exitCode = 1;
@@ -275,7 +304,7 @@ export async function testCommand(patterns: string[]) {
     
     // Display summary
     const duration = Date.now() - startTime;
-    displaySummary(summary, duration);
+    displaySummary(summary, duration, testFiles.length);
     
   } catch (error) {
     console.error(chalk.red('Error running tests:'), error);

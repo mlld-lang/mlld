@@ -231,8 +231,16 @@ export class RegistryResolver implements Resolver {
 
     if (!response.ok) {
       if (response.status === 404) {
+        // Special handling for @local resolver
+        if (username === 'local') {
+          throw new MlldResolutionError(
+            `@local resolver is not configured. Run 'mlld setup' to enable it.`,
+            { username, registryUrl }
+          );
+        }
+        // Generic message for other resolvers
         throw new MlldResolutionError(
-          `User '${username}' not found in registry`,
+          `There isn't a public module author or configured resolver with @${username}. Check your configuration or see the docs for more detail about resolvers.`,
           { username, registryUrl }
         );
       }
