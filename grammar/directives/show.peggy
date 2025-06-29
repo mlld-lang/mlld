@@ -562,6 +562,105 @@ SlashShow
         'path'  // Added source parameter
       );
     }
+    
+  // Error Recovery Rules for /show directive
+  // -----------------------------------------
+  
+  // Error: Unclosed double brackets [[ (for path section expressions)
+  / DirectiveContext "/show" _ "[[" &{
+      // Check if we have unclosed double brackets
+      let i = peg$currPos;
+      let depth = 1;
+      while (i < input.length - 1 && depth > 0) {
+        if (input[i] === '[' && input[i+1] === '[') {
+          depth++;
+          i += 2;
+        } else if (input[i] === ']' && input[i+1] === ']') {
+          depth--;
+          i += 2;
+        } else {
+          i++;
+        }
+      }
+      return depth > 0;
+    } {
+      error("Unclosed double brackets in /show directive. Expected closing ']]' for path section expression.");
+    }
+    
+  // Error: Unclosed single bracket [
+  / DirectiveContext "/show" _ "[" &{
+      return helpers.isUnclosedArray(input, peg$currPos);
+    } {
+      error("Unclosed path bracket in /show directive. Expected closing ']' for path specification.");
+    }
+    
+  // Error: Missing 'from' keyword in section syntax
+  / DirectiveContext "/show" _ QuotedContent _ &{
+      // Look ahead to see if next non-whitespace is [ or path-like
+      let i = peg$currPos;
+      while (i < input.length && (input[i] === ' ' || input[i] === '\t')) {
+        i++;
+      }
+      // If we see [ or a path-like character, but didn't match section syntax, must be missing 'from'
+      if (i < input.length && (input[i] === '[' || input[i] === '/' || /[a-zA-Z0-9.]/.test(input[i]))) {
+        return true;
+      }
+      return false;
+    } {
+      error("Invalid section syntax in /show directive. Expected 'from' keyword after section title. Use: /show \"Section Title\" from [path]");
+    }
+    
+  // Error: Missing path after 'from' in section syntax
+  / DirectiveContext "/show" _ QuotedContent _ "from" _ &(LineTerminator / EOF) {
+      error("Missing path in /show section syntax. Expected a path after 'from' keyword.");
+    }
+    
+  // Error: Invalid @ usage (not followed by valid identifier)
+  / DirectiveContext "/show" _ "@" &{
+      const nextChar = input[peg$currPos];
+      return !/[a-zA-Z_]/.test(nextChar);
+    } {
+      error("Invalid variable reference in /show directive. Variable names must start with a letter or underscore.");
+    }
+    
+  // Error: Unclosed backtick template
+  / DirectiveContext "/show" _ "`" &{
+      let i = peg$currPos;
+      while (i < input.length) {
+        if (input[i] === '`' && input[i-1] !== '\\') return false;
+        if (input[i] === '\n') return true; // Unclosed on newline
+        i++;
+      }
+      return true; // Unclosed at end of input
+    } {
+      error("Unclosed backtick template in /show directive. Expected closing backtick (`).");
+    }
+    
+  // Error: Unclosed double-colon template
+  / DirectiveContext "/show" _ "::" &{
+      return helpers.isUnclosedTemplate(input, peg$currPos);
+    } {
+      error("Unclosed double-colon template in /show directive. Expected closing '::' delimiter.");
+    }
+    
+  // Error: Missing content after /show
+  / DirectiveContext "/show" _ &(LineTerminator / EOF) {
+      error("Missing content in /show directive. Expected template, variable, or path to show.");
+    }
+    
+  // Error: Invalid foreach syntax
+  / DirectiveContext "/show" _ "foreach" _ &{
+      // Check if we have incomplete foreach syntax
+      const rest = input.substring(peg$currPos).trim();
+      return !rest.startsWith('@') && !rest.startsWith('[');
+    } {
+      error("Invalid foreach syntax in /show directive. Expected '@command(@arrays)' or '[@array.field # section]' after 'foreach'.");
+    }
+    
+  // Error: Generic /show syntax error (catch-all)
+  / DirectiveContext "/show" {
+      error("Invalid /show syntax. Expected: /show `template`, /show @variable, /show [path], or /show \"section\" from [path]");
+    }
 
 // -------------------------------------------------------------
 // HELPER RULES

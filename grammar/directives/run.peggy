@@ -181,6 +181,74 @@ SlashRun
         'exec'
       );
     }
+    
+  // Error Recovery Rules for /run directive
+  // ----------------------------------------
+  
+  // Error: Unclosed quoted command
+  / DirectiveContext "/run" _ "\"" &{
+      return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
+    } {
+      error("Unclosed quoted command in /run directive. Expected closing double quote (\").");
+    }
+    
+  // Error: Unclosed bracket command
+  / DirectiveContext "/run" _ "{" &{
+      return helpers.isUnclosedObject(input, peg$currPos);
+    } {
+      error("Unclosed command brackets in /run directive. Expected closing brace for command.");
+    }
+    
+  // Error: Invalid syntax after language identifier - must check for NOT { or (
+  / DirectiveContext "/run" _ lang:BaseIdentifier _ !"{" !"(" !LineTerminator !EOF &{
+      // Only match if this is a valid language identifier
+      const validLangs = ['js', 'javascript', 'node', 'python', 'py', 'bash', 'sh'];
+      return validLangs.includes(lang.toLowerCase());
+    } {
+      error("Invalid code syntax in /run directive. Expected code block or arguments after language identifier: " + lang);
+    }
+    
+  // Error: Missing code block after language
+  / DirectiveContext "/run" _ lang:BaseIdentifier _ &(LineTerminator / EOF) &{
+      const validLangs = ['js', 'javascript', 'node', 'python', 'py', 'bash', 'sh'];
+      return validLangs.includes(lang.toLowerCase());
+    } {
+      error("Missing code block in /run directive. Expected code block after language: " + lang);
+    }
+    
+  // Error: Invalid @ usage (not followed by valid identifier)
+  / DirectiveContext "/run" _ "@" &{
+      const nextChar = input[peg$currPos];
+      return !/[a-zA-Z_]/.test(nextChar);
+    } {
+      error("Invalid exec reference in /run directive. Variable names must start with a letter or underscore.");
+    }
+    
+  // Error: Missing content after /run
+  / DirectiveContext "/run" _ &(LineTerminator / EOF) {
+      error("Missing content in /run directive. Expected command, code block, or exec reference.");
+    }
+    
+  // Error: Unclosed code block
+  / DirectiveContext "/run" _ lang:BaseIdentifier _ "(" [^)]* ")" _ "{" &{
+      // Check if we have an unclosed code block after language (args)
+      return helpers.isUnclosedObject(input, peg$currPos);
+    } {
+      error("Unclosed code block in /run directive. Expected closing brace for " + lang + " code.");
+    }
+    
+  // Error: Unclosed code block without args
+  / DirectiveContext "/run" _ lang:BaseIdentifier _ "{" &{
+      // Check if we have an unclosed code block after language
+      return helpers.isUnclosedObject(input, peg$currPos);
+    } {
+      error("Unclosed code block in /run directive. Expected closing brace for " + lang + " code.");
+    }
+    
+  // Error: Generic /run syntax error (catch-all)
+  / DirectiveContext "/run" {
+      error("Invalid /run syntax. Expected: /run \"command\", /run {command}, /run language {code}, or /run @exec");
+    }
 
 // -------------------------------------------------------------
 // RUN DIRECTIVE FOR RHS CONTEXTS

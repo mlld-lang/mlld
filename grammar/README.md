@@ -310,7 +310,7 @@ CommandContent
   / &{ return helpers.isInRunCodeBlockContext(input, peg$currPos); } CodePattern
   / DefaultCommandPattern
 
-// Context helpers available: isAtDirectiveContext(), isRHSContext(), etc.
+// Context helpers available: isSlashDirectiveContext(), isRHSContext(), etc.
 ```
 
 This system enables context-aware parsing without runtime state tracking, maintaining clean separation between syntactic and semantic concerns.
@@ -331,6 +331,49 @@ AtRun
 ```
 
 **Why This Matters**: Peggy is a top-down parser that commits to branches. Once it takes a fork, it follows that semantic path. This aligns perfectly with how we think about Mlld directives.
+
+### 6. **Error Recovery with Semantic Commitment**
+Once a directive is identified by its prefix (e.g., `/var`), the parser commits to that semantic branch. Any subsequent failures should produce directive-specific errors, not generic backtracking errors.
+
+**The Problem**: Without error recovery, Peggy backtracks completely on failure:
+```
+Input: /var @items = [
+Error: Expected "/exe", "/import", "/output", "/path", "/run", "/show", "/when", "<<", ">>", "@", "```", "{{", Backtick Sequence, Special reserved variable, [ \t], end of input, or var directive but "/" found.
+```
+
+**The Solution**: Implement committed error recovery using ordered choices:
+
+```peggy
+SlashVar "var directive"
+  = DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ... // Success path
+  / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "[" _ &{
+      // Detect unclosed array
+      return helpers.isUnclosedArray(input, peg$currPos);
+    } {
+      error(`Unclosed array in /var directive. Expected ']' to close the array.`);
+    }
+  / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" {
+      error(`Missing value in /var directive. Expected a value after '='`);
+    }
+  / DirectiveContext "/var" _ "@" id:BaseIdentifier {
+      error(`Invalid /var syntax. Expected '=' after variable name '@${id}'`);
+    }
+  / DirectiveContext "/var" {
+      error(`Invalid /var syntax. Expected: /var @name = value`);
+    }
+```
+
+**Key Techniques**:
+1. **Ordered Choices**: Most specific failures first, general failures last
+2. **Semantic Predicates**: Use `&{ ... }` to detect specific error conditions
+3. **Context Preservation**: Include parsed information in error messages
+4. **No Backtracking**: Once a directive is identified, stay within its error recovery
+
+**Benefits**:
+- Users get helpful, context-aware error messages
+- Error points to exact failure position
+- Every error suggests how to fix it
+- Aligns with semantic fork philosophy
 
 ## Directive Parse Trees
 
@@ -996,6 +1039,125 @@ PatternName "Human-readable description"
 3. Document each rule with a clear string description
 4. Use structured debug output with rule name and relevant details
 5. Follow the abstraction hierarchy for rule dependencies
+
+## Error Recovery Implementation Guide
+
+### Pattern Template
+
+Every directive should follow this error recovery pattern:
+
+```peggy
+DirectiveName "directive description"
+  = // 1. Success path(s) - normal parsing
+    DirectiveContext "/directive" /* full success pattern */ {
+      // Return AST node
+    }
+    
+  // 2. Specific error recovery - most specific errors first
+  / DirectiveContext "/directive" /* partial pattern */ &{
+      // Semantic predicate to detect specific error condition
+      return helpers.detectSpecificError(input, peg$currPos);
+    } {
+      error(`Specific helpful error message with context`);
+    }
+    
+  // 3. Progressive error recovery - less specific
+  / DirectiveContext "/directive" /* less complete pattern */ {
+      error(`Less specific but still helpful error`);
+    }
+    
+  // 4. Generic fallback - catches any other issues
+  / DirectiveContext "/directive" {
+      error(`Generic but directive-specific error with usage hint`);
+    }
+```
+
+### Example: Implementing Error Recovery for /show
+
+```peggy
+SlashShow "show directive"
+  = // Success paths
+    DirectiveContext "/show" _ content:ShowContent tail:TailModifiers? {
+      return helpers.createStructuredDirective(/* ... */);
+    }
+    
+  // Error: unclosed template
+  / DirectiveContext "/show" _ "::" content:$[^:]* &{
+      // Check if we hit end of input without closing ::
+      return !input.substring(peg$currPos).includes('::');
+    } {
+      error(`Unclosed template in /show directive. Expected closing '::' delimiter.`);
+    }
+    
+  // Error: unclosed bracket
+  / DirectiveContext "/show" _ "[" path:$[^\]]* &{
+      return !input.substring(peg$currPos).includes(']');
+    } {
+      error(`Unclosed path in /show directive. Expected ']' to close the path.`);
+    }
+    
+  // Error: invalid foreach
+  / DirectiveContext "/show" _ "foreach" _ &{
+      const rest = input.substring(peg$currPos);
+      return !rest.match(/^@\w+\s*\(/);
+    } {
+      error(`Invalid foreach syntax in /show. Expected: /show foreach @command(@array)`);
+    }
+    
+  // Error: missing content
+  / DirectiveContext "/show" _ $ {
+      error(`Missing content in /show directive. Expected text, template, variable, or file reference.`);
+    }
+    
+  // Error: generic catch-all
+  / DirectiveContext "/show" {
+      error(`Invalid /show syntax. Examples: /show "text", /show @var, /show [file.md]`);
+    }
+```
+
+### Helper Functions for Error Detection
+
+Add these to `grammar/deps/grammar-core.js`:
+
+```javascript
+export const helpers = {
+  // ... existing helpers ...
+  
+  isUnclosedArray(input, pos) {
+    let depth = 1;
+    let i = pos;
+    while (i < input.length && depth > 0) {
+      if (input[i] === '[') depth++;
+      else if (input[i] === ']') depth--;
+      else if (input[i] === '\n' && depth > 0) return true;
+      i++;
+    }
+    return depth > 0;
+  },
+  
+  isUnclosedObject(input, pos) {
+    let depth = 1;
+    let i = pos;
+    while (i < input.length && depth > 0) {
+      if (input[i] === '{') depth++;
+      else if (input[i] === '}') depth--;
+      else if (input[i] === '\n' && depth > 0) return true;
+      i++;
+    }
+    return depth > 0;
+  },
+  
+  detectMissingQuoteClose(input, pos, quoteChar) {
+    let i = pos;
+    while (i < input.length) {
+      if (input[i] === quoteChar && input[i-1] !== '\\') return false;
+      if (input[i] === '\n') return true;
+      i++;
+    }
+    return true;
+  }
+};
+```
 
 ## Anti-Patterns to Avoid
 

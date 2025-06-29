@@ -21,6 +21,93 @@ It can be used in these forms:
 SlashImport
   = SlashImportShorthand
   / SlashImportFull
+  
+  // Error Recovery Rules for /import directive
+  // -------------------------------------------
+  
+  // Error: Unclosed import list bracket
+  / DirectiveContext "/import" _ "{" &{
+      // Check if we have an unclosed bracket for import list
+      let depth = 1;
+      let i = peg$currPos;
+      while (i < input.length && depth > 0) {
+        if (input[i] === '{') depth++;
+        else if (input[i] === '}') depth--;
+        else if (input[i] === '\n' && depth > 0) return true; // Unclosed on newline
+        i++;
+      }
+      return depth > 0;
+    } {
+      error("Unclosed import list in /import directive. Expected closing brace for import list.");
+    }
+    
+  // Error: Missing 'from' keyword
+  / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ &{
+      return helpers.isMissingFromKeyword(input, peg$currPos);
+    } {
+      error("Missing 'from' keyword in /import directive. Expected: /import { items } from \"path\"");
+    }
+    
+  // Error: Missing path after 'from'
+  / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ &(LineTerminator / EOF) {
+      error("Missing path in /import directive. Expected a path after 'from' keyword.");
+    }
+    
+  // Error: Unclosed quoted path
+  / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ "\"" &{
+      return helpers.detectMissingQuoteClose(input, peg$currPos, '"');
+    } {
+      error("Unclosed quoted path in /import directive. Expected closing double quote (\").");
+    }
+    
+  // Error: Unclosed single quoted path
+  / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ "'" &{
+      return helpers.detectMissingQuoteClose(input, peg$currPos, "'");
+    } {
+      error("Unclosed quoted path in /import directive. Expected closing single quote.");
+    }
+    
+  // Error: Unclosed bracket path
+  / DirectiveContext "/import" _ "{" _ ImportsList _ "}" _ "from" _ "[" &{
+      return helpers.isUnclosedArray(input, peg$currPos);
+    } {
+      error("Unclosed path bracket in /import directive. Expected closing bracket for path.");
+    }
+    
+  // Error: Invalid wildcard syntax (missing alias)
+  / DirectiveContext "/import" _ "{" _ "*" _ "}" {
+      error("Wildcard imports must have an alias. Use: /import { * as name } from \"path\"");
+    }
+    
+  // Error: Missing content after /import
+  / DirectiveContext "/import" _ &(LineTerminator / EOF) {
+      error("Missing content in /import directive. Expected import list or path.");
+    }
+    
+  // Error: Invalid @ usage in shorthand
+  / DirectiveContext "/import" _ "@" &{
+      const nextChar = input[peg$currPos];
+      // Check if it's not a valid special import or module reference
+      const rest = input.substring(peg$currPos);
+      const validStarts = ['INPUT', 'TIME', 'stdin'];
+      const isValidSpecial = validStarts.some(s => rest.toUpperCase().startsWith(s.toUpperCase()));
+      const isValidModule = /^[a-zA-Z_][a-zA-Z0-9_-]*\//.test(rest);
+      return !isValidSpecial && !isValidModule;
+    } {
+      error("Invalid import source. Expected @INPUT, @TIME, or module reference like @author/module");
+    }
+    
+  // Error: Unclosed shorthand path bracket
+  / DirectiveContext "/import" _ "[" &{
+      return helpers.isUnclosedArray(input, peg$currPos);
+    } {
+      error("Unclosed path bracket in /import shorthand. Expected closing bracket.");
+    }
+    
+  // Error: Generic /import syntax error (catch-all)
+  / DirectiveContext "/import" {
+      error("Invalid /import syntax. Expected: /import [path], /import @module, or /import { items } from \"path\"");
+    }
 
 // Shorthand import: /import [path] or /import @input or /import [path] as name
 SlashImportShorthand

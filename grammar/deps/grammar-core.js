@@ -47,12 +47,12 @@ export const helpers = {
     // Context Detection System - Core Helper Methods
     // ---------------------------------------------
     /**
-     * Determines if the current position represents a directive context
-     * A directive context requires:
+     * Determines if the current position represents a slash directive context
+     * A slash directive context requires:
      * 1. / symbol at logical line start
      * 2. Followed by a valid directive keyword
      */
-    isAtDirectiveContext(input, pos) {
+    isSlashDirectiveContext(input, pos) {
         // First check if we're at a / symbol
         if (input[pos] !== '/')
             return false;
@@ -92,8 +92,8 @@ export const helpers = {
         // First check if we're at an @ symbol
         if (input[pos] !== '@')
             return false;
-        // If we're at a directive context, this can't be a variable context
-        if (this.isAtDirectiveContext(input, pos))
+        // If we're at a slash directive context, this can't be a variable context
+        if (this.isSlashDirectiveContext(input, pos))
             return false;
         // If not a directive, but we have an @ symbol, it's a variable reference
         // This assumes that @ is either:
@@ -178,7 +178,7 @@ export const helpers = {
      */
     isPlainTextContext(input, pos) {
         // If it's not any of the special contexts, it's plain text
-        return !this.isAtDirectiveContext(input, pos) &&
+        return !this.isSlashDirectiveContext(input, pos) &&
             !this.isAtVariableContext(input, pos) &&
             !this.isRHSContext(input, pos);
     },
@@ -628,5 +628,125 @@ export const helpers = {
             properties: properties || {},
             location
         };
+    },
+    // Error Recovery Helper Functions
+    // --------------------------------
+    /**
+     * Checks if an array is unclosed by scanning ahead
+     * Returns true if we hit a newline before finding the closing bracket
+     */
+    isUnclosedArray(input, pos) {
+        let depth = 1;
+        let i = pos;
+        while (i < input.length && depth > 0) {
+            if (input[i] === '[')
+                depth++;
+            else if (input[i] === ']')
+                depth--;
+            else if (input[i] === '\n' && depth > 0)
+                return true; // Unclosed on newline
+            i++;
+        }
+        return depth > 0; // Still unclosed at end of input
+    },
+    /**
+     * Checks if an object is unclosed by scanning ahead
+     * Returns true if we hit a newline before finding the closing brace
+     */
+    isUnclosedObject(input, pos) {
+        let depth = 1;
+        let i = pos;
+        let inString = false;
+        let stringChar = null;
+        while (i < input.length && depth > 0) {
+            const char = input[i];
+            // Handle string context to avoid counting braces inside strings
+            if ((char === '"' || char === "'") && (i === 0 || input[i - 1] !== '\\')) {
+                if (!inString) {
+                    inString = true;
+                    stringChar = char;
+                }
+                else if (char === stringChar) {
+                    inString = false;
+                    stringChar = null;
+                }
+            }
+            // Only count braces outside of strings
+            if (!inString) {
+                if (char === '{')
+                    depth++;
+                else if (char === '}')
+                    depth--;
+                else if (char === '\n' && depth > 0)
+                    return true; // Unclosed on newline
+            }
+            i++;
+        }
+        return depth > 0; // Still unclosed at end of input
+    },
+    /**
+     * Checks if a string quote is unclosed
+     * Returns true if we hit a newline or end of input before finding the closing quote
+     */
+    detectMissingQuoteClose(input, pos, quoteChar) {
+        let i = pos;
+        while (i < input.length) {
+            if (input[i] === quoteChar && input[i - 1] !== '\\')
+                return false; // Found closing quote
+            if (input[i] === '\n')
+                return true; // Hit newline before closing
+            i++;
+        }
+        return true; // Hit end of input without closing
+    },
+    /**
+     * Checks if a template delimiter (::) is unclosed
+     */
+    isUnclosedTemplate(input, pos) {
+        // Look for closing :: delimiter
+        let i = pos;
+        while (i < input.length - 1) {
+            if (input[i] === ':' && input[i + 1] === ':')
+                return false; // Found closing
+            i++;
+        }
+        return true; // No closing :: found
+    },
+    /**
+     * Checks if we're at the start of what looks like a multiline array
+     * (array with newline after opening bracket)
+     */
+    isMultilineArrayStart(input, pos) {
+        // Skip any whitespace after current position
+        let i = pos;
+        while (i < input.length && (input[i] === ' ' || input[i] === '\t')) {
+            i++;
+        }
+        // Check if next character is a newline
+        return i < input.length && input[i] === '\n';
+    },
+    /**
+     * Scans ahead to check if this looks like a valid language identifier for /run
+     */
+    isValidLanguageKeyword(input, pos, lang) {
+        const validLanguages = ['js', 'javascript', 'node', 'python', 'py', 'bash', 'sh'];
+        return validLanguages.includes(lang.toLowerCase());
+    },
+    /**
+     * Checks if we're missing a 'from' keyword in an import statement
+     */
+    isMissingFromKeyword(input, pos) {
+        // Scan ahead to see if we have a path but no 'from'
+        let i = pos;
+        // Skip whitespace
+        while (i < input.length && (input[i] === ' ' || input[i] === '\t')) {
+            i++;
+        }
+        // Check if we see a path indicator (", ', [, or @) without 'from'
+        if (i < input.length) {
+            const char = input[i];
+            return char === '"' || char === "'" || char === '[' || char === '@';
+        }
+        return false;
     },
 };

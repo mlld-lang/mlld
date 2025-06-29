@@ -131,7 +131,7 @@ TextPart
       
       // Check for directive start
       if (isAtLineStart && input[pos] === '/') {
-        return helpers.isAtDirectiveContext(input, pos);
+        return helpers.isSlashDirectiveContext(input, pos);
       }
       
       // Check for comment start

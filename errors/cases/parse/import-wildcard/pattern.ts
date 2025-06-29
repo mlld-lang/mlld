@@ -1,5 +1,5 @@
-import type { ErrorPattern } from '@core/errors/patterns/types';
-import { MlldParseError } from '@core/errors/MlldParseError';
+import type { ErrorPattern } from '../../../../core/errors/patterns/types';
+import { MlldParseError } from '../../../../core/errors/MlldParseError';
 
 export const pattern: ErrorPattern = {
   name: 'import-wildcard',
