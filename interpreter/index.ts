@@ -6,6 +6,7 @@ import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
+import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import * as path from 'path';
 
 import type { ResolvedURLConfig } from '@core/config/types';
@@ -40,6 +41,7 @@ export interface InterpretOptions {
   useMarkdownFormatter?: boolean; // Use prettier for markdown formatting (default: true)
   localFileFuzzyMatch?: FuzzyMatchConfig | boolean; // Fuzzy matching for local file imports (default: true)
   captureEnvironment?: (env: Environment) => void; // Callback to capture environment after execution
+  captureErrors?: boolean; // Capture parse errors for pattern development
 }
 
 /**
@@ -58,6 +60,9 @@ export async function interpret(
   source: string,
   options: InterpretOptions
 ): Promise<string | InterpretResult> {
+  // Initialize error patterns on first use
+  await initializePatterns();
+  
   // Parse the source into AST
   const parseResult = await parse(source);
   
@@ -67,6 +72,15 @@ export async function interpret(
     
     // Import MlldParseError for proper error handling
     const { MlldParseError, ErrorSeverity } = await import('@core/errors');
+    
+    // If capture errors is enabled, capture the error and exit
+    if (options.captureErrors) {
+      const { captureError } = await import('@core/errors/capture');
+      const captureDir = await captureError(parseError, source, options.filePath || 'stdin');
+      console.log(`Error captured to: ${captureDir}`);
+      console.log('Edit the pattern.ts file and test with: mlld error-test ' + captureDir);
+      process.exit(1);
+    }
     
     // Create a proper MlldParseError with location information
     const location = (parseError as any).location;
@@ -83,7 +97,15 @@ export async function interpret(
       }
     }
     
-    // Enhance error message for common mistakes
+    // Use pattern-based error enhancement
+    const enhancedError = await enhanceParseError(parseError, source, options.filePath);
+    
+    // If we got an enhanced error, throw it
+    if (enhancedError) {
+      throw enhancedError;
+    }
+    
+    // Fallback to the old enhancement logic for now
     let enhancedMessage = parseError.message;
     
     // Detect common syntax errors and provide helpful guidance

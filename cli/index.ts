@@ -17,6 +17,7 @@ import { envCommand } from './commands/env';
 import { languageServerCommand } from './commands/language-server';
 import { testCommand } from './commands/test';
 import { createRunCommand } from './commands/run';
+import { errorTestCommand } from './commands/error-test';
 import chalk from 'chalk';
 import { version } from '@core/version';
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
@@ -83,6 +84,8 @@ export interface CLIOptions {
   dev?: boolean;
   // Disable prettier formatting
   noFormat?: boolean;
+  // Error capture for pattern development
+  captureErrors?: boolean;
   _?: string[]; // Remaining args after command
 }
 
@@ -153,7 +156,7 @@ function parseArgs(args: string[]): CLIOptions {
   };
 
   // Commands that can have subcommands (and should stop parsing)
-  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 'setup', 'env', 'test', 'run'];
+  const commandsWithSubcommands = ['auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 'setup', 'env', 'test', 'run', 'error-test'];
   
   // Store remaining args after command
   options._ = [];
@@ -366,6 +369,10 @@ function parseArgs(args: string[]): CLIOptions {
       // Disable prettier formatting
       case '--no-format':
         options.noFormat = true;
+        break;
+      // Error capture for pattern development
+      case '--capture-errors':
+        options.captureErrors = true;
         break;
       // Transformation is always enabled by default
       // No transform flags needed
@@ -1083,7 +1090,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
       devMode: cliOptions.dev,
       enableTrace: true, // Enable directive trace for better error debugging
-      useMarkdownFormatter: !cliOptions.noFormat
+      useMarkdownFormatter: !cliOptions.noFormat,
+      captureErrors: cliOptions.captureErrors
     });
 
     // Extract result and environment
@@ -1491,6 +1499,13 @@ Examples:
       const runCmd = createRunCommand();
       const cmdArgs = cliOptions._ || [];
       await runCmd.execute(cmdArgs, parseFlags(cmdArgs));
+      return;
+    }
+    
+    // Handle error-test command
+    if (cliOptions.input === 'error-test') {
+      const cmdArgs = cliOptions._ || [];
+      await errorTestCommand(cmdArgs);
       return;
     }
     

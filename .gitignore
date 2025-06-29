@@ -128,3 +128,6 @@ cli/temp-test-*
 # Test output files
 output-test.md
 **/output-test.md
+
+# Error capture directory
+errors/captured/
