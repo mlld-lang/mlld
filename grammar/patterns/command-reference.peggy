@@ -31,6 +31,7 @@ CommandArgumentList "command arguments list"
 
 CommandArgument "command argument"
   = CommandTemplateArgument     // Template arguments ::...::
+  / BacktickTemplateArgument    // Backtick templates `...`
   / NestedExecInvocation       // Nested function calls @func(args)
   / str:StringLiteral {
       // Create a Text node directly
@@ -76,6 +77,25 @@ CommandTemplateArgument "command template argument"
         templateParts: content,
         location: location()
       });
+    }
+
+// Backtick template argument - `template with @var`
+BacktickTemplateArgument "backtick template argument"
+  = template:BacktickTemplate {
+      helpers.debug('BacktickTemplateArgument matched', { template });
+      
+      // Return the template wrapped in the expected structure
+      return template;
+    }
+
+// Backtick template pattern
+BacktickTemplate "backtick template"
+  = "`" parts:(BacktickInterpolation)* "`" {
+      // Return as a template structure that preserves interpolation
+      return {
+        content: parts,
+        wrapperType: 'backtick'
+      };
     }
 
 // Content inside template arguments - allows {{var}} interpolation
