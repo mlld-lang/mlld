@@ -25,6 +25,26 @@ Modifiers:
 // Primary /when directive
 SlashWhen
   = WhenSimpleForm
+  // Error recovery: any: with individual actions (MUST come before WhenBlockForm)
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":" _ "[" _ &{
+      // Look ahead to see if there are individual actions (=> inside the block)
+      let i = peg$currPos;
+      let depth = 1;
+      while (i < input.length && depth > 0) {
+        if (input[i] === '[') depth++;
+        else if (input[i] === ']') depth--;
+        else if (input[i] === '=' && i + 1 < input.length && input[i + 1] === '>' && depth === 1) {
+          return true; // Found => at the top level of the block
+        }
+        i++;
+      }
+      return false;
+    } {
+      error("Invalid /when syntax. The 'any:' modifier requires a block action after the conditions.\\n" +
+            "Individual actions are not allowed with 'any:'.\\n\\n" +
+            "Incorrect: /when @var any: [@cond1 => action1, @cond2 => action2]\\n" +
+            "Correct:   /when @var any: [@cond1, @cond2] => /show \"Any matched\"");
+    }
   / WhenBlockForm
   / WhenBareBlockForm
   / WhenSwitchForm
@@ -35,6 +55,76 @@ SlashWhen
   // Error recovery: Missing action after =>
   / DirectiveContext "/when" _ condition:WhenSimpleCondition _ "=>" _ !. {
       error("Missing action in /when directive. Expected a directive after '=>'.");
+    }
+  // Error recovery: all: with individual actions AND block action
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":" _ "[" _ &{
+      // Look ahead to see if there are BOTH individual actions AND a block action
+      let i = peg$currPos;
+      let depth = 1;
+      let hasIndividualActions = false;
+      let hasBlockAction = false;
+      
+      while (i < input.length && depth > 0) {
+        if (input[i] === '[') depth++;
+        else if (input[i] === ']') depth--;
+        else if (input[i] === '=' && i + 1 < input.length && input[i + 1] === '>' && depth === 1) {
+          hasIndividualActions = true;
+        }
+        i++;
+      }
+      
+      // After closing ], check for => (block action)
+      if (depth === 0 && i < input.length) {
+        while (i < input.length && (input[i] === ' ' || input[i] === '\t' || input[i] === '\n')) i++;
+        if (i + 1 < input.length && input[i] === '=' && input[i + 1] === '>') {
+          hasBlockAction = true;
+        }
+      }
+      
+      return hasIndividualActions && hasBlockAction;
+    } {
+      error("Invalid /when syntax. The 'all:' modifier cannot have both individual actions and a block action.\\n" +
+            "Use either:\\n" +
+            "  /when @var all: [@cond1 => action1, @cond2 => action2]  (individual actions)\\n" +
+            "  /when @var all: [@cond1, @cond2] => /show \"All matched\"  (block action)");
+    }
+  // Error recovery: Unclosed brackets in block form
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:WhenModifier? _ ":" _ "[" _ &{
+      // Check if we hit newline or EOF before closing bracket
+      let i = peg$currPos;
+      let depth = 1;
+      while (i < input.length && depth > 0) {
+        if (input[i] === '[') depth++;
+        else if (input[i] === ']') depth--;
+        else if (input[i] === '\n' && depth > 0) {
+          // Found newline before closing bracket
+          let j = i + 1;
+          // Skip whitespace on next line
+          while (j < input.length && (input[j] === ' ' || input[j] === '\t')) j++;
+          // Check if next line starts with a directive
+          if (j < input.length && input[j] === '/') return true;
+        }
+        i++;
+      }
+      return depth > 0; // EOF reached without closing bracket
+    } {
+      error("Unclosed brackets in /when directive. Expected ']' to close the condition list.");
+    }
+  // Error recovery: Invalid modifier
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:BaseIdentifier _ ":" _ "[" {
+      error("Invalid /when modifier: '" + modifier + "'. Valid modifiers are: 'first', 'all', 'any'.\\n" +
+            "Examples:\\n" +
+            "  /when @var first: [...] => action\\n" +
+            "  /when @var all: [...] => action\\n" +
+            "  /when @var any: [...] => action");
+    }
+  // Error recovery: Generic catch-all
+  / DirectiveContext "/when" {
+      error("Invalid /when syntax. Valid forms:\\n" +
+            "  /when @condition => action          (simple form)\\n" +
+            "  /when @variable: [...]              (switch form)\\n" +
+            "  /when @var first: [...] => action   (block form with modifier)\\n" +
+            "  /when [...] => action               (bare block form)");
     }
 
 // -------------------------------------------------------------
