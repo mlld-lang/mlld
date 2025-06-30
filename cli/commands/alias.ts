@@ -26,8 +26,17 @@ export class AliasCommand {
       });
     }
 
+    // Normalize alias name: remove @ prefix and / suffix if present
+    let normalizedName = options.name.toLowerCase();
+    if (normalizedName.startsWith('@')) {
+      normalizedName = normalizedName.slice(1);
+    }
+    if (normalizedName.endsWith('/')) {
+      normalizedName = normalizedName.slice(0, -1);
+    }
+
     // Validate alias name format
-    if (!options.name.match(/^[a-z0-9-]+$/)) {
+    if (!normalizedName.match(/^[a-z0-9-]+$/)) {
       throw new MlldError('Alias name must be lowercase alphanumeric with hyphens', {
         code: 'INVALID_ALIAS_NAME',
         severity: ErrorSeverity.Fatal
@@ -37,6 +46,26 @@ export class AliasCommand {
     // Expand tilde in path
     const expandedPath = options.path.replace(/^~/, os.homedir());
     
+    // Resolve to absolute path first to check existence
+    const absolutePath = path.resolve(expandedPath);
+    
+    // Check if the path exists
+    if (!existsSync(absolutePath)) {
+      throw new MlldError(`Path does not exist: ${absolutePath}`, {
+        code: 'PATH_NOT_FOUND',
+        severity: ErrorSeverity.Fatal
+      });
+    }
+    
+    // Check if it's a directory
+    const stats = await fs.stat(absolutePath);
+    if (!stats.isDirectory()) {
+      throw new MlldError(`Path must be a directory: ${absolutePath}`, {
+        code: 'NOT_A_DIRECTORY',
+        severity: ErrorSeverity.Fatal
+      });
+    }
+    
     // Determine lock file path
     let lockFilePath: string;
     let resolvedPath: string;
@@ -45,7 +74,7 @@ export class AliasCommand {
       // Global alias - use absolute path
       const globalConfigDir = path.join(os.homedir(), '.config', 'mlld');
       lockFilePath = path.join(globalConfigDir, 'mlld.lock.json');
-      resolvedPath = path.resolve(expandedPath);
+      resolvedPath = absolutePath;
       
       // Ensure global config directory exists
       if (!existsSync(globalConfigDir)) {
@@ -54,14 +83,20 @@ export class AliasCommand {
     } else {
       // Local alias - use relative path
       lockFilePath = path.join(process.cwd(), 'mlld.lock.json');
-      resolvedPath = path.relative(process.cwd(), path.resolve(expandedPath));
+      // Make sure we get a clean relative path without ./ prefix unless needed
+      resolvedPath = path.relative(process.cwd(), absolutePath);
+      // If the path is outside the current directory, use absolute path
+      if (resolvedPath.startsWith('..')) {
+        console.log(chalk.yellow(`Warning: Path is outside current directory. Using absolute path.`));
+        resolvedPath = absolutePath;
+      }
     }
 
     // Load or create lock file
     const lockFile = new LockFile(lockFilePath);
     
-    // Create prefix configuration entry
-    const prefix = `@${options.name}/`;
+    // Create prefix configuration entry with normalized name
+    const prefix = `@${normalizedName}/`;
     const newPrefixConfig = {
       prefix,
       resolver: 'LOCAL',
@@ -91,10 +126,15 @@ export class AliasCommand {
     const scope = options.global ? 'global' : 'local';
     console.log(chalk.green(`✔ Created ${scope} path alias: ${prefix} → ${resolvedPath}`));
     console.log(chalk.gray(`\nYou can now import from this directory:`));
-    console.log(chalk.gray(`  /import { something } from ${prefix}module`));
+    console.log(chalk.gray(`  /import { something } from ${prefix}filename`));
+    console.log(chalk.gray(`  /import { * } from ${prefix}module.mld`));
     
     if (!options.global) {
-      console.log(chalk.gray(`\nThis path alias is only available in this project.`));
+      console.log(chalk.gray(`\nThis alias is only available in this project.`));
+      console.log(chalk.gray(`Lock file: ${path.relative(process.cwd(), lockFilePath)}`));
+    } else {
+      console.log(chalk.gray(`\nThis alias is available globally to all mlld projects.`));
+      console.log(chalk.gray(`Lock file: ${lockFilePath}`));
     }
   }
 }

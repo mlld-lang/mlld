@@ -24,6 +24,93 @@ import { version as currentMlldVersion } from '@core/version';
 type ContentNodeArray = ContentNode[];
 
 /**
+ * Resolve variable references within an object value
+ * This handles cases like { ask: @claude_ask } where @claude_ask needs to be resolved
+ */
+function resolveObjectReferences(
+  value: any,
+  childVars: Map<string, Variable>
+): any {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  
+  if (Array.isArray(value)) {
+    return value.map(item => resolveObjectReferences(item, childVars));
+  }
+  
+  // Check if this is a VariableReference AST node
+  if (typeof value === 'object' && value.type === 'VariableReference' && value.identifier) {
+    const varName = value.identifier;
+    const referencedVar = childVars.get(varName);
+    if (referencedVar) {
+      // For executables, we need to export them with the proper structure
+      if (referencedVar.type === 'executable') {
+        const execVar = referencedVar as ExecutableVariable;
+        return {
+          __executable: true,
+          value: execVar.value,
+          paramNames: execVar.paramNames,
+          executableDef: execVar.metadata?.executableDef,
+          metadata: execVar.metadata
+        };
+      } else {
+        // For other variable types, return the value directly
+        return referencedVar.value;
+      }
+    }
+    // If not found, return the original node
+    return value;
+  }
+  
+  if (typeof value === 'object') {
+    // Handle AST object nodes with type and properties
+    if (value.type === 'object' && value.properties) {
+      const resolved: Record<string, any> = {};
+      for (const [key, val] of Object.entries(value.properties)) {
+        resolved[key] = resolveObjectReferences(val, childVars);
+      }
+      return {
+        type: 'object',
+        properties: resolved,
+        location: value.location
+      };
+    }
+    
+    // Handle regular objects
+    const resolved: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      resolved[key] = resolveObjectReferences(val, childVars);
+    }
+    return resolved;
+  }
+  
+  // Check if this is a variable reference string (starts with @)
+  if (typeof value === 'string' && value.startsWith('@')) {
+    const varName = value.substring(1); // Remove @ prefix
+    const referencedVar = childVars.get(varName);
+    if (referencedVar) {
+      // For executables, we need to export them with the proper structure
+      if (referencedVar.type === 'executable') {
+        const execVar = referencedVar as ExecutableVariable;
+        return {
+          __executable: true,
+          value: execVar.value,
+          paramNames: execVar.paramNames,
+          executableDef: execVar.metadata?.executableDef,
+          metadata: execVar.metadata
+        };
+      } else {
+        // For other variable types, return the value directly
+        return referencedVar.value;
+      }
+    }
+  }
+  
+  return value;
+}
+
+/**
  * Process module exports - either use explicit @data module or auto-generate
  */
 function processModuleExports(
@@ -51,6 +138,9 @@ function processModuleExports(
           executableDef: execVar.metadata?.executableDef,
           metadata: execVar.metadata
         };
+      } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
+        // For objects, resolve any variable references within the object
+        moduleObject[name] = resolveObjectReferences(variable.value, childVars);
       } else {
         // For other variables, export the value directly
         moduleObject[name] = variable.value;

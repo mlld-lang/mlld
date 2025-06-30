@@ -25,7 +25,6 @@ export interface LockFileData {
   config?: {
     resolvers?: {
       prefixes?: PrefixConfig[];
-      registries?: PrefixConfig[]; // Legacy support
     };
     security?: {
       allowedDomains?: string[];
@@ -316,10 +315,6 @@ export class LockFile {
   getResolverPrefixes(): PrefixConfig[] {
     this.ensureLoaded();
     if (!this.data!.config?.resolvers?.prefixes) {
-      // Check legacy location for backwards compatibility
-      if (this.data!.config?.resolvers?.registries) {
-        return this.data!.config.resolvers.registries;
-      }
       return [];
     }
     return this.data!.config.resolvers.prefixes;

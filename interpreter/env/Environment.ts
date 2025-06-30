@@ -30,8 +30,7 @@ import {
   LocalResolver, 
   GitHubResolver, 
   HTTPResolver,
-  ProjectPathResolver,
-  convertLockFileToPrefixConfigs
+  ProjectPathResolver
 } from '@core/resolvers';
 import { PathMatcher } from '@core/resolvers/utils/PathMatcher';
 import { logger } from '@core/utils/logger';
@@ -259,15 +258,6 @@ export class Environment {
             logger.debug(`Configuring ${resolverPrefixes.length} resolver prefixes from lock file`);
             this.resolverManager.configurePrefixes(resolverPrefixes, this.basePath);
             logger.debug(`Total prefixes after configuration: ${this.resolverManager.getPrefixConfigs().length}`);
-          } else {
-            // Fall back to legacy location
-            const registries = lockFile.getRegistries();
-            if (Object.keys(registries).length > 0) {
-              logger.debug(`Configuring ${Object.keys(registries).length} legacy registries from lock file`);
-              const configs = convertLockFileToPrefixConfigs(registries);
-              this.resolverManager.configurePrefixes(configs, this.basePath);
-              logger.debug(`Total prefixes after legacy configuration: ${this.resolverManager.getPrefixConfigs().length}`);
-            }
           }
         }
       } catch (error) {

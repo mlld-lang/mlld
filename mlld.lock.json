@@ -2,7 +2,7 @@
   "version": "1.0",
   "config": {
     "resolvers": {
-      "registries": [
+      "prefixes": [
         {
           "prefix": "@local/",
           "resolver": "LOCAL",
@@ -20,6 +20,34 @@
           "config": {
             "repository": "adamavenir/private-modules",
             "branch": "main",
+            "basePath": "llm/modules"
+          }
+        },
+        {
+          "prefix": "@tests/",
+          "resolver": "LOCAL",
+          "config": {
+            "basePath": "llm/tests"
+          }
+        },
+        {
+          "prefix": "@example/",
+          "resolver": "LOCAL",
+          "config": {
+            "basePath": "examples"
+          }
+        },
+        {
+          "prefix": "@parent/",
+          "resolver": "LOCAL",
+          "config": {
+            "basePath": "/Users/adam/dev"
+          }
+        },
+        {
+          "prefix": "@modules/",
+          "resolver": "LOCAL",
+          "config": {
             "basePath": "llm/modules"
           }
         }

@@ -105,7 +105,14 @@ export async function evaluateExecInvocation(
     } else {
       // Direct field access on the object
       if (typeof objectValue === 'object' && objectValue !== null) {
-        const fieldValue = (objectValue as any)[commandName];
+        // Handle AST object structure with type and properties
+        let fieldValue;
+        if (objectValue.type === 'object' && objectValue.properties) {
+          fieldValue = objectValue.properties[commandName];
+        } else {
+          fieldValue = (objectValue as any)[commandName];
+        }
+        
         // Check if this is a raw executable object that needs conversion
         if (fieldValue && typeof fieldValue === 'object' && fieldValue.__executable) {
           // Convert raw executable to ExecutableVariable
