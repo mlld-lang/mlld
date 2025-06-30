@@ -59,12 +59,8 @@ export async function evaluateShow(
       throw new Error('Add variable directive missing variable reference');
     }
     
-    console.log('DEBUG: Show directive variableNodes:', JSON.stringify(variableNodes, null, 2));
-    
     const variableNode = variableNodes[0];
     const varName = variableNode.identifier;
-    
-    console.log('DEBUG: Selected variableNode:', JSON.stringify(variableNode, null, 2));
     
     // Get variable from environment
     const variable = env.getVariable(varName);
@@ -137,22 +133,12 @@ export async function evaluateShow(
     }
     
     // Handle field access if present in the variable node
-    if (variableNode.fields && variableNode.fields.length > 0) {
-      console.log('DEBUG: Show field access detected, fields:', variableNode.fields);
-      console.log('DEBUG: Value before field access:', value, 'type:', typeof value);
-      if (typeof value === 'object' && value !== null) {
-        const { accessField } = await import('../utils/field-access');
-        for (const field of variableNode.fields) {
-          console.log('DEBUG: Accessing field:', field);
-          value = accessField(value, field);
-          console.log('DEBUG: Result after field access:', value);
-          if (value === undefined) break;
-        }
-      } else {
-        console.log('DEBUG: Skipping field access - value is not object or is null');
+    if (variableNode.fields && variableNode.fields.length > 0 && typeof value === 'object' && value !== null) {
+      const { accessField } = await import('../utils/field-access');
+      for (const field of variableNode.fields) {
+        value = accessField(value, field);
+        if (value === undefined) break;
       }
-    } else {
-      console.log('DEBUG: No field access needed, variableNode.fields:', variableNode.fields);
     }
     
     // Check if the value contains unevaluated directives

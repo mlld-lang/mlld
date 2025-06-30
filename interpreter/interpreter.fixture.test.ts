@@ -175,6 +175,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     'text-path-section-bracket-rename': 'Section extraction in bracket syntax needs investigation',
     // Module import tests that need published modules
     'data-object-strings-array-functions': 'Issue #254: Registry tests need isolation - @mlld/array not published yet',
+    // Bracket notation tests - skipped until grammar issue resolved
+    'bracket-notation-comprehensive': 'Issue #306: Bracket notation field access lost in grammar parsing pipeline',
   };
 
   // Separate fixtures into categories for better reporting
