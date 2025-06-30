@@ -25,6 +25,7 @@ import { evaluateDataValue } from '../eval/lazy-eval';
 import { isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
+import { interpreterLogger as logger } from '@core/utils/logger';
 
 /**
  * Type for variable values
@@ -215,7 +216,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           }
           // Skip comment nodes
           if (isComment(n)) {
-            console.log('DEBUG: Skipping comment node:', n.content);
+            logger.debug('Skipping comment node:', { content: n.content });
             continue;
           }
           env.addNode(n);
@@ -238,7 +239,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           }
           // Skip comment nodes
           if (isComment(n)) {
-            console.log('DEBUG: Skipping comment node:', n.content);
+            logger.debug('Skipping comment node:', { content: n.content });
             continue;
           }
           env.addNode(n);
@@ -789,7 +790,7 @@ export async function interpolate(
         
         // Special debug for @sum
         if (node.identifier === 'sum') {
-          console.log('DEBUG: Interpolating @sum:', {
+          logger.debug('Interpolating @sum:', {
             rawValue: value,
             stringValue: String(value),
             willBe: `"${String(value)}"`

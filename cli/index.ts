@@ -1123,7 +1123,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     
     // Clean up environment to prevent event loop from staying alive
     if (environment && 'cleanup' in environment) {
-      console.log('DEBUG: Calling environment cleanup');
+      cliLogger.debug('Calling environment cleanup');
       (environment as any).cleanup();
     }
     
@@ -1137,13 +1137,13 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     // Force exit if not in stdout mode but cleanup is complete
     // This is a workaround for a Prettier v3 bug where the process doesn't exit naturally
     // after formatting markdown content. The issue persists in v3.6.2.
-    console.log('DEBUG: Forcing process exit after cleanup');
+    cliLogger.debug('Forcing process exit after cleanup');
     await new Promise(resolve => setTimeout(resolve, 50));
     process.exit(0);
   } catch (error: any) {
     // Clean up environment even on error
     if (environment && 'cleanup' in environment) {
-      console.log('DEBUG: Calling environment cleanup (error path)');
+      cliLogger.debug('Calling environment cleanup (error path)');
       environment.cleanup();
     }
     await handleError(error, cliOptions);
@@ -1337,7 +1337,7 @@ export async function main(customArgs?: string[]): Promise<void> {
     seenErrors.clear();
 
     // Explicitly disable debug mode by default
-    process.env.DEBUG = '';
+    process.env.MLLD_DEBUG = '';
     
     // Parse command-line arguments
     const args = customArgs || process.argv.slice(2);
@@ -1571,19 +1571,19 @@ Examples:
     // Configure logging based on options
     if (cliOptions.debug) {
       // Set environment variable for child processes and imported modules
-      process.env.DEBUG = 'true';
+      process.env.MLLD_DEBUG = 'true';
       logger.level = 'trace';
       cliLogger.level = 'trace';
     } else if (cliOptions.verbose) {
       // Show info level messages for verbose, but no debug logs
       logger.level = 'info';
       cliLogger.level = 'info';
-      process.env.DEBUG = ''; // Explicitly disable DEBUG
+      process.env.MLLD_DEBUG = ''; // Explicitly disable MLLD_DEBUG
     } else {
       // Only show errors by default (no debug logs)
       logger.level = 'error';
       cliLogger.level = 'error';
-      process.env.DEBUG = ''; // Explicitly disable DEBUG
+      process.env.MLLD_DEBUG = ''; // Explicitly disable MLLD_DEBUG
     }
 
     // Watch mode or single processing

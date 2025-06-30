@@ -32,7 +32,7 @@ const consoleFormat = winston.format.combine(
   winston.format.colorize({ all: loggingConfig.format.colorize }),
   winston.format.printf(({ level, message, timestamp, service, ...metadata }) => {
     // In non-debug mode, use more concise output
-    if (process.env.DEBUG !== 'true') {
+    if (process.env.MLLD_DEBUG !== 'true') {
       // Only show error messages, no debug/info/etc
       if (level !== 'error') {
         return '';
@@ -68,7 +68,7 @@ const getLogLevel = () => {
   }
   
   // In debug mode use debug level
-  if (process.env.DEBUG === 'true') {
+  if (process.env.MLLD_DEBUG === 'true') {
     return 'debug';
   }
   
@@ -101,7 +101,7 @@ export class LoggerFactory implements ILoggerFactory {
       }
       
       // In debug mode use debug level
-      if (process.env.DEBUG === 'true') {
+      if (process.env.MLLD_DEBUG === 'true') {
         return 'debug';
       }
       

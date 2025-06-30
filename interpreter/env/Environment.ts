@@ -2684,24 +2684,24 @@ ${code}
    * Clean up resources that might keep the event loop alive
    */
   cleanup(): void {
-    console.log('DEBUG: Environment cleanup called');
+    logger.debug('Environment cleanup called');
     
     // Clean up NodeShadowEnvironment if it exists
     if (this.nodeShadowEnv) {
-      console.log('DEBUG: Cleaning up NodeShadowEnvironment');
+      logger.debug('Cleaning up NodeShadowEnvironment');
       this.nodeShadowEnv.cleanup();
       this.nodeShadowEnv = undefined;
     }
     
     // Clean up child environments recursively
-    console.log(`DEBUG: Cleaning up ${this.childEnvironments.size} child environments`);
+    logger.debug(`Cleaning up ${this.childEnvironments.size} child environments`);
     for (const child of this.childEnvironments) {
       child.cleanup();
     }
     this.childEnvironments.clear();
     
     // Clear any other resources that might keep event loop alive
-    console.log('DEBUG: Clearing caches and shadow envs');
+    logger.debug('Clearing caches and shadow envs');
     this.urlCache.clear();
     this.resolverVariableCache.clear();
     this.shadowEnvs.clear();
@@ -2709,6 +2709,6 @@ ${code}
     // Clear import stack to prevent memory leaks
     this.importStack.clear();
     
-    console.log('DEBUG: Cleanup complete');
+    logger.debug('Cleanup complete');
   }
 }

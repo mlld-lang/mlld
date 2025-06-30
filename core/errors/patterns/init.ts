@@ -19,12 +19,12 @@ export async function initializePatterns(): Promise<void> {
     initialized = true;
     
     // Only log in development
-    if (process.env.NODE_ENV === 'development' || process.env.DEBUG) {
+    if (process.env.NODE_ENV === 'development' || process.env.MLLD_DEBUG === 'true') {
       console.log(`Loaded ${patterns.length} error patterns`);
     }
   } catch (error) {
     // Silently continue without patterns in production
-    if (process.env.NODE_ENV === 'development' || process.env.DEBUG) {
+    if (process.env.NODE_ENV === 'development' || process.env.MLLD_DEBUG === 'true') {
       console.warn('Failed to load error patterns:', error);
     }
     // Create empty matcher as fallback
