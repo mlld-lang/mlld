@@ -192,18 +192,20 @@ function createVariableFromValue(
     const paramNames = value.paramNames || [];
     const executableDef = value.executableDef;
     
-    // Create executable variable
+    // The executable definition contains all the needed information
+    // We just need to create a dummy ExecutableVariable that preserves it
+    // The actual execution will use the executableDef from metadata
     const execVariable = createExecutableVariable(
       name,
-      execValue.type,
-      execValue.template,
+      'command', // Default type - the real type is in executableDef
+      '', // Empty template - the real template is in executableDef
       paramNames,
-      execValue.language,
+      undefined, // No language here - it's in executableDef
       source,
       {
         ...metadata,
         ...value.metadata,
-        executableDef // Preserve the executable definition
+        executableDef // This is what actually matters for execution
       }
     );
     
