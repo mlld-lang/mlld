@@ -165,14 +165,14 @@ describe('Complex Data Assignment', () => {
     const env = new Environment(fs, pathService, process.cwd());
     
     const mlldContent = `
-/var @tests = [run {echo "test1"}, run {echo "test2"}, run {echo "test3"}]
+/var @testresults = [run {echo "test1"}, run {echo "test2"}, run {echo "test3"}]
 `;
     
     const parseResult = await parse(mlldContent);
     const ast = parseResult.ast;
     await evaluate(ast, env);
     
-    const testsVar = env.getVariable('tests');
+    const testsVar = env.getVariable('testresults');
     expect(testsVar).toBeDefined();
     
     // Manually trigger evaluation

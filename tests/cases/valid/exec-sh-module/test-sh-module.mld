@@ -1,0 +1,28 @@
+---
+name: test-sh-executables
+author: test
+version: 1.0.0
+about: Test sh executables in modules
+needs: ["sh"]
+---
+
+# Test module with sh executables
+
+/exe @simple_sh() = sh { echo "Simple sh output" }
+
+/exe @multiline_sh() = sh {
+  result="Multi-line sh"
+  echo "$result output"
+}
+
+/exe @parameterized_sh(@name) = sh {
+  echo "Hello, $name from sh!"
+}
+
+/exe @error_handling_sh(@cmd) = sh {
+  if command -v "$cmd" >/dev/null 2>&1; then
+    echo "$cmd is available"
+  else
+    echo "$cmd is not found"
+  fi
+}
