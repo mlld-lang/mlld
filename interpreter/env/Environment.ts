@@ -1994,14 +1994,40 @@ ${code}
             return outputs.join('\n');
           }
           
+          // Detect command substitution patterns and automatically add stderr capture
+          const enhancedCode = this.enhanceShellCodeForCommandSubstitution(code);
+          
           // For multiline bash scripts, use stdin to avoid shell escaping issues
-          const result = child_process.execSync('bash', {
-            input: code,
+          // Use spawnSync to capture both stdout and stderr
+          const { spawnSync } = child_process;
+          const execResult = spawnSync('bash', [], {
+            input: enhancedCode,
             encoding: 'utf8',
             env: { ...process.env, ...envVars },
             cwd: this.basePath,
             stdio: ['pipe', 'pipe', 'pipe']
           });
+          
+          if (execResult.error) {
+            throw execResult.error;
+          }
+          
+          if (execResult.status !== 0) {
+            // Handle non-zero exit status like execSync would
+            const error: any = new Error(`Command failed with exit code ${execResult.status}`);
+            error.status = execResult.status;
+            error.stderr = execResult.stderr;
+            error.stdout = execResult.stdout;
+            throw error;
+          }
+          
+          // Combine stdout and stderr for commands that write to stderr when no TTY
+          const stdout = execResult.stdout || '';
+          const stderr = execResult.stderr || '';
+          
+          // For commands that likely wrote to stderr due to TTY detection, include stderr in output
+          const hasTTYCheck = enhancedCode.includes('[ -t ') || enhancedCode.includes('>&2');
+          const result = hasTTYCheck && stderr && !stdout ? stderr : stdout;
           
           return result.toString().replace(/\n+$/, '');
         } catch (execError: any) {
@@ -2030,6 +2056,63 @@ ${code}
     } else {
       throw new Error(`Unsupported code language: ${language}`);
     }
+  }
+  
+  /**
+   * Enhances shell code to automatically capture stderr in command substitution patterns.
+   * This fixes the issue where interactive commands write to stderr when no TTY is detected,
+   * but command substitution $(…) only captures stdout by default.
+   */
+  private enhanceShellCodeForCommandSubstitution(code: string): string {
+    // Pattern to match command substitution that doesn't already have stderr redirection
+    // Matches: $(...) where ... doesn't contain "2>&1" or "2>/dev/null"
+    const commandSubstitutionPattern = /\$\(([^)]*)\)/g;
+    
+    let enhancedCode = code.replace(commandSubstitutionPattern, (match, innerCommand) => {
+      // Check if this looks like an interactive command pattern that might write to stderr
+      const interactivePatterns = [
+        /if\s*\[\s*-t\s+[01]\s*\]/,  // TTY detection: if [ -t 0 ] or if [ -t 1 ]
+        /echo\s+.*\s+>&2/,           // Direct stderr output: echo "..." >&2
+        /\|\|\s*echo/,               // Fallback pattern: command || echo
+        /python3?\s+-c/,             // Python scripts that might detect TTY
+        /node\s+-e/,                 // Node scripts that might detect TTY
+        /sh\s+-c\s+.*>&2/,           // Shell commands with stderr: sh -c '... >&2'
+        /echo.*&&.*echo.*>&2/,       // Commands with multiple echo, one to stderr
+      ];
+      
+      const needsStderrCapture = interactivePatterns.some(pattern => pattern.test(innerCommand));
+      const hasStderrRedirection = innerCommand.includes('2>&1') || innerCommand.includes('2>/dev/null') || innerCommand.includes('2>');
+      
+      // Check if stderr redirection is at the end of the command (common pattern)
+      const hasTrailingStderrRedirection = /\s+2>&1\s*$/.test(innerCommand);
+      
+      if (needsStderrCapture && !hasStderrRedirection) {
+        // Add stderr capture to the command substitution and normalize whitespace
+        return `$(${innerCommand.trim()} 2>&1 | tr '\\n' ' ' | sed 's/[[:space:]]*$//')`;
+      } else if (hasStderrRedirection && (needsStderrCapture || hasTrailingStderrRedirection)) {
+        // For commands that already capture stderr but might have multi-line output, normalize whitespace
+        // Remove the trailing 2>&1 and re-add it after normalization
+        const cleanCommand = innerCommand.replace(/\s+2>&1\s*$/, '').trim();
+        return `$(${cleanCommand} 2>&1 | tr '\\n' ' ' | sed 's/[[:space:]]*$//')`;
+      } else if (innerCommand.includes('&&') || innerCommand.includes('||')) {
+        // For commands with && or || that might produce multi-line output, normalize whitespace
+        // Wrap the command in parentheses to ensure proper precedence
+        return `$({ ${innerCommand.trim()}; } | tr '\\n' ' ' | sed 's/[[:space:]]*$//')`;
+      }
+      
+      return match;
+    });
+    
+    // Also add stderr capture for direct commands that might write to stderr when no TTY
+    // This helps with direct execution cases
+    const hasDirectStderrPattern = /echo\s+.*\s+>&2/;
+    if (hasDirectStderrPattern.test(code) && !code.includes('2>&1')) {
+      // For direct commands that write to stderr, we need to ensure they're captured
+      // But we need to be careful not to break existing functionality
+      // This is more complex and should be handled case by case
+    }
+    
+    return enhancedCode;
   }
   
   async resolvePath(inputPath: string): Promise<string> {

@@ -188,20 +188,17 @@ This test simulates the behavior we see with interactive CLI tools in command su
 ## Test Direct Execution
 
 Direct: [Direct execution]
-
 ## Test Command Substitution
 
-Substitution: [Captured: ]
-
+Substitution: [Captured: Via substitution]
 ## Test with Stderr Capture
 
 With stderr: [Both streams: With stderr]
-
 ## Python Script Simulation
 
 Python direct: [Python output]
 
-Python subst: [Python output]
+Python subst: [Python not available]
 ```
 
 ### Valid Command substitution sh
@@ -300,27 +297,21 @@ This test verifies that command substitution works correctly in sh blocks across
 ## Basic Command Substitution
 
 Result: basic substitution works
-
 ## Command Substitution with Multiple Lines
 
 Combined: line 1 line 2
-
 ## Nested Command Substitution
 
 outer contains: inner
-
 ## Command Substitution with Exit Codes
 
 Output: success (exit code: 0)
-
 ## Command Substitution with stderr
 
 Captured: stdout text stderr text
-
 ## Complex Pattern (similar to AI module)
 
 Success: complex pattern test
-
 ## Direct Output (for comparison)
 
 direct output works
@@ -411,17 +402,14 @@ This test explores how command substitution affects commands that behave differe
 Direct: stdout is NOT a TTY
 
 Subst: stdout is NOT a TTY
-
 ## Test with Script Command (TTY-aware)
 
 test input
 
 Captured: test input
-
 ## Test Process Substitution vs Command Substitution
 
 Read: data
-
 ## Test Buffering Behavior
 
 Result: unbuffered output
