@@ -144,7 +144,7 @@ const identifier = await interpolate(identifierNodes, env);
 - `/when @condition => @action` - Simple one-line conditional
 - `/when @condition [...]` - Execute each action for matching condition (all fire independently)
   ```
-  /when @env [
+  /when @condition [
     "prod" => /show "Production"
     "dev" => /show "Development"
     _ => /show "Unknown"
@@ -212,7 +212,7 @@ const identifier = await interpolate(identifierNodes, env);
 - **Examples**: `examples/` (real-world usage patterns and integration tests)
 
 ## Compacting
-When compacting for the next session--*especially* mid-task, your emphasis should be on *removing* unnecessary context which does not advance the current priority. Claude needs surgically assembled context. Be sure to avoid including unnecessary details summarizing the past conversation when it will have no clear benefit to the next Claude to pick up where you left off. Make your summary a clear mission briefing. Ask yourself "What would I need to know if I was picking this work up fresh with no context?" There may be documents or files worth referencing. Present the information in an organized and structured fashion. This is for LLM consumption, so don't hesitate to use XML in order to make it well organized and clear for Claude.
+When compacting for the next session--*especially* mid-task, your emphasis should be on *removing* unnecessary context which does not advance the current priority. Claude needs surgically assembled context. Be sure to avoid including unnecessary details summarizing the past conversation when it will have no clear benefit to the next Claude to pick up where you left off. Make your summary a clear mission briefing. Ask yourself "What would I need to know if I was picking this work up fresh with no context?" There may be documents or files worth referencing. Present the information in an organized and structured fashion. This is for LLM consumption, so don't hesitate to use XML in order to make it well organized and clear.
 
 ## Coding Practices
 - Don't add comments saying something is being removed or changed -- keep comments timeless
@@ -257,3 +257,6 @@ The `llms.txt` file serves as the authoritative onboarding guide for LLMs learni
    - Update examples to match current syntax
    - Note deprecated patterns explicitly
    - Test all examples before committing
+
+## Debugging
+- When adding debugging output, use `MLLD_DEBUG=true` or `--debug` and winston for debug logging output
