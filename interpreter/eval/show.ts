@@ -59,8 +59,12 @@ export async function evaluateShow(
       throw new Error('Add variable directive missing variable reference');
     }
     
+    console.log('DEBUG: Show directive variableNodes:', JSON.stringify(variableNodes, null, 2));
+    
     const variableNode = variableNodes[0];
     const varName = variableNode.identifier;
+    
+    console.log('DEBUG: Selected variableNode:', JSON.stringify(variableNode, null, 2));
     
     // Get variable from environment
     const variable = env.getVariable(varName);
@@ -134,40 +138,21 @@ export async function evaluateShow(
     
     // Handle field access if present in the variable node
     if (variableNode.fields && variableNode.fields.length > 0) {
-      // Process field access
-      for (const field of variableNode.fields) {
-        if (value === null || value === undefined) {
-          throw new Error(`Cannot access field on null or undefined value`);
+      console.log('DEBUG: Show field access detected, fields:', variableNode.fields);
+      console.log('DEBUG: Value before field access:', value, 'type:', typeof value);
+      if (typeof value === 'object' && value !== null) {
+        const { accessField } = await import('../utils/field-access');
+        for (const field of variableNode.fields) {
+          console.log('DEBUG: Accessing field:', field);
+          value = accessField(value, field);
+          console.log('DEBUG: Result after field access:', value);
+          if (value === undefined) break;
         }
-        
-        if (field.type === 'arrayIndex') {
-          const index = Number(field.value);
-          if (Array.isArray(value)) {
-            value = value[index];
-          } else {
-            throw new Error(`Cannot index non-array value with [${index}]`);
-          }
-        } else if (field.type === 'field' || field.type === 'stringIndex') {
-          const fieldName = String(field.value);
-          if (typeof value === 'object' && value !== null) {
-            // Handle DataObject type
-            if (value.type === 'object' && value.properties) {
-              value = value.properties[fieldName];
-            } else {
-              value = value[fieldName];
-            }
-          } else {
-            throw new Error(`Cannot access property '${fieldName}' on non-object value`);
-          }
-        } else if (field.type === 'numericField') {
-          const fieldName = String(field.value);
-          if (typeof value === 'object' && value !== null) {
-            value = value[fieldName];
-          } else {
-            throw new Error(`Cannot access numeric property '${fieldName}' on non-object value`);
-          }
-        }
+      } else {
+        console.log('DEBUG: Skipping field access - value is not object or is null');
       }
+    } else {
+      console.log('DEBUG: No field access needed, variableNode.fields:', variableNode.fields);
     }
     
     // Check if the value contains unevaluated directives

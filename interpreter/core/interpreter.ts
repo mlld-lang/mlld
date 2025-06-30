@@ -428,7 +428,16 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     }
     
     // Handle complex data variables with lazy evaluation
-    const resolvedValue = await resolveVariableValue(variable, env);
+    let resolvedValue = await resolveVariableValue(variable, env);
+    
+    // Handle field access if present
+    if (node.fields && node.fields.length > 0 && typeof resolvedValue === 'object' && resolvedValue !== null) {
+      const { accessField } = await import('../utils/field-access');
+      for (const field of node.fields) {
+        resolvedValue = accessField(resolvedValue, field);
+        if (resolvedValue === undefined) break;
+      }
+    }
     
     // For interpolation variables, we need to add the resolved text to output
     if (node.valueType === 'varInterpolation') {
