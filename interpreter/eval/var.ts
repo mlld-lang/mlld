@@ -332,7 +332,10 @@ export async function evaluateVar(
     // Apply field access if present
     if (varWithTail.variable.fields && varWithTail.variable.fields.length > 0) {
       const { accessField } = await import('../utils/field-access');
-      result = await accessField(result, varWithTail.variable.fields, varWithTail.variable.identifier);
+      // Iterate through fields one at a time (accessField expects a single field)
+      for (const field of varWithTail.variable.fields) {
+        result = accessField(result, field);
+      }
     }
     
     // Apply pipeline if present

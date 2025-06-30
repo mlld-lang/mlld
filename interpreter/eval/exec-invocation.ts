@@ -244,7 +244,10 @@ export async function evaluateExecInvocation(
         let finalValue = value;
         if (varRef.fields && varRef.fields.length > 0) {
           const { accessField } = await import('../utils/field-access');
-          finalValue = await accessField(value, varRef.fields, varRef.identifier);
+          // Iterate through fields one at a time (accessField expects a single field)
+          for (const field of varRef.fields) {
+            finalValue = accessField(finalValue, field);
+          }
         }
         
         // Store the actual value

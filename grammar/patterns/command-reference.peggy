@@ -40,13 +40,25 @@ CommandArgument "command argument"
         location: location()
       });
     }
-  / varRef:Variable {
+  / varRef:CommandVariableReference {  // Use a specific rule for command context variables
       // Return the VariableReference directly
       return varRef;
     }
   / PrimitiveValue       // Direct primitives: 42, true, false, null
   / EscapedArgument      // Escaped characters in unquoted arguments
   / RawArgument          // Fallback for unquoted arguments
+
+// Variable reference in command arguments - handles field access
+CommandVariableReference "command variable reference"
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* {
+      const normalizedId = helpers.normalizePathVar(id);
+      const node = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+      helpers.debug('CommandVariableReference', { id: normalizedId, fields: fields });
+      return node;
+    }
 
 // Nested function call in command arguments
 NestedExecInvocation "nested exec invocation"
@@ -115,19 +127,7 @@ CommandTemplateChar
 EscapedArgument "escaped argument"
   = chars:EscapedArgChar+ {
       const content = chars.join('');
-      // If it starts with @, create a VariableReference node
-      if (content.startsWith('@')) {
-        const identifier = content.substring(1);
-        // Only create variable reference if it's a valid identifier
-        if (/^[a-zA-Z_][a-zA-Z0-9_]*/.test(identifier)) {
-          return helpers.createNode(NodeType.VariableReference, {
-            identifier: identifier,
-            valueType: 'varIdentifier',
-            location: location()
-          });
-        }
-      }
-      // Otherwise create a Text node
+      // Create a Text node (variables are handled by AtVar rule)
       return helpers.createNode(NodeType.Text, {
         content: content,
         location: location()
@@ -144,19 +144,7 @@ RawArgument "raw argument"
       const content = chars.join('').trim();
       if (!content) return null; // Skip empty arguments
       
-      // If it starts with @, create a VariableReference node
-      if (content.startsWith('@')) {
-        const identifier = content.substring(1);
-        // Only create variable reference if it's a valid identifier
-        if (/^[a-zA-Z_][a-zA-Z0-9_]*/.test(identifier)) {
-          return helpers.createNode(NodeType.VariableReference, {
-            identifier: identifier,
-            valueType: 'varIdentifier',
-            location: location()
-          });
-        }
-      }
-      // Otherwise create a Text node
+      // Create a Text node (variables are handled by AtVar rule)
       return helpers.createNode(NodeType.Text, {
         content: content,
         location: location()
