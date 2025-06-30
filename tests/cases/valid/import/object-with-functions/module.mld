@@ -1,0 +1,5 @@
+@exec claude_ask(prompt) = [(echo "Claude response: @prompt")]
+
+@data claude = {
+  ask: @claude_ask
+}

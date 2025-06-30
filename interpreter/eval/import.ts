@@ -12,6 +12,110 @@ import { version as currentMlldVersion } from '@core/version';
 type ContentNodeArray = ContentNode[];
 
 /**
+ * Resolve variable references within an object value
+ */
+function resolveObjectReferences(
+  value: any,
+  childVars: Map<string, MlldVariable>
+): any {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  
+  if (Array.isArray(value)) {
+    return value.map(item => resolveObjectReferences(item, childVars));
+  }
+  
+  if (typeof value === 'object') {
+    const resolved: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      resolved[key] = resolveObjectReferences(val, childVars);
+    }
+    return resolved;
+  }
+  
+  // Check if this is a variable reference (starts with @)
+  if (typeof value === 'string' && value.startsWith('@')) {
+    const varName = value.substring(1); // Remove @ prefix
+    const referencedVar = childVars.get(varName);
+    if (referencedVar) {
+      // Return the actual variable wrapped with type information for import
+      return {
+        __variableType: referencedVar.type,
+        __value: referencedVar.value,
+        // For executable variables, preserve the ExecutableDefinition structure
+        ...(referencedVar.type === 'executable' && {
+          __definition: (referencedVar as any).definition,
+          __params: (referencedVar as any).params,
+          __content: (referencedVar as any).content
+        }),
+        // For legacy textTemplate variables, preserve additional metadata
+        ...(referencedVar.type === 'textTemplate' && {
+          __params: (referencedVar as any).params,
+          __content: (referencedVar as any).content
+        })
+      };
+    }
+  }
+  
+  return value;
+}
+
+/**
+ * Unwrap resolved variable references within an imported object value
+ */
+function unwrapResolvedReferences(value: any): any {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  
+  if (Array.isArray(value)) {
+    return value.map(item => unwrapResolvedReferences(item));
+  }
+  
+  if (typeof value === 'object') {
+    // Check if this is a wrapped reference from resolveObjectReferences
+    if ('__variableType' in value && '__value' in value) {
+      // This is a wrapped variable - create a synthetic variable object
+      const syntheticVar: any = {
+        type: value.__variableType,
+        value: value.__value,
+        nodeId: '',
+        location: { line: 0, column: 0 },
+        metadata: {
+          isImported: true,
+          isSynthetic: true, // Mark as synthetic to distinguish from regular imports
+          definedAt: { line: 0, column: 0, filePath: '<synthetic>' }
+        }
+      };
+      
+      // For executable variables, restore the full structure
+      if (value.__variableType === 'executable' && '__definition' in value) {
+        syntheticVar.definition = value.__definition;
+        syntheticVar.params = value.__params;
+        syntheticVar.content = value.__content;
+      }
+      // For legacy textTemplate variables
+      else if (value.__variableType === 'textTemplate' && '__params' in value) {
+        syntheticVar.params = value.__params;
+        syntheticVar.content = value.__content;
+      }
+      
+      return syntheticVar;
+    }
+    
+    // Regular object - recursively unwrap its properties
+    const unwrapped: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      unwrapped[key] = unwrapResolvedReferences(val);
+    }
+    return unwrapped;
+  }
+  
+  return value;
+}
+
+/**
  * Process module exports - either use explicit @data module or auto-generate
  */
 function processModuleExports(
@@ -28,10 +132,16 @@ function processModuleExports(
   for (const [name, variable] of childVars) {
     // Skip the 'module' variable itself
     if (name !== 'module') {
+      // For objects (data type), resolve any variable references within the object
+      let exportValue = variable.value;
+      if (variable.type === 'data' && typeof variable.value === 'object' && variable.value !== null) {
+        exportValue = resolveObjectReferences(variable.value, childVars);
+      }
+      
       // Preserve variable type information for proper import
       moduleObject[name] = {
         __variableType: variable.type,
-        __value: variable.value
+        __value: exportValue
       };
       
       // For executable variables, preserve the ExecutableDefinition structure
@@ -86,7 +196,14 @@ function createNamespaceVariable(
   for (const [key, value] of Object.entries(moduleObject)) {
     if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
       // Unwrap the wrapped variable format
-      unwrappedObject[key] = value.__value;
+      let unwrappedValue = value.__value;
+      
+      // If this is a data object, unwrap any resolved references within it
+      if (value.__variableType === 'data' && typeof unwrappedValue === 'object' && unwrappedValue !== null) {
+        unwrappedValue = unwrapResolvedReferences(unwrappedValue);
+      }
+      
+      unwrappedObject[key] = unwrappedValue;
     } else {
       // Keep the value as-is for non-wrapped values
       unwrappedObject[key] = value;
@@ -389,6 +506,11 @@ async function importFromPath(
           varType = value.__variableType;
           varValue = value.__value;
           
+          // If this is a data object, unwrap any resolved references within it
+          if (varType === 'data' && typeof varValue === 'object' && varValue !== null) {
+            varValue = unwrapResolvedReferences(varValue);
+          }
+          
           // Handle backward compatibility: convert textTemplate to executable
           if (varType === 'textTemplate') {
             varType = 'executable';
@@ -472,6 +594,11 @@ async function importFromPath(
           if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
             varType = value.__variableType;
             varValue = value.__value;
+            
+            // If this is a data object, unwrap any resolved references within it
+            if (varType === 'data' && typeof varValue === 'object' && varValue !== null) {
+              varValue = unwrapResolvedReferences(varValue);
+            }
             
             // Handle backward compatibility: convert textTemplate to executable
             if (varType === 'textTemplate') {
@@ -792,6 +919,11 @@ async function importFromResolverContent(
           varType = value.__variableType;
           varValue = value.__value;
           
+          // If this is a data object, unwrap any resolved references within it
+          if (varType === 'data' && typeof varValue === 'object' && varValue !== null) {
+            varValue = unwrapResolvedReferences(varValue);
+          }
+          
           // Handle backward compatibility: convert textTemplate to executable
           if (varType === 'textTemplate') {
             varType = 'executable';
@@ -873,6 +1005,11 @@ async function importFromResolverContent(
           if (value && typeof value === 'object' && '__variableType' in value && '__value' in value) {
             varType = value.__variableType;
             varValue = value.__value;
+            
+            // If this is a data object, unwrap any resolved references within it
+            if (varType === 'data' && typeof varValue === 'object' && varValue !== null) {
+              varValue = unwrapResolvedReferences(varValue);
+            }
             
             // Handle backward compatibility: convert textTemplate to executable
             if (varType === 'textTemplate') {
