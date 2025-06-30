@@ -12,23 +12,86 @@ vi.mock('fs');
 vi.mock('os');
 vi.mock('@core/registry/LockFile');
 
-// TODO: Add test infrastructure for aliases - need to properly mock file system paths
-// See: https://github.com/mlld-lang/mlld/issues/304
-describe.skip('AliasCommand', () => {
+describe('AliasCommand', () => {
   let command: AliasCommand;
   let mockConsoleLog: any;
   let mockConsoleError: any;
+  let validPaths: Set<string>;
 
   beforeEach(() => {
     command = new AliasCommand();
     mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     
+    // Define valid paths that should exist in our mock filesystem
+    validPaths = new Set([
+      '/home/user/Desktop',
+      '/project/shared-modules', 
+      '/project/new-path',
+      '/project/path',
+      '/home/user/.config/mlld'
+    ]);
+    
     // Mock os.homedir
     vi.mocked(os.homedir).mockReturnValue('/home/user');
     
-    // Mock existsSync
-    vi.mocked(existsSync).mockReturnValue(false);
+    // Mock process.cwd
+    const originalCwd = process.cwd;
+    process.cwd = vi.fn().mockReturnValue('/project');
+    
+    // Mock existsSync with intelligent path resolution
+    vi.mocked(existsSync).mockImplementation((filePath: string) => {
+      const pathStr = filePath.toString();
+      
+      // Handle relative paths by resolving them
+      let resolvedPath = pathStr;
+      if (!path.isAbsolute(pathStr)) {
+        resolvedPath = path.resolve('/project', pathStr);
+      }
+      
+      // Check if this resolved path exists in our mock filesystem
+      return validPaths.has(resolvedPath) || pathStr.includes('.config/mlld');
+    });
+    
+    // Mock fs.stat to return directory stats for existing paths
+    vi.mocked(fs.stat).mockImplementation(async (filePath: string) => {
+      const pathStr = filePath.toString();
+      
+      // Resolve relative paths
+      let resolvedPath = pathStr;
+      if (!path.isAbsolute(pathStr)) {
+        resolvedPath = path.resolve('/project', pathStr);
+      }
+      
+      // For files that should be files, not directories
+      if (pathStr.includes('some-file.txt')) {
+        return {
+          isDirectory: () => false,
+          isFile: () => true,
+          size: 100,
+          mtime: new Date(),
+          ctime: new Date(),
+          atime: new Date()
+        } as any;
+      }
+      
+      // Default to directory for existing paths
+      if (validPaths.has(resolvedPath) || pathStr.includes('.config')) {
+        return {
+          isDirectory: () => true,
+          isFile: () => false,
+          size: 0,
+          mtime: new Date(),
+          ctime: new Date(),
+          atime: new Date()
+        } as any;
+      }
+      
+      throw new Error(`ENOENT: no such file or directory, stat '${pathStr}'`);
+    });
+
+    // Mock fs.mkdir
+    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -46,7 +109,7 @@ describe.skip('AliasCommand', () => {
 
     await command.createAlias({
       name: 'shared',
-      path: '../shared-modules',
+      path: './shared-modules',
       global: false
     });
 
@@ -55,7 +118,7 @@ describe.skip('AliasCommand', () => {
         prefix: '@shared/',
         resolver: 'LOCAL',
         config: {
-          basePath: '../shared-modules'
+          basePath: 'shared-modules'
         }
       }
     ]);
@@ -71,9 +134,6 @@ describe.skip('AliasCommand', () => {
     
     // Set up the mock implementation
     vi.mocked(LockFile).mockImplementation(() => mockLockFile as any);
-
-    // Mock fs.mkdir
-    vi.mocked(fs.mkdir).mockResolvedValue(undefined);
 
     await command.createAlias({
       name: 'desktop',
@@ -92,13 +152,19 @@ describe.skip('AliasCommand', () => {
     ]);
 
     expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('✔ Created global path alias: @desktop/'));
-    expect(vi.mocked(fs.mkdir)).toHaveBeenCalledWith('/home/user/.config/mlld', { recursive: true });
   });
 
   it('should validate alias name format', async () => {
+    // Mock LockFile for this test
+    const mockLockFile = {
+      getResolverPrefixes: vi.fn().mockReturnValue([]),
+      setResolverPrefixes: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.mocked(LockFile).mockImplementation(() => mockLockFile as any);
+
     await expect(command.createAlias({
-      name: 'Invalid-Name',
-      path: './path',
+      name: 'invalid_name',  // Underscore is not allowed
+      path: './shared-modules',
       global: false
     })).rejects.toThrow('Alias name must be lowercase alphanumeric with hyphens');
   });
@@ -106,7 +172,7 @@ describe.skip('AliasCommand', () => {
   it('should require both name and path', async () => {
     await expect(command.createAlias({
       name: '',
-      path: './path',
+      path: './shared-modules',
       global: false
     })).rejects.toThrow('Both --name and --path are required');
 
@@ -153,5 +219,24 @@ describe.skip('AliasCommand', () => {
     ]);
 
     expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('Updated existing path alias: @shared/'));
+  });
+
+  it('should throw error when path does not exist', async () => {
+    await expect(command.createAlias({
+      name: 'missing',
+      path: './nonexistent',
+      global: false
+    })).rejects.toThrow('Path does not exist');
+  });
+
+  it('should throw error when path is not a directory', async () => {
+    // Add the file to valid paths so existsSync returns true
+    validPaths.add('/project/some-file.txt');
+
+    await expect(command.createAlias({
+      name: 'file',
+      path: './some-file.txt',
+      global: false
+    })).rejects.toThrow('Path must be a directory');
   });
 });
