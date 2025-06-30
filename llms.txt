@@ -58,11 +58,22 @@ This design keeps documents readable as regular Markdown while enabling programm
 ✅ RIGHT: /run {echo "hello"}
 ✅ RIGHT: /run "echo hello"
 
->> Important: /run vs language specifiers
-✅ /run {echo "hello"}          << Shell command - use 'run'
-✅ /run js {console.log("hi")}  << JavaScript execution - use '/run js'
-✅ /exe @fn = run {echo "hi"}   << Shell executable - use 'run' 
-✅ /exe @fn = js {return 42}    << JavaScript executable - use 'js' (no 'run')
+>> CRITICAL: 'run' vs 'sh' for shell commands
+✅ /run "echo hello"            << Single-line, pipes only (|)
+✅ /run {echo "hello" | cat}    << Single-line with pipe
+❌ /run {cmd1 && cmd2}          << WRONG - && not allowed with 'run'
+✅ /sh {cmd1 && cmd2}           << RIGHT - use 'sh' for && or ||
+✅ /sh {                        << Use 'sh' for multi-line scripts
+  if [ -f "file.txt" ]; then
+    cat file.txt
+  fi
+}
+
+>> Language specifiers
+✅ /run js {console.log("hi")}  << JavaScript execution
+✅ /exe @fn = run "echo hi"     << Single-line shell executable
+✅ /exe @fn = sh {echo hi}      << Multi-line shell executable
+✅ /exe @fn = js {return 42}    << JavaScript executable (no 'run')
 ```
 
 ### 4. Only /show, /run, and /output Produce Output
@@ -224,10 +235,19 @@ Important: /when doesn't support inline comparisons. Create helper functions:
 /run "echo System info:"
 /run "date"
 
->> Or use braces for multi-line commands
-/run {
+>> IMPORTANT: Single-line commands with 'run' can only use pipes (|)
+>> For multi-line shell scripts or commands with && or ||, use 'sh'
+/run "echo Hello | tr '[:lower:]' '[:upper:]'"  >> Pipes allowed
+
+>> Use 'sh' for multi-line shell scripts
+/sh {
   echo "Multiple commands"
   ls -la
+}
+
+>> Use 'sh' for conditional execution (|| and &&)
+/exe @safeDeploy(@env) = sh {
+  npm test && npm run deploy:$env || echo "Deployment failed"
 }
 
 >> Data structures
@@ -322,10 +342,17 @@ The unified `/var` directive creates variables with types inferred from syntax:
 
 ```mlld
 >> Command executable
-/exe @deploy(env) = run "deploy.sh @env"      >> Single line with quotes
-/exe @build(type) = run {                     >> Multi-line with braces
-  npm run build:@type
+/exe @deploy(@env) = run "deploy.sh $env"      >> Single line with quotes
+/exe @build(@type) = sh {                      >> Multi-line requires 'sh'
+  npm run build:$type
   npm test
+}
+/exe @checkFile(@path) = sh {                  >> 'sh' for if/then/else
+  if [ -f "$path" ]; then
+    echo "File exists"
+  else
+    echo "File not found"
+  fi
 }
 
 >> Code executable (js/node without 'run' prefix)
@@ -413,6 +440,61 @@ The unified `/var` directive creates variables with types inferred from syntax:
 
 >> With format specification
 /output @config to "settings.yaml" as yaml
+```
+
+## Shell Commands: run vs sh
+
+Understanding when to use `run` vs `sh` is critical for shell commands:
+
+### Use 'run' for:
+- **Single-line commands** that only use pipes (`|`)
+- **Simple command execution** without conditionals
+- **Security**: `run` is restricted to prevent command injection
+
+```mlld
+/run "echo Hello World"                    >> Simple command
+/run {cat file.txt | grep "pattern"}      >> Pipes are allowed
+/run "ls -la | head -10"                   >> Single line with pipe
+
+>> These will FAIL with 'run':
+❌ /run {cmd1 && cmd2}                     >> && not allowed
+❌ /run {cmd1 || cmd2}                     >> || not allowed
+❌ /run {if [ -f "file" ]; then ...; fi}   >> Multi-line not allowed
+```
+
+### Use 'sh' for:
+- **Multi-line shell scripts**
+- **Conditional execution** with `&&` or `||`
+- **Control structures** like if/then/else, loops
+- **Complex shell operations**
+
+```mlld
+/sh {
+  echo "Starting deployment"
+  npm test && npm build && npm deploy
+}
+
+/exe @safeDelete(@file) = sh {
+  if [ -f "$file" ]; then
+    rm "$file"
+    echo "Deleted $file"
+  else
+    echo "File not found: $file"
+  fi
+}
+
+/exe @tryCommand(@cmd) = sh {
+  $cmd || echo "Command failed with exit code $?"
+}
+```
+
+### Parameter Syntax Differences:
+- In `run`: Use `@param` for mlld interpolation
+- In `sh`: Use `$param` for shell variable interpolation
+
+```mlld
+/exe @greet(@name) = run "echo Hello @name"     >> @name in run
+/exe @greet(@name) = sh { echo "Hello $name" }  >> $name in sh
 ```
 
 ## Common Patterns

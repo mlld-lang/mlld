@@ -301,7 +301,9 @@ async function importFromPath(
               const variable = createVariableFromValue(targetName, moduleObject[varName], resolvedPath, varName);
               env.setVariable(targetName, variable);
             } else {
-              const availableExports = Object.keys(moduleObject);
+              const availableExports = Object.keys(moduleObject).filter(k => 
+                k !== '__meta__' && k !== 'fm' && k !== 'frontmatter'
+              );
               throw new Error(
                 `Variable '${varName}' not found in module exports from ${resolvedPath}. ` +
                 `Available exports: ${availableExports.join(', ')}`
@@ -452,7 +454,7 @@ async function importFromPath(
         const varName = importNode.identifier;
         
         // Check if the variable exists in the module object
-        if (varName in moduleObject && varName !== '__meta__') {
+        if (varName in moduleObject && varName !== '__meta__' && varName !== 'fm' && varName !== 'frontmatter') {
           const value = moduleObject[varName];
           // Use alias if provided, otherwise use original name
           const targetName = importNode.alias || varName;
@@ -462,7 +464,9 @@ async function importFromPath(
           env.setVariable(targetName, importedVariable);
         } else {
           // Variable not found in module exports
-          const availableExports = Object.keys(moduleObject).filter(k => k !== '__meta__');
+          const availableExports = Object.keys(moduleObject).filter(k => 
+            k !== '__meta__' && k !== 'fm' && k !== 'frontmatter'
+          );
           throw new Error(
             `Variable '${varName}' not found in module exports from ${resolvedPath}. ` +
             `Available exports: ${availableExports.join(', ')}`
@@ -758,7 +762,7 @@ async function importFromResolverContent(
         const varName = importNode.identifier;
         
         // Check if the variable exists in the module object
-        if (varName in moduleObject && varName !== '__meta__') {
+        if (varName in moduleObject && varName !== '__meta__' && varName !== 'fm' && varName !== 'frontmatter') {
           const value = moduleObject[varName];
           // Use alias if provided, otherwise use original name
           const targetName = importNode.alias || varName;
@@ -768,7 +772,9 @@ async function importFromResolverContent(
           env.setVariable(targetName, importedVariable);
         } else {
           // Variable not found in module exports
-          const availableExports = Object.keys(moduleObject).filter(k => k !== '__meta__');
+          const availableExports = Object.keys(moduleObject).filter(k => 
+            k !== '__meta__' && k !== 'fm' && k !== 'frontmatter'
+          );
           throw new Error(
             `Variable '${varName}' not found in module exports from ${ref}. ` +
             `Available exports: ${availableExports.join(', ')}`
