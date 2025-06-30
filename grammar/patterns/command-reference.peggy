@@ -33,6 +33,8 @@ CommandArgument "command argument"
   = CommandTemplateArgument     // Template arguments ::...::
   / BacktickTemplateArgument    // Backtick templates `...`
   / NestedExecInvocation       // Nested function calls @func(args)
+  / DataObjectLiteral           // Object literals: {"key": "value"}
+  / DataBracketAmbiguous        // Array literals: ["a", "b"] or path references
   / str:StringLiteral {
       // Create a Text node directly
       return helpers.createNode(NodeType.Text, {

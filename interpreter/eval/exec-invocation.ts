@@ -265,6 +265,10 @@ export async function evaluateExecInvocation(
           stringValue = String(finalValue);
         }
         evaluatedArgStrings.push(stringValue);
+      } else if (arg.type === 'array' || arg.type === 'object') {
+        // Handle array and object literals directly
+        evaluatedArgs.push(arg);
+        evaluatedArgStrings.push(JSON.stringify(arg));
       } else {
         // Otherwise interpolate as usual
         const evaluated = await interpolate([arg], env);
