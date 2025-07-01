@@ -150,8 +150,8 @@ RunCommandValue
         meta: content.meta
       };
     }
-  / "run" _ "@" invocation:ExecInvocationWithTail {
-      // Handle run @command() syntax
+  / "run" _ "@" invocation:UnifiedReferenceWithTail {
+      // Handle run @command() syntax with unified patterns
       return {
         type: 'runExec',
         invocation: invocation,
