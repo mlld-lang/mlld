@@ -198,14 +198,7 @@ URLSegment "URL segment"
 // Section identifier - supports both literal names and variable references
 // Used in: UnifiedSectionPath for dynamic section extraction
 SectionIdentifier "Section name or variable reference"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
-      // Variable reference in section context - no VariableContext check needed
-      const normalizedId = helpers.normalizePathVar(id);
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-    }
+  = VariableNoTail
   / '"' content:$(!'"' .)* '"' {  // Double-quoted section names
       return helpers.createNode(NodeType.Text, { 
         content: content, 

@@ -101,21 +101,12 @@ ArrayValue
   = TemplateStyleInterpolation  // Templates
   / DataObjectLiteral           // Use data-context object parsing for proper typing
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
-  / ArrayVariableReference      // Variable references without context check for arrays
+  / VariableWithTail            // Variable references with optional tail modifiers
   / BracketAmbiguous            // Nested arrays or paths - moved after AtVar
   / NestedDirective             // Nested directives
   / CodeExecution               // Code execution (run keyword and shortcuts)
   / PrimitiveValue              // Strings, numbers, booleans, null
 
-// Variable references in array context (no context checks needed)
-ArrayVariableReference
-  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* {
-      // The !"(" ensures we don't match exec invocations like @func()
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: helpers.normalizePathVar(id),
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-    }
 
 // Primitive values for arrays
 PrimitiveValue
@@ -128,15 +119,6 @@ PrimitiveValue
 ObjectPropertyValue "object property value"
   = DataPropertyValue           // Delegate to data-context patterns
 
-// Variable references in object context (no context checks needed)
-ObjectVariableReference
-  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* {
-      // The !"(" ensures we don't match exec invocations like @func()
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: helpers.normalizePathVar(id),
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-    }
 
 // Run command in object context
 RunCommandValue

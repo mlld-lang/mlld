@@ -223,20 +223,10 @@ SlashPath
 
 // Path parts for path assignment - allows @var interpolation
 PathAssignmentParts
-  = parts:(PathAssignmentVariable / PathTextSegment / PathSeparator)* {
+  = parts:(VariableNoTail / PathTextSegment / PathSeparator)* {
       return parts;
     }
 
-// Variable in path assignment context
-PathAssignmentVariable
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
-      const normalizedId = helpers.normalizePathVar(id);
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-    }
-  / SpecialVariable
 
 // Special path identifiers
 SpecialPathIdentifier

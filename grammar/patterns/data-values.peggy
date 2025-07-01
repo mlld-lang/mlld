@@ -49,7 +49,7 @@ DataPropertyValue "data context property value"
   / DataObjectLiteral            // Nested objects get typed
   / DataBracketAmbiguous         // Arrays OR file paths - data context version
   / ExecInvocationPattern        // @func() - preserve as-is
-  / ObjectVariableReference      // @var - preserve as-is
+  / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / NestedDirective              // Other embedded directives - preserve as-is
   / DataTemplateValue            // Only bracket templates and backticks (not quotes)
   / DataStringValue              // Plain strings (unwrapped)
@@ -95,7 +95,7 @@ DataArrayValue
   / DataObjectLiteral            // Objects get typed
   / DataBracketAmbiguous         // Arrays OR paths - use ambiguous version for consistency
   / ExecInvocationPattern        // @func() - preserve as-is
-  / ArrayVariableReference       // @var - preserve as-is
+  / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / NestedDirective              // Other embedded directives - preserve as-is
   / DataTemplateValue            // Only bracket templates and backticks
   / DataStringValue              // Plain strings (unwrapped)

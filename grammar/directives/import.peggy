@@ -459,20 +459,10 @@ ImportItem
 
 // Path parts for import context - allows @var interpolation
 ImportPathParts
-  = parts:(ImportPathVariable / PathTextSegment / PathSeparator)* {
+  = parts:(VariableNoTail / PathTextSegment / PathSeparator)* {
       return parts;
     }
 
-// Variable in import path context
-ImportPathVariable  
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
-      const normalizedId = helpers.normalizePathVar(id);
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-    }
-  / SpecialVariable  // Special vars like @., @TIME, etc.
 
 // Special variable path - handles @. followed by path segments
 SpecialVariablePath

@@ -238,27 +238,17 @@ UnifiedCommandParts
 
 // Command tokens - complete units (quoted strings, variables, words)
 UnifiedCommandToken
-  = UnifiedCommandVariable       // Variables first
+  = VariableNoTail               // Variables first (unified pattern)
   / UnifiedCommandQuotedString   // Complete quoted strings
   / UnifiedCommandWord           // Unquoted words with spaces
   / UnifiedCommandSpace          // Explicit spaces between tokens
 
-// Variable in unified command context
-UnifiedCommandVariable
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
-      const normalizedId = helpers.normalizePathVar(id);
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-    }
-  / SpecialVariable
 
 // (Removed UnifiedCommandText - now using token-based approach)
 
 // Quoted strings in unified commands - preserve special characters inside quotes
 UnifiedCommandQuotedString
-  = '"' content:UnifiedCommandDoubleQuotedContent* '"' {
+  = '"' content:UnifiedDoubleQuotedContent* '"' {
       // For double quotes, we need to handle variable interpolation
       // Return an array of nodes that can include both text and variable references
       const nodes = [];
@@ -298,15 +288,11 @@ UnifiedCommandQuotedString
       return helpers.createNode(NodeType.Text, { content: text, location: location() });
     }
 
-// Content inside double quotes - allows variables but no operator checks
-UnifiedCommandDoubleQuotedContent
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
-      // Variable interpolation inside double quotes - return proper VariableReference node
-      const normalizedId = helpers.normalizePathVar(id);
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
+// Content inside double quotes - allows variables but no operator checks  
+UnifiedDoubleQuotedContent
+  = varRef:VariableNoTail {
+      // Variable interpolation inside double quotes - return the unified pattern result
+      return varRef;
     }
   / chars:$((!'"' !'@' .)+) { return chars; }
   / "@" { return '@'; }  // Lone @ without identifier

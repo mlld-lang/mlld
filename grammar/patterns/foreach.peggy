@@ -13,7 +13,7 @@
 // Usage: foreach @command(@array1, @array2) 
 // Creates cartesian product when multiple arrays provided
 ForeachCommandExpression
-  = "foreach" _ cmd:ForeachCommandRef _ "(" _ arrays:ForeachArrayArgumentList _ ")" withClause:ForeachWithClause? {
+  = "foreach" _ cmd:UnifiedReferenceNoTail _ "(" _ arrays:ForeachArrayArgumentList _ ")" withClause:ForeachWithClause? {
       helpers.debug('ForeachCommandExpression matched', { cmd, arrays, withClause });
       
       return {
@@ -28,34 +28,14 @@ ForeachCommandExpression
       };
     }
 
-// Command reference for foreach expressions
-// References parameterized @exec commands or @text templates
-ForeachCommandRef
-  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* {
-      return {
-        type: 'commandRef',
-        identifier: identifier,
-        fields: fields || []
-      };
-    }
 
 // List of array arguments separated by commas
 // Each array will be iterated over, creating cartesian product for multiple arrays
 ForeachArrayArgumentList
-  = first:ForeachVariableRef rest:(_ "," _ arr:ForeachVariableRef { return arr; })* {
+  = first:VariableNoTail rest:(_ "," _ arr:VariableNoTail { return arr; })* {
       return [first].concat(rest || []);
     }
 
-// Variable reference for array arguments
-// Must reference variables that contain arrays
-ForeachVariableRef
-  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* {
-      const normalizedId = helpers.normalizePathVar(identifier);
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-    }
 
 // -------------------------------------------------------------
 // FOREACH SECTION EXTRACTION (NEW PATTERN)
@@ -114,19 +94,10 @@ ForeachSectionExpression
 
 // Path parts for foreach - without context checking
 ForeachPathParts "Path parts for foreach section"
-  = parts:(SpecialVariable / ForeachPathVariable / InterpolationVar / PathTextSegment / PathSeparator)* {
+  = parts:(SpecialVariable / VariableNoTail / InterpolationVar / PathTextSegment / PathSeparator)* {
       return parts;
     }
 
-// Variable in foreach path context - no VariableContext check needed
-ForeachPathVariable "Variable in foreach path"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
-      const normalizedId = helpers.normalizePathVar(id);
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-    }
 
 // -------------------------------------------------------------
 // FOREACH WITH CLAUSE (OPTIONAL)
