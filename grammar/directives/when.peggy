@@ -309,16 +309,10 @@ NegatedSimpleCondition
 
 // Non-negated simple conditions (no literals)
 NonNegatedSimpleCondition
-  = "@" id:BaseIdentifier !("(" / TailModifiers) fields:AnyFieldAccess* {
-      // Simple variable reference without parentheses or tail modifiers
-      const loc = location();
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, loc);
-      return [node];
+  = varRef:VariableNoTail {
+      return [varRef];
     }
-  / "@" invocation:UnifiedReferenceWithTail {
+  / invocation:UnifiedReferenceWithTail {
       // Unified reference (exec invocation or variable) with tail modifiers
       return [invocation];
     }
@@ -361,16 +355,10 @@ NegatedCondition
 
 // Non-negated conditions (existing patterns)
 NonNegatedCondition
-  = "@" id:BaseIdentifier !("(" / TailModifiers) fields:AnyFieldAccess* {
-      // Simple variable reference without parentheses or tail modifiers
-      const loc = location();
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, loc);
-      return [node];
+  = varRef:VariableNoTail {
+      return [varRef];
     }
-  / "@" invocation:UnifiedReferenceWithTail {
+  / invocation:UnifiedReferenceWithTail {
       // Unified reference (exec invocation or variable) with tail modifiers
       return [invocation];
     }
@@ -488,13 +476,8 @@ WhenActionDirective
       })];
     }
   // show with simple variable reference (MUST come before exec invocation)
-  / "/"? "show" _ "@" id:BaseIdentifier !("(") !TailModifiers fields:AnyFieldAccess* {
+  / "/"? "show" _ varRef:VariableNoTail {
       // show with simple variable
-      const varRef = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-      
       return [helpers.createNode(NodeType.Directive, {
         kind: 'show',
         subtype: 'showVariable',
@@ -502,7 +485,7 @@ WhenActionDirective
           variable: [varRef]
         },
         raw: { 
-          variable: '@' + id
+          variable: '@' + varRef.identifier
         },
         meta: {},
         location: location()

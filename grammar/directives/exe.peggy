@@ -399,20 +399,14 @@ SlashExe
       );
     }
   // Section executable: /exec name(params) = [@file # @section] [as @newheader]
-  / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "[" _ "@" pathParam:BaseIdentifier fields:AnyFieldAccess* _ "#" _ section:SectionIdentifier _ "]" rename:ExecAsNewTitle? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
-      helpers.debug('SlashExe matched section executable', { id, params, pathParam, section, rename, trust });
+  / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "[" _ pathVar:VariableNoTail _ "#" _ section:SectionIdentifier _ "]" rename:ExecAsNewTitle? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+      helpers.debug('SlashExe matched section executable', { id, params, pathVar, section, rename, trust });
       
       // Create identifier node
       const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
       
       // Process parameters
       const processedParams = params || [];
-      
-      // Create variable reference node for path
-      const pathVar = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: pathParam,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
       
       // Build values and raw objects
       const values = {
@@ -672,11 +666,8 @@ ResolverPathPattern
 
 // ExecResolverPayload - optional payload syntax: { @variable }
 ExecResolverPayload
-  = _ "{" _ "@" varName:BaseIdentifier fields:AnyFieldAccess* _ "}" {
-      return [helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: varName,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location())];
+  = _ "{" _ varRef:VariableNoTail _ "}" {
+      return [varRef];
     }
 
 // AsNewTitle pattern for exec section renaming - supports both literals and variables
@@ -684,9 +675,6 @@ ExecAsNewTitle
   = _ "as" _ title:LiteralContent {
       return title;
     }
-  / _ "as" _ "@" varName:BaseIdentifier fields:AnyFieldAccess* {
-      return [helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: varName,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location())];
+  / _ "as" _ varRef:VariableNoTail {
+      return [varRef];
     }

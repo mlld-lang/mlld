@@ -292,17 +292,9 @@ UnquotedPathPart
   / UnquotedPathVar
   / UnquotedPathText
 
-// Variable reference in unquoted paths - without VariableContext check
+// Variable reference in unquoted paths - use unified pattern
 UnquotedPathVar
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
-      const normalizedId = helpers.normalizePathVar(id);
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-      helpers.debug('CreateVAR in UnquotedPath', { id: normalizedId, node, fields: fields });
-      return node;
-    }
+  = VariableNoTail
 
 // Text segment for unquoted paths - handles @ when not a valid variable
 UnquotedPathText "Unquoted path text"

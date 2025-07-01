@@ -263,25 +263,40 @@ OutputExecInvocation
 
 // Variable reference with optional arguments (includes templates and commands)
 OutputVariable
-  = "@" identifier:BaseIdentifier fields:AnyFieldAccess* args:OutputArguments? !("|" / "with" / "trust" / "needs") {
-      const hasArgs = args && args.length > 0;
-      const isTemplate = hasArgs; // With args, it's a template/command invocation
+  = ref:UnifiedReferenceNoTail !("|" / "with" / "trust" / "needs") {
+      // Handle both ExecInvocation and VariableReference types from unified patterns
+      let values, raw, subtype;
       
-      const values = {
-        identifier: [helpers.createNode(NodeType.Text, { content: identifier, location: location() })],
-        ...(fields && fields.length > 0 ? { fields } : {}),
-        ...(hasArgs ? { args } : {})
-      };
-      
-      const raw = {
-        identifier,
-        ...(fields && fields.length > 0 ? { fields: fields.map(f => f.value) } : {}),
-        ...(hasArgs ? { args: args.map(arg => helpers.reconstructRawString([arg])) } : {})
-      };
+      if (ref.type === 'ExecInvocation') {
+        // Function/method call with arguments
+        values = {
+          identifier: ref.commandRef.identifier,
+          args: ref.commandRef.args || []
+        };
+        raw = {
+          identifier: ref.commandRef.name,
+          args: ref.commandRef.args ? ref.commandRef.args.map(arg => 
+            arg.type === NodeType.Text ? arg.content : 
+            arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''
+          ) : []
+        };
+        subtype = 'outputInvocation';
+      } else {
+        // Plain variable reference
+        values = {
+          identifier: [ref],
+          args: []
+        };
+        raw = {
+          identifier: ref.identifier,
+          ...(ref.fields && ref.fields.length > 0 ? { fields: ref.fields.map(f => f.value) } : {})
+        };
+        subtype = 'outputVariable';
+      }
       
       return {
         type: 'variable',
-        subtype: hasArgs ? 'outputInvocation' : 'outputVariable',
+        subtype,
         values,
         raw
       };

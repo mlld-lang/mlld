@@ -413,13 +413,9 @@ RunCommandArgument
       // Special variables like @INPUT work without context
       return varRef;
     }
-  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
+  / varRef:VariableNoTail {
       // Direct variable reference without context check for arguments
-      const normalizedId = helpers.normalizePathVar(id);
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
+      return varRef;
     }
   / val:$([^,)]+) {
       // Plain value - create a Text node directly
