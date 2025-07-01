@@ -86,6 +86,19 @@ const identifierNodes = directive.values?.identifier;
 const identifier = await interpolate(identifierNodes, env);
 ```
 
+## CRITICAL: When the AST Seems Unclear
+**When working in the interpreter, FOLLOW THE AST, and DON'T accommodate broken data structures. If you feel you're shoehorning the AST in, 
+STOP! All clarity in mlld flows from our highly intentful grammar and AST.**
+
+**Red flags that indicate AST problems, not interpreter problems:**
+- Manual type checking with `typeof` and `instanceof`
+- Converting between data structures (e.g., arrays to strings)
+- Different handling for "similar" operations in different contexts
+- Complex conditional logic to handle multiple data formats
+- Adding "accommodation code" or "workaround logic"
+
+**When you see these patterns: STOP. Investigate how to the grammar/AST first.**
+
 ## Mlld Syntax Rules
 
 **Mlld is a scripting language embedded in Markdown documents** - it enhances Markdown with dynamic content generation while preserving the readability of the source document.

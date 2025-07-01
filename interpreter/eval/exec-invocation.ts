@@ -60,9 +60,13 @@ export async function evaluateExecInvocation(
     if (process.env.DEBUG_EXEC) {
       console.log('DEBUG: Object reference in exec invocation', {
         objectRef: objectRef.identifier,
+        objectVarType: objectVar.type,
+        objectVarValue: typeof objectVar.value,
+        objectVarIsComplex: (objectVar as any).isComplex,
         objectValueType: typeof objectValue,
         isString: typeof objectValue === 'string',
-        objectKeys: typeof objectValue === 'object' && objectValue !== null ? Object.keys(objectValue) : 'not-object'
+        objectKeys: typeof objectValue === 'object' && objectValue !== null ? Object.keys(objectValue) : 'not-object',
+        objectValue: typeof objectValue === 'object' && objectValue !== null ? JSON.stringify(objectValue, null, 2).substring(0, 500) : objectValue
       });
     }
     
@@ -71,8 +75,23 @@ export async function evaluateExecInvocation(
       // Navigate through nested fields
       let currentValue = objectValue;
       for (const field of objectRef.fields) {
+        if (process.env.DEBUG_EXEC) {
+          console.log('DEBUG: Accessing field', {
+            fieldType: field.type,
+            fieldValue: field.value,
+            currentValueType: typeof currentValue,
+            currentValueKeys: typeof currentValue === 'object' && currentValue !== null ? Object.keys(currentValue) : 'not-object'
+          });
+        }
         if (typeof currentValue === 'object' && currentValue !== null) {
           currentValue = (currentValue as any)[field.value];
+          if (process.env.DEBUG_EXEC) {
+            console.log('DEBUG: Field access result', {
+              fieldValue: field.value,
+              resultType: typeof currentValue,
+              resultKeys: typeof currentValue === 'object' && currentValue !== null ? Object.keys(currentValue) : 'not-object'
+            });
+          }
         } else {
           throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
         }
@@ -80,27 +99,7 @@ export async function evaluateExecInvocation(
       // Now access the command field
       if (typeof currentValue === 'object' && currentValue !== null) {
         const fieldValue = (currentValue as any)[commandName];
-        // Check if this is a raw executable object that needs conversion
-        if (fieldValue && typeof fieldValue === 'object' && fieldValue.__executable) {
-          // Convert raw executable to ExecutableVariable
-          const { createExecutableVariable } = await import('@core/types/variable');
-          variable = createExecutableVariable(
-            commandName,
-            fieldValue.value.type,
-            fieldValue.value.template,
-            fieldValue.paramNames || [],
-            fieldValue.value.language,
-            {
-              directive: 'exec',
-              syntax: 'code',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            fieldValue.metadata
-          );
-        } else {
-          variable = fieldValue;
-        }
+        variable = fieldValue;
       }
     } else {
       // Direct field access on the object
@@ -113,27 +112,7 @@ export async function evaluateExecInvocation(
           fieldValue = (objectValue as any)[commandName];
         }
         
-        // Check if this is a raw executable object that needs conversion
-        if (fieldValue && typeof fieldValue === 'object' && fieldValue.__executable) {
-          // Convert raw executable to ExecutableVariable
-          const { createExecutableVariable } = await import('@core/types/variable');
-          variable = createExecutableVariable(
-            commandName,
-            fieldValue.value.type,
-            fieldValue.value.template,
-            fieldValue.paramNames || [],
-            fieldValue.value.language,
-            {
-              directive: 'exec',
-              syntax: 'code',
-              hasInterpolation: false,
-              isMultiLine: false
-            },
-            fieldValue.metadata
-          );
-        } else {
-          variable = fieldValue;
-        }
+        variable = fieldValue;
       }
     }
     

@@ -188,6 +188,16 @@ export async function evaluateDataValue(
     return result.value;
   }
   
+  // Handle executable code objects (from imported executable variables)
+  if (value && typeof value === 'object' && 
+      (value.type === 'code' || value.type === 'command') && 
+      ('template' in value || 'codeTemplate' in value || 'commandTemplate' in value)) {
+    // This is an executable variable definition - return it as-is
+    // It will be handled by the execution system when invoked
+    // Note: Some have paramNames, others don't - both are valid executable structures
+    return value;
+  }
+  
   // Handle arrays
   if (Array.isArray(value)) {
     const evaluatedArray = [];

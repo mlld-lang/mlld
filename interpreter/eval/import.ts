@@ -43,6 +43,16 @@ function resolveObjectReferences(
   if (typeof value === 'object' && value.type === 'VariableReference' && value.identifier) {
     const varName = value.identifier;
     const referencedVar = childVars.get(varName);
+    
+    if (process.env.DEBUG_EXEC) {
+      console.log('DEBUG: resolveObjectReferences found VariableReference AST node:', {
+        varName,
+        found: !!referencedVar,
+        referencedVarType: referencedVar?.type,
+        availableVars: Array.from(childVars.keys())
+      });
+    }
+    
     if (referencedVar) {
       // For executables, we need to export them with the proper structure
       if (referencedVar.type === 'executable') {
@@ -58,9 +68,12 @@ function resolveObjectReferences(
         // For other variable types, return the value directly
         return referencedVar.value;
       }
+    } else {
+      if (process.env.DEBUG_EXEC) {
+        console.log('DEBUG: VariableReference AST node not found during import resolution:', varName);
+      }
+      throw new Error(`Variable reference @${varName} not found during import`);
     }
-    // If not found, return the original node
-    return value;
   }
   
   if (typeof value === 'object') {
@@ -89,6 +102,17 @@ function resolveObjectReferences(
   if (typeof value === 'string' && value.startsWith('@')) {
     const varName = value.substring(1); // Remove @ prefix
     const referencedVar = childVars.get(varName);
+    
+    if (process.env.DEBUG_EXEC) {
+      console.log('DEBUG: resolveObjectReferences looking for variable:', {
+        originalValue: value,
+        varName,
+        found: !!referencedVar,
+        referencedVarType: referencedVar?.type,
+        availableVars: Array.from(childVars.keys())
+      });
+    }
+    
     if (referencedVar) {
       // For executables, we need to export them with the proper structure
       if (referencedVar.type === 'executable') {
@@ -103,6 +127,10 @@ function resolveObjectReferences(
       } else {
         // For other variable types, return the value directly
         return referencedVar.value;
+      }
+    } else {
+      if (process.env.DEBUG_EXEC) {
+        console.log('DEBUG: Variable not found during import resolution:', varName);
       }
     }
   }
@@ -221,7 +249,28 @@ function createVariableFromValue(
     processedValue = String(value);
   }
   
-  // Use createImportedVariable to preserve the original type info
+  // For object types, create an ObjectVariable to preserve field access capability
+  // This fixes issue #299 where imported objects with function properties 
+  // cannot be accessed via dot notation
+  if (originalType === 'object') {
+    // Check if the object contains complex AST nodes that need evaluation
+    const isComplex = hasComplexContent(processedValue);
+    
+    return createObjectVariable(
+      name,
+      processedValue,
+      isComplex, // Mark as complex if it contains AST nodes
+      source,
+      {
+        ...metadata,
+        isImported: true,
+        importPath,
+        originalName: originalName !== name ? originalName : undefined
+      }
+    );
+  }
+  
+  // For non-objects, use createImportedVariable to preserve the original type info
   return createImportedVariable(
     name,
     processedValue,
@@ -232,6 +281,39 @@ function createVariableFromValue(
     source,
     metadata
   );
+}
+
+/**
+ * Check if a value contains complex AST nodes that need evaluation
+ */
+function hasComplexContent(value: any): boolean {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+  
+  // Check if this is an AST node with a type
+  if (value.type) {
+    return true;
+  }
+  
+  // Check if it has __executable objects (from resolved executables)
+  if (value.__executable) {
+    return true;
+  }
+  
+  // Recursively check arrays
+  if (Array.isArray(value)) {
+    return value.some(item => hasComplexContent(item));
+  }
+  
+  // Recursively check object properties
+  for (const prop of Object.values(value)) {
+    if (hasComplexContent(prop)) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 /**
@@ -651,29 +733,8 @@ export async function evaluateImport(
   const pathNode = pathNodes[0]; // Assuming single path node for imports
   const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
   
-  // Handle prefixed module references: if first node is VariableReference, treat as @prefix
-  // This ensures Postel's Law for @prefixes - if a user quotes "@prefix/whatever" this will still resolve
-  // even though @prefixes should not be quoted
-  let importPath: string;
-  if (pathNodes.length > 0 && pathNodes[0].type === 'VariableReference') {
-    const varRef = pathNodes[0] as any;
-    // First try to resolve as a regular variable (for cases like @configPath)
-    const variable = env.getVariable(varRef.identifier);
-    if (variable) {
-      // This is a real variable reference, use normal interpolation
-      importPath = (await interpolate(pathNodes, env)).trim();
-    } else {
-      // Variable not found, assume this is a module prefix reference
-      // Reconstruct the full module path with @ prefix for resolver system
-      const prefix = `@${varRef.identifier}`;
-      const remainingNodes = pathNodes.slice(1);
-      const remainingPath = remainingNodes.length > 0 ? await interpolate(remainingNodes, env) : '';
-      importPath = (prefix + remainingPath).trim();
-    }
-  } else {
-    // Regular path interpolation for non-module references
-    importPath = (await interpolate(pathNodes, env)).trim();
-  }
+  // Regular path interpolation - let variable resolution fail properly for quoted @prefixes
+  const importPath = (await interpolate(pathNodes, env)).trim();
   let resolvedPath: string;
   
   // Check if this is a module reference (@prefix/ pattern)

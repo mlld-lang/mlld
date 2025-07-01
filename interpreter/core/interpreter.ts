@@ -525,12 +525,24 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
   } else if (isStructured(variable)) {
     // Object and array variables
     const complexFlag = (variable as any).isComplex;
+    
+    // Debug logging for object resolution
+    if (process.env.DEBUG_EXEC) {
+      console.log('DEBUG: resolveVariableValue for structured variable:', {
+        variableName: variable.name,
+        variableType: variable.type,
+        isComplex: complexFlag,
+        valueType: typeof variable.value,
+        hasTypeProperty: variable.value && typeof variable.value === 'object' && 'type' in variable.value
+      });
+    }
+    
     if (complexFlag) {
       // Complex data needs evaluation
       const evaluatedValue = await evaluateDataValue(variable.value, env);
       
       // Debug logging
-      if (process.env.MLLD_DEBUG === 'true') {
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
         console.log('resolveVariableValue - evaluated complex data:', {
           variableName: variable.name,
           evaluatedValue,
@@ -702,8 +714,7 @@ export async function interpolate(
       
       
       if (!variable) {
-        // TODO: Should we throw in strict mode?
-        parts.push(`${varName}`); // Keep unresolved
+        parts.push(`${varName}`); // Keep unresolved - will be caught by Environment.ts strict checks
         continue;
       }
       
