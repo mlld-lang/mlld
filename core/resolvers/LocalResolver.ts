@@ -194,7 +194,12 @@ export class LocalResolver implements Resolver {
               
               throw new MlldFileNotFoundError(
                 `File not found: ${relativePath}\n\nDid you mean:\n${suggestions}`,
-                fullPath
+                {
+                  details: {
+                    filePath: relativePath,
+                    operation: 'resolve'
+                  }
+                }
               );
             }
           }
@@ -265,7 +270,12 @@ export class LocalResolver implements Resolver {
       if (error.code === 'ENOENT' || error.message?.includes('File not found')) {
         throw new MlldFileNotFoundError(
           `File not found: ${relativePath}`,
-          fullPath
+          {
+            details: {
+              filePath: relativePath,
+              operation: 'resolve'
+            }
+          }
         );
       }
       throw ResolverError.resolutionFailed(

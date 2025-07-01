@@ -358,7 +358,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     if (!variable) {
       // For interpolation variables, return empty if not found
       if (node.valueType === 'varInterpolation') {
-        return { value: `{{${node.identifier}}}`, env };
+        return { value: `${node.identifier}`, env };
       }
       throw new Error(`Variable not found: ${node.identifier}`);
     }
@@ -703,7 +703,7 @@ export async function interpolate(
       
       if (!variable) {
         // TODO: Should we throw in strict mode?
-        parts.push(`{{${varName}}}`); // Keep unresolved
+        parts.push(`${varName}`); // Keep unresolved
         continue;
       }
       

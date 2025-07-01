@@ -816,3 +816,65 @@ Files and URLs are treated equally as "paths":
 - Comprehensive error messages with resolver attribution
 - Consistent configuration patterns across resolver types
 - Context-aware behavior matches user expectations
+- Liberal import syntax following Postel's Law (see below)
+
+## Liberal Import Syntax (Postel's Law)
+
+mlld follows Postel's Law ("be liberal in what you accept") for module import syntax. Both quoted and unquoted module references work:
+
+```mlld
+// Both of these work identically:
+/import { test } from @local/test      // Correct syntax (unquoted)
+/import { test } from "@local/test"    // Liberal syntax (quoted) 
+```
+
+### Implementation Details
+
+The liberal parsing is implemented surgically in the import path evaluator:
+
+1. **Smart Variable Resolution**: When encountering `@local` in an import path:
+   - First attempts to resolve as a variable (for legitimate cases like `@configPath`)
+   - If no variable found, assumes it's a module prefix and reconstructs the full path
+
+2. **Context-Specific**: The liberal behavior only applies to import contexts, not general variable interpolation:
+   ```mlld
+   /import { x } from "@local/test"  // Liberal: becomes @local/test
+   /show "@local is: @local"         // Normal: @local interpolated as variable
+   ```
+
+3. **Preserves Semantics**: Variable references in import paths still work correctly:
+   ```mlld
+   /path @configPath = [config.mld]
+   /import [@configPath] as config    // @configPath resolved as variable
+   ```
+
+### Benefits
+
+- **Reduced friction**: Copy/paste from examples with quotes "just works"
+- **Fewer error messages**: Less interruption to developer flow  
+- **Intuitive behavior**: System figures out user intent
+- **Backward compatible**: Existing unquoted syntax continues to work
+
+### Technical Implementation
+
+The logic is in `interpreter/eval/import.ts` where import paths are reconstructed:
+
+```typescript
+// Smart prefix detection in import paths
+if (pathNodes.length > 0 && pathNodes[0].type === 'VariableReference') {
+  const varRef = pathNodes[0];
+  const variable = env.getVariable(varRef.identifier);
+  
+  if (variable) {
+    // Real variable reference - use normal interpolation
+    importPath = await interpolate(pathNodes, env);
+  } else {
+    // Variable not found - assume module prefix reference
+    const prefix = `@${varRef.identifier}`;
+    const remainingPath = await interpolate(pathNodes.slice(1), env);
+    importPath = prefix + remainingPath;
+  }
+}
+```
+
+This approach ensures that both legitimate variable references and module prefixes work correctly in import contexts.

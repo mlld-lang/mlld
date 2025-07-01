@@ -651,8 +651,29 @@ export async function evaluateImport(
   const pathNode = pathNodes[0]; // Assuming single path node for imports
   const isURL = pathNode?.subtype === 'urlPath' || pathNode?.subtype === 'urlSectionPath';
   
-  // Resolve the import path (handles both file paths and URLs)
-  const importPath = (await interpolate(pathNodes, env)).trim();
+  // Handle prefixed module references: if first node is VariableReference, treat as @prefix
+  // This ensures Postel's Law for @prefixes - if a user quotes "@prefix/whatever" this will still resolve
+  // even though @prefixes should not be quoted
+  let importPath: string;
+  if (pathNodes.length > 0 && pathNodes[0].type === 'VariableReference') {
+    const varRef = pathNodes[0] as any;
+    // First try to resolve as a regular variable (for cases like @configPath)
+    const variable = env.getVariable(varRef.identifier);
+    if (variable) {
+      // This is a real variable reference, use normal interpolation
+      importPath = (await interpolate(pathNodes, env)).trim();
+    } else {
+      // Variable not found, assume this is a module prefix reference
+      // Reconstruct the full module path with @ prefix for resolver system
+      const prefix = `@${varRef.identifier}`;
+      const remainingNodes = pathNodes.slice(1);
+      const remainingPath = remainingNodes.length > 0 ? await interpolate(remainingNodes, env) : '';
+      importPath = (prefix + remainingPath).trim();
+    }
+  } else {
+    // Regular path interpolation for non-module references
+    importPath = (await interpolate(pathNodes, env)).trim();
+  }
   let resolvedPath: string;
   
   // Check if this is a module reference (@prefix/ pattern)

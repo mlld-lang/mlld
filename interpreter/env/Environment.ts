@@ -899,6 +899,25 @@ export class Environment {
       return resolverVar;
     }
     
+    // TODO: implement in strict mode
+    // Check if this might be a prefix being used as a variable
+    // This helps catch common mistakes like using "@local/test" (quoted) instead of @local/test
+    // const resolverManager = this.getResolverManager();
+    // if (resolverManager) {
+    //   const prefixConfigs = resolverManager.getPrefixConfigs();
+    //   const matchingPrefix = prefixConfigs.find(config => {
+    //     // Remove trailing slash from prefix for comparison
+    //     const prefixName = config.prefix.replace(/^@/, '').replace(/\/$/, '');
+    //     return prefixName === name;
+    //   });
+    //   
+    //   if (matchingPrefix) {
+    //     throw new Error(
+    //       `Variable @${name} not found: You're probably trying to use the prefix @${name}/ but inside quotes, mlld thinks it's a common @variable. Remove the quotes and it will probably work. See https://mlld.ai/docs/resolvers`
+    //     );
+    //   }
+    // }
+    
     return undefined;
   }
 
