@@ -60,15 +60,31 @@ PipelineCommandList
 
 // Single pipeline command (command reference with @input support)
 PipelineCommand
-  = "@" ref:RunCommandReference {
-      helpers.debug('PipelineCommand matched', { ref });
-      return {
-        identifier: ref.identifier,
-        args: ref.args || [],
-        fields: ref.fields || [],
-        rawIdentifier: ref.rawIdentifier,
-        rawArgs: ref.rawArgs || []
-      };
+  = ref:UnifiedReferenceNoTail {
+      helpers.debug('PipelineCommand matched unified reference', { ref });
+      
+      // Handle both ExecInvocation and VariableReference types from unified patterns
+      if (ref.type === 'ExecInvocation') {
+        return {
+          identifier: ref.commandRef.identifier,
+          args: ref.commandRef.args || [],
+          fields: [],
+          rawIdentifier: ref.commandRef.name,
+          rawArgs: ref.commandRef.args ? ref.commandRef.args.map(arg => 
+            arg.type === NodeType.Text ? arg.content : 
+            arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''
+          ) : []
+        };
+      } else {
+        // Plain variable reference
+        return {
+          identifier: [ref],
+          args: [],
+          fields: ref.fields || [],
+          rawIdentifier: ref.identifier,
+          rawArgs: []
+        };
+      }
     }
 
 // -------------------------------------------------------------

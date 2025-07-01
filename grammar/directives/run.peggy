@@ -143,32 +143,74 @@ SlashRun
         'code'
       );
     }
-  / DirectiveContext "/run" _ security:(SecurityOptions _)? "@" commandRef:RunCommandReference tail:TailModifiers? comment:InlineComment? {
+  / DirectiveContext "/run" _ security:(SecurityOptions _)? commandRef:UnifiedReferenceWithTail comment:InlineComment? {
       // @ detected -> Command reference (exec)
       const securityOptions = security ? security[0] : null;
-      helpers.debug('SlashRun matched command reference', { commandRef, securityOptions, tail });
+      helpers.debug('SlashRun matched unified command reference', { commandRef, securityOptions });
       
-      const values = {
-        identifier: commandRef.identifier,
-        args: commandRef.args || []
-      };
+      // Handle both ExecInvocation and VariableReference types from unified patterns
+      let values, raw, meta;
       
-      const raw = {
-        identifier: commandRef.rawIdentifier,
-        args: commandRef.rawArgs || []
-      };
-      
-      const meta = {
-        argumentCount: commandRef.args ? commandRef.args.length : 0,
-        ...helpers.createSecurityMeta(securityOptions),
-        ...(comment ? { comment } : {})
-      };
-      
-      // Add withClause from tail if present
-      if (tail) {
-        values.withClause = tail;
-        raw.withClause = tail;
-        meta.withClause = tail;
+      if (commandRef.type === 'ExecInvocation') {
+        values = {
+          identifier: commandRef.commandRef.identifier,
+          args: commandRef.commandRef.args || []
+        };
+        raw = {
+          identifier: commandRef.commandRef.name,
+          args: commandRef.commandRef.args ? commandRef.commandRef.args.map(arg => 
+            arg.type === NodeType.Text ? arg.content : 
+            arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''
+          ) : []
+        };
+        meta = {
+          argumentCount: commandRef.commandRef.args ? commandRef.commandRef.args.length : 0,
+          ...helpers.createSecurityMeta(securityOptions),
+          ...(comment ? { comment } : {})
+        };
+        
+        // Add withClause from unified pattern
+        if (commandRef.withClause) {
+          values.withClause = commandRef.withClause;
+          raw.withClause = commandRef.withClause;
+          meta.withClause = commandRef.withClause;
+        }
+      } else if (commandRef.type === 'VariableReferenceWithTail') {
+        // Handle variable with tail modifiers
+        values = {
+          identifier: [commandRef.variable],
+          args: []
+        };
+        raw = {
+          identifier: commandRef.variable.identifier,
+          args: []
+        };
+        meta = {
+          argumentCount: 0,
+          ...helpers.createSecurityMeta(securityOptions),
+          ...(comment ? { comment } : {})
+        };
+        
+        if (commandRef.withClause) {
+          values.withClause = commandRef.withClause;
+          raw.withClause = commandRef.withClause;
+          meta.withClause = commandRef.withClause;
+        }
+      } else {
+        // Plain variable reference without tail
+        values = {
+          identifier: [commandRef],
+          args: []
+        };
+        raw = {
+          identifier: commandRef.identifier,
+          args: []
+        };
+        meta = {
+          argumentCount: 0,
+          ...helpers.createSecurityMeta(securityOptions),
+          ...(comment ? { comment } : {})
+        };
       }
       
       return helpers.createStructuredDirective(
@@ -280,25 +322,51 @@ RunDirectiveRef
         'code'
       );
     }
-  / "@" commandRef:RunCommandReference {
+  / commandRef:UnifiedReferenceNoTail {
       // @ detected -> Command reference (exec) in RHS
-      helpers.debug('RunDirectiveRef matched exec reference in RHS', { commandRef });
+      helpers.debug('RunDirectiveRef matched unified exec reference in RHS', { commandRef });
+      
+      // Handle both ExecInvocation and VariableReference types from unified patterns
+      let values, raw, meta;
+      
+      if (commandRef.type === 'ExecInvocation') {
+        values = {
+          identifier: commandRef.commandRef.identifier,
+          args: commandRef.commandRef.args || []
+        };
+        raw = {
+          identifier: commandRef.commandRef.name,
+          args: commandRef.commandRef.args ? commandRef.commandRef.args.map(arg => 
+            arg.type === NodeType.Text ? arg.content : 
+            arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''
+          ) : []
+        };
+        meta = {
+          argumentCount: commandRef.commandRef.args ? commandRef.commandRef.args.length : 0,
+          isRHSRef: true
+        };
+      } else {
+        // Plain variable reference
+        values = {
+          identifier: [commandRef],
+          args: []
+        };
+        raw = {
+          identifier: commandRef.identifier,
+          args: []
+        };
+        meta = {
+          argumentCount: 0,
+          isRHSRef: true
+        };
+      }
       
       return helpers.createStructuredDirective(
         'run',
         'runExec',
-        {
-          identifier: commandRef.identifier,
-          args: commandRef.args || []
-        },
-        {
-          identifier: commandRef.rawIdentifier,
-          args: commandRef.rawArgs || []
-        },
-        {
-          argumentCount: commandRef.args ? commandRef.args.length : 0,
-          isRHSRef: true
-        },
+        values,
+        raw,
+        meta,
         location(),
         'exec'
       );
@@ -323,37 +391,6 @@ RunDirectiveRef
 // HELPER RULES
 // -------------------------------------------------------------
 
-// Command reference structure (for /run @command with field access support)
-RunCommandReference
-  = identifier:BaseIdentifier fields:AnyFieldAccess* _ args:RunCommandArguments? {
-      // Process arguments if present
-      const processedArgs = args || [];
-      const rawArgs = processedArgs.map(arg => {
-        // Handle Argument nodes
-        if (arg.type === NodeType.Argument && arg.value) {
-          if (arg.value.type === NodeType.Text) return arg.value.content;
-          if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
-        }
-        // Legacy handling for unwrapped nodes (shouldn't happen with new grammar)
-        if (arg.type === NodeType.Text) return arg.content;
-        if (arg.type === NodeType.VariableReference) return '@' + arg.identifier;
-        return '';
-      });
-      
-      // Create a variable reference node with field access support
-      const varRef = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: identifier,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-      
-      return {
-        identifier: [varRef],
-        rawIdentifier: identifier,
-        fields: fields,
-        args: processedArgs,
-        rawArgs: rawArgs
-      };
-    }
 
 // Arguments for command references
 RunCommandArguments

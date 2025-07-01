@@ -289,20 +289,41 @@ OutputVariable
 
 // Command reference (for exec commands)
 OutputCommand
-  = "@run" _ "@" commandRef:OutputCommandReference {
-      helpers.debug('OutputCommand matched', { commandRef });
+  = "@run" _ commandRef:UnifiedReferenceNoTail {
+      helpers.debug('OutputCommand matched unified reference', { commandRef });
+      
+      // Handle both ExecInvocation and VariableReference types from unified patterns
+      let values, raw;
+      
+      if (commandRef.type === 'ExecInvocation') {
+        values = {
+          identifier: commandRef.commandRef.identifier,
+          args: commandRef.commandRef.args || []
+        };
+        raw = {
+          identifier: commandRef.commandRef.name,
+          args: commandRef.commandRef.args ? commandRef.commandRef.args.map(arg => 
+            arg.type === NodeType.Text ? arg.content : 
+            arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''
+          ) : []
+        };
+      } else {
+        // Plain variable reference
+        values = {
+          identifier: [commandRef],
+          args: []
+        };
+        raw = {
+          identifier: commandRef.identifier,
+          args: []
+        };
+      }
       
       return {
         type: 'command',
         subtype: 'outputCommand',
-        values: {
-          identifier: commandRef.identifier,
-          args: commandRef.args || []
-        },
-        raw: {
-          identifier: commandRef.rawIdentifier,
-          args: commandRef.rawArgs || []
-        }
+        values,
+        raw
       };
     }
 
@@ -317,25 +338,6 @@ OutputLiteral
       };
     }
 
-// Command reference structure (similar to RunCommandReference)
-OutputCommandReference
-  = identifier:BaseIdentifier fields:AnyFieldAccess* _ args:OutputArguments? {
-      const processedArgs = args || [];
-      const rawArgs = processedArgs.map(arg => {
-        if (arg.type === 'Variable') {
-          return '@' + arg.identifier;
-        }
-        return arg.content || '';
-      });
-      
-      return {
-        identifier: [helpers.createNode(NodeType.Text, { content: identifier, location: location() })],
-        ...(fields && fields.length > 0 ? { fields } : {}),
-        args: processedArgs,
-        rawIdentifier: identifier,
-        rawArgs: rawArgs
-      };
-    }
 
 // Arguments for templates/commands
 OutputArguments

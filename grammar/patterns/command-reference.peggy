@@ -42,7 +42,7 @@ CommandArgument "command argument"
         location: location()
       });
     }
-  / varRef:CommandVariableReference {  // Use a specific rule for command context variables
+  / varRef:VariableNoTail {  // Use unified variable pattern for command context
       // Return the VariableReference directly
       return varRef;
     }
@@ -50,17 +50,6 @@ CommandArgument "command argument"
   / EscapedArgument      // Escaped characters in unquoted arguments
   / RawArgument          // Fallback for unquoted arguments
 
-// Variable reference in command arguments - handles field access
-CommandVariableReference "command variable reference"
-  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* {
-      const normalizedId = helpers.normalizePathVar(id);
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-      helpers.debug('CommandVariableReference', { id: normalizedId, fields: fields });
-      return node;
-    }
 
 // Nested function call in command arguments
 NestedExecInvocation "nested exec invocation"
