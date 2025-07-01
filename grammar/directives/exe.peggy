@@ -273,7 +273,7 @@ SlashExe
         'command'
       );
     }
-  / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@"? "/"? "run" _ "@" commandRef:CommandReference withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
+  / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@"? "/"? "run" _ "@" commandRef:UnifiedReferenceNoTail withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('SlashExe matched command reference', { id, params, commandRef, trust });
       
       // Create identifier node
@@ -283,19 +283,24 @@ SlashExe
       const processedParams = params || [];
       const rawParams = processedParams.map(p => p.name); // Extract parameter names for raw field
       
+      // Handle unified reference (exec invocation or variable)
+      const isExecInvocation = commandRef.type === 'ExecInvocation';
+      const refIdentifier = isExecInvocation ? commandRef.commandRef.identifier : commandRef.identifier;
+      const refArgs = isExecInvocation ? commandRef.commandRef.args : [];
+      
       // Build values and raw objects
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        commandRef: Array.isArray(commandRef.identifier) ? commandRef.identifier : [helpers.createNode(NodeType.Text, { content: commandRef.identifier, location: location() })],
-        args: commandRef.args || []
+        commandRef: [helpers.createNode(NodeType.Text, { content: refIdentifier, location: location() })],
+        args: refArgs || []
       };
       
       const raw = {
         identifier: id,
         params: rawParams,
-        commandRef: commandRef.name,
-        args: commandRef.args ? commandRef.args.map(arg => {
+        commandRef: refIdentifier,
+        args: refArgs ? refArgs.map(arg => {
           // Extract value from Argument node
           if (arg.value && arg.value.type === 'Text') {
             return arg.value.content;
@@ -309,7 +314,7 @@ SlashExe
       // Create meta object
       const metaObj = {
         parameterCount: processedParams.length,
-        argumentCount: commandRef.args ? commandRef.args.length : 0,
+        argumentCount: refArgs ? refArgs.length : 0,
         isCommandRef: true,
         ...helpers.createSecurityMeta({ trust })
       };

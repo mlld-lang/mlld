@@ -318,8 +318,8 @@ NonNegatedSimpleCondition
       }, loc);
       return [node];
     }
-  / "@" invocation:ExecInvocationWithTail {
-      // Exec invocation with tail modifiers
+  / "@" invocation:UnifiedReferenceWithTail {
+      // Unified reference (exec invocation or variable) with tail modifiers
       return [invocation];
     }
   / Variable {
@@ -370,8 +370,8 @@ NonNegatedCondition
       }, loc);
       return [node];
     }
-  / "@" invocation:ExecInvocationWithTail {
-      // Exec invocation with tail modifiers
+  / "@" invocation:UnifiedReferenceWithTail {
+      // Unified reference (exec invocation or variable) with tail modifiers
       return [invocation];
     }
   / Variable {
@@ -508,17 +508,21 @@ WhenActionDirective
         location: location()
       })];
     }
-  // show with exec invocation (function call with parentheses or tail modifiers)
-  / "/"? "show" _ "@" invocation:ExecInvocationWithTail {
-      // show with exec invocation
+  // show with unified reference (function call with parentheses or tail modifiers)
+  / "/"? "show" _ "@" invocation:UnifiedReferenceWithTail {
+      // show with unified reference (exec invocation or variable)
+      const isExecInvocation = invocation.type === 'ExecInvocation';
+      const subtype = isExecInvocation ? 'showExecInvocation' : 'showVariable';
+      const rawValue = isExecInvocation ? invocation.commandRef.name : `@${invocation.variable.identifier}`;
+      
       return [helpers.createNode(NodeType.Directive, {
         kind: 'show',
-        subtype: 'showExecInvocation',
+        subtype: subtype,
         values: { 
-          execInvocation: invocation
+          [isExecInvocation ? 'execInvocation' : 'variable']: invocation
         },
         raw: { 
-          execInvocation: invocation.commandRef.name 
+          [isExecInvocation ? 'execInvocation' : 'variable']: rawValue
         },
         meta: {},
         location: location()
@@ -554,16 +558,20 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "/"? "run" _ "@" invocation:ExecInvocationWithTail {
-      // run with exec invocation
+  / "/"? "run" _ "@" invocation:UnifiedReferenceWithTail {
+      // run with unified reference (exec invocation or variable)
+      const isExecInvocation = invocation.type === 'ExecInvocation';
+      const subtype = isExecInvocation ? 'runExecReference' : 'runVariable';
+      const rawValue = isExecInvocation ? invocation.commandRef.name : `@${invocation.variable.identifier}`;
+      
       return [helpers.createNode(NodeType.Directive, {
         kind: 'run',
-        subtype: 'runExecReference',
+        subtype: subtype,
         values: { 
-          execRef: invocation
+          [isExecInvocation ? 'execRef' : 'varRef']: invocation
         },
         raw: { 
-          execRef: invocation.commandRef.name 
+          [isExecInvocation ? 'execRef' : 'varRef']: rawValue
         },
         meta: {
           hasWithClause: !!invocation.withClause

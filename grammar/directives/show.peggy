@@ -358,13 +358,14 @@ SlashShow
         'variable'  // Added source parameter
       );
     }
-  // Exec invocation with tail modifiers - /show @command() | @modifiers
-  / DirectiveContext "/show" _ "@" invocation:ExecInvocationWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
-      helpers.debug('SlashShow matched exec invocation with tail modifiers', { invocation, headerLevel, underHeader });
+  // Unified reference (exec invocation or variable) with tail modifiers - /show @obj.method() | @modifiers
+  / DirectiveContext "/show" _ invocation:UnifiedReferenceWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+      helpers.debug('SlashShow matched unified reference with tail modifiers', { invocation, headerLevel, underHeader });
       
-      // Extract command reference info
-      const commandRef = invocation.commandRef;
-      const hasParentheses = commandRef.args !== null && commandRef.args !== undefined;
+      // Handle both ExecInvocation and VariableReferenceWithTail types
+      const isExecInvocation = invocation.type === 'ExecInvocation';
+      const commandRef = isExecInvocation ? invocation.commandRef : null;
+      const hasParentheses = isExecInvocation && commandRef.args !== null && commandRef.args !== undefined;
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
@@ -392,15 +393,20 @@ SlashShow
         })];
       }
       
-      // Create raw object
-      const raw = {
-        invocation: commandRef.name,
-        arguments: commandRef.args ? commandRef.args.map(arg => {
+      // Create raw object based on invocation type
+      const raw = {};
+      if (isExecInvocation) {
+        raw.invocation = commandRef.name;
+        raw.arguments = commandRef.args ? commandRef.args.map(arg => {
           if (arg.type === NodeType.Text) return arg.content;
           if (arg.type === NodeType.VariableReference) return `@${arg.identifier}`;
           return arg;
-        }).join(', ') : ''
-      };
+        }).join(', ') : '';
+      } else {
+        // VariableReferenceWithTail
+        const variable = invocation.variable || invocation;
+        raw.variable = `@${variable.identifier}${variable.fields ? variable.fields.map(f => `.${f.value || f.name || f.index}`).join('') : ''}`;
+      }
       
       // Add headerLevel and underHeader to raw if present
       if (headerLevelValue) {
@@ -411,15 +417,18 @@ SlashShow
         raw.underHeader = underHeaderValue;
       }
       
-      // Create meta object
+      // Create meta object based on invocation type
       const meta = {
         hasParentheses: hasParentheses,
-        argumentCount: commandRef.args ? commandRef.args.length : 0
+        argumentCount: isExecInvocation && commandRef.args ? commandRef.args.length : 0
       };
+      
+      // Determine subtype based on invocation type
+      const subtype = isExecInvocation ? 'showInvocation' : 'showVariable';
       
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
-        'showInvocation', 
+        subtype, 
         values, 
         raw, 
         meta, 

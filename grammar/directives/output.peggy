@@ -242,17 +242,21 @@ OutputSource
   / OutputCommand  
   / OutputLiteral
 
-// Exec invocation with tail modifiers
+// Unified reference (exec invocation or variable) with tail modifiers
 OutputExecInvocation
-  = "@" invocation:ExecInvocationWithTail {
+  = "@" invocation:UnifiedReferenceWithTail {
       helpers.debug('OutputExecInvocation matched', { invocation });
       
+      // Handle both ExecInvocation and VariableReferenceWithTail types
+      const isExecInvocation = invocation.type === 'ExecInvocation';
+      const rawValue = isExecInvocation ? invocation.commandRef.name : `@${invocation.variable.identifier}`;
+      
       return {
-        type: 'exec',
-        subtype: 'outputExecInvocation',
+        type: isExecInvocation ? 'exec' : 'variable',
+        subtype: isExecInvocation ? 'outputExecInvocation' : 'outputVariable',
         values: invocation,
         raw: {
-          commandName: invocation.commandRef.name
+          [isExecInvocation ? 'commandName' : 'variable']: rawValue
         }
       };
     }
