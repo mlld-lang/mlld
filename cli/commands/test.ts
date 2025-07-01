@@ -51,6 +51,60 @@ function extractTestResults(env: Environment): Record<string, boolean> {
 }
 
 /**
+ * Capture console output during test execution
+ */
+function captureConsoleOutput(fn: () => Promise<void>): Promise<{ output: string; error?: Error }> {
+  return new Promise((resolve) => {
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+    const originalConsoleWarn = console.warn;
+    const originalStdoutWrite = process.stdout.write;
+    const originalStderrWrite = process.stderr.write;
+    
+    let capturedOutput = '';
+    let caughtError: Error | undefined;
+    
+    // Capture all console outputs
+    const capture = (text: string) => {
+      capturedOutput += text + '\n';
+    };
+    
+    console.log = (...args) => capture(args.join(' '));
+    console.error = (...args) => capture(args.join(' '));
+    console.warn = (...args) => capture(args.join(' '));
+    
+    // Capture stdout/stderr writes
+    process.stdout.write = ((text: string) => {
+      capturedOutput += text;
+      return true;
+    }) as any;
+    
+    process.stderr.write = ((text: string) => {
+      capturedOutput += text;
+      return true;
+    }) as any;
+    
+    const restore = () => {
+      console.log = originalConsoleLog;
+      console.error = originalConsoleError;
+      console.warn = originalConsoleWarn;
+      process.stdout.write = originalStdoutWrite;
+      process.stderr.write = originalStderrWrite;
+    };
+    
+    fn()
+      .then(() => {
+        restore();
+        resolve({ output: capturedOutput.trim() });
+      })
+      .catch((error) => {
+        restore();
+        resolve({ output: capturedOutput.trim(), error });
+      });
+  });
+}
+
+/**
  * Run a single test file
  */
 async function runTestFile(file: string): Promise<TestResult> {
@@ -63,17 +117,35 @@ async function runTestFile(file: string): Promise<TestResult> {
     
     let capturedEnv: Environment | null = null;
     
-    await interpret(content, {
-      fileSystem,
-      pathService,
-      format: 'markdown',
-      basePath: path.dirname(file),
-      filePath: file,
-      captureEnvironment: (env) => { capturedEnv = env; },
-      useMarkdownFormatter: false,
-      approveAllImports: true, // Auto-approve imports for tests
-      devMode: true // Always run tests in dev mode for flexible path resolution
+    // Capture any console output during test execution
+    const { output, error } = await captureConsoleOutput(async () => {
+      await interpret(content, {
+        fileSystem,
+        pathService,
+        format: 'markdown',
+        basePath: path.dirname(file),
+        filePath: file,
+        captureEnvironment: (env) => { capturedEnv = env; },
+        useMarkdownFormatter: false,
+        approveAllImports: true, // Auto-approve imports for tests
+        devMode: true // Always run tests in dev mode for flexible path resolution
+      });
     });
+    
+    // If there was an error during execution, include the captured output
+    if (error) {
+      const duration = Date.now() - startTime;
+      let errorMessage = error.message;
+      if (output) {
+        errorMessage += '\n\nCaptured output:\n' + output;
+      }
+      return {
+        file,
+        tests: {},
+        duration,
+        error: errorMessage
+      };
+    }
     
     if (!capturedEnv) {
       throw new Error('Failed to capture environment from test execution');
@@ -233,7 +305,26 @@ function displaySummary(summary: TestSummary, duration: number, totalFiles: numb
     
     for (let i = 0; i < summary.parseErrors.length; i++) {
       const result = summary.parseErrors[i];
-      console.log(`${i + 1}. ${chalk.red(path.basename(result.file))} - ${chalk.red('Error:')} ${result.error}`);
+      const fileName = path.basename(result.file);
+      
+      // Split error message to separate main error from captured output
+      const errorParts = result.error?.split('\n\nCaptured output:\n') || ['Unknown error'];
+      const mainError = errorParts[0];
+      const capturedOutput = errorParts[1];
+      
+      console.log(`${i + 1}. ${chalk.red(fileName)} - ${chalk.red('Error:')} ${mainError}`);
+      
+      // If there's captured output, show it in a dimmed format
+      if (capturedOutput) {
+        console.log(chalk.dim('   Captured output:'));
+        const outputLines = capturedOutput.split('\n');
+        outputLines.forEach(line => {
+          if (line.trim()) {
+            console.log(chalk.dim(`   ${line}`));
+          }
+        });
+      }
+      
       console.log();
     }
   }

@@ -9,7 +9,7 @@
           "type": "input",
           "priority": 20,
           "config": {
-            "basePath": "./llm/modules"
+            "basePath": "./modules/llm/modules"
           }
         },
         {
@@ -20,14 +20,14 @@
           "config": {
             "repository": "adamavenir/private-modules",
             "branch": "main",
-            "basePath": "llm/modules"
+            "basePath": "modules/llm/modules"
           }
         },
         {
           "prefix": "@tests/",
           "resolver": "LOCAL",
           "config": {
-            "basePath": "llm/tests"
+            "basePath": "modules/llm/tests"
           }
         },
         {
@@ -48,7 +48,7 @@
           "prefix": "@modules/",
           "resolver": "LOCAL",
           "config": {
-            "basePath": "llm/modules"
+            "basePath": "modules/llm/modules"
           }
         }
       ]
