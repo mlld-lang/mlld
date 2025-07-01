@@ -492,7 +492,7 @@ WhenActionDirective
       })];
     }
   // show with unified reference (function call with parentheses or tail modifiers)
-  / "/"? "show" _ "@" invocation:UnifiedReferenceWithTail {
+  / "/"? "show" _ invocation:UnifiedReferenceWithTail {
       // show with unified reference (exec invocation or variable)
       const isExecInvocation = invocation.type === 'ExecInvocation';
       const subtype = isExecInvocation ? 'showExecInvocation' : 'showVariable';
@@ -541,7 +541,7 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "/"? "run" _ "@" invocation:UnifiedReferenceWithTail {
+  / "/"? "run" _ invocation:UnifiedReferenceWithTail {
       // run with unified reference (exec invocation or variable)
       const isExecInvocation = invocation.type === 'ExecInvocation';
       const subtype = isExecInvocation ? 'runExecReference' : 'runVariable';
