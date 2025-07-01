@@ -140,78 +140,81 @@ function formatTestName(name: string): string {
 }
 
 /**
- * Report test results with colors
+ * Simple static dots indicator for individual tests
  */
-function reportResults(results: TestResult[]): TestSummary {
-  const summary: TestSummary = {
-    total: 0,
-    passed: 0,
-    failed: 0,
-    skipped: 0,
-    errors: 0,
-    parseErrors: [],
-    successfulFiles: 0
-  };
-  
-  // Group results by directory
-  const byDirectory = new Map<string, TestResult[]>();
-  for (const result of results) {
-    const dir = path.dirname(result.file);
-    if (!byDirectory.has(dir)) {
-      byDirectory.set(dir, []);
-    }
-    byDirectory.get(dir)!.push(result);
+class InlineSpinner {
+  private filename: string;
+
+  constructor(filename: string) {
+    this.filename = filename;
   }
+
+  start() {
+    process.stdout.write(`  ${this.filename}...`);
+  }
+
+  stop(finalLine: string) {
+    // Clear the line and write the final result
+    process.stdout.write(`\r${finalLine}\n`);
+  }
+}
+
+/**
+ * Show spinner for a test that's about to run
+ */
+function startTestSpinner(relativePath: string): InlineSpinner {
+  const spinner = new InlineSpinner(relativePath);
+  spinner.start();
+  return spinner;
+}
+
+/**
+ * Complete a test and show the final result
+ */
+function completeTestResult(spinner: InlineSpinner, result: TestResult, summary: TestSummary): void {
+  const dir = path.dirname(result.file);
+  const relativePath = path.relative(dir, result.file);
   
-  console.log('\nRunning tests...\n');
-  
-  // Report results by directory
-  for (const [dir, dirResults] of byDirectory) {
-    console.log(chalk.dim(dir));
+  if (result.error) {
+    // Test file had an error - collect for summary but show minimal info here
+    spinner.stop(`  ${chalk.red('✗')} ${relativePath}`);
+    console.log(); // Add blank line after error
+    summary.errors++;
+    summary.parseErrors.push(result);
+  } else {
+    summary.successfulFiles++;
+    // Report individual test results
+    const testNames = Object.keys(result.tests).sort();
+    const allPassed = testNames.every(name => result.tests[name]);
     
-    for (const result of dirResults) {
-      const relativePath = path.relative(dir, result.file);
+    let finalLine: string;
+    if (testNames.length === 0) {
+      // File ran but no tests were found
+      finalLine = `  ${chalk.yellow('○')} ${relativePath} ${chalk.dim(`(${result.duration}ms) - no tests found`)}`;
+    } else if (allPassed) {
+      finalLine = `  ${chalk.green('✓')} ${relativePath} ${chalk.dim(`(${result.duration}ms)`)}`;
+    } else {
+      finalLine = `  ${chalk.red('✗')} ${relativePath} ${chalk.dim(`(${result.duration}ms)`)}`;
+    }
+    
+    spinner.stop(finalLine);
+    
+    // Show individual test results
+    for (const testName of testNames) {
+      const passed = result.tests[testName];
+      summary.total++;
       
-      if (result.error) {
-        // Test file had an error (likely parse error)
-        console.log(`  ${chalk.red('✗')} ${relativePath}`);
-        console.log(chalk.red(`    Error: ${result.error}`));
-        summary.errors++;
-        summary.parseErrors.push(result);
+      if (passed) {
+        console.log(`    ${chalk.green('✓')} ${chalk.dim(formatTestName(testName))}`);
+        summary.passed++;
       } else {
-        summary.successfulFiles++;
-        // Report individual test results
-        const testNames = Object.keys(result.tests).sort();
-        const allPassed = testNames.every(name => result.tests[name]);
-        
-        if (testNames.length === 0) {
-          // File ran but no tests were found
-          console.log(`  ${chalk.yellow('○')} ${relativePath} ${chalk.dim(`(${result.duration}ms) - no tests found`)}`);
-        } else if (allPassed) {
-          console.log(`  ${chalk.green('✓')} ${relativePath} ${chalk.dim(`(${result.duration}ms)`)}`);
-        } else {
-          console.log(`  ${relativePath} ${chalk.dim(`(${result.duration}ms)`)}`);
-        }
-        
-        for (const testName of testNames) {
-          const passed = result.tests[testName];
-          summary.total++;
-          
-          if (passed) {
-            console.log(`    ${chalk.green('✓')} ${chalk.dim(formatTestName(testName))}`);
-            summary.passed++;
-          } else {
-            console.log(`    ${chalk.red('✗')} ${formatTestName(testName)}`);
-            summary.failed++;
-          }
-        }
+        console.log(`    ${chalk.red('✗')} ${formatTestName(testName)}`);
+        summary.failed++;
       }
     }
     
-    console.log(); // Empty line between directories
+    console.log(); // Empty line after each test file
   }
-  
-  return summary;
 }
 
 /**
@@ -220,56 +223,63 @@ function reportResults(results: TestResult[]): TestSummary {
 function displaySummary(summary: TestSummary, duration: number, totalFiles: number) {
   const { total, passed, failed, errors, successfulFiles } = summary;
   
-  console.log(chalk.dim('─'.repeat(50)));
+  console.log('_'.repeat(50));
+  console.log();
   
+  // Show detailed errors if any
   if (errors > 0) {
-    console.log(chalk.red(`\n${errors} test file(s) failed to parse`));
+    const errorWord = errors === 1 ? 'error' : 'errors';
+    console.log(`${errors} ${errorWord}:\n`);
     
-    // Show parse error details
-    console.log('\nParse errors:');
-    for (const result of summary.parseErrors) {
-      console.log(`  ${chalk.red('✗')} ${result.file}`);
-      if (result.error) {
-        // Extract line/column info if available
-        const match = result.error.match(/at line (\d+), column (\d+)/);
-        if (match) {
-          console.log(`    ${chalk.dim(`Line ${match[1]}, Column ${match[2]}`)}`);
-        }
-      }
+    for (let i = 0; i < summary.parseErrors.length; i++) {
+      const result = summary.parseErrors[i];
+      console.log(`${i + 1}. ${chalk.red(path.basename(result.file))} - ${chalk.red('Error:')} ${result.error}`);
+      console.log();
     }
   }
   
+  console.log('_'.repeat(50));
+  console.log();
+  
+  // Calculate failed files (files with failed tests, not parse errors)
+  const failedFiles = totalFiles - successfulFiles - errors;
+  
+  // Format counts with proper alignment
+  const fileStats = [];
   if (successfulFiles > 0) {
-    console.log(`\n${chalk.green(successfulFiles)} file(s) ran successfully`);
+    fileStats.push(chalk.green(`${successfulFiles} passed`));
+  }
+  if (failedFiles > 0) {
+    fileStats.push(chalk.red(`${failedFiles} failed`));
+  }
+  if (errors > 0) {
+    fileStats.push(chalk.red(`${errors} errored`));
   }
   
-  if (total === 0 && errors === 0) {
-    console.log(chalk.yellow('\nNo tests found'));
-    return;
-  }
-  
-  const parts: string[] = [];
-  
+  const testStats = [];
   if (passed > 0) {
-    parts.push(chalk.green(`${passed} passed`));
+    testStats.push(chalk.green(`${passed} passed`));
   }
-  
   if (failed > 0) {
-    parts.push(chalk.red(`${failed} failed`));
+    testStats.push(chalk.red(`${failed} failed`));
   }
   
+  // Display formatted summary with proper right alignment
+  console.log(`${chalk.dim('Test Files'.padStart(10))}   ${fileStats.join('  |  ')}`);
   if (total > 0) {
-    const time = duration > 1000 ? `${(duration / 1000).toFixed(2)}s` : `${duration}ms`;
-    console.log(`\nTests: ${parts.join(', ')} (${total} total)`);
-    console.log(`Time:  ${time}`);
+    console.log(`${chalk.dim('Tests'.padStart(10))}   ${testStats.join('  |  ')}`);
   }
   
-  console.log(`\nSummary: ${totalFiles} file(s), ${successfulFiles} succeeded, ${errors} parse errors`);
+  const time = duration > 1000 ? `${(duration / 1000).toFixed(2)}s` : `${duration}ms`;
+  console.log(`${chalk.dim('Time'.padStart(10))}   ${time}`);
+  
+  console.log('_'.repeat(50));
   
   if (failed > 0 || errors > 0) {
     process.exitCode = 1;
   }
 }
+
 
 /**
  * Main test command handler
@@ -279,7 +289,6 @@ export async function testCommand(patterns: string[]) {
   
   try {
     // Discover test files
-    console.log('Discovering tests...');
     const testFiles = await discoverTests(patterns);
     
     if (testFiles.length === 0) {
@@ -290,24 +299,57 @@ export async function testCommand(patterns: string[]) {
       return;
     }
     
-    console.log(`Found ${testFiles.length} test file(s)`);
+    // Initialize summary
+    const summary: TestSummary = {
+      total: 0,
+      passed: 0,
+      failed: 0,
+      skipped: 0,
+      errors: 0,
+      parseErrors: [],
+      successfulFiles: 0
+    };
     
-    // Run tests sequentially (MVP phase)
-    const results: TestResult[] = [];
+    // Group test files by directory for display
+    const byDirectory = new Map<string, string[]>();
     for (const file of testFiles) {
-      const result = await runTestFile(file);
-      results.push(result);
+      const dir = path.dirname(file);
+      if (!byDirectory.has(dir)) {
+        byDirectory.set(dir, []);
+      }
+      byDirectory.get(dir)!.push(file);
     }
     
-    // Report results
-    const summary = reportResults(results);
+    console.log('Running tests...\n');
+    
+    // Run tests sequentially and report as they complete
+    for (const [dir, files] of byDirectory) {
+      console.log(chalk.dim(dir));
+      console.log(); // Add space after directory name
+      
+      for (const file of files) {
+        const relativePath = path.relative(dir, file);
+        const spinner = startTestSpinner(relativePath);
+        
+        const result = await runTestFile(file);
+        completeTestResult(spinner, result, summary);
+      }
+    }
     
     // Display summary
     const duration = Date.now() - startTime;
     displaySummary(summary, duration, testFiles.length);
     
+    // Workaround for Prettier hanging issue (see docs/dev/PRETTIER-HANGING-ISSUE.md)
+    // Force exit after a brief delay to ensure all output is flushed
+    setTimeout(() => {
+      process.exit(summary.failed > 0 || summary.errors > 0 ? 1 : 0);
+    }, 100);
+    
   } catch (error) {
     console.error(chalk.red('Error running tests:'), error);
     process.exitCode = 1;
+    // Force exit on error as well
+    setTimeout(() => process.exit(1), 100);
   }
 }
