@@ -13,14 +13,20 @@
 // Usage: foreach @command(@array1, @array2) 
 // Creates cartesian product when multiple arrays provided
 ForeachCommandExpression
-  = "foreach" _ cmd:UnifiedReferenceNoTail _ "(" _ arrays:ForeachArrayArgumentList _ ")" withClause:ForeachWithClause? {
-      helpers.debug('ForeachCommandExpression matched', { cmd, arrays, withClause });
+  = "foreach" _ execInvocation:UnifiedReferenceWithTail withClause:ForeachWithClause? {
+      helpers.debug('ForeachCommandExpression matched', { execInvocation, withClause });
+      
+      // Extract arrays from exec invocation arguments
+      let arrays = [];
+      if (execInvocation.type === 'ExecInvocation' && execInvocation.commandRef.args) {
+        arrays = execInvocation.commandRef.args;
+      }
       
       return {
         type: "foreach-command",
         value: {
-          type: 'foreach-command',
-          command: cmd,
+          type: 'foreach',
+          command: execInvocation,
           arrays: arrays,
           ...(withClause ? { with: withClause } : {})
         },

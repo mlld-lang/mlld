@@ -8,8 +8,8 @@ Test that @when actions support exec invocations with tail modifiers like trust.
 /var @hasData = "true"
 
 ## Test basic exec invocation
-/when @hasData => run @transform("hello world")
+/when @hasData => /run @transform("hello world")
 
 ## Test trust modifier
 /exe @sensitiveOp() = {echo "sensitive data"}
-/when @isTrue => run @sensitiveOp() trust always
+/when @isTrue => /run @sensitiveOp() trust always

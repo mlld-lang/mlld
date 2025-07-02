@@ -74,8 +74,15 @@ SlashShow
       }
       
       // Create raw object
+      let rawString = 'foreach ';
+      if (foreachValue.execInvocation.type === 'ExecInvocation') {
+        rawString += `@${foreachValue.execInvocation.commandRef.name}(...)`;
+      } else {
+        rawString += `@${foreachValue.execInvocation.identifier || 'unknown'}(...)`;
+      }
+      
       const raw = {
-        foreach: `foreach @${foreachValue.command.identifier}(${foreachValue.arrays.map(a => `@${a.identifier}`).join(', ')})`
+        foreach: rawString
       };
       
       if (foreachValue.with) {
@@ -85,7 +92,7 @@ SlashShow
       // Create meta object
       const meta = {
         isForeach: true,
-        arrayCount: foreachValue.arrays.length
+        hasExecInvocation: true
       };
       
       return helpers.createStructuredDirective(

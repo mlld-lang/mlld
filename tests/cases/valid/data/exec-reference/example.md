@@ -3,12 +3,12 @@
 /exe @getStatus = {echo "active"}
 
 /var @systemInfo = {
-date: run @getDate(),
-user: run @getUser(),
-status: run @getStatus(),
+date: @getDate(),
+user: @getUser(),
+status: @getStatus(),
 nested: {
-backup_date: run @getDate(),
-backup_user: run @getUser()
+backup_date: @getDate(),
+backup_user: @getUser()
   }
 }
 

@@ -517,22 +517,37 @@ export async function evaluateForeachCommand(
   foreachExpr: any, // Use any for now since the grammar output structure might not match exactly
   env: Environment
 ): Promise<any[]> {
-  const { command, arrays } = foreachExpr.value || foreachExpr;
+  const { execInvocation } = foreachExpr.value || foreachExpr;
+  
+  // Extract command name and arguments from execInvocation
+  let commandName: string;
+  let commandArgs: any[] = [];
+  
+  if (execInvocation.type === 'ExecInvocation') {
+    // Handle @func(args) exec invocation
+    commandName = execInvocation.commandRef.name;
+    commandArgs = execInvocation.commandRef.args || [];
+  } else if (execInvocation.identifier) {
+    // Handle @var variable reference (legacy support)
+    commandName = execInvocation.identifier;
+  } else {
+    throw new Error('Invalid foreach command structure');
+  }
   
   // 1. Resolve the command variable
-  const cmdVariable = env.getVariable(command.identifier);
+  const cmdVariable = env.getVariable(commandName);
   if (!cmdVariable) {
-    throw new Error(`Command not found: ${command.identifier}`);
+    throw new Error(`Command not found: ${commandName}`);
   }
   
   if (!isExecutable(cmdVariable)) {
-    throw new Error(`Variable '${command.identifier}' cannot be used with foreach. Expected an @exec command or @text template with parameters, but got type: ${cmdVariable.type}`);
+    throw new Error(`Variable '${commandName}' cannot be used with foreach. Expected an @exec command or @text template with parameters, but got type: ${cmdVariable.type}`);
   }
   
-  // 2. Evaluate all array arguments
+  // 2. Evaluate all array arguments from the exec invocation
   const evaluatedArrays: any[][] = [];
-  for (let i = 0; i < arrays.length; i++) {
-    const arrayVar = arrays[i];
+  for (let i = 0; i < commandArgs.length; i++) {
+    const arrayVar = commandArgs[i];
     const arrayValue = await evaluateDataValue(arrayVar, env);
     
     if (!Array.isArray(arrayValue)) {
