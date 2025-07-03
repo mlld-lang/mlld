@@ -80,7 +80,7 @@ export interface RunValues {
   lang?: TextNodeArray;
   args?: VariableNodeArray;
   code?: ContentNodeArray;
-  identifier?: TextNodeArray;
+  identifier?: VariableNodeArray;
   withClause?: WithClause;
 }
 
@@ -128,7 +128,7 @@ export interface RunCodeDirectiveNode extends RunDirectiveNode {
 export interface RunExecDirectiveNode extends RunDirectiveNode {
   subtype: 'runExec';
   values: {
-    identifier: TextNodeArray;
+    identifier: VariableNodeArray;
     args: VariableNodeArray;
   };
   raw: {

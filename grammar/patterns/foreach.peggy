@@ -26,8 +26,8 @@ ForeachCommandExpression
         type: "foreach-command",
         value: {
           type: 'foreach',
-          command: execInvocation,
-          arrays: arrays,
+          execInvocation,
+          arrays,
           ...(withClause ? { with: withClause } : {})
         },
         rawText: text()

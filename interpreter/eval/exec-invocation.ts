@@ -24,14 +24,15 @@ export async function evaluateExecInvocation(
   // Get the command name from the command reference
   let commandName: string;
   
-  // Handle different command reference structures
+  // With improved type consistency, identifier is always VariableReferenceNode[]
   if (typeof node.commandRef.identifier === 'string') {
+    // Legacy string format (should be rare)
     commandName = node.commandRef.identifier;
   } else if (Array.isArray(node.commandRef.identifier) && node.commandRef.identifier.length > 0) {
-    // Extract from array of nodes
+    // Extract from array of VariableReference nodes
     const identifierNode = node.commandRef.identifier[0];
-    if (identifierNode.type === 'Text' && identifierNode.content) {
-      commandName = identifierNode.content;
+    if (identifierNode.type === 'VariableReference' && identifierNode.identifier) {
+      commandName = identifierNode.identifier;
     } else {
       commandName = node.commandRef.name || '';
     }

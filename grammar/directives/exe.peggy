@@ -36,8 +36,8 @@ SlashExe
       // Environment declaration syntax: /exec js = { helperA, helperB }
       helpers.debug('SlashExe matched environment declaration (no @)', { id, envVars });
       
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      // Create identifier node  
+      const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
       
       // Build values and raw objects
       const values = {
@@ -69,8 +69,8 @@ SlashExe
       // Environment declaration syntax: /exec @js = { helperA, helperB }
       helpers.debug('SlashExe matched environment declaration (with @)', { id, envVars });
       
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      // Create identifier node  
+      const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
       
       // Build values and raw objects
       const values = {
@@ -103,8 +103,8 @@ SlashExe
       // Code syntax: /exec fn() = language {code}
       helpers.debug('SlashExe matched with RunLanguageCodeCore', { id, params, codeCore, trust });
       
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      // Create identifier node  
+      const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
       
       // Process parameters
       const processedParams = params || [];
@@ -163,8 +163,8 @@ SlashExe
       // Command syntax: /exec cmd() = {command}
       helpers.debug('SlashExe matched with command', { id, params, content, trust });
       
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      // Create identifier node  
+      const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
       
       // Process parameters
       const processedParams = params || [];
@@ -220,8 +220,8 @@ SlashExe
       // Command syntax: /exec cmd() = @run {command}
       helpers.debug('SlashExe matched with command', { id, params, content, trust });
       
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      // Create identifier node  
+      const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
       
       // Process parameters
       const processedParams = params || [];
@@ -276,8 +276,8 @@ SlashExe
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@"? "/"? "run" _ "@" commandRef:UnifiedReferenceNoTail withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('SlashExe matched command reference', { id, params, commandRef, trust });
       
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      // Create identifier node  
+      const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
       
       // Process parameters
       const processedParams = params || [];
@@ -292,7 +292,7 @@ SlashExe
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        commandRef: [helpers.createNode(NodeType.Text, { content: refIdentifier, location: location() })],
+        commandRef: [helpers.createVariableReferenceNode('varIdentifier', { identifier: refIdentifier }, location())],
         args: refArgs || []
       };
       
@@ -347,8 +347,8 @@ SlashExe
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ template:TemplateCore withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('SlashExe matched template executable', { id, params, template, trust });
       
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      // Create identifier node  
+      const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
       
       // Process parameters
       const processedParams = params || [];
@@ -402,8 +402,8 @@ SlashExe
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "[" _ pathVar:VariableNoTail _ "#" _ section:SectionIdentifier _ "]" rename:ExecAsNewTitle? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('SlashExe matched section executable', { id, params, pathVar, section, rename, trust });
       
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      // Create identifier node  
+      const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
       
       // Process parameters
       const processedParams = params || [];
@@ -470,8 +470,8 @@ SlashExe
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" commandRef:BaseIdentifier !"/" withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('SlashExe matched direct command reference', { id, params, commandRef, trust });
       
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      // Create identifier node  
+      const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
       
       // Process parameters
       const processedParams = params || [];
@@ -480,7 +480,7 @@ SlashExe
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        commandRef: [helpers.createNode(NodeType.Text, { content: commandRef, location: location() })]
+        commandRef: [helpers.createVariableReferenceNode('varIdentifier', { identifier: commandRef }, location())]
       };
       
       const raw = {
@@ -523,8 +523,8 @@ SlashExe
   / DirectiveContext "/exe" _ "@" id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ "@" resolver:ResolverPathPattern payload:ExecResolverPayload? withClause:WithClause? trust:(_ t:TrustOption { return t; })? {
       helpers.debug('SlashExe matched resolver executable', { id, params, resolver, trust });
       
-      // Create identifier node
-      const identifierNode = helpers.createNode(NodeType.Text, { content: id, location: location() });
+      // Create identifier node  
+      const identifierNode = helpers.createVariableReferenceNode('varIdentifier', { identifier: id }, location());
       
       // Process parameters
       const processedParams = params || [];
@@ -533,7 +533,7 @@ SlashExe
       const values = {
         identifier: [identifierNode],
         params: processedParams,
-        resolver: [helpers.createNode(NodeType.Text, { content: resolver, location: location() })]
+        resolver: [helpers.createVariableReferenceNode('varIdentifier', { identifier: resolver }, location())]
       };
       
       // Add payload if present

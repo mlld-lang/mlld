@@ -51,8 +51,9 @@ export async function evaluateExe(
     const identifierNode = identifierNodes[0];
     let language: string;
     
-    if (identifierNode.type === 'Text' && 'content' in identifierNode) {
-      language = (identifierNode as TextNode).content;
+    // With improved type consistency, identifierNodes is always VariableReferenceNode[]
+    if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
+      language = identifierNode.identifier;
     } else {
       throw new Error('Exec environment language must be a simple string');
     }
@@ -111,11 +112,9 @@ export async function evaluateExe(
   const identifierNode = identifierNodes[0];
   let identifier: string;
   
-  if (identifierNode.type === 'Text' && 'content' in identifierNode) {
-    // eslint-disable-next-line mlld/no-ast-string-manipulation
-    identifier = (identifierNode as TextNode).content;
-  } else if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
-    identifier = (identifierNode as any).identifier;
+  // With improved type consistency, identifierNodes is always VariableReferenceNode[]
+  if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
+    identifier = identifierNode.identifier;
   } else {
     throw new Error('Exec directive identifier must be a simple command name');
   }

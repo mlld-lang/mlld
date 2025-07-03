@@ -153,10 +153,9 @@ export async function evaluateRun(
     let commandName: string = '';
     const identifierNode = identifierNodes[0];
     
-    if (identifierNode.type === 'Text' && 'content' in identifierNode) {
-      commandName = (identifierNode as any).content;
-    } else if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
-      commandName = (identifierNode as any).identifier;
+    // With improved type consistency, identifierNodes is always VariableReferenceNode[]
+    if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
+      commandName = identifierNode.identifier;
     }
     
     // Add current command to call stack if not already there
@@ -241,27 +240,19 @@ export async function evaluateRun(
         // Handle argument nodes
         const arg = args[i];
         
-        // TODO: This is a workaround for a parser bug where @variable in function
-        // arguments is parsed as Text instead of VariableReference
-        // Remove this when the parser is fixed to properly parse variable references in arguments
-        if (arg && arg.type === 'Text' && 'content' in arg && 
-            typeof arg.content === 'string' && arg.content.startsWith('@')) {
-          // This looks like a variable reference that was parsed as text
-          const varName = arg.content.substring(1);
-          const variable = env.getVariable(varName);
-          if (variable) {
-            // Resolve the variable value
-            const value = await resolveVariableValue(variable, env);
-            argValues[paramName] = value;
-          } else {
-            // Variable not found, keep as-is
-            argValues[paramName] = arg.content;
-          }
+        // Handle both primitive values and node objects
+        let argValue: string;
+        if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
+          // Primitive value from grammar
+          argValue = String(arg);
+        } else if (arg && typeof arg === 'object' && 'type' in arg) {
+          // Node object - interpolate normally
+          argValue = await interpolate([arg], env, InterpolationContext.Default);
         } else {
-          // Normal interpolation for properly parsed nodes
-          const argValue = await interpolate([arg], env, InterpolationContext.Default);
-          argValues[paramName] = argValue;
+          // Fallback
+          argValue = String(arg);
         }
+        argValues[paramName] = argValue;
       }
     }
     

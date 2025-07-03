@@ -63,7 +63,7 @@ export interface OutputSourceVariable {
   type: 'variable';
   subtype: 'outputVariable' | 'outputInvocation';
   values: {
-    identifier: TextNode[];
+    identifier: VariableReferenceNode[];
     fields?: any[]; // Field access
     args?: BaseMlldNode[]; // For invocations
   };
@@ -87,7 +87,7 @@ export interface OutputSourceCommand {
   type: 'command';
   subtype: 'outputCommand';
   values: {
-    identifier: TextNode[];
+    identifier: VariableReferenceNode[];
     args: BaseMlldNode[];
   };
   raw: {

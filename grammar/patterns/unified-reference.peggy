@@ -44,7 +44,9 @@ FieldAccessExec "field access exec invocation"
       // Create the exec invocation
       const ref = {
         name: methodName,
-        identifier: [helpers.createNode(NodeType.Text, { content: methodName, location: location() })],
+        identifier: [helpers.createVariableReferenceNode('varIdentifier', {
+          identifier: methodName
+        }, location())],
         args: args || [],
         isCommandReference: true,
         objectReference: objectRef
@@ -71,7 +73,9 @@ FieldAccessExecNoTail "field access exec invocation without tail"
       
       const ref = {
         name: methodName,
-        identifier: [helpers.createNode(NodeType.Text, { content: methodName, location: location() })],
+        identifier: [helpers.createVariableReferenceNode('varIdentifier', {
+          identifier: methodName
+        }, location())],
         args: args || [],
         isCommandReference: true,
         objectReference: objectRef
@@ -95,7 +99,9 @@ SimpleExec "simple exec invocation"
       // Create command reference with arguments
       const ref = {
         name,
-        identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
+        identifier: [helpers.createVariableReferenceNode('varIdentifier', {
+          identifier: name
+        }, location())],
         args: args || [],
         isCommandReference: true
       };
@@ -111,7 +117,9 @@ SimpleExecNoTail "simple exec invocation without tail"
   = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" !TailModifiers {
       const ref = {
         name,
-        identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
+        identifier: [helpers.createVariableReferenceNode('varIdentifier', {
+          identifier: name
+        }, location())],
         args: args || [],
         isCommandReference: true
       };

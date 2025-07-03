@@ -219,7 +219,7 @@ async function evaluateInvocationSource(
   directive: DirectiveNode,
   env: Environment
 ): Promise<string> {
-  const varName = directive.values.source.identifier?.[0]?.content || directive.values.source.identifier;
+  const varName = directive.values.source.identifier?.[0]?.identifier || directive.values.source.identifier;
   const args = directive.values.source.args || [];
   
   // Get the variable
@@ -313,7 +313,7 @@ async function evaluateSimpleVariableSource(
   // Handle different source structures
   if (directive.values.source.identifier) {
     // Standard structure from grammar
-    varName = directive.values.source.identifier[0]?.content || directive.values.source.identifier;
+    varName = directive.values.source.identifier[0]?.identifier || directive.values.source.identifier;
   } else if (Array.isArray(directive.values.source) && directive.values.source[0]?.type === 'VariableReference') {
     // Structure from @when action
     varName = directive.values.source[0].identifier;
@@ -403,7 +403,7 @@ async function evaluateCommandSource(
 ): Promise<string> {
   // @output @run @command to target
   // Execute the command reference
-  const cmdName = directive.values.source.identifier[0].content;
+  const cmdName = directive.values.source.identifier[0].identifier;
   const cmdArgs = directive.values.source.args || [];
   
   // Get the command variable
@@ -540,7 +540,7 @@ async function outputToEnv(
   } else {
     // Default pattern: MLLD_VARIABLE
     if (source && source.identifier) {
-      const sourceVarName = source.identifier[0]?.content || source.identifier;
+      const sourceVarName = source.identifier[0]?.identifier || source.identifier;
       varName = `MLLD_${sourceVarName.toUpperCase()}`;
     } else {
       varName = 'MLLD_OUTPUT';
