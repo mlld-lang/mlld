@@ -135,7 +135,7 @@ SlashImportShorthand
       
       // Create values object with namespace import structure
       const values = {
-        namespace: namespace,  // Store namespace directly for shorthand imports
+        namespace: [helpers.createNode(NodeType.Text, { content: namespace, location: location() })],  // Store namespace as array for consistency
         path: path.values?.path || path.values?.module || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle different path formats
       };
       

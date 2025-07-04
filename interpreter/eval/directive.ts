@@ -28,11 +28,14 @@ function extractTraceInfo(directive: DirectiveNode): {
     case 'path':
     case 'var':
       // /path @varName = ... or /var @varName = ...
-      const identifier = directive.values?.identifier?.[0] || directive.values?.identifier;
-      if (identifier?.type === 'Text' && 'content' in identifier) {
-        info.varName = identifier.content;
-      } else if (identifier?.type === 'VariableReference' && 'identifier' in identifier) {
-        info.varName = identifier.identifier;
+      const identifierNodes = directive.values?.identifier;
+      if (identifierNodes && Array.isArray(identifierNodes) && identifierNodes.length > 0) {
+        const identifier = identifierNodes[0];
+        if (identifier?.type === 'Text' && 'content' in identifier) {
+          info.varName = identifier.content;
+        } else if (identifier?.type === 'VariableReference' && 'identifier' in identifier) {
+          info.varName = identifier.identifier;
+        }
       }
       break;
       

@@ -88,12 +88,13 @@ export async function evaluateVar(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
-  // Extract identifier
-  const identifierNode = directive.values?.identifier;
-  if (!identifierNode) {
+  // Extract identifier from array
+  const identifierNodes = directive.values?.identifier;
+  if (!identifierNodes || !Array.isArray(identifierNodes) || identifierNodes.length === 0) {
     throw new Error('Var directive missing identifier');
   }
   
+  const identifierNode = identifierNodes[0];
   const identifier = identifierNode.identifier;
   if (!identifier) {
     throw new Error('Var directive identifier must be a simple variable name');

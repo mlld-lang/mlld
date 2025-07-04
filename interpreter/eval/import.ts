@@ -455,8 +455,11 @@ async function importFromPath(
           );
         } else if (directive.subtype === 'importNamespace') {
           // Import entire JSON under a namespace alias
-          // For shorthand imports, namespace is stored directly in values.namespace
-          const alias = directive.values?.namespace || directive.values?.imports?.[0]?.alias;
+          // For shorthand imports, namespace is stored as an array in values.namespace
+          const namespaceNodes = directive.values?.namespace;
+          const alias = (namespaceNodes && Array.isArray(namespaceNodes) && namespaceNodes[0]?.content) 
+            ? namespaceNodes[0].content 
+            : directive.values?.imports?.[0]?.alias;
           
           if (!alias) {
             throw new Error('Namespace import missing alias');
@@ -610,8 +613,11 @@ async function importFromPath(
       );
     } else if (directive.subtype === 'importNamespace') {
       // Import entire module under a namespace
-      // For shorthand imports, namespace is stored directly in values.namespace
-      const namespace = directive.values?.namespace || directive.values?.imports?.[0]?.alias;
+      // For shorthand imports, namespace is stored as an array in values.namespace
+      const namespaceNodes = directive.values?.namespace;
+      const namespace = (namespaceNodes && Array.isArray(namespaceNodes) && namespaceNodes[0]?.content) 
+        ? namespaceNodes[0].content 
+        : directive.values?.imports?.[0]?.alias;
       
       if (!namespace) {
         throw new Error('Namespace import missing alias');
@@ -918,8 +924,11 @@ async function importFromResolverContent(
       );
     } else if (directive.subtype === 'importNamespace') {
       // Import entire module under a namespace
-      // For shorthand imports, namespace is stored directly in values.namespace
-      const alias = directive.values?.namespace || directive.values?.imports?.[0]?.alias;
+      // For shorthand imports, namespace is stored as an array in values.namespace
+      const namespaceNodes = directive.values?.namespace;
+      const alias = (namespaceNodes && Array.isArray(namespaceNodes) && namespaceNodes[0]?.content) 
+        ? namespaceNodes[0].content 
+        : directive.values?.imports?.[0]?.alias;
       
       if (!alias) {
         throw new Error('Namespace import missing alias');

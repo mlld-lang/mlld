@@ -91,7 +91,7 @@ SlashVar "var directive"
       
       // Create the values object
       const values = {
-        identifier: idNode,
+        identifier: [idNode],
         value: processedValue
       };
       

@@ -219,7 +219,14 @@ async function evaluateInvocationSource(
   directive: DirectiveNode,
   env: Environment
 ): Promise<string> {
-  const varName = directive.values.source.identifier?.[0]?.identifier || directive.values.source.identifier;
+  const identifierNodes = directive.values.source.identifier;
+  const varName = (identifierNodes && Array.isArray(identifierNodes) && identifierNodes[0]?.identifier) 
+    ? identifierNodes[0].identifier 
+    : undefined;
+  
+  if (!varName) {
+    throw new MlldOutputError(`Invalid variable reference in output directive`, directive.location);
+  }
   const args = directive.values.source.args || [];
   
   // Get the variable
@@ -313,7 +320,10 @@ async function evaluateSimpleVariableSource(
   // Handle different source structures
   if (directive.values.source.identifier) {
     // Standard structure from grammar
-    varName = directive.values.source.identifier[0]?.identifier || directive.values.source.identifier;
+    const identifierNodes = directive.values.source.identifier;
+    varName = (identifierNodes && Array.isArray(identifierNodes) && identifierNodes[0]?.identifier) 
+      ? identifierNodes[0].identifier 
+      : undefined;
   } else if (Array.isArray(directive.values.source) && directive.values.source[0]?.type === 'VariableReference') {
     // Structure from @when action
     varName = directive.values.source[0].identifier;
@@ -540,8 +550,11 @@ async function outputToEnv(
   } else {
     // Default pattern: MLLD_VARIABLE
     if (source && source.identifier) {
-      const sourceVarName = source.identifier[0]?.identifier || source.identifier;
-      varName = `MLLD_${sourceVarName.toUpperCase()}`;
+      const identifierNodes = source.identifier;
+      const sourceVarName = (identifierNodes && Array.isArray(identifierNodes) && identifierNodes[0]?.identifier) 
+        ? identifierNodes[0].identifier 
+        : undefined;
+      varName = sourceVarName ? `MLLD_${sourceVarName.toUpperCase()}` : 'MLLD_OUTPUT';
     } else {
       varName = 'MLLD_OUTPUT';
     }

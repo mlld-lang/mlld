@@ -62,10 +62,9 @@ describe('Directive Base Structure', () => {
           }
         }
       } catch (error) {
-        // During development/migration, some may fail - just report, don't fail test
+        // These are real architectural issues that need to be fixed
         console.error(`Failed to parse ${directiveName} with error:`, error);
-        // This will be uncommented once all directives are updated:
-        // throw error;
+        throw error;
       }
     });
   }
