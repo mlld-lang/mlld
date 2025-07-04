@@ -4,6 +4,7 @@ import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
 import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable } from '@core/types/executable';
 import { interpolate, resolveVariableValue } from '../core/interpreter';
+import { InterpolationContext } from '../core/interpolation-context';
 import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError } from '@core/errors';
@@ -181,103 +182,43 @@ export async function evaluateExecInvocation(
   const args = node.commandRef.args || [];
   const params = definition.paramNames || [];
   
-  // Evaluate arguments to get their actual values
-  // Changed: Store actual values instead of always stringifying
-  const evaluatedArgs: any[] = [];
-  const evaluatedArgStrings: string[] = []; // For command/template execution that needs strings
+  // Evaluate arguments using consistent interpolate() pattern
+  const evaluatedArgStrings: string[] = [];
+  const evaluatedArgs: any[] = []; // Preserve original data types
   
   for (const arg of args) {
-    if (typeof arg === 'string') {
-      evaluatedArgs.push(arg);
-      evaluatedArgStrings.push(arg);
-    } else if (typeof arg === 'number' || typeof arg === 'boolean' || arg === null) {
-      // Handle primitive arguments directly
-      evaluatedArgs.push(arg);
-      evaluatedArgStrings.push(String(arg));
-    } else if (arg && typeof arg === 'object') {
-      // Check if this is a nested ExecInvocation
-      if (arg.type === 'ExecInvocation') {
-        // Recursively evaluate the nested function call
-        const nestedResult = await evaluateExecInvocation(arg, env);
-        const resultValue = nestedResult.value;
-        
-        // Store the actual value
-        evaluatedArgs.push(resultValue);
-        
-        // Create string representation for templates/commands
-        let stringValue: string;
-        if (typeof resultValue === 'string') {
-          stringValue = resultValue;
-        } else if (resultValue === null || resultValue === undefined) {
-          stringValue = String(resultValue);
-        } else if (typeof resultValue === 'object') {
-          stringValue = JSON.stringify(resultValue);
-        } else {
-          stringValue = String(resultValue);
-        }
-        evaluatedArgStrings.push(stringValue);
-      } else if (arg.type === 'VariableReference') {
-        // Handle variable references directly
-        const varRef = arg as any;
-        const variable = env.getVariable(varRef.identifier);
-        if (!variable) {
-          throw new Error(`Variable not found: ${varRef.identifier}`);
-        }
-        
-        // Resolve the variable value
-        const value = await resolveVariableValue(variable, env);
-        
-        // Apply field access if present
-        let finalValue = value;
-        if (varRef.fields && varRef.fields.length > 0) {
-          const { accessField } = await import('../utils/field-access');
-          // Iterate through fields one at a time (accessField expects a single field)
-          for (const field of varRef.fields) {
-            finalValue = accessField(finalValue, field);
-          }
-        }
-        
-        // Store the actual value
-        evaluatedArgs.push(finalValue);
-        
-        // Create string representation for templates/commands
-        let stringValue: string;
-        if (typeof finalValue === 'string') {
-          stringValue = finalValue;
-        } else if (finalValue === null || finalValue === undefined) {
-          stringValue = String(finalValue);
-        } else if (typeof finalValue === 'object') {
-          stringValue = JSON.stringify(finalValue);
-        } else {
-          stringValue = String(finalValue);
-        }
-        evaluatedArgStrings.push(stringValue);
-      } else if (arg.type === 'array' || arg.type === 'object') {
-        // Handle array and object literals directly
-        evaluatedArgs.push(arg);
-        evaluatedArgStrings.push(JSON.stringify(arg));
-      } else {
-        // Otherwise interpolate as usual
-        const evaluated = await interpolate([arg], env);
-        evaluatedArgs.push(evaluated);
-        evaluatedArgStrings.push(evaluated);
+    // Handle both primitive values and node objects
+    let argValue: string;
+    let argValueAny: any;
+    
+    if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
+      // Primitive value from grammar
+      argValue = String(arg);
+      argValueAny = arg; // Preserve original type
+    } else if (arg && typeof arg === 'object' && 'type' in arg) {
+      // Node object - interpolate normally (handles VariableReference, ExecInvocation, etc.)
+      argValue = await interpolate([arg], env, InterpolationContext.Default);
+      // For the any version, try to preserve the data type
+      try {
+        argValueAny = JSON.parse(argValue);
+      } catch {
+        argValueAny = argValue; // Keep as string if not JSON
       }
     } else {
-      const stringValue = String(arg);
-      evaluatedArgs.push(arg);
-      evaluatedArgStrings.push(stringValue);
+      // Fallback
+      argValue = String(arg);
+      argValueAny = arg;
     }
+    evaluatedArgStrings.push(argValue);
+    evaluatedArgs.push(argValueAny);
   }
   
   // Bind evaluated arguments to parameters
   for (let i = 0; i < params.length; i++) {
     const paramName = params[i];
-    const argValue = evaluatedArgs[i];
     const argStringValue = evaluatedArgStrings[i];
     
-    if (argValue !== undefined) {
-      // For template/command execution, we need string values
-      // But we should preserve the actual value in the variable for code execution
+    if (argStringValue !== undefined) {
       const paramVar = createSimpleTextVariable(
         paramName, 
         argStringValue,
@@ -289,9 +230,7 @@ export async function evaluateExecInvocation(
         },
         {
           isSystem: true, // Mark as system variable to bypass reserved name check
-          isParameter: true,
-          // Store the actual value (not stringified) for code execution
-          actualValue: argValue
+          isParameter: true
         }
       );
       execEnv.setVariable(paramName, paramVar);

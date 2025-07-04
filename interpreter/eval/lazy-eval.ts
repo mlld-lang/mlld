@@ -160,15 +160,13 @@ export async function evaluateDataValue(
   
   // Handle foreach command expressions
   if (value && typeof value === 'object' && value.type === 'foreach-command') {
-    // Import the evaluator from data-value-evaluator
-    const { evaluateDataValue: evaluateFull } = await import('./data-value-evaluator');
-    return await evaluateFull(value, env);
+    const { evaluateForeachCommand } = await import('./foreach');
+    return await evaluateForeachCommand(value, env);
   }
   
   // Handle foreach section expressions
   if (value && typeof value === 'object' && value.type === 'foreach-section') {
-    // Import the evaluator from data-value-evaluator
-    const { evaluateForeachSection } = await import('./data-value-evaluator');
+    const { evaluateForeachSection } = await import('./foreach');
     return await evaluateForeachSection(value, env);
   }
   

@@ -571,7 +571,7 @@ export async function evaluateForeachCommand(
   const paramCount = cmdVariable.paramNames?.length || definition.paramNames?.length || 0;
   if (evaluatedArrays.length !== paramCount) {
     const paramType = definition.sourceDirective === 'text' ? 'Text template' : 'Command';
-    throw new Error(`${paramType} '${command.identifier}' expects ${paramCount} parameter${paramCount !== 1 ? 's' : ''}, but foreach is passing ${evaluatedArrays.length} array${evaluatedArrays.length !== 1 ? 's' : ''}`);
+    throw new Error(`${paramType} '${commandName}' expects ${paramCount} parameter${paramCount !== 1 ? 's' : ''}, but foreach is passing ${evaluatedArrays.length} array${evaluatedArrays.length !== 1 ? 's' : ''}`);
   }
   
   // 5. Generate cartesian product

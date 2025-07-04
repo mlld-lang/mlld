@@ -14,7 +14,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
-import { evaluateDataValue } from './data-value-evaluator';
+import { evaluateDataValue } from './value-evaluator';
 import { isTextLike, isExecutable, createSimpleTextVariable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';

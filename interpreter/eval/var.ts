@@ -304,9 +304,9 @@ export async function evaluateVar(
     // Simple text content
     resolvedValue = valueNode.content;
     
-  } else if (valueNode && valueNode.type === 'foreach-command') {
+  } else if (valueNode && valueNode.type === 'foreach') {
     // Handle foreach expressions
-    const { evaluateForeachCommand } = await import('./data-value-evaluator');
+    const { evaluateForeachCommand } = await import('./foreach');
     resolvedValue = await evaluateForeachCommand(valueNode, env);
     
   } else if (valueNode && valueNode.type === 'ExecInvocation') {
@@ -424,7 +424,7 @@ export async function evaluateVar(
       variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
     }
     
-  } else if (valueNode.type === 'foreach-command') {
+  } else if (valueNode.type === 'foreach') {
     // Foreach expressions always return arrays
     const isComplex = false; // foreach results are typically simple values
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);

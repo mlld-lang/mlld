@@ -1,5 +1,5 @@
 import type { Environment } from '../env/Environment';
-import { evaluateForeachCommand, evaluateForeachSection } from '../eval/data-value-evaluator';
+import { evaluateForeachCommand, evaluateForeachSection } from '../eval/foreach';
 import { interpolate } from '../core/interpreter';
 
 /**

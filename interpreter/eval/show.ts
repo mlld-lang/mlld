@@ -25,7 +25,7 @@ import {
   createSimpleTextVariable
 } from '@core/types/variable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
-import { evaluateDataValue, hasUnevaluatedDirectives } from './lazy-eval';
+import { evaluateDataValue, hasUnevaluatedDirectives } from './value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 // Template normalization now handled in grammar - no longer needed here
 
