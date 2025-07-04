@@ -270,10 +270,12 @@ export async function evaluateDataValue(
     throw new Error('Unexpected variable reference in lazy evaluation');
   }
   
-  // Handle template values (arrays with Text/VariableReference nodes)
+  // Handle template values - they're valid in lazy evaluation context
   if (isTemplateValue(value)) {
-    // Templates should be interpolated before storage
-    throw new Error('Unexpected template value in lazy evaluation');
+    // Templates in lazy evaluation are deferred execution contexts
+    // Interpolate them now with full environment context
+    const { interpolate } = await import('../core/interpreter');
+    return await interpolate(value, env);
   }
   
   // Handle executable code objects (from imported executable variables)

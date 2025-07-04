@@ -187,28 +187,51 @@ export async function evaluateExecInvocation(
   const evaluatedArgs: any[] = []; // Preserve original data types
   
   for (const arg of args) {
-    // Handle both primitive values and node objects
     let argValue: string;
     let argValueAny: any;
     
     if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
-      // Primitive value from grammar
+      // Primitives: pass through directly
       argValue = String(arg);
-      argValueAny = arg; // Preserve original type
+      argValueAny = arg;
+      
     } else if (arg && typeof arg === 'object' && 'type' in arg) {
-      // Node object - interpolate normally (handles VariableReference, ExecInvocation, etc.)
-      argValue = await interpolate([arg], env, InterpolationContext.Default);
-      // For the any version, try to preserve the data type
-      try {
-        argValueAny = JSON.parse(argValue);
-      } catch {
-        argValueAny = argValue; // Keep as string if not JSON
+      // AST nodes: evaluate based on type
+      switch (arg.type) {
+        case 'object':
+          // Object literals: recursively evaluate properties (may contain exec invocations, etc.)
+          const { evaluateDataValue } = await import('./value-evaluator');
+          argValueAny = await evaluateDataValue(arg, env);
+          argValue = JSON.stringify(argValueAny);
+          break;
+          
+        case 'array':
+          // Array literals: recursively evaluate items (may contain variables, exec calls, etc.)
+          const { evaluateDataValue: evalArray } = await import('./value-evaluator');
+          argValueAny = await evalArray(arg, env);
+          argValue = JSON.stringify(argValueAny);
+          break;
+          
+        case 'VariableReference':
+        case 'ExecInvocation':
+        case 'Text':
+        default:
+          // Other nodes: interpolate normally
+          argValue = await interpolate([arg], env, InterpolationContext.Default);
+          // Try to preserve structured data if it's JSON
+          try {
+            argValueAny = JSON.parse(argValue);
+          } catch {
+            argValueAny = argValue;
+          }
+          break;
       }
     } else {
-      // Fallback
+      // Fallback for unexpected types
       argValue = String(arg);
       argValueAny = arg;
     }
+    
     evaluatedArgStrings.push(argValue);
     evaluatedArgs.push(argValueAny);
   }
