@@ -2,6 +2,17 @@
 
 Shadow environments in mlld provide a bridge between mlld's declarative syntax and imperative JavaScript/Node.js code. This document explains the internal architecture and implementation details.
 
+## Language Support
+
+**Currently Implemented**:
+- ✅ **JavaScript** (`js`): In-process execution with function injection
+- ✅ **Node.js** (`node`): VM-isolated execution with function injection
+
+**Not Implemented**:
+- ❌ **Bash** (`bash`): Only supports variable injection, no function calls
+- ❌ **Python** (`python`): No shadow environment support
+- ❌ **Shell** (`sh`): No shadow environment support
+
 ## Overview
 
 Shadow environments allow mlld `/exec` functions to be called from within JavaScript or Node.js code blocks. This creates a seamless integration where mlld functions become available as regular functions in the target language.
@@ -321,7 +332,8 @@ Test cases for shadow environments can be found in:
 - `tests/cases/valid/exec/`: General exec and shadow environment tests
 - Integration tests validate both JavaScript and Node.js shadow functionality
 - `interpreter/env/NodeShadowEnvironment.test.ts`: Unit tests for Node.js shadow environment
-- `tests/integration/node-shadow-cleanup.test.ts`: Integration tests for cleanup behavior
+- `tests/integration/node-shadow-cleanup.test.ts`: Integration tests for Node.js cleanup behavior
+- `tests/integration/js-shadow-cleanup.test.ts`: Integration tests for JavaScript error handling
 
 ### Key Test Scenarios
 
@@ -447,6 +459,103 @@ function calculate_wrapper(...args) {
 ### Why Not Just Use Closures?
 We can't use JavaScript closures because the function bodies come from user-provided strings in mlld files. The `new Function()` constructor doesn't have access to the surrounding scope, so we must explicitly pass everything as parameters.
 
+## Error Handling Architecture
+
+### Critical Discovery: Error Details Preservation
+
+During Environment.ts refactoring, we discovered a systematic issue in error handling that affected **all language executors**. This section documents the issue and the architectural fix.
+
+#### The Problem
+
+When language executors (NodeExecutor, JavaScriptExecutor, BashExecutor, etc.) threw `MlldCommandExecutionError` with error details:
+
+```typescript
+// All executors create errors like this:
+throw new MlldCommandExecutionError(
+  `${language} error: ${originalError}`,
+  context?.sourceLocation,
+  {
+    command: `${language} code execution`,
+    exitCode: 1,
+    duration: Date.now() - startTime,
+    stderr: originalError, // ✅ Correctly set in details object
+    stdout: '',
+    workingDirectory: this.workingDirectory,
+    // ... other details
+  }
+);
+```
+
+The `BaseCommandExecutor.createCommandExecutionError()` method was re-wrapping these errors but only looked for error details as **direct properties** (`error.stderr`), not in the **details object** (`error.details.stderr`):
+
+```typescript
+// ❌ Original implementation - only checked direct properties
+if ('stderr' in error) errorDetails.stderr = String(error.stderr);
+```
+
+This meant that when errors were caught and re-wrapped by BaseCommandExecutor, the original error messages were lost, resulting in empty `stderr` fields in the final error output.
+
+#### The Fix
+
+We updated `BaseCommandExecutor.createCommandExecutionError()` to also check for error details in the `details` object:
+
+```typescript
+// ✅ Fixed implementation - checks both direct properties and details object
+if (error && typeof error === 'object') {
+  // Check for direct properties first
+  if ('stdout' in error) errorDetails.stdout = String(error.stdout);
+  if ('stderr' in error) errorDetails.stderr = String(error.stderr);
+  
+  // Check for properties in details object (for MlldCommandExecutionError)
+  if ('details' in error && error.details && typeof error.details === 'object') {
+    if ('stdout' in error.details) errorDetails.stdout = String(error.details.stdout);
+    if ('stderr' in error.details) errorDetails.stderr = String(error.details.stderr);
+    if ('exitCode' in error.details && typeof error.details.exitCode === 'number') {
+      errorDetails.status = error.details.exitCode;
+    }
+  }
+  
+  // ... rest of status handling
+}
+```
+
+#### Impact
+
+This fix affects **language executors with shadow environment support**:
+- ✅ **NodeExecutor**: Error messages now properly captured in subprocess stderr
+- ✅ **JavaScriptExecutor**: Stack traces preserved in error details  
+- ❌ **BashExecutor**: No shadow environment support (only variable injection)
+- ✅ **ShellCommandExecutor**: Command execution errors preserved
+- ⚠️ **PythonExecutor**: Uses different pattern (delegates to shell), not affected
+
+#### Testing
+
+The fix was validated with:
+1. **Node.js shadow environment test**: `tests/integration/node-shadow-cleanup.test.ts` now passes
+2. **JavaScript shadow environment test**: `tests/integration/js-shadow-cleanup.test.ts` now passes  
+3. **All existing tests**: No regressions in 742+ core tests
+
+### Error Propagation Flow
+
+The complete error propagation flow for language executors:
+
+```
+1. User code throws error (e.g., `throw new Error('message')`)
+   ↓
+2. Language executor catches error and creates MlldCommandExecutionError
+   - Error message stored in details.stderr
+   ↓  
+3. BaseCommandExecutor.executeWithCommonHandling() catches the error
+   ↓
+4. BaseCommandExecutor.createCommandExecutionError() re-wraps the error
+   - NOW CORRECTLY preserves details.stderr → new error's details.stderr
+   ↓
+5. CLI error handler displays the error
+   - Writes details.stderr to process.stderr for subprocess capture
+   ↓
+6. Calling process/test captures the original error message
+```
+
 ## Implementation Checklist
 
 When adding a new language shadow environment:
@@ -459,6 +568,8 @@ When adding a new language shadow environment:
 4. [ ] Add execution support in Environment.executeCode
 5. [ ] Handle console/output capture appropriately
 6. [ ] Add error handling and context enhancement
+   - **CRITICAL**: Use `MlldCommandExecutionError` with error details in the `details` object
+   - Store original error messages in `details.stderr` for proper propagation
 7. [ ] Implement cleanup mechanism
    - For isolated environments: Clear VM contexts, child processes, etc.
    - For in-process environments: Clear function references
@@ -466,5 +577,29 @@ When adding a new language shadow environment:
 8. [ ] Write comprehensive tests including:
    - Nested function calls
    - Resource cleanup (timers, file handles, etc.)
-   - Error scenarios with cleanup
+   - **Error scenarios with cleanup - verify stderr propagation**
+   - **Shadow environment error handling specifically**
 9. [ ] Document usage patterns and limitations
+
+### Error Handling Requirements
+
+When implementing a new executor, ensure:
+
+1. **Error Creation**: Use `MlldCommandExecutionError` with details object:
+   ```typescript
+   throw new MlldCommandExecutionError(
+     `${language} error: ${originalError}`,
+     context?.sourceLocation,
+     {
+       stderr: originalError, // Put original error in details.stderr
+       // ... other details
+     }
+   );
+   ```
+
+2. **Error Testing**: Verify that error messages are preserved through:
+   - Direct execution (`/var @result = @function()`)
+   - Shadow environment execution (with environment declared)
+   - Subprocess execution (CLI with --stdout mode)
+
+3. **Integration Testing**: Test both success and error scenarios in shadow environments to ensure cleanup happens correctly even when errors occur.

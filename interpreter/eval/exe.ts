@@ -121,6 +121,7 @@ export async function evaluateExe(
   
   let executableDef: ExecutableDefinition;
   
+  
   if (directive.subtype === 'exeCommand') {
     // Check if this is a command reference
     const commandRef = directive.values?.commandRef;
@@ -534,6 +535,7 @@ function createExecWrapper(
       // if (process.env.MLLD_DEBUG) {
       //   console.log(`Executing ${execName} with:`, { code, params: codeParams });
       // }
+      
       // Execute the code with parameters
       result = await execEnv.executeCode(
         code,

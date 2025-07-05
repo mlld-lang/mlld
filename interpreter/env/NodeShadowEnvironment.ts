@@ -114,9 +114,11 @@ export class NodeShadowEnvironment {
         }
       }
       
-      // Enhance error with context information
-      if (error instanceof Error) {
-        error.message = `Node shadow environment error: ${error.message}`;
+      
+      // Preserve original error message but add context via stack trace
+      if (error instanceof Error && !error.message.includes('Node shadow environment error:')) {
+        // Add context to stack trace instead of wrapping the message
+        error.stack = `Node shadow environment error: ${error.message}\n${error.stack}`;
       }
       throw error;
     }

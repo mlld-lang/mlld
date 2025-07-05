@@ -1240,6 +1240,15 @@ async function handleError(error: any, options: CLIOptions): Promise<void> {
   logger.level = options.debug ? 'debug' : (options.verbose ? 'info' : 'warn');
 
   if (isMlldError) {
+    // For command execution errors, also output stderr content to process stderr
+    if (isCommandError && error.details && typeof error.details === 'object' && 'stderr' in error.details) {
+      const stderrContent = error.details.stderr;
+      if (stderrContent && typeof stderrContent === 'string' && stderrContent.trim()) {
+        // Write the original stderr content to process stderr before the formatted error
+        console.error(stderrContent.trim());
+      }
+    }
+    
     // Use enhanced error formatting with auto-detection
     const fileSystem = new NodeFileSystem();
     const errorFormatter = new ErrorFormatSelector(fileSystem);
