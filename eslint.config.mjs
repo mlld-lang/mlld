@@ -204,6 +204,17 @@ export default tseslint.config(
     }
   },
   
+  // Security warnings and command execution feedback
+  {
+    files: [
+      'security/command/executor/CommandExecutor.ts',
+      'security/registry/AdvisoryChecker.ts'
+    ],
+    rules: {
+      'no-console': 'off', // User-facing security warnings and command feedback
+    }
+  },
+  
   // Files with legitimate string operations (not for AST manipulation)
   {
     files: [
