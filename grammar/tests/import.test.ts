@@ -27,7 +27,7 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check values
       expect(result.values.path).toBeDefined();
-      expect(result.values.namespace).toBe('file'); // Auto-derived from filename
+      expect(result.values.namespace[0].content).toBe('file'); // Auto-derived from filename
       
       // Check raw
       expect(result.raw.path).toBeDefined();
@@ -49,7 +49,7 @@ describe('Import Directive Syntax Tests', () => {
       
       // Check values
       expect(result.values.path).toBeDefined();
-      expect(result.values.namespace).toBe('myModule'); // Explicit alias
+      expect(result.values.namespace[0].content).toBe('myModule'); // Explicit alias
       
       // Check raw
       expect(result.raw.path).toBeDefined();
@@ -72,7 +72,7 @@ describe('Import Directive Syntax Tests', () => {
       // Check path has a variable
       expect(result.values.path).toHaveLength(1);
       expect(result.values.path[0].type).toBe('VariableReference');
-      expect(result.values.namespace).toBe('config'); // Explicit alias required for variable paths
+      expect(result.values.namespace[0].content).toBe('config'); // Explicit alias required for variable paths
       
       // Check meta
       expect(result.meta.path.hasVariables).toBe(true);
@@ -145,9 +145,9 @@ describe('Import Directive AST Structure', () => {
         // Check that expected keys exist in values
         for (const key of Object.keys(fixture.expected.values)) {
           expect(node.values).toHaveProperty(key);
-          // Special case: namespace field in importNamespace is a string, not an array
+          // Special case: namespace field in importNamespace is an array of Text nodes
           if (node.subtype === 'importNamespace' && key === 'namespace') {
-            expect(typeof node.values[key]).toBe('string');
+            expect(Array.isArray(node.values[key])).toBe(true);
           } else {
             expect(Array.isArray(node.values[key])).toBe(true);
           }

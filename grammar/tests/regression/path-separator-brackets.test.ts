@@ -48,8 +48,10 @@ describe('Path Separator in Brackets - Regression Test for Issue #53', () => {
     expect(result[0].source).toBe(null);
     
     // Check that path array contains PathSeparator nodes
-    // In the new AST structure, path segments are in values.value.segments
-    const contentArray = result[0].values.value.segments;
+    // In the new AST structure, value is an array containing a path object
+    const pathObject = result[0].values.value[0];
+    expect(pathObject.type).toBe('path');
+    const contentArray = pathObject.segments;
     expect(contentArray).toHaveLength(5);
     
     // Verify structure

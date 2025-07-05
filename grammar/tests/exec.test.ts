@@ -16,7 +16,7 @@ describe('Exec directive', () => {
       expect(directiveNode.subtype).toBe('exeCommand');
       
       // Check structured format
-      expect(directiveNode.values.identifier[0].content).toBe('listFiles');
+      expect(directiveNode.values.identifier[0].identifier).toBe('listFiles');
       // Command is now tokenized
       expect(directiveNode.values.command).toHaveLength(3); // 'ls', ' ', '-la'
       expect(directiveNode.values.command[0].content).toBe('ls');
@@ -43,7 +43,7 @@ describe('Exec directive', () => {
       expect(directiveNode.subtype).toBe('exeCommand');
       
       // Check structured format
-      expect(directiveNode.values.identifier[0].content).toBe('formatFile');
+      expect(directiveNode.values.identifier[0].identifier).toBe('formatFile');
       expect(directiveNode.values.params).toHaveLength(2);
       expect(directiveNode.values.params[0].type).toBe('Parameter');
       expect(directiveNode.values.params[0].name).toBe('file');
@@ -77,7 +77,7 @@ describe('Exec directive', () => {
       expect(directiveNode.subtype).toBe('exeCommand');
       
       // Check structured format
-      expect(directiveNode.values.identifier[0].content).toBe('formatFile');
+      expect(directiveNode.values.identifier[0].identifier).toBe('formatFile');
       expect(directiveNode.values.params).toHaveLength(2);
       expect(directiveNode.values.params[0].type).toBe('Parameter');
       expect(directiveNode.values.params[0].name).toBe('file');
@@ -104,7 +104,7 @@ describe('Exec directive', () => {
       expect(directiveNode.subtype).toBe('exeCommand');
       
       // Check metadata
-      expect(directiveNode.values.identifier[0].content).toBe('dangerous');
+      expect(directiveNode.values.identifier[0].identifier).toBe('dangerous');
       expect(directiveNode.values.metadata).toBeDefined();
       expect(directiveNode.values.metadata[0].content).toBe('risk.high');
       expect(directiveNode.raw.metadata).toBe('risk.high');
@@ -128,7 +128,7 @@ describe('Exec directive', () => {
       expect(directiveNode.subtype).toBe('exeCode');
       
       // Check structured format
-      expect(directiveNode.values.identifier[0].content).toBe('greet');
+      expect(directiveNode.values.identifier[0].identifier).toBe('greet');
       expect(directiveNode.values.params).toEqual([]);
       expect(directiveNode.values.lang[0].content).toBe('javascript');
       expect(directiveNode.values.code[0].content).toContain('console.log("Hello, world!")');
@@ -155,7 +155,7 @@ describe('Exec directive', () => {
       expect(directiveNode.subtype).toBe('exeCode');
       
       // Check structured format
-      expect(directiveNode.values.identifier[0].content).toBe('formatJson');
+      expect(directiveNode.values.identifier[0].identifier).toBe('formatJson');
       expect(directiveNode.values.params).toHaveLength(2);
       expect(directiveNode.values.params[0].type).toBe('Parameter');
       expect(directiveNode.values.params[0].name).toBe('data');
@@ -184,7 +184,7 @@ describe('Exec directive', () => {
       expect(directiveNode.subtype).toBe('exeCode');
       
       // Check structured format
-      expect(directiveNode.values.identifier[0].content).toBe('formatJson');
+      expect(directiveNode.values.identifier[0].identifier).toBe('formatJson');
       expect(directiveNode.values.params).toHaveLength(2);
       expect(directiveNode.values.params[0].type).toBe('Parameter');
       expect(directiveNode.values.params[0].name).toBe('data');
@@ -211,7 +211,7 @@ describe('Exec directive', () => {
       expect(directiveNode.subtype).toBe('exeCode');
       
       // Check structured format
-      expect(directiveNode.values.identifier[0].content).toBe('processTemplate');
+      expect(directiveNode.values.identifier[0].identifier).toBe('processTemplate');
       expect(directiveNode.values.lang[0].content).toBe('javascript');
       expect(directiveNode.values.code).toBeDefined();
       
@@ -238,7 +238,7 @@ describe('Exec directive', () => {
       expect(directiveNode.subtype).toBe('exeCode');
       
       // Check metadata
-      expect(directiveNode.values.identifier[0].content).toBe('processData');
+      expect(directiveNode.values.identifier[0].identifier).toBe('processData');
       expect(directiveNode.values.metadata).toBeDefined();
       expect(directiveNode.values.metadata[0].content).toBe('meta');
       expect(directiveNode.raw.metadata).toBe('meta');

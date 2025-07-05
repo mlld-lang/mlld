@@ -36,7 +36,7 @@ describe('Grammar-Type System Alignment', () => {
       
       // Check values structure - unified var has 'value' not 'content'
       expect(directive.values.identifier).toBeDefined();
-      expect(directive.values.identifier.identifier).toBe('greeting');
+      expect(directive.values.identifier[0].identifier).toBe('greeting');
       expect(directive.values.value).toBeDefined();
     });
 
