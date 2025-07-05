@@ -21,10 +21,16 @@ NumericFieldAccess
     }
 
 // ARRAY INDEXING WITH BRACKETS
-// Example: array[0], list[index]
+// Example: array[0], list[index], obj["key-with-spaces"]
 ArrayAccess
   = "[" _ index:NumberLiteral _ "]" {
       return { type: 'arrayIndex', value: index };
+    }
+  / "[" _ index:StringLiteral _ "]" {
+      return { type: 'bracketAccess', value: index };
+    }
+  / "[" _ "@" index:BaseIdentifier _ "]" {
+      return { type: 'variableIndex', value: index };
     }
   / "[" _ index:BaseIdentifier _ "]" {
       return { type: 'stringIndex', value: index };

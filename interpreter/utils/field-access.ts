@@ -16,8 +16,9 @@ export function accessField(value: any, field: FieldAccessNode): any {
   
   switch (field.type) {
     case 'field':
-    case 'stringIndex': {
-      // Both handle string-based property access
+    case 'stringIndex':
+    case 'bracketAccess': {
+      // All handle string-based property access
       const name = String(fieldValue);
       
       if (typeof value !== 'object' || value === null) {

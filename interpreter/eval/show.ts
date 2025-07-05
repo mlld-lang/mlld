@@ -155,7 +155,23 @@ export async function evaluateShow(
     if (variableNode.fields && variableNode.fields.length > 0 && typeof value === 'object' && value !== null) {
       const { accessField } = await import('../utils/field-access');
       for (const field of variableNode.fields) {
-        value = accessField(value, field);
+        // Handle variableIndex type - need to resolve the variable first
+        if (field.type === 'variableIndex') {
+          const indexVar = env.getVariable(field.value);
+          if (!indexVar) {
+            throw new Error(`Variable not found for index: ${field.value}`);
+          }
+          // Get the actual value to use as index
+          let indexValue = indexVar.value;
+          if (isTextLike(indexVar)) {
+            indexValue = indexVar.value;
+          }
+          // Create a new field with the resolved value
+          const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
+          value = accessField(value, resolvedField);
+        } else {
+          value = accessField(value, field);
+        }
         if (value === undefined) break;
       }
     }

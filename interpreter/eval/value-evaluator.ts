@@ -249,7 +249,23 @@ export async function evaluateDataValue(
       const { accessField } = await import('../utils/field-access');
       // Apply each field access in sequence
       for (const field of value.fields) {
-        result = accessField(result, field);
+        // Handle variableIndex type - need to resolve the variable first
+        if (field.type === 'variableIndex') {
+          const indexVar = env.getVariable(field.value);
+          if (!indexVar) {
+            throw new Error(`Variable not found for index: ${field.value}`);
+          }
+          // Get the actual value to use as index
+          let indexValue = indexVar.value;
+          if (typeof indexValue === 'object' && indexValue !== null && 'value' in indexValue) {
+            indexValue = indexValue.value;
+          }
+          // Create a new field with the resolved value
+          const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
+          result = accessField(result, resolvedField);
+        } else {
+          result = accessField(result, field);
+        }
       }
     }
     

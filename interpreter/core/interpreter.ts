@@ -425,7 +425,23 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     if (node.fields && node.fields.length > 0 && typeof resolvedValue === 'object' && resolvedValue !== null) {
       const { accessField } = await import('../utils/field-access');
       for (const field of node.fields) {
-        resolvedValue = accessField(resolvedValue, field);
+        // Handle variableIndex type - need to resolve the variable first
+        if (field.type === 'variableIndex') {
+          const indexVar = env.getVariable(field.value);
+          if (!indexVar) {
+            throw new Error(`Variable not found for index: ${field.value}`);
+          }
+          // Get the actual value to use as index
+          let indexValue = indexVar.value;
+          if (typeof indexValue === 'object' && indexValue !== null && 'value' in indexValue) {
+            indexValue = indexValue.value;
+          }
+          // Create a new field with the resolved value
+          const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
+          resolvedValue = accessField(resolvedValue, resolvedField);
+        } else {
+          resolvedValue = accessField(resolvedValue, field);
+        }
         if (resolvedValue === undefined) break;
       }
     }
