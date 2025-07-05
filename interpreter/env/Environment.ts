@@ -38,6 +38,10 @@ import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import { builtinTransformers, createTransformerVariable } from '../builtin/transformers';
 import { NodeShadowEnvironment } from './NodeShadowEnvironment';
+import { CacheManager } from './CacheManager';
+import { CommandUtils } from './CommandUtils';
+import { DebugUtils } from './DebugUtils';
+import { ErrorUtils, type CollectedError, type CommandExecutionContext } from './ErrorUtils';
 
 interface CommandExecutionOptions {
   showProgress?: boolean;
@@ -49,21 +53,6 @@ interface CommandExecutionOptions {
   env?: Record<string, string>;
 }
 
-interface CommandExecutionContext {
-  sourceLocation?: SourceLocation;
-  directiveNode?: MlldNode;
-  filePath?: string;
-  directiveType?: string;
-}
-
-interface CollectedError {
-  error: MlldCommandExecutionError;
-  command: string;
-  timestamp: Date;
-  duration: number;
-  sourceLocation?: SourceLocation;
-  context?: CommandExecutionContext;
-}
 
 /**
  * Environment holds all state and provides capabilities for evaluation.
@@ -73,7 +62,6 @@ export class Environment {
   private variables = new Map<string, Variable>();
   private nodes: MlldNode[] = [];
   private parent?: Environment;
-  private urlCache: Map<string, { content: string; timestamp: number; ttl?: number }> = new Map();
   private importStack: Set<string> = new Set(); // Track imports to prevent circular dependencies
   private urlConfig?: ResolvedURLConfig;
   private importApproval?: ImportApproval;
@@ -85,8 +73,11 @@ export class Environment {
   private resolverManager?: ResolverManager; // New resolver system
   private urlCacheManager?: URLCache; // URL cache manager
   private reservedNames: Set<string> = new Set(); // Now dynamic based on registered resolvers
-  private resolverVariableCache = new Map<string, Variable>(); // Cache for resolver variables
   private initialNodeCount: number = 0; // Track initial nodes to prevent duplicate merging
+  
+  // Utility managers
+  private cacheManager: CacheManager;
+  private errorUtils: ErrorUtils;
   
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
@@ -112,7 +103,6 @@ export class Environment {
     timeout: 30000,
     collectErrors: false
   };
-  private collectedErrors: CollectedError[] = [];
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
@@ -285,6 +275,10 @@ export class Environment {
       // Reserve module prefixes from resolver configuration
       this.reserveModulePrefixes();
     }
+    
+    // Initialize utility managers
+    this.cacheManager = new CacheManager(this.urlCacheManager, this.immutableCache, this.urlConfig);
+    this.errorUtils = new ErrorUtils();
   }
   
   /**
@@ -463,287 +457,11 @@ export class Environment {
     // TODO: Add security toggle from mlld.lock.json when available
     // For now, assume debug is enabled
     
-    
-    // Handle special case: @DEBUG is lazy and computed on access
-    // If we're being called to get the value for @DEBUG variable, we should compute it
-    
-    if (version === 1) {
-      // Version 1: Full environment as pretty-printed JSON
-      // Collect all variables (including from parent scopes)
-      const allVars = this.getAllVariables();
-      const variablesObj: Record<string, any> = {};
-      
-      for (const [name, variable] of allVars) {
-        variablesObj[name] = {
-          type: variable.type,
-          value: variable.value,
-          metadata: variable.metadata || null
-        };
-      }
-      
-      // Collect environment information
-      const debugInfo = {
-        basePath: this.basePath,
-        currentFile: this.getCurrentFilePath() || null,
-        variables: variablesObj,
-        reservedVariables: Array.from(this.reservedNames),
-        nodes: this.nodes.length,
-        urlConfig: this.urlConfig || null,
-        outputOptions: this.outputOptions,
-        errors: this.collectedErrors.length,
-        importStack: Array.from(this.importStack),
-        hasParent: this.parent !== undefined
-      };
-      
-      return debugInfo;
-    } else if (version === 2) {
-      // Version 2: Reduced/useful version for debugging
-      const allVars = this.getAllVariables();
-      
-      // Separate variables by category
-      const reservedVars: Record<string, any> = {};
-      const userVars: Record<string, any> = {};
-      const importedVars: Record<string, any> = {};
-      
-      for (const [name, variable] of allVars) {
-        const varInfo: any = {
-          type: variable.type,
-          value: this.truncateValue(variable.value, variable.type, 50)
-        };
-        
-        // Add source information
-        if (variable.metadata?.definedAt) {
-          varInfo.source = variable.metadata.definedAt.filePath || 'unknown';
-          varInfo.line = variable.metadata.definedAt.line;
-        }
-        
-        if (variable.metadata?.isReserved) {
-          reservedVars[name] = varInfo;
-        } else if (variable.metadata?.isImported) {
-          importedVars[name] = varInfo;
-          if ('importPath' in variable.metadata && variable.metadata.importPath) {
-            varInfo.importedFrom = variable.metadata.importPath;
-          }
-        } else {
-          userVars[name] = varInfo;
-        }
-      }
-      
-      // Get environment variable names only (no values for security)
-      const envVarNames = Object.keys(process.env).filter(key => 
-        !key.startsWith('npm_') && // Filter npm-specific vars
-        !key.includes('PATH') &&    // Filter path-related vars  
-        key !== 'DEBUG' &&          // Filter debug var
-        key !== '_'                 // Filter underscore var
-      );
-      
-      const debugInfo = {
-        project: {
-          basePath: this.basePath,
-          currentFile: this.getCurrentFilePath() || null,
-          projectPath: this.basePath // Should be computed via getProjectPath()
-        },
-        environment: {
-          variables: envVarNames.sort(),
-          note: 'Values hidden for security. Use @INPUT to access if needed.'
-        },
-        globalVariables: reservedVars,
-        userVariables: userVars,
-        importedVariables: importedVars,
-        stats: {
-          totalVariables: allVars.size,
-          outputNodes: this.nodes.length,
-          errors: this.collectedErrors.length,
-          importStackDepth: this.importStack.size
-        }
-      };
-      
-      return debugInfo;
-    } else if (version === 3) {
-      // Version 3: Markdown formatted output
-      const allVars = this.getAllVariables();
-      
-      // Separate variables by category
-      const reservedVars: Array<[string, Variable]> = [];
-      const userVars: Array<[string, Variable]> = [];
-      const importedVars: Array<[string, Variable]> = [];
-      
-      for (const [name, variable] of allVars) {
-        if (variable.metadata?.isReserved) {
-          reservedVars.push([name, variable]);
-        } else if (variable.metadata?.isImported) {
-          importedVars.push([name, variable]);
-        } else {
-          userVars.push([name, variable]);
-        }
-      }
-      
-      // Get environment variable names
-      const envVarNames = Object.keys(process.env).filter(key => 
-        !key.startsWith('npm_') && 
-        !key.includes('PATH') &&
-        key !== 'DEBUG' &&
-        key !== '_'
-      ).sort();
-      
-      // Build markdown output
-      let markdown = `## ${this.getCurrentFilePath() || 'mlld'} debug:\n\n`;
-      
-      // Environment variables section
-      markdown += '### Environment variables:\n';
-      if (envVarNames.length > 0) {
-        markdown += envVarNames.join(', ') + '\n';
-        markdown += '_(not available unless passed via @INPUT)_\n\n';
-      } else {
-        markdown += '_None detected_\n\n';
-      }
-      
-      // Global variables section
-      markdown += '### Global variables:\n';
-      for (const [name, variable] of reservedVars) {
-        if (name === 'DEBUG') continue; // Don't show DEBUG itself
-        markdown += `**@${name}**\n`;
-        markdown += `- type: ${variable.type}\n`;
-        const value = this.truncateValue(variable.value, variable.type, 50);
-        if (isTextLike(variable) && typeof value === 'string') {
-          markdown += `- value: "${value}"\n`;
-        } else {
-          markdown += `- value: ${value}\n`;
-        }
-        markdown += '\n';
-      }
-      
-      // User variables section
-      if (userVars.length > 0) {
-        markdown += '### User variables:\n';
-        for (const [name, variable] of userVars) {
-          markdown += `**@${name}**\n`;
-          markdown += `- type: ${variable.type}\n`;
-          const value = this.truncateValue(variable.value, variable.type, 50);
-          if (isTextLike(variable) && typeof value === 'string') {
-            markdown += `- value: "${value}"\n`;
-          } else {
-            markdown += `- value: ${value}\n`;
-          }
-          if (variable.metadata?.definedAt) {
-            const source = variable.metadata.definedAt.filePath || 'unknown';
-            const relativePath = source.startsWith(this.basePath) 
-              ? source.substring(this.basePath.length + 1) 
-              : source;
-            markdown += `- defined at: ${relativePath}:${variable.metadata.definedAt.line}\n`;
-          }
-          markdown += '\n';
-        }
-      }
-      
-      // Imported variables section
-      if (importedVars.length > 0) {
-        markdown += '### Imported variables:\n';
-        for (const [name, variable] of importedVars) {
-          markdown += `**@${name}**\n`;
-          markdown += `- type: ${variable.type}\n`;
-          const value = this.truncateValue(variable.value, variable.type, 50);
-          if (isTextLike(variable) && typeof value === 'string') {
-            markdown += `- value: "${value}"\n`;
-          } else {
-            markdown += `- value: ${value}\n`;
-          }
-          if (variable.metadata?.importPath) {
-            markdown += `- imported from: ${variable.metadata.importPath}\n`;
-          }
-          markdown += '\n';
-        }
-      }
-      
-      // Pipeline context section (if in a pipeline)
-      // Check this environment and parent environments for pipeline context
-      let pipelineCtx = this.pipelineContext;
-      if (!pipelineCtx && this.parent) {
-        // Check parent environment for pipeline context
-        let current: Environment | undefined = this.parent;
-        while (current && !pipelineCtx) {
-          pipelineCtx = current.getPipelineContext();
-          current = current.parent;
-        }
-      }
-      
-      if (pipelineCtx) {
-        markdown += '\n### Pipeline Context:\n';
-        markdown += `- Current stage: ${pipelineCtx.stage} of ${pipelineCtx.totalStages}\n`;
-        markdown += `- Current command: @${String(pipelineCtx.currentCommand)}\n`;
-        markdown += `- Input type: ${typeof pipelineCtx.input}\n`;
-        markdown += `- Input length: ${typeof pipelineCtx.input === 'string' ? (pipelineCtx.input as string).length : 'N/A'}\n`;
-        if (typeof pipelineCtx.input === 'string') {
-          const truncated = (pipelineCtx.input as string).length > 100 
-            ? (pipelineCtx.input as string).substring(0, 100) + '...' 
-            : pipelineCtx.input;
-          markdown += `- Input value: "${truncated}"\n`;
-        } else {
-          markdown += `- Input value: ${JSON.stringify(pipelineCtx.input, null, 2).substring(0, 200)}...\n`;
-        }
-        if (pipelineCtx.previousOutputs.length > 0) {
-          markdown += `- Previous stages:\n`;
-          pipelineCtx.previousOutputs.forEach((output, i) => {
-            const truncated = output.length > 50 ? output.substring(0, 50) + '...' : output;
-            markdown += `  ${i + 1}. ${truncated}\n`;
-          });
-        }
-        markdown += '\n';
-      }
-      
-      // Stats section
-      markdown += '### Statistics:\n';
-      markdown += `- Total variables: ${allVars.size}\n`;
-      markdown += `- Output nodes: ${this.nodes.length}\n`;
-      markdown += `- Errors collected: ${this.collectedErrors.length}\n`;
-      markdown += `- Current file: ${this.getCurrentFilePath() || 'none'}\n`;
-      markdown += `- Base path: ${this.basePath}\n`;
-      
-      return markdown;
-    } else {
-      // Default to version 2
-      return this.createDebugObject(2);
-    }
+    // Use DebugUtils for debug object creation
+    const allVars = this.getAllVariables();
+    return DebugUtils.createDebugObject(allVars, this.reservedNames, version);
   }
   
-  /**
-   * Truncate values for display in debug output
-   */
-  private truncateValue(value: any, type: string, maxLength: number = 50): any {
-    if (value === null || value === undefined) {
-      return value;
-    }
-    
-    if ((type === 'text' || type === 'simple-text') && typeof value === 'string') {
-      if (value.length > maxLength) {
-        return `${value.substring(0, maxLength)}... (${value.length} chars)`;
-      }
-      return value;
-    }
-    
-    if (type === 'data') {
-      // For objects/arrays, show structure but truncate strings
-      if (Array.isArray(value)) {
-        return `[array with ${value.length} items]`;
-      } else if (typeof value === 'object') {
-        const keys = Object.keys(value);
-        if (keys.length > 5) {
-          return `{object with ${keys.length} keys: ${keys.slice(0, 5).join(', ')}, ...}`;
-        }
-        return `{object with keys: ${keys.join(', ')}}`;
-      }
-    }
-    
-    if (type === 'path' && typeof value === 'object' && value !== null && 'resolvedPath' in value) {
-      return value.resolvedPath;
-    }
-    
-    if (type === 'exec' || type === 'command') {
-      return '[command definition]';
-    }
-    
-    return value;
-  }
   
   // --- Property Accessors ---
   
@@ -892,7 +610,7 @@ export class Environment {
       const upperName = name.toUpperCase();
       
       // Check cache first
-      const cached = this.resolverVariableCache.get(upperName);
+      const cached = this.cacheManager.getResolverVariable(upperName);
       if (cached) {
         return cached;
       }
@@ -900,7 +618,7 @@ export class Environment {
       // Create and cache the resolver variable
       const resolverVar = this.createResolverVariable(upperName);
       if (resolverVar) {
-        this.resolverVariableCache.set(upperName, resolverVar);
+        this.cacheManager.setResolverVariable(upperName, resolverVar);
         return resolverVar;
       }
     }
@@ -1056,7 +774,7 @@ export class Environment {
     }
     
     // Check cache first
-    const cached = this.resolverVariableCache.get(upperName);
+    const cached = this.cacheManager.getResolverVariable(upperName);
     if (cached && cached.metadata && 'needsResolution' in cached.metadata && !cached.metadata.needsResolution) {
       return cached;
     }
@@ -1110,7 +828,7 @@ export class Environment {
         });
       
       // Cache the resolved variable
-      this.resolverVariableCache.set(upperName, resolvedVar);
+      this.cacheManager.setResolverVariable(upperName, resolvedVar);
       
       return resolvedVar;
     } catch (error) {
@@ -1433,45 +1151,6 @@ export class Environment {
     return this.parent.readStdin();
   }
   
-  /**
-   * Parse a command string and validate it for security
-   * This ensures no dangerous operators are present
-   */
-  private validateAndParseCommand(command: string): string {
-    // Create a version of the command with quoted sections removed for operator checking
-    let checkCommand = command;
-    
-    // Remove single-quoted strings (no interpolation, so safe to remove entirely)
-    checkCommand = checkCommand.replace(/'[^']*'/g, '');
-    
-    // Remove double-quoted strings (they may have interpolation but operators inside are literal)
-    checkCommand = checkCommand.replace(/"[^"]*"/g, '');
-    
-    // Also handle escaped characters - they're literal
-    checkCommand = checkCommand.replace(/\\./g, '');
-    
-    // Check for dangerous operators only in the unquoted parts
-    const dangerousPatterns = [
-      /&&/, // AND operator
-      /\|\|/, // OR operator (but single | is allowed for piping) 
-      /;/, // Semicolon
-      />\s*[^>]/, // Single redirect
-      />>/,  // Append redirect
-      /<(?![=<])/, // Input redirect (not <= or <<)
-      /&(?![&>])/ // Background (not && or &>)
-    ];
-    
-    for (const pattern of dangerousPatterns) {
-      if (pattern.test(checkCommand)) {
-        throw new Error(`Command contains banned shell operator`);
-      }
-    }
-    
-    // For now, just return the command as-is since it passed validation
-    // The shell-quote library was causing issues with over-escaping
-    // The grammar should have already caught most dangerous operators
-    return command;
-  }
 
   async executeCommand(
     command: string, 
@@ -1487,7 +1166,7 @@ export class Environment {
     // Validate and parse the command for safe execution
     let safeCommand: string;
     try {
-      safeCommand = this.validateAndParseCommand(command);
+      safeCommand = CommandUtils.validateAndParseCommand(command);
     } catch (error: unknown) {
       // If validation fails, it's likely due to a banned operator
       const message = error instanceof Error ? error.message : String(error);
@@ -2036,7 +1715,7 @@ ${code}
           }
           
           // Detect command substitution patterns and automatically add stderr capture
-          const enhancedCode = this.enhanceShellCodeForCommandSubstitution(code);
+          const enhancedCode = CommandUtils.enhanceShellCodeForCommandSubstitution(code);
           
           // For multiline bash scripts, use stdin to avoid shell escaping issues
           // Use spawnSync to capture both stdout and stderr
@@ -2103,65 +1782,6 @@ ${code}
     }
   }
   
-  /**
-   * Enhances shell code to automatically capture stderr in command substitution patterns.
-   * This fixes the issue where interactive commands write to stderr when no TTY is detected,
-   * but command substitution $(…) only captures stdout by default.
-   */
-  private enhanceShellCodeForCommandSubstitution(code: string): string {
-    // Pattern to match command substitution that doesn't already have stderr redirection
-    // Matches: $(...) where ... doesn't contain "2>&1" or "2>/dev/null"
-    const commandSubstitutionPattern = /\$\(([^)]*)\)/g;
-    
-    const enhancedCode = code.replace(commandSubstitutionPattern, (match, innerCommand) => {
-      if (typeof innerCommand !== 'string') {
-        return match;
-      }
-      // Check if this looks like an interactive command pattern that might write to stderr
-      const interactivePatterns = [
-        /if\s*\[\s*-t\s+[01]\s*\]/,  // TTY detection: if [ -t 0 ] or if [ -t 1 ]
-        /echo\s+.*\s+>&2/,           // Direct stderr output: echo "..." >&2
-        /\|\|\s*echo/,               // Fallback pattern: command || echo
-        /python3?\s+-c/,             // Python scripts that might detect TTY
-        /node\s+-e/,                 // Node scripts that might detect TTY
-        /sh\s+-c\s+.*>&2/,           // Shell commands with stderr: sh -c '... >&2'
-        /echo.*&&.*echo.*>&2/,       // Commands with multiple echo, one to stderr
-      ];
-      
-      const needsStderrCapture = interactivePatterns.some(pattern => pattern.test(innerCommand));
-      const hasStderrRedirection = innerCommand.includes('2>&1') || innerCommand.includes('2>/dev/null') || innerCommand.includes('2>');
-      
-      // Check if stderr redirection is at the end of the command (common pattern)
-      const hasTrailingStderrRedirection = /\s+2>&1\s*$/.test(innerCommand);
-      
-      if (needsStderrCapture && !hasStderrRedirection) {
-        // Add stderr capture to the command substitution and normalize whitespace
-        return `$(${innerCommand.trim()} 2>&1 | tr '\\n' ' ' | sed 's/[[:space:]]*$//')`;
-      } else if (hasStderrRedirection && (needsStderrCapture || hasTrailingStderrRedirection)) {
-        // For commands that already capture stderr but might have multi-line output, normalize whitespace
-        // Remove the trailing 2>&1 and re-add it after normalization
-        const cleanCommand = innerCommand.replace(/\s+2>&1\s*$/, '').trim();
-        return `$(${cleanCommand} 2>&1 | tr '\\n' ' ' | sed 's/[[:space:]]*$//')`;
-      } else if (innerCommand.includes('&&') || innerCommand.includes('||')) {
-        // For commands with && or || that might produce multi-line output, normalize whitespace
-        // Wrap the command in parentheses to ensure proper precedence
-        return `$({ ${innerCommand.trim()}; } | tr '\\n' ' ' | sed 's/[[:space:]]*$//')`;
-      }
-      
-      return match;
-    });
-    
-    // Also add stderr capture for direct commands that might write to stderr when no TTY
-    // This helps with direct execution cases
-    const hasDirectStderrPattern = /echo\s+.*\s+>&2/;
-    if (hasDirectStderrPattern.test(code) && !code.includes('2>&1')) {
-      // For direct commands that write to stderr, we need to ensure they're captured
-      // But we need to be careful not to break existing functionality
-      // This is more complex and should be handled case by case
-    }
-    
-    return enhancedCode;
-  }
   
   async resolvePath(inputPath: string): Promise<string> {
     // Handle special path variables
@@ -2430,12 +2050,9 @@ ${code}
     
     if (cacheEnabled && !forImport) {
       // Check runtime cache for non-imports
-      const cached = this.urlCache.get(url);
-      if (cached) {
-        const ttl = cached.ttl || this.getURLCacheTTL(url);
-        if (Date.now() - cached.timestamp < ttl) {
-          return cached.content;
-        }
+      const cached = this.cacheManager.getURLCacheEntry(url);
+      if (cached && this.cacheManager.isURLCacheEntryValid(url)) {
+        return cached.content;
       }
     }
     
@@ -2485,7 +2102,7 @@ ${code}
       // Cache the response with URL-specific TTL for non-imports
       if (cacheEnabled && !forImport) {
         const ttl = this.getURLCacheTTL(url);
-        this.urlCache.set(url, { content, timestamp: Date.now(), ttl });
+        this.cacheManager.setURLCacheEntry(url, content, ttl);
       }
       
       return content;
@@ -2498,19 +2115,7 @@ ${code}
   }
   
   private getURLCacheTTL(url: string): number {
-    if (!this.urlConfig?.cache.rules) {
-      return this.urlConfig?.cache.defaultTTL || 5 * 60 * 1000;
-    }
-    
-    // Find matching rule
-    for (const rule of this.urlConfig.cache.rules) {
-      if (rule.pattern.test(url)) {
-        return rule.ttl;
-      }
-    }
-    
-    // Fall back to default
-    return this.urlConfig.cache.defaultTTL;
+    return this.cacheManager.getURLCacheTTL(url);
   }
   
   setURLOptions(options: Partial<typeof this.defaultUrlOptions>): void {
@@ -2524,7 +2129,7 @@ ${code}
     if (this.parent) {
       return this.parent.getURLCache();
     }
-    return this.urlCacheManager;
+    return this.cacheManager.getURLCacheManager();
   }
 
   /**
@@ -2548,6 +2153,7 @@ ${code}
   
   setURLConfig(config: ResolvedURLConfig): void {
     this.urlConfig = config;
+    this.cacheManager.setURLConfig(config);
   }
   
   // --- Output Management Methods ---
@@ -2608,22 +2214,15 @@ ${code}
     duration: number,
     context?: CommandExecutionContext
   ): void {
-    this.collectedErrors.push({
-      error,
-      command,
-      timestamp: new Date(),
-      duration,
-      sourceLocation: context?.sourceLocation,
-      context
-    });
+    this.errorUtils.collectError(error, command, duration, context);
   }
   
   getCollectedErrors(): CollectedError[] {
-    return this.collectedErrors;
+    return this.errorUtils.getCollectedErrors();
   }
   
   clearCollectedErrors(): void {
-    this.collectedErrors = [];
+    this.errorUtils.clearCollectedErrors();
   }
   
   private processOutput(output: string, maxLines?: number): { 
@@ -2631,32 +2230,12 @@ ${code}
     truncated: boolean; 
     originalLineCount: number 
   } {
-    // Temporarily disable output limiting to fix truncation issue
-    // TODO: Revisit terminal output controls in the future
-    return { processed: output.trimEnd(), truncated: false, originalLineCount: 0 };
-    
-    /*
-    if (!maxLines || maxLines <= 0) {
-      return { processed: output.trimEnd(), truncated: false, originalLineCount: 0 };
-    }
-    
-    const lines = output.split('\n');
-    if (lines.length <= maxLines) {
-      return { 
-        processed: output.trimEnd(), 
-        truncated: false, 
-        originalLineCount: lines.length 
-      };
-    }
-    
-    const truncated = lines.slice(0, maxLines).join('\n');
-    const remaining = lines.length - maxLines;
+    const result = ErrorUtils.processOutput(output, maxLines);
     return {
-      processed: `${truncated}\n... (${remaining} more lines, use --verbose to see all)`,
-      truncated: true,
-      originalLineCount: lines.length
+      processed: result.output.trimEnd(),
+      truncated: result.truncated,
+      originalLineCount: result.originalLength
     };
-    */
   }
   
   async displayCollectedErrors(): Promise<void> {
@@ -2835,8 +2414,7 @@ ${code}
     
     // Clear any other resources that might keep event loop alive
     logger.debug('Clearing caches and shadow envs');
-    this.urlCache.clear();
-    this.resolverVariableCache.clear();
+    this.cacheManager.clearAllCaches();
     this.shadowEnvs.clear();
     
     // Clear import stack to prevent memory leaks
