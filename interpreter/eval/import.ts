@@ -446,11 +446,11 @@ async function importFromPath(
         // Handle variable merging based on import type
         if (directive.subtype === 'importAll') {
           throw new MlldImportError(
-            "Wildcard imports '/import { * }' are no longer supported. " +
-            "Use namespace imports instead: '/import [file]' or '/import [file] as name'",
+            'Wildcard imports \'/import { * }\' are no longer supported. ' +
+            'Use namespace imports instead: \'/import [file]\' or \'/import [file] as name\'',
             directive.location,
             {
-              suggestion: "Change '/import { * } from [file]' to '/import [file]'"
+              suggestion: 'Change \'/import { * } from [file]\' to \'/import [file]\''
             }
           );
         } else if (directive.subtype === 'importNamespace') {
@@ -604,11 +604,11 @@ async function importFromPath(
     // Handle variable merging based on import type
     if (directive.subtype === 'importAll') {
       throw new MlldImportError(
-        "Wildcard imports '/import { * }' are no longer supported. " +
-        "Use namespace imports instead: '/import [file]' or '/import [file] as name'",
+        'Wildcard imports \'/import { * }\' are no longer supported. ' +
+        'Use namespace imports instead: \'/import [file]\' or \'/import [file] as name\'',
         directive.location,
         {
-          suggestion: "Change '/import { * } from [file]' to '/import [file]'"
+          suggestion: 'Change \'/import { * } from [file]\' to \'/import [file]\''
         }
       );
     } else if (directive.subtype === 'importNamespace') {
@@ -915,11 +915,11 @@ async function importFromResolverContent(
     // Handle variable merging based on import type (same as importFromPath)
     if (directive.subtype === 'importAll') {
       throw new MlldImportError(
-        "Wildcard imports '/import { * }' are no longer supported. " +
-        "Use namespace imports instead: '/import [file]' or '/import [file] as name'",
+        'Wildcard imports \'/import { * }\' are no longer supported. ' +
+        'Use namespace imports instead: \'/import [file]\' or \'/import [file] as name\'',
         directive.location,
         {
-          suggestion: "Change '/import { * } from [file]' to '/import [file]'"
+          suggestion: 'Change \'/import { * } from [file]\' to \'/import [file]\''
         }
       );
     } else if (directive.subtype === 'importNamespace') {
@@ -1046,7 +1046,7 @@ async function evaluateResolverImport(
         const format = importNode.identifier.replace(/^["']|["']$/g, ''); // Remove quotes
         
         // Check if this is a format string (quoted)
-        if (importNode.identifier.startsWith('"') || importNode.identifier.startsWith("'")) {
+        if (importNode.identifier.startsWith('"') || importNode.identifier.startsWith('\'')) {
           exportData = await (resolver as any).getExportData(format);
           
           // If no alias provided, use the format as the variable name
@@ -1104,11 +1104,11 @@ async function evaluateResolverImport(
   // Handle variable merging based on import type
   if (directive.subtype === 'importAll') {
     throw new MlldImportError(
-      "Wildcard imports '/import { * }' are no longer supported. " +
-      "Use namespace imports instead: '/import [file]' or '/import [file] as name'",
+      'Wildcard imports \'/import { * }\' are no longer supported. ' +
+      'Use namespace imports instead: \'/import [file]\' or \'/import [file] as name\'',
       directive.location,
       {
-        suggestion: "Change '/import { * } from [file]' to '/import [file]'"
+        suggestion: 'Change \'/import { * } from [file]\' to \'/import [file]\''
       }
     );
   } else if (directive.subtype === 'importSelected') {
@@ -1118,7 +1118,7 @@ async function evaluateResolverImport(
       const varName = importNode.identifier;
       
       // Skip if already handled as format import
-      if (varName.startsWith('"') || varName.startsWith("'")) {
+      if (varName.startsWith('"') || varName.startsWith('\'')) {
         continue;
       }
       
@@ -1193,11 +1193,11 @@ async function evaluateInputImport(
   // Handle variable merging based on import type
   if (directive.subtype === 'importAll') {
     throw new MlldImportError(
-      "Wildcard imports '/import { * }' are no longer supported. " +
-      "Use namespace imports instead: '/import [file]' or '/import [file] as name'",
+      'Wildcard imports \'/import { * }\' are no longer supported. ' +
+      'Use namespace imports instead: \'/import [file]\' or \'/import [file] as name\'',
       directive.location,
       {
-        suggestion: "Change '/import { * } from [file]' to '/import [file]'"
+        suggestion: 'Change \'/import { * } from [file]\' to \'/import [file]\''
       }
     );
   } else if (directive.subtype === 'importSelected') {

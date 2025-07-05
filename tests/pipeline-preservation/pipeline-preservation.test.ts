@@ -210,7 +210,7 @@ Bob,25,LA\`
 
       const result = await interpret(input, { fileSystem, pathService });
       const parsed = JSON.parse(result.trim());
-      expect(parsed).toEqual({ users: ["Alice", "Bob"], count: 2 });
+      expect(parsed).toEqual({ users: ['Alice', 'Bob'], count: 2 });
     });
   });
 

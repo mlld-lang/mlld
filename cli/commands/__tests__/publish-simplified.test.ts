@@ -99,7 +99,7 @@ describe('PublishCommand - Simplified Syntax', () => {
       
       await expect(
         (publisher as any).resolvePublishTarget('@unknown/module')
-      ).rejects.toThrow("No registry configured for prefix '@unknown/'");
+      ).rejects.toThrow('No registry configured for prefix \'@unknown/\'');
     });
     
     it('should throw error if module file not found', async () => {
@@ -117,7 +117,7 @@ describe('PublishCommand - Simplified Syntax', () => {
       
       await expect(
         (publisher as any).resolvePublishTarget('@adam/nonexistent')
-      ).rejects.toThrow("Module 'nonexistent' not found in any configured location");
+      ).rejects.toThrow('Module \'nonexistent\' not found in any configured location');
     });
     
     it('should skip LOCAL resolvers', async () => {

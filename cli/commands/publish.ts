@@ -800,7 +800,7 @@ export class PublishCommand {
   }> {
     const errors: string[] = [];
     const warnings: string[] = [];
-    let updatedMetadata: Partial<ModuleMetadata> = {};
+    const updatedMetadata: Partial<ModuleMetadata> = {};
     let updatedContent = content;
     let needsUpdate = false;
 

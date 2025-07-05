@@ -2086,7 +2086,7 @@ ${code}
     // Matches: $(...) where ... doesn't contain "2>&1" or "2>/dev/null"
     const commandSubstitutionPattern = /\$\(([^)]*)\)/g;
     
-    let enhancedCode = code.replace(commandSubstitutionPattern, (match, innerCommand) => {
+    const enhancedCode = code.replace(commandSubstitutionPattern, (match, innerCommand) => {
       // Check if this looks like an interactive command pattern that might write to stderr
       const interactivePatterns = [
         /if\s*\[\s*-t\s+[01]\s*\]/,  // TTY detection: if [ -t 0 ] or if [ -t 1 ]
@@ -2172,7 +2172,7 @@ ${code}
       // If no match found with fuzzy matching, check with extensions
       if (!path.extname(inputPath)) {
         const extensions = ['.mlld.md', '.mld', '.md'];
-        let allSuggestions: string[] = [];
+        const allSuggestions: string[] = [];
         
         for (const ext of extensions) {
           const pathWithExt = inputPath + ext;

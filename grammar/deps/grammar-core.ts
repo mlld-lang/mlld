@@ -723,7 +723,7 @@ export const helpers = {
       const char = input[i];
       
       // Handle string context to avoid counting braces inside strings
-      if ((char === '"' || char === "'") && (i === 0 || input[i - 1] !== '\\')) {
+      if ((char === '"' || char === '\'') && (i === 0 || input[i - 1] !== '\\')) {
         if (!inString) {
           inString = true;
           stringChar = char;
@@ -806,7 +806,7 @@ export const helpers = {
     // Check if we see a path indicator (", ', [, or @) without 'from'
     if (i < input.length) {
       const char = input[i];
-      return char === '"' || char === "'" || char === '[' || char === '@';
+      return char === '"' || char === '\'' || char === '[' || char === '@';
     }
     return false;
   },

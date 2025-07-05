@@ -10,7 +10,7 @@ export const pattern: ErrorPattern = {
       ctx.line.startsWith('/run ') &&
       !ctx.line.includes('{') &&
       !ctx.line.includes('"') &&
-      !ctx.line.includes("'") &&
+      !ctx.line.includes('\'') &&
       error.expected.some(e => e.text === '{' || e.text === '"')
     );
   },

@@ -111,7 +111,7 @@ export async function evaluateVar(
 
   // Type-based routing based on the AST structure
   let resolvedValue: any;
-  let templateAst: any = null; // Store AST for templates that need lazy interpolation
+  const templateAst: any = null; // Store AST for templates that need lazy interpolation
   
   // Check for primitive values first (numbers, booleans, null)
   if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {

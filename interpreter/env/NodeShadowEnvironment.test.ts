@@ -53,8 +53,8 @@ describe('NodeShadowEnvironment', () => {
   describe('timer cleanup', () => {
     it('should clear timers on cleanup', async () => {
       // Track timer IDs
-      let timerExecuted = false;
-      let intervalCount = 0;
+      const timerExecuted = false;
+      const intervalCount = 0;
       
       const code = `
         // Create a timer that would keep the event loop alive

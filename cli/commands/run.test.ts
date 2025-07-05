@@ -149,7 +149,7 @@ describe('RunCommand', () => {
         expect.fail('Should have thrown an error');
       } catch (error) {
         expect(error).toBeInstanceOf(MlldError);
-        expect(error.message).toMatch(/Available scripts:\n  available1\n  available2/);
+        expect(error.message).toMatch(/Available scripts:\n {2}available1\n {2}available2/);
       }
     });
     

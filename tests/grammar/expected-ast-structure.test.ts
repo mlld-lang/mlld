@@ -170,7 +170,7 @@ describe('Expected AST Structure - Basic Data Types', () => {
     });
     
     it('should unwrap single-quoted strings in data structures', () => {
-      const input = "/var @obj = {'message': 'Hello, world!'}";
+      const input = '/var @obj = {\'message\': \'Hello, world!\'}';
       const ast = parseSync(input);
       
       const varDirective = ast[0];

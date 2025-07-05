@@ -140,21 +140,67 @@ export default tseslint.config(
   {
     files: [
       'cli/commands/**/*.ts',
-      'cli/utils/**/*.ts'
+      'cli/utils/**/*.ts',
+      'cli/index.ts', // Main CLI entry with help messages
+      'cli/cli-entry.ts' // CLI entry point
     ],
     rules: {
       'no-console': 'off', // CLI commands need console output
     }
   },
   
-  // Test mock utilities need to access real console
+  // Build scripts and grammar generation need console for progress
+  {
+    files: [
+      'scripts/**/*.js',
+      'scripts/**/*.mjs',
+      'grammar/scripts/**/*.mjs',
+      'grammar/scripts/**/*.js',
+      'grammar/syntax-generator/**/*.js',
+      'grammar/deps/**/*.js',
+      'grammar/deps/**/*.ts'
+    ],
+    rules: {
+      'no-console': 'off', // Build scripts need console for progress output
+    }
+  },
+  
+  // Test files and test utilities
   {
     files: [
       'tests/utils/cli/mockConsole.ts',
-      'tests/utils/cli/mockProcessExit.ts'
+      'tests/utils/cli/mockProcessExit.ts',
+      '**/*.test.ts',
+      '**/*.spec.ts',
+      'tests/**/*.ts'
     ],
     rules: {
-      'no-console': 'off', // Mock utilities need console for debugging
+      'no-console': 'off', // Tests and mock utilities need console for debugging
+    }
+  },
+  
+  // Logger implementations need console
+  {
+    files: [
+      'core/utils/simpleLogger.ts',
+      'core/errors/patterns/init.ts' // Error pattern initialization
+    ],
+    rules: {
+      'no-console': 'off', // Logger implementations need direct console access
+    }
+  },
+  
+  // Debug output wrapped in environment checks
+  {
+    files: [
+      'interpreter/index.ts',
+      'interpreter/interpreter.fixture.test.ts',
+      'core/registry/RegistryManager.ts',
+      'core/resolvers/utils/PathMatcher.ts',
+      'core/security/ImportApproval.ts'
+    ],
+    rules: {
+      'no-console': 'off', // These files use console for debug output with environment checks
     }
   },
   
