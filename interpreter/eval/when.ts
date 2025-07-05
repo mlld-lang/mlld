@@ -292,8 +292,10 @@ async function evaluateWhenBlock(
     env.mergeChild(result.env);
     
     if (process.env.DEBUG_WHEN) {
-      console.log('After merge, parent env nodes:', env.nodes.length);
-      console.log('Result value:', result.value);
+      logger.debug('After merge:', {
+        parentEnvNodes: env.nodes.length,
+        resultValue: result.value
+      });
     }
     
     // Return the result with the updated parent environment
@@ -426,12 +428,14 @@ async function evaluateAllMatches(
     // Execute block action only if all conditions matched
     if (allMatch) {
       if (process.env.DEBUG_WHEN) {
-        console.log('Executing block action with env nodes before:', env.nodes.length);
+        logger.debug('Executing block action', { envNodesBefore: env.nodes.length });
       }
       const result = await evaluate(blockAction, env);
       if (process.env.DEBUG_WHEN) {
-        console.log('Block action result:', result);
-        console.log('Env nodes after block action:', env.nodes.length);
+        logger.debug('Block action completed', {
+          result,
+          envNodesAfter: env.nodes.length
+        });
       }
       return result;
     }
@@ -619,14 +623,14 @@ async function evaluateCondition(
   }
   
   if (process.env.DEBUG_WHEN) {
-    console.log('Evaluating condition:', condition);
+    logger.debug('Evaluating condition:', { condition });
   }
   
   // Evaluate the condition
   const result = await evaluate(condition, childEnv);
   
   if (process.env.DEBUG_WHEN) {
-    console.log('Condition evaluation result:', JSON.stringify(result, null, 2));
+    logger.debug('Condition evaluation result:', { result });
   }
   
   // If we have a variable to compare against
@@ -667,7 +671,7 @@ async function evaluateCondition(
     // Otherwise check stdout - trim whitespace
     const trimmedStdout = result.stdout.trim();
     if (process.env.DEBUG_WHEN) {
-      console.log('Trimmed stdout for truthiness:', JSON.stringify(trimmedStdout));
+      logger.debug('Trimmed stdout for truthiness:', { trimmedStdout });
     }
     return isTruthy(trimmedStdout);
   }

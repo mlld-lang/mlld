@@ -139,7 +139,7 @@ export class RegistryResolver {
     }
     
     const text = await response.text();
-    const registryData = JSON.parse(text);
+    const registryData = JSON.parse(text) as unknown;
     
     // Validate registry format with type guard
     if (!isRegistry(registryData)) {

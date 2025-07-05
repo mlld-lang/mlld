@@ -3,6 +3,7 @@ import type { Environment } from '../env/Environment';
 import type { DataValue } from '@core/types/var';
 import { isDirectiveValue, isVariableReferenceValue, isTemplateValue } from '@core/types/var';
 import { evaluate } from '../core/interpreter';
+import { logger } from '@core/utils/logger';
 
 // Simple cache to prevent double evaluation of the same directive
 const evaluationCache = new WeakMap<DirectiveNode, any>();
@@ -22,7 +23,7 @@ export async function evaluateDataValue(
   
   // Debug logging
   if (process.env.DEBUG_LAZY_EVAL) {
-    console.log('evaluateDataValue called with:', JSON.stringify(value, null, 2).substring(0, 200));
+    logger.debug('evaluateDataValue called with:', { value: JSON.stringify(value, null, 2).substring(0, 200) });
   }
   
   // Handle wrapped string values FIRST (with content array and wrapperType)
@@ -92,8 +93,10 @@ export async function evaluateDataValue(
     // Resolve path segments and read file
     const { interpolate } = await import('../core/interpreter');
     const resolvedPath = await interpolate(value.segments || [], env);
-    console.log('DEBUG: About to read file:', resolvedPath);
-    console.log('DEBUG: Path node:', JSON.stringify(value, null, 2));
+    logger.debug('About to read file', {
+      resolvedPath,
+      pathNode: value
+    });
     // Read the file content
     const content = await env.fileSystem.readFile(resolvedPath);
     return content;
@@ -238,7 +241,7 @@ export async function evaluateDataValue(
   }
   
   // If we get here, it's an unhandled type
-  console.warn('Unhandled data value type in lazy evaluation:', value);
+  logger.warn('Unhandled data value type in lazy evaluation:', { value });
   return value;
 }
 

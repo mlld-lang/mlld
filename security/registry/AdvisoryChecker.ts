@@ -82,8 +82,8 @@ export class AdvisoryChecker {
     }
     
     const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
+      input: process.stdin as NodeJS.ReadStream,
+      output: process.stdout as NodeJS.WriteStream
     });
     
     try {

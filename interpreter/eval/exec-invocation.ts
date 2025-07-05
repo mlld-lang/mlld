@@ -8,6 +8,7 @@ import { InterpolationContext } from '../core/interpolation-context';
 import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError } from '@core/errors';
+import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 
 /**
@@ -19,7 +20,7 @@ export async function evaluateExecInvocation(
   env: Environment
 ): Promise<EvalResult> {
   if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
-    console.log('evaluateExecInvocation called with:', node.commandRef);
+    logger.debug('evaluateExecInvocation called with:', { commandRef: node.commandRef });
   }
   
   // Get the command name from the command reference
@@ -60,7 +61,7 @@ export async function evaluateExecInvocation(
     const objectValue = await resolveVariableValue(objectVar, env);
     
     if (process.env.DEBUG_EXEC) {
-      console.log('DEBUG: Object reference in exec invocation', {
+      logger.debug('Object reference in exec invocation', {
         objectRef: objectRef.identifier,
         objectVarType: objectVar.type,
         objectVarValue: typeof objectVar.value,
@@ -78,7 +79,7 @@ export async function evaluateExecInvocation(
       let currentValue = objectValue;
       for (const field of objectRef.fields) {
         if (process.env.DEBUG_EXEC) {
-          console.log('DEBUG: Accessing field', {
+          logger.debug('Accessing field', {
             fieldType: field.type,
             fieldValue: field.value,
             currentValueType: typeof currentValue,
@@ -88,7 +89,7 @@ export async function evaluateExecInvocation(
         if (typeof currentValue === 'object' && currentValue !== null) {
           currentValue = (currentValue as any)[field.value];
           if (process.env.DEBUG_EXEC) {
-            console.log('DEBUG: Field access result', {
+            logger.debug('Field access result', {
               fieldValue: field.value,
               resultType: typeof currentValue,
               resultKeys: typeof currentValue === 'object' && currentValue !== null ? Object.keys(currentValue) : 'not-object'
@@ -273,8 +274,10 @@ export async function evaluateExecInvocation(
     const command = await interpolate(definition.commandTemplate, execEnv);
     
     if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
-      console.log('Executing command:', command);
-      console.log('Command template:', definition.commandTemplate);
+      logger.debug('Executing command', {
+        command,
+        commandTemplate: definition.commandTemplate
+      });
     }
     
     // Build environment variables from parameters for shell execution
@@ -324,7 +327,7 @@ export async function evaluateExecInvocation(
       // Check if this parameter is a pipeline input variable
       const paramVar = execEnv.getVariable(paramName);
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('Checking parameter:', {
+        logger.debug('Checking parameter:', {
           paramName,
           hasParamVar: !!paramVar,
           paramVarType: paramVar?.type,
@@ -342,7 +345,7 @@ export async function evaluateExecInvocation(
         
         // Debug primitive values
         if (process.env.DEBUG_EXEC) {
-          console.log(`Using actualValue for ${paramName}:`, {
+          logger.debug(`Using actualValue for ${paramName}:`, {
             actualValue: paramVar.metadata.actualValue,
             type: typeof paramVar.metadata.actualValue
           });
@@ -355,7 +358,7 @@ export async function evaluateExecInvocation(
         
         // Debug primitive values
         if (process.env.DEBUG_EXEC) {
-          console.log(`Code parameter ${paramName}:`, {
+          logger.debug(`Code parameter ${paramName}:`, {
             argValue,
             type: typeof argValue,
             isNumber: typeof argValue === 'number',

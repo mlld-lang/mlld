@@ -80,7 +80,7 @@ export class GistAdapter implements StorageAdapter {
       );
     }
 
-    const gistData = await response.json();
+    const gistData = await response.json() as unknown;
 
     // Validate response structure
     if (!isGistResponse(gistData)) {
