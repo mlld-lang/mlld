@@ -80,8 +80,22 @@ export async function evaluateShow(
       value = variable.value;
       
       // For template variables (like ::{{var}}::), we need to interpolate the template content
-      if (isTemplate(variable) && Array.isArray(value)) {
-        value = await interpolate(value, env);
+      if (isTemplate(variable)) {
+        // For double-bracket templates, the value is the AST array
+        if (Array.isArray(value)) {
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.log('DEBUG: Template interpolation in show');
+            console.log('  Variable name:', variable.name);
+            console.log('  AST array:', JSON.stringify(value, null, 2));
+          }
+          value = await interpolate(value, env);
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.log('  Interpolation result:', value);
+          }
+        } else if (variable.metadata?.templateAst && Array.isArray(variable.metadata.templateAst)) {
+          // Fallback - check metadata (shouldn't be needed with new code)
+          value = await interpolate(variable.metadata.templateAst, env);
+        }
       }
     } else if (isObject(variable)) {
       // Object - use the value

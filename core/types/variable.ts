@@ -100,7 +100,7 @@ export interface InterpolatedTextVariable extends BaseVariable {
  */
 export interface TemplateVariable extends BaseVariable {
   type: 'template';
-  value: string;
+  value: string | any[]; // Allow array for lazy-evaluated templates
   parameters?: string[];
   templateSyntax: 'double-bracket' | 'backtick';
   metadata?: VariableMetadata;

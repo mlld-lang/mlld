@@ -728,35 +728,6 @@ Output: Hello from module
 Hello from module
 ```
 
-#### Example.o Variant
-
-**Input:**
-```mlld
-# Test exec invocation from module imports
-
-## Direct invocation
-Hello, World!
-
-## With parameter
-Hello, Alice!
-
-## Multi-line command
-Line 1
-Line 2
-
-## Multiple parameters
-First: foo, Second: bar
-
-## In data directive
-
-Hello, World!
-## In text template
-
-Output: Hello from module
-## Verify regular variable import works
-Hello from module
-```
-
 ### Valid Exec parameterized command
 
 **Input:**
@@ -892,26 +863,6 @@ Mixed literals test: path: /test, pattern: *.js, options: {"depth":2,"exclude":[
 All literal tests completed!
 ```
 
-#### Example.o Variant
-
-**Input:**
-```mlld
-# Array and Object Literals in Function Arguments
-
-This test verifies that array and object literals can be passed directly as function arguments.
-
-Array literal test: PASS
-
-Object literal test: path: /path, pattern: \*.md, options: {"includeContent":true}
-
-Empty array test: Filtering 0 items by key=value
-
-Nested structure test: PASS
-
-Mixed literals test: path: /test, pattern: \*.js, options: {"depth":2,"exclude":[".git","node_modules"]}
-All literal tests completed!
-```
-
 ### Valid Object property access in exec args
 
 **Input:**
@@ -991,34 +942,6 @@ Test array access: PASS
 All tests completed!
 ```
 
-#### Example.o Variant
-
-**Input:**
-```mlld
-# GitHub Issue: Object Property Access in Function Arguments
-
-This test specifically verifies the scenarios described in the GitHub issue.
-
-User name: Alice
-User age: 30
-User active: true
-
-Extracted name: Alice
-
-Test name: PASS
-
-Test age: PASS
-
-Test active: PASS
-
-Test company city: PASS
-
-Test numeric field: PASS
-
-Test array access: PASS
-All tests completed!
-```
-
 ### Valid Object property access in functions
 
 **Input:**
@@ -1057,30 +980,6 @@ This test verifies that object property access works correctly when passing valu
 
 **Expected Output:**
 ```markdown
-# Object Property Access in Function Arguments
-
-This test verifies that object property access works correctly when passing values to functions.
-
-User name: Alice
-User age: 30
-
-Company city: Boston
-
-Numeric field: numeric key
-Alice
-
-30
-
-Boston
-
-numeric key
-All property access tests completed!
-```
-
-#### Example.o Variant
-
-**Input:**
-```mlld
 # Object Property Access in Function Arguments
 
 This test verifies that object property access works correctly when passing values to functions.

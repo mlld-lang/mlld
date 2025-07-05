@@ -106,10 +106,12 @@ export async function evaluateVar(
     throw new Error('Var directive missing value');
   }
   
-  const valueNode = valueNodes[0];
+  // For templates with multiple nodes (e.g., ::text {{var}}::), we need the whole array
+  const valueNode = valueNodes.length === 1 ? valueNodes[0] : valueNodes;
 
   // Type-based routing based on the AST structure
   let resolvedValue: any;
+  let templateAst: any = null; // Store AST for templates that need lazy interpolation
   
   // Check for primitive values first (numbers, booleans, null)
   if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
@@ -298,6 +300,15 @@ export async function evaluateVar(
     // Check if this is a simple text array (backtick template)
     if (valueNode.length === 1 && valueNode[0].type === 'Text' && directive.meta?.wrapperType === 'backtick') {
         resolvedValue = valueNode[0].content;
+    } else if (directive.meta?.wrapperType === 'doubleBracket') {
+      // For double-bracket templates, store the AST for later interpolation
+      // DO NOT interpolate now - that happens when displayed
+      resolvedValue = valueNode; // Store the AST array as the value
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('DEBUG: Storing template AST for double-bracket template');
+        console.log('  Identifier:', identifier);
+        console.log('  AST:', JSON.stringify(valueNode, null, 2));
+      }
     } else {
       // Template or string content - need to interpolate
         resolvedValue = await interpolate(valueNode, env);
@@ -465,7 +476,11 @@ export async function evaluateVar(
     } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick' || directive.meta?.wrapperType === 'doubleBracket') {
       // Template variable
       const templateType = directive.meta?.wrapperType === 'doubleBracket' ? 'doubleBracket' : 'backtick';
-      variable = createTemplateVariable(identifier, strValue, undefined, templateType, source, metadata);
+      // For double-bracket templates, the value is the AST array, not a string
+      const templateValue = directive.meta?.wrapperType === 'doubleBracket' && Array.isArray(resolvedValue) 
+        ? resolvedValue as any // Pass the AST array
+        : strValue; // For other templates, use the string value
+      variable = createTemplateVariable(identifier, templateValue, undefined, templateType, source, metadata);
     } else if (directive.meta?.wrapperType === 'doubleQuote' || source.hasInterpolation) {
       // Interpolated text - need to track interpolation points
       // For now, create without interpolation points - TODO: extract these from AST
