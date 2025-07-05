@@ -87,7 +87,7 @@ export * from './variable'; // New discriminated union variable system
 export interface VariableMetadata {
   createdAt?: number;
   modifiedAt?: number;
-  definedAt?: any; // SourceLocation
+  definedAt?: SourceLocation;
   isImported?: boolean;
   importPath?: string;
   isComplex?: boolean;
@@ -154,8 +154,8 @@ export function astLocationToSourceLocation(
 /**
  * Type guard to check if a variable is using the extended type system
  */
-export function isExtendedVariable(variable: any): variable is ExtendedMlldVariable {
-  return variable && typeof variable === 'object' && 'type' in variable;
+export function isExtendedVariable(variable: unknown): variable is ExtendedMlldVariable {
+  return variable !== null && typeof variable === 'object' && 'type' in variable;
 }
 
 // =========================================================================

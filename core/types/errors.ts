@@ -2,6 +2,8 @@
  * Error types for AST parsing
  */
 
+import type { MlldNode } from './nodes';
+
 /**
  * Error codes for parsing failures
  */
@@ -56,6 +58,6 @@ export interface ParserOptions {
  */
 export interface ParseResult {
   success: boolean;
-  nodes?: any[];
+  nodes?: MlldNode[];
   errors?: Error[];
 }

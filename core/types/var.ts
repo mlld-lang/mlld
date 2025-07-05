@@ -137,7 +137,7 @@ export interface VarAssignmentDirectiveNode extends VarDirectiveNode {
 /**
  * Type guard to check if a node is a var directive
  */
-export function isVarDirectiveNode(node: any): node is VarDirectiveNode {
+export function isVarDirectiveNode(node: unknown): node is VarDirectiveNode {
   return node && 
          typeof node === 'object' && 
          node.type === 'Directive' && 
@@ -190,7 +190,7 @@ export function isDataArray(value: VarValue): value is DataArrayValue {
 /**
  * Type guard to check if value is a primitive (string, number, boolean, null)
  */
-export function isPrimitiveValue(value: any): value is string | number | boolean | null {
+export function isPrimitiveValue(value: unknown): value is string | number | boolean | null {
   return value === null || 
          typeof value === 'string' || 
          typeof value === 'number' || 
@@ -200,7 +200,7 @@ export function isPrimitiveValue(value: any): value is string | number | boolean
 /**
  * Type guard to check if value is a directive node
  */
-export function isDirectiveValue(value: any): value is DirectiveNode {
+export function isDirectiveValue(value: unknown): value is DirectiveNode {
   return typeof value === 'object' &&
          value !== null &&
          'type' in value &&
@@ -211,7 +211,7 @@ export function isDirectiveValue(value: any): value is DirectiveNode {
 /**
  * Type guard to check if value is a variable reference node
  */
-export function isVariableReferenceValue(value: any): value is ContentNodeArray {
+export function isVariableReferenceValue(value: unknown): value is ContentNodeArray {
   if (!Array.isArray(value)) return false;
   return value.some(node => 
     typeof node === 'object' &&
@@ -224,7 +224,7 @@ export function isVariableReferenceValue(value: any): value is ContentNodeArray 
 /**
  * Type guard to check if value is a template (array with Text/VariableReference nodes)
  */
-export function isTemplateValue(value: any): value is ContentNodeArray {
+export function isTemplateValue(value: unknown): value is ContentNodeArray {
   if (!Array.isArray(value)) return false;
   return value.some(node => 
     typeof node === 'object' &&
@@ -237,7 +237,7 @@ export function isTemplateValue(value: any): value is ContentNodeArray {
 /**
  * Type guard to check if value is a data object value
  */
-export function isDataObjectValue(value: any): value is DataObjectValue {
+export function isDataObjectValue(value: unknown): value is DataObjectValue {
   return typeof value === 'object' && 
          value !== null &&
          !Array.isArray(value) && 
@@ -248,7 +248,7 @@ export function isDataObjectValue(value: any): value is DataObjectValue {
 /**
  * Type guard to check if value is a data array value
  */
-export function isDataArrayValue(value: any): value is DataArrayValue {
+export function isDataArrayValue(value: unknown): value is DataArrayValue {
   return typeof value === 'object' && 
          value !== null &&
          !Array.isArray(value) && 
@@ -259,28 +259,28 @@ export function isDataArrayValue(value: any): value is DataArrayValue {
 /**
  * Type guard to check if value is an embed directive
  */
-export function isEmbedDirectiveValue(value: any): boolean {
+export function isEmbedDirectiveValue(value: unknown): boolean {
   return isDirectiveValue(value) && value.kind === 'embed';
 }
 
 /**
  * Type guard to check if value is a run directive
  */
-export function isRunDirectiveValue(value: any): boolean {
+export function isRunDirectiveValue(value: unknown): boolean {
   return isDirectiveValue(value) && value.kind === 'run';
 }
 
 /**
  * Type guard to check if content is a nested embed directive
  */
-export function isNestedEmbedDirective(content: any): boolean {
+export function isNestedEmbedDirective(content: unknown): boolean {
   return isDirectiveValue(content) && content.kind === 'embed';
 }
 
 /**
  * Type guard to check if content is a nested run directive
  */
-export function isNestedRunDirective(content: any): boolean {
+export function isNestedRunDirective(content: unknown): boolean {
   return isDirectiveValue(content) && content.kind === 'run';
 }
 

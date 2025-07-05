@@ -152,7 +152,7 @@ export interface ObjectVariable extends BaseVariable {
  */
 export interface ArrayVariable extends BaseVariable {
   type: 'array';
-  value: any[];
+  value: unknown[];
   isComplex?: boolean; // Contains embedded directives
   metadata?: VariableMetadata;
 }
@@ -166,7 +166,7 @@ export interface ArrayVariable extends BaseVariable {
  */
 export interface ComputedVariable extends BaseVariable {
   type: 'computed';
-  value: any;
+  value: unknown;
   language: 'js' | 'node' | 'python' | 'sh';
   sourceCode: string;
   metadata?: VariableMetadata;
@@ -211,7 +211,7 @@ export interface PathVariable extends BaseVariable {
  */
 export interface ImportedVariable extends BaseVariable {
   type: 'imported';
-  value: any; // The actual imported value
+  value: unknown; // The actual imported value
   originalType: VariableTypeDiscriminator; // Type in the source file
   importSource: {
     path: string;
@@ -264,10 +264,10 @@ export interface PrimitiveVariable extends BaseVariable {
  */
 export interface PipelineInput {
   text: string;
-  data?: any;
-  csv?: any;
-  xml?: any;
-  json?: any;
+  data?: unknown;
+  csv?: unknown;
+  xml?: unknown;
+  json?: unknown;
   toString(): string;
 }
 

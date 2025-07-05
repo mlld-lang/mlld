@@ -1,6 +1,7 @@
 import type { DirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
+import { getTextContent } from '../utils/type-guard-helpers';
 
 // Import specific evaluators
 import { evaluatePath } from './path';
@@ -53,25 +54,27 @@ function extractTraceInfo(directive: DirectiveNode): {
     case 'exe':
       // /exec @funcName(...) = ... or /exe @funcName(...) = ...
       const execName = directive.values?.name?.[0];
-      if (execName?.type === 'Text' && 'content' in execName) {
-        info.varName = execName.content;
+      const execNameContent = getTextContent(execName);
+      if (execNameContent) {
+        info.varName = execNameContent;
       }
       break;
       
     case 'foreach':
       // foreach @template(@items)
       const template = directive.values?.template?.[0];
-      if (template?.type === 'Text' && 'content' in template) {
-        info.varName = template.content;
+      const templateContent = getTextContent(template);
+      if (templateContent) {
+        info.varName = templateContent;
       }
       break;
       
     case 'import':
       // /import { ... } from "path"
       const importPath = directive.values?.path?.[0];
-      if (importPath?.type === 'Text' && 'content' in importPath) {
+      const pathContent = getTextContent(importPath);
+      if (pathContent) {
         // Show just the filename for cleaner trace
-        const pathContent = importPath.content;
         info.varName = pathContent.split('/').pop()?.replace(/\.mld$/, '');
       }
       break;

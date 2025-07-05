@@ -7,6 +7,7 @@ import {
   TextNode,
   VariableReferenceNode
 } from './base';
+import type { FieldAccessNode } from './primitives';
 
 // Output directive subtypes
 export type OutputSubtype = 
@@ -64,7 +65,7 @@ export interface OutputSourceVariable {
   subtype: 'outputVariable' | 'outputInvocation';
   values: {
     identifier: VariableReferenceNode[];
-    fields?: any[]; // Field access
+    fields?: FieldAccessNode[]; // Field access
     args?: BaseMlldNode[]; // For invocations
   };
   raw: {
@@ -77,7 +78,7 @@ export interface OutputSourceVariable {
 export interface OutputSourceExec {
   type: 'exec';
   subtype: 'outputExecInvocation';
-  values: any; // Exec invocation with tail modifiers
+  values: BaseMlldNode[]; // Exec invocation with tail modifiers
   raw: {
     commandName: string;
   };

@@ -3,6 +3,8 @@
  * These are the fundamental building blocks used by directive types
  */
 
+import type { WithClause } from './run';
+
 // Position and source location tracking
 export interface Position {
   line: number;
@@ -51,7 +53,7 @@ export interface VariableReferenceNode extends BaseMlldNode {
 // Literal value node
 export interface LiteralNode extends BaseMlldNode {
   type: 'Literal';
-  value: any;
+  value: string | number | boolean | null;
   valueType?: string;
 }
 
@@ -91,15 +93,15 @@ export interface CommentNode extends BaseMlldNode {
 export interface ErrorNode extends BaseMlldNode {
   type: 'Error';
   error: string;
-  debugDetails?: any;
-  partialNode?: any;
+  debugDetails?: unknown;
+  partialNode?: unknown;
 }
 
 // Frontmatter node
 export interface FrontmatterNode extends BaseMlldNode {
   type: 'Frontmatter';
   content: string;
-  data?: any; // Parsed YAML
+  data?: unknown; // Parsed YAML
 }
 
 // Newline node
@@ -211,7 +213,7 @@ export interface CommandReference extends BaseMlldNode {
 export interface ExecInvocation extends BaseMlldNode {
   type: 'ExecInvocation';
   commandRef: CommandReference;
-  withClause?: any; // Will be WithClause type from run.ts
+  withClause?: WithClause;
 }
 
 // Negation node - represents negation of a condition (!) in @when directives
