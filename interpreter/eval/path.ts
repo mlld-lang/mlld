@@ -30,7 +30,7 @@ export async function evaluatePath(
     // eslint-disable-next-line mlld/no-ast-string-manipulation
     identifier = (identifierNode as TextNode).content;
   } else if (identifierNode.type === 'VariableReference' && 'identifier' in identifierNode) {
-    identifier = (identifierNode as any).identifier;
+    identifier = (identifierNode as any).identifier as string;
   } else {
     throw new Error('Path directive identifier must be a simple variable name');
   }

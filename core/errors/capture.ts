@@ -16,9 +16,9 @@ export async function captureError(error: Error, source: string, filePath: strin
       message: error.message,
       name: error.name,
       stack: error.stack,
-      location: (error as any).location,
-      found: (error as any).found,
-      expected: (error as any).expected
+      location: (error as any).location as unknown,
+      found: (error as any).found as unknown,
+      expected: (error as any).expected as unknown
     },
     filePath,
     timestamp: new Date().toISOString()

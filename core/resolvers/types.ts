@@ -1,5 +1,5 @@
 import { TaintLevel } from '@security/taint/TaintTracker';
-import { FuzzyMatchConfig } from '@core/resolvers/utils/PathMatcher';
+export type { FuzzyMatchConfig } from '@core/resolvers/utils/PathMatcher';
 
 /**
  * Type of resolver - determines what operations it supports

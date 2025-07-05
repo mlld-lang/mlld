@@ -130,7 +130,7 @@ export class LocalResolver implements Resolver {
     
     // Use fuzzy matching if enabled (default: true)
     const fuzzyConfig = config?.fuzzyMatch !== undefined ? config.fuzzyMatch : true;
-    const fuzzyEnabled = typeof fuzzyConfig === 'boolean' ? fuzzyConfig : fuzzyConfig.enabled !== false;
+    const fuzzyEnabled = typeof fuzzyConfig === 'boolean' ? fuzzyConfig : (fuzzyConfig as FuzzyMatchConfig).enabled !== false;
     
     let fullPath: string;
     
@@ -345,7 +345,7 @@ export class LocalResolver implements Resolver {
     
     // Use fuzzy matching if enabled (default: true)
     const fuzzyConfig = config?.fuzzyMatch !== undefined ? config.fuzzyMatch : true;
-    const fuzzyEnabled = typeof fuzzyConfig === 'boolean' ? fuzzyConfig : fuzzyConfig.enabled !== false;
+    const fuzzyEnabled = typeof fuzzyConfig === 'boolean' ? fuzzyConfig : (fuzzyConfig as FuzzyMatchConfig).enabled !== false;
     
     let fullPath: string;
     
@@ -472,7 +472,7 @@ export class LocalResolver implements Resolver {
       
       // Use fuzzy matching if enabled (default: true)
       const fuzzyConfig = config?.fuzzyMatch !== undefined ? config.fuzzyMatch : true;
-      const fuzzyEnabled = typeof fuzzyConfig === 'boolean' ? fuzzyConfig : fuzzyConfig.enabled !== false;
+      const fuzzyEnabled = typeof fuzzyConfig === 'boolean' ? fuzzyConfig : (fuzzyConfig as FuzzyMatchConfig).enabled !== false;
       
       if (fuzzyEnabled && operation === 'read') {
         // Try fuzzy matching for read operations

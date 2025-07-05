@@ -519,7 +519,7 @@ export async function evaluateVar(
   
   // Debug logging for primitive values
   if (process.env.MLLD_DEBUG === 'true' && identifier === 'sum') {
-    console.log('DEBUG: Setting variable @sum:', {
+    logger.debug('Setting variable @sum:', {
       identifier,
       resolvedValue,
       valueType: typeof resolvedValue,
@@ -613,7 +613,7 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
 
   // Debug logging for Phase 2
   if (process.env.MLLD_DEBUG === 'true' && item.type === 'object') {
-    console.log('DEBUG: evaluateArrayItem processing object:', {
+    logger.debug('evaluateArrayItem processing object:', {
       hasProperties: !!item.properties,
       propertyKeys: item.properties ? Object.keys(item.properties) : [],
       sampleProperty: item.properties?.name

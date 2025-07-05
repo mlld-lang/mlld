@@ -1,13 +1,13 @@
 import type { MlldNode, SourceLocation, DirectiveNode } from '@core/types';
-import type { Variable, VariableSource, PipelineInput } from '@core/types/variable';
+import type { Variable, VariableSource, PipelineInput, VariableMetadata } from '@core/types/variable';
 import { 
   createSimpleTextVariable, 
   createObjectVariable, 
   createPathVariable,
   isPipelineInput,
   isTextLike,
-  isStructured
 } from '@core/types/variable';
+import { isDirectiveNode, isVariableReferenceNode, isTextNode } from '@core/types';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
 import type { IPathService } from '@services/fs/IPathService';
 import type { ResolvedURLConfig } from '@core/config/types';
@@ -51,7 +51,7 @@ interface CommandExecutionOptions {
 
 interface CommandExecutionContext {
   sourceLocation?: SourceLocation;
-  directiveNode?: DirectiveNode;
+  directiveNode?: MlldNode;
   filePath?: string;
   directiveType?: string;
 }
@@ -191,8 +191,8 @@ export class Environment {
         if (moduleCache && lockFile) {
           // Create a cache adapter that URLCache can use
           const cacheAdapter = {
-            async set(content: string, metadata: any): Promise<string> {
-              const entry = await moduleCache!.store(content, metadata.source);
+            async set(content: string, metadata: { source: string }): Promise<string> {
+              const entry = await moduleCache!.store(content, metadata.source as string);
               return entry.hash;
             },
             async get(hash: string): Promise<string | null> {
@@ -235,6 +235,7 @@ export class Environment {
           {
             prefix: '@PROJECTPATH',
             resolver: 'PROJECTPATH',
+            type: 'io',
             config: {
               basePath: this.basePath,
               readonly: false
@@ -243,6 +244,7 @@ export class Environment {
           {
             prefix: '@.',
             resolver: 'PROJECTPATH', 
+            type: 'io',
             config: {
               basePath: this.basePath,
               readonly: false
@@ -262,7 +264,9 @@ export class Environment {
         }
       } catch (error) {
         console.warn('ResolverManager initialization failed:', error);
-        console.warn('Error stack:', error.stack);
+        if (error instanceof Error) {
+          console.warn('Error stack:', error.stack);
+        }
         // Still assign a basic resolver manager so we don't crash later
         this.resolverManager = undefined;
       }
@@ -473,7 +477,7 @@ export class Environment {
         variablesObj[name] = {
           type: variable.type,
           value: variable.value,
-          metadata: variable.metadata
+          metadata: variable.metadata || null
         };
       }
       
@@ -517,7 +521,7 @@ export class Environment {
           reservedVars[name] = varInfo;
         } else if (variable.metadata?.isImported) {
           importedVars[name] = varInfo;
-          if (variable.metadata.importPath) {
+          if ('importPath' in variable.metadata && variable.metadata.importPath) {
             varInfo.importedFrom = variable.metadata.importPath;
           }
         } else {
@@ -656,7 +660,7 @@ export class Environment {
       let pipelineCtx = this.pipelineContext;
       if (!pipelineCtx && this.parent) {
         // Check parent environment for pipeline context
-        let current = this.parent;
+        let current: Environment | undefined = this.parent;
         while (current && !pipelineCtx) {
           pipelineCtx = current.getPipelineContext();
           current = current.parent;
@@ -668,10 +672,10 @@ export class Environment {
         markdown += `- Current stage: ${pipelineCtx.stage} of ${pipelineCtx.totalStages}\n`;
         markdown += `- Current command: @${String(pipelineCtx.currentCommand)}\n`;
         markdown += `- Input type: ${typeof pipelineCtx.input}\n`;
-        markdown += `- Input length: ${typeof pipelineCtx.input === 'string' ? pipelineCtx.input.length : 'N/A'}\n`;
+        markdown += `- Input length: ${typeof pipelineCtx.input === 'string' ? (pipelineCtx.input as string).length : 'N/A'}\n`;
         if (typeof pipelineCtx.input === 'string') {
-          const truncated = pipelineCtx.input.length > 100 
-            ? pipelineCtx.input.substring(0, 100) + '...' 
+          const truncated = (pipelineCtx.input as string).length > 100 
+            ? (pipelineCtx.input as string).substring(0, 100) + '...' 
             : pipelineCtx.input;
           markdown += `- Input value: "${truncated}"\n`;
         } else {
@@ -730,7 +734,7 @@ export class Environment {
       }
     }
     
-    if (type === 'path' && typeof value === 'object' && value.resolvedPath) {
+    if (type === 'path' && typeof value === 'object' && value !== null && 'resolvedPath' in value) {
       return value.resolvedPath;
     }
     
@@ -860,7 +864,7 @@ export class Environment {
     
     if (variable) {
       // Special handling for lazy variables like @DEBUG
-      if (variable.metadata?.isLazy && variable.value === null) {
+      if (variable.metadata && 'isLazy' in variable.metadata && variable.metadata.isLazy && variable.value === null) {
         // For lazy variables, we need to compute the value
         if (name.toUpperCase() === 'DEBUG') {
           const debugValue = this.createDebugObject(3); // Use markdown format
@@ -895,8 +899,10 @@ export class Environment {
       
       // Create and cache the resolver variable
       const resolverVar = this.createResolverVariable(upperName);
-      this.resolverVariableCache.set(upperName, resolverVar);
-      return resolverVar;
+      if (resolverVar) {
+        this.resolverVariableCache.set(upperName, resolverVar);
+        return resolverVar;
+      }
     }
     
     // Check if this might be a prefix being used as a variable
@@ -924,7 +930,7 @@ export class Environment {
    * Create a synthetic variable for a resolver reference
    * This allows resolvers to be used in variable contexts
    */
-  private createResolverVariable(resolverName: string): Variable {
+  private createResolverVariable(resolverName: string): Variable | undefined {
     // For resolver variables, we check if there's already a reserved variable
     // This handles TIME, DEBUG, INPUT, PROJECTPATH which are pre-initialized
     const existingVar = this.variables.get(resolverName);
@@ -1039,8 +1045,8 @@ export class Environment {
       const debugVar = createObjectVariable(
         'DEBUG',
         debugValue,
+        false, // Not complex, it's just a string
         debugSource,
-        undefined,
         {
           isReserved: true,
           definedAt: { line: 0, column: 0, filePath: '<reserved>' }
@@ -1051,7 +1057,7 @@ export class Environment {
     
     // Check cache first
     const cached = this.resolverVariableCache.get(upperName);
-    if (cached && !cached.metadata?.needsResolution) {
+    if (cached && cached.metadata && 'needsResolution' in cached.metadata && !cached.metadata.needsResolution) {
       return cached;
     }
     
@@ -1090,7 +1096,7 @@ export class Environment {
         isMultiLine: false
       };
       const resolvedVar = varType === 'data' ?
-        createObjectVariable(upperName, varValue, resolverSource, undefined, {
+        createObjectVariable(upperName, varValue, true, resolverSource, {
           isReserved: true,
           isResolver: true,
           resolverName: upperName,
@@ -1109,14 +1115,14 @@ export class Environment {
       return resolvedVar;
     } catch (error) {
       // If resolution fails, return undefined
-      console.warn(`Failed to resolve variable @${upperName}: ${error.message}`);
+      console.warn(`Failed to resolve variable @${upperName}: ${(error as Error).message}`);
       return undefined;
     }
   }
   
   hasVariable(name: string): boolean {
     // FAST PATH: Check local and parent variables first
-    if (this.variables.has(name) || this.parent?.hasVariable(name)) {
+    if (this.variables.has(name) || (this.parent && this.parent.hasVariable(name))) {
       return true;
     }
     
@@ -1135,7 +1141,7 @@ export class Environment {
    * Set frontmatter data for this environment
    * Creates both @fm and @frontmatter as aliases to the same data
    */
-  setFrontmatter(data: any): void {
+  setFrontmatter(data: Record<string, unknown>): void {
     const frontmatterSource: VariableSource = {
       directive: 'var',
       syntax: 'object',
@@ -1145,8 +1151,8 @@ export class Environment {
     const frontmatterVariable = createObjectVariable(
       'frontmatter',
       data,
+      true, // Frontmatter can be complex
       frontmatterSource,
-      undefined,
       { 
         isSystem: true, 
         immutable: true,
@@ -1297,7 +1303,7 @@ export class Environment {
       isMultiLine: false
     };
     
-    const metadata: VariableMetadata = {
+    const metadata: Partial<VariableMetadata> = {
       isReserved: true,
       definedAt: { line: 0, column: 0, filePath: '<reserved>' }
     };
@@ -1305,23 +1311,23 @@ export class Environment {
     // Determine the final @INPUT value
     if (Object.keys(envVars).length > 0 && stdinData !== null) {
       // Both env vars and stdin: merge them
-      if (typeof stdinData === 'object' && stdinData !== null && !Array.isArray(stdinData)) {
+      if (typeof stdinData === 'object' && !Array.isArray(stdinData)) {
         // Merge env vars into JSON object (env vars take precedence)
-        return createObjectVariable('INPUT', { ...stdinData, ...envVars }, inputSource, undefined, metadata);
+        return createObjectVariable('INPUT', { ...stdinData, ...envVars }, true, inputSource, metadata);
       } else {
         // Stdin is not an object, add it as 'content' alongside env vars
         return createObjectVariable('INPUT', {
           content: stdinData,
           ...envVars
-        }, inputSource, undefined, metadata);
+        }, true, inputSource, metadata);
       }
     } else if (Object.keys(envVars).length > 0) {
       // Only env vars: return as data object
-      return createObjectVariable('INPUT', envVars, inputSource, undefined, metadata);
+      return createObjectVariable('INPUT', envVars, true, inputSource, metadata);
     } else if (stdinData !== null) {
       // Only stdin: preserve original stdin behavior for @INPUT when no env vars
       if (typeof stdinData === 'object') {
-        return createObjectVariable('INPUT', stdinData, inputSource, undefined, metadata);
+        return createObjectVariable('INPUT', stdinData, true, inputSource, metadata);
       } else {
         // Plain text input
         const textSource: VariableSource = {
@@ -1360,7 +1366,7 @@ export class Environment {
         // Try to get lock file from resolver manager (root environment)
         const resolver = currentEnv.resolverManager as any;
         if (resolver.lockFile) {
-          lockFile = resolver.lockFile;
+          lockFile = resolver.lockFile as LockFile;
           break;
         }
       }
@@ -1482,16 +1488,17 @@ export class Environment {
     let safeCommand: string;
     try {
       safeCommand = this.validateAndParseCommand(command);
-    } catch (error: any) {
+    } catch (error: unknown) {
       // If validation fails, it's likely due to a banned operator
+      const message = error instanceof Error ? error.message : String(error);
       throw new MlldCommandExecutionError(
-        `Invalid command: ${error.message}`,
+        `Invalid command: ${message}`,
         context?.sourceLocation,
         {
           command,
           exitCode: 1,
           duration: 0,
-          stderr: error.message,
+          stderr: message,
           workingDirectory: await this.getProjectPath(),
           directiveType: context?.directiveType || 'run'
         }
@@ -1547,7 +1554,7 @@ export class Environment {
       
       return processed;
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
       
       // Temporarily disable timing messages for cleaner output
@@ -1558,15 +1565,31 @@ export class Environment {
       }
       */
       
+      const errorDetails = {
+        stdout: '',
+        stderr: '',
+        status: 1,
+      };
+
+      if (error && typeof error === 'object') {
+        if ('stdout' in error) errorDetails.stdout = String(error.stdout);
+        if ('stderr' in error) errorDetails.stderr = String(error.stderr);
+        if ('status' in error && typeof error.status === 'number') {
+          errorDetails.status = error.status;
+        } else if ('code' in error && typeof error.code === 'number') {
+          errorDetails.status = error.code;
+        }
+      }
+
       // Create rich MlldCommandExecutionError with source context
       const commandError = MlldCommandExecutionError.create(
         command,
-        error.status || error.code || 1,
+        errorDetails.status,
         duration,
         context?.sourceLocation,
         {
-          stdout: error.stdout,
-          stderr: error.stderr,
+          stdout: errorDetails.stdout,
+          stderr: errorDetails.stderr,
           workingDirectory: await this.getProjectPath(),
           directiveType: context?.directiveType || 'run'
         }
@@ -1582,7 +1605,7 @@ export class Environment {
       }
       
       // Return available output for continue mode
-      const output = error.stdout || error.stderr || '';
+      const output = errorDetails.stdout || errorDetails.stderr || '';
       const { processed } = this.processOutput(output, maxOutputLines);
       return processed;
     }
@@ -1705,7 +1728,7 @@ export class Environment {
             exitCode: 1,
             duration,
             stdout: '',
-            stderr: error instanceof Error ? error.stack || error.message : 'Unknown error',
+            stderr: error instanceof Error ? error.stack || error.message : String(error),
             workingDirectory: this.basePath
           }
         );
@@ -1740,7 +1763,7 @@ export class Environment {
         
         // Build Node.js code with parameters
         let nodeCode = '';
-        if (params) {
+        if (params && typeof params === 'object') {
           // Inject parameters as constants
           for (const [key, value] of Object.entries(params)) {
             nodeCode += `const ${key} = ${JSON.stringify(value)};\n`;
@@ -1796,9 +1819,9 @@ ${code}
           let mlldNodeModules: string | undefined;
           
           // First check if we're in development (mlld source directory)
-          const devNodeModules = path.join(process.cwd(), 'node_modules');
-          if (fs.existsSync(devNodeModules) && fs.existsSync(path.join(process.cwd(), 'package.json'))) {
-            const packageJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+          const devNodeModules = path.join((process as NodeJS.Process).cwd(), 'node_modules');
+          if (fs.existsSync(devNodeModules) && fs.existsSync(path.join((process as NodeJS.Process).cwd(), 'package.json'))) {
+            const packageJson = JSON.parse(fs.readFileSync(path.join((process as NodeJS.Process).cwd(), 'package.json'), 'utf8'));
             if (packageJson.name === 'mlld') {
               mlldNodeModules = devNodeModules;
             }
@@ -1849,7 +1872,7 @@ ${code}
           // Process the output to separate return value from stdout
           const output = result.toString();
           const lines = output.split('\n');
-          const returnLineIndex = lines.findIndex(line => line.startsWith('__MLLD_RETURN__:'));
+          const returnLineIndex = lines.findIndex((line: string) => line.startsWith('__MLLD_RETURN__:'));
           
           if (returnLineIndex !== -1) {
             // Found a return value
@@ -1907,7 +1930,7 @@ ${code}
         
         // Build Python code with parameters
         let pythonCode = '';
-        if (params) {
+        if (params && typeof params === 'object') {
           for (const [key, value] of Object.entries(params)) {
             pythonCode += `${key} = ${JSON.stringify(value)}\n`;
           }
@@ -1926,14 +1949,14 @@ ${code}
           fs.unlinkSync(tmpFile);
         }
       } catch (error) {
-        throw new Error(`Python execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`Python execution failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     } else if (language === 'bash' || language === 'sh' || language === 'shell') {
       try {
         // Build environment variables from parameters
         const envVars: Record<string, string> = {};
         
-        if (params) {
+        if (params && typeof params === 'object') {
           for (const [key, value] of Object.entries(params)) {
             // Convert value to string for environment variable
             if (typeof value === 'object' && value !== null) {
@@ -2048,28 +2071,32 @@ ${code}
           const result = hasTTYCheck && stderr && !stdout ? stderr : stdout;
           
           return result.toString().replace(/\n+$/, '');
-        } catch (execError: any) {
+        } catch (execError: unknown) {
           // Handle execution error with proper error details
           if (context?.sourceLocation) {
+            const stderr = (execError && typeof execError === 'object' && 'stderr' in execError) ? String(execError.stderr) : (execError instanceof Error ? execError.message : 'Unknown error');
+            const status = (execError && typeof execError === 'object' && 'status' in execError) ? Number(execError.status) : 1;
+            const stdout = (execError && typeof execError === 'object' && 'stdout' in execError) ? String(execError.stdout) : '';
+
             const bashError = new MlldCommandExecutionError(
               `Code execution failed: ${language}`,
               context.sourceLocation,
               {
                 command: `${language} code execution`,
-                exitCode: execError.status || 1,
+                exitCode: status,
                 duration: Date.now() - startTime,
-                stderr: execError.stderr?.toString() || execError.message,
-                stdout: execError.stdout?.toString() || '',
+                stderr: stderr,
+                stdout: stdout,
                 workingDirectory: this.basePath,
                 directiveType: context.directiveType || 'run'
               }
             );
             throw bashError;
           }
-          throw new Error(`Bash execution failed: ${execError.stderr || execError.message || 'Unknown error'}`);
+          throw new Error(`Bash execution failed: ${execError instanceof Error ? execError.message : 'Unknown error'}`);
         }
       } catch (error) {
-        throw new Error(`Bash execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`Bash execution failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     } else {
       throw new Error(`Unsupported code language: ${language}`);
@@ -2087,6 +2114,9 @@ ${code}
     const commandSubstitutionPattern = /\$\(([^)]*)\)/g;
     
     const enhancedCode = code.replace(commandSubstitutionPattern, (match, innerCommand) => {
+      if (typeof innerCommand !== 'string') {
+        return match;
+      }
       // Check if this looks like an interactive command pattern that might write to stderr
       const interactivePatterns = [
         /if\s*\[\s*-t\s+[01]\s*\]/,  // TTY detection: if [ -t 0 ] or if [ -t 1 ]
@@ -2650,7 +2680,7 @@ ${code}
           useSourceContext: true,
           useSmartPaths: true,
           basePath: this.basePath,
-          workingDirectory: process.cwd(),
+          workingDirectory: (process as NodeJS.Process).cwd(),
           contextLines: 2
         });
         
@@ -2659,7 +2689,9 @@ ${code}
         // Fallback to basic display if rich formatting fails
         console.log(`   ├─ Command: ${item.command}`);
         console.log(`   ├─ Duration: ${item.duration}ms`);
-        console.log(`   ├─ ${item.error.message}`);
+        if (formatError instanceof Error) {
+          console.log(`   ├─ ${item.error.message}`);
+        }
         if (item.error.details?.exitCode !== undefined) {
           console.log(`   ├─ Exit code: ${item.error.details.exitCode}`);
         }
@@ -2713,7 +2745,7 @@ ${code}
     if (!this.traceEnabled) return;
     
     const fileName = this.currentFilePath ? path.basename(this.currentFilePath) : 'unknown';
-    const lineNumber = location?.start?.line || 'unknown';
+    const lineNumber = location?.line || 'unknown';
     
     this.directiveTrace.push({
       directive,

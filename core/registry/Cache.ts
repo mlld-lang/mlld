@@ -56,7 +56,7 @@ export class Cache {
     
     try {
       const content = await fs.promises.readFile(metadataPath, 'utf8');
-      return JSON.parse(content);
+      return JSON.parse(content) as CacheMetadata;
     } catch {
       return null;
     }
@@ -157,7 +157,7 @@ export class Cache {
             
             try {
               const content = await fs.promises.readFile(fullPath, 'utf8');
-              const metadata: CacheMetadata = JSON.parse(content);
+              const metadata: CacheMetadata = JSON.parse(content) as CacheMetadata;
               const cachedDate = new Date(metadata.cachedAt);
               
               if (!oldestEntry || cachedDate < oldestEntry) {

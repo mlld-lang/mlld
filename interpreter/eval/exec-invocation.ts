@@ -34,12 +34,12 @@ export async function evaluateExecInvocation(
     // Extract from array of VariableReference nodes
     const identifierNode = node.commandRef.identifier[0];
     if (identifierNode.type === 'VariableReference' && identifierNode.identifier) {
-      commandName = identifierNode.identifier;
+      commandName = identifierNode.identifier as string;
     } else {
-      commandName = node.commandRef.name || '';
+      commandName = (node.commandRef as any).name as string || '';
     }
   } else {
-    commandName = node.commandRef.name || '';
+    commandName = (node.commandRef as any).name as string || '';
   }
   
   if (!commandName) {
@@ -48,7 +48,7 @@ export async function evaluateExecInvocation(
   
   // Check if this is a field access exec invocation (e.g., @demo.valueCmd())
   let variable;
-  const commandRefWithObject = node.commandRef as any; // Type assertion to handle objectReference
+  const commandRefWithObject = node.commandRef as any & { objectReference?: any }; // Type assertion to handle objectReference
   if (commandRefWithObject.objectReference) {
     // Get the object first
     const objectRef = commandRefWithObject.objectReference;

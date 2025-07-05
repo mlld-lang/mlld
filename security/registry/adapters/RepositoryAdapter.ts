@@ -265,11 +265,19 @@ export class RepositoryAdapter implements StorageAdapter {
       if (response.ok) {
         const commits = await response.json() as unknown;
         if (Array.isArray(commits) && commits.length > 0) {
-          const commit = commits[0] as any;
+          const commit = commits[0] as {
+            sha: string;
+            commit: {
+              author: {
+                date: string;
+                name: string;
+              };
+            };
+          };
           return {
-            sha: commit.sha as string,
-            date: commit.commit.author.date as string,
-            committer: commit.commit.author.name as string
+            sha: commit.sha,
+            date: commit.commit.author.date,
+            committer: commit.commit.author.name
           };
         }
       }

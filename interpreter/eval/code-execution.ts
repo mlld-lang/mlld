@@ -26,12 +26,12 @@ export async function evaluateCodeExecution(
       try {
         // For now, use a simple evaluation approach
         // In production, this should use vm module or other sandboxing
-        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor as new (...args: string[]) => Promise<unknown>;
         const fn = new AsyncFunction(code);
-        const result = await fn();
+        const result = await fn() as string | undefined;
         return { value: result ?? '', env };
       } catch (error) {
-        throw new Error(`JavaScript execution failed: ${error.message}`);
+        throw new Error(`JavaScript execution failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     

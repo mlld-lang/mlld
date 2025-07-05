@@ -63,7 +63,7 @@ export class MlldParseError extends MlldError {
       }
       
       // Store filePath separately for easier access
-      filePath = location?.filePath;
+      filePath = location?.filePath as string | undefined;
     }
     
     // Parse errors are typically fatal, but can be overridden
@@ -74,9 +74,9 @@ export class MlldParseError extends MlldError {
       code: 'PARSE_ERROR', // Assign a default code or get from options if needed
       severity,
       details: {
-        ...options.context, // Keep existing context details
+        ...(options.context as Record<string, unknown>), // Keep existing context details
         filePath: options.filePath || filePath
-      },
+      } as Record<string, unknown>,
       sourceLocation: location, // Use sourceLocation for the parsed location
       cause: options.cause
     });
@@ -101,7 +101,7 @@ export class MlldParseError extends MlldError {
       severity: this.severity,
       location: this.location,
       sourceLocation: this.sourceLocation ? formatLocationForError(this.sourceLocation) : undefined,
-      filePath: this.details?.filePath,
+      filePath: (this.details as Record<string, unknown>)?.filePath as string | undefined,
       cause: cause instanceof Error ? cause.message : String(cause),
       details: this.details
     } as SerializedParseError;

@@ -181,26 +181,33 @@ export default tseslint.config(
     }
   },
   
-  // Build scripts need console for progress
+  // Build scripts and extensions need console for progress
   {
     files: [
       'scripts/**/*.js',
-      'scripts/**/*.mjs'
+      'scripts/**/*.mjs',
+      'scripts/**/*.cjs', // CommonJS scripts
+      'editors/vscode/**/*.js' // VSCode extension
     ],
     rules: {
-      'no-console': 'off', // Build scripts need console for progress output
+      'no-console': 'off', // Build scripts and extensions need console for progress output
     }
   },
   
   
-  // Logger implementations need console
+  // Logger implementations and output handlers need console
   {
     files: [
       'core/utils/simpleLogger.ts',
-      'core/errors/patterns/init.ts' // Error pattern initialization
+      'core/errors/patterns/init.ts', // Error pattern initialization
+      'interpreter/eval/output.ts', // Implements stdout/stderr output
+      'interpreter/env/Environment.ts', // May have legitimate console usage
+      'interpreter/utils/pipeline-input.ts', // Pipeline output handling
+      'interpreter/utils/type-guard-helpers.ts', // Type guard warnings
+      'core/utils/version-checker.ts' // Version compatibility warnings
     ],
     rules: {
-      'no-console': 'off', // Logger implementations need direct console access
+      'no-console': 'off', // Direct console access for output/logging
     }
   },
   
@@ -223,7 +230,12 @@ export default tseslint.config(
     files: [
       'security/command/executor/CommandExecutor.ts',
       'security/registry/AdvisoryChecker.ts',
-      'security/import/ImportApproval.ts' // Import approval prompts
+      'security/import/ImportApproval.ts', // Import approval prompts
+      'core/security/ImportApproval.ts', // Core import approval prompts
+      'core/resolvers/builtin/DebugResolver.ts', // Debug resolver output
+      'core/registry/auth/GitHubAuthService.ts', // Auth prompts
+      'core/registry/RegistryManager.ts', // Registry user messages
+      'core/resolvers/utils/PathMatcher.ts' // Debug output
     ],
     rules: {
       'no-console': 'off', // User-facing security warnings and command feedback

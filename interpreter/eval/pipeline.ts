@@ -8,6 +8,7 @@ import {
   createPipelineInputVariable,
   type VariableSource 
 } from '@core/types/variable';
+import { logger } from '@core/utils/logger';
 
 /**
  * Execute a pipeline of transformation commands with @input threading
@@ -40,7 +41,7 @@ export async function executePipeline(
     
     // Create pipeline input variable for this stage
     if (process.env.MLLD_DEBUG === 'true') {
-      console.log('Creating pipeline input:', {
+      logger.debug('Creating pipeline input:', {
         stage: i + 1,
         currentOutputType: typeof currentOutput,
         currentOutputLength: typeof currentOutput === 'string' ? currentOutput.length : 'N/A',
@@ -91,7 +92,7 @@ export async function executePipeline(
       
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('Pipeline command resolved:', {
+        logger.debug('Pipeline command resolved:', {
           rawIdentifier: command.rawIdentifier,
           commandVarType: commandVar?.type,
           hasValue: !!commandVar?.value,
@@ -106,7 +107,7 @@ export async function executePipeline(
       const evaluatedArgs = [];
       for (const arg of args) {
         if (process.env.MLLD_DEBUG === 'true') {
-          console.log('Pipeline arg evaluation:', {
+          logger.debug('Pipeline arg evaluation:', {
             argType: typeof arg,
             argNodeType: arg?.type,
             argContent: typeof arg === 'string' ? arg : arg?.content,
@@ -141,7 +142,7 @@ export async function executePipeline(
                               String(finalValue);
             
             if (process.env.MLLD_DEBUG === 'true') {
-              console.log('Evaluated variable reference:', {
+              logger.debug('Evaluated variable reference:', {
                 identifier: varRef.identifier,
                 resolvedValue: value,
                 stringValue
@@ -241,7 +242,7 @@ export async function executePipeline(
   
   // Debug logging
   if (process.env.MLLD_DEBUG === 'true') {
-    console.log('executePipeline returning:', {
+    logger.debug('executePipeline returning:', {
       currentOutput,
       currentOutputType: typeof currentOutput,
       isNull: currentOutput === null,
@@ -372,7 +373,7 @@ async function executeCommandVariable(
     
     // Debug logging
     if (process.env.MLLD_DEBUG === 'true') {
-      console.log('Executable definition extracted:', {
+      logger.debug('Executable definition extracted:', {
         type: execDef?.type,
         hasParamNames: !!execDef?.paramNames,
         hasCommandTemplate: !!execDef?.commandTemplate,
@@ -428,7 +429,7 @@ async function executeCommandVariable(
       const isPipelineParam = i === 0 && pipelineCtx !== undefined;
       
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('Parameter binding check:', {
+        logger.debug('Parameter binding check:', {
           i,
           paramName,
           stdinInput: stdinInput ? String(stdinInput).substring(0, 50) + '...' : undefined,
@@ -471,7 +472,7 @@ async function executeCommandVariable(
           
           // Debug logging
           if (process.env.MLLD_DEBUG === 'true') {
-            console.log('Creating pipeline parameter:', {
+            logger.debug('Creating pipeline parameter:', {
               paramName,
               format,
               textValue: typeof textValue === 'string' ? textValue.substring(0, 50) + '...' : String(textValue),
@@ -497,7 +498,7 @@ async function executeCommandVariable(
           );
           
           if (process.env.MLLD_DEBUG === 'true') {
-            console.log('Setting pipeline parameter variable:', {
+            logger.debug('Setting pipeline parameter variable:', {
               paramName,
               hasMetadata: !!pipelineVar.metadata,
               isPipelineInput: pipelineVar.metadata?.isPipelineInput,
@@ -516,7 +517,7 @@ async function executeCommandVariable(
                          argValue.content !== undefined ? argValue.content : String(argValue);
         
         if (process.env.MLLD_DEBUG === 'true') {
-          console.log('Regular parameter handling:', {
+          logger.debug('Regular parameter handling:', {
             paramName,
             textValue,
             argValueType: typeof argValue,
@@ -570,7 +571,7 @@ async function executeCommandVariable(
         if (paramVar) {
           // Debug logging
           if (process.env.MLLD_DEBUG === 'true') {
-            console.log('Processing parameter for JS execution:', {
+            logger.debug('Processing parameter for JS execution:', {
               paramName,
               varType: paramVar.type,
               hasMetadata: !!paramVar.metadata,
@@ -586,14 +587,14 @@ async function executeCommandVariable(
             params[paramName] = paramVar.value;
             
             if (process.env.MLLD_DEBUG === 'true') {
-              console.log('Using PipelineInputVariable value for param:', paramName);
+              logger.debug('Using PipelineInputVariable value for param:', paramName);
             }
           } else if (paramVar.metadata?.isPipelineInput && paramVar.metadata?.pipelineInput) {
             // Legacy: Use the wrapped pipeline input from metadata
             params[paramName] = paramVar.metadata.pipelineInput;
             
             if (process.env.MLLD_DEBUG === 'true') {
-              console.log('Using wrapped pipeline input from metadata for param:', paramName);
+              logger.debug('Using wrapped pipeline input from metadata for param:', paramName);
             }
           } else {
             // Regular variable - use the value directly
@@ -604,7 +605,7 @@ async function executeCommandVariable(
     }
     
     if (process.env.MLLD_DEBUG === 'true') {
-      console.log('Executing code with params:', {
+      logger.debug('Executing code with params:', {
         paramNames: Object.keys(params),
         paramTypes: Object.entries(params).map(([k, v]) => [k, typeof v, v?.constructor?.name])
       });
@@ -616,7 +617,7 @@ async function executeCommandVariable(
     // This can happen if the function just returns its input parameter
     if (result && typeof result === 'object' && 'text' in result && 'type' in result) {
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('Pipeline function returned PipelineInput object, extracting text');
+        logger.debug('Pipeline function returned PipelineInput object, extracting text');
       }
       return String(result.text);
     }

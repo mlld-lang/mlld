@@ -12,11 +12,11 @@ const execAsync = promisify(exec);
 export async function hasUncommittedChanges(filePath: string): Promise<boolean> {
   try {
     // Resolve to absolute path if relative
-    const absolutePath = isAbsolute(filePath) ? filePath : resolve(process.cwd(), filePath);
+    const absolutePath = isAbsolute(filePath) ? filePath : resolve((process.cwd as () => string)(), filePath);
     
     // Run git status for the specific file
     const { stdout } = await execAsync(`git status --porcelain -- "${absolutePath}"`, {
-      cwd: process.cwd()
+      cwd: (process.cwd as () => string)()
     });
     
     // If stdout has content, the file has changes
@@ -35,11 +35,11 @@ export async function hasUncommittedChanges(filePath: string): Promise<boolean> 
 export async function getGitStatus(filePath: string): Promise<'modified' | 'untracked' | 'clean' | 'error'> {
   try {
     // Resolve to absolute path if relative
-    const absolutePath = isAbsolute(filePath) ? filePath : resolve(process.cwd(), filePath);
+    const absolutePath = isAbsolute(filePath) ? filePath : resolve((process.cwd as () => string)(), filePath);
     
     // Run git status for the specific file
     const { stdout } = await execAsync(`git status --porcelain -- "${absolutePath}"`, {
-      cwd: process.cwd()
+      cwd: (process.cwd as () => string)()
     });
     
     const statusLine = stdout.trim();
@@ -49,7 +49,7 @@ export async function getGitStatus(filePath: string): Promise<'modified' | 'untr
       // Check if file is tracked at all
       try {
         await execAsync(`git ls-files --error-unmatch -- "${absolutePath}"`, {
-          cwd: process.cwd()
+          cwd: (process.cwd as () => string)()
         });
         return 'clean';
       } catch {

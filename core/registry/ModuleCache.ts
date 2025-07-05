@@ -115,7 +115,7 @@ export class ModuleCache {
         fs.promises.readFile(metadataPath, 'utf8')
       ]);
       
-      const metadata: ModuleCacheMetadata = JSON.parse(metadataStr);
+      const metadata: ModuleCacheMetadata = JSON.parse(metadataStr) as ModuleCacheMetadata;
       
       // Verify content integrity
       if (!HashUtils.verify(content, fullHash)) {
@@ -165,7 +165,7 @@ export class ModuleCache {
     
     try {
       const metadataStr = await fs.promises.readFile(metadataPath, 'utf8');
-      return JSON.parse(metadataStr);
+      return JSON.parse(metadataStr) as ModuleCacheMetadata;
     } catch {
       return null;
     }
@@ -260,7 +260,7 @@ export class ModuleCache {
             
             try {
               const content = await fs.promises.readFile(fullPath, 'utf8');
-              const metadata: ModuleCacheMetadata = JSON.parse(content);
+              const metadata: ModuleCacheMetadata = JSON.parse(content) as ModuleCacheMetadata;
               const cachedDate = new Date(metadata.cachedAt);
               
               totalSize += metadata.size;
@@ -304,7 +304,7 @@ export class ModuleCache {
             
             try {
               const metadataStr = await fs.promises.readFile(metadataPath, 'utf8');
-              const metadata: ModuleCacheMetadata = JSON.parse(metadataStr);
+              const metadata: ModuleCacheMetadata = JSON.parse(metadataStr) as ModuleCacheMetadata;
               
               entries.push({
                 path: path.join(fullPath, 'content.mld'),
@@ -359,7 +359,7 @@ export class ModuleCache {
     
     try {
       const content = await fs.promises.readFile(this.indexPath, 'utf8');
-      index = JSON.parse(content);
+      index = JSON.parse(content) as Record<string, string>;
     } catch {
       // Index doesn't exist yet
     }

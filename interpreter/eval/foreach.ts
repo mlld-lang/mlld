@@ -1,5 +1,6 @@
 import type { Environment } from '../env/Environment';
 import { isExecutable } from '@core/types/variable';
+import { logger } from '@core/utils/logger';
 
 /**
  * Evaluate a foreach command expression by applying an executable to arrays of values.
@@ -15,7 +16,7 @@ export async function evaluateForeachCommand(
 ): Promise<any[]> {
   // Debug logging
   if (process.env.MLLD_DEBUG === 'true') {
-    console.log('evaluateForeachCommand called with:', JSON.stringify(foreachExpr, null, 2));
+    logger.debug('evaluateForeachCommand called with:', { foreachExpr });
   }
   
   const { execInvocation, arrays } = foreachExpr;

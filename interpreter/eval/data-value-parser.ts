@@ -17,6 +17,7 @@ import type {
   DirectiveNode,
   LiteralNode
 } from '@core/types/primitives';
+import { logger } from '@core/utils/logger';
 
 // Forward declaration for recursive type
 interface ASTArrayNode {
@@ -162,7 +163,7 @@ export function parseDataValue(node: ASTDataNode): DataValue {
   }
   
   // If we can't identify the node type, treat it as a literal
-  console.warn('Unexpected node type in data value:', node);
+  logger.warn('Unexpected node type in data value:', { node });
   return node as string;
 }
 

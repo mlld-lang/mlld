@@ -72,7 +72,7 @@ export class StatsCollector {
       return content
         .split('\n')
         .filter(line => line.trim())
-        .map(line => JSON.parse(line));
+        .map(line => JSON.parse(line) as StatsEvent);
     } catch {
       return [];
     }
@@ -157,7 +157,7 @@ export class StatsCollector {
 
   private getMlldVersion(): string {
     try {
-      const packageJson = require('../../../package.json');
+      const packageJson = require('../../../package.json') as { version?: string };
       return packageJson.version || 'unknown';
     } catch {
       return 'unknown';

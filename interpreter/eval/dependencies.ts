@@ -55,7 +55,7 @@ export class DefaultDependencyChecker implements DependencyChecker {
             stdio: 'pipe'
           });
           
-          const data = JSON.parse(localResult);
+          const data = JSON.parse(localResult) as { dependencies?: Record<string, { version?: string }> };
           version = data.dependencies?.[pkg]?.version;
         } catch {
           // Try global if local fails
@@ -65,7 +65,7 @@ export class DefaultDependencyChecker implements DependencyChecker {
               stdio: 'pipe'
             });
             
-            const data = JSON.parse(globalResult);
+            const data = JSON.parse(globalResult) as { dependencies?: Record<string, { version?: string }> };
             version = data.dependencies?.[pkg]?.version;
           } catch {
             // Package not found

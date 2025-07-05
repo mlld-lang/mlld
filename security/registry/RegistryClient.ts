@@ -220,7 +220,7 @@ class LockFile {
   private load(): LockFileData {
     try {
       const content = fsSync.readFileSync(this.path, 'utf8');
-      return JSON.parse(content);
+      return JSON.parse(content) as LockFileData;
     } catch {
       return { version: '1.0.0', imports: {} };
     }
