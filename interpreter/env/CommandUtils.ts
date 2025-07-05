@@ -9,26 +9,38 @@ export class CommandUtils {
    * Blocks dangerous shell operators that could be used maliciously
    */
   static validateAndParseCommand(command: string): string {
-    // Remove quoted sections to avoid false positives
-    const withoutQuotes = command.replace(/(["'])(?:(?!\1)[^\\]|\\.)*\1/g, '');
+    // Create a version of the command with quoted sections removed for operator checking
+    let checkCommand = command;
     
-    // Check for dangerous patterns
+    // Remove single-quoted strings (no interpolation, so safe to remove entirely)
+    checkCommand = checkCommand.replace(/'[^']*'/g, '');
+    
+    // Remove double-quoted strings (they may have interpolation but operators inside are literal)
+    checkCommand = checkCommand.replace(/"[^"]*"/g, '');
+    
+    // Also handle escaped characters - they're literal
+    checkCommand = checkCommand.replace(/\\./g, '');
+    
+    // Check for dangerous operators only in the unquoted parts
     const dangerousPatterns = [
-      /&&/,    // Command chaining
-      /\|\|/,  // Command alternatives
-      /;/,     // Command separator
-      />/,     // Output redirection
-      />>/,    // Append redirection
-      /</,     // Input redirection
-      /&$/,    // Background execution
+      /&&/, // AND operator
+      /\|\|/, // OR operator (but single | is allowed for piping) 
+      /;/, // Semicolon
+      />\s*[^>]/, // Single redirect
+      />>/,  // Append redirect
+      /<(?![=<])/, // Input redirect (not <= or <<)
+      /&(?![&>])/ // Background (not && or &>)
     ];
     
     for (const pattern of dangerousPatterns) {
-      if (pattern.test(withoutQuotes)) {
-        throw new Error(`Command contains potentially dangerous operator: ${pattern.source}`);
+      if (pattern.test(checkCommand)) {
+        throw new Error(`Command contains banned shell operator`);
       }
     }
     
+    // For now, just return the command as-is since it passed validation
+    // The shell-quote library was causing issues with over-escaping
+    // The grammar should have already caught most dangerous operators
     return command;
   }
 
