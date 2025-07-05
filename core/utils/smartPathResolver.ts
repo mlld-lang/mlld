@@ -29,8 +29,8 @@ export class SmartPathResolver {
    */
   async resolvePath(filePath: string, options: SmartPathOptions = {}): Promise<ResolvedPath> {
     const {
-      basePath = process.cwd(),
-      workingDirectory = process.cwd(),
+      basePath = process.cwd() as string,
+      workingDirectory = process.cwd() as string,
       preferRelative = true,
       maxRelativeDepth = 3
     } = options;

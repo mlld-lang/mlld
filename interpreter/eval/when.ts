@@ -6,6 +6,7 @@ import type { Variable } from '@core/types/variable';
 import { MlldConditionError } from '@core/errors';
 import { isWhenSimpleNode, isWhenBlockNode, isWhenSwitchNode } from '@core/types/when';
 import { evaluate } from '../core/interpreter';
+import { logger } from '@core/utils/logger';
 import {
   isTextLike,
   isArray as isArrayVariable,
@@ -90,14 +91,14 @@ async function evaluateWhenSimple(
   const conditionResult = await evaluateCondition(node.values.condition, env);
   
   if (process.env.DEBUG_WHEN) {
-    console.log('When condition result:', conditionResult);
+    logger.debug('When condition result:', { conditionResult });
   }
   
   if (conditionResult) {
     // Execute the action if condition is true
     const result = await evaluate(node.values.action, env);
     if (process.env.DEBUG_WHEN) {
-      console.log('When action result:', result);
+      logger.debug('When action result:', { result });
     }
     return result;
   }
@@ -278,11 +279,12 @@ async function evaluateWhenBlock(
     // Merge child environment nodes back to parent
     // This ensures output nodes created by actions are preserved
     if (process.env.DEBUG_WHEN) {
-      console.log('Before merge:');
-      console.log('  Parent nodes:', env.nodes.length);
-      console.log('  Child nodes:', childEnv.nodes.length);
-      console.log('  Child initial count:', childEnv.initialNodeCount);
-      console.log('  Result env nodes:', result.env.nodes.length);
+      logger.debug('Before merge:', {
+        parentNodes: env.nodes.length,
+        childNodes: childEnv.nodes.length,
+        childInitialCount: childEnv.initialNodeCount,
+        resultEnvNodes: result.env.nodes.length
+      });
     }
     
     // The result.env contains the updated environment from the evaluation

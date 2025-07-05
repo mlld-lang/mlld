@@ -4,6 +4,7 @@ import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { astLocationToSourceLocation } from '@core/types';
+import { logger } from '@core/utils/logger';
 import { 
   Variable,
   VariableSource,
@@ -170,8 +171,8 @@ export async function evaluateVar(
       const processedObject: Record<string, any> = {};
       if (valueNode.properties) {
         // Debug logging for Phase 2
-        if (process.env.MLLD_DEBUG === 'true' && identifier === 'complex') {
-          console.log('DEBUG: Processing object properties for @complex:', {
+        if (identifier === 'complex') {
+          logger.debug('Processing object properties for @complex:', {
             propertyKeys: Object.keys(valueNode.properties),
             users: valueNode.properties.users
           });
@@ -187,8 +188,8 @@ export async function evaluateVar(
             const processedArray = [];
             
             // Debug logging for Phase 2
-            if (process.env.MLLD_DEBUG === 'true' && identifier === 'complex' && key === 'users') {
-              console.log('DEBUG: Processing users array items:', {
+            if (identifier === 'complex' && key === 'users') {
+              logger.debug('Processing users array items:', {
                 itemCount: (propValue.items || []).length,
                 firstItem: propValue.items?.[0]
               });
@@ -305,11 +306,10 @@ export async function evaluateVar(
       // For double-bracket templates, store the AST for later interpolation
       // DO NOT interpolate now - that happens when displayed
       resolvedValue = valueNode; // Store the AST array as the value
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log('DEBUG: Storing template AST for double-bracket template');
-        console.log('  Identifier:', identifier);
-        console.log('  AST:', JSON.stringify(valueNode, null, 2));
-      }
+      logger.debug('Storing template AST for double-bracket template', {
+        identifier,
+        ast: valueNode
+      });
     } else {
       // Template or string content - need to interpolate
         resolvedValue = await interpolate(valueNode, env);
