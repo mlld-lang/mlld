@@ -207,8 +207,8 @@ export default tseslint.config(
   // Debug output wrapped in environment checks
   {
     files: [
-      'interpreter/index.ts',
-      'interpreter/interpreter.fixture.test.ts',
+      'interpreter/index.ts', // Has DEBUG_WHEN wrapped console
+      'interpreter/interpreter.fixture.test.ts', // Test file
       'core/registry/RegistryManager.ts',
       'core/resolvers/utils/PathMatcher.ts',
       'core/security/ImportApproval.ts'
@@ -222,7 +222,8 @@ export default tseslint.config(
   {
     files: [
       'security/command/executor/CommandExecutor.ts',
-      'security/registry/AdvisoryChecker.ts'
+      'security/registry/AdvisoryChecker.ts',
+      'security/import/ImportApproval.ts' // Import approval prompts
     ],
     rules: {
       'no-console': 'off', // User-facing security warnings and command feedback

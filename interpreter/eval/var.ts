@@ -1,4 +1,4 @@
-import type { DirectiveNode, VarValue } from '@core/types';
+import type { DirectiveNode, VarValue, VariableNodeArray } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
@@ -71,10 +71,8 @@ function createVariableSource(valueNode: VarValue | undefined, directive: Direct
     }
   }
 
-  // Check for multi-line content
-  if (typeof valueNode === 'string' && valueNode.includes('\n')) {
-    baseSource.isMultiLine = true;
-  }
+  // Multi-line content is determined during evaluation, not from raw AST
+  // The isMultiLine property will be set based on the evaluated content
 
   return baseSource;
 }
@@ -89,14 +87,17 @@ export async function evaluateVar(
   env: Environment
 ): Promise<EvalResult> {
   // Extract identifier from array
-  const identifierNodes = directive.values?.identifier;
+  const identifierNodes = directive.values?.identifier as VariableNodeArray | undefined;
   if (!identifierNodes || !Array.isArray(identifierNodes) || identifierNodes.length === 0) {
     throw new Error('Var directive missing identifier');
   }
   
   const identifierNode = identifierNodes[0];
+  if (!identifierNode || typeof identifierNode !== 'object' || !('identifier' in identifierNode)) {
+    throw new Error('Invalid identifier node structure');
+  }
   const identifier = identifierNode.identifier;
-  if (!identifier) {
+  if (!identifier || typeof identifier !== 'string') {
     throw new Error('Var directive identifier must be a simple variable name');
   }
 
