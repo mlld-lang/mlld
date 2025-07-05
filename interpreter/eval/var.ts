@@ -1,4 +1,4 @@
-import type { DirectiveNode } from '@core/types';
+import type { DirectiveNode, VarValue } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import { interpolate } from '../core/interpreter';
@@ -21,7 +21,7 @@ import {
 /**
  * Create VariableSource metadata based on the value node type
  */
-function createVariableSource(valueNode: any, directive: DirectiveNode): VariableSource {
+function createVariableSource(valueNode: VarValue | undefined, directive: DirectiveNode): VariableSource {
   const baseSource: VariableSource = {
     directive: 'var',
     syntax: 'quoted', // default

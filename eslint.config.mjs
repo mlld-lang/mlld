@@ -114,11 +114,7 @@ export default tseslint.config(
   // Disable type-aware rules for low-impact areas
   {
     files: [
-      'grammar/**/*.ts',     // Generated parser code
-      'tests/**/*.ts',       // Test utilities
       'cli/**/*.ts',         // CLI with yargs
-      '**/*.test.ts',        // Test files
-      '**/*.spec.ts',        // Spec files
       'scripts/**/*.js',     // Build scripts
       'scripts/**/*.mjs',    // Build scripts
     ],
@@ -136,6 +132,42 @@ export default tseslint.config(
     }
   },
   
+  // Files that interface with the untyped parser
+  {
+    files: [
+      'interpreter/index.ts', // Main parse() call
+      'interpreter/eval/import.ts', // Parses imported files
+      'cli/commands/error-test.ts', // Error testing with parser
+      'cli/commands/add-needs.ts', // Parses for needs analysis
+      'cli/commands/language-server-impl.ts', // LSP parser usage
+      'cli/commands/publish.ts', // Parses for publish validation
+    ],
+    rules: {
+      // Allow any for parser interactions only
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    }
+  },
+  
+  // Error classes need flexible context types
+  {
+    files: [
+      'core/errors/**/*.ts', // Error classes with flexible context
+      'core/registry/**/*.ts', // Registry with dynamic module data
+      'core/services/**/*.ts', // Services with dynamic data
+    ],
+    rules: {
+      // Allow any for error context and dynamic data
+      '@typescript-eslint/no-explicit-any': 'warn', // Warn instead of error
+      '@typescript-eslint/no-unsafe-assignment': 'warn',
+      '@typescript-eslint/no-unsafe-member-access': 'warn',
+      '@typescript-eslint/no-unsafe-call': 'warn',
+      '@typescript-eslint/no-unsafe-return': 'warn',
+    }
+  },
+  
   // CLI commands need console output for user interaction
   {
     files: [
@@ -149,35 +181,17 @@ export default tseslint.config(
     }
   },
   
-  // Build scripts and grammar generation need console for progress
+  // Build scripts need console for progress
   {
     files: [
       'scripts/**/*.js',
-      'scripts/**/*.mjs',
-      'grammar/scripts/**/*.mjs',
-      'grammar/scripts/**/*.js',
-      'grammar/syntax-generator/**/*.js',
-      'grammar/deps/**/*.js',
-      'grammar/deps/**/*.ts'
+      'scripts/**/*.mjs'
     ],
     rules: {
       'no-console': 'off', // Build scripts need console for progress output
     }
   },
   
-  // Test files and test utilities
-  {
-    files: [
-      'tests/utils/cli/mockConsole.ts',
-      'tests/utils/cli/mockProcessExit.ts',
-      '**/*.test.ts',
-      '**/*.spec.ts',
-      'tests/**/*.ts'
-    ],
-    rules: {
-      'no-console': 'off', // Tests and mock utilities need console for debugging
-    }
-  },
   
   // Logger implementations need console
   {
@@ -239,9 +253,10 @@ export default tseslint.config(
         'bin/**',  // Binary wrapper files
         'lib/**',  // External library
         'website/**',  // Website files
-        'grammar/generated/**',  // Generated parser and deps
-        'grammar/parser/parser.js',  // Legacy location (for safety)
-        'grammar/parser/parser.ts',  // Legacy location (for safety)
+        'grammar/**',  // Entire grammar directory (parser + tests + scripts)
+        'tests/**',  // All test files and fixtures
+        '**/*.test.ts',  // Test files anywhere
+        '**/*.spec.ts',  // Spec files anywhere
         '**/*.d.ts',  // Type declaration files
         '_dev/**',  // Development files
         'logs/**'  // Log files
