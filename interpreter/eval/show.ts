@@ -78,6 +78,11 @@ export async function evaluateShow(
     if (isTextLike(variable)) {
       // All text-producing types: simple, interpolated, template, file, section, command result
       value = variable.value;
+      
+      // For template variables (like ::{{var}}::), we need to interpolate the template content
+      if (isTemplate(variable) && Array.isArray(value)) {
+        value = await interpolate(value, env);
+      }
     } else if (isObject(variable)) {
       // Object - use the value
       value = variable.value;

@@ -351,6 +351,10 @@ LiteralOnlyContent "Literal text without any interpolation"
 // Double quoted content with @var interpolation (supports multiline)
 InterpolatedDoubleQuoteContent "Double quoted content with @var interpolation"
   = '"' parts:(SpecialVariable / VariableNoTail / DoubleQuotedText)* '"' {
+      // Handle empty string case - create Text node with empty content
+      if (parts.length === 0) {
+        return [helpers.createNode(NodeType.Text, { content: '', location: location() })];
+      }
       return parts;
     }
 

@@ -101,10 +101,12 @@ export async function evaluateVar(
   }
 
   // Get the value node - this contains type information from the parser
-  const valueNode = directive.values?.value;
-  if (valueNode === undefined) {
+  const valueNodes = directive.values?.value;
+  if (!valueNodes || !Array.isArray(valueNodes) || valueNodes.length === 0) {
     throw new Error('Var directive missing value');
   }
+  
+  const valueNode = valueNodes[0];
 
   // Type-based routing based on the AST structure
   let resolvedValue: any;
@@ -460,9 +462,10 @@ export async function evaluateVar(
     
     if (directive.meta?.wrapperType === 'singleQuote') {
       variable = createSimpleTextVariable(identifier, strValue, source, metadata);
-    } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick') {
+    } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick' || directive.meta?.wrapperType === 'doubleBracket') {
       // Template variable
-      variable = createTemplateVariable(identifier, strValue, undefined, 'backtick', source, metadata);
+      const templateType = directive.meta?.wrapperType === 'doubleBracket' ? 'doubleBracket' : 'backtick';
+      variable = createTemplateVariable(identifier, strValue, undefined, templateType, source, metadata);
     } else if (directive.meta?.wrapperType === 'doubleQuote' || source.hasInterpolation) {
       // Interpolated text - need to track interpolation points
       // For now, create without interpolation points - TODO: extract these from AST

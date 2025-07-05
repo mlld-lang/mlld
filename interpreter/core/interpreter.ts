@@ -315,8 +315,6 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     // The grammar incorrectly creates top-level VariableReference nodes
     // for parameters in exec directives. These have location offset 0,0
     // which is impossible for real variable references.
-    // However, variable interpolation nodes also have offset 0,0 but
-    // they have valueType: 'varInterpolation'
     interface LocationWithOffset {
       start?: { offset?: number };
       end?: { offset?: number };
@@ -331,7 +329,6 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
                          location.start?.offset === 0 && 
                          location.end?.offset === 0;
     if (hasZeroOffset &&
-        node.valueType !== 'varInterpolation' &&
         node.valueType !== 'commandRef' &&
         node.valueType !== 'varIdentifier') {
       // Skip orphaned parameter references from grammar bug
@@ -354,10 +351,6 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     }
     
     if (!variable) {
-      // For interpolation variables, return empty if not found
-      if (node.valueType === 'varInterpolation') {
-        return { value: `${node.identifier}`, env };
-      }
       throw new Error(`Variable not found: ${node.identifier}`);
     }
     
@@ -437,20 +430,6 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       }
     }
     
-    // For interpolation variables, we need to add the resolved text to output
-    if (node.valueType === 'varInterpolation') {
-      let stringValue = String(resolvedValue);
-      // Handle path objects specially
-      if (isPathValue(resolvedValue)) {
-        stringValue = resolvedValue.resolvedPath;
-      }
-      const textNode: TextNode = { 
-        type: 'Text', 
-        nodeId: node.nodeId || 'var-interpolation',
-        content: stringValue 
-      };
-      env.addNode(textNode);
-    }
     
     return { value: resolvedValue, env };
   }
@@ -480,7 +459,7 @@ async function evaluateDocument(doc: DocumentNode, env: Environment): Promise<Ev
     if (isText(child)) {
       env.addNode(child);
     }
-    // VariableReference nodes with varInterpolation are now handled in evaluate()
+    // VariableReference nodes are handled consistently through interpolate()
   }
   
   return { value: lastValue, env };

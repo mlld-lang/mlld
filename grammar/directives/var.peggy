@@ -15,24 +15,24 @@ SlashVar "var directive"
       
       // Handle template content (backtick, [[...]], quotes)
       if (value && value.content && value.wrapperType) {
-        processedValue = value.content;
+        processedValue = value.content; // value.content is already an array of nodes
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
       }
       // Handle object literals (already typed by DataObjectLiteral)
       else if (value && value.type === 'object') {
-        processedValue = value;
+        processedValue = [value];
         metaInfo.inferredType = 'object';
       }
       // Handle array literals
       else if (value && value.type === 'array') {
-        processedValue = value;
+        processedValue = [value];
         metaInfo.inferredType = 'array';
         metaInfo.isEmptyArray = value.items.length === 0;
       }
       // Handle section extraction
       else if (value && value.type === 'section') {
-        processedValue = value;
+        processedValue = [value];
         metaInfo.inferredType = 'section-content';
       }
       // Handle path dereference (array of nodes)
@@ -47,45 +47,45 @@ SlashVar "var directive"
       }
       // Handle nested directives
       else if (value && value.type === 'nestedDirective') {
-        processedValue = value.directive;
+        processedValue = [value.directive];
         metaInfo.inferredType = 'computed';
         metaInfo.isDataValue = true;
       }
       // Handle code execution (both 'run' keyword and shorthand)
       else if (value && value.type === 'code') {
-        processedValue = {
+        processedValue = [{
           type: 'code',
           language: value.language,
           code: value.code
-        };
+        }];
         metaInfo.inferredType = 'computed';
         metaInfo.language = value.language;
         metaInfo.hasRunKeyword = value.hasRunKeyword;
       }
       // Handle command execution (run {command})
       else if (value && value.type === 'command') {
-        processedValue = {
+        processedValue = [{
           type: 'command',
           command: value.command
-        };
+        }];
         metaInfo.inferredType = 'computed';
         metaInfo.hasRunKeyword = value.hasRunKeyword;
       }
       // Handle foreach expressions
       else if (value && value.type === 'foreach-command') {
-        processedValue = value.value;
+        processedValue = [value.value];
         metaInfo.inferredType = 'computed';
         metaInfo.isForeach = true;
       }
       // Handle primitive values (numbers, booleans, null)
       else if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
-        processedValue = value;
+        processedValue = [value];
         metaInfo.inferredType = 'primitive';
         metaInfo.primitiveType = value === null ? 'null' : typeof value;
       }
       // Handle other types
       else {
-        processedValue = value;
+        processedValue = Array.isArray(value) ? value : [value];
         metaInfo.inferredType = 'unknown';
       }
       

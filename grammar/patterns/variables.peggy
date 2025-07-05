@@ -108,7 +108,7 @@ InterpolationSpecialVar
 // {{var}} for simple variable interpolation
 InterpolationSimpleVar
   = "{{" _ id:BaseIdentifier format:VarFormat? _ "}}" {
-      const node = helpers.createVariableReferenceNode('varInterpolation', {
+      const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
         ...(format ? { format } : {})
       }, location());
@@ -119,7 +119,7 @@ InterpolationSimpleVar
 // {{var.field}} or {{var[index]}} for data field/array access
 InterpolationDataVar
   = "{{" _ id:BaseIdentifier fields:AnyFieldAccess* format:VarFormat? _ "}}" {
-      const node = helpers.createVariableReferenceNode('varInterpolation', {
+      const node = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
         fields: fields || [],
         ...(format ? { format } : {})

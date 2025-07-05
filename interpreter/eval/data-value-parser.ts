@@ -109,7 +109,7 @@ export function parseDataValue(node: ASTDataNode): DataValue {
     const hasTemplateContent = node.some(item => 
       (typeof item === 'object' && item !== null && 'type' in item) &&
       (item.type === 'Text' || 
-      (item.type === 'VariableReference' && (item as VariableReferenceNode).valueType === 'varInterpolation'))
+      (item.type === 'VariableReference' && (item as VariableReferenceNode).valueType === 'varIdentifier'))
     );
     
     if (hasTemplateContent) {
