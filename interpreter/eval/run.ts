@@ -11,6 +11,7 @@ import type { SecurityManager } from '@security/SecurityManager';
 import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
 import { executePipeline } from './pipeline';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
+import { logger } from '@core/utils/logger';
 
 /**
  * Determine the taint level of command arguments
@@ -341,10 +342,11 @@ export async function evaluateRun(
       
       const code = await interpolate(definition.codeTemplate, tempEnv, InterpolationContext.Default);
       if (process.env.DEBUG_EXEC) {
-        console.log('run.ts code execution debug:');
-        console.log('  definition.codeTemplate:', definition.codeTemplate);
-        console.log('  interpolated code:', code);
-        console.log('  argValues:', argValues);
+        logger.debug('run.ts code execution debug:', {
+          codeTemplate: definition.codeTemplate,
+          interpolatedCode: code,
+          argValues
+        });
       }
       output = await env.executeCode(code, definition.language || 'javascript', argValues, executionContext);
     } else if (definition.type === 'template') {

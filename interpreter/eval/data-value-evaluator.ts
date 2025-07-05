@@ -41,6 +41,7 @@ import {
   validateArrayInputs, 
   isWithinPerformanceLimit 
 } from '../utils/cartesian-product';
+import { logger } from '@core/utils/logger';
 
 /**
  * Cache for evaluated directives to avoid re-evaluation
@@ -210,7 +211,7 @@ export async function evaluateDataValue(
       
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('Before pipeline:', { result, stringified: String(result), format });
+        logger.debug('Before pipeline:', { result, stringified: String(result), format });
       }
       
       // Convert result to string properly - JSON.stringify for objects/arrays
@@ -226,7 +227,7 @@ export async function evaluateDataValue(
       
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('After pipeline:', { 
+        logger.debug('After pipeline:', { 
           pipelineResult,
           pipelineResultType: typeof pipelineResult,
           pipelineResultIsNull: pipelineResult === null,
@@ -239,7 +240,7 @@ export async function evaluateDataValue(
     
     // Debug logging
     if (process.env.MLLD_DEBUG === 'true') {
-      console.log('VariableReferenceWithTail final result:', {
+      logger.debug('VariableReferenceWithTail final result:', {
         variableIdentifier: varRef.identifier,
         resultValue: result,
         resultType: typeof result,
@@ -408,7 +409,7 @@ export async function evaluateDataValue(
       
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('ExecInvocation pipeline result:', {
+        logger.debug('ExecInvocation pipeline result:', {
           pipelineResult,
           pipelineResultType: typeof pipelineResult,
           isPipelineInput: !!(pipelineResult && typeof pipelineResult === 'object' && 'text' in pipelineResult)
@@ -443,7 +444,7 @@ export async function evaluateDataValue(
   }
   
   // Fallback - return the value as-is
-  console.warn('Unexpected value type in evaluateDataValue:', value);
+  logger.warn('Unexpected value type in evaluateDataValue:', { value });
   return value;
 }
 
@@ -681,7 +682,7 @@ async function invokeParameterizedCommand(
     
     // Debug logging
     if (process.env.MLLD_DEBUG === 'true') {
-      console.log('Foreach code execution:', {
+      logger.debug('Foreach code execution:', {
         code,
         language: definition.language,
         argMap

@@ -20,6 +20,7 @@ import { VariableRedefinitionError, MlldError, MlldImportError } from '@core/err
 import { HashUtils } from '@core/registry/utils/HashUtils';
 import { checkMlldVersion, formatVersionError } from '@core/utils/version-checker';
 import { version as currentMlldVersion } from '@core/version';
+import { logger } from '@core/utils/logger';
 
 type ContentNodeArray = ContentNode[];
 
@@ -45,7 +46,7 @@ function resolveObjectReferences(
     const referencedVar = childVars.get(varName);
     
     if (process.env.DEBUG_EXEC) {
-      console.log('DEBUG: resolveObjectReferences found VariableReference AST node:', {
+      logger.debug('resolveObjectReferences found VariableReference AST node:', {
         varName,
         found: !!referencedVar,
         referencedVarType: referencedVar?.type,
@@ -70,7 +71,7 @@ function resolveObjectReferences(
       }
     } else {
       if (process.env.DEBUG_EXEC) {
-        console.log('DEBUG: VariableReference AST node not found during import resolution:', varName);
+        logger.debug('VariableReference AST node not found during import resolution:', varName);
       }
       throw new Error(`Variable reference @${varName} not found during import`);
     }
@@ -104,7 +105,7 @@ function resolveObjectReferences(
     const referencedVar = childVars.get(varName);
     
     if (process.env.DEBUG_EXEC) {
-      console.log('DEBUG: resolveObjectReferences looking for variable:', {
+      logger.debug('resolveObjectReferences looking for variable:', {
         originalValue: value,
         varName,
         found: !!referencedVar,
@@ -130,7 +131,7 @@ function resolveObjectReferences(
       }
     } else {
       if (process.env.DEBUG_EXEC) {
-        console.log('DEBUG: Variable not found during import resolution:', varName);
+        logger.debug('Variable not found during import resolution:', varName);
       }
     }
   }
@@ -550,7 +551,7 @@ async function importFromPath(
       
       if (requiredVersion) {
         if (process.env.MLLD_DEBUG_VERSION) {
-          console.log(`[Version Check] Module requires: ${requiredVersion}, Current: ${currentMlldVersion}`);
+          logger.debug(`[Version Check] Module requires: ${requiredVersion}, Current: ${currentMlldVersion}`);
         }
         const versionCheck = checkMlldVersion(requiredVersion);
         if (!versionCheck.compatible) {

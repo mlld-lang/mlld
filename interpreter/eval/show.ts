@@ -27,6 +27,7 @@ import {
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import { evaluateDataValue, hasUnevaluatedDirectives } from './value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
+import { logger } from '@core/utils/logger';
 // Template normalization now handled in grammar - no longer needed here
 
 /**
@@ -84,13 +85,14 @@ export async function evaluateShow(
         // For double-bracket templates, the value is the AST array
         if (Array.isArray(value)) {
           if (process.env.MLLD_DEBUG === 'true') {
-            console.log('DEBUG: Template interpolation in show');
-            console.log('  Variable name:', variable.name);
-            console.log('  AST array:', JSON.stringify(value, null, 2));
+            logger.debug('Template interpolation in show', {
+              variableName: variable.name,
+              astArray: value
+            });
           }
           value = await interpolate(value, env);
           if (process.env.MLLD_DEBUG === 'true') {
-            console.log('  Interpolation result:', value);
+            logger.debug('Interpolation result:', { value });
           }
         } else if (variable.metadata?.templateAst && Array.isArray(variable.metadata.templateAst)) {
           // Fallback - check metadata (shouldn't be needed with new code)
@@ -211,7 +213,7 @@ export async function evaluateShow(
       const hadFieldAccess = variableNode.fields && variableNode.fields.length > 0;
       if (variable && variable.metadata?.isNamespace && !hadFieldAccess) {
         if (process.env.DEBUG_NAMESPACE) {
-          console.log('DEBUG: Cleaning namespace for display:', {
+          logger.debug('Cleaning namespace for display:', {
             varName: variable.name,
             hasMetadata: !!variable.metadata,
             isNamespace: variable.metadata?.isNamespace,

@@ -521,7 +521,7 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
     
     // Debug logging for object resolution
     if (process.env.DEBUG_EXEC) {
-      console.log('DEBUG: resolveVariableValue for structured variable:', {
+      logger.debug('resolveVariableValue for structured variable:', {
         variableName: variable.name,
         variableType: variable.type,
         isComplex: complexFlag,
@@ -536,7 +536,7 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
       
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
-        console.log('resolveVariableValue - evaluated complex data:', {
+        logger.debug('resolveVariableValue - evaluated complex data:', {
           variableName: variable.name,
           evaluatedValue,
           evaluatedType: typeof evaluatedValue
@@ -559,7 +559,7 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
   } else if (isExecutableVariable(variable)) {
     // Auto-execute executables when interpolated
     if (process.env.DEBUG_EXEC) {
-      console.log('Auto-executing executable during interpolation:', variable.name);
+      logger.debug('Auto-executing executable during interpolation:', { name: variable.name });
     }
     const { evaluateExecInvocation } = await import('../eval/exec-invocation');
     const invocation = {
@@ -708,7 +708,7 @@ export async function interpolate(
       
       if (!variable) {
         if (process.env.MLLD_DEBUG === 'true') {
-          console.log('Variable not found during interpolation:', varName);
+          logger.debug('Variable not found during interpolation:', { varName });
         }
         parts.push(`${varName}`); // Keep unresolved - will be caught by Environment.ts strict checks
         continue;
@@ -741,7 +741,7 @@ export async function interpolate(
           // Handle executable variables specially in interpolation
           if (error instanceof Error && error.message.includes('Cannot interpolate executable')) {
             if (context === InterpolationContext.Default) {
-              console.warn(`Warning: Referenced executable '@${variable.name}' without calling it. Did you mean to use @${variable.name}() instead?`);
+              logger.warn(`Referenced executable '@${variable.name}' without calling it. Did you mean to use @${variable.name}() instead?`);
             }
             value = `[executable: ${variable.name}]`;
           } else {
@@ -752,7 +752,7 @@ export async function interpolate(
       
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('Variable resolved in template:', {
+        logger.debug('Variable resolved in template:', {
           name: variable.name,
           type: variable.type,
           resolvedValue: value,
@@ -797,7 +797,7 @@ export async function interpolate(
       
       // Debug logging for data variables
       if (process.env.MLLD_DEBUG === 'true' && node.identifier) {
-        console.log('Template interpolation:', {
+        logger.debug('Template interpolation:', {
           identifier: node.identifier,
           value,
           valueType: typeof value,

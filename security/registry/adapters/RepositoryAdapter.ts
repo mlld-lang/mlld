@@ -123,7 +123,7 @@ export class RepositoryAdapter implements StorageAdapter {
       );
     }
 
-    const data = await response.json();
+    const data = await response.json() as unknown;
     
     if (!isGitHubContentItem(data)) {
       throw new MlldImportError(
@@ -238,7 +238,7 @@ export class RepositoryAdapter implements StorageAdapter {
       return 'main'; // Fallback
     }
 
-    const data = await response.json();
+    const data = await response.json() as unknown;
     if (!isGitHubRepoInfo(data)) {
       return 'main'; // Fallback
     }
@@ -263,13 +263,13 @@ export class RepositoryAdapter implements StorageAdapter {
       );
 
       if (response.ok) {
-        const commits = await response.json();
+        const commits = await response.json() as unknown;
         if (Array.isArray(commits) && commits.length > 0) {
-          const commit = commits[0];
+          const commit = commits[0] as any;
           return {
-            sha: commit.sha,
-            date: commit.commit.author.date,
-            committer: commit.commit.author.name
+            sha: commit.sha as string,
+            date: commit.commit.author.date as string,
+            committer: commit.commit.author.name as string
           };
         }
       }

@@ -8,6 +8,7 @@ import {
   isPrimitiveValue
 } from '@core/types/var';
 import { evaluate } from '../core/interpreter';
+import { logger } from '@core/utils/logger';
 
 // Simple cache to prevent double evaluation of the same directive
 const evaluationCache = new WeakMap<DirectiveNode, any>();
@@ -39,7 +40,7 @@ export async function evaluateDataValue(
   
   // Debug logging
   if (process.env.DEBUG_LAZY_EVAL || process.env.MLLD_DEBUG === 'true') {
-    console.log('evaluateDataValue called with:', JSON.stringify(value, null, 2).substring(0, 200));
+    logger.debug('evaluateDataValue called with:', { value: JSON.stringify(value, null, 2).substring(0, 200) });
   }
   
   // Handle Text nodes
@@ -136,7 +137,7 @@ export async function evaluateDataValue(
   // Handle foreach expressions
   if (value && typeof value === 'object' && value.type === 'foreach') {
     if (process.env.MLLD_DEBUG === 'true') {
-      console.log('Found foreach expression in value-evaluator:', JSON.stringify(value, null, 2));
+      logger.debug('Found foreach expression in value-evaluator:', { value });
     }
     const { evaluateForeachCommand } = await import('./foreach');
     return await evaluateForeachCommand(value, env);
@@ -175,7 +176,7 @@ export async function evaluateDataValue(
       
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('ExecInvocation pipeline result:', {
+        logger.debug('ExecInvocation pipeline result:', {
           pipelineResult,
           pipelineResultType: typeof pipelineResult,
           isPipelineInput: !!(pipelineResult && typeof pipelineResult === 'object' && 'text' in pipelineResult)
@@ -345,7 +346,7 @@ export async function evaluateDataValue(
   }
   
   // If we get here, it's an unhandled type
-  console.warn('Unhandled data value type in lazy evaluation:', value);
+  logger.warn('Unhandled data value type in lazy evaluation:', { value });
   return value;
 }
 

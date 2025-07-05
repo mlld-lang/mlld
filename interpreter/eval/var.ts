@@ -375,7 +375,7 @@ export async function evaluateVar(
   } else {
     // Default case - try to interpolate as text
     if (process.env.MLLD_DEBUG === 'true') {
-      console.log('var.ts: Default case for valueNode:', valueNode);
+      logger.debug('var.ts: Default case for valueNode:', { valueNode });
     }
     resolvedValue = await interpolate([valueNode], env);
   }
