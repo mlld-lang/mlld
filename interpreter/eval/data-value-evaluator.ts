@@ -11,11 +11,9 @@ import {
   isPrimitiveValue
 } from '@core/types/var';
 import { createObjectVariable, createArrayVariable } from '@core/types/variable';
-
-interface EvaluationState {
-  depth: number;
-  maxDepth: number;
-}
+import { EvaluationStateManager } from './data-values/EvaluationStateManager';
+import { PrimitiveEvaluator } from './data-values/PrimitiveEvaluator';
+import { CollectionEvaluator } from './data-values/CollectionEvaluator';
 
 // Type guards for foreach expressions
 function isForeachCommandExpression(value: any): boolean {
@@ -44,9 +42,19 @@ import {
 import { logger } from '@core/utils/logger';
 
 /**
- * Cache for evaluated directives to avoid re-evaluation
+ * State manager for evaluation caching
  */
-const evaluationCache = new Map<any, EvaluationState>();
+const stateManager = new EvaluationStateManager();
+
+/**
+ * Primitive evaluator for simple values and directives
+ */
+const primitiveEvaluator = new PrimitiveEvaluator(stateManager);
+
+/**
+ * Collection evaluator for objects and arrays
+ */
+const collectionEvaluator = new CollectionEvaluator(evaluateDataValue);
 
 /**
  * Evaluates a DataValue, recursively evaluating any embedded directives,
@@ -56,56 +64,14 @@ export async function evaluateDataValue(
   value: DataValue,
   env: Environment
 ): Promise<any> {
-  // Primitive values pass through unchanged
-  if (isPrimitiveValue(value)) {
-    return value;
+  // Check if primitive evaluator can handle this value
+  if (primitiveEvaluator.canHandle(value)) {
+    return await primitiveEvaluator.evaluate(value, env);
   }
   
-  // Handle Text nodes
-  if (value && typeof value === 'object' && value.type === 'Text' && 'content' in value) {
-    return value.content;
-  }
-  
-  // Handle embedded directives
-  if (isDirectiveValue(value)) {
-    // Check if we've already evaluated this directive
-    const cached = evaluationCache.get(value);
-    if (cached?.evaluated && !cached.error) {
-      return cached.result;
-    }
-    
-    try {
-      // Create a child environment to capture output without affecting the parent
-      const childEnv = env.createChild();
-      
-      // Evaluate the directive in the child environment
-      const result = await evaluate([value], childEnv);
-      
-      // For run and add directives in data context, trim trailing newlines
-      let finalValue = result.value;
-      if ((value.kind === 'run' || value.kind === 'add') && typeof finalValue === 'string') {
-        finalValue = finalValue.replace(/\n+$/, '');
-      }
-      
-      // Cache the result
-      const state: EvaluationState = {
-        evaluated: true,
-        result: finalValue,
-        error: undefined
-      };
-      evaluationCache.set(value, state);
-      
-      return finalValue;
-    } catch (error) {
-      // Cache the error
-      const state: EvaluationState = {
-        evaluated: true,
-        result: undefined,
-        error: error as Error
-      };
-      evaluationCache.set(value, state);
-      throw error;
-    }
+  // Check if collection evaluator can handle this value
+  if (collectionEvaluator.canHandle(value)) {
+    return await collectionEvaluator.evaluate(value, env);
   }
   
   // Handle foreach command expressions
@@ -305,70 +271,6 @@ export async function evaluateDataValue(
     return await interpolate(value, env);
   }
   
-  // Handle objects - recursively evaluate all properties
-  if (value?.type === 'object') {
-    const evaluatedObj: Record<string, any> = {};
-    
-    for (const [key, propValue] of Object.entries(value.properties)) {
-      try {
-        evaluatedObj[key] = await evaluateDataValue(propValue, env);
-      } catch (error) {
-        // Store error information but continue evaluating other properties
-        evaluatedObj[key] = {
-          __error: true,
-          __message: error instanceof Error ? error.message : String(error),
-          __property: key
-        };
-      }
-    }
-    
-    return evaluatedObj;
-  }
-  
-  // Handle arrays - evaluate all elements
-  if (value?.type === 'array') {
-    const evaluatedElements: any[] = [];
-    
-    for (let i = 0; i < value.items.length; i++) {
-      try {
-        const evaluatedItem = await evaluateDataValue(value.items[i], env);
-        evaluatedElements.push(evaluatedItem);
-      } catch (error) {
-        // Store error information but continue evaluating other elements
-        evaluatedElements.push({
-          __error: true,
-          __message: error instanceof Error ? error.message : String(error),
-          __index: i
-        });
-      }
-    }
-    
-    // Use ASTEvaluator to ensure we return plain JavaScript arrays
-    const { ASTEvaluator } = await import('../core/ast-evaluator');
-    return await ASTEvaluator.evaluateToRuntime(evaluatedElements, env);
-  }
-  
-  // Check if it's an array that needs interpolation (template content) or contains foreach
-  if (Array.isArray(value)) {
-    // Check if the array contains a single foreach command object
-    if (value.length === 1 && value[0] && typeof value[0] === 'object' && value[0].type === 'foreach-command') {
-      return await evaluateForeachCommand(value[0], env);
-    }
-    
-    // Check if all elements are Text or VariableReference nodes
-    const isTemplateContent = value.every(item => 
-      item?.type === 'Text' || item?.type === 'VariableReference'
-    );
-    
-    if (isTemplateContent) {
-      // This is template content that needs interpolation
-      return await interpolate(value, env);
-    }
-    
-    // Otherwise it's a regular array that's already been processed
-    // This can happen when foreach-section returns an array of strings
-    return value;
-  }
   
   // Handle direct foreach structure from grammar 
   if (value && typeof value === 'object' && value.type === 'foreach-command') {
