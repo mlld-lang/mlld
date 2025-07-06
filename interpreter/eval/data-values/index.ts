@@ -12,6 +12,7 @@
 export { EvaluationStateManager } from './EvaluationStateManager';
 export { PrimitiveEvaluator } from './PrimitiveEvaluator';
 export { CollectionEvaluator } from './CollectionEvaluator';
+export { VariableReferenceEvaluator } from './VariableReferenceEvaluator';
 
 export type { EvaluationState, CacheResult } from './EvaluationStateManager';
 
@@ -21,3 +22,4 @@ export type { EvaluationState, CacheResult } from './EvaluationStateManager';
 export * from './EvaluationStateManager';
 export * from './PrimitiveEvaluator';
 export * from './CollectionEvaluator';
+export * from './VariableReferenceEvaluator';

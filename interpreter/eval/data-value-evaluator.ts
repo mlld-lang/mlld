@@ -14,6 +14,7 @@ import { createObjectVariable, createArrayVariable } from '@core/types/variable'
 import { EvaluationStateManager } from './data-values/EvaluationStateManager';
 import { PrimitiveEvaluator } from './data-values/PrimitiveEvaluator';
 import { CollectionEvaluator } from './data-values/CollectionEvaluator';
+import { VariableReferenceEvaluator } from './data-values/VariableReferenceEvaluator';
 
 // Type guards for foreach expressions
 function isForeachCommandExpression(value: any): boolean {
@@ -57,6 +58,11 @@ const primitiveEvaluator = new PrimitiveEvaluator(stateManager);
 const collectionEvaluator = new CollectionEvaluator(evaluateDataValue);
 
 /**
+ * Variable reference evaluator for variable resolution and field access
+ */
+const variableReferenceEvaluator = new VariableReferenceEvaluator(evaluateDataValue);
+
+/**
  * Evaluates a DataValue, recursively evaluating any embedded directives,
  * variable references, or templates.
  */
@@ -72,6 +78,11 @@ export async function evaluateDataValue(
   // Check if collection evaluator can handle this value
   if (collectionEvaluator.canHandle(value)) {
     return await collectionEvaluator.evaluate(value, env);
+  }
+  
+  // Check if variable reference evaluator can handle this value
+  if (variableReferenceEvaluator.canHandle(value)) {
+    return await variableReferenceEvaluator.evaluate(value, env);
   }
   
   // Handle foreach command expressions
@@ -93,256 +104,9 @@ export async function evaluateDataValue(
     return await evaluateForeachSection(value, env);
   }
   
-  // Handle raw VariableReference nodes (not wrapped in array)
-  if (value && typeof value === 'object' && value.type === 'VariableReference') {
-    const variable = env.getVariable(value.identifier);
-    if (!variable) {
-      throw new Error(`Variable not found: ${value.identifier}`);
-    }
-    
-    // For executable variables, return the variable itself (for lazy execution)
-    if (isExecutable(variable)) {
-      return variable;
-    }
-    
-    // Extract the actual value
-    let result: any;
-    if (isTextLike(variable)) {
-      result = variable.value;
-    } else if (isPath(variable)) {
-      result = variable.value.resolvedPath;
-    } else if (isImported(variable)) {
-      result = variable.value;
-    } else if (isObject(variable) || isArray(variable)) {
-      result = await resolveVariableValue(variable, env);
-    } else {
-      result = await resolveVariableValue(variable, env);
-    }
-    
-    return result;
-  }
-  
-  // Handle variable references with tail modifiers (pipelines, etc.)
-  if (value && typeof value === 'object' && value.type === 'VariableReferenceWithTail') {
-    // First resolve the variable value
-    const varRef = value.variable;
-    const variable = env.getVariable(varRef.identifier);
-    if (!variable) {
-      throw new Error(`Variable not found: ${varRef.identifier}`);
-    }
-    
-    // Get the base value using new type guards
-    let result: any;
-    if (isTextLike(variable)) {
-      // All text-producing types
-      result = variable.value;
-    } else if (isPath(variable)) {
-      result = variable.value.resolvedPath;
-    } else if (isExecutable(variable)) {
-      // If we have a pipeline, we need to execute the variable to get its value
-      if (value.withClause && value.withClause.pipeline) {
-        // Execute the function to get its result
-        const { evaluateExecInvocation } = await import('./exec-invocation');
-        result = await evaluateExecInvocation({
-          type: 'ExecInvocation',
-          identifier: varRef.identifier,
-          args: [],
-          withClause: null
-        } as any, env);
-      } else {
-        // For non-pipeline cases, return the variable for lazy evaluation
-        result = variable;
-      }
-    } else if (isImported(variable)) {
-      result = variable.value;
-    } else if (isObject(variable) || isArray(variable)) {
-      // Handle structured data - may need evaluation
-      result = await resolveVariableValue(variable, env);
-    } else {
-      // Fallback for any other types
-      result = await resolveVariableValue(variable, env);
-    }
-    
-    // Apply field access if present
-    if (varRef.fields && varRef.fields.length > 0) {
-      result = await accessField(result, varRef.fields, varRef.identifier);
-    }
-    
-    // Apply pipeline if present
-    if (value.withClause && value.withClause.pipeline) {
-      const { executePipeline } = await import('../eval/pipeline');
-      
-      // Extract format from with clause if specified
-      const format = value.withClause.format as string | undefined;
-      
-      // Debug logging
-      if (process.env.MLLD_DEBUG === 'true') {
-        logger.debug('Before pipeline:', { result, stringified: String(result), format });
-      }
-      
-      // Convert result to string properly - JSON.stringify for objects/arrays
-      const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
-      
-      const pipelineResult = await executePipeline(
-        stringResult,
-        value.withClause.pipeline,
-        env,
-        undefined, // location
-        format
-      );
-      
-      // Debug logging
-      if (process.env.MLLD_DEBUG === 'true') {
-        logger.debug('After pipeline:', { 
-          pipelineResult,
-          pipelineResultType: typeof pipelineResult,
-          pipelineResultIsNull: pipelineResult === null,
-          pipelineResultIsUndefined: pipelineResult === undefined
-        });
-      }
-      
-      result = pipelineResult;
-    }
-    
-    // Debug logging
-    if (process.env.MLLD_DEBUG === 'true') {
-      logger.debug('VariableReferenceWithTail final result:', {
-        variableIdentifier: varRef.identifier,
-        resultValue: result,
-        resultType: typeof result,
-        resultIsNull: result === null,
-        resultIsUndefined: result === undefined
-      });
-    }
-    
-    return result;
-  }
-  
-  // Handle variable references (with potential field access)
-  if (isVariableReferenceValue(value)) {
-    const variable = env.getVariable(value.identifier);
-    if (!variable) {
-      throw new Error(`Variable not found: ${value.identifier}`);
-    }
-    
-    // For executable variables, return the variable itself (for lazy execution)
-    // This preserves the executable for later execution rather than executing it now
-    if (isExecutable(variable)) {
-      return variable;
-    }
-    
-    // Extract value using new type guards
-    let result: any;
-    if (isTextLike(variable)) {
-      // All text-producing types
-      result = variable.value;
-    } else if (isPath(variable)) {
-      result = variable.value.resolvedPath;
-    } else if (isExecutable(variable)) {
-      result = variable; // Already handled above but included for completeness
-    } else if (isImported(variable)) {
-      result = variable.value;
-    } else if (isObject(variable) || isArray(variable)) {
-      // Handle structured data - may need evaluation
-      result = await resolveVariableValue(variable, env);
-    } else {
-      // Fallback for any other types
-      result = await resolveVariableValue(variable, env);
-    }
-    
-    // Apply field access if present
-    if (value.fields && value.fields.length > 0) {
-      // If the variable has complex metadata indicating it needs further evaluation
-      if ((variable as Variable).metadata?.isComplex) {
-        // For complex variables, we need to evaluate the raw value
-        result = await evaluateDataValue(result, env);
-      }
-      
-      for (const field of value.fields) {
-        result = accessField(result, field);
-      }
-    }
-    
-    return result;
-  }
-  
-  // Handle template interpolation
-  if (isTemplateValue(value)) {
-    return await interpolate(value, env);
-  }
-  
-  
   // Handle direct foreach structure from grammar 
   if (value && typeof value === 'object' && value.type === 'foreach-command') {
     return await evaluateForeachCommand(value, env);
-  }
-  
-  // Handle ExecInvocation nodes
-  if (value && typeof value === 'object' && value.type === 'ExecInvocation') {
-    const { evaluateExecInvocation } = await import('./exec-invocation');
-    
-    // If the ExecInvocation has a pipeline, we need to handle it here
-    // to ensure proper data type handling
-    if (value.withClause && value.withClause.pipeline) {
-      // Create a copy without the withClause to avoid double execution
-      const nodeWithoutPipeline = {
-        ...value,
-        withClause: null
-      };
-      
-      const result = await evaluateExecInvocation(nodeWithoutPipeline as any, env);
-      
-      const { executePipeline } = await import('../eval/pipeline');
-      
-      // Get the string representation of the result for the pipeline
-      const stringResult = typeof result.value === 'string' ? result.value : JSON.stringify(result.value);
-      
-      // Extract format from with clause if specified
-      const format = value.withClause.format as string | undefined;
-      
-      // Execute the pipeline with the stringified result and format
-      const pipelineResult = await executePipeline(
-        stringResult,
-        value.withClause.pipeline,
-        env,
-        undefined, // location
-        format
-      );
-      
-      // Debug logging
-      if (process.env.MLLD_DEBUG === 'true') {
-        logger.debug('ExecInvocation pipeline result:', {
-          pipelineResult,
-          pipelineResultType: typeof pipelineResult,
-          isPipelineInput: !!(pipelineResult && typeof pipelineResult === 'object' && 'text' in pipelineResult)
-        });
-      }
-      
-      // Try to parse the pipeline result back to maintain type consistency
-      try {
-        const parsed = JSON.parse(pipelineResult);
-        return parsed;
-      } catch {
-        // If JSON parsing fails, return the string as-is
-        return pipelineResult;
-      }
-    }
-    
-    // No pipeline, execute normally
-    const result = await evaluateExecInvocation(value as any, env);
-    
-    // If the result is a JSON string, try to parse it back into an object/array
-    if (typeof result.value === 'string') {
-      try {
-        const parsed = JSON.parse(result.value);
-        return parsed;
-      } catch {
-        // If JSON parsing fails, return the string as-is
-        return result.value;
-      }
-    }
-    
-    return result.value;
   }
   
   // Fallback - return the value as-is
@@ -359,8 +123,8 @@ export function isFullyEvaluated(value: DataValue): boolean {
   }
   
   if (isDirectiveValue(value)) {
-    const cached = evaluationCache.get(value);
-    return cached?.evaluated === true;
+    const cached = stateManager.getCachedResult(value);
+    return cached?.hit === true;
   }
   
   if (isVariableReferenceValue(value) || isTemplateValue(value)) {
