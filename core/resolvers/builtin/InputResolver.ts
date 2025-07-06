@@ -195,6 +195,10 @@ export class InputResolver implements Resolver {
 
     // Handle special format requests
     switch (field.toLowerCase()) {
+      case 'content':
+        // Return stdin content directly (same as 'text')
+        return this.inputData.stdin || '';
+      
       case 'json':
         return this.inputData;
       

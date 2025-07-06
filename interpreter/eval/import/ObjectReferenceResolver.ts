@@ -1,0 +1,136 @@
+import type { Variable, ExecutableVariable } from '@core/types/variable';
+import { logger } from '@core/utils/logger';
+
+/**
+ * Handles complex object variable reference resolution for imported modules
+ */
+export class ObjectReferenceResolver {
+  /**
+   * Recursively resolve variable references in nested objects
+   * This handles cases like { ask: @claude_ask } where @claude_ask needs to be resolved
+   */
+  resolveObjectReferences(
+    value: any,
+    variableMap: Map<string, Variable>
+  ): any {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    
+    if (Array.isArray(value)) {
+      return value.map(item => this.resolveObjectReferences(item, variableMap));
+    }
+    
+    // Check if this is a VariableReference AST node
+    if (typeof value === 'object' && value.type === 'VariableReference' && value.identifier) {
+      return this.resolveVariableReference(value.identifier, variableMap);
+    }
+    
+    if (typeof value === 'object') {
+      // Handle AST object nodes with type and properties
+      if (value.type === 'object' && value.properties) {
+        return this.resolveASTObjectNode(value, variableMap);
+      }
+      
+      // Handle regular objects
+      return this.resolveNestedStructures(value, variableMap);
+    }
+    
+    // Check if this is a variable reference string (starts with @)
+    if (typeof value === 'string' && value.startsWith('@')) {
+      const varName = value.substring(1); // Remove @ prefix
+      const referencedVar = variableMap.get(varName);
+      
+      if (process.env.DEBUG_EXEC) {
+        logger.debug('resolveObjectReferences looking for variable:', {
+          originalValue: value,
+          varName,
+          found: !!referencedVar,
+          referencedVarType: referencedVar?.type,
+          availableVars: Array.from(variableMap.keys())
+        });
+      }
+      
+      if (referencedVar) {
+        return this.resolveExecutableReference(referencedVar);
+      } else {
+        if (process.env.DEBUG_EXEC) {
+          logger.debug('Variable not found during import resolution:', varName);
+        }
+      }
+    }
+    
+    return value;
+  }
+
+  /**
+   * Resolve a single variable reference by name
+   */
+  private resolveVariableReference(varName: string, variableMap: Map<string, Variable>): any {
+    const referencedVar = variableMap.get(varName);
+    
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('resolveObjectReferences found VariableReference AST node:', {
+        varName,
+        found: !!referencedVar,
+        referencedVarType: referencedVar?.type,
+        availableVars: Array.from(variableMap.keys())
+      });
+    }
+    
+    if (referencedVar) {
+      return this.resolveExecutableReference(referencedVar);
+    } else {
+      if (process.env.DEBUG_EXEC) {
+        logger.debug('VariableReference AST node not found during import resolution:', varName);
+      }
+      throw new Error(`Variable reference @${varName} not found during import`);
+    }
+  }
+
+  /**
+   * Handle executable variable references with special serialization format
+   */
+  private resolveExecutableReference(referencedVar: Variable): any {
+    // For executables, we need to export them with the proper structure
+    if (referencedVar.type === 'executable') {
+      const execVar = referencedVar as ExecutableVariable;
+      return {
+        __executable: true,
+        value: execVar.value,
+        paramNames: execVar.paramNames,
+        executableDef: execVar.metadata?.executableDef,
+        metadata: execVar.metadata
+      };
+    } else {
+      // For other variable types, return the value directly
+      return referencedVar.value;
+    }
+  }
+
+  /**
+   * Handle AST object nodes with type and properties
+   */
+  private resolveASTObjectNode(value: any, variableMap: Map<string, Variable>): any {
+    const resolved: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value.properties)) {
+      resolved[key] = this.resolveObjectReferences(val, variableMap);
+    }
+    return {
+      type: 'object',
+      properties: resolved,
+      location: value.location
+    };
+  }
+
+  /**
+   * Recursively resolve references in nested objects and arrays
+   */
+  private resolveNestedStructures(value: any, variableMap: Map<string, Variable>): any {
+    const resolved: Record<string, any> = {};
+    for (const [key, val] of Object.entries(value)) {
+      resolved[key] = this.resolveObjectReferences(val, variableMap);
+    }
+    return resolved;
+  }
+}

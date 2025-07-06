@@ -677,7 +677,11 @@ async function importFromPath(
  * 
  * Ported from ImportDirectiveHandler.
  */
-export async function evaluateImport(
+// Re-export the new modular import evaluator for backward compatibility
+export { evaluateImport } from './import/index';
+
+// Keep the original function as a legacy export for any code that imports it directly
+export async function evaluateImportLegacy(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {

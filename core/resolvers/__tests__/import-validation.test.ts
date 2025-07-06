@@ -250,7 +250,7 @@ describe('Import Content Type Validation', () => {
           },
           resolverManager
         })
-      ).rejects.toThrow(/Variable.*not found|Field.*not found/);
+      ).rejects.toThrow(/Import.*not found|Variable.*not found|Field.*not found/);
     });
   });
 
@@ -319,7 +319,7 @@ describe('Import Content Type Validation', () => {
         });
         expect.fail('Should have thrown an error');
       } catch (error: any) {
-        expect(error.message).toMatch(/Variable.*content.*not found/);
+        expect(error.message).toMatch(/Import.*content.*not found|Variable.*content.*not found/);
       }
     });
 
