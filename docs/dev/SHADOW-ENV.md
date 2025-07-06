@@ -350,6 +350,56 @@ Test cases for shadow environments can be found in:
 2. **Async/Sync Mismatch**: Node functions are always async
 3. **Context Leaks**: VM contexts are per-file, not per-execution
 4. **Parameter Conflicts**: Shadow functions take precedence over params
+5. **Process Hanging**: Timers not being cleaned up properly
+6. **Missing Error Messages**: Error details not propagating to stderr
+
+### Troubleshooting Process Hanging
+
+**Symptoms**: Tests timeout, CLI processes don't exit after completion
+
+**Common Causes**:
+1. **Timers keeping event loop alive**: `setTimeout`, `setInterval` in Node.js shadow functions
+2. **Improper cleanup flow**: Cleanup not being called or failing silently
+3. **Missing process.exit()**: Success cases don't force exit after cleanup
+
+**Debugging Steps**:
+1. **Check timer tracking**: Verify wrapped timers are being tracked in NodeShadowEnvironment
+2. **Verify cleanup flow**: Add debug logging to track cleanup calls
+3. **Test exit behavior**: Run with manual timeout to confirm hanging
+
+**Example Debug Session**:
+```typescript
+// Add to NodeShadowEnvironment.cleanup()
+console.error(`[DEBUG] Cleanup called - ${this.activeTimers.size} timers, ${this.activeIntervals.size} intervals`);
+
+// Add to Environment.cleanup()
+console.error('[DEBUG] Environment cleanup called');
+if (this.nodeShadowEnv) {
+  console.error('[DEBUG] Calling NodeShadowEnvironment cleanup');
+} else {
+  console.error('[DEBUG] No NodeShadowEnvironment found');
+}
+```
+
+### Troubleshooting Missing Error Messages
+
+**Symptoms**: Tests expect error messages in stderr but get empty strings
+
+**Common Causes**:
+1. **Early process.exit()**: CLI exits before ErrorHandler runs
+2. **Error bypassing**: Errors caught and handled before reaching ErrorHandler
+3. **Details not preserved**: Error re-wrapping loses original message
+
+**Debugging Steps**:
+1. **Check error flow**: Verify errors reach CLIOrchestrator.main() catch block
+2. **Verify ErrorHandler**: Confirm ErrorHandler.handleError() is called
+3. **Test details preservation**: Check BaseCommandExecutor.createCommandExecutionError()
+
+**Key Implementation Points**:
+- Remove early `process.exit()` calls from FileProcessor
+- Let errors propagate to ErrorHandler naturally
+- Ensure MlldCommandExecutionError puts details in `details.stderr`
+- ErrorHandler writes `error.details.stderr` to process.stderr
 
 ## Cleanup and Resource Management
 
@@ -359,51 +409,109 @@ The Node.js shadow environment requires special cleanup to prevent processes fro
 
 **Location**: `interpreter/env/NodeShadowEnvironment.ts` - `cleanup()` method
 
-**Implementation**:
+**Current Implementation - Timer Tracking Approach**:
 ```typescript
-cleanup(): void {
-  this.isCleaningUp = true;
+export class NodeShadowEnvironment {
+  private activeTimers: Set<any> = new Set();
+  private activeIntervals: Set<any> = new Set();
   
-  // Clear shadow functions first
-  this.shadowFunctions.clear();
+  constructor(basePath: string, currentFile?: string) {
+    // Wrap timer functions to track active timers
+    const wrappedSetTimeout = (callback: Function, delay?: number, ...args: any[]) => {
+      const id = setTimeout(() => {
+        this.activeTimers.delete(id);
+        callback(...args);
+      }, delay);
+      this.activeTimers.add(id);
+      return id;
+    };
+    
+    const wrappedSetInterval = (callback: Function, delay?: number, ...args: any[]) => {
+      const id = setInterval(callback, delay, ...args);
+      this.activeIntervals.add(id);
+      return id;
+    };
+    
+    // Provide wrapped timers in VM context
+    this.context = vm.createContext({
+      setTimeout: wrappedSetTimeout,
+      setInterval: wrappedSetInterval,
+      clearTimeout: (id) => { this.activeTimers.delete(id); clearTimeout(id); },
+      clearInterval: (id) => { this.activeIntervals.delete(id); clearInterval(id); },
+      // ... other globals
+    });
+  }
   
-  // Simply replace the context with an empty one to break all references
-  // This is the simplest and most effective approach for cleanup
-  this.context = vm.createContext({});
+  cleanup(): void {
+    this.isCleaningUp = true;
+    
+    // Clear shadow functions first
+    this.shadowFunctions.clear();
+    
+    // Clear all tracked timers and intervals
+    for (const timerId of this.activeTimers) {
+      try { clearTimeout(timerId); } catch (error) { /* ignore */ }
+    }
+    this.activeTimers.clear();
+    
+    for (const intervalId of this.activeIntervals) {
+      try { clearInterval(intervalId); } catch (error) { /* ignore */ }
+    }
+    this.activeIntervals.clear();
+    
+    // Replace the context with an empty one to break all references
+    this.context = vm.createContext({});
+  }
 }
 ```
 
 **Key design decisions**:
-1. **Simple replacement**: Instead of trying to manipulate timers within the VM context, we replace the entire context
-2. **Break all references**: This ensures timers, intervals, and other async operations lose their references
-3. **No complex cleanup**: Avoids the complexity of tracking and clearing individual resources
+1. **Active timer tracking**: Wrap setTimeout/setInterval to track all active timers
+2. **Explicit cleanup**: Clear tracked timers during cleanup to prevent hanging
+3. **Context replacement**: Replace VM context to break remaining references
+4. **Error resilience**: Ignore errors when clearing timers (they may already be cleared)
 
 ### Environment Cleanup Flow
 
+**Critical Path**: `FileProcessor → Environment.cleanup() → NodeShadowEnvironment.cleanup()`
+
 1. **Normal execution**: After successful mlld script execution
    ```typescript
-   // In CLI (cli/index.ts)
-   if (environment && 'cleanup' in environment) {
-     environment.cleanup();
+   // In FileProcessor.ts (success path)
+   if (interpretEnvironment && 'cleanup' in interpretEnvironment) {
+     cliLogger.debug('Calling environment cleanup');
+     (interpretEnvironment as any).cleanup();
    }
+   
+   // Force exit after cleanup to prevent hanging
+   await new Promise(resolve => setTimeout(resolve, 10));
+   process.exit(0);
    ```
 
 2. **Error handling**: Cleanup is called even when errors occur
    ```typescript
    } catch (error: any) {
-     // Clean up environment even on error
-     if (environment && 'cleanup' in environment) {
-       environment.cleanup();
+     // Clean up environment even on error path
+     if (interpretEnvironment && 'cleanup' in interpretEnvironment) {
+       cliLogger.debug('Calling environment cleanup (error path)');
+       (interpretEnvironment as any).cleanup();
      }
-     // ... handle error
+     // Let error propagate to ErrorHandler
+     throw error;
    }
    ```
 
-3. **Process exit**: For `--stdout` mode, explicit exit ensures clean termination
+3. **Error propagation flow**: Errors must reach ErrorHandler for proper exit codes
    ```typescript
-   if (stdout) {
-     await new Promise(resolve => setTimeout(resolve, 10));
-     process.exit(0);
+   // CLIOrchestrator catches errors and delegates to ErrorHandler
+   } catch (error: unknown) {
+     // Use the centralized error handler
+     await this.errorHandler.handleError(error, cliOptions);
+   }
+   
+   // ErrorHandler treats command execution errors as fatal in CLI context
+   if (severity === ErrorSeverity.Fatal || isCommandError) {
+     process.exit(1);
    }
    ```
 
@@ -603,3 +711,45 @@ When implementing a new executor, ensure:
    - Subprocess execution (CLI with --stdout mode)
 
 3. **Integration Testing**: Test both success and error scenarios in shadow environments to ensure cleanup happens correctly even when errors occur.
+
+## Lessons Learned from Shadow Environment Debugging
+
+### December 2024 Debugging Session: Timer Cleanup & Error Propagation
+
+During a comprehensive debugging session, we identified and fixed two critical issues in shadow environment handling:
+
+#### Issue 1: Process Hanging Due to Timer Cleanup
+**Problem**: Node.js shadow environment tests were timing out because timers created in VM contexts weren't being properly cleaned up.
+
+**Root Cause**: The original cleanup approach only replaced the VM context but didn't explicitly clear active timers, leaving them to keep the event loop alive.
+
+**Solution**: Implemented timer tracking by wrapping `setTimeout` and `setInterval` in the VM context to track active timers, then explicitly clearing them during cleanup.
+
+**Key Insight**: VM context replacement alone isn't sufficient for cleanup - asynchronous operations need explicit termination.
+
+#### Issue 2: Error Message Propagation in CLI Context
+**Problem**: Shadow environment error tests were passing but getting empty stderr content instead of the original error messages.
+
+**Root Cause**: The FileProcessor was calling `process.exit()` prematurely, bypassing the ErrorHandler that writes error details to stderr.
+
+**Solution**: Removed early `process.exit()` calls and ensured errors propagate through the proper CLIOrchestrator → ErrorHandler flow.
+
+**Key Insight**: Error handling in CLI tools requires careful orchestration - cleanup must happen without preventing proper error propagation and exit code handling.
+
+#### Implementation Principles Reinforced
+
+1. **Separation of Concerns**: Cleanup logic should be separate from error handling logic
+2. **Explicit Resource Management**: Don't rely on implicit cleanup for asynchronous resources
+3. **Error Flow Integrity**: Maintain clean error propagation paths from low-level executors to high-level CLI handlers
+4. **Process Exit Management**: Use `process.exit()` strategically - after cleanup for success, after error handling for failures
+5. **Integration Testing**: Test both success and error scenarios to catch issues in different execution paths
+
+#### Testing Approach That Revealed Issues
+
+The issues were discovered through integration tests that:
+- Used subprocess execution to test actual process exit behavior
+- Measured execution duration to detect hanging processes
+- Captured both stdout and stderr to verify error message propagation
+- Tested both successful execution with timers and error cases
+
+This reinforced the importance of testing shadow environments in isolation from the main test process to catch real-world behavior.

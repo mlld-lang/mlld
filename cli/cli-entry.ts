@@ -17,9 +17,6 @@ if (isMainModule) {
   const args = process.argv.slice(2);
 
   // Call the main function from index.ts, passing only customArgs
-  main(args).catch(err => {
-    // Basic error handling for the entry point
-    console.error('CLI Error:', err instanceof Error ? err.message : String(err));
-    process.exit(1);
-  });
+  // The main function handles its own errors through CLIOrchestrator -> ErrorHandler
+  main(args);
 } 

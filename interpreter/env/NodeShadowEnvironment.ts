@@ -11,15 +11,41 @@ export class NodeShadowEnvironment {
   private basePath: string;
   private currentFile?: string;
   private isCleaningUp: boolean = false;
+  private activeTimers: Set<any> = new Set();
+  private activeIntervals: Set<any> = new Set();
   
   constructor(basePath: string, currentFile?: string) {
     this.basePath = basePath;
     this.currentFile = currentFile;
     this.shadowFunctions = new Map();
     
+    // Create wrapped timer functions that track active timers
+    const wrappedSetTimeout = (callback: Function, delay?: number, ...args: any[]) => {
+      const id = setTimeout(() => {
+        this.activeTimers.delete(id);
+        callback(...args);
+      }, delay);
+      this.activeTimers.add(id);
+      return id;
+    };
+    
+    const wrappedSetInterval = (callback: Function, delay?: number, ...args: any[]) => {
+      const id = setInterval(callback, delay, ...args);
+      this.activeIntervals.add(id);
+      return id;
+    };
+    
+    const wrappedClearTimeout = (id: any) => {
+      this.activeTimers.delete(id);
+      return clearTimeout(id);
+    };
+    
+    const wrappedClearInterval = (id: any) => {
+      this.activeIntervals.delete(id);
+      return clearInterval(id);
+    };
+    
     // Create base context with Node.js globals
-    // NOTE: Including timer functions (setTimeout, etc.) in the context
-    // may cause the process to hang if they create timers that aren't cleaned up
     this.context = vm.createContext({
       // Console and basic I/O
       console,
@@ -34,12 +60,12 @@ export class NodeShadowEnvironment {
       __dirname: currentFile ? path.dirname(currentFile) : basePath,
       __filename: currentFile || '',
       
-      // Timers
-      setTimeout,
-      setInterval,
+      // Wrapped timers that track active timers
+      setTimeout: wrappedSetTimeout,
+      setInterval: wrappedSetInterval,
       setImmediate,
-      clearTimeout,
-      clearInterval,
+      clearTimeout: wrappedClearTimeout,
+      clearInterval: wrappedClearInterval,
       clearImmediate,
       
       // Node.js globals
@@ -154,8 +180,27 @@ export class NodeShadowEnvironment {
     // Clear shadow functions first
     this.shadowFunctions.clear();
     
-    // Simply replace the context with an empty one to break all references
-    // This is the simplest and most effective approach for cleanup
+    // Clear all tracked timers
+    for (const timerId of this.activeTimers) {
+      try {
+        clearTimeout(timerId);
+      } catch (error) {
+        // Timer might already be cleared, ignore
+      }
+    }
+    this.activeTimers.clear();
+    
+    // Clear all tracked intervals
+    for (const intervalId of this.activeIntervals) {
+      try {
+        clearInterval(intervalId);
+      } catch (error) {
+        // Interval might already be cleared, ignore
+      }
+    }
+    this.activeIntervals.clear();
+    
+    // Replace the context with an empty one to break all references
     this.context = vm.createContext({});
   }
 }
