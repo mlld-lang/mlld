@@ -65,9 +65,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
-  
-  // Node.js shadow environment (uses VM for better isolation)
-  private nodeShadowEnv?: NodeShadowEnvironment;
+  private nodeShadowEnv?: NodeShadowEnvironment; // VM-based Node.js shadow environment
   
   // Pipeline execution context
   private pipelineContext?: {
@@ -716,7 +714,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   /**
-   * Get Node shadow environment instance
+   * Get Node shadow environment instance with parent environment fallback
+   * @returns NodeShadowEnvironment instance or undefined if not available
    */
   getNodeShadowEnv(): NodeShadowEnvironment | undefined {
     return this.nodeShadowEnv || this.parent?.getNodeShadowEnv();
@@ -1206,8 +1205,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.cacheManager.clearAllCaches();
     this.shadowEnvs.clear();
     
-    // Clear import stack to prevent memory leaks
-    this.importStack.clear();
+    // Clear import stack to prevent memory leaks (now handled by ImportResolver)
+    // this.importStack.clear(); // Moved to ImportResolver
     
     logger.debug('Cleanup complete');
   }
