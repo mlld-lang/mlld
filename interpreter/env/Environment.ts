@@ -43,14 +43,14 @@ import { CommandUtils } from './CommandUtils';
 import { DebugUtils } from './DebugUtils';
 import { ErrorUtils, type CollectedError, type CommandExecutionContext } from './ErrorUtils';
 import { CommandExecutorFactory, type ExecutorDependencies, type CommandExecutionOptions } from './executors';
+import { VariableManager, type IVariableManager, type VariableManagerDependencies, type VariableManagerContext } from './VariableManager';
 
 
 /**
  * Environment holds all state and provides capabilities for evaluation.
  * This replaces StateService, ResolutionService, and capability injection.
  */
-export class Environment {
-  private variables = new Map<string, Variable>();
+export class Environment implements VariableManagerContext {
   private nodes: MlldNode[] = [];
   private parent?: Environment;
   private importStack: Set<string> = new Set(); // Track imports to prevent circular dependencies
@@ -70,6 +70,7 @@ export class Environment {
   private cacheManager: CacheManager;
   private errorUtils: ErrorUtils;
   private commandExecutorFactory: CommandExecutorFactory;
+  private variableManager: IVariableManager;
   
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
@@ -259,10 +260,7 @@ export class Environment {
       
       // Initialize reserved variables (these are different from resolvers)
       // Resolvers handle imports/paths, but these are actual variables
-      this.initializeReservedVariables();
-      
-      // Initialize built-in transformers
-      this.initializeBuiltinTransformers();
+      // Note: This will be called after VariableManager is initialized
       
       // Reserve module prefixes from resolver configuration
       this.reserveModulePrefixes();
@@ -271,6 +269,31 @@ export class Environment {
     // Initialize utility managers
     this.cacheManager = new CacheManager(this.urlCacheManager, this.immutableCache, this.urlConfig);
     this.errorUtils = new ErrorUtils();
+    
+    // Initialize variable manager with dependencies
+    const variableManagerDependencies: VariableManagerDependencies = {
+      cacheManager: this.cacheManager,
+      getCurrentFilePath: () => this.getCurrentFilePath(),
+      getReservedNames: () => this.reservedNames,
+      getParent: () => this.parent,
+      getResolverManager: () => this.getResolverManager(),
+      createDebugObject: (format: number) => this.createDebugObject(format),
+      getEnvironmentVariables: () => this.getEnvironmentVariables(),
+      getStdinContent: () => this.stdinContent,
+      getFsService: () => this.fileSystem,
+      getPathService: () => this.pathService,
+      getSecurityManager: () => this.securityManager,
+      getBasePath: () => this.basePath
+    };
+    this.variableManager = new VariableManager(variableManagerDependencies);
+    
+    // Initialize reserved variables if this is the root environment
+    if (!parent) {
+      this.variableManager.initializeReservedVariables();
+      
+      // Initialize built-in transformers
+      this.initializeBuiltinTransformers();
+    }
     
     // Initialize command executor factory with dependencies
     const executorDependencies: ExecutorDependencies = {
@@ -284,7 +307,7 @@ export class Environment {
         getCurrentFilePath: () => this.getCurrentFilePath()
       },
       variableProvider: {
-        getVariables: () => this.variables
+        getVariables: () => this.variableManager.getVariables()
       }
     };
     this.commandExecutorFactory = new CommandExecutorFactory(executorDependencies);
@@ -344,88 +367,6 @@ export class Environment {
     }
   }
   
-  /**
-   * Initialize reserved variables (INPUT, TIME, etc.)
-   * Only called for root environment (non-child)
-   */
-  private initializeReservedVariables(): void {
-    // Initialize @INPUT from merged stdin content and environment variables
-    const inputVar = this.createInputValue();
-    if (inputVar !== null) {
-      // Direct assignment for reserved variables during initialization
-      this.variables.set('INPUT', inputVar);
-      // Note: lowercase 'input' is handled in getVariable() to avoid conflicts
-    }
-    
-    // Initialize @TIME with current timestamp
-    const timeSource: VariableSource = {
-      directive: 'var',
-      syntax: 'quoted',
-      hasInterpolation: false,
-      isMultiLine: false
-    };
-    const timeVar = createSimpleTextVariable(
-      'TIME',
-      getTimeValue(),
-      timeSource,
-      {
-        isReserved: true,
-        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-      }
-    );
-    // Direct assignment for reserved variables during initialization
-    this.variables.set('TIME', timeVar);
-    // Note: lowercase 'time' is handled in getVariable() to avoid conflicts
-    
-    // Initialize @DEBUG with environment information
-    // This is a lazy variable that generates its value when accessed
-    const debugSource: VariableSource = {
-      directive: 'var',
-      syntax: 'object',
-      hasInterpolation: false,
-      isMultiLine: false
-    };
-    const debugVar = createObjectVariable(
-      'DEBUG',
-      null as any, // Null for lazy evaluation
-      false, // Not complex
-      debugSource,
-      {
-        isReserved: true,
-        isLazy: true, // Indicates value should be computed on access
-        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-      }
-    );
-    // Direct assignment for reserved variables during initialization
-    this.variables.set('DEBUG', debugVar);
-    // Note: lowercase 'debug' is handled in getVariable() to avoid conflicts
-    
-    // Initialize @PROJECTPATH with project root path
-    // For now, use basePath as the value (tests override this in fixture setup)
-    const projectPathSource: VariableSource = {
-      directive: 'var',
-      syntax: 'path',
-      hasInterpolation: false,
-      isMultiLine: false
-    };
-    const projectPath = getProjectPathValue(this.basePath);
-    const projectPathVar = createPathVariable(
-      'PROJECTPATH',
-      projectPath,
-      projectPath,
-      false, // Not a URL
-      true, // Is absolute
-      projectPathSource,
-      undefined, // No security metadata
-      {
-        isReserved: true,
-        definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-      }
-    );
-    // Direct assignment for reserved variables during initialization
-    this.variables.set('PROJECTPATH', projectPathVar);
-    // Note: lowercase 'projectpath' is handled in getVariable() to avoid conflicts
-  }
   
   /**
    * Initialize built-in transformers (JSON, XML, CSV, MD)
@@ -441,7 +382,7 @@ export class Environment {
         transformer.description,
         true
       );
-      this.variables.set(transformer.uppercase, upperVar);
+      this.variableManager.setVariable(transformer.uppercase, upperVar);
       
       // Create lowercase alias for ergonomics
       const lowerVar = createTransformerVariable(
@@ -450,7 +391,7 @@ export class Environment {
         transformer.description,
         false
       );
-      this.variables.set(transformer.name, lowerVar);
+      this.variableManager.setVariable(transformer.name, lowerVar);
       
       // Reserve both names
       this.reservedNames.add(transformer.uppercase);
@@ -507,55 +448,7 @@ export class Environment {
   // --- Variable Management ---
   
   setVariable(name: string, variable: Variable): void {
-    // Check if the name is reserved (but allow system variables to be set)
-    if (this.reservedNames.has(name) && !variable.metadata?.isReserved && !variable.metadata?.isSystem) {
-      throw new Error(`Cannot create variable '${name}': this name is reserved for system use`);
-    }
-    
-    // Check if variable already exists in this scope
-    if (this.variables.has(name)) {
-      const existing = this.variables.get(name)!;
-      
-      // Check if this is an import conflict (one imported, one local)
-      const existingIsImported = Boolean(existing.metadata?.isImported);
-      const newIsImported = Boolean(variable.metadata?.isImported);
-      
-      if (existingIsImported !== newIsImported) {
-        // Import vs local conflict
-        const importPath = existingIsImported ? existing.metadata?.importPath : variable.metadata?.importPath;
-        throw VariableRedefinitionError.forImportConflict(
-          name,
-          existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
-          variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
-          importPath,
-          existingIsImported
-        );
-      } else {
-        // Same-file redefinition
-        throw VariableRedefinitionError.forSameFile(
-          name,
-          existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
-          variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() }
-        );
-      }
-    }
-    
-    // Check if variable exists in parent scope (true parent-child import conflict)
-    if (this.parent?.hasVariable(name)) {
-      const existing = this.parent.getVariable(name)!;
-      const isExistingImported = existing.metadata?.isImported || false;
-      const importPath = existing.metadata?.importPath;
-      
-      throw VariableRedefinitionError.forImportConflict(
-        name,
-        existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
-        variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
-        importPath,
-        isExistingImported
-      );
-    }
-    
-    this.variables.set(name, variable);
+    this.variableManager.setVariable(name, variable);
   }
 
   /**
@@ -563,145 +456,19 @@ export class Environment {
    * Used for temporary parameter variables in exec functions.
    */
   setParameterVariable(name: string, variable: Variable): void {
-    // Only check if variable already exists in this scope
-    if (this.variables.has(name)) {
-      const existing = this.variables.get(name)!;
-      throw VariableRedefinitionError.forSameFile(
-        name,
-        existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() },
-        variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.getCurrentFilePath() }
-      );
-    }
-    
-    // Allow shadowing parent scope variables for parameters
-    this.variables.set(name, variable);
+    this.variableManager.setParameterVariable(name, variable);
   }
   
   getVariable(name: string): Variable | undefined {
-    // FAST PATH: Check local variables first (most common case)
-    let variable = this.variables.get(name);
-    
-    // Handle lowercase reserved variable aliases
-    if (!variable && !this.parent) {
-      const upperName = name.toUpperCase();
-      if (upperName === 'TIME' || upperName === 'DEBUG' || upperName === 'INPUT' || upperName === 'PROJECTPATH') {
-        variable = this.variables.get(upperName);
-      }
-    }
-    
-    if (variable) {
-      // Special handling for lazy variables like @DEBUG
-      if (variable.metadata && 'isLazy' in variable.metadata && variable.metadata.isLazy && variable.value === null) {
-        // For lazy variables, we need to compute the value
-        if (name.toUpperCase() === 'DEBUG') {
-          const debugValue = this.createDebugObject(3); // Use markdown format
-          return {
-            ...variable,
-            type: 'simple-text', // Markdown is simple text type
-            value: debugValue
-          };
-        }
-      }
-      return variable;
-    }
-    
-    // Check parent scope for regular variables
-    const parentVar = this.parent?.getVariable(name);
-    if (parentVar) {
-      return parentVar;
-    }
-    
-    // SLOW PATH: Only check resolvers if variable not found
-    // and only in root environment (no parent)
-    // Since we enforce name protection at setVariable time,
-    // we know there are no conflicts between variables and resolvers
-    if (!this.parent && this.reservedNames.has(name.toUpperCase())) {
-      const upperName = name.toUpperCase();
-      
-      // Check cache first
-      const cached = this.cacheManager.getResolverVariable(upperName);
-      if (cached) {
-        return cached;
-      }
-      
-      // Create and cache the resolver variable
-      const resolverVar = this.createResolverVariable(upperName);
-      if (resolverVar) {
-        this.cacheManager.setResolverVariable(upperName, resolverVar);
-        return resolverVar;
-      }
-    }
-    
-    // Check if this might be a prefix being used as a variable
-    // This helps catch common mistakes like using "@local/test" (quoted) instead of @local/test
-    const resolverManager = this.getResolverManager();
-    if (resolverManager) {
-      const prefixConfigs = resolverManager.getPrefixConfigs();
-      const matchingPrefix = prefixConfigs.find(config => {
-        // Remove trailing slash from prefix for comparison
-        const prefixName = config.prefix.replace(/^@/, '').replace(/\/$/, '');
-        return prefixName === name;
-      });
-      
-      if (matchingPrefix) {
-        throw new Error(
-          `Variable @${name} not found: if you want to use the @${name} prefix, remove the quotes.`
-        );
-      }
-    }
-    
-    return undefined;
+    return this.variableManager.getVariable(name);
   }
 
-  /**
-   * Create a synthetic variable for a resolver reference
-   * This allows resolvers to be used in variable contexts
-   */
-  private createResolverVariable(resolverName: string): Variable | undefined {
-    // For resolver variables, we check if there's already a reserved variable
-    // This handles TIME, DEBUG, INPUT, PROJECTPATH which are pre-initialized
-    const existingVar = this.variables.get(resolverName);
-    if (existingVar) {
-      return existingVar;
-    }
-
-    // For dynamic resolver variables, we need to resolve them with 'variable' context
-    // to get the correct content type and value
-    // This is now handled asynchronously during evaluation
-    const placeholderSource: VariableSource = {
-      directive: 'var',
-      syntax: 'quoted',
-      hasInterpolation: false,
-      isMultiLine: false
-    };
-    return createSimpleTextVariable(
-      resolverName,
-      `@${resolverName}`, // Placeholder value
-      placeholderSource,
-      {
-        isReserved: true,
-        isResolver: true,
-        resolverName: resolverName,
-        needsResolution: true, // Flag indicating this needs async resolution
-        definedAt: { line: 0, column: 0, filePath: '<resolver>' }
-      }
-    );
-  }
-  
   /**
    * Get the value of a variable, handling special cases
    * This is a convenience method for consumers
    */
   getVariableValue(name: string): any {
-    const variable = this.getVariable(name);
-    if (!variable) return null;
-    
-    // Handle special cases
-    if (isPipelineInput(variable)) {
-      return variable.value.text; // Default to text representation
-    }
-    
-    return variable.value;
+    return this.variableManager.getVariableValue(name);
   }
   
   /**
@@ -848,18 +615,7 @@ export class Environment {
   }
   
   hasVariable(name: string): boolean {
-    // FAST PATH: Check local and parent variables first
-    if (this.variables.has(name) || (this.parent && this.parent.hasVariable(name))) {
-      return true;
-    }
-    
-    // SLOW PATH: Only check resolvers if variable not found in normal scopes
-    // and only in root environment
-    if (!this.parent && this.reservedNames.has(name.toUpperCase())) {
-      return true;
-    }
-    
-    return false;
+    return this.variableManager.hasVariable(name);
   }
   
   // --- Frontmatter Support ---
@@ -889,8 +645,8 @@ export class Environment {
     );
     
     // Create both @fm and @frontmatter as aliases
-    this.variables.set('fm', frontmatterVariable);
-    this.variables.set('frontmatter', frontmatterVariable);
+    this.variableManager.setVariable('fm', frontmatterVariable);
+    this.variableManager.setVariable('frontmatter', frontmatterVariable);
   }
   
   // --- Node Management ---
@@ -1006,70 +762,6 @@ export class Environment {
   /**
    * Create the @INPUT value by merging stdin content with environment variables
    */
-  private createInputValue(): Variable | null {
-    // Get environment variables if enabled
-    const envVars = this.getEnvironmentVariables();
-    
-    // Parse stdin content if available
-    let stdinData: any = null;
-    if (this.stdinContent) {
-      try {
-        // Try to parse as JSON first
-        stdinData = JSON.parse(this.stdinContent);
-      } catch {
-        // If not JSON, treat as plain text
-        stdinData = this.stdinContent;
-      }
-    }
-    
-    // Create variable source metadata
-    const inputSource: VariableSource = {
-      directive: 'var',
-      syntax: 'object',
-      hasInterpolation: false,
-      isMultiLine: false
-    };
-    
-    const metadata: Partial<VariableMetadata> = {
-      isReserved: true,
-      definedAt: { line: 0, column: 0, filePath: '<reserved>' }
-    };
-    
-    // Determine the final @INPUT value
-    if (Object.keys(envVars).length > 0 && stdinData !== null) {
-      // Both env vars and stdin: merge them
-      if (typeof stdinData === 'object' && !Array.isArray(stdinData)) {
-        // Merge env vars into JSON object (env vars take precedence)
-        return createObjectVariable('INPUT', { ...stdinData, ...envVars }, true, inputSource, metadata);
-      } else {
-        // Stdin is not an object, add it as 'content' alongside env vars
-        return createObjectVariable('INPUT', {
-          content: stdinData,
-          ...envVars
-        }, true, inputSource, metadata);
-      }
-    } else if (Object.keys(envVars).length > 0) {
-      // Only env vars: return as data object
-      return createObjectVariable('INPUT', envVars, true, inputSource, metadata);
-    } else if (stdinData !== null) {
-      // Only stdin: preserve original stdin behavior for @INPUT when no env vars
-      if (typeof stdinData === 'object') {
-        return createObjectVariable('INPUT', stdinData, true, inputSource, metadata);
-      } else {
-        // Plain text input
-        const textSource: VariableSource = {
-          directive: 'var',
-          syntax: 'quoted',
-          hasInterpolation: false,
-          isMultiLine: false
-        };
-        return createSimpleTextVariable('INPUT', stdinData, textSource, metadata);
-      }
-    }
-    
-    // No input available
-    return null;
-  }
 
   /**
    * Get raw stdin content for legacy @stdin imports
@@ -1136,12 +828,8 @@ export class Environment {
         }
       }
       
-      // Update the @INPUT variable with the new content
-      const inputVar = this.createInputValue();
-      if (inputVar !== null) {
-        // Update the existing INPUT variable
-        this.variables.set('INPUT', inputVar);
-      }
+      // Reinitialize reserved variables to update @INPUT with new content
+      this.variableManager.initializeReservedVariables();
     } else {
       // Delegate to parent
       this.parent.setStdinContent(content);
@@ -1305,9 +993,9 @@ export class Environment {
   mergeChild(child: Environment): void {
     // Merge child variables into this environment without immutability checks
     // This is used for internal operations like nested data assignments
-    for (const [name, variable] of child.variables) {
+    for (const [name, variable] of child.variableManager.getVariables()) {
       // Use direct assignment to bypass immutability checks
-      this.variables.set(name, variable);
+      this.variableManager.setVariable(name, variable);
     }
     
     // Merge all nodes from the child environment
@@ -1353,27 +1041,11 @@ export class Environment {
   // --- Utility Methods ---
   
   getAllVariables(): Map<string, Variable> {
-    const allVars = new Map<string, Variable>();
-    
-    // Add parent variables first (so child can override)
-    if (this.parent) {
-      const parentVars = this.parent.getAllVariables();
-      for (const [name, variable] of parentVars) {
-        allVars.set(name, variable);
-      }
-    }
-    
-    // Add this scope's variables
-    for (const [name, variable] of this.variables) {
-      allVars.set(name, variable);
-    }
-    
-    return allVars;
+    return this.variableManager.getAllVariables();
   }
 
   getCurrentVariables(): Map<string, Variable> {
-    // Return only this environment's variables (not parent variables)
-    return new Map(this.variables);
+    return this.variableManager.getCurrentVariables();
   }
   
   // --- URL Support Methods ---
