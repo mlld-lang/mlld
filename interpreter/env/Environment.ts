@@ -15,24 +15,14 @@ import type { DirectiveTrace } from '@core/types/trace';
 import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import { execSync } from 'child_process';
 import * as path from 'path';
-import { ImportApproval } from '@core/security/ImportApproval';
-import { ImmutableCache } from '@core/security/ImmutableCache';
-import { GistTransformer } from '@core/security/GistTransformer';
+// Note: ImportApproval, ImmutableCache, and GistTransformer are now handled by ImportResolver
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { MlldCommandExecutionError, type CommandExecutionDetails } from '@core/errors';
 import { SecurityManager } from '@security';
 import { RegistryManager, ModuleCache, LockFile } from '@core/registry';
 import { URLCache } from '../cache/URLCache';
 import { astLocationToSourceLocation } from '@core/types';
-import { 
-  ResolverManager, 
-  RegistryResolver,
-  LocalResolver, 
-  GitHubResolver, 
-  HTTPResolver,
-  ProjectPathResolver
-} from '@core/resolvers';
-import { PathMatcher } from '@core/resolvers/utils/PathMatcher';
+import { ResolverManager, RegistryResolver, LocalResolver, GitHubResolver, HTTPResolver, ProjectPathResolver } from '@core/resolvers';
 import { logger } from '@core/utils/logger';
 import * as shellQuote from 'shell-quote';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
@@ -44,19 +34,19 @@ import { DebugUtils } from './DebugUtils';
 import { ErrorUtils, type CollectedError, type CommandExecutionContext } from './ErrorUtils';
 import { CommandExecutorFactory, type ExecutorDependencies, type CommandExecutionOptions } from './executors';
 import { VariableManager, type IVariableManager, type VariableManagerDependencies, type VariableManagerContext } from './VariableManager';
+import { ImportResolver, type IImportResolver, type ImportResolverDependencies, type ImportResolverContext } from './ImportResolver';
 
 
 /**
  * Environment holds all state and provides capabilities for evaluation.
  * This replaces StateService, ResolutionService, and capability injection.
  */
-export class Environment implements VariableManagerContext {
+export class Environment implements VariableManagerContext, ImportResolverContext {
   private nodes: MlldNode[] = [];
   private parent?: Environment;
-  private importStack: Set<string> = new Set(); // Track imports to prevent circular dependencies
+  // Note: importStack is now handled by ImportResolver
   private urlConfig?: ResolvedURLConfig;
-  private importApproval?: ImportApproval;
-  private immutableCache?: ImmutableCache;
+  // Note: importApproval and immutableCache are now handled by ImportResolver
   private currentFilePath?: string; // Track current file being processed
   private securityManager?: SecurityManager; // Central security coordinator
   private registryManager?: RegistryManager; // Registry for mlld:// URLs
@@ -71,6 +61,7 @@ export class Environment implements VariableManagerContext {
   private errorUtils: ErrorUtils;
   private commandExecutorFactory: CommandExecutorFactory;
   private variableManager: IVariableManager;
+  private importResolver: IImportResolver;
   
   // Shadow environments for language-specific function injection
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
@@ -115,7 +106,7 @@ export class Environment implements VariableManagerContext {
   
   // Fuzzy matching for local files
   private localFileFuzzyMatch: FuzzyMatchConfig | boolean = true; // Default enabled
-  private pathMatcher?: PathMatcher;
+  // Note: pathMatcher is now handled by ImportResolver
   
   // Default URL validation options (used if no config provided)
   private defaultUrlOptions = {
@@ -140,9 +131,6 @@ export class Environment implements VariableManagerContext {
       // Inherit fuzzy match configuration from parent
       this.localFileFuzzyMatch = parent.localFileFuzzyMatch;
     }
-    
-    // Initialize PathMatcher for fuzzy file matching
-    this.pathMatcher = new PathMatcher(fileSystem);
     
     // Initialize security components for root environment only
     if (!parent) {
@@ -254,9 +242,7 @@ export class Environment implements VariableManagerContext {
         this.resolverManager = undefined;
       }
       
-      // Keep legacy components for backward compatibility
-      this.importApproval = new ImportApproval(basePath);
-      this.immutableCache = new ImmutableCache(basePath);
+      // Note: ImportApproval and ImmutableCache are now handled by ImportResolver
       
       // Initialize reserved variables (these are different from resolvers)
       // Resolvers handle imports/paths, but these are actual variables
@@ -294,6 +280,24 @@ export class Environment implements VariableManagerContext {
       // Initialize built-in transformers
       this.initializeBuiltinTransformers();
     }
+    
+    // Initialize import resolver with dependencies
+    const importResolverDependencies: ImportResolverDependencies = {
+      fileSystem: this.fileSystem,
+      pathService: this.pathService,
+      basePath: this.basePath,
+      cacheManager: this.cacheManager,
+      getSecurityManager: () => this.getSecurityManager(),
+      getRegistryManager: () => this.getRegistryManager(),
+      getResolverManager: () => this.getResolverManager(),
+      getParent: () => this.parent,
+      getCurrentFilePath: () => this.getCurrentFilePath(),
+      getApproveAllImports: () => this.approveAllImports,
+      getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
+      getURLConfig: () => this.urlConfig,
+      getDefaultUrlOptions: () => this.defaultUrlOptions
+    };
+    this.importResolver = new ImportResolver(importResolverDependencies);
     
     // Initialize command executor factory with dependencies
     const executorDependencies: ExecutorDependencies = {
@@ -721,11 +725,7 @@ export class Environment implements VariableManagerContext {
   // --- Capabilities ---
   
   async readFile(pathOrUrl: string): Promise<string> {
-    if (this.isURL(pathOrUrl)) {
-      return this.fetchURL(pathOrUrl);
-    }
-    const resolvedPath = await this.resolvePath(pathOrUrl);
-    return this.fileSystem.readFile(resolvedPath);
+    return this.importResolver.readFile(pathOrUrl);
   }
   
   /**
@@ -733,30 +733,7 @@ export class Environment implements VariableManagerContext {
    * This handles @prefix/ patterns and registry lookups for @user/module
    */
   async resolveModule(reference: string, context?: 'import' | 'path' | 'variable'): Promise<{ content: string; contentType: 'module' | 'data' | 'text'; metadata?: any }> {
-    const resolverManager = this.getResolverManager();
-    if (!resolverManager) {
-      throw new Error('ResolverManager not available');
-    }
-    
-    const result = await resolverManager.resolve(reference, { context });
-    
-    // Check if result.content exists
-    if (!result || !result.content) {
-      throw new Error(`Resolver returned invalid result for '${reference}': missing content`);
-    }
-    
-    // Check the structure of result.content
-    if (!result.content.content || !result.content.contentType) {
-      console.error('Resolver result structure:', JSON.stringify(result, null, 2));
-      throw new Error(`Resolver returned invalid content structure for '${reference}': missing content or contentType`);
-    }
-    
-    // The result.content is already the resolver's result object
-    return {
-      content: result.content.content,
-      contentType: result.content.contentType,
-      metadata: result.content.metadata
-    };
+    return this.importResolver.resolveModule(reference, context);
   }
   
   /**
@@ -872,104 +849,7 @@ export class Environment implements VariableManagerContext {
   
   
   async resolvePath(inputPath: string): Promise<string> {
-    // Handle special path variables
-    if (inputPath.startsWith('@PROJECTPATH')) {
-      inputPath = inputPath.replace('@PROJECTPATH', await this.getProjectPath());
-    }
-    
-    // Use the path module that's already imported
-    if (path.isAbsolute(inputPath)) {
-      return inputPath;
-    }
-    
-    // Check if fuzzy matching is enabled for local files
-    const fuzzyEnabled = typeof this.localFileFuzzyMatch === 'boolean' 
-      ? this.localFileFuzzyMatch 
-      : this.localFileFuzzyMatch.enabled !== false;
-    
-    // Debug log
-    if (process.env.DEBUG_FUZZY) {
-      console.log(`resolvePath called with: ${inputPath}, fuzzyEnabled: ${fuzzyEnabled}`);
-    }
-    
-    if (fuzzyEnabled && this.pathMatcher) {
-      // Try fuzzy matching for local files
-      const matchResult = await this.pathMatcher.findMatch(
-        inputPath,
-        this.basePath,
-        typeof this.localFileFuzzyMatch === 'object' ? this.localFileFuzzyMatch : undefined
-      );
-      
-      if (matchResult.path) {
-        if (process.env.DEBUG_FUZZY) {
-          console.log(`Fuzzy match found: ${matchResult.path}`);
-        }
-        return matchResult.path;
-      }
-      
-      // If no match found with fuzzy matching, check with extensions
-      if (!path.extname(inputPath)) {
-        const extensions = ['.mlld.md', '.mld', '.md'];
-        const allSuggestions: string[] = [];
-        
-        for (const ext of extensions) {
-          const pathWithExt = inputPath + ext;
-          const extMatchResult = await this.pathMatcher.findMatch(
-            pathWithExt,
-            this.basePath,
-            typeof this.localFileFuzzyMatch === 'object' ? this.localFileFuzzyMatch : undefined
-          );
-          
-          if (extMatchResult.path) {
-            return extMatchResult.path;
-          }
-          
-          // Collect suggestions from each extension attempt
-          if (extMatchResult.suggestions) {
-            allSuggestions.push(...extMatchResult.suggestions);
-          }
-        }
-        
-        // If we collected any suggestions, throw error with them
-        if (allSuggestions.length > 0) {
-          // Remove duplicates and take top 3
-          const uniqueSuggestions = [...new Set(allSuggestions)].slice(0, 3);
-          const suggestions = uniqueSuggestions
-            .map(s => `  - ${s}`)
-            .join('\n');
-          throw new Error(`File not found: ${inputPath}\n\nDid you mean:\n${suggestions}`);
-        }
-      }
-      
-      // If still no match and we have suggestions, throw error here
-      // This ensures fuzzy matching suggestions are included
-      if (matchResult.suggestions && matchResult.suggestions.length > 0) {
-        const suggestions = matchResult.suggestions
-          .slice(0, 3)
-          .map(s => `  - ${s}`)
-          .join('\n');
-        throw new Error(`File not found: ${inputPath}\n\nDid you mean:\n${suggestions}`);
-      }
-      
-      // If we have candidates (ambiguous matches), throw error
-      if (matchResult.candidates && matchResult.candidates.length > 1) {
-        const candidates = matchResult.candidates
-          .map(c => `  - ${c.path} (${c.matchType} match, confidence: ${c.confidence})`)
-          .join('\n');
-        throw new Error(`Ambiguous file match for: ${inputPath}\n\nMultiple files match:\n${candidates}`);
-      }
-    }
-    
-    // Fall back to standard path resolution, but check if the file exists
-    const resolvedPath = path.resolve(this.basePath, inputPath);
-    
-    // If fuzzy matching is enabled but didn't find anything, check if the file exists
-    // If not, throw an error with better messaging
-    if (fuzzyEnabled && !await this.fileSystem.exists(resolvedPath)) {
-      throw new Error(`File not found: ${inputPath}`);
-    }
-    
-    return resolvedPath;
+    return this.importResolver.resolvePath(inputPath);
   }
   
   // --- Scope Management ---
@@ -983,6 +863,9 @@ export class Environment implements VariableManagerContext {
     );
     // Track the current node count so we know which nodes are new in the child
     child.initialNodeCount = this.nodes.length;
+    
+    // Create child import resolver
+    child.importResolver = this.importResolver.createChildResolver(newBasePath);
     
     // Track child environment for cleanup
     this.childEnvironments.add(child);
@@ -1006,36 +889,7 @@ export class Environment implements VariableManagerContext {
   // --- Special Variables ---
   
   async getProjectPath(): Promise<string> {
-    // Walk up from basePath to find project root
-    let current = this.basePath;
-    
-    while (current !== path.dirname(current)) {
-      try {
-        // Check for common project indicators in order of preference
-        const indicators = [
-          'mlld.config.json',
-          'package.json',
-          '.git',
-          'pyproject.toml',
-          'Cargo.toml',
-          'pom.xml',
-          'build.gradle',
-          'Makefile'
-        ];
-        
-        for (const indicator of indicators) {
-          if (await this.fileSystem.exists(path.join(current, indicator))) {
-            return current;
-          }
-        }
-      } catch {
-        // Continue searching
-      }
-      current = path.dirname(current);
-    }
-    
-    // Fallback to current base path
-    return this.basePath;
+    return this.importResolver.getProjectPath();
   }
   
   // --- Utility Methods ---
@@ -1051,144 +905,22 @@ export class Environment implements VariableManagerContext {
   // --- URL Support Methods ---
   
   isURL(path: string): boolean {
-    try {
-      const url = new URL(path);
-      return ['http:', 'https:'].includes(url.protocol);
-    } catch {
-      return false;
-    }
+    return this.importResolver.isURL(path);
   }
   
   areURLsEnabled(): boolean {
-    return this.urlConfig?.enabled || false;
+    return this.importResolver.areURLsEnabled();
   }
   
   async validateURL(url: string): Promise<void> {
-    const parsed = new URL(url);
-    const config = this.urlConfig || this.defaultUrlOptions;
-    
-    // Check if URLs are enabled
-    if (this.urlConfig && !this.urlConfig.enabled) {
-      throw new Error('URL support is not enabled in configuration');
-    }
-    
-    // Check protocol
-    const allowedProtocols = this.urlConfig?.allowedProtocols || config.allowedProtocols;
-    if (!allowedProtocols.includes(parsed.protocol.slice(0, -1))) {
-      throw new Error(`Protocol not allowed: ${parsed.protocol}`);
-    }
-    
-    // Warn on insecure protocol if configured
-    if (this.urlConfig?.warnOnInsecureProtocol && parsed.protocol === 'http:') {
-      console.warn(`Warning: Using insecure HTTP protocol for ${url}`);
-    }
-    
-    // Check domain allowlist if configured
-    const allowedDomains = this.urlConfig?.allowedDomains || config.allowedDomains;
-    if (allowedDomains.length > 0) {
-      const allowed = allowedDomains.some(
-        domain => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
-      );
-      if (!allowed) {
-        throw new Error(`Domain not allowed: ${parsed.hostname}`);
-      }
-    }
-    
-    // Check domain blocklist
-    const blockedDomains = this.urlConfig?.blockedDomains || config.blockedDomains;
-    const blocked = blockedDomains.some(
-      domain => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
-    );
-    if (blocked) {
-      throw new Error(`Domain blocked: ${parsed.hostname}`);
-    }
+    return this.importResolver.validateURL(url);
   }
   
   async fetchURL(url: string, forImport: boolean = false): Promise<string> {
-    // Transform Gist URLs to raw URLs
-    if (GistTransformer.isGistUrl(url)) {
-      url = await GistTransformer.transformToRaw(url);
-    }
-    // For imports, check immutable cache first
-    if (forImport && this.getImmutableCache()) {
-      const cached = await this.getImmutableCache()!.get(url);
-      if (cached) {
-        return cached;
-      }
-    }
-    
-    // Check if caching is enabled
-    const cacheEnabled = this.urlConfig?.cache.enabled ?? true;
-    
-    if (cacheEnabled && !forImport) {
-      // Check runtime cache for non-imports
-      const cached = this.cacheManager.getURLCacheEntry(url);
-      if (cached && this.cacheManager.isURLCacheEntryValid(url)) {
-        return cached.content;
-      }
-    }
-    
-    // Validate URL
-    await this.validateURL(url);
-    
-    // Get timeout and max size from config
-    const timeout = this.urlConfig?.timeout || this.defaultUrlOptions.timeout;
-    const maxSize = this.urlConfig?.maxSize || this.defaultUrlOptions.maxResponseSize;
-    
-    // Fetch with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-    
-    try {
-      const response = await fetch(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}`);
-      }
-      
-      // Check content size
-      const content = await response.text();
-      if (content.length > maxSize) {
-        throw new Error(`Response too large: ${content.length} bytes`);
-      }
-      
-      // For imports, check approval and cache in immutable cache
-      if (forImport && this.getImportApproval() && !this.approveAllImports) {
-        const approved = await this.getImportApproval()!.checkApproval(url, content);
-        if (!approved) {
-          throw new Error('Import not approved by user');
-        }
-        
-        // Store in immutable cache
-        if (this.getImmutableCache()) {
-          await this.getImmutableCache()!.set(url, content);
-        }
-      } else if (forImport && this.approveAllImports) {
-        // Auto-approved, just store in immutable cache
-        if (this.getImmutableCache()) {
-          await this.getImmutableCache()!.set(url, content);
-        }
-      }
-      
-      // Cache the response with URL-specific TTL for non-imports
-      if (cacheEnabled && !forImport) {
-        const ttl = this.getURLCacheTTL(url);
-        this.cacheManager.setURLCacheEntry(url, content, ttl);
-      }
-      
-      return content;
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        throw new Error(`Request timed out after ${timeout}ms`);
-      }
-      throw error;
-    }
+    return this.importResolver.fetchURL(url, forImport);
   }
   
-  private getURLCacheTTL(url: string): number {
-    return this.cacheManager.getURLCacheTTL(url);
-  }
+  // Note: getURLCacheTTL is now handled by ImportResolver via CacheManager
   
   setURLOptions(options: Partial<typeof this.defaultUrlOptions>): void {
     Object.assign(this.defaultUrlOptions, options);
@@ -1198,10 +930,7 @@ export class Environment implements VariableManagerContext {
    * Get URLCache manager
    */
   getURLCache(): URLCache | undefined {
-    if (this.parent) {
-      return this.parent.getURLCache();
-    }
-    return this.cacheManager.getURLCacheManager();
+    return this.importResolver.getURLCache();
   }
 
   /**
@@ -1212,15 +941,7 @@ export class Environment implements VariableManagerContext {
     security?: import('@core/types/primitives').SecurityOptions,
     configuredBy?: string
   ): Promise<string> {
-    const urlCache = this.getURLCache();
-    
-    if (urlCache && security) {
-      // Use the new URL cache with security options
-      return urlCache.fetchURL(url, security, configuredBy);
-    }
-    
-    // Fall back to existing fetchURL method
-    return this.fetchURL(url);
+    return this.importResolver.fetchURLWithSecurity(url, security, configuredBy);
   }
   
   setURLConfig(config: ResolvedURLConfig): void {
@@ -1357,15 +1078,15 @@ export class Environment implements VariableManagerContext {
   // --- Import Tracking (for circular import detection) ---
   
   isImporting(path: string): boolean {
-    return this.importStack.has(path) || (this.parent?.isImporting(path) ?? false);
+    return this.importResolver.isImporting(path);
   }
   
   beginImport(path: string): void {
-    this.importStack.add(path);
+    this.importResolver.beginImport(path);
   }
   
   endImport(path: string): void {
-    this.importStack.delete(path);
+    this.importResolver.endImport(path);
   }
   
   createChildEnvironment(): Environment {
@@ -1375,8 +1096,8 @@ export class Environment implements VariableManagerContext {
       this.basePath,
       this
     );
-    // Share import stack with parent to detect circular imports across scopes
-    child.importStack = this.importStack;
+    // Share import stack with parent via ImportResolver
+    child.importResolver = this.importResolver.createChildResolver();
     // Inherit trace settings
     child.traceEnabled = this.traceEnabled;
     child.directiveTrace = this.directiveTrace; // Share trace with parent
@@ -1450,18 +1171,14 @@ export class Environment implements VariableManagerContext {
     return this.traceEnabled;
   }
   
-  private getImportApproval(): ImportApproval | undefined {
-    // Walk up to root environment to find import approval
-    if (this.importApproval) return this.importApproval;
-    if (this.parent) return this.parent.getImportApproval();
-    return undefined;
+  // --- ImportResolverContext Implementation ---
+  
+  getImportApproval(): ImportApproval | undefined {
+    return this.importResolver.getImportApproval();
   }
   
-  private getImmutableCache(): ImmutableCache | undefined {
-    // Walk up to root environment to find immutable cache
-    if (this.immutableCache) return this.immutableCache;
-    if (this.parent) return this.parent.getImmutableCache();
-    return undefined;
+  getImmutableCache(): ImmutableCache | undefined {
+    return this.importResolver.getImmutableCache();
   }
   
   /**
