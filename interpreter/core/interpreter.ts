@@ -20,7 +20,7 @@ import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
 import { isExecInvocation } from '@core/types';
-import { evaluateDataValue, isFullyEvaluated, collectEvaluationErrors } from '../eval/value-evaluator';
+import { evaluateDataValue, isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
 import { interpreterLogger as logger } from '@core/utils/logger';

@@ -47,7 +47,7 @@ export async function evaluateForeachCommand(
   }
   
   // 2. Evaluate all array arguments (use arrays property from AST)
-  const { evaluateDataValue } = await import('./value-evaluator');
+  const { evaluateDataValue } = await import('./data-value-evaluator');
   const evaluatedArrays: any[][] = [];
   
   // Use the arrays property from the foreach AST node

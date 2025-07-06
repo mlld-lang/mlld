@@ -56,6 +56,28 @@ export class VariableReferenceEvaluator {
       return true;
     }
     
+    // Handle runExec nodes (run @command() in object context)
+    if (value && typeof value === 'object' && value.type === 'runExec' && 'invocation' in value) {
+      return true;
+    }
+    
+    // Handle path nodes (from [/path/to/file])
+    if (value && typeof value === 'object' && value.type === 'path') {
+      return true;
+    }
+    
+    // Handle content arrays (like template content)
+    if (value && typeof value === 'object' && value.content && Array.isArray(value.content)) {
+      return true;
+    }
+    
+    // Handle executable code objects (from imported executable variables)
+    if (value && typeof value === 'object' && 
+        (value.type === 'code' || value.type === 'command') && 
+        ('template' in value || 'codeTemplate' in value || 'commandTemplate' in value)) {
+      return true;
+    }
+    
     return false;
   }
 
@@ -88,6 +110,30 @@ export class VariableReferenceEvaluator {
       return await this.evaluateExecInvocation(value, env);
     }
     
+    // Handle runExec nodes (run @command() in object context)
+    if (value && typeof value === 'object' && value.type === 'runExec' && 'invocation' in value) {
+      return await this.evaluateRunExec(value, env);
+    }
+    
+    // Handle path nodes (from [/path/to/file])
+    if (value && typeof value === 'object' && value.type === 'path') {
+      return await this.evaluatePathNode(value, env);
+    }
+    
+    // Handle content arrays (like template content)
+    if (value && typeof value === 'object' && value.content && Array.isArray(value.content)) {
+      return await interpolate(value.content, env);
+    }
+    
+    // Handle executable code objects (from imported executable variables)
+    if (value && typeof value === 'object' && 
+        (value.type === 'code' || value.type === 'command') && 
+        ('template' in value || 'codeTemplate' in value || 'commandTemplate' in value)) {
+      // This is an executable variable definition - return it as-is
+      // It will be handled by the execution system when invoked
+      return value;
+    }
+    
     throw new Error(`VariableReferenceEvaluator cannot handle value type: ${typeof value}`);
   }
 
@@ -106,7 +152,33 @@ export class VariableReferenceEvaluator {
     }
     
     // Extract the actual value
-    return await this.extractVariableValue(variable, env);
+    let result = await this.extractVariableValue(variable, env);
+    
+    // Apply field access if present
+    if (value.fields && value.fields.length > 0) {
+      // Apply each field access in sequence
+      for (const field of value.fields) {
+        // Handle variableIndex type - need to resolve the variable first
+        if (field.type === 'variableIndex') {
+          const indexVar = env.getVariable(field.value);
+          if (!indexVar) {
+            throw new Error(`Variable not found for index: ${field.value}`);
+          }
+          // Get the actual value to use as index
+          let indexValue = indexVar.value;
+          if (typeof indexValue === 'object' && indexValue !== null && 'value' in indexValue) {
+            indexValue = indexValue.value;
+          }
+          // Create a new field with the resolved value
+          const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
+          result = accessField(result, resolvedField);
+        } else {
+          result = accessField(result, field);
+        }
+      }
+    }
+    
+    return result;
   }
 
   /**
@@ -202,8 +274,25 @@ export class VariableReferenceEvaluator {
         result = await this.evaluateDataValue(result, env);
       }
       
+      // Apply each field access in sequence
       for (const field of value.fields) {
-        result = accessField(result, field);
+        // Handle variableIndex type - need to resolve the variable first
+        if (field.type === 'variableIndex') {
+          const indexVar = env.getVariable(field.value);
+          if (!indexVar) {
+            throw new Error(`Variable not found for index: ${field.value}`);
+          }
+          // Get the actual value to use as index
+          let indexValue = indexVar.value;
+          if (typeof indexValue === 'object' && indexValue !== null && 'value' in indexValue) {
+            indexValue = indexValue.value;
+          }
+          // Create a new field with the resolved value
+          const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
+          result = accessField(result, resolvedField);
+        } else {
+          result = accessField(result, field);
+        }
       }
     }
     
@@ -344,5 +433,24 @@ export class VariableReferenceEvaluator {
       undefined, // location
       format
     );
+  }
+
+  /**
+   * Evaluates a runExec node (run @command() in object context)
+   */
+  private async evaluateRunExec(value: any, env: Environment): Promise<any> {
+    const { evaluateExecInvocation } = await import('../exec-invocation');
+    const result = await evaluateExecInvocation(value.invocation as any, env);
+    return result.value;
+  }
+
+  /**
+   * Evaluates a path node (from [/path/to/file])
+   */
+  private async evaluatePathNode(value: any, env: Environment): Promise<any> {
+    // Resolve path segments and read file
+    const resolvedPath = await interpolate(value.segments || [], env);
+    const content = await env.fileSystem.readFile(resolvedPath);
+    return content;
   }
 }

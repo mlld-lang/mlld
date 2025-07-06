@@ -44,6 +44,11 @@ export class CollectionEvaluator {
       return isTemplateContent || value.every(item => typeof item === 'string');
     }
     
+    // Handle plain objects (from parsed data) without type field
+    if (typeof value === 'object' && value !== null && !value.type && !Array.isArray(value)) {
+      return true;
+    }
+    
     return false;
   }
 
@@ -81,6 +86,11 @@ export class CollectionEvaluator {
       // Otherwise it's a regular array that's already been processed
       // This can happen when foreach-section returns an array of strings
       return value;
+    }
+    
+    // Handle plain objects (from parsed data) without type field
+    if (typeof value === 'object' && value !== null && !value.type && !Array.isArray(value)) {
+      return await this.evaluatePlainObject(value, env);
     }
     
     throw new Error(`CollectionEvaluator cannot handle value type: ${typeof value}`);
@@ -145,5 +155,28 @@ export class CollectionEvaluator {
       __message: error instanceof Error ? error.message : String(error),
       __index: index
     };
+  }
+
+  /**
+   * Evaluates a plain object (without type field) recursively
+   */
+  private async evaluatePlainObject(value: Record<string, any>, env: Environment): Promise<Record<string, any>> {
+    const evaluatedObject: Record<string, any> = {};
+    
+    for (const [key, propValue] of Object.entries(value)) {
+      // Skip internal properties that shouldn't be in the result
+      if (key === 'wrapperType' || key === 'nodeId' || key === 'location') {
+        continue;
+      }
+      
+      try {
+        evaluatedObject[key] = await this.evaluateDataValue(propValue, env);
+      } catch (error) {
+        // Include the error in the result but don't stop evaluation
+        evaluatedObject[key] = this.createPropertyError(key, error);
+      }
+    }
+    
+    return evaluatedObject;
   }
 }

@@ -201,14 +201,14 @@ export async function evaluateExecInvocation(
       switch (arg.type) {
         case 'object':
           // Object literals: recursively evaluate properties (may contain exec invocations, etc.)
-          const { evaluateDataValue } = await import('./value-evaluator');
+          const { evaluateDataValue } = await import('./data-value-evaluator');
           argValueAny = await evaluateDataValue(arg, env);
           argValue = JSON.stringify(argValueAny);
           break;
           
         case 'array':
           // Array literals: recursively evaluate items (may contain variables, exec calls, etc.)
-          const { evaluateDataValue: evalArray } = await import('./value-evaluator');
+          const { evaluateDataValue: evalArray } = await import('./data-value-evaluator');
           argValueAny = await evalArray(arg, env);
           argValue = JSON.stringify(argValueAny);
           break;

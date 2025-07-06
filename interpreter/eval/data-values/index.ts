@@ -13,6 +13,9 @@ export { EvaluationStateManager } from './EvaluationStateManager';
 export { PrimitiveEvaluator } from './PrimitiveEvaluator';
 export { CollectionEvaluator } from './CollectionEvaluator';
 export { VariableReferenceEvaluator } from './VariableReferenceEvaluator';
+export { ForeachCommandEvaluator } from './ForeachCommandEvaluator';
+export { ForeachSectionEvaluator } from './ForeachSectionEvaluator';
+export { DataValueEvaluator } from './DataValueEvaluator';
 
 export type { EvaluationState, CacheResult } from './EvaluationStateManager';
 
@@ -23,3 +26,6 @@ export * from './EvaluationStateManager';
 export * from './PrimitiveEvaluator';
 export * from './CollectionEvaluator';
 export * from './VariableReferenceEvaluator';
+export * from './ForeachCommandEvaluator';
+export * from './ForeachSectionEvaluator';
+export * from './DataValueEvaluator';

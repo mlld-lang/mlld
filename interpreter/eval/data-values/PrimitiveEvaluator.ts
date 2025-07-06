@@ -29,6 +29,16 @@ export class PrimitiveEvaluator {
       return true;
     }
     
+    // Handle wrapped string values (with content array and wrapperType)
+    if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
+      return true;
+    }
+    
+    // Handle command objects (from run directives in objects)
+    if (value && typeof value === 'object' && value.type === 'command' && 'command' in value) {
+      return true;
+    }
+    
     // Handle embedded directives
     if (isDirectiveValue(value)) {
       return true;
@@ -51,12 +61,41 @@ export class PrimitiveEvaluator {
       return value.content;
     }
     
+    // Handle wrapped string values (quotes, backticks, or brackets)
+    if (value && typeof value === 'object' && 'wrapperType' in value && 'content' in value && Array.isArray(value.content)) {
+      const { interpolate } = await import('../../core/interpreter');
+      return await interpolate(value.content, env);
+    }
+    
+    // Handle command objects (from run directives in objects)
+    if (value && typeof value === 'object' && value.type === 'command' && 'command' in value) {
+      return await this.evaluateCommandObject(value, env);
+    }
+    
     // Handle embedded directives
     if (isDirectiveValue(value)) {
       return await this.evaluateDirective(value, env);
     }
     
     throw new Error(`PrimitiveEvaluator cannot handle value type: ${typeof value}`);
+  }
+
+  /**
+   * Evaluates a command object (from run directives in objects)
+   */
+  private async evaluateCommandObject(value: any, env: Environment): Promise<any> {
+    let commandStr: string;
+    if (typeof value.command === 'string') {
+      commandStr = value.command;
+    } else if (Array.isArray(value.command)) {
+      // Interpolate the command array
+      const { interpolate } = await import('../../core/interpreter');
+      commandStr = await interpolate(value.command, env);
+    } else {
+      throw new Error('Invalid command format in command object evaluation');
+    }
+    const result = await env.executeCommand(commandStr);
+    return result;
   }
 
   /**

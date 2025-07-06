@@ -25,7 +25,7 @@ import {
   createSimpleTextVariable
 } from '@core/types/variable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
-import { evaluateDataValue, hasUnevaluatedDirectives } from './value-evaluator';
+import { evaluateDataValue, hasUnevaluatedDirectives } from './data-value-evaluator';
 import { evaluateForeachAsText, parseForeachOptions } from '../utils/foreach';
 import { logger } from '@core/utils/logger';
 // Template normalization now handled in grammar - no longer needed here
@@ -593,8 +593,10 @@ export async function evaluateShow(
     }
     
     // Evaluate foreach section expression
-    const { evaluateForeachSection } = await import('./data-value-evaluator');
-    const result = await evaluateForeachSection(foreachExpression, env);
+    const { ForeachSectionEvaluator } = await import('./data-values/ForeachSectionEvaluator');
+    const { evaluateDataValue } = await import('./data-value-evaluator');
+    const foreachSectionEvaluator = new ForeachSectionEvaluator(evaluateDataValue);
+    const result = await foreachSectionEvaluator.evaluate(foreachExpression, env);
     
     // Convert result to string content - should be an array of results
     if (Array.isArray(result)) {
