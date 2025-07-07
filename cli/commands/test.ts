@@ -5,6 +5,7 @@ import * as fs from 'fs/promises';
 import { interpret, Environment } from '@interpreter/index';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
+import { getCommandContext } from '@cli/utils/command-context';
 
 interface TestResult {
   file: string;
@@ -169,13 +170,20 @@ async function runTestFile(file: string): Promise<TestResult> {
 /**
  * Discover test files based on patterns
  */
-async function discoverTests(patterns: string[]): Promise<string[]> {
+async function discoverTests(patterns: string[], context: ReturnType<typeof getCommandContext> extends Promise<infer T> ? T : never): Promise<string[]> {
   const defaultPattern = '**/*.test.mld';
   const ignorePatterns = ['node_modules/**', '.mlld-cache/**', 'mlld/tests/tmp/**'];
   
+  // Always search from project root for consistency
+  const globOptions = { 
+    cwd: context.projectRoot,
+    ignore: ignorePatterns,
+    absolute: true
+  };
+  
   if (patterns.length === 0) {
     // No patterns provided, use default
-    return glob(defaultPattern, { ignore: ignorePatterns });
+    return glob(defaultPattern, globOptions);
   }
   
   // Convert patterns to test file patterns
@@ -196,7 +204,7 @@ async function discoverTests(patterns: string[]): Promise<string[]> {
   // Run glob for each pattern and combine results
   const allFiles = new Set<string>();
   for (const pattern of testPatterns) {
-    const files = await glob(pattern, { ignore: ignorePatterns });
+    const files = await glob(pattern, globOptions);
     files.forEach(f => allFiles.add(f));
   }
   
@@ -379,14 +387,18 @@ export async function testCommand(patterns: string[]) {
   const startTime = Date.now();
   
   try {
-    // Discover test files
-    const testFiles = await discoverTests(patterns);
+    // Get command context
+    const context = await getCommandContext();
+    
+    // Discover test files from project root
+    const testFiles = await discoverTests(patterns, context);
     
     if (testFiles.length === 0) {
       console.log(chalk.yellow('No test files found'));
       if (patterns.length > 0) {
         console.log(chalk.dim(`Patterns: ${patterns.join(', ')}`));
       }
+      console.log(chalk.dim(`Searched from: ${context.projectRoot}`));
       return;
     }
     
@@ -415,7 +427,9 @@ export async function testCommand(patterns: string[]) {
     
     // Run tests sequentially and report as they complete
     for (const [dir, files] of byDirectory) {
-      console.log(chalk.dim(dir));
+      // Show directory relative to project root
+      const relativeDir = path.relative(context.projectRoot, dir);
+      console.log(chalk.dim(relativeDir || '.'));
       console.log(); // Add space after directory name
       
       for (const file of files) {
