@@ -122,6 +122,29 @@ export async function evaluateExecInvocation(
     if (!variable) {
       throw new MlldInterpreterError(`Method not found: ${commandName} on ${objectRef.identifier}`);
     }
+    
+    // Handle __executable objects from resolved imports
+    if (typeof variable === 'object' && variable !== null && '__executable' in variable && variable.__executable) {
+      // Convert the __executable object to a proper ExecutableVariable
+      const { createExecutableVariable } = await import('@core/types/variable/VariableFactories');
+      variable = createExecutableVariable(
+        commandName,
+        'command', // Default type - the real type is in executableDef
+        '', // Empty template - the real template is in executableDef
+        variable.paramNames || [],
+        undefined, // No language here - it's in executableDef
+        {
+          directive: 'exe',
+          syntax: 'braces',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          executableDef: variable.executableDef,
+          ...variable.metadata
+        }
+      );
+    }
   } else {
     // Regular command lookup
     variable = env.getVariable(commandName);

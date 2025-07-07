@@ -116,11 +116,8 @@ export class ObjectReferenceResolver {
     for (const [key, val] of Object.entries(value.properties)) {
       resolved[key] = this.resolveObjectReferences(val, variableMap);
     }
-    return {
-      type: 'object',
-      properties: resolved,
-      location: value.location
-    };
+    // Return the resolved object directly, not as an AST node
+    return resolved;
   }
 
   /**
