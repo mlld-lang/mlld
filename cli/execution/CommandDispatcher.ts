@@ -62,8 +62,11 @@ export class CommandDispatcher {
     // Handle different command types
     if (typeof handler === 'function') {
       // Direct function (like registryCommand, envCommand, etc.)
-      if (handler.name === 'registryCommand' || handler.name === 'envCommand' || handler.name === 'testCommand' || handler.name === 'errorTestCommand' || handler.name === 'languageServerCommand') {
+      if (handler.name === 'registryCommand' || handler.name === 'testCommand' || handler.name === 'errorTestCommand' || handler.name === 'languageServerCommand') {
         await handler(subcommands);
+      } else if (handler.name === 'envCommand') {
+        // envCommand expects an options object with _ property
+        await handler({ _: subcommands });
       } else {
         // Command object with execute method
         await handler.execute(subcommands, this.parseFlags(subcommands));

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import { LockFile } from '@core/registry/LockFile';
 import { logger } from '@core/utils/logger';
+import { getCommandContext } from '../utils/command-context';
 
 export interface EnvCommandOptions {
   _: string[]; // Subcommand and arguments
@@ -10,8 +11,9 @@ export interface EnvCommandOptions {
 }
 
 export async function envCommand(options: EnvCommandOptions): Promise<void> {
-  const cwd = options.cwd || process.cwd();
-  const lockFilePath = path.join(cwd, 'mlld.lock.json');
+  // Get command context to find project root
+  const context = await getCommandContext({ startPath: options.cwd });
+  const lockFilePath = path.join(context.projectRoot, 'mlld.lock.json');
   
   // Get subcommand
   const subcommand = options._[0] || 'list';

@@ -1,6 +1,7 @@
 import { RegistryManager } from '@core/registry/RegistryManager';
 import { OutputFormatter, type ModuleDisplayInfo } from '../utils/output';
 import { lockFileManager } from '../utils/lock-file';
+import { getCommandContext } from '../utils/command-context';
 import chalk from 'chalk';
 
 export interface LsOptions {
@@ -224,7 +225,9 @@ export class LsCommand {
 }
 
 export async function lsCommand(options: LsOptions = {}): Promise<void> {
-  const basePath = options.basePath || process.cwd();
+  // Get command context to find project root
+  const context = await getCommandContext({ startPath: options.basePath });
+  const basePath = context.projectRoot;
   
   // Ensure we have a lock file
   await lockFileManager.ensureLockFile(basePath);

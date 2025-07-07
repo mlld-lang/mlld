@@ -82,8 +82,8 @@ export class VariableImporter {
     // Then, if there's an explicit module export, add it as a structured export
     const moduleVar = childVars.get('module');
     if (moduleVar && (moduleVar.type === 'object' || moduleVar.type === 'array')) {
-      // Export the module value directly
-      moduleObject.module = moduleVar.value;
+      // Resolve all variable references in the module export
+      moduleObject.module = this.objectResolver.resolveObjectReferences(moduleVar.value, childVars);
     }
     
     return {
