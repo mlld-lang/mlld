@@ -68,9 +68,9 @@ You are helping {{name}}, a {{role}}, working on {{context.project}} using {{con
 /show @prompt
 ```
 
-### 3. Only /add and /run Produce Output
+### 3. Only /show and /run Produce Output
 
-This is crucial - most directives just set up state. Only `/add` and `/run` actually contribute to the final document:
+This is crucial - most directives just set up state. Only `/show` and `/run` actually contribute to the final document:
 
 ```mlld
 /var @hidden = "This won't appear in output"

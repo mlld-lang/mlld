@@ -2,7 +2,7 @@
   "name": "mlld-vscode",
   "displayName": "mlld",
   "description": "Language support for mlld - A modular prompt scripting language",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "andyet",
   "repository": {
     "type": "git",
