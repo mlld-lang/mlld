@@ -9,7 +9,7 @@ Prism.languages.mlld = {
     greedy: true
   },
   'directive': {
-    pattern: //(var|show|run|exe|path|import|when|output)\b/,
+    pattern: /\/(var|show|run|exe|path|import|when|output)\b/,
     alias: 'keyword'
   },
   'template-block': {
