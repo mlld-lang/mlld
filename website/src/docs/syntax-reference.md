@@ -11,39 +11,40 @@ This document provides a comprehensive reference for the mlld syntax.
 
 ### Directives
 
-Directives must appear at start of line (no indentation):
+Directives must appear at start of line (no indentation) and use the `/` prefix:
 ```
-@add      - Include content from files
-@run      - Execute shell commands
-@import   - Import variables and commands from other mlld files
-@exec     - Create reusable commands
-@text     - Define text variables
-@path     - Define filesystem path variables
-@data     - Define structured data variables
-@when     - Conditional actions
+/show      - Include content from files
+/run      - Execute shell commands
+/import   - Import variables and commands from other mlld files
+/exe     - Create reusable commands
+/var     - Define text variables
+/path     - Define filesystem path variables
+/var     - Define structured data variables
+/when     - Conditional actions
+/output   - Write content to files or streams
 ```
 
 ### Comments
 
-Lines that begin with `>> ` (two greater-than signs followed by a space) are treated as comments:
+Comments use `>>` (two greater-than signs) and can appear at start of line or end of line:
 ```mlld
->> This is a comment
->> Comments must start at beginning of line (no indentation)
-@text message = "Hello"  >> Invalid - comments must be on their own line
+>> This is a comment at start of line
+/var @message = "Hello"  >> This is an end-of-line comment
 ```
 
-- Must appear at start of line (no indentation)
-- Everything after `>> ` on that line is ignored
-- Cannot be added to the end of directive lines
-- Preserves comments exactly as written
+- Start-of-line: `>> This is a comment`
+- End-of-line: `/text @name = "Alice" >> This is also a comment`
+- Inside templates/strings: `::Hello >> World::` - >> is treated as literal text, not a comment
 
 ### Delimiters
 
 ```
-[ ]     Path boundaries
-[[ ]]   Template boundaries
-[( )]   Command boundaries
-{{ }}   Multi-line object boundaries
+[ ]     Path boundaries and resolver paths
+:: ::   Template boundaries (double-bracket templates)
+{ }     Command boundaries (braces for multi-line)
+" "     Command boundaries (quotes for single-line)
+` `     Backtick templates (with @ interpolation)
+{{ }}   Variable interpolation in templates
 #       Section marker
 =       Assignment (requires spaces on both sides)
 .       Metadata/field accessor
@@ -58,7 +59,9 @@ Lines that begin with `>> ` (two greater-than signs followed by a space) are tre
 - Quotes must match (no mixing)
 - Backslashes and quotes within strings are treated as literal characters
 - Single-line strings (', ") cannot contain newlines
-- Template literals (`) can interpolate variables: `Hello {{name}}`
+- Double quotes (") support @ interpolation: "Hello @name"
+- Backtick templates (`) support @ interpolation: `Hello @name!`
+- Double-bracket templates support {{}} interpolation: ::Hello {{name}}!::
 
 ### Identifiers
 
@@ -71,28 +74,34 @@ Lines that begin with `>> ` (two greater-than signs followed by a space) are tre
 
 ### Path Variables
 
-Syntax: `@identifier`
+Syntax: Variables are created with `@identifier` and referenced with `@identifier`
 ```mlld
-@path                # Reference a path variable
-[@./path]           # Project root path
+/path @docs = "./documentation"    # Create path variable
+@docs                              # Reference path variable
+[@./path]                          # Resolver path (needs brackets)
+[@PROJECTPATH/config]              # Project root resolver path
 ```
 
 ### Text Variables
 
-Syntax: `@identifier` in regular text, `{{identifier}}` in templates
+Variables are created with `@identifier` prefix and referenced differently based on context:
 ```mlld
-@textvar                       # Text variable reference
-[[Content with {{textvar}}]]   # Variable in template
+/var @name = "Alice"              # Create text variable
+@name                              # Reference in directives
+"Hello @name"                     # Reference in double quotes
+`Welcome @name!`                   # Reference in backtick templates
+::Content with {{name}}::          # Reference in double-bracket templates
 ```
 
 ### Data Variables
 
-Syntax: `@identifier` in regular text, `{{identifier}}` in templates
+Variables are created with `@identifier` prefix and support field access:
 ```mlld
-@datavar                       # Data variable reference
-@datavar.field                 # Data variable field access
-@datavar[0]                    # Array element access
-[[Content: {{datavar.field}}]] # Variable in template
+/var @config = { "port": 3000 }   # Create data variable
+@config                            # Reference data variable
+@config.port                       # Field access with dot notation
+@users.0                           # Array element access
+::Port: {{config.port}}::          # Reference in template
 ```
 
 ## Code Fences
@@ -114,75 +123,108 @@ def hello():
 
 ## Directive Patterns
 
-### @add
+### /add
 
 ```mlld
-@add [path]
-@add [path # section_text]
-@add [path] as "# New Title"           # Rename section
-@add "Section" from [path]
-@add "Section" from [path] as "# New Title"
+/show [path]
+/show [path # section_text]
+/show [path] as "# New Title"           # Rename section
+/show "Section" from [path]
+/show "Section" from [path] as "# New Title"
+/show @variable                          # Add variable content
+/show "Literal text"                    # Add literal text
+/show ::Template with {{var}}::          # Add template
 ```
 
-### @run
+### /run
 
 ```mlld
-@run [(command_text)]
-@run [(language code_text)]
-@run @command(@var1, @var2)
+/run "echo hello"                  # Single-line command with quotes
+/run {echo "hello world"}          # Multi-line command with braces
+/run js {console.log("Hi")}        # JavaScript code execution
+/run python {print("Hello")}       # Python code execution
+/run @command(@var1, @var2)         # Execute defined command
 ```
 
-### @import
-
-```
-
-### @exec
+### /import
 
 ```mlld
-@exec identifier = @run [(content)]
-@exec command(param1, param2) = @run [(content @param1 @param2)]
-@exec command = @run js [(code)]
+/import { greeting, config } from "shared.mld"      # File import
+/import { * } from "utils.mld"                      # Import all
+/import { fetchData } from @corp/utils              # Module import (no quotes)
+/import { readme } from [@./README.md]              # Resolver path import (brackets)
+/import { API_KEY } from @INPUT                     # Environment variables
 ```
 
-### @text
+### /exec
 
 ```mlld
-@text identifier = "value"
-@text identifier = @add [path]
-@text identifier = @run [(command)]
+/exe @deploy(env) = "deploy.sh @env"              # Command executable
+/exe @greet(name) = `Hello @name!`                # Template executable  
+/exe @build(type) = {                             # Multi-line command
+  npm run build:@type
+  npm test
+}
+/exe @calculate(x) = js {return @x * 2}           # Code executable
+/exe @getIntro(file) = [@file # Introduction]     # Section executable
+/exe @js = { formatDate, parseJSON }               # Shadow environment
 ```
 
-### @path
+### /text
 
 ```mlld
-@path identifier = [@./path]
-@path identifier = [/absolute/path]
-@path identifier = [relative/path]
+/var @name = "value"                    # Simple text
+/var @greeting = "Hello @name!"         # With @ interpolation
+/var @template = `Welcome @user!`       # Backtick template
+/var @content = ::Hello {{name}}!::     # Double-bracket template
+/var @result = /run "date"              # From command output
 ```
 
-### @data 
+### /path
 
 ```mlld
-@data identifier = value
-@data identifier : schema = value
+/path @docs = "./documentation"         # Simple path
+/path @output = "results/@date.txt"     # Path with interpolation
+/path @template = 'templates/@var.html'  # Single quotes (no interpolation)
+/path @api = https://api.example.com/data (5m)  # URL with cache duration
 ```
 
-## Template Literals
+### /data 
 
-Template literals:
 ```mlld
-@text prompt = [[`
+/var @config = { "port": 3000 }         # JSON object
+/var @users = ["Alice", "Bob"]         # Array
+/var @settings : schema = value         # With schema validation
+/var @result = /run "ls -la"           # From command output
+```
+
+## Templates
+
+### Backtick Templates (Primary - with @ interpolation)
+```mlld
+/var @message = `Hello @name, welcome to @place!`
+/var @link = `[@title](@url)`
+```
+
+### Double-Bracket Templates (For @ heavy content)
+```mlld
+/var @tweet = ::Hey {{user}}, check out {{handle}}'s new post!::
+/var @prompt = ::
   System: {{role}}
-  
-  Context:
-  {{context.data}}
-  
+  Context: {{context.data}}
   User: {{username}}
-`]]
+::
 ```
 
 ## Variable Interpolation Rules
 
-Quotes are literal
-Double bracket templates, double braces variables
-@variables everywhere else
+### Context-Specific Rules:
+- **Double quotes**: `"Hello @name"` - @ interpolation works
+- **Single quotes**: `'Hello @name'` - @ is literal text (no interpolation)
+- **Backtick templates**: `` `Hello @name!` `` - @ interpolation works
+- **Double-bracket templates**: `::Hello {{name}}!::` - Use {{}} for variables
+- **Commands in braces**: `{echo "User: @name"}` - @ interpolation works
+- **Directives**: `/add @greeting` - Direct @ reference
+
+### Key Rule: "Double brackets, double braces"
+In `::...::` templates, always use `{{variable}}` syntax.

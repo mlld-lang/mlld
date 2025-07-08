@@ -40,18 +40,18 @@ mlld maintains a minimal core language for orchestration while supporting extens
 
 ### 1. Everything is Markdown
 
-mlld enhances regular markdown - anything that isn't a directive (starting with `@`) is treated as normal markdown:
+mlld enhances regular markdown - anything that isn't a directive (starting with `/`) is treated as normal markdown:
 
 ```mlld
 # My Document
 
 This is regular markdown.
 
-@text greeting = "Hello from mlld!"
+/var @greeting = "Hello from mlld!"
 
 The greeting is still markdown, but now we can make it dynamic.
 
-@add @greeting
+/show @greeting
 ```
 
 ### 2. Directives Execute Line by Line
@@ -59,30 +59,30 @@ The greeting is still markdown, but now we can make it dynamic.
 Meld processes directives sequentially, building up state as it goes:
 
 ```mlld
-@text name = "Alice"
-@text role = "software engineer"
-@data context = {
+/var @name = "Alice"
+/var @role = "software engineer"
+/var @context = {
   "project": "AI Assistant",
   "language": "Python"
 }
 
-@text prompt = [[
+/var @prompt = ::
 You are helping {{name}}, a {{role}}, working on {{context.project}} using {{context.language}}.
-]]
+::
 
-@add @prompt
+/show @prompt
 ```
 
-### 3. Only @add and @run Produce Output
+### 3. Only /add and /run Produce Output
 
-This is crucial - most directives just set up state. Only `@add` and `@run` actually contribute to the final document:
+This is crucial - most directives just set up state. Only `/add` and `/run` actually contribute to the final document:
 
 ```mlld
-@text hidden = "This won't appear in output"
-@data config = { "debug": true }
+/var @hidden = "This won't appear in output"
+/var @config = { "debug": true }
 
-@add [[This WILL appear in output]]
-@run [(echo "This command output WILL appear")]
+/show ::This WILL appear in output::
+/run "echo This command output WILL appear"
 ```
 
 ### 4. Complexity Lives in Modules
@@ -91,12 +91,12 @@ mlld deliberately lacks traditional programming constructs (loops, error handlin
 
 ```mlld
 # Instead of language features, use modules:
-@import { forEach, parallel, retry } from @mlld/core
-@import { validateResponse, improveAnswer } from @company/ai-tools
+/import { forEach, parallel, retry } from @mlld/core
+/import { validateResponse, improveAnswer } from @company/ai-tools
 
 # Orchestrate with simple, readable syntax:
-@data results = @run @parallel(@llmCalls, { concurrency: 3 })
-@text refined = @run @validateResponse(@results) 
+/var @results = /run @parallel(@llmCalls, { concurrency: 3 })
+/var @refined = /run @validateResponse(@results) 
 ```
 
 This separation keeps mlld scripts clean and focused on orchestration while modules handle implementation details.
@@ -109,16 +109,16 @@ Create reusable prompt components in separate files:
 
 **prompts/roles.mld:**
 ```mlld
-@text architect = "You are a senior software architect with 20 years of experience."
-@text reviewer = "You are a thorough code reviewer focused on security and performance."
-@text teacher = "You are a patient teacher who explains complex concepts simply."
+/var @architect = "You are a senior software architect with 20 years of experience."
+/var @reviewer = "You are a thorough code reviewer focused on security and performance."
+/var @teacher = "You are a patient teacher who explains complex concepts simply."
 ```
 
 **prompts/tasks.mld:**
 ```mlld
-@text analyze_code = "Analyze this code for potential issues and suggest improvements."
-@text explain_concept = "Explain this concept as if teaching a junior developer."
-@text review_pr = "Review this pull request for merge readiness."
+/var @analyze_code = "Analyze this code for potential issues and suggest improvements."
+/var @explain_concept = "Explain this concept as if teaching a junior developer."
+/var @review_pr = "Review this pull request for merge readiness."
 ```
 
 ### Composing Complex Prompts
@@ -126,13 +126,13 @@ Create reusable prompt components in separate files:
 Import and combine modules to build sophisticated prompts:
 
 ```mlld
-@import { architect, reviewer } from "./prompts/roles.mld"
-@import { analyze_code } from "./prompts/tasks.mld"
+/import { architect, reviewer } from "./prompts/roles.mld"
+/import { analyze_code } from "./prompts/tasks.mld"
 
-@text codebase = @run [(find src -name "*.py" -exec cat {} \;)]
-@text recent_changes = @run [(git diff main..HEAD)]
+/var @codebase = /run "find src -name '*.py' -exec cat {} \;"
+/var @recent_changes = /run "git diff main..HEAD"
 
-@text full_prompt = [[
+/var @full_prompt = ::
 {{architect}}
 
 Here's our codebase:
@@ -146,9 +146,9 @@ Recent changes:
 ```
 
 {{analyze_code}}
-]]
+::
 
-@run [(claude --message @full_prompt)]
+/run "claude --message '@full_prompt'"
 ```
 
 ## The Power of Modules
@@ -237,11 +237,11 @@ mlld supports explicit step-by-step processing through transformation pipelines:
 
 ```mlld
 # Define transformation stages
-@exec checkAccuracy(response) = @run @claude([[Review this response for factual accuracy: {{response}}]])
+@exec checkAccuracy(response) = @run @claude(::Review this response for factual accuracy: {{response}}::)
 
-@exec improveClarity(response) = @run @claude([[Rewrite this for clarity, preserving all facts: {{response}}]])
+@exec improveClarity(response) = @run @claude(::Rewrite this for clarity, preserving all facts: {{response}}::)
 
-@exec addExamples(response) = @run @claude([[Add concrete examples to illustrate points: {{response}}]])
+@exec addExamples(response) = @run @claude(::Add concrete examples to illustrate points: {{response}}::)
 
 # Apply pipeline to ensure quality
 @text answer = @run @claude("Explain how DNS works") with {
@@ -284,12 +284,12 @@ Use `@map` to gather diverse viewpoints efficiently:
   { role: "user advocate", focus: "usability and accessibility" }
 ]
 
-@exec analyze(perspective) = @run [(claude --system "You are a {{perspective.role}}" --message "Review this design focusing on {{perspective.focus}}: {{design}}")]
+@exec analyze(perspective) = run [(claude --system "You are a {{perspective.role}}" --message "Review this design focusing on {{perspective.focus}}: {{design}}")]
 
 @data reviews = @map @analyze(@perspectives)
 
 # Synthesize all perspectives
-@text synthesis = @run @claude([[Synthesize these reviews into actionable recommendations: {{reviews}}]])
+@text synthesis = @run @claude(::Synthesize these reviews into actionable recommendations: {{reviews}}::)
 
 @add @synthesis
 ```
@@ -351,7 +351,7 @@ This XML format:
 
 ```mlld
 # Product Documentation
-@text version = @run [(cat VERSION)]
+@text version = run [(cat VERSION)]
 Version: @add @version
 
 ## Features
@@ -388,9 +388,9 @@ Import modules from the public registry using `@user/module` syntax:
 @import { coding_standards } from @company/standards
 @import { pr_template } from @templates/github
 
-@text current_pr = @run [(gh pr view --json body -q .body)]
+@text current_pr = run [(gh pr view --json body -q .body)]
 
-@text review_prompt = [[
+@text review_prompt = ::
 {{senior_reviewer}}
 
 Our coding standards:
@@ -398,13 +398,12 @@ Our coding standards:
 
 Please review this PR:
 {{current_pr}}
-]]
+::
 ```
 
 **How it works:**
-- DNS TXT records map `@user/module` to GitHub gists
+- Registry records map `@user/module` to GitHub gists and private modules
 - Content is cached locally and identified by SHA-256 hash
-- No central servers - fully decentralized
 - Lock files ensure reproducible builds
 
 ### Private Module Resolvers
@@ -501,10 +500,10 @@ Still support direct URL imports when needed:
 ### Dynamic README Generation
 
 ```mlld
-@text version = @run [(npm version --json | jq -r .version)]
-@text contributors = @run [(git shortlog -sn | head -10)]
-@text last_commit = @run [(git log -1 --pretty=format:"%h - %s (%cr)")]
-@text test_badge = @run [(
+@text version = run [(npm version --json | jq -r .version)]
+@text contributors = run [(git shortlog -sn | head -10)]
+@text last_commit = run [(git log -1 --pretty=format:"%h - %s (%cr)")]
+@text test_badge = run [(
   if npm test >/dev/null 2>&1; then 
     echo "![Tests)](https://img.shields.io/badge/tests-passing-green)"
   else 
@@ -527,12 +526,12 @@ Last commit: {{last_commit}}
 ### Automated PR Description
 
 ```mlld
-@text branch = @run [(git branch --show-current)]
-@text changes = @run [(git diff main..HEAD --stat)]
-@text commits = @run [(git log main..HEAD --oneline)]
+@text branch = run [(git branch --show-current)]
+@text changes = run [(git diff main..HEAD --stat)]
+@text commits = run [(git log main..HEAD --oneline)]
 
 >> Analyze the changes
-@text analysis = @run [(claude --message "Analyze these code changes and write a brief summary:\n\n@changes\n\nCommits:\n@commits")]
+@text analysis = run [(claude --message "Analyze these code changes and write a brief summary:\n\n@changes\n\nCommits:\n@commits")]
 
 ## Pull Request: {{branch}}
 
@@ -556,12 +555,12 @@ Last commit: {{last_commit}}
 @text question = "What are the key considerations for migrating from REST to GraphQL?"
 
 >> Get responses from multiple models
-@text claude_response = @run [(claude --message @question)]
-@text gpt_response = @run [(openai --message @question)]
-@text local_response = @run [(ollama run llama2 @question)]
+@text claude_response = run [(claude --message @question)]
+@text gpt_response = run [(openai --message @question)]
+@text local_response = run [(ollama run llama2 @question)]
 
 >> Synthesize the responses
-@text synthesis = @run [(claude --message "
+@text synthesis = run [(claude --message "
 Synthesize these three responses into a unified answer:
 
 Response 1: @claude_response
@@ -608,11 +607,11 @@ Create a consensus view that incorporates the best insights from each.
 1. Install Meld: `npm install -g mlld`
 2. Create a file `hello.mld`:
    ```mlld
-   @text name = @run [(whoami)]
+   @text name = run [(whoami)]
    # Hello, {{name}}!
    
    Welcome to Meld. The current date is:
-   @run [(date)]
+   run [(date)]
    ```
 3. Run it: `mlld hello.mld`
 4. See the output in `hello.o.md`

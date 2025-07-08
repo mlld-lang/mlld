@@ -25,7 +25,7 @@ Parse raw mlld content into an Abstract Syntax Tree (AST):
 import { parsemlld } from 'mlld';
 
 const content = `
-@text name = "World"
+/var @name = "World"
 Hello, {{name}}!
 `;
 
@@ -245,8 +245,8 @@ registerFormatHandler('uppercase', (value) => {
 });
 
 // Now you can use it in mlld code
-// @text name = "alice"
-// @text greeting = `Hello, {{name>>(uppercase)}}!`
+// /text @name = "alice"
+// /text @greeting = `Hello, {{name>>(uppercase)}}!`
 // Result: "Hello, ALICE!"
 ```
 

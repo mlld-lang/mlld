@@ -14,21 +14,23 @@ mlld has three distinct types of variables, each with its own syntax and usage p
 Path variables are used for filesystem paths and command arguments:
 
 ```mlld
-@path                # Reference a path variable in directives
-[@path]              # Use in path contexts (inside brackets)
-[@./path]            # Project root path
+/path @docs = "./documentation"    # Define a path variable
+@docs                              # Reference a path variable
+[@./path]                          # Resolver path (with brackets)
+[@PROJECTPATH/config]              # Project root resolver path
 ```
 
-- Must be defined with `@path` directive
-- Used primarily inside `[]` brackets in path contexts
+- Must be defined with `/path` directive with `@` prefix
+- Can use @ interpolation in double quotes: `/path @output = "results/@date.txt"`
 - Cannot use field access or formatting
 - Path segments are separated by forward slashes
-- Special prefix: `.` for project root
+- Special resolvers: `@PROJECTPATH` or `@.` for project root
 
 Example:
 ```mlld
-@path docs = [@./docs]
-@add [@docs/guide.md]
+/path @docs = "./docs"
+/show [@docs/guide.md]
+/path @output = "build/@version"
 ```
 
 ### Text Variables
@@ -36,20 +38,25 @@ Example:
 Text variables store unstructured text:
 
 ```mlld
-@variable            # Reference in directives
-{{variable}}         # Reference in templates [[...]]
+/var @greeting = "Hello"          # Define with @ prefix
+@greeting                          # Reference in directives
+"Message: @greeting"               # Reference in double quotes
+`Welcome: @greeting`               # Reference in backticks
+::Text: {{greeting}}::             # Reference in double-bracket templates
 ```
 
-- Defined with `@text` directive
+- Defined with `/text` directive with `@` prefix
 - No field access (text is atomic)
-- In directives: use `@variable`
-- In templates `[[...]]`: use `{{variable}}`
+- In directives and double quotes: use `@variable`
+- In double-bracket templates `::...::`: use `{{variable}}`
+- Key rule: "Double brackets, double braces"
 
 Example:
 ```mlld
-@text greeting = "Hello"
-@text name = "World"
-@text message = [[{{greeting}}, {{name}}!]]
+/var @greeting = "Hello"
+/var @name = "World"
+/var @message1 = "@greeting, @name!"          # @ interpolation
+/var @message2 = ::{{greeting}}, {{name}}!::  # {{}} in templates
 ```
 
 ### Data Variables
@@ -57,32 +64,38 @@ Example:
 Data variables store structured data:
 
 ```mlld
-@variable             # Reference in directives
-@variable.field       # Field access in directives
-{{variable}}          # Reference in templates
-{{variable.field}}    # Field access in templates
+/var @user = { "name": "Alice" }   # Define with @ prefix
+@user                              # Reference in directives
+@user.name                         # Field access in directives
+"User: @user.name"                 # Field access in double quotes
+{{user}}                           # Reference in templates
+{{user.name}}                      # Field access in templates
 ```
 
-- Defined with `@data` directive
-- Support field access (`@config.name` in directives, `{{config.name}}` in templates)
-- Fields can be nested (`@config.user.name`, `{{config.user.name}}`)
+- Defined with `/data` directive with `@` prefix
+- Support field access with dot notation
+- In directives and double quotes: use `@variable.field`
+- In double-bracket templates: use `{{variable.field}}`
 
 Example:
 ```mlld
-@data user = { "name": "Alice", "id": 123 }
-@text greeting = [[Hello, {{user.name}}! Your ID is {{user.id}}.]]```
+/var @user = { "name": "Alice", "id": 123 }
+/var @greeting1 = "Hello, @user.name! ID: @user.id"           # @ interpolation
+/var @greeting2 = ::Hello, {{user.name}}! Your ID is {{user.id}}.::  # {{}} in templates
+```
 
 ### Array Access
 
 When working with arrays, use dot notation to access array elements by index:
 
 ```mlld
-@data items = ["apple", "banana", "cherry"]
-@text first = [[First item: {{items.0}}]]
-@text second = [[Second item: {{items.1}}]]
+/var @items = ["apple", "banana", "cherry"]
+/var @first = "First item: @items.0"               # @ interpolation with dot notation
+/var @second = ::Second item: {{items.1}}::        # {{}} in templates
+/show "Third item: @items.2"                         # Direct reference
 ```
 
-Note: Currently, only dot notation is supported for array access. Bracket notation (`items[0]`) is not supported.
+Note: Only dot notation is supported for array access. Bracket notation (`items[0]`) is not supported.
 
 ## Variable Type Conversion
 
@@ -94,9 +107,9 @@ Variables can be converted between types automatically in many contexts:
 - Objects and arrays convert to JSON string representation
 
 ```mlld
-@data config = { "name": "test", "version": 1 }
-@text simple = [[Name: {{config.name}}]]          # Outputs: Name: test
-@text object = [[Config: {{config}}]]             # Outputs: Config: {"name":"test","version":1}
+/var @config = { "name": "test", "version": 1 }
+/var @simple = "Name: @config.name"              # Outputs: Name: test
+/var @object = ::Config: {{config}}::            # Outputs: Config: {"name":"test","version":1}
 ```
 
 ### Object and Array Formatting
@@ -108,25 +121,26 @@ When referencing complete objects or arrays (rather than their individual fields
 When referencing an entire array:
 
 ```mlld
-@data fruits = ["apple", "banana", "orange"]
+/var @fruits = ["apple", "banana", "orange"]
 ```
 
-- **Inline context** (within text, template literals):
+- **Inline context** (within text, templates):
   ```mlld
-  @text list = [[My fruits: {{fruits}}]]  # Outputs: My fruits: apple, banana, orange
+  /var @list1 = "My fruits: @fruits"      # @ interpolation
+  /var @list2 = ::My fruits: {{fruits}}:: # {{}} in templates
   ```
   Arrays are formatted as comma-separated values with spaces.
 
 - **Block context** (in embed directives, standalone references):
   ```mlld
-  @add @fruits
+  /show @fruits
   ```
   Simple arrays (of strings, numbers) use comma-separated values with spaces.
   
   Arrays of objects are formatted as properly indented JSON:
   ```mlld
-  @data people = [{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }]
-  @add @people
+  /var @people = [{ "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }]
+  /show @people
   ```
   This outputs the array as properly indented JSON:
   ```json
@@ -147,18 +161,18 @@ When referencing an entire array:
 When referencing an entire object:
 
 ```mlld
-@data config = { "host": "localhost", "port": 8080 }
+/var @config = { "host": "localhost", "port": 8080 }
 ```
 
 - **Inline context**:
   ```mlld
-  @text settings = [[My config: {{config}}]]  # Outputs: My config: {"host":"localhost","port":8080}
+  /var @settings = ::My config: {{config}}::  # Outputs: My config: {"host":"localhost","port":8080}
   ```
   Objects are formatted as compact JSON without whitespace.
 
 - **Block context** (in embed directives, standalone references):
   ```mlld
-  @add @config
+  /show @config
   ```
   Objects are formatted as properly indented JSON:
   ```json
@@ -174,28 +188,35 @@ When referencing an entire object:
 - Text variables can also be used as object keys
 
 ```mlld
-@text name = "Alice"
-@text key = "username"
+/var @name = "Alice"
+/var @key = "username"
 
-@data user = {
+/var @user = {
   @key: @name,              # Dynamic key from text
   "id": 123,
   "settings": {
-    "displayName": @name        # Nested text value
+    "displayName": @name    # Nested text value
   }
 }
 ```
 
 ## Where Variables Can Be Used
 
-Variable references are allowed in:
-- Inside square brackets `[...]` for paths and commands
-- Inside object literals `{{...}}` and single-line objects
-- Inside template literals (backtick strings) for string interpolation
-- Inside directive values after `=`
+Variable references are context-specific:
 
-They are NOT allowed in:
-- Plain text lines
-- Regular string literals (use template literals instead)
-- Outside of specific interpolation contexts
+### @ Interpolation contexts:
+- In directives: `/add @variable`
+- In double quotes: `"Hello @name"`
+- In backtick templates: `` `Welcome @user` ``
+- In command braces: `/run {echo "@message"}`
+- In object values: `/data @config = { "user": @name }`
+
+### {{}} Interpolation contexts:
+- In double-bracket templates: `::Hello {{name}}!::`
+- ONLY in `::...::` templates
+
+### NOT allowed in:
+- Plain text lines (not starting with `/`)
+- Single quotes: `'Hello @name'` (@ is literal)
+- Outside of mlld directive lines
 

@@ -1,23 +1,23 @@
-@import {*} from [imports.mld]
+/import "imports.mld"
 
-@path services = [@./src/services]
-@text code = @run @codecat(@services)
+/path @services = "./src/services"
+/var @code = @codecat(@services)
 
-@text context = [[
-  Read our docs: {{docs}}
-  Review our code: {{code}}
-]]
+/var @context = `
+  Read our docs: @imports.docs
+  Review our code: @code
+`
 
-@text arch_review = @run @ask(@context, @role.architect, @task.archrev)
-@text ux_review   = @run @ask(@context, @role.ux, @task.uxrev)
-@text sec_review  = @run @ask(@context, @role.security, @task.secrev)
+/var @arch_review = @imports.ask(@context, @imports.role.architect, @imports.task.archrev)
+/var @ux_review   = @imports.ask(@context, @imports.role.ux, @imports.task.uxrev)
+/var @sec_review  = @imports.ask(@context, @imports.role.security, @imports.task.secrev)
 
-@text pm_review = [[
+/var @pm_review = `
   Here's the team's input on our priorities:
-  - Architect review: {{arch_review}}
-  - UX review: {{ux_review}}
-  - Security review: {{sec_review}}
-  Your task: {{task.roadmap}}
-]]
+  - Architect review: @arch_review
+  - UX review: @ux_review
+  - Security review: @sec_review
+  Your task: @imports.task.roadmap
+`
 
-@run @ask(@context, @role.pm, @pm_review)
+/run @imports.ask(@context, @imports.role.pm, @pm_review)
