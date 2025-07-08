@@ -88,7 +88,7 @@ OutputFilePath "output file path"
   / "[" _ content:InterpolatedPathContent _ "]" {
       return {
         parts: content,
-        raw: helpers.reconstructRawString(content),
+        raw: `[${helpers.reconstructRawString(content)}]`,
         meta: { bracketed: true }
       };
     }

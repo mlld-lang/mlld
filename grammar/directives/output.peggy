@@ -124,6 +124,72 @@ SlashOutput
         location()
       );
     }
+  // Support for quoted path syntax (without 'to')
+  / DirectiveContext "/output" _ source:OutputSource _ path:StringLiteral {
+      helpers.debug('SlashOutput quoted syntax with source matched', { source, path });
+      
+      const values = {
+        source: source.values,
+        target: {
+          type: 'file',
+          path: [helpers.createNode(NodeType.Text, { content: path, location: location() })],
+          raw: `"${path}"`,
+          meta: { quoted: true }
+        }
+      };
+      
+      const raw = {
+        source: source.raw,
+        target: `"${path}"`
+      };
+      
+      const meta = {
+        sourceType: source.type,
+        targetType: 'file',
+        hasSource: true,
+        legacy: true
+      };
+      
+      return helpers.createStructuredDirective(
+        'output',
+        'outputFile',
+        values,
+        raw,
+        meta,
+        location()
+      );
+    }
+  / DirectiveContext "/output" _ path:StringLiteral {
+      helpers.debug('SlashOutput quoted syntax without source matched', { path });
+      
+      const values = {
+        target: {
+          type: 'file',
+          path: [helpers.createNode(NodeType.Text, { content: path, location: location() })],
+          raw: `"${path}"`,
+          meta: { quoted: true }
+        }
+      };
+      
+      const raw = {
+        target: `"${path}"`
+      };
+      
+      const meta = {
+        targetType: 'file',
+        hasSource: false,
+        legacy: true
+      };
+      
+      return helpers.createStructuredDirective(
+        'output',
+        'outputDocument',
+        values,
+        raw,
+        meta,
+        location()
+      );
+    }
   // New enhanced syntax for document output
   / DirectiveContext "/output" _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
       helpers.debug('SlashOutput enhanced syntax without source matched', { target, format });

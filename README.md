@@ -1,8 +1,25 @@
-# mlld (pre-release)
+# mlld
 
-mlld is a modular prompt scripting language.
+Executable markdown for LLM workflows. Write documentation that runs.
 
-[Give this to your LLM](llms.txt)
+## What is mlld?
+
+mlld transforms markdown documents into reproducible AI pipelines. Any line starting with `/` is a command. Everything else stays readable documentation.
+
+```mlld
+# Customer Analysis Workflow
+
+This analyzes support tickets for patterns and sentiment.
+
+/import { analyzeSentiment } from @company/nlp
+/var @tickets = run {curl -s api.internal.com/support/recent}
+/var @analysis = @tickets | @analyzeSentiment
+
+## Results
+/show @analysis
+```
+
+This document renders as markdown on GitHub. Run it with `mlld` to execute the analysis.
 
 ## Installation
 
@@ -10,265 +27,213 @@ mlld is a modular prompt scripting language.
 npm install -g mlld
 ```
 
-or just run it with `npx mlld`
+## Why mlld?
 
-## CLI Usage
+**Context Engineering** - Compose prompts from multiple sources instead of mega-prompts  
+**Pipelines** - Chain LLM calls with `|` for iterative refinement  
+**Modules** - Share and reuse workflows like npm packages  
+**Reproducible** - Lock files ensure workflows run identically over time
 
-Process mlld files from the command line:
+## Quick Start
 
-```bash
-# Basic usage - outputs .xml file
-mlld input.mld
-
-# Specify output format
-mlld input.mld --format md
-
-# Specify output file
-mlld input.mld --output output.xml
-
-# Print to stdout instead of file
-mlld input.mld --stdout
-```
-
-### Supported Options
-
-- `--format, -f`: Output format (default: md)
-  - Supported formats: md, xml
-- `--output, -o`: Output file path (default: input filename with new extension)
-- `--stdout`: Print to stdout instead of file
-
-### Supported File Extensions
-
-- `.mld` is standard `.mld.md` is another option.
-- `.md`: mlld can just interpret regular old markdown files with added mlld syntax, too.
-
-## JavaScript API
-
-Here's mlld's simple API for processing content directly in JS:
-
-```javascript
-// ES Module import
-import { processMlld } from 'mlld';
-
-// Process mlld content
-const mlldContent = `
-  /var @greeting = "Hello"
-  /var @name = "World"
-  
-  /show ::{{greeting}}, {{name}}!::
-`;
-
-// Simple usage
-const result = await processMlld(mlldContent);
-console.log(result); // "Hello, World!"
-
-// With options
-const xmlResult = await processMlld(mlldContent, {
-  format: 'xml',
-  basePath: '/path/to/project'
-});
-```
-
-## Writing mlld Files
-
-mlld is a simple scripting language designed to work within markdown-like documents. It processes special `/directive` lines while preserving all other content as-is.
-
-### Core Directives
+### 1. Basic Syntax
 
 ```mlld
-/var @name = "value"              # Define a variable (text, data, arrays, etc.)
-/var @config = { "key": "value" } # Objects and arrays use /var too
-/path @docs = [file.md]           # Define a path reference
-/show [file.md]                   # Show content from another file
-/show [file.md # Section]         # Show specific section from file
-/run [command]                    # Run a shell command
-/import { * } from [file.mld]     # Import another mlld file
-/exe @cmd = run [echo "hi"]      # Define a reusable command
+/var @name = "Alice"                    # Create variable
+/show `Hello @name!`                    # Display output
+/run {echo "System: @name logged in"}   # Run commands
 ```
 
-### Variables & Interpolation
+Only `/show`, `/run`, and `/output` produce output. Everything else sets up state.
 
-Must be inside a / directive to be interpolated
+### 2. Context Composition
 
 ```mlld
->> In directive contexts:
-@variable               << Reference a variable in directives
-@varname.field          << Access object field in directives
-@pathvar                << Reference a path variable in directives
+/import { codeStyle } from @company/standards
+/var @currentPR = run {gh pr view --json body}
+/var @prompt = `
+Review this PR against our style guide:
 
->> In template contexts:
-{{variable}}            << Reference a variable in templates
-{{datavar.field}}       << Access data field in templates
-
->> Variables can be used in templates and commands:
-/var @greeting = ::Hello {{name}}!::
-/run [cat @file]
+Style: @codeStyle
+PR: @currentPR
+`
+/run {claude -p "@prompt"}
 ```
 
-### Comments & Code Fences
+### 3. Pipeline Refinement
 
-````mlld
->> This is a comment
->> Comments work at line beginnings
-/show [file.md] << They can also be added at line endings
-
->> Code fences preserve content exactly:
-```python
-def hello():
-    print("Hi")  # /var directives here are preserved as-is
-```
-````
-
-### String Values
-
-- Use single quotes, double quotes, or backticks
-- Quotes must match (no mixing)
-- Use backticks for template strings with variables:
 ```mlld
-/var @simple = "Hello"
-/var @template = ::Hello {{name}}!::
-/var @multiline = ::
-  Multi-line
-  template with {{vars}}
-::
+/exe @checkFacts(text) = run "claude -p 'Verify facts in: @text'"
+/exe @improveClarity(text) = run "claude -p 'Rewrite for clarity: @text'"
+/exe @addExamples(text) = run "claude -p 'Add examples to: @text'"
+
+/var @answer = run {claude -p "@question"} | @checkFacts | @improveClarity | @addExamples
 ```
 
-### Path Variables
+### 4. Cartesian Products
 
-- Reference files and URLs using brackets
-- Support both local files and remote URLs
 ```mlld
-/path @docs = [./docs/api.md]
-/path @remote = [https://example.com/config.json]
->> Example Usage:
-/show @docs
-/show [./some_file.txt] 
+/var @models = ["claude-3", "gpt-4", "gemini"]
+/var @prompts = ["Explain X", "Compare Y", "Design Z"]
+
+/exe @query(model, prompt) = run "@model -p '@prompt'"
+/var @results = foreach @query(@models, @prompts)  << 9 results
 ```
 
-### Data Variables
-
-- Store structured data (objects/arrays) using /var
-- Support field access
-```mlld
-/var @user = { "name": "Alice", "id": 123 }
-/var @name = ::User: {{user.name}}::
-```
-
-## Module System & Registry
-
-mlld has a decentralized module system that enables sharing and reusing code across projects.
+## Modules
 
 ### Using Modules
 
-Install and use modules from the registry:
-
 ```bash
-# Install specific modules
-mlld install @alice/strings @company/templates
-
-# Install from lock file
-mlld install
-
-# List installed modules
-mlld ls --verbose
+mlld install @alice/utils @company/tools
 ```
-
-Import in your mlld files:
 
 ```mlld
->> Import from public registry
-/import { format, parse } from @alice/strings
-/import { * } from @company/templates
+/import { formatDate, validate } from @alice/utils
+/import { analyze } from @company/tools
 
->> Modules are cached locally and content-addressed for security
->> Lock files ensure reproducible builds
+/var @report = @analyze(@data) | @validate
 ```
+
+### Private Modules
+
+```bash
+mlld setup  # Interactive setup for GitHub repos
+```
+
+Now `@company/tools` resolves directly from your private GitHub repository.
 
 ### Publishing Modules
 
-Share your mlld code with others:
+```bash
+mlld init my-module.mld.md       # Create module
+mlld publish my-module.mld.md    # Publish to registry
+```
+
+## Not a Programming Language
+
+mlld has no loops, no conditionals, no recursion. That's intentional. Complex logic lives in modules:
+
+```mlld
+/import { retry, parallel, validate } from @mlld/core
+
+/var @results = @parallel(@tasks, {"concurrency": 5})
+```
+
+Your `.mld` files stay readable. Modules handle complexity.
+
+## Examples
+
+### Code Review Workflow
+
+```mlld
+/import { styleGuide } from @company/standards
+/import { githubContext } from @tools/github
+
+/var @changes = run {git diff main..HEAD}
+/var @context = @githubContext()
+
+/exe @review(perspective) = run {
+  claude -p "As a @perspective, review: @changes with context: @context"
+}
+
+/var @reviews = foreach @review([
+  "security expert",
+  "performance engineer", 
+  "API designer"
+])
+
+/output @reviews to "review.md"
+```
+
+### Multi-Model Consensus
+
+```mlld
+/var @question = "What are the tradeoffs of microservices?"
+
+/exe @ask(model) = run "@model -p '@question'"
+/var @responses = foreach @ask(["claude", "gpt-4", "gemini"])
+
+/var @consensus = run {
+  claude -p "Synthesize these viewpoints: @responses"
+}
+
+/show @consensus
+```
+
+## Essential CLI Commands
+
+### Running mlld Files
 
 ```bash
-# Authenticate with GitHub (required for publishing)
-mlld auth login
-
-# Publish a module
-mlld publish my-utils.mld
-
-# Publish as organization
-mlld publish my-utils.mld --org my-company
+mlld file.mld                    # Process file, output to file.md
+mlld file.mld --stdout           # Output to terminal
+mlld file.mld --format xml       # Output as XML
+mlld file.mld --watch            # Auto-rerun on changes
 ```
 
-Every module needs frontmatter metadata:
+### Module Management
 
-```mlld
+```bash
+# Create modules
+mlld init                        # Interactive module creation
+mlld init utils.mld.md           # Create specific module file
+
+# Install modules
+mlld install @alice/utils        # Install specific module
+mlld install                     # Install all from lock file
+mlld ls                          # List installed modules
+
+# Publish modules
+mlld auth login                  # Authenticate with GitHub
+mlld publish my-module.mld.md    # Publish to registry
+mlld publish --private           # Publish to private repo
+```
+
+### Project Configuration
+
+```bash
+# Interactive setup wizard
+mlld setup                       # Configure GitHub repos, aliases, etc.
+
+# Create path aliases
+mlld alias --name lib --path ./src/lib
+mlld alias --name shared --path ../shared --global
+
+# Manage environment variables
+mlld env allow GITHUB_TOKEN API_KEY
+mlld env list                    # Show allowed vars
+```
+
+### Running Scripts
+
+```bash
+# Run scripts from configured directory (default: llm/run/)
+mlld run                         # List available scripts
+mlld run analyze-pr              # Run analyze-pr.mld from script dir
+mlld run data/process            # Run nested scripts
+```
+
+### Development Tools
+
+```bash
+# Analyze dependencies
+mlld add-needs my-module.mld     # Auto-detect and add runtime deps
+
+# Testing
+mlld test                        # Run all tests
+mlld test array                  # Run tests matching pattern
+
+# Language server
+mlld language-server             # Start LSP for editor integration
+```
+
+## Learn More
+
+- [Documentation](docs/)
+- [LLM Reference](llms.txt) - Give this to your AI assistant
+- [Examples](examples/)
+
 ---
-name: my-utils
-description: Helpful utility functions
-author: myusername
-keywords: [utils, text, helpers]
----
 
-/exe @trim(str) = [(echo "@str" | xargs)]
-/exe @uppercase(str) = [(echo "@str" | tr '[:lower:]' '[:upper:]')]
-```
-
-See the [Publishing Modules Guide](docs/publishing-modules.md) for detailed instructions.
-
-### Private Modules & Custom Resolvers
-
-Configure resolvers for private or corporate modules:
-
-```mlld
->> Local filesystem modules
-/import { utils } from @notes/helpers
-
->> Private GitHub repositories  
-/import { internal } from @company/tools
-
->> Custom HTTP endpoints
-/import { api } from @corporate/modules
-```
-
-Configure resolvers in your lock file:
-```json
-{
-  "registries": [
-    {
-      "prefix": "@notes/",
-      "resolver": "local",
-      "config": { "path": "~/Documents/Notes" }
-    },
-    {
-      "prefix": "@company/", 
-      "resolver": "github",
-      "config": {
-        "owner": "company",
-        "repo": "mlld-modules",
-        "token": "${GITHUB_TOKEN}"
-      }
-    }
-  ]
-}
-```
-
-### Security & Caching
-
-- **Content Addressing**: All modules identified by SHA-256 hash
-- **Progressive Trust**: Interactive approval for new modules  
-- **Offline-First**: Everything cached locally for reliability
-- **TTL Control**: Configure cache refresh intervals
-
-```mlld
->> Security options
-/import { trusted } from @company/utils trust always
-/import { external } from @community/parser trust verify
-
->> Cache control  
-/import { live } from @api/data (30m) << Refresh every 30 minutes
-/import { stable } from @alice/lib (static) << Never refresh
-```
-
-## License
-
-[MIT](LICENSE)
+mlld brings software engineering to AI workflows: modularity, versioning, and reproducibility.
