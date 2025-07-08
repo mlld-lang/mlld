@@ -177,6 +177,21 @@ PathStartingWithVariableContext "Path starting with @variable context"
     }
 
 // -------------------------------------------------------------
+// DIRECTIVE BOUNDARY - State reset between directives
+// -------------------------------------------------------------
+
+// This rule is used to reset parser state between directives,
+// particularly important in mlld-run blocks where multiple complex
+// functions can cause state corruption
+DirectiveBoundary "Directive boundary"
+  = &{
+      // Reset parser state between directives to prevent corruption
+      helpers.resetCodeParsingState();
+      helpers.debug('DirectiveBoundary: Parser state reset between directives');
+      return true;
+    }
+
+// -------------------------------------------------------------
 // CONTEXT DETECTION ARCHITECTURE
 // -------------------------------------------------------------
 
@@ -202,4 +217,8 @@ between run.peggy and exec.peggy.
 The PathStartingWithVariableContext predicate helps distinguish between
 paths that start with variables (like @env/config.json) and command
 references, preventing incorrect parsing in text.peggy and similar contexts.
+
+The DirectiveBoundary predicate is used to reset parser state between
+directives, preventing state corruption when parsing multiple complex
+functions in mlld-run blocks.
 */

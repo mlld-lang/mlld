@@ -397,6 +397,8 @@ UnifiedCodeChar
   = '"' chars:DoubleQuoteChar* '"' { return '"' + chars.join('') + '"'; }  // Double quoted strings
   / "'" chars:SingleQuoteChar* "'" { return "'" + chars.join('') + "'"; }  // Single quoted strings
   / '`' chars:BacktickChar* '`' { return '`' + chars.join('') + '`'; }      // Template literals
+  / '/*' chars:(!('*/') c:. { return c; })* '*/' { return '/*' + chars.join('') + '*/'; }  // Multi-line comments
+  / '//' chars:(!('\n') c:. { return c; })* { return '//' + chars.join(''); }  // Single-line comments
   / '{' inner:UnifiedCodeContent '}' { return '{' + inner + '}'; }          // Nested braces
   / !'}' char:. { return char; }                                            // Any other character
 

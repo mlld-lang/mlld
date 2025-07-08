@@ -761,4 +761,88 @@ export const helpers = {
         error.mlldErrorLocation = loc;
         throw error;
     },
+    // Parser State Management for Code Blocks
+    // ----------------------------------------
+    // These functions help prevent state corruption when parsing multiple
+    // complex functions in mlld-run blocks
+    /**
+     * Parser state tracking object
+     * Used to detect and prevent state corruption issues
+     */
+    parserState: {
+        codeBlockDepth: 0,
+        braceDepth: 0,
+        inString: false,
+        stringChar: null,
+        lastDirectiveEndPos: -1,
+        functionCount: 0,
+        maxNestingDepth: 20
+    },
+    /**
+     * Reset parser state between functions
+     * This prevents state corruption when parsing multiple complex functions
+     */
+    resetCodeParsingState() {
+        this.parserState.braceDepth = 0;
+        this.parserState.inString = false;
+        this.parserState.stringChar = null;
+        // Keep track of function count and position for debugging
+        this.parserState.functionCount++;
+        this.debug('Parser state reset', {
+            functionCount: this.parserState.functionCount,
+            lastEndPos: this.parserState.lastDirectiveEndPos
+        });
+    },
+    /**
+     * Get current brace depth for debugging and limits
+     */
+    getBraceDepth() {
+        return this.parserState.braceDepth;
+    },
+    /**
+     * Increment brace depth with overflow checking
+     */
+    incrementBraceDepth() {
+        this.parserState.braceDepth++;
+        if (this.parserState.braceDepth > this.parserState.maxNestingDepth) {
+            this.mlldError(`Code block nesting too deep (${this.parserState.braceDepth} levels). Consider simplifying your function or splitting it into smaller functions.`);
+        }
+    },
+    /**
+     * Decrement brace depth with underflow checking
+     */
+    decrementBraceDepth() {
+        this.parserState.braceDepth--;
+        if (this.parserState.braceDepth < 0) {
+            // This indicates parser state corruption
+            this.debug('WARNING: Brace depth underflow detected', {
+                depth: this.parserState.braceDepth,
+                functionCount: this.parserState.functionCount
+            });
+            // Reset to prevent cascading errors
+            this.parserState.braceDepth = 0;
+        }
+    },
+    /**
+     * Validate parser state consistency
+     * Returns true if state is valid, false if corrupted
+     */
+    validateParserState() {
+        const isValid = this.parserState.braceDepth >= 0 &&
+            this.parserState.braceDepth <= this.parserState.maxNestingDepth;
+        if (!isValid) {
+            this.debug('Parser state validation failed', {
+                braceDepth: this.parserState.braceDepth,
+                inString: this.parserState.inString,
+                functionCount: this.parserState.functionCount
+            });
+        }
+        return isValid;
+    },
+    /**
+     * Mark the end of a directive for state tracking
+     */
+    markDirectiveEnd(pos) {
+        this.parserState.lastDirectiveEndPos = pos;
+    },
 };
