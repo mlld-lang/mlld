@@ -8,13 +8,14 @@ This extension provides rich language support for mlld, a modular prompt scripti
 - `.mlld` and `.mld` files are always treated as mlld
 - `.md` files are automatically detected:
   - Switches to mlld mode only when mlld directives are found
-  - Detection looks for: `@text`, `@data`, `@path`, `@run`, `@exec`, `@add`, or `@import`
+  - Detection looks for: `/var`, `/show`, `/run`, `/exe`, `/path`, `/import`, `/when`, `/output`
   - Shows a notification allowing you to keep it as markdown if preferred
   - Use Command Palette: "mlld: Switch to mlld Mode" to manually switch
 
 ### Syntax Highlighting
-- Full syntax highlighting for all MLLD directives
-- Variable highlighting with `@variableName` and `{{variableName}}` patterns
+- Full syntax highlighting for all mlld directives
+- Variable highlighting with `@variableName` in templates and directives
+- Backtick template syntax with `` `text @variable` ``
 - Embedded code block highlighting (JavaScript, Shell)
 - Comment highlighting with `>>` prefix
 
@@ -31,13 +32,14 @@ This extension provides rich language support for mlld, a modular prompt scripti
 
 ## Supported Directives
 
-- `@text` - Text variable assignment
-- `@data` - Data structures (JSON)
-- `@path` - Path variable assignment
-- `@run` - Command execution
-- `@exec` - Code execution with return value
-- `@add` - Content inclusion and templates
-- `@import` - Import variables from other files
+- `/var` - Variable assignment (text, data, paths)
+- `/show` - Display content to output
+- `/run` - Command execution
+- `/exe` - Define executable commands
+- `/path` - Path manipulation
+- `/import` - Import variables from other files or modules
+- `/when` - Conditional execution
+- `/output` - Direct output to files or streams
 
 ## Extension Settings
 
@@ -46,6 +48,21 @@ This extension contributes the following settings:
 * `mlld.enableAutocomplete`: Enable/disable autocomplete features
 * `mlld.projectPath`: Override @PROJECTPATH detection
 * `mlld.includePaths`: Additional paths for import resolution
+
+## Variable Syntax
+
+- **Create variables**: `/var @name = "value"`
+- **Reference in templates**: `` /show `Hello @name!` ``
+- **Reference in commands**: `/run {echo "@name"}`
+- **Access object fields**: `/show @user.name`
+- **Access array elements**: `/show @scores.0`
+
+## Command Syntax
+
+- **Shell commands**: `/run {echo "hello"}` or `/run "echo hello"`
+- **JavaScript**: `/run js {console.log("hello")}`
+- **Executables**: `/exe @cmd = run {echo "@msg"}`
+- **Comments**: `>> This is a comment`
 
 ## Known Issues
 

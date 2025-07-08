@@ -2,6 +2,13 @@
 
 All notable changes to the "mlld-vscode" extension will be documented in this file.
 
+## [0.4.0] - 2025-01-08
+
+### Changed
+- Updated all documentation to use correct mlld v2 syntax
+- Directives now use `/` prefix instead of `@` (e.g., `/var` instead of `@text`)
+- Updated supported directives list to match current language spec
+
 ## [0.3.0] - 2024-12-17
 
 ### Added
