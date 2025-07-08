@@ -9,16 +9,14 @@ Directives are the core building blocks of mlld. They always start with a `/` sy
 
 ## Available Directives
 
-- [/text](./text.md) - Define text variables
-- [/data](./data.md) - Define structured data variables
-- [/path](./path.md) - Define filesystem path variables
-- [/add](./add.md) - Include content from files, variables, or templates
-- [/run](./run.md) - Execute shell commands and include output
-- [/import](./import.md) - Import variables from other mlld files
-- [/output](./output.md) - Write content to files or streams
-- [/url](./url.md) - Reference remote URLs
-- [/exec](./exec.md) - Create reusable commands and templates
-- [/when](./when.md) - Conditional actions 
+- [/var](./var.md) - Define variables (text, data structures, primitives)
+- [/show](./show.md) - Display content from files, variables, or templates
+- [/run](./run.md) - Execute shell commands and code
+- [/exe](./exe.md) - Create reusable commands, templates, and functions
+- [/import](./import.md) - Import variables from other mlld files or modules
+- [/output](./output.md) - Write content to files, streams, or environment
+- [/when](./when.md) - Conditional logic and routing
+- [/path](./path.md) - Define filesystem path variables 
 
 ## Directive Placement Rules
 

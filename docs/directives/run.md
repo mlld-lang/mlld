@@ -24,8 +24,9 @@ Where:
 - Command references use `@`: `/run @myCommand(arg1, arg2)`
 
 Key points:
-- Single-line commands use double quotes
-- Multi-line commands use braces
+- Single-line shell commands use double quotes: `/run "echo hello"`
+- Shell commands in braces: `/run {echo "hello" | tr a-z A-Z}`
+- Code execution uses language specifier: `/run js {code}`
 - `language` must be one of: `javascript`/`js`, `python`/`py`, or `bash`/`sh`
 - Language is specified **outside** the braces for code execution
 - Variables in commands use `@var` syntax
@@ -37,7 +38,7 @@ The command can be:
 - A literal command: `/run "ls -la"`
 - A command with variables: `/run "echo Hello, @name"`
 - A command with path variables: `/run "cat @docs/guide.md"`
-- A multi-line command: `/run { ls -la && echo "Done" }`
+- A command with pipes: `/run {ls -la | head -5}`
 - A defined command: `/run @listFiles(@path)`
 
 ## Variables in Commands
@@ -94,15 +95,26 @@ The `@run` directive can execute code in different languages by specifying the l
 ```
 
 ### Bash/Shell
-- Parameters are passed as environment variables
+- The `sh` language specifier allows full bash features including `&&`, `||`, and multi-line scripts
+- Regular `/run` commands (without `sh`) only support pipes (`|`)
+- Parameters in `sh` blocks use `$param` syntax (shell variables)
 - Code is executed with `bash -c`
-- Environment variables from the parent process are available
 
 ```mlld
-/run bash {echo "Hello from Bash"}
+# Simple command - use regular run
+/run "echo Hello from shell"
+/run {echo "Hello" | tr a-z A-Z}
+
+# Multi-line or conditional logic - use sh
 /run sh {
-  name="World"
-  echo "Hello, $name!"
+  if [ -f "config.json" ]; then
+    echo "Config found"
+  fi
+}
+
+# With && or || operators - use sh
+/run sh {
+  npm test && npm build && echo "Success!"
 }
 ```
 
@@ -125,12 +137,16 @@ Using path variables:
 /run "ls -la @src"
 ```
 
-Multi-line commands:
+Commands with pipes:
 ```mlld
-/run {
+/run {cat data.txt | grep "pattern" | sort}
+```
+
+Note: For multi-line shell scripts or commands with `&&` or `||`, use the `sh` language specifier:
+```mlld
+/run sh {
   echo "Starting process..."
-  npm install
-  npm test
+  npm install && npm test
   echo "Done!"
 }
 ```

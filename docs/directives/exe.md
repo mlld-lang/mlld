@@ -1,11 +1,11 @@
 ---
 layout: docs.njk
-title: "/exec Directive"
+title: "/exe Directive"
 ---
 
-# /exec Directive
+# /exe Directive
 
-The `/exec` directive creates reusable commands, templates, and functions that can be invoked throughout your mlld document.
+The `/exe` directive creates reusable commands, templates, and functions that can be invoked throughout your mlld document.
 
 ## Syntax
 
@@ -167,7 +167,7 @@ Commands can be used within data structures:
 
 ## Notes
 
-- Exec names must be created with `@` prefix: `/exec @name`
+- Exe names must be created with `@` prefix: `/exe @name`
 - Parameters are passed as-is without shell escaping
 - Be cautious with user input in commands
 - JavaScript code has access to Node.js APIs

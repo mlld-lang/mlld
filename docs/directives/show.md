@@ -1,11 +1,11 @@
 ---
 layout: docs.njk
-title: "/add Directive"
+title: "/show Directive"
 ---
 
-# /add Directive
+# /show Directive
 
-The `/add` directive includes content from external files, variables, or templates into your mlld document.
+The `/show` directive displays content from external files, variables, or templates in your mlld document.
 
 ## Syntax
 
@@ -54,7 +54,7 @@ Extract specific sections from files:
 
 ## Including Variables
 
-Add content from variables:
+Display content from variables:
 
 ```mlld
 /var @greeting = "Hello, world!"
@@ -66,7 +66,7 @@ Add content from variables:
 
 ## Template Content
 
-Add content with variable interpolation:
+Display content with variable interpolation:
 
 ```mlld
 /var @name = "Alice"
