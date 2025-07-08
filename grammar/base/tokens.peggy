@@ -63,5 +63,5 @@ BacktickSequence "Backtick Sequence"
 
 // Reserved directive names that cannot be used as variable names
 ReservedDirective "Reserved Directive Name"
-  = "/data" / "/text" / "/run" / "/add" / "/path" 
-  / "/import" / "/exec" / "/when"
+  = "/var" / "/show" / "/run" / "/exe" / "/path" 
+  / "/import" / "/when" / "/output"

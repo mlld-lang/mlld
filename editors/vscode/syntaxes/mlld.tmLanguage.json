@@ -12,12 +12,12 @@
     },
     {
       "name": "meta.embedded.mlld",
-      "begin": "^(?=@(data|text|run|add|path|import|exec|when|output)\\b)",
+      "begin": "^(?=/(var|show|run|exe|path|import|when|output)\\b)",
       "end": "$",
       "patterns": [
         {
           "name": "keyword.control.directive.mlld",
-          "match": "\\G@(data|text|run|add|path|import|exec|when|output)\\b"
+          "match": "\\G/(var|show|run|exe|path|import|when|output)\\b"
         },
         {
           "name": "comment.line.double-slash.mlld",
@@ -37,8 +37,8 @@
         },
         {
           "name": "string.template.mlld",
-          "begin": "\\[\\[",
-          "end": "\\]\\]",
+          "begin": "::",
+          "end": "::",
           "beginCaptures": {
             "0": {
               "name": "punctuation.definition.template.begin.mlld"
@@ -70,32 +70,6 @@
                   "match": "[^}]+"
                 }
               ]
-            }
-          ]
-        },
-        {
-          "name": "meta.command.mlld",
-          "begin": "\\[\\(",
-          "end": "\\)\\]",
-          "beginCaptures": {
-            "0": {
-              "name": "punctuation.definition.command.begin.mlld"
-            }
-          },
-          "endCaptures": {
-            "0": {
-              "name": "punctuation.definition.command.end.mlld"
-            }
-          },
-          "contentName": "string.unquoted.command.mlld",
-          "patterns": [
-            {
-              "name": "variable.language.reserved.mlld",
-              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b"
-            },
-            {
-              "name": "variable.other.mlld",
-              "match": "@\\w+"
             }
           ]
         },
@@ -183,8 +157,42 @@
           ]
         },
         {
+          "name": "meta.command.braces.mlld",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.command.begin.mlld"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.command.end.mlld"
+            }
+          },
+          "contentName": "string.unquoted.command.mlld",
+          "patterns": [
+            {
+              "name": "keyword.other.language.mlld",
+              "match": "\\b(javascript|js|node|nodejs|python|py|bash|sh)\\b"
+            },
+            {
+              "name": "variable.language.reserved.mlld",
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b"
+            },
+            {
+              "name": "variable.other.mlld",
+              "match": "@\\w+"
+            }
+          ]
+        },
+        {
           "name": "string.quoted.double.mlld",
           "match": "\"[^\"]*\""
+        },
+        {
+          "name": "string.quoted.single.mlld",
+          "match": "'[^']*'"
         },
         {
           "name": "keyword.operator.logical.mlld",

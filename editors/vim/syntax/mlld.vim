@@ -1,7 +1,7 @@
 " Vim syntax file for Mlld
 " Language: Mlld
 " Maintainer: Auto-generated
-" Latest Revision: 2025-06-17T12:12:10.557Z
+" Latest Revision: 2025-07-08T16:43:02.839Z
 
 if exists("b:current_syntax")
   finish
@@ -15,7 +15,7 @@ runtime! syntax/markdown.vim
 syn match mlldComment "\(>>\|<<\).*$"
 
 " Directives - must be at start of line
-syn match mlldDirective "^@\(data\|text\|run\|add\|path\|import\|exec\|when\|output\)\>"
+syn match mlldDirective "^/\(var\|show\|run\|exe\|path\|import\|when\|output\)\>"
 
 " Reserved variables
 syn match mlldReservedVar "@\(INPUT\|TIME\|PROJECTPATH\|STDIN\|input\|time\|projectpath\|stdin\)\>"
@@ -24,12 +24,18 @@ syn match mlldReservedVar "@\."
 " Regular variables (lower priority than directives and reserved)
 syn match mlldVariable "@\w\+"
 
-" Template blocks
-syn region mlldTemplate start="\[\[" end="\]\]" contains=mlldTemplateVar
+" Template blocks (double-colon syntax)
+syn region mlldTemplate start="::" end="::" contains=mlldTemplateVar
 syn region mlldTemplateVar start="{{" end="}}" contained
 
-" Command blocks
-syn region mlldCommand start="\[(" end=")\]" contains=mlldVariable,mlldReservedVar
+" Backtick templates
+syn region mlldBacktickTemplate start="`" end="`" contains=mlldVariable,mlldReservedVar
+
+" Command blocks (braces)
+syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReservedVar,mlldLanguageKeyword
+
+" Language keywords
+syn match mlldLanguageKeyword "\<\(js\|sh\|node\|python\)\>"
 
 " Paths
 syn region mlldPath start="\[" end="\]" contains=mlldURL,mlldVariable,mlldReservedVar
@@ -59,7 +65,9 @@ hi def link mlldReservedVar Constant
 hi def link mlldVariable Identifier
 hi def link mlldTemplate String
 hi def link mlldTemplateVar Special
+hi def link mlldBacktickTemplate String
 hi def link mlldCommand String
+hi def link mlldLanguageKeyword Type
 hi def link mlldPath String
 hi def link mlldURL Underlined
 hi def link mlldString String

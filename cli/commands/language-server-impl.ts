@@ -344,6 +344,23 @@ export async function startLanguageServer(): Promise<void> {
         detail: 'Variable name prefix',
         insertText: '@'
       });
+    } else if (line.match(/\/run\s+$/)) {
+      // After '/run ' - suggest language keywords or quote/brace
+      completions.push(...getLanguageCompletions());
+      completions.push({
+        label: '"',
+        kind: CompletionItemKind.Operator,
+        detail: 'Quote for simple shell command',
+        insertText: '"$1"',
+        insertTextFormat: 2 // Snippet
+      });
+      completions.push({
+        label: '{',
+        kind: CompletionItemKind.Operator,
+        detail: 'Braces for shell command',
+        insertText: '{$1}',
+        insertTextFormat: 2 // Snippet
+      });
     } else if (line.match(/\/(\w*)$/)) {
       // Partial directive
       const partial = line.match(/\/(\w*)$/)?.[1] || '';
@@ -377,6 +394,36 @@ export async function startLanguageServer(): Promise<void> {
     } else if (line.match(/foreach\s+@\w+\s*\($/)) {
       // After 'foreach @command(' - suggest array variables
       completions.push(...await getArrayVariableCompletions(document));
+    } else if (line.match(/\/var\s+@\w+\s*=\s*$/)) {
+      // After '/var @name = ' - suggest language keywords and value types
+      completions.push(...getLanguageCompletions());
+      completions.push({
+        label: 'run',
+        kind: CompletionItemKind.Keyword,
+        detail: 'Execute command and capture output',
+        insertText: 'run {$1}'
+      });
+      completions.push({
+        label: '"',
+        kind: CompletionItemKind.Operator,
+        detail: 'String literal',
+        insertText: '"$1"',
+        insertTextFormat: 2
+      });
+      completions.push({
+        label: '`',
+        kind: CompletionItemKind.Operator,
+        detail: 'Backtick template with @variable interpolation',
+        insertText: '`$1`',
+        insertTextFormat: 2
+      });
+      completions.push({
+        label: '::',
+        kind: CompletionItemKind.Operator,
+        detail: 'Double-colon template with {{variable}} interpolation',
+        insertText: '::$1::',
+        insertTextFormat: 2
+      });
     } else if (line.match(/\/var\s+@\w+\s*=\s*foreach/)) {
       // In a data foreach context - suggest parameterized definitions
       completions.push(...await getParameterizedDefinitions(document));
@@ -402,6 +449,23 @@ export async function startLanguageServer(): Promise<void> {
       kind: CompletionItemKind.Keyword,
       detail: d.desc,
       insertText: d.name
+    }));
+  }
+
+  function getLanguageCompletions(): CompletionItem[] {
+    const languages = [
+      { name: 'js', desc: 'JavaScript code execution' },
+      { name: 'sh', desc: 'Shell script with full bash features' },
+      { name: 'node', desc: 'Node.js execution' },
+      { name: 'python', desc: 'Python code execution' }
+    ];
+
+    return languages.map(lang => ({
+      label: lang.name,
+      kind: CompletionItemKind.Keyword,
+      detail: lang.desc,
+      insertText: `${lang.name} {$1}`,
+      insertTextFormat: 2 // Snippet
     }));
   }
 

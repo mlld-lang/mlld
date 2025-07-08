@@ -13,14 +13,16 @@ syn region mlldRunContent start="." end="\ze^\s*```\s*$" contained contains=mlld
 
 " Define our syntax patterns directly
 syn match mlldComment "\(>>\|<<\).*$"
-syn match mlldDirective "^@\(data\|text\|run\|add\|path\|import\|exec\|when\|output\)\>"
+syn match mlldDirective "^/\(var\|show\|run\|exe\|path\|import\|when\|output\)\>"
 syn match mlldReserved "@\(INPUT\|TIME\|PROJECTPATH\|STDIN\|input\|time\|projectpath\|stdin\)\>"
 syn match mlldReserved "@\."
 syn match mlldVariable "@\w\+"
 syn region mlldString start='"' end='"'
-syn region mlldTemplate start="\[\[" end="\]\]" contains=mlldTemplateVar
+syn region mlldTemplate start="::" end="::" contains=mlldTemplateVar
 syn match mlldTemplateVar "{{[^}]*}}" contained
-syn region mlldCommand start="\[(" end=")\]"
+syn region mlldBacktickTemplate start="`" end="`" contains=mlldVariable,mlldReserved
+syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReserved,mlldLanguageKeyword
+syn match mlldLanguageKeyword "\<\(js\|sh\|node\|python\)\>"
 
 " Force our colors
 hi mlldComment ctermfg=242 guifg=#6c6c6c
@@ -30,6 +32,8 @@ hi mlldVariable ctermfg=117 guifg=#87d7ff
 hi mlldString ctermfg=150 guifg=#afd787
 hi mlldTemplate ctermfg=150 guifg=#afd787
 hi mlldTemplateVar ctermfg=214 guifg=#ffaf00
+hi mlldBacktickTemplate ctermfg=150 guifg=#afd787
 hi mlldCommand ctermfg=150 guifg=#afd787
+hi mlldLanguageKeyword ctermfg=204 guifg=#ff5f87
 hi mlldRunCodeBlock ctermfg=242 guifg=#6c6c6c
 hi mlldRunContent ctermfg=255 guifg=#ffffff

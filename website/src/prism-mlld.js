@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2025-06-17T12:12:10.558Z
+// Generated from grammar at 2025-07-08T16:43:02.841Z
 
 const Prism = require('prismjs');
 
@@ -9,11 +9,11 @@ Prism.languages.mlld = {
     greedy: true
   },
   'directive': {
-    pattern: /@(data|text|run|add|path|import|exec|when|output)\b/,
+    pattern: //(var|show|run|exe|path|import|when|output)\b/,
     alias: 'keyword'
   },
   'template-block': {
-    pattern: /\[\[([^\]\]]|\](?!\]))*\]\]/,
+    pattern: /::[^:]+::/,
     greedy: true,
     inside: {
       'template-variable': {
