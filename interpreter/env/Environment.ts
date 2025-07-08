@@ -79,7 +79,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // Output management properties
   private outputOptions: CommandExecutionOptions = {
-    showProgress: true,
+    showProgress: false,  // Default to false to avoid debug output in results
     maxOutputLines: 50,
     errorBehavior: 'continue',
     timeout: 30000,

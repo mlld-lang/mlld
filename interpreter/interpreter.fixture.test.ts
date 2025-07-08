@@ -772,7 +772,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             basePath,
             urlConfig,
             stdinContent,
-            useMarkdownFormatter: false // Disable prettier for tests to maintain exact output
+            useMarkdownFormatter: false, // Disable prettier for tests to maintain exact output
+            outputOptions: {
+              showProgress: false // Disable progress output in tests
+            }
           });
           
           if (isValidFixture && !isSmokeTest) {

@@ -106,12 +106,13 @@ export class NodeShadowEnvironment {
       throw new Error('Node shadow environment error: Cannot execute after cleanup');
     }
     
-    // Track console.log output if requested
+    // Track console.log output
     let lastConsoleLogValue: any = undefined;
+    let consoleOutput: string[] = [];
     const originalLog = this.context.console.log;
     
     if (captureConsoleLog) {
-      // Override console.log to capture the last logged value
+      // Override console.log to capture the last logged value for return
       this.context.console.log = (...args: any[]) => {
         // Call original console.log
         originalLog.apply(this.context.console, args);
@@ -122,6 +123,27 @@ export class NodeShadowEnvironment {
         } else if (args.length > 1) {
           lastConsoleLogValue = args;
         }
+      };
+    } else {
+      // For /run directives, capture console output as strings
+      this.context.console.log = (...args: any[]) => {
+        // Convert all arguments to strings and join with spaces
+        const line = args.map(arg => {
+          if (typeof arg === 'object') {
+            try {
+              return JSON.stringify(arg);
+            } catch {
+              return String(arg);
+            }
+          }
+          return String(arg);
+        }).join(' ');
+        
+        // Add to output buffer
+        consoleOutput.push(line);
+        
+        // Don't call original console.log to avoid double output
+        // The output will be returned as the result instead
       };
     }
     
@@ -160,9 +182,18 @@ export class NodeShadowEnvironment {
         }
       }
       
-      // If there's an explicit return value, use it
-      // Otherwise, if console.log was called and we're capturing, use the last logged value
-      return result !== undefined ? result : (captureConsoleLog ? lastConsoleLogValue : undefined);
+      // If we're capturing console.log (for /var and /exe directives):
+      //   - Return the explicit result if available
+      //   - Otherwise return the last console.log value
+      // If we're NOT capturing console.log (for /run directives):
+      //   - Return the console output as a string
+      if (captureConsoleLog) {
+        return result !== undefined ? result : lastConsoleLogValue;
+      } else {
+        // For /run directives, return console output as string
+        // Join lines with newlines
+        return consoleOutput.length > 0 ? consoleOutput.join('\n') : undefined;
+      }
     } catch (error) {
       // Restore original console.log on error if we modified it
       if (captureConsoleLog) {
