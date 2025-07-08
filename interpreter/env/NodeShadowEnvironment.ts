@@ -1,5 +1,7 @@
 import * as vm from 'vm';
 import * as path from 'path';
+import * as fs from 'fs';
+import Module from 'module';
 
 /**
  * Node.js shadow environment using VM module for module-level isolation.
@@ -18,6 +20,9 @@ export class NodeShadowEnvironment {
     this.basePath = basePath;
     this.currentFile = currentFile;
     this.shadowFunctions = new Map();
+    
+    // Create custom require function with proper module resolution
+    const customRequire = this.createCustomRequire();
     
     // Create wrapped timer functions that track active timers
     const wrappedSetTimeout = (callback: Function, delay?: number, ...args: any[]) => {
@@ -51,8 +56,8 @@ export class NodeShadowEnvironment {
       console,
       process,
       
-      // Module system
-      require,
+      // Module system with custom require
+      require: customRequire,
       module,
       exports,
       
@@ -202,5 +207,94 @@ export class NodeShadowEnvironment {
     
     // Replace the context with an empty one to break all references
     this.context = vm.createContext({});
+  }
+  
+  /**
+   * Create a custom require function that includes mlld's dependencies
+   */
+  private createCustomRequire(): NodeRequire {
+    const currentDir = this.currentFile ? path.dirname(this.currentFile) : this.basePath;
+    
+    // Build module paths including mlld's node_modules
+    const modulePaths = this.buildModulePaths(currentDir);
+    
+    // Create a new Module instance for proper require context
+    const dummyModule = new Module(this.currentFile || 'mlld-shadow-env', null);
+    dummyModule.filename = this.currentFile || path.join(currentDir, 'mlld-shadow-env.js');
+    dummyModule.paths = modulePaths;
+    
+    // Return the require function bound to this module
+    return dummyModule.require.bind(dummyModule);
+  }
+  
+  /**
+   * Build module paths including mlld's dependencies
+   */
+  private buildModulePaths(fromDir: string): string[] {
+    const paths: string[] = [];
+    
+    // Add all parent node_modules directories from the current location
+    let currentPath = fromDir;
+    while (currentPath !== path.dirname(currentPath)) {
+      paths.push(path.join(currentPath, 'node_modules'));
+      currentPath = path.dirname(currentPath);
+    }
+    
+    // Determine mlld's node_modules path
+    let mlldNodeModules: string | undefined;
+    
+    // First check if we're in development (mlld source directory)
+    const devNodeModules = path.join(process.cwd(), 'node_modules');
+    if (fs.existsSync(devNodeModules) && fs.existsSync(path.join(process.cwd(), 'package.json'))) {
+      try {
+        const packageJson = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'package.json'), 'utf8'));
+        if (packageJson.name === 'mlld') {
+          mlldNodeModules = devNodeModules;
+        }
+      } catch {
+        // Ignore parse errors
+      }
+    }
+    
+    // If not in dev, try to find mlld's installation directory
+    if (!mlldNodeModules) {
+      try {
+        // Try to resolve mlld's package.json location
+        const mlldPath = require.resolve('mlld/package.json');
+        mlldNodeModules = path.join(path.dirname(mlldPath), 'node_modules');
+      } catch {
+        // If that fails, try common global install locations
+        const possiblePaths = [
+          '/opt/homebrew/lib/node_modules/mlld/node_modules',
+          '/usr/local/lib/node_modules/mlld/node_modules',
+          '/usr/lib/node_modules/mlld/node_modules',
+          path.join(process.env.HOME || '', '.npm-global/lib/node_modules/mlld/node_modules')
+        ];
+        
+        for (const p of possiblePaths) {
+          if (fs.existsSync(p)) {
+            mlldNodeModules = p;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Add mlld's node_modules if found and not already in paths
+    if (mlldNodeModules && !paths.includes(mlldNodeModules)) {
+      paths.push(mlldNodeModules);
+    }
+    
+    // Also add global node_modules paths
+    if (process.env.NODE_PATH) {
+      const globalPaths = process.env.NODE_PATH.split(path.delimiter);
+      for (const p of globalPaths) {
+        if (!paths.includes(p)) {
+          paths.push(p);
+        }
+      }
+    }
+    
+    return paths;
   }
 }

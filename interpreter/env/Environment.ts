@@ -306,6 +306,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       },
       nodeShadowProvider: {
         getNodeShadowEnv: () => this.getNodeShadowEnv(),
+        getOrCreateNodeShadowEnv: () => this.getOrCreateNodeShadowEnv(),
         getCurrentFilePath: () => this.getCurrentFilePath()
       },
       variableProvider: {
@@ -719,6 +720,31 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    */
   getNodeShadowEnv(): NodeShadowEnvironment | undefined {
     return this.nodeShadowEnv || this.parent?.getNodeShadowEnv();
+  }
+  
+  /**
+   * Get or create Node shadow environment instance
+   * @returns NodeShadowEnvironment instance (always creates one if needed)
+   */
+  getOrCreateNodeShadowEnv(): NodeShadowEnvironment {
+    // Check if we already have one
+    if (this.nodeShadowEnv) {
+      return this.nodeShadowEnv;
+    }
+    
+    // Check parent environments
+    const parentShadowEnv = this.parent?.getNodeShadowEnv();
+    if (parentShadowEnv) {
+      return parentShadowEnv;
+    }
+    
+    // Create a new one for this environment
+    this.nodeShadowEnv = new NodeShadowEnvironment(
+      this.basePath,
+      this.currentFilePath
+    );
+    
+    return this.nodeShadowEnv;
   }
   
   // --- Capabilities ---

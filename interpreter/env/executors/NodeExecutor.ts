@@ -14,6 +14,11 @@ export interface NodeShadowEnvironmentProvider {
   getNodeShadowEnv(): NodeShadowEnvironment | undefined;
   
   /**
+   * Get or create Node.js shadow environment instance
+   */
+  getOrCreateNodeShadowEnv(): NodeShadowEnvironment;
+  
+  /**
    * Get current file path for determining execution directory
    */
   getCurrentFilePath(): string | undefined;
@@ -57,35 +62,28 @@ export class NodeExecutor extends BaseCommandExecutor {
     const startTime = Date.now();
 
     try {
-      // Check if we have a Node shadow environment
-      const nodeShadowEnv = this.nodeShadowProvider.getNodeShadowEnv();
+      // Always use shadow environment for Node.js execution
+      const nodeShadowEnv = this.nodeShadowProvider.getOrCreateNodeShadowEnv();
       
-      if (nodeShadowEnv) {
-        
-        // Use shadow environment with VM
-        const result = await nodeShadowEnv.execute(code, params);
-        
-        // Format result (same as subprocess version)
-        let output = '';
-        if (result !== undefined) {
-          if (typeof result === 'object') {
-            output = JSON.stringify(result);
-          } else {
-            output = String(result);
-          }
+      // Use shadow environment with VM
+      const result = await nodeShadowEnv.execute(code, params);
+      
+      // Format result (same as subprocess version)
+      let output = '';
+      if (result !== undefined) {
+        if (typeof result === 'object') {
+          output = JSON.stringify(result);
+        } else {
+          output = String(result);
         }
-        
-        const duration = Date.now() - startTime;
-        return {
-          output,
-          duration,
-          exitCode: 0
-        };
       }
       
-      
-      // Fall back to subprocess execution if no shadow environment
-      return await this.executeNodeSubprocess(code, params);
+      const duration = Date.now() - startTime;
+      return {
+        output,
+        duration,
+        exitCode: 0
+      };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
