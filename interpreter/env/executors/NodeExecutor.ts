@@ -65,8 +65,12 @@ export class NodeExecutor extends BaseCommandExecutor {
       // Always use shadow environment for Node.js execution
       const nodeShadowEnv = this.nodeShadowProvider.getOrCreateNodeShadowEnv();
       
+      // Determine if we should capture console.log based on directive type
+      // Only capture for 'exe' and 'var' directives, not for 'run'
+      const captureConsoleLog = context?.directiveType !== 'run';
+      
       // Use shadow environment with VM
-      const result = await nodeShadowEnv.execute(code, params);
+      const result = await nodeShadowEnv.execute(code, params, captureConsoleLog);
       
       // Format result (same as subprocess version)
       let output = '';

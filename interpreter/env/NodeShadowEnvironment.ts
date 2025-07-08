@@ -100,10 +100,29 @@ export class NodeShadowEnvironment {
   /**
    * Execute code in the shadow environment with optional parameters
    */
-  async execute(code: string, params?: Record<string, any>): Promise<any> {
+  async execute(code: string, params?: Record<string, any>, captureConsoleLog: boolean = true): Promise<any> {
     // Check if cleanup has been called
     if (this.isCleaningUp) {
       throw new Error('Node shadow environment error: Cannot execute after cleanup');
+    }
+    
+    // Track console.log output if requested
+    let lastConsoleLogValue: any = undefined;
+    const originalLog = this.context.console.log;
+    
+    if (captureConsoleLog) {
+      // Override console.log to capture the last logged value
+      this.context.console.log = (...args: any[]) => {
+        // Call original console.log
+        originalLog.apply(this.context.console, args);
+        
+        // Capture the last value (single arg) or array (multiple args)
+        if (args.length === 1) {
+          lastConsoleLogValue = args[0];
+        } else if (args.length > 1) {
+          lastConsoleLogValue = args;
+        }
+      };
     }
     
     // Add parameters to the existing context
@@ -129,6 +148,11 @@ export class NodeShadowEnvironment {
       
       const result = await script.runInContext(this.context);
       
+      // Restore original console.log if we modified it
+      if (captureConsoleLog) {
+        this.context.console.log = originalLog;
+      }
+      
       // Clean up parameters from context after execution
       if (params) {
         for (const key of Object.keys(params)) {
@@ -136,8 +160,15 @@ export class NodeShadowEnvironment {
         }
       }
       
-      return result;
+      // If there's an explicit return value, use it
+      // Otherwise, if console.log was called and we're capturing, use the last logged value
+      return result !== undefined ? result : (captureConsoleLog ? lastConsoleLogValue : undefined);
     } catch (error) {
+      // Restore original console.log on error if we modified it
+      if (captureConsoleLog) {
+        this.context.console.log = originalLog;
+      }
+      
       // Clean up parameters even on error
       if (params) {
         for (const key of Object.keys(params)) {
