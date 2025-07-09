@@ -629,6 +629,44 @@ export async function evaluateShow(
   return { value: content, env };
 }
 
+/**
+ * Apply header transformation to content
+ * Supports three cases:
+ * 1. Just header level: "###" -> change level only
+ * 2. Just text: "New Title" -> keep original level, replace text
+ * 3. Full header: "### New Title" -> replace entire line
+ */
+export function applyHeaderTransform(content: string, newHeader: string): string {
+  const lines = content.split('\n');
+  if (lines.length === 0) return newHeader;
+  
+  // Check if first line is a markdown header
+  if (lines[0].match(/^#+\s/)) {
+    const newHeaderTrimmed = newHeader.trim();
+    const headerMatch = newHeaderTrimmed.match(/^(#+)(\s+(.*))?$/);
+    
+    if (headerMatch) {
+      if (!headerMatch[3]) {
+        // Case 1: Just header level
+        const originalText = lines[0].replace(/^#+\s*/, '');
+        lines[0] = `${headerMatch[1]} ${originalText}`;
+      } else {
+        // Case 3: Full replacement
+        lines[0] = newHeaderTrimmed;
+      }
+    } else {
+      // Case 2: Just text, preserve original level
+      const originalLevel = lines[0].match(/^(#+)\s/)?.[1] || '#';
+      lines[0] = `${originalLevel} ${newHeaderTrimmed}`;
+    }
+  } else {
+    // No header found, prepend the new header
+    lines.unshift(newHeader);
+  }
+  
+  return lines.join('\n');
+}
+
 // We'll use llmxml for section extraction once it's properly set up
 // For now, keeping the basic implementation
 /**

@@ -45,6 +45,15 @@ SlashVar "var directive"
         processedValue = [value.value];
         metaInfo.inferredType = 'reference';
       }
+      // Handle variable references with tail modifiers
+      else if (value && value.type === 'VariableReferenceWithTail') {
+        processedValue = [value.variable];
+        metaInfo.inferredType = 'reference';
+        // Merge the withClause from the variable reference
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
+      }
       // Handle nested directives
       else if (value && value.type === 'nestedDirective') {
         processedValue = [value.directive];

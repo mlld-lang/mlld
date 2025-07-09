@@ -8,12 +8,14 @@ TailModifiers "tail modifiers"
         return value; // Already an object
       } else if (keyword === "|") {
         return { pipeline: value };
+      } else if (keyword === "as") {
+        return { asSection: value };
       } else {
         return { [keyword]: value };
       }
     }
 
-TailKeyword = "trust" / "pipeline" / "|" / "needs" / "with"
+TailKeyword = "trust" / "pipeline" / "|" / "needs" / "with" / "as"
 
 TailValue
   = "{" _ props:WithProperties _ "}" { 
@@ -30,6 +32,7 @@ TailValue
   / transformers:PipelineShorthand { return transformers; }  // for '|'
   / level:TrustLevel { return level; }                       // for 'trust'
   / deps:NeedsObject { return deps; }                        // for 'needs'
+  / title:LiteralContent { return title; }                   // for 'as'
 
 PipelineShorthand
   = first:PipelineCommand rest:(HWS &{ 

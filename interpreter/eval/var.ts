@@ -5,6 +5,7 @@ import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { astLocationToSourceLocation } from '@core/types';
 import { logger } from '@core/utils/logger';
+import { applyHeaderTransform } from './show';
 import { 
   Variable,
   VariableSource,
@@ -235,6 +236,12 @@ export async function evaluateVar(
     } catch (error) {
       // Fallback to basic extraction
       resolvedValue = extractSection(fileContent, sectionName);
+    }
+    
+    // Check if we have an asSection modifier in the withClause
+    if (directive.values?.withClause?.asSection) {
+      const newHeader = await interpolate(directive.values.withClause.asSection, env);
+      resolvedValue = applyHeaderTransform(resolvedValue, newHeader);
     }
     
   } else if (valueNode.type === 'path') {
