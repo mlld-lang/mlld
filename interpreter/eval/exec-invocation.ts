@@ -5,7 +5,7 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable } from '@core/types/executable';
 import { interpolate, resolveVariableValue } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
+import { isExecutableVariable, createSimpleTextVariable, createObjectVariable, createArrayVariable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError } from '@core/errors';
 import { logger } from '@core/utils/logger';
@@ -263,23 +263,65 @@ export async function evaluateExecInvocation(
   // Bind evaluated arguments to parameters
   for (let i = 0; i < params.length; i++) {
     const paramName = params[i];
+    const argValue = evaluatedArgs[i]; // Use the preserved type value
     const argStringValue = evaluatedArgStrings[i];
     
-    if (argStringValue !== undefined) {
-      const paramVar = createSimpleTextVariable(
-        paramName, 
-        argStringValue,
-        {
-          directive: 'var',
-          syntax: 'quoted',
-          hasInterpolation: false,
-          isMultiLine: false
-        },
-        {
-          isSystem: true, // Mark as system variable to bypass reserved name check
-          isParameter: true
-        }
-      );
+    if (argValue !== undefined) {
+      let paramVar;
+      
+      // Create appropriate variable type based on actual data
+      if (typeof argValue === 'object' && argValue !== null && !Array.isArray(argValue)) {
+        // Object type - preserve structure
+        paramVar = createObjectVariable(
+          paramName,
+          argValue,
+          true, // isComplex = true for objects from parameters
+          {
+            directive: 'var',
+            syntax: 'object',
+            hasInterpolation: false,
+            isMultiLine: false
+          },
+          {
+            isSystem: true,
+            isParameter: true
+          }
+        );
+      } else if (Array.isArray(argValue)) {
+        // Array type - preserve structure
+        paramVar = createArrayVariable(
+          paramName,
+          argValue,
+          true, // isComplex = true for arrays from parameters
+          {
+            directive: 'var',
+            syntax: 'array',
+            hasInterpolation: false,
+            isMultiLine: false
+          },
+          {
+            isSystem: true,
+            isParameter: true
+          }
+        );
+      } else {
+        // Primitive types - use string representation
+        paramVar = createSimpleTextVariable(
+          paramName, 
+          argStringValue,
+          {
+            directive: 'var',
+            syntax: 'quoted',
+            hasInterpolation: false,
+            isMultiLine: false
+          },
+          {
+            isSystem: true,
+            isParameter: true
+          }
+        );
+      }
+      
       execEnv.setParameterVariable(paramName, paramVar);
     }
   }

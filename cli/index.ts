@@ -86,7 +86,7 @@ export interface CLIOptions {
   // Blank line normalization
   noNormalizeBlankLines?: boolean;
   // Development mode
-  dev?: boolean;
+  devMode?: boolean;
   // Disable prettier formatting
   noFormat?: boolean;
   // Error capture for pattern development

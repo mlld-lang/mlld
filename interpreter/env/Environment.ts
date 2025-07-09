@@ -1011,11 +1011,20 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   /**
    * Set development mode flag
    */
-  setDevMode(devMode: boolean): void {
+  async setDevMode(devMode: boolean): Promise<void> {
     this.devMode = devMode;
     // Pass to resolver manager if it exists
     if (this.resolverManager) {
       this.resolverManager.setDevMode(devMode);
+      
+      // Initialize dev mode prefixes if enabling
+      if (devMode) {
+        // Check for local modules directory
+        const localModulePath = this.pathService.join(this.basePath, 'llm', 'modules');
+        if (await this.fileSystem.exists(localModulePath)) {
+          await this.resolverManager.initializeDevMode(localModulePath);
+        }
+      }
     }
   }
   

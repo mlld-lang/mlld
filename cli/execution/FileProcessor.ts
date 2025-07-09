@@ -153,7 +153,7 @@ export class FileProcessor {
       returnEnvironment: true,
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
-      devMode: cliOptions.dev,
+      devMode: cliOptions.devMode,
       enableTrace: true,
       useMarkdownFormatter: !cliOptions.noFormat,
       captureErrors: cliOptions.captureErrors

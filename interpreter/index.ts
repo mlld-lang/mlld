@@ -229,7 +229,7 @@ export async function interpret(
   
   // Set dev mode if provided
   if (options.devMode) {
-    env.setDevMode(options.devMode);
+    await env.setDevMode(options.devMode);
   }
   
   // Set trace enabled (default: true)

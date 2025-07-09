@@ -5,6 +5,28 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc3]
+
+### Added
+- **Dev Mode**: Local module development support with automatic prefix mapping
+  - `mlld mode dev` - Enable dev mode (persists in lock file)
+  - `mlld dev status` - Show current mode and detected local modules
+  - `mlld dev list` - List all local modules with their publish names
+  - `--dev` flag for one-time dev mode override
+  - `MLLD_DEV=true` environment variable support
+  - Automatically maps `@author/module` imports to local files in `llm/modules/`
+- **Mode Command**: Set mlld execution mode
+  - `mlld mode dev/development` - Enable development mode
+  - `mlld mode prod/production` - Enable production mode
+  - `mlld mode user` - Default user mode
+  - `mlld mode clear/reset` - Remove mode setting (defaults to user)
+  - Mode stored in `mlld.lock.json` under `config.mode`
+  - Future extensibility for security modes with different permissions
+
+### Fixed
+- Duplicate `--dev` case clause in ArgumentParser
+- Property name consistency (`dev` vs `devMode`) across CLI interfaces
+
 ## [2.0.0]
 
 Represents an overhaul and consolidation of all syntax. 

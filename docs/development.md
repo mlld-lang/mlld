@@ -60,6 +60,41 @@ mlld data-processor.mld.md --stdout | jq .
 mlld my-module.mld.md --stdout && mlld my-module.mld.md -o output.md
 ```
 
+### Dev Mode for Local Module Development
+
+When developing modules locally, use dev mode to test with published module names:
+
+```bash
+# Enable dev mode in lock file (persists across sessions)
+mlld mode dev
+
+# Or use CLI flag for one-time use
+mlld my-script.mld --dev
+
+# Or set environment variable
+export MLLD_DEV=true
+```
+
+In dev mode, imports like `@author/module` automatically resolve to local files in `llm/modules/`. This lets you:
+- Test modules before publishing
+- Use the same import syntax as published modules
+- Develop multiple modules that depend on each other
+
+Check current mode and detected modules:
+```bash
+mlld dev status
+mlld dev list
+```
+
+Manage modes:
+```bash
+mlld mode dev          # Enable development mode
+mlld mode prod         # Enable production mode  
+mlld mode user         # Default user mode
+mlld mode clear        # Remove mode setting (same as user)
+mlld mode reset        # Reset to default (same as clear)
+```
+
 ### Testing Pipeline Formats
 
 When developing functions for use in pipelines, test with different formats:

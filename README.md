@@ -1,274 +1,239 @@
-# mlld (pre-release)
+Running llm/run/build.mld...
 
-mlld is a modular prompt scripting language, bringing software engineering to LLM workflows: modularity, versioning, and reproducibility.
+# mlld Standard Library Modules
 
-I still consider it 'early', but this isn't a slapped together idea. I've been working on it nearly every single day for 6 months straight. It has tools for writing tests and a public/private module system.
+Standard library modules for the mlld prompt scripting language.
 
-[Give this to your LLM](https://mlld.ai/llms.txt)
+## Available Modules
 
-## Installation
+### mlld-dev/ai
 
-```bash
-npm install -g mlld
-```
+See full docs: [ai](./llm/modules/ai.mld.md#docs)
 
-or just run it with `npx mlld`
-
-## What is mlld for?
-
-- makes context and prompt engineering multiplayer and git-versionable
-- turns markdown documents into subsection-addressable modules
-- public and private modules for prompts and processing
-- complex chaining and filtering of LLM calls
-- abstract out processing complexity in modules, keep things readable
-- get a better handle on the explosion of llm workflow tool cruft
-
-## Here's a simple example
-
-Use mlld to create a daily standup update based on your recent activity:
+Easy AI integration for your mlld scripts:
 
 ```mlld
-/var @commits = run {git log --since="yesterday"}
-/var @prs = run {gh pr list --json title,url,createdAt}
+/import { claude, llm, codex, gemini } from @mlld/ai
 
-/exe @claude(request) = run {claude -p "@request"}
-/exe @formatPRs(items) = js {
-  return items.map(pr => `- PR: ${pr.title} (${pr.url})`).join('\n');
-}
+/var @response = @claude.ask("What's the capital of France?")
+/show `Claude says: @response`
 
-/var @prompt = `
-  Write a standup update in markdown summarizing the work I did 
-  yesterday based on the following commits and PRs.
-
-  ## Commits:
-  @commits
-
-  ## PRs:
-  @formatPRs(@prs)
-`
-/show @claude(@prompt)
+/var @answer = @llm.ask("You are a helpful assistant", "Explain quantum computing in one sentence")
+/show `LLM says: @answer`
 ```
 
-## Installation
+### mlld/array
 
-```bash
-npm install -g mlld
-```
+See full docs: [array](./llm/modules/array.mld.md#docs)
 
-## Why?
-
-**Context engineering** - Compose prompts from multiple sources instead of mega-prompts or lots of legwork 
-**Pipelines** - Chain LLM calls with `|` for iterative refinement  
-**Modules** - Share and reuse workflows like npm packages 
-**Reproducible** - Lock files ensure workflows run identically over time
-
-## Quick Start
-
-### 1. Basic Syntax
+Process data arrays with powerful operations:
 
 ```mlld
-/var @name = "Alice"                    # Create variable
-/show `Hello @name!`                    # Display output
-/run {echo "System: @name logged in"}   # Run commands
-```
+/import { filter, sortBy, pluck, sum, groupBy } from @mlld/array
 
-Only `/show`, `/run`, and `/output` produce output. Everything else sets up state.
-
-### 2. Context Composition
-
-```mlld
-/import { codeStyle } from @company/standards
-/var @currentPR = run {gh pr view --json body}
-/var @prompt = `
-Review this PR against our style guide:
-
-Style: @codeStyle
-PR: @currentPR
-`
-/run {claude -p "@prompt"}
-```
-
-### 3. Pipeline Refinement
-
-```mlld
-/exe @checkFacts(text) = run "claude -p 'Verify facts in: @text'"
-/exe @improveClarity(text) = run "claude -p 'Rewrite for clarity: @text'"
-/exe @addExamples(text) = run "claude -p 'Add examples to: @text'"
-
-/var @answer = run {claude -p "@question"} | @checkFacts | @improveClarity | @addExamples
-```
-
-### 4. Cartesian Products
-
-```mlld
-/var @models = ["claude-3", "gpt-4", "gemini"]
-/var @prompts = ["Explain X", "Compare Y", "Design Z"]
-
-/exe @query(model, prompt) = run "@model -p '@prompt'"
-/var @results = foreach @query(@models, @prompts)  << 9 results
-```
-
-## Modules
-
-### Using Modules
-
-```mlld
-/import { formatDate, validate } from @alice/utils
-/import { analyze } from @company/tools
-
-/var @report = @analyze(@data) | @validate
-```
-
-### Private Modules
-
-```bash
-mlld setup  # Interactive setup for GitHub repos
-```
-
-Now `@company/prompts` resolves directly from your private GitHub repository.
-
-### Publishing Modules
-
-```bash
-mlld init my-module.mld.md       # Create module
-mlld publish my-module.mld.md    # Publish to registry
-```
-
-## Conditional actions with `/when`
-
-mlld's `/when` allows firing actions based on booleans. Combining this with modules makes this even more useful.
-
-```mlld
-/var @hasReadme = run {test -f README.md && echo "true" || echo ""}
-/var @hasLicense = run {test -f LICENSE && echo "true" || echo ""}
-/var @hasTests = run {test -d tests -o -d test && echo "true" || echo ""}
-/var @hasSecurity = run {test -f SECURITY.md && echo "true" || echo ""}
-/var @hasCI = run {test -f .github/workflows/ci.yml && echo "true" || echo ""}
-
-/when @projectQuality: [
-  @hasReadme  => /show `✓ Documentation present`
-  @hasLicense => /show `✓ License included`
-  @hasTests   => /show `✓ Test suite found`
-  @hasCI      => /show `✓ CI/CD configured`
+/var @users = [
+  {"name": "alice", "age": 30, "dept": "engineering"},
+  {"name": "bob", "age": 25, "dept": "design"},
+  {"name": "charlie", "age": 35, "dept": "engineering"}
 ]
+
+/var @engineers = @filter(@users, "dept", "engineering")
+/var @sortedByAge = @sortBy(@users, "age")
+/var @names = @pluck(@users, "name")
+/var @totalAge = @sum(@users, "age")
+
+/show `Engineers: @engineers`
+/show `Total age: @totalAge`
 ```
 
-You can also use `/when` with `any`, `all`, or `first` (classic switch)
+### mlld-dev/bundle
 
-Read more about [/when](docs/slash/when.md)
+See full docs: [bundle](./llm/modules/bundle.mld.md#docs)
 
-## Not a Programming Language
-
-mlld is minimal. That's intentional. Complex logic lives in modules:
+Bundle your project files for AI analysis or documentation:
 
 ```mlld
-/import { retry, parallel, validate } from @mlld/core
+/import { xml as toXml, md, tree } from @mlld/bundle
 
-/var @results = @parallel(@tasks, {"concurrency": 5})
+/var @src_xml = @toXml("./src")
+/show "Project structure in XML:"
+/show `@src_xml`
+
+/var @docs_md = @toMd("./docs")
+/show "Documentation structure:"
+/show `@docs_md`
 ```
 
-Your `.mld` files stay readable. Modules handle complexity.
+### mlld/conditions
 
-## Examples
+See full docs: [conditions](./llm/modules/conditions.mld.md#docs)
 
-### Code Review Workflow
+Essential utilities for building complex conditional logic in mlld:
 
 ```mlld
-/import { styleGuide } from @company/standards
-/import { githubContext } from @tools/github
+/import { equals, contains, gt, and, isEmpty } from @mlld/conditions
 
-/var @changes = run {git diff main..HEAD}
-/var @context = @githubContext()
+/var @users = ["alice", "bob", "charlie"]
+/var @threshold = 10
+/var @count = 15
 
-/exe @review(perspective) = run {
-  claude -p "As a @perspective, review: @changes with context: @context"
-}
-
-/var @reviews = foreach @review([
-  "security expert",
-  "performance engineer", 
-  "API designer"
-])
-
-/output @reviews to "review.md"
+/when @and(@gt(@count, @threshold), @contains(@users, "alice")) => /show "High count with Alice present"
+/when @isEmpty(@users) => /show "No users found"
+/when @equals(@count, 15) => /show "Exact match!"
 ```
 
-### Multi-Model Consensus
+### mlld/fix-relative-links
+
+See full docs: [fix-relative-links](./llm/modules/fix-relative-links.mld.md#docs)
+
+Recalculates relative links when moving content between directories:
 
 ```mlld
-/var @question = "What are the tradeoffs of microservices?"
+/import [fix-relative-links.mld.md]
 
-/exe @ask(model) = run "@model -p '@question'"
-/var @responses = foreach @ask(["claude", "gpt-4", "gemini"])
+/var @content = "See the [docs](../docs/guide.md) for details."
 
-/var @consensus = run {
-  claude -p "Synthesize these viewpoints: @responses"
-}
-
-/show @consensus
+>> The function asks: "How do I get from dist/ to src/docs/guide.md?"
+>> Answer: "../src/docs/guide.md"
+/var @fixed = @fixRelativeLinks(@content, "src/modules", "dist")
+>>                                        ↑                ↑
+>>                   where content thinks it is    where it's actually going
 ```
 
-## Essential CLI Commands
+### mlld/fm-dir
 
-### Running mlld Files
+See full docs: [fm-dir](./llm/modules/fm-dir.mld.md#docs)
 
-```bash
-mlld file.mld                    # Process file, output to file.md
-mlld file.mld --stdout           # Output to terminal
-mlld file.mld --format xml       # Output as XML
-mlld file.mld --watch            # Auto-rerun on changes
+Grab directories with advanced frontmatter support:
+
+```mlld
+/import { grab, grabDir, grabFiles, filterByFrontmatter, sortByField, groupByField } from @mlld/fm-dir
+
+>> Basic file grabbing
+/var @modules = @grabDir("modules", "*.mld.md")
+/var @allDocs = @grabFiles(".", "**/*.md")
+
+>> Advanced usage with shadow environment
+/var @published = @grab("posts", "*.md", { "fm": { "published": true } })
+/var @byAuthor = @groupByField(@allDocs, "author")
+/var @recent = @sortByField(@published, "date", "desc")
+
+/show `Found @length(@modules) modules and @length(@published) published posts`
 ```
 
-### Module Management
+### mlld/fs
 
-```bash
-# Create modules
-mlld init                        # Interactive module creation
-mlld init utils                  # Create specific module file
+See full docs: [fs](./llm/modules/fs.mld.md#docs)
 
-# Publish modules
-mlld auth login                  # Authenticate with GitHub
-mlld publish my-module.mld.md    # Publish to registry
-mlld publish --private           # Publish to private repo
+Provides basic file system checks that return truthy/falsy values for use with  conditions:
+
+```mlld
+/import { fileExists, dirExists, pathExists } from @mlld/fs
+
+/when @fileExists("config.json") => /show "Config file found!"
+/when @dirExists("src") => /show "Source directory exists"
+/when @pathExists("README.md") => /show "README is available"
 ```
 
-### Project Configuration
+### mlld/http
 
-```bash
-# Interactive setup wizard
-mlld setup                       # Configure private modules, aliases, etc.
+See full docs: [http](./llm/modules/http.mld.md#docs)
 
-# Create path aliases
-mlld alias --name lib --path ./src/lib
-mlld alias --name shared --path ../shared --global
+Quick HTTP requests with automatic JSON handling:
 
-# Manage environment variables
-mlld env allow GITHUB_TOKEN API_KEY
-mlld env list                    # Show allowed vars
+```mlld
+/import { http } from @mlld/http
+
+/run @http.get("https://api.github.com/users/octocat")
+/run @http.post("https://httpbin.org/post", {"message": "hello"})
+/run @http.auth.get("https://api.github.com/user", @token)
+
+/var @userData = @http.fetch.get("https://api.github.com/users/octocat")
+/show `User: @userData.name`
 ```
 
-### Running Scripts
+### mlld/pipelog
 
-```bash
-# Run scripts from configured directory (default: llm/run/)
-mlld run                         # List available scripts
-mlld run analyze-pr              # Run analyze-pr.mld from script dir
-mlld run data/process            # Run nested scripts
+See full docs: [pipelog](./llm/modules/pipelog.mld.md#docs)
+
+Debug your pipelines by inserting logging between transformations:
+
+```mlld
+/import { log, logVerbose, logJson } from @mlld/pipelog
+
+>> Simple pipeline debugging
+/var @result = @data | @json | @log | @uppercase | @log
+
+>> Verbose logging with full context
+/var @processed = @fetchData() | @logVerbose | @transform
+
+>> Structured JSON logging for parsing
+/var @output = @input | @logJson | @process
 ```
 
-### Development Tools
+All loggers output to stderr, ensuring your pipeline data flows unchanged to stdout.
 
-```bash
-# Testing
-mlld test                        # Run all tests
-mlld test array                  # Run tests matching pattern
+### mlld/string
 
-# Analyze dependencies
-mlld add-needs my-module.mld     # Auto-detect and add runtime deps
+See full docs: [string](./llm/modules/string.mld.md#docs)
+
+Common string operations:
+
+```mlld
+/import { title, camelCase, split, join, trim, includes } from @mlld/string
+
+/var @name = "john doe smith"
+/var @formatted = @title(@name)
+/var @slug = @camelCase(@formatted)
+
+/var @words = @split(@name, " ")
+/var @rejoined = @join(@words, "-")
+
+/when @includes(@name, "doe") => /show "Contains 'doe'"
+/show `Formatted: @formatted`
 ```
 
-## Learn More
+### mlld/test
 
-- [Documentation](docs/)
-- [LLM Reference](llms.txt) - Give this to your AI assistant
-- [Examples](examples/)
+See full docs: [test](./llm/modules/test.mld.md#docs)
+
+Test your mlld scripts with simple assertions:
+
+```mlld
+/import { eq, deepEq, ok, contains } from @mlld/test
+
+/var @result = @calculateSum(2, 3)
+/when @eq(@result, 5) => /show "✓ Sum calculation correct"
+
+/var @data = { "name": "test", "items": [1, 2, 3] }
+/when @deepEq(@data.items, [1, 2, 3]) => /show "✓ Array matches"
+
+/when @contains(@output, "success") => /show "✓ Output contains success message"
+```
+
+### mlld/time
+
+See full docs: [time](./llm/modules/time.mld.md#docs)
+
+```mlld
+/import { time } from @mlld/time
+
+>> Use the built-in @now
+/var @today = @time.format(@now, "YYYY-MM-DD")
+/var @tomorrow = @time.add(@now, { days: 1 })
+
+>> Compare dates
+/when @time.compare.before(@dateA, @dateB) => /show "DateA is earlier"
+
+>> Human-readable relative time
+/var @updated = @time.relative(@lastModified)  >> "2 hours ago"
+
+>> Work with durations
+/var @workWeek = @time.duration.days(5)
+/var @deadline = @time.add(@now, @workWeek)
+```
+
+---
+
+All readmes are generated by the *llm/run/build.mld* script.
+
