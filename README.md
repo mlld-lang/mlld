@@ -1,25 +1,8 @@
-# mlld
+# mlld (pre-release)
 
-Executable markdown for LLM workflows. Write documentation that runs.
+mlld is a modular prompt scripting language.
 
-## What is mlld?
-
-mlld transforms markdown documents into reproducible AI pipelines. Any line starting with `/` is a command. Everything else stays readable documentation.
-
-```mlld
-# Customer Analysis Workflow
-
-This analyzes support tickets for patterns and sentiment.
-
-/import { analyzeSentiment } from @company/nlp
-/var @tickets = run {curl -s api.internal.com/support/recent}
-/var @analysis = @tickets | @analyzeSentiment
-
-## Results
-/show @analysis
-```
-
-This document renders as markdown on GitHub. Run it with `mlld` to execute the analysis.
+[Give this to your LLM](https://mlld.ai/llms.txt)
 
 ## Installation
 
@@ -27,11 +10,42 @@ This document renders as markdown on GitHub. Run it with `mlld` to execute the a
 npm install -g mlld
 ```
 
-## Why mlld?
+or just run it with `npx mlld`
 
-**Context Engineering** - Compose prompts from multiple sources instead of mega-prompts  
+## What is mlld?
+
+mlld transforms markdown documents into reproducible AI pipelines. Any line starting with `/` is a command. Everything else stays readable documentation.
+
+```mlld
+/var @commits = run {git log --since="yesterday"}
+/var @prs = run {gh pr list --author="@me"}
+/var @prompt = `
+
+  Write a concise, bulleted standup summary for the work I completed yesterday based on the following commits and PRs. Use markdown formatting.
+
+  ## Commits:
+  @commits
+
+  ## PRs:
+  @prs
+`
+/exe @claude(request) = run {claude -p "@request"}
+/show @claude(@prompt)
+/output "standup.md"
+
+```
+
+## Installation
+
+```bash
+npm install -g mlld
+```
+
+## Why?
+
+**Context engineering** - Compose prompts from multiple sources instead of mega-prompts  
 **Pipelines** - Chain LLM calls with `|` for iterative refinement  
-**Modules** - Share and reuse workflows like npm packages  
+**Modules** - Share and reuse workflows like npm packages 
 **Reproducible** - Lock files ensure workflows run identically over time
 
 ## Quick Start

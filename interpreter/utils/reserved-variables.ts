@@ -4,15 +4,15 @@
  */
 
 /**
- * Get the current time value for @TIME variable
+ * Get the current time value for @NOW variable
  * Handles test mocking via MLLD_MOCK_TIME environment variable
  */
 export function getTimeValue(): string {
   const mockTime = process.env.MLLD_MOCK_TIME;
   if (mockTime) {
-    // If it's a number, keep it as-is (Unix timestamp for backwards compatibility)
+    // If it's a number, convert Unix timestamp to ISO
     if (/^\d+$/.test(mockTime)) {
-      return mockTime;
+      return new Date(parseInt(mockTime) * 1000).toISOString();
     }
     // Otherwise parse as ISO string
     return new Date(mockTime).toISOString();

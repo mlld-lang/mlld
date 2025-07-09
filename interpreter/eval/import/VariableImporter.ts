@@ -56,34 +56,27 @@ export class VariableImporter {
     
     // Export all top-level variables directly
     for (const [name, variable] of childVars) {
-      // Skip the 'module' variable itself
-      if (name !== 'module') {
-        // For executable variables, we need to preserve the full structure
-        if (variable.type === 'executable') {
-          const execVar = variable as ExecutableVariable;
-          // Export executable with all necessary metadata
-          moduleObject[name] = {
-            __executable: true,
-            value: execVar.value,
-            paramNames: execVar.paramNames,
-            executableDef: execVar.metadata?.executableDef,
-            metadata: execVar.metadata
-          };
-        } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
-          // For objects, resolve any variable references within the object
-          moduleObject[name] = this.objectResolver.resolveObjectReferences(variable.value, childVars);
-        } else {
-          // For other variables, export the value directly
-          moduleObject[name] = variable.value;
-        }
+      if (process.env.DEBUG_MODULE_EXPORT) {
+        console.error(`[DEBUG] Exporting variable '${name}' of type '${variable.type}'`);
       }
-    }
-    
-    // Then, if there's an explicit module export, add it as a structured export
-    const moduleVar = childVars.get('module');
-    if (moduleVar && (moduleVar.type === 'object' || moduleVar.type === 'array')) {
-      // Resolve all variable references in the module export
-      moduleObject.module = this.objectResolver.resolveObjectReferences(moduleVar.value, childVars);
+      // For executable variables, we need to preserve the full structure
+      if (variable.type === 'executable') {
+        const execVar = variable as ExecutableVariable;
+        // Export executable with all necessary metadata
+        moduleObject[name] = {
+          __executable: true,
+          value: execVar.value,
+          // paramNames removed - they're already in executableDef and shouldn't be exposed as imports
+          executableDef: execVar.metadata?.executableDef,
+          metadata: execVar.metadata
+        };
+      } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
+        // For objects, resolve any variable references within the object
+        moduleObject[name] = this.objectResolver.resolveObjectReferences(variable.value, childVars);
+      } else {
+        // For other variables, export the value directly
+        moduleObject[name] = variable.value;
+      }
     }
     
     return {
@@ -270,6 +263,10 @@ export class VariableImporter {
       const importedValue = moduleObject[importName];
       const variable = this.createVariableFromValue(alias, importedValue, importPath, importName);
       
+      if (process.env.DEBUG_MODULE_EXPORT) {
+        console.error(`[DEBUG] Importing '${importName}' as '${alias}' with metadata:`, variable.metadata);
+      }
+      
       targetEnv.setVariable(alias, variable);
     }
   }
@@ -285,8 +282,9 @@ export class VariableImporter {
   ): ExecutableVariable {
     // This is an executable variable - reconstruct it properly
     const execValue = value.value;
-    const paramNames = value.paramNames || [];
     const executableDef = value.executableDef;
+    // Get paramNames from executableDef where it's properly stored
+    const paramNames = executableDef?.paramNames || [];
     
     // The executable definition contains all the needed information
     // We just need to create a dummy ExecutableVariable that preserves it

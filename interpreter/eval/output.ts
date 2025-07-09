@@ -276,7 +276,7 @@ async function evaluateInvocationSource(
             isParameter: true
           }
         );
-        childEnv.setVariable(paramName, paramVar);
+        childEnv.setParameterVariable(paramName, paramVar);
       }
     }
     
@@ -448,7 +448,7 @@ async function evaluateCommandSource(
           isParameter: true
         }
       );
-      cmdChildEnv.setVariable(paramName, paramVar);
+      cmdChildEnv.setParameterVariable(paramName, paramVar);
     }
   }
   

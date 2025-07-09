@@ -1,4 +1,4 @@
-/var @name = "bob smith"
+/var @fullName = "bob smith"
 /exe @format(name) = javascript {
   // Format the name with title case
   const words = name.split(' ');

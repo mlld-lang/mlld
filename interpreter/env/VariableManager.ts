@@ -277,7 +277,7 @@ export class VariableManager implements IVariableManager {
     // Check lowercase reserved variable aliases only in root environment
     if (!parent) {
       const upperName = name.toUpperCase();
-      if ((upperName === 'TIME' || upperName === 'DEBUG' || upperName === 'INPUT' || upperName === 'PROJECTPATH') && this.variables.has(upperName)) {
+      if ((upperName === 'NOW' || upperName === 'DEBUG' || upperName === 'INPUT' || upperName === 'PROJECTPATH') && this.variables.has(upperName)) {
         return true;
       }
     }
@@ -321,25 +321,25 @@ export class VariableManager implements IVariableManager {
       // Note: lowercase 'input' is handled in getVariable() to avoid conflicts
     }
     
-    // Initialize @TIME with current timestamp
-    const timeSource: VariableSource = {
+    // Initialize @NOW with current timestamp
+    const nowSource: VariableSource = {
       directive: 'var',
       syntax: 'quoted',
       hasInterpolation: false,
       isMultiLine: false
     };
-    const timeVar = createSimpleTextVariable(
-      'TIME',
+    const nowVar = createSimpleTextVariable(
+      'NOW',
       getTimeValue(),
-      timeSource,
+      nowSource,
       {
         isReserved: true,
         definedAt: { line: 0, column: 0, filePath: '<reserved>' }
       }
     );
     // Direct assignment for reserved variables during initialization
-    this.variables.set('TIME', timeVar);
-    // Note: lowercase 'time' is handled in getVariable() to avoid conflicts
+    this.variables.set('NOW', nowVar);
+    // Note: lowercase 'now' is handled in getVariable() to avoid conflicts
     
     // Initialize @DEBUG with environment information
     // This is a lazy variable that generates its value when accessed

@@ -1,28 +1,28 @@
 # Test Array AST Fix
 
 >> Define array functions inline to test the fix
-/exe @filter(array, key, value) = js {(
-  Array.isArray(array) 
+/exe @filter(array, key, value) = js {
+  return Array.isArray(array) 
     ? array.filter(item => item[key] == value)
-    : []
-)}
+    : [];
+}
 
-/exe @find(array, key, value) = js {(
-  Array.isArray(array) 
+/exe @find(array, key, value) = js {
+  return Array.isArray(array) 
     ? array.find(item => item[key] == value) || null
-    : null
-)}
+    : null;
+}
 
-/exe @groupBy(array, key) = js {(
-  Array.isArray(array) 
+/exe @groupBy(array, key) = js {
+  return Array.isArray(array) 
     ? array.reduce((groups, item) => {
         const group = String(item[key]);
         if (!groups[group]) groups[group] = [];
         groups[group].push(item);
         return groups;
       }, {})
-    : {}
-)}
+    : {};
+}
 
 /var @users = [
   {"name": "alice", "dept": "eng"},

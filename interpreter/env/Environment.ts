@@ -326,19 +326,19 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
 
     // Import and register built-in function resolvers
-    const { TimeResolver, DebugResolver, InputResolver } = await import('@core/resolvers/builtin');
+    const { NowResolver, DebugResolver, InputResolver } = await import('@core/resolvers/builtin');
     
     // Create InputResolver with current stdin content
     const inputResolver = new InputResolver(this.stdinContent);
     
     // Register the resolvers
-    this.resolverManager.registerResolver(new TimeResolver());
+    this.resolverManager.registerResolver(new NowResolver());
     this.resolverManager.registerResolver(new DebugResolver());
     this.resolverManager.registerResolver(inputResolver);
     
     // Only reserve names for built-in function resolvers (not file/module resolvers)
-    // Function resolvers are those that provide computed values like TIME, DEBUG, etc.
-    const functionResolvers = ['TIME', 'DEBUG', 'INPUT', 'PROJECTPATH'];
+    // Function resolvers are those that provide computed values like NOW, DEBUG, etc.
+    const functionResolvers = ['NOW', 'DEBUG', 'INPUT', 'PROJECTPATH'];
     for (const name of functionResolvers) {
       this.reservedNames.add(name);
       this.reservedNames.add(name.toLowerCase());

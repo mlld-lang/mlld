@@ -65,7 +65,7 @@ VARIABLE1, VARIABLE2, ...
 _(not available unless passed via @INPUT)_
 
 ### Global variables:
-**@TIME**
+**@NOW**
 - type: text
 - value: "2025-06-20T03:00:00.000Z"
 
@@ -106,7 +106,7 @@ _(not available unless passed via @INPUT)_
 
 ### 2. Global Variables
 - Shows all reserved variables (except @DEBUG itself)
-- Includes @TIME, @PROJECTPATH, @INPUT
+- Includes @NOW, @PROJECTPATH, @INPUT
 - Shows built-in transformers (@JSON, @XML, etc.)
 
 ### 3. User Variables

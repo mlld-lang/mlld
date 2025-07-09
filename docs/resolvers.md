@@ -202,7 +202,7 @@ When mlld encounters an @ reference like `@TIME`, `@local/module`, or `@author/p
 
 **Important distinction**:
 - `@local/` is a PREFIX that uses the LOCAL resolver
-- `@TIME` is a BUILT-IN RESOLVER (not a prefix)
+- `@NOW` is a BUILT-IN RESOLVER (not a prefix)
 - Prefixes always end with `/`, built-in resolvers don't
 
 ## Path Aliases and Custom Resolvers

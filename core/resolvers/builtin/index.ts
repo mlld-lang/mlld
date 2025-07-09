@@ -1,6 +1,6 @@
 /**
  * Export all built-in resolvers
  */
-export { TimeResolver } from './TimeResolver';
+export { NowResolver } from './NowResolver';
 export { DebugResolver } from './DebugResolver';
 export { InputResolver } from './InputResolver';

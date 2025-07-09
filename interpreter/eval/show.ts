@@ -513,7 +513,7 @@ export async function evaluateShow(
         isMultiLine: false
       };
       const variable = createSimpleTextVariable(paramName, value, source);
-      childEnv.setVariable(paramName, variable);
+      childEnv.setParameterVariable(paramName, variable);
     }
     
     // Interpolate the template content with the child environment

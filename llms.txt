@@ -699,7 +699,7 @@ Remember: If you're wishing mlld had a feature, you can probably create it as a 
 
 ### Reserved Variables
 ```mlld
-/show `Current time: @TIME`        # Current timestamp
+/show `Current time: @NOW`         # Current timestamp
 /show `Input data: @INPUT.config`  # Access stdin/env vars  
 /show `Project root: @PROJECTPATH` # Project directory
 /show @DEBUG                       # Show extensive debug info
@@ -1138,7 +1138,7 @@ mlld 1.4+ introduces a resolver system with customizable prefixes that "open doo
 ### Key Concepts
 - **Prefix**: An @ symbol that opens access to data (e.g., `@lib/`, `@company/`)
 - **Resolver**: The data provider that handles requests for a prefix (e.g., LOCAL, GITHUB, REGISTRY)
-- **Built-in Resolvers**: Special resolvers like @TIME, @DEBUG that don't need prefixes
+- **Built-in Resolvers**: Special resolvers like @NOW, @DEBUG that don't need prefixes
 - **Registry**: The REGISTRY resolver that ONLY provides validated modules from registries
 
 ### Quick Setup with CLI Commands
@@ -1257,7 +1257,7 @@ Usage:
 - **REGISTRY**: Special - ONLY provides validated modules from registries
 
 **Built-in resolvers (no prefix needed)**:
-- **TIME**: Dynamic timestamps (`@TIME`, not `@time/`)
+- **NOW**: Dynamic timestamps (`@NOW`, not `@now/`)
 - **DEBUG**: Environment info (`@DEBUG`, not `@debug/`)
 - **INPUT**: Stdin/env data (`@INPUT`, not `@input/`)
 - **PROJECTPATH**: Project root (`@PROJECTPATH` or `@.`)

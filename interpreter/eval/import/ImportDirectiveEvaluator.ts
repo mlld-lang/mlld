@@ -131,7 +131,9 @@ export class ImportDirectiveEvaluator {
       throw new Error('Resolver manager not available');
     }
 
-    const resolver = resolverManager.getResolver(resolverName.toUpperCase());
+    // Try case-sensitive first, then uppercase for backward compatibility
+    const resolver = resolverManager.getResolver(resolverName) || 
+                    resolverManager.getResolver(resolverName.toUpperCase());
     if (!resolver) {
       throw new Error(`Resolver '${resolverName}' not found`);
     }

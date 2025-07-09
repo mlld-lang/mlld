@@ -275,6 +275,24 @@ ImportPath
         }
       };
     }
+  / "@NOW"i {
+      helpers.debug('ImportPath matched @NOW');
+      const matched = text();
+      return {
+        type: 'path',
+        subtype: 'nowPath',
+        values: { 
+          path: [helpers.createNode(NodeType.Text, { content: matched, location: location() })]
+        },
+        raw: { 
+          path: matched
+        },
+        meta: {
+          isSpecial: true,
+          source: 'now'
+        }
+      };
+    }
   / "@TIME"i {
       helpers.debug('ImportPath matched @TIME');
       const matched = text();

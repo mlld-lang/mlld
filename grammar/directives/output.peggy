@@ -1,6 +1,13 @@
 // OUTPUT DIRECTIVE
 // Implementation of the /output directive for writing content to various targets
 
+// TODO: Add tests for quoted path syntax once test infrastructure is in place
+// See https://github.com/mlld-lang/mlld/issues/312
+// The following syntax variations need test coverage:
+// - /output "path.txt" (document output with quoted path)
+// - /output @variable "path.txt" (variable output with quoted path)
+// - /output @variable to "path.txt" (enhanced syntax with quoted path)
+
 // Main /output directive - supports multiple forms:
 // Legacy syntax (backward compatible):
 // /output [file.md]                              <- outputs full document
@@ -19,7 +26,41 @@
 // /output @variable to "file.json" as json       <- with format specification
 
 SlashOutput
-  = DirectiveContext "/output" _ source:OutputSource _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
+  // Support for simple quoted path syntax without source - MUST come first to avoid OutputLiteral matching
+  // BUT don't match if followed by bracket (that's the literal+bracket syntax)
+  = DirectiveContext "/output" _ path:StringLiteral !(_ "[") {
+      helpers.debug('SlashOutput quoted path without source matched', { path });
+      
+      const values = {
+        target: {
+          type: 'file',
+          path: [helpers.createNode(NodeType.Text, { content: path, location: location() })],
+          raw: `"${path}"`,
+          meta: { quoted: true }
+        }
+      };
+      
+      const raw = {
+        target: `"${path}"`
+      };
+      
+      const meta = {
+        targetType: 'file',
+        hasSource: false,
+        legacy: true
+      };
+      
+      return helpers.createStructuredDirective(
+        'output',
+        'outputDocument',
+        values,
+        raw,
+        meta,
+        location()
+      );
+    }
+  // Main enhanced syntax with 'to' keyword
+  / DirectiveContext "/output" _ source:OutputSource _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
       helpers.debug('SlashOutput enhanced syntax matched', { source, target, format });
       
       const values = {
@@ -93,40 +134,10 @@ SlashOutput
         location()
       );
     }
-  / DirectiveContext "/output" _ path:WrappedPathContent {
-      helpers.debug('SlashOutput legacy syntax without source matched', { path });
-      
-      const values = {
-        target: {
-          type: 'file',
-          path: path.parts,
-          raw: path.raw,
-          meta: path.meta
-        }
-      };
-      
-      const raw = {
-        target: path.raw
-      };
-      
-      const meta = {
-        targetType: 'file',
-        hasSource: false,
-        legacy: true
-      };
-      
-      return helpers.createStructuredDirective(
-        'output',
-        'outputDocument',
-        values,
-        raw,
-        meta,
-        location()
-      );
-    }
-  // Support for quoted path syntax (without 'to')
-  / DirectiveContext "/output" _ source:OutputSource _ path:StringLiteral {
-      helpers.debug('SlashOutput quoted syntax with source matched', { source, path });
+  // Support for quoted path syntax with source (legacy) - for syntax like: /output @var "file.txt"
+  // BUT don't match if followed by bracket (that would be invalid syntax anyway)
+  / DirectiveContext "/output" _ source:OutputSource _ path:StringLiteral !(_ "[") {
+      helpers.debug('SlashOutput quoted path with source matched', { source, path });
       
       const values = {
         source: source.values,
@@ -159,20 +170,20 @@ SlashOutput
         location()
       );
     }
-  / DirectiveContext "/output" _ path:StringLiteral {
-      helpers.debug('SlashOutput quoted syntax without source matched', { path });
+  / DirectiveContext "/output" _ path:WrappedPathContent {
+      helpers.debug('SlashOutput legacy syntax without source matched', { path });
       
       const values = {
         target: {
           type: 'file',
-          path: [helpers.createNode(NodeType.Text, { content: path, location: location() })],
-          raw: `"${path}"`,
-          meta: { quoted: true }
+          path: path.parts,
+          raw: path.raw,
+          meta: path.meta
         }
       };
       
       const raw = {
-        target: `"${path}"`
+        target: path.raw
       };
       
       const meta = {
@@ -228,11 +239,13 @@ SlashOutput
   // ------------------------------------------
   
   // Error: Missing 'to' keyword in enhanced syntax
+  // But allow quoted paths without 'to' (they're handled by earlier rules)
   / DirectiveContext "/output" _ OutputSource _ &{
       // Look ahead to see if there's a target but no 'to'
       const rest = input.substring(peg$currPos).trim();
-      // Check if next content looks like a target (quote, bracket, stdout, etc)
-      return rest.startsWith('"') || rest.startsWith('[') || rest.startsWith('stdout') || 
+      // Check if next content looks like a target OTHER than quotes (quotes are valid without 'to')
+      // We still want to error on brackets without 'to' though
+      return rest.startsWith('[') || rest.startsWith('stdout') || 
              rest.startsWith('stderr') || rest.startsWith('env') || rest.startsWith('@');
     } {
       helpers.mlldError("Missing 'to' keyword in /output directive. Expected: /output @variable to \"path\"", "to", location());

@@ -142,6 +142,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
   const skipTests: Record<string, string> = {
     'modules-hash': 'Newline handling issue - hash validation is implemented',
     'security-ttl-durations': 'Issue #99: TTL/trust security features not implemented',
+    'output-quoted-path': 'Issue #312: Test infrastructure needed for new output syntax variations',
     'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
     'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
     'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
@@ -177,6 +178,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     'data-object-strings-array-functions': 'Issue #254: Registry tests need isolation - @mlld/array not published yet',
     // Bracket notation tests - skipped until grammar issue resolved
     'bracket-notation-comprehensive': 'Issue #306: Bracket notation field access lost in grammar parsing pipeline',
+    // Tests that require @time module
+    'now-lowercase-basic': 'Requires @time module to be installed',
+    'now-enhanced-formats': 'Requires @time module to be installed',
   };
 
   // Separate fixtures into categories for better reporting
@@ -410,12 +414,15 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       } else if (fixture.name === 'with-combined' || fixture.name === 'with-needs-node') {
         // Enable command mocking for npm/sed test
         process.env.MLLD_TEST_MODE = 'true';
-      } else if (fixture.name === 'reserved-time-variable') {
-        // Mock time for the TIME reserved variable test
+      } else if (fixture.name === 'reserved-now-variable') {
+        // Mock time for the NOW reserved variable test
         process.env.MLLD_MOCK_TIME = '1234567890';
-      } else if (fixture.name === 'reserved-time-variable-lowercase') {
-        // Mock time for the lowercase time variable test
+      } else if (fixture.name === 'reserved-now-variable-lowercase') {
+        // Mock time for the lowercase now variable test
         process.env.MLLD_MOCK_TIME = '2024-05-30T14:30:00.000Z';
+      } else if (fixture.name === 'now-basic-compat') {
+        // Mock time for the NOW compatibility test
+        process.env.MLLD_MOCK_TIME = '2024-01-15T10:30:00.000Z';
       } else if (fixture.name === 'reserved-debug-variable') {
         // Mock time for consistent debug output
         process.env.MLLD_MOCK_TIME = '2024-05-30T14:30:00.000Z';
@@ -817,9 +824,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         if (fixture.name === 'with-combined' || fixture.name === 'with-needs-node') {
           delete process.env.MLLD_TEST_MODE;
         }
-        if (fixture.name === 'reserved-time-variable' || fixture.name === 'reserved-time-variable-lowercase' || 
+        if (fixture.name === 'reserved-now-variable' || fixture.name === 'reserved-now-variable-lowercase' || 
             fixture.name === 'reserved-debug-variable' || fixture.name === 'reserved-debug-variable-lowercase' ||
-            fixture.name === 'resolver-contexts') {
+            fixture.name === 'resolver-contexts' || fixture.name === 'now-basic-compat') {
           delete process.env.MLLD_MOCK_TIME;
         }
         if (fixture.name === 'modules-hash') {

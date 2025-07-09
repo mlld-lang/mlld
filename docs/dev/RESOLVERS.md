@@ -9,7 +9,7 @@ This document explains mlld's unified resolver system, which handles all @ refer
 All @ references in mlld (imports, paths, etc.) are resolved through the same resolver system:
 
 ```mlld
-@import { "YYYY-MM-DD" as date } from @TIME    # Function resolver
+@import { "YYYY-MM-DD" as date } from @NOW    # Function resolver
 @add [@./README.md]                            # Path resolver  
 @import { utils } from @company/toolkit        # Module resolver
 @path docs = @PROJECTPATH/documentation        # Path resolver
@@ -29,12 +29,12 @@ mlld supports three categories of resolvers, each serving different use cases:
 #### Function Resolvers
 Compute data dynamically and can accept parameters via import selections or path segments.
 
-- **@TIME**: Dynamic timestamp formatting
+- **@NOW**: Dynamic timestamp formatting
 - **@DEBUG**: Environment inspection with configurable detail levels
 - **@INPUT**: Stdin/environment variable access
 
 ```mlld
-@import { "YYYY-MM-DD" as date, "HH:mm:ss" as time } from @TIME
+@import { "YYYY-MM-DD" as date, "HH:mm:ss" as time } from @NOW
 @import { config, data } from @INPUT
 ```
 
@@ -97,7 +97,7 @@ interface ResolverCapabilities {
 ```
 
 **Examples:**
-- `@TIME`: 
+- `@NOW`: 
   ```typescript
   {
     io: { read: true, write: false, list: false },
@@ -133,13 +133,13 @@ interface ResolverCapabilities {
 Resolver names are protected to prevent variable/resolver conflicts:
 
 ```mlld
-@text TIME = "my time"  # ❌ ERROR: 'TIME' is reserved for resolver
-@import { "format" as time } from @TIME  # ❌ ERROR: 'time' is reserved
-@import { "format" as timestamp } from @TIME  # ✅ OK
+@text NOW = "my time"  # ❌ ERROR: 'NOW' is reserved for resolver
+@import { "format" as time } from @NOW  # ❌ ERROR: 'time' is reserved
+@import { "format" as timestamp } from @NOW  # ✅ OK
 ```
 
 **Protection Rules:**
-1. Built-in resolver names (TIME, DEBUG, INPUT, PROJECTPATH, .) are reserved
+1. Built-in resolver names (NOW, DEBUG, INPUT, PROJECTPATH, .) are reserved
 2. Custom resolver names become reserved when registered
 3. Both uppercase and lowercase variants are protected
 4. Variable creation and import aliases are validated against reserved names
@@ -152,7 +152,7 @@ mlld resolvers use the Model Context Protocol (MCP) for standardized communicati
 
 **Built-in resolvers** implement the MCP interface internally:
 ```typescript
-class TimeResolver implements MCPResolver {
+class NowResolver implements MCPResolver {
   async callTool(name: string, args: any): Promise<any> {
     if (name === 'formatTimestamp') {
       return this.formatTimestamp(args.format);
@@ -243,8 +243,8 @@ mlld uses a three-tier resolution approach, checked in order:
    - Sorted by prefix length for correct matching (longest first)
 
 2. **Built-in Resolver Lookup** - For built-in resolvers
-   - Checks if the reference matches a built-in resolver directly (TIME, DEBUG, INPUT, PROJECTPATH)
-   - These don't use prefixes - they ARE the resolver (e.g., @TIME, not @time/)
+   - Checks if the reference matches a built-in resolver directly (NOW, DEBUG, INPUT, PROJECTPATH)
+   - These don't use prefixes - they ARE the resolver (e.g., @NOW, not @time/)
    - Case-insensitive matching for convenience
 
 3. **Priority-Based Fallback** - For unmatched references
@@ -259,7 +259,7 @@ This design ensures explicit prefix configurations take precedence while maintai
 Each resolver type has a default priority (lower number = higher priority):
 
 ```
-Priority 1:  Function resolvers (TIME, DEBUG, INPUT)
+Priority 1:  Function resolvers (NOW, DEBUG, INPUT)
 Priority 1:  Path resolvers (PROJECTPATH)
 Priority 10: Module resolvers (REGISTRY)
 Priority 20: File resolvers (LOCAL, GITHUB, HTTP)
@@ -280,7 +280,7 @@ async function resolveAtReference(identifier: string, pathSegments: string[]): P
     }
   }
   
-  // 2. Check built-in resolver lookup (TIME, DEBUG, INPUT, etc.)
+  // 2. Check built-in resolver lookup (NOW, DEBUG, INPUT, etc.)
   const builtinResolver = resolvers.get(identifier.toUpperCase());
   if (builtinResolver && builtinResolver.canResolve(ref)) {
     return builtinResolver.resolve(ref);
@@ -301,16 +301,16 @@ async function resolveAtReference(identifier: string, pathSegments: string[]): P
 Resolvers behave differently based on the context in which they're used:
 
 #### Variable Context
-`@add @TIME` or `@text timestamp = @TIME`
+`@add @NOW` or `@text timestamp = @NOW`
 - Returns the resolver's default value
 - Uses `defaultContentType` from capabilities
 - Examples:
-  - `@TIME` → "2024-01-15T10:30:00Z" (text)
+  - `@NOW` → "2024-01-15T10:30:00Z" (text)
   - `@PROJECTPATH` → "/Users/adam/dev/mlld" (text)
   - `@DEBUG` → { variables: {...}, ... } (data)
 
 #### Import Context
-`@import { x } from @TIME`
+`@import { x } from @NOW`
 - Resolver returns structured content based on requested imports
 - Content type must match what's expected (modules return 'module', etc.)
 - Import evaluation extracts specific variables
@@ -557,7 +557,7 @@ class ResolverError extends Error {
 
 **Example error messages:**
 ```
-TimeResolver failed: Invalid format string 'XYZ'
+NowResolver failed: Invalid format string 'XYZ'
 Input: {"format": "XYZ"}
 Suggestions: YYYY-MM-DD, HH:mm:ss, iso, unix
 
@@ -571,8 +571,8 @@ Did you mean:
 
 ### TIME Resolver
 ```typescript
-class TimeResolver implements Resolver {
-  name = 'TIME';
+class NowResolver implements Resolver {
+  name = 'NOW';
   capabilities = {
     io: { read: true, write: false, list: false },
     contexts: { import: true, path: false, output: false },
@@ -583,7 +583,7 @@ class TimeResolver implements Resolver {
   
   async resolve(ref: string, options?: ResolverOptions): Promise<ResolverContent> {
     // Variable context - return ISO timestamp as text
-    if (options?.context === 'variable' || ref === 'TIME') {
+    if (options?.context === 'variable' || ref === 'NOW') {
       return {
         content: new Date().toISOString(),
         contentType: 'text'
@@ -607,7 +607,7 @@ class TimeResolver implements Resolver {
       };
     }
     
-    throw new Error('TIME resolver only supports variable and import contexts');
+    throw new Error('NOW resolver only supports variable and import contexts');
   }
   
   private formatTimestamp(date: Date, format: string): string {
@@ -782,8 +782,8 @@ This enables:
 
 ### Context-Dependent Resolution
 The same resolver behaves differently based on usage context:
-- **Variable context** (`@TIME`): Returns default value
-- **Import context** (`@import from @TIME`): Returns structured exports
+- **Variable context** (`@NOW`): Returns default value
+- **Import context** (`@import from @NOW`): Returns structured exports
 - **Path context** (`[@./file]`): Resolves full path and returns content
 
 This provides intuitive behavior while maintaining consistency.

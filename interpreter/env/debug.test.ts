@@ -40,7 +40,7 @@ describe('@DEBUG variable', () => {
     expect(lines.length).toBeGreaterThan(5);
     
     // Verify it contains some expected content
-    expect(debugOutput).toContain('@TIME');
+    expect(debugOutput).toContain('@NOW');
     expect(debugOutput).toContain('@PROJECTPATH');
     expect(debugOutput).toContain('Total variables:');
     expect(debugOutput).toContain('Output nodes:');

@@ -32,7 +32,7 @@ Once installed, import modules in your `.mld.md` or `.mld` files:
 /import { formatDate, capitalize } from @alice/utils
 
 /var @greeting = `Hello @capitalize("world")!`
-/var @today = `Today is @formatDate(@TIME)`
+/var @today = `Today is @formatDate(@NOW)`
 
 /show @greeting
 /show @today
@@ -439,7 +439,7 @@ Utility functions for text formatting and dates. Perfect for blogs, documentatio
 ```mlld-run
 /import { formatDate, capitalize, greeting } from @alice/utils
 
-/var @today = ::Today is {{formatDate(@TIME)}}::
+/var @today = ::Today is {{formatDate(@NOW)}}::
 /show @today
 ```
 

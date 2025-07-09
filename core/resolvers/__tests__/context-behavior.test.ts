@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ResolverManager } from '@core/resolvers/ResolverManager';
-import { TimeResolver, DebugResolver, InputResolver } from '@core/resolvers/builtin';
+import { NowResolver, DebugResolver, InputResolver } from '@core/resolvers/builtin';
 import { LocalResolver } from '@core/resolvers/LocalResolver';
 import { RegistryResolver } from '@core/resolvers/RegistryResolver';
 import { ProjectPathResolver } from '@core/resolvers/ProjectPathResolver';
@@ -15,18 +15,18 @@ describe('Context-Dependent Behavior', () => {
     resolverManager = new ResolverManager();
   });
 
-  describe('TIME Resolver', () => {
+  describe('NOW Resolver', () => {
     beforeEach(() => {
-      resolverManager.registerResolver(new TimeResolver());
-      // Configure TIME resolver
+      resolverManager.registerResolver(new NowResolver());
+      // Configure NOW resolver
       resolverManager.configurePrefixes([{
-        prefix: '@TIME',
-        resolver: 'TIME',
+        prefix: '@NOW',
+        resolver: 'NOW',
               }]);
     });
 
     it('returns text in variable context', async () => {
-      const result = await resolverManager.resolve('@TIME', { context: 'variable' });
+      const result = await resolverManager.resolve('@NOW', { context: 'variable' });
       
       expect(result.content.contentType).toBe('text');
       expect(typeof result.content.content).toBe('string');
@@ -35,7 +35,7 @@ describe('Context-Dependent Behavior', () => {
     });
 
     it('returns data in import context', async () => {
-      const result = await resolverManager.resolve('@TIME', { context: 'import' });
+      const result = await resolverManager.resolve('@NOW', { context: 'import' });
       
       expect(result.content.contentType).toBe('data');
       // Should be JSON with time formats
@@ -47,7 +47,7 @@ describe('Context-Dependent Behavior', () => {
     });
 
     it('returns data in path context (not typical use)', async () => {
-      const result = await resolverManager.resolve('@TIME', { context: 'path' });
+      const result = await resolverManager.resolve('@NOW', { context: 'path' });
       
       // Path context should return the default (variable) behavior
       expect(result.content.contentType).toBe('text');

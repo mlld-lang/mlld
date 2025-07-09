@@ -710,7 +710,7 @@ export async function interpolate(
         if (process.env.MLLD_DEBUG === 'true') {
           logger.debug('Variable not found during interpolation:', { varName });
         }
-        parts.push(`${varName}`); // Keep unresolved - will be caught by Environment.ts strict checks
+        parts.push(`@${varName}`); // Keep unresolved with @ symbol
         continue;
       }
       

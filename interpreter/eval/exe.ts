@@ -5,6 +5,7 @@ import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, Cod
 import { interpolate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
 import { createExecutableVariable, createSimpleTextVariable, type VariableSource } from '@core/types/variable';
+import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError';
 
 /**
  * Extract parameter names from the params array.
@@ -28,6 +29,31 @@ function extractParamNames(params: any[]): string[] {
     }
     return '';
   }).filter(Boolean);
+}
+
+/**
+ * Check if any parameter names conflict with existing variables.
+ * Throws ExecParameterConflictError if a conflict is found.
+ */
+function checkParameterConflicts(
+  paramNames: string[],
+  execName: string,
+  execLocation: any,
+  env: Environment
+): void {
+  for (const paramName of paramNames) {
+    if (env.hasVariable(paramName)) {
+      const existingVar = env.getVariable(paramName);
+      if (existingVar && existingVar.metadata?.definedAt) {
+        throw new ExecParameterConflictError(
+          paramName,
+          execName,
+          existingVar.metadata.definedAt,
+          astLocationToSourceLocation(execLocation, env.getCurrentFilePath())
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -134,6 +160,9 @@ export async function evaluateExe(
       const params = directive.values?.params || [];
       const paramNames = extractParamNames(params);
       
+      // Check for parameter conflicts
+      checkParameterConflicts(paramNames, identifier, directive.location, env);
+      
       // Store the reference definition
       executableDef = {
         type: 'commandRef',
@@ -155,6 +184,9 @@ export async function evaluateExe(
       const params = directive.values?.params || [];
       const paramNames = extractParamNames(params);
       
+      // Check for parameter conflicts
+      checkParameterConflicts(paramNames, identifier, directive.location, env);
+      
       // Store the command template (not interpolated yet)
       executableDef = {
         type: 'command',
@@ -174,6 +206,9 @@ export async function evaluateExe(
     // Get parameter names if any
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
+    
+    // Check for parameter conflicts
+    checkParameterConflicts(paramNames, identifier, directive.location, env);
     
     // Language is stored in meta, not raw
     const language = directive.meta?.language || 'javascript';
@@ -200,6 +235,9 @@ export async function evaluateExe(
     // Get parameter names if any
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
+    
+    // Check for parameter conflicts
+    checkParameterConflicts(paramNames, identifier, directive.location, env);
     
     // Get payload nodes if present
     const payloadNodes = directive.values?.payload;
@@ -232,6 +270,9 @@ export async function evaluateExe(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
+    // Check for parameter conflicts
+    checkParameterConflicts(paramNames, identifier, directive.location, env);
+    
     // Create template executable definition
     executableDef = {
       type: 'template',
@@ -251,6 +292,9 @@ export async function evaluateExe(
     // Get parameter names if any
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
+    
+    // Check for parameter conflicts
+    checkParameterConflicts(paramNames, identifier, directive.location, env);
     
     // Get rename nodes if present
     const renameNodes = directive.values?.rename;
@@ -466,7 +510,10 @@ function createExecWrapper(
             isParameter: true
           }
         );
-        execEnv.setVariable(paramName, paramVar);
+        if (process.env.DEBUG_PARAM_EXEC) {
+          console.error(`[DEBUG] Setting parameter '${paramName}' in exec environment`);
+        }
+        execEnv.setParameterVariable(paramName, paramVar);
       }
     }
     

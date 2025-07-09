@@ -42,6 +42,12 @@ The `/` command approach creates clear disambiguiation between commands and vari
   - Type preservation: Primitives maintain their JavaScript types through the system
   - JavaScript semantics: Type coercion follows JavaScript rules (e.g., `"text" + 5 = "text5"`)
   - Exec invocation support: Primitive literals in function calls (e.g., `@add(@num, 8)`)
+- **Built-in @now Variable**: New built-in variable for current timestamp
+  - Replaces the previous @time built-in variable (breaking change)
+  - Returns ISO 8601 timestamp: `2024-01-15T10:30:00.000Z`
+  - Available in all contexts where variables are allowed
+  - Also available as `mlld_now()` function in JavaScript/Node shadow environments
+- **@mlld/time Module**: Comprehensive date/time functionality replaces simple built-in time operations with full-featured module
 
 ## [1.4.11]
 

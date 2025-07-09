@@ -280,7 +280,7 @@ export async function evaluateExecInvocation(
           isParameter: true
         }
       );
-      execEnv.setVariable(paramName, paramVar);
+      execEnv.setParameterVariable(paramName, paramVar);
     }
   }
   

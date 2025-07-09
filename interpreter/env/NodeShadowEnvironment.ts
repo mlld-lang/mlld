@@ -83,6 +83,9 @@ export class NodeShadowEnvironment {
       Promise,
       queueMicrotask,
       
+      // mlld built-in values
+      mlld_now: () => new Date().toISOString(),
+      
       // Keep reference to shadow functions map for inter-function calls
       __mlldShadowFunctions: this.shadowFunctions
     });

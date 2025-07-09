@@ -4,7 +4,7 @@ import { LocalResolver } from '@core/resolvers/LocalResolver';
 import { GitHubResolver } from '@core/resolvers/GitHubResolver';
 import { HTTPResolver } from '@core/resolvers/HTTPResolver';
 import { RegistryResolver } from '@core/resolvers/RegistryResolver';
-import { TimeResolver, DebugResolver, InputResolver } from '@core/resolvers/builtin';
+import { NowResolver, DebugResolver, InputResolver } from '@core/resolvers/builtin';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 
 describe('Content Type Detection', () => {
@@ -325,13 +325,13 @@ describe('Content Type Detection', () => {
 
   describe('Built-in Resolvers', () => {
     beforeEach(() => {
-      resolverManager.registerResolver(new TimeResolver());
+      resolverManager.registerResolver(new NowResolver());
       resolverManager.registerResolver(new DebugResolver());
       resolverManager.registerResolver(new InputResolver('{"test": "data"}'));
     });
 
-    it('TIME resolver returns text by default', async () => {
-      const result = await resolverManager.resolve('@TIME');
+    it('NOW resolver returns text by default', async () => {
+      const result = await resolverManager.resolve('@NOW');
       
       expect(result.content.contentType).toBe('text');
       expect(typeof result.content.content).toBe('string');

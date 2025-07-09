@@ -136,6 +136,11 @@ export class NodeExecutor extends BaseCommandExecutor {
       }
     }
     
+    // Add mlld built-in values
+    if (!params || !params['mlld_now']) {
+      nodeCode += `const mlld_now = () => new Date().toISOString();\n`;
+    }
+    
     // Wrap the code to capture return values
     const wrappedCode = `
 ${nodeCode}

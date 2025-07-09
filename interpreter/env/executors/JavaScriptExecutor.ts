@@ -71,24 +71,22 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         }
       }
 
-      // Build the function body
+      // Build the function body with mlld built-ins
       let functionBody = code;
-
-      // Handle return statements properly
-      // Check if this is likely a complete expression that should be returned
-      const trimmedCode = code.trim();
-      const isExpression = (
-        // Single expression without semicolon
-        (!code.includes('return') && !code.includes(';')) ||
-        // IIFE pattern - starts with ( and ends with )
-        (trimmedCode.startsWith('(') && trimmedCode.endsWith(')')) ||
-        // Arrow function call pattern
-        (trimmedCode.endsWith('()') && !trimmedCode.includes('{'))
-      );
-
-      // For single expressions, wrap in return statement
-      if (isExpression) {
+      
+      // Check if this is a single-line expression that should be auto-returned
+      const isSingleLine = !code.includes('\n');
+      const hasNoReturn = !code.includes('return');
+      const looksLikeStatement = code.includes(';') || code.trim().startsWith('console.log');
+      
+      // For single-line expressions without explicit return, wrap in return statement
+      if (isSingleLine && hasNoReturn && !looksLikeStatement) {
         functionBody = `return (${functionBody})`;
+      }
+      
+      // Then prepend mlld built-in values to the function body
+      if (!params || !params['mlld_now']) {
+        functionBody = `const mlld_now = () => new Date().toISOString();\n${functionBody}`;
       }
 
       // Debug exec-code issue
