@@ -301,7 +301,22 @@ export class InitModuleCommand {
 
         if (!defaultAuthor && !options.skipGit) {
           try {
-            defaultAuthor = execSync('git config user.name', { encoding: 'utf8' }).trim();
+            // Try to get GitHub username from git config first
+            try {
+              defaultAuthor = execSync('git config github.user', { encoding: 'utf8' }).trim();
+            } catch {
+              // If no github.user, try to extract from remote URL
+              try {
+                const remoteUrl = execSync('git remote get-url origin', { encoding: 'utf8' }).trim();
+                const githubMatch = remoteUrl.match(/github\.com[:\/]([^\/]+)\/.+/);
+                if (githubMatch) {
+                  defaultAuthor = githubMatch[1];
+                }
+              } catch {
+                // If all else fails, use git user.name as last resort
+                defaultAuthor = execSync('git config user.name', { encoding: 'utf8' }).trim();
+              }
+            }
           } catch {
             // Ignore git errors
           }
@@ -488,6 +503,7 @@ More detailed usage examples and documentation.
 
 >> Add your mlld code here
 >> All variables are automatically exported
+>> You can optionally create a structured export by adding a /var @module = { ... }
 \`\`\`
 `;
     
