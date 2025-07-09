@@ -1,6 +1,8 @@
 # mlld (pre-release)
 
-mlld is a modular prompt scripting language.
+mlld is a modular prompt scripting language, bringing software engineering to LLM workflows: modularity, versioning, and reproducibility.
+
+I still consider it 'early', but this isn't a slapped together idea. I've been working on it nearly every single day for 6 months straight. It has tools for writing tests and a public/private module system.
 
 [Give this to your LLM](https://mlld.ai/llms.txt)
 
@@ -12,27 +14,38 @@ npm install -g mlld
 
 or just run it with `npx mlld`
 
-## What is mlld?
+## What is mlld for?
 
-mlld transforms markdown documents into reproducible AI pipelines. Any line starting with `/` is a command. Everything else stays readable documentation.
+- makes context and prompt engineering multiplayer and git-versionable
+- turns markdown documents into subsection-addressable modules
+- public and private modules for prompts and processing
+- complex chaining and filtering of LLM calls
+- abstract out processing complexity in modules, keep things readable
+- get a better handle on the explosion of llm workflow tool cruft
+
+## Here's a simple example
+
+Use mlld to create a daily standup update based on your recent activity:
 
 ```mlld
 /var @commits = run {git log --since="yesterday"}
-/var @prs = run {gh pr list --author="@me"}
-/var @prompt = `
+/var @prs = run {gh pr list --json title,url,createdAt}
 
-  Write a concise, bulleted standup summary for the work I completed yesterday based on the following commits and PRs. Use markdown formatting.
+/exe @claude(request) = run {claude -p "@request"}
+/exe @formatPRs(items) = js {
+  return items.map(pr => `- PR: ${pr.title} (${pr.url})`).join('\n');
+}
+
+/var @prompt = `
+  Write a standup update in markdown summarizing the work I did yesterday based on the following commits and PRs.
 
   ## Commits:
   @commits
 
   ## PRs:
-  @prs
+  @formatPRs(@prs)
 `
-/exe @claude(request) = run {claude -p "@request"}
 /show @claude(@prompt)
-/output "standup.md"
-
 ```
 
 ## Installation
@@ -43,7 +56,7 @@ npm install -g mlld
 
 ## Why?
 
-**Context engineering** - Compose prompts from multiple sources instead of mega-prompts  
+**Context engineering** - Compose prompts from multiple sources instead of mega-prompts or lots of legwork 
 **Pipelines** - Chain LLM calls with `|` for iterative refinement  
 **Modules** - Share and reuse workflows like npm packages 
 **Reproducible** - Lock files ensure workflows run identically over time
@@ -98,10 +111,6 @@ PR: @currentPR
 
 ### Using Modules
 
-```bash
-mlld install @alice/utils @company/tools
-```
-
 ```mlld
 /import { formatDate, validate } from @alice/utils
 /import { analyze } from @company/tools
@@ -115,7 +124,7 @@ mlld install @alice/utils @company/tools
 mlld setup  # Interactive setup for GitHub repos
 ```
 
-Now `@company/tools` resolves directly from your private GitHub repository.
+Now `@company/prompts` resolves directly from your private GitHub repository.
 
 ### Publishing Modules
 
@@ -124,9 +133,32 @@ mlld init my-module.mld.md       # Create module
 mlld publish my-module.mld.md    # Publish to registry
 ```
 
+## Conditional actions with `/when`
+
+mlld's `/when` allows firing actions based on booleans. Combining this with modules makes this even more useful.
+
+```mlld
+/var @hasReadme = run {test -f README.md && echo "true" || echo ""}
+/var @hasLicense = run {test -f LICENSE && echo "true" || echo ""}
+/var @hasTests = run {test -d tests -o -d test && echo "true" || echo ""}
+/var @hasSecurity = run {test -f SECURITY.md && echo "true" || echo ""}
+/var @hasCI = run {test -f .github/workflows/ci.yml && echo "true" || echo ""}
+
+/when @projectQuality: [
+  @hasReadme  => /show `✓ Documentation present`
+  @hasLicense => /show `✓ License included`
+  @hasTests   => /show `✓ Test suite found`
+  @hasCI      => /show `✓ CI/CD configured`
+]
+```
+
+You can also use `/when` with `any`, `all`, or `first` (classic switch)
+
+Read more about [/when](docs/slash/when.md)
+
 ## Not a Programming Language
 
-mlld has no loops, no conditionals, no recursion. That's intentional. Complex logic lives in modules:
+mlld is minimal. That's intentional. Complex logic lives in modules:
 
 ```mlld
 /import { retry, parallel, validate } from @mlld/core
@@ -191,12 +223,7 @@ mlld file.mld --watch            # Auto-rerun on changes
 ```bash
 # Create modules
 mlld init                        # Interactive module creation
-mlld init utils.mld.md           # Create specific module file
-
-# Install modules
-mlld install @alice/utils        # Install specific module
-mlld install                     # Install all from lock file
-mlld ls                          # List installed modules
+mlld init utils                  # Create specific module file
 
 # Publish modules
 mlld auth login                  # Authenticate with GitHub
@@ -208,7 +235,7 @@ mlld publish --private           # Publish to private repo
 
 ```bash
 # Interactive setup wizard
-mlld setup                       # Configure GitHub repos, aliases, etc.
+mlld setup                       # Configure private modules, aliases, etc.
 
 # Create path aliases
 mlld alias --name lib --path ./src/lib
@@ -231,15 +258,12 @@ mlld run data/process            # Run nested scripts
 ### Development Tools
 
 ```bash
-# Analyze dependencies
-mlld add-needs my-module.mld     # Auto-detect and add runtime deps
-
 # Testing
 mlld test                        # Run all tests
 mlld test array                  # Run tests matching pattern
 
-# Language server
-mlld language-server             # Start LSP for editor integration
+# Analyze dependencies
+mlld add-needs my-module.mld     # Auto-detect and add runtime deps
 ```
 
 ## Learn More
@@ -247,7 +271,3 @@ mlld language-server             # Start LSP for editor integration
 - [Documentation](docs/)
 - [LLM Reference](llms.txt) - Give this to your AI assistant
 - [Examples](examples/)
-
----
-
-mlld brings software engineering to AI workflows: modularity, versioning, and reproducibility.
