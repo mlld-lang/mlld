@@ -37,7 +37,8 @@ Use mlld to create a daily standup update based on your recent activity:
 }
 
 /var @prompt = `
-  Write a standup update in markdown summarizing the work I did yesterday based on the following commits and PRs.
+  Write a standup update in markdown summarizing the work I did 
+  yesterday based on the following commits and PRs.
 
   ## Commits:
   @commits
