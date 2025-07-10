@@ -1,2 +1,2 @@
-/var @intro = [section-file.md # Original Title]
+/var @intro = <section-file.md # Original Title>
 /show @intro

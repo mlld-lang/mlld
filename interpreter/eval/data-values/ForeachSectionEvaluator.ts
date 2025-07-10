@@ -48,21 +48,35 @@ export class ForeachSectionEvaluator {
 
   /**
    * Evaluates a ForeachSectionExpression - iterating over arrays with section extraction
-   * Usage: foreach [@array.field # section] as [[template]]
+   * Usage: foreach <@array.field # section> as ::template::
    */
   async evaluateForeachSection(
     foreachExpr: any,
     env: Environment
   ): Promise<any[]> {
-    const { arrayVariable, pathField, path, section, template } = foreachExpr.value || foreachExpr;
+    const { alligator, arrayVariable, pathField, path, section, template } = foreachExpr.value || foreachExpr;
     
-    // Handle the new flexible path expressions
-    // If arrayVariable is not set, we need to find it in the path
+    // Handle the new alligator-based structure
     let actualArrayVariable = arrayVariable;
     let actualPathField = pathField;
+    let actualPath = path;
     
-    if (!actualArrayVariable && path) {
-      // Look for a variable reference in the path
+    if (alligator) {
+      // Extract from alligator structure
+      actualPath = alligator.source.segments;
+      
+      // Look for a variable reference in the path segments
+      if (actualPath) {
+        for (const part of actualPath) {
+          if (part.type === 'VariableReference' && part.fields && part.fields.length > 0) {
+            actualArrayVariable = part.identifier;
+            actualPathField = part.fields[0].value || part.fields[0].field;
+            break;
+          }
+        }
+      }
+    } else if (!actualArrayVariable && path) {
+      // Legacy support - look for a variable reference in the path
       for (const part of path) {
         if (part.type === 'VariableReference' && part.fields && part.fields.length > 0) {
           actualArrayVariable = part.identifier;
@@ -124,9 +138,9 @@ export class ForeachSectionEvaluator {
         // 5. Get the path value
         let pathValue: string;
         
-        if (path) {
+        if (actualPath) {
           // For flexible path expressions, evaluate the entire path
-          pathValue = await interpolate(path, childEnv);
+          pathValue = await interpolate(actualPath, childEnv);
         } else if (actualPathField) {
           // For simple case, get path from item field
           if (!item || typeof item !== 'object') {
@@ -144,8 +158,14 @@ export class ForeachSectionEvaluator {
         // 6. Resolve section name (can be literal or variable)
         let sectionName: string;
         
+        // Get section from alligator or legacy structure
+        let sectionToProcess = section;
+        if (alligator && alligator.options && alligator.options.section) {
+          sectionToProcess = alligator.options.section.identifier;
+        }
+        
         // Handle section as an array of nodes
-        const sectionNodes = Array.isArray(section) ? section : [section];
+        const sectionNodes = Array.isArray(sectionToProcess) ? sectionToProcess : [sectionToProcess];
         
         if (sectionNodes.length === 1 && sectionNodes[0].type === 'Text') {
           sectionName = sectionNodes[0].content;
@@ -163,6 +183,12 @@ export class ForeachSectionEvaluator {
             throw new Error(`Section must resolve to a string, got ${typeof sectionValue}`);
           }
           sectionName = sectionValue;
+        } else if (typeof sectionToProcess === 'string') {
+          // Direct string section name
+          sectionName = sectionToProcess;
+        } else if (sectionToProcess && typeof sectionToProcess === 'object' && sectionToProcess.content) {
+          // Object with content property
+          sectionName = sectionToProcess.content;
         } else {
           throw new Error('Section name is required for foreach section extraction');
         }

@@ -4,5 +4,5 @@
 
 Hello, {{name}}! Welcome to mlld.::
 
-/output @greet("Alice","Greeting") [greeting.txt]
-/output @greet("Bob","Welcome") [welcome.txt]
+/output @greet("Alice","Greeting") "greeting.txt"
+/output @greet("Bob","Welcome") "welcome.txt"

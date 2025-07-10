@@ -3,38 +3,43 @@ import { parse } from '@grammar/parser';
 
 describe('Path Separator in Brackets - Regression Test for Issue #53', () => {
   it('should parse paths in brackets with PathSeparator nodes', async () => {
-    const input = '/show [path/to/file.md]';
+    const input = '/show <path/to/file.md>';
     const parseResult = await parse(input);
     const result = parseResult.ast;
     
     expect(result).toHaveLength(1);
     expect(result[0].type).toBe('Directive');
     expect(result[0].kind).toBe('show');
-    expect(result[0].subtype).toBe('showPath');
+    expect(result[0].subtype).toBe('showLoadContent');
     
-    // Check that path array contains PathSeparator nodes
-    const pathArray = result[0].values.path;
-    expect(pathArray).toHaveLength(5);
+    // Check that the load content node has the correct structure
+    const loadContent = result[0].values.loadContent;
+    expect(loadContent.type).toBe('load-content');
+    expect(loadContent.source.type).toBe('path');
+    
+    // Check that path segments contain PathSeparator nodes
+    const pathSegments = loadContent.source.segments;
+    expect(pathSegments).toHaveLength(5);
     
     // Verify structure: Text, PathSeparator, Text, PathSeparator, Text
-    expect(pathArray[0].type).toBe('Text');
-    expect(pathArray[0].content).toBe('path');
+    expect(pathSegments[0].type).toBe('Text');
+    expect(pathSegments[0].content).toBe('path');
     
-    expect(pathArray[1].type).toBe('PathSeparator');
-    expect(pathArray[1].value).toBe('/');
+    expect(pathSegments[1].type).toBe('PathSeparator');
+    expect(pathSegments[1].value).toBe('/');
     
-    expect(pathArray[2].type).toBe('Text');
-    expect(pathArray[2].content).toBe('to');
+    expect(pathSegments[2].type).toBe('Text');
+    expect(pathSegments[2].content).toBe('to');
     
-    expect(pathArray[3].type).toBe('PathSeparator');
-    expect(pathArray[3].value).toBe('/');
+    expect(pathSegments[3].type).toBe('PathSeparator');
+    expect(pathSegments[3].value).toBe('/');
     
-    expect(pathArray[4].type).toBe('Text');
-    expect(pathArray[4].content).toBe('file.md');
+    expect(pathSegments[4].type).toBe('Text');
+    expect(pathSegments[4].content).toBe('file.md');
   });
 
   it('should parse paths in text directive brackets with PathSeparator nodes', async () => {
-    const input = '/var @content = [path/to/file.md]';
+    const input = '/var @content = <path/to/file.md>';
     const parseResult = await parse(input);
     const result = parseResult.ast;
     
@@ -48,10 +53,11 @@ describe('Path Separator in Brackets - Regression Test for Issue #53', () => {
     expect(result[0].source).toBe(null);
     
     // Check that path array contains PathSeparator nodes
-    // In the new AST structure, value is an array containing a path object
-    const pathObject = result[0].values.value[0];
-    expect(pathObject.type).toBe('path');
-    const contentArray = pathObject.segments;
+    // In the new AST structure, value is an array containing a load-content object
+    const loadContentObject = result[0].values.value[0];
+    expect(loadContentObject.type).toBe('load-content');
+    expect(loadContentObject.source.type).toBe('path');
+    const contentArray = loadContentObject.source.segments;
     expect(contentArray).toHaveLength(5);
     
     // Verify structure
@@ -72,24 +78,25 @@ describe('Path Separator in Brackets - Regression Test for Issue #53', () => {
   });
 
   it('should handle paths with multiple directory levels', async () => {
-    const input = '/show [deep/nested/path/to/file.md]';
+    const input = '/show <deep/nested/path/to/file.md>';
     const parseResult = await parse(input);
     const result = parseResult.ast;
     
-    const pathArray = result[0].values.path;
-    expect(pathArray).toHaveLength(9); // 5 text segments + 4 separators
+    const loadContent = result[0].values.loadContent;
+    const pathSegments = loadContent.source.segments;
+    expect(pathSegments).toHaveLength(9); // 5 text segments + 4 separators
     
     // Verify all separators are present
-    expect(pathArray[1].type).toBe('PathSeparator');
-    expect(pathArray[3].type).toBe('PathSeparator');
-    expect(pathArray[5].type).toBe('PathSeparator');
-    expect(pathArray[7].type).toBe('PathSeparator');
+    expect(pathSegments[1].type).toBe('PathSeparator');
+    expect(pathSegments[3].type).toBe('PathSeparator');
+    expect(pathSegments[5].type).toBe('PathSeparator');
+    expect(pathSegments[7].type).toBe('PathSeparator');
   });
 
   it.skip('should handle paths with variables and separators', async () => {
     // TODO: This test needs to be updated for the unified var system
     // The path variable interpolation in brackets is not yet supported
-    const input = '/var @mypath = [@root/path/to/file.md]';
+    const input = '/var @mypath = <@root/path/to/file.md>';
     const parseResult = await parse(input);
     const result = parseResult.ast;
     

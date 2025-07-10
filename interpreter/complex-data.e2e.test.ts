@@ -46,7 +46,7 @@ describe('Complex Data Assignment', () => {
     
     const mlldContent = `
 /var @docs = {
-  readme: [/test.txt]
+  readme: </test.txt>
 }
 `;
     

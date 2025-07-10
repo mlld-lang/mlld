@@ -332,10 +332,42 @@ ImportPath
   / SpecialVariablePath
   / ModuleReference
   / QuotedPath
-  / BracketImportPath
+  / ImportAlligatorAdapter
   / PathExpression
 
-// Bracketed path for imports - handles [@var/path]
+// Adapter to use AlligatorExpression for imports
+ImportAlligatorAdapter
+  = content:AlligatorExpression {
+      helpers.debug('ImportAlligatorAdapter processing AlligatorExpression', { content });
+      
+      // Alligators in imports just load the file
+      if (content.options && content.options.section) {
+        helpers.mlldError("Section extraction is not supported in import paths. Use: /import { items } from <path>", ">", location());
+      }
+      
+      // Convert alligator source to import path format
+      if (content.source.type === 'path') {
+        return {
+          type: 'path',
+          subtype: 'filePath',
+          values: { 
+            path: content.source.segments
+          },
+          raw: { 
+            path: content.source.raw
+          },
+          meta: content.source.meta
+        };
+      } else if (content.source.type === 'url') {
+        // Future: support importing from URLs
+        helpers.mlldError("URL imports are not yet supported. Use: /import { items } from <local-file>", ">", location());
+      }
+      
+      // Should not reach here
+      helpers.mlldError("Invalid alligator content in import path", ">", location());
+    }
+
+// DEPRECATED - Bracketed path for imports - handles [@var/path]
 BracketImportPath
   = "[" parts:ImportPathParts "]" {
       helpers.debug('BracketImportPath matched', { parts });

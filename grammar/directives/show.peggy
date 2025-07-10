@@ -149,48 +149,43 @@ SlashShow
         'section'  // Added source parameter
       );
     }
-  // Single-bracketed path with section: [path/to/file.md # Section]  
-  / DirectiveContext "/show" _ content:SemanticSectionContent rename:AsNewTitle? {
-      helpers.debug('SlashShow matched bracketed path section', { content, rename });
+  // Load content expression: <path/to/file.md> or <path # Section>
+  / DirectiveContext "/show" _ content:AlligatorExpression rename:AsNewTitle? {
+      helpers.debug('SlashShow matched load content expression', { content, rename });
       
-      const rawPath = content.raw.split(' # ')[0];
-      const sectionText = content.section;
-      
-      // Create values object
+      // Handle content loading
       const values = {
-        sectionTitle: content.sectionNodes || [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })],
-        path: content.parts
+        loadContent: content
       };
       
-      // Add new title if provided
+      // Add rename if provided
       if (rename) {
         values.newTitle = rename;
       }
       
-      // Create raw object
+      // Create raw representation
       const raw = {
-        sectionTitle: sectionText,
-        path: rawPath
+        loadContent: text()
       };
       
-      // Add new title to raw if present
       if (rename) {
         raw.newTitle = rename[0].content;
       }
       
-      // Create meta object with path metadata
+      // Create meta
       const meta = {
-        path: helpers.createPathMetadata(rawPath, content.parts)
+        hasSection: content.options && content.options.section,
+        sourceType: content.source.type
       };
       
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
-        'showPathSection', 
+        'showLoadContent', 
         values, 
         raw, 
         meta, 
         location(),
-        'section'  // Added source parameter
+        'load-content'
       );
     }
   / DirectiveContext "/show" _ sectionTitle:QuotedContent _ "from" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ asTitle:AsNewTitle? {
@@ -668,9 +663,9 @@ SlashShow
   / DirectiveContext "/show" _ "foreach" _ &{
       // Check if we have incomplete foreach syntax
       const rest = input.substring(peg$currPos).trim();
-      return !rest.startsWith('@') && !rest.startsWith('[');
+      return !rest.startsWith('@') && !rest.startsWith('[') && !rest.startsWith('<');
     } {
-      helpers.mlldError("Invalid foreach syntax in /show directive. Expected '@command(@arrays)' or '[@array.field # section]' after 'foreach'.", "foreach", location());
+      helpers.mlldError("Invalid foreach syntax in /show directive. Expected '@command(@arrays)' or '<@array.field # section>' after 'foreach'.", "foreach", location());
     }
     
   // Error: Generic /show syntax error (catch-all)

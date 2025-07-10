@@ -1,2 +1,2 @@
 /var @targetSection = "Section Title"
-/show [file.md # @targetSection]
+/show <file.md # @targetSection>

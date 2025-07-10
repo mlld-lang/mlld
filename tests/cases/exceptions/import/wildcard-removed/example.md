@@ -6,6 +6,6 @@ description: Error when using removed wildcard import syntax
 
 This should fail with an error about wildcard imports being removed.
 
-/import { * } from [./config.mld]
+/import { * } from "./config.mld"
 
 /show @greeting

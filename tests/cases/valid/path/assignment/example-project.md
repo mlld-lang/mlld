@@ -1,2 +1,2 @@
-/path @projectSrc = [@./src]
+/path @projectSrc = "@./src"
 /show ::The project source is {{projectSrc}}::

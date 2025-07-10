@@ -1,1 +1,1 @@
-/show [file.md]
+/show <file.md>

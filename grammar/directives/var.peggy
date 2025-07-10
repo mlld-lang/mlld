@@ -30,7 +30,13 @@ SlashVar "var directive"
         metaInfo.inferredType = 'array';
         metaInfo.isEmptyArray = value.items.length === 0;
       }
-      // Handle section extraction
+      // Handle alligator expressions (file/URL loading)
+      else if (value && value.type === 'alligator') {
+        processedValue = [value];
+        metaInfo.inferredType = value.options && value.options.section ? 'section-content' : 'file-content';
+        metaInfo.sourceType = value.source.type; // 'path' or 'url'
+      }
+      // Handle section extraction (legacy - should be removed once migrated)
       else if (value && value.type === 'section') {
         processedValue = [value];
         metaInfo.inferredType = 'section-content';
@@ -128,6 +134,8 @@ SlashVar "var directive"
     
   // Error: Unclosed array literal
   / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "[" &{
+      // peg$currPos is now after the '[', but isUnclosedArray expects to start from after '['
+      // So we pass the current position which is correct
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
       helpers.mlldError("Unclosed array in /var directive. Expected ']' to close the array.", "]", location());

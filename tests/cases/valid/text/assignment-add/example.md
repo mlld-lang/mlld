@@ -1,2 +1,2 @@
-/var @content = [file.md]
+/var @content = <file.md>
 /show @content

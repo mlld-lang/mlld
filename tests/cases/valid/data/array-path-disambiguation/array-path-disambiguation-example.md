@@ -14,19 +14,19 @@
 /show @nested
 
 ## Single string is path
-/var @path = [array-path-disambiguation-test.md]
+/var @path = <array-path-disambiguation-test.md>
 /show @path
 
 ## Absolute path is path
-/var @absPath = [/etc/hosts]
+/var @absPath = </etc/hosts>
 /show `First 30 chars: @absPath`
 
 ## Path with spaces needs quotes
-/var @spacePath = ["path with spaces.txt"]
+/var @spacePath = <"path with spaces.txt">
 /show @spacePath
 
 ## Multiple items always array
-/var @multi1 = [array-path-disambiguation-test.md, array-path-disambiguation-section.md]
+/var @multi1 = <array-path-disambiguation-test.md, array-path-disambiguation-section.md>
 /show @multi1
 
 ## Comma makes it array
@@ -34,5 +34,5 @@
 /show @comma
 
 ## Section extraction syntax
-/var @section = [array-path-disambiguation-section.md # section-name]
+/var @section = <array-path-disambiguation-section.md # section-name>
 /show @section

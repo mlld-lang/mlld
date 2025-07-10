@@ -213,7 +213,7 @@ describe('Fuzzy Local File Imports', () => {
   
   describe('Integration with @var directive', () => {
     it('should fuzzy match files in @text assignments', async () => {
-      const source = '/var @content = [./MY_IMPORTANT_FILE.MD]\n/show @content';
+      const source = '/var @content = <./MY_IMPORTANT_FILE.MD>\n/show @content';
       
       const result = await interpret(source, {
         fileSystem,
@@ -227,7 +227,7 @@ describe('Fuzzy Local File Imports', () => {
     it('should fuzzy match files with section extraction', async () => {
       await fileSystem.writeFile('/Guide.md', '# Guide\n\n## Setup\n\nInstall steps here\n\n## Usage\n\nHow to use');
       
-      const source = '/var @section = [./guide # Setup]\n/show @section';
+      const source = '/var @section = <./guide # Setup>\n/show @section';
       
       const result = await interpret(source, {
         fileSystem,

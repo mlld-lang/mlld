@@ -1,2 +1,2 @@
-/path @projectConfig = [@./config]
+/path @projectConfig = "@./config"
 /show ::The config is {{projectConfig}}::

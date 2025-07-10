@@ -47,19 +47,26 @@ ForeachArrayArgumentList
 // FOREACH SECTION EXTRACTION (NEW PATTERN)
 // -------------------------------------------------------------
 
-// Foreach with section extraction: foreach [path expression] as [[template]]
+// Foreach with section extraction: foreach <path expression> as [[template]]
 // This pattern enables direct iteration over arrays with section extraction and template application
 // Usage examples:
-//   - foreach [@files.path # tldr] as [[### {{files.name}}]]
-//   - foreach [../{{files.path}} # tldr] as [[### {{files.name}}]]
-//   - foreach [@docs.url # @docs.section] as [[## {{docs.title}}]]
+//   - foreach <@files.path # tldr> as [[### {{files.name}}]]
+//   - foreach <../{{files.path}} # tldr> as [[### {{files.name}}]]
+//   - foreach <@docs.url # @docs.section> as [[## {{docs.title}}]]
 ForeachSectionExpression
-  = "foreach" _ "[" _ pathParts:ForeachPathParts _ "#" _ section:SectionIdentifier _ "]" _ "as" _ template:TemplateCore {
-      helpers.debug('ForeachSectionExpression matched', { pathParts, section, template });
+  = "foreach" _ alligator:AlligatorExpression _ "as" _ template:StringLiteral {
+      helpers.debug('ForeachSectionExpression matched', { alligator, template });
       
-      // Extract the array variable from the path
-      // This is a simplified extraction - in practice, the interpreter
-      // will need to evaluate the full path expression
+      // Verify this is a section extraction
+      if (!alligator.options || !alligator.options.section) {
+        helpers.mlldError("Foreach section expression requires section extraction. Use: foreach <file # section> as \"template\"", ">", location());
+      }
+      
+      // Extract path parts and section from alligator
+      const pathParts = alligator.source.type === 'path' ? alligator.source.segments : [];
+      const section = alligator.options.section.identifier;
+      
+      // Extract the array variable from the path (for backward compatibility)
       let arrayVariable = null;
       let pathField = null;
       
@@ -78,6 +85,8 @@ ForeachSectionExpression
         sectionRaw = '@' + section.identifier;
       } else if (typeof section === 'string') {
         sectionRaw = section;
+      } else if (section.type === 'Text') {
+        sectionRaw = section.content;
       } else {
         sectionRaw = section.content || section.identifier || '';
       }
@@ -86,10 +95,18 @@ ForeachSectionExpression
         type: "foreach-section",
         value: {
           type: 'foreach-section',
+          alligator: alligator,
           path: pathParts,
           section: Array.isArray(section) ? section : [section],
           sectionRaw: sectionRaw,
-          template: template,
+          template: {
+            values: {
+              content: [helpers.createNode(NodeType.Text, { content: template, location: location() })]
+            },
+            raw: {
+              content: template
+            }
+          },
           // Include simplified extraction for backward compatibility
           ...(arrayVariable ? { arrayVariable } : {}),
           ...(pathField ? { pathField } : {})

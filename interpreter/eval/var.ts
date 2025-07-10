@@ -244,6 +244,11 @@ export async function evaluateVar(
       resolvedValue = applyHeaderTransform(resolvedValue, newHeader);
     }
     
+  } else if (valueNode.type === 'load-content') {
+    // Content loader: <file.md> or <file.md # Section>
+    const { processContentLoader } = await import('./content-loader');
+    resolvedValue = await processContentLoader(valueNode, env);
+    
   } else if (valueNode.type === 'path') {
     // Path dereference: [README.md]
     const filePath = await interpolate(valueNode.segments, env);
@@ -433,6 +438,34 @@ export async function evaluateVar(
     const sectionName = await interpolate(valueNode.section, env);
     variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
       sectionName, 'hash', source, metadata);
+    
+  } else if (valueNode.type === 'load-content') {
+    // Handle load-content nodes from <file.md> syntax
+    const { source: contentSource, options } = valueNode;
+    
+    if (contentSource.type === 'path') {
+      // For now, treat it as file content
+      // TODO: We might want to store the raw path for lazy loading
+      const filePath = contentSource.raw || '';
+      
+      if (options?.section) {
+        // Section extraction case
+        const sectionName = options.section.identifier.content || '';
+        variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
+          sectionName, 'hash', source, metadata);
+      } else {
+        // Whole file case
+        variable = createFileContentVariable(identifier, resolvedValue, filePath, source, metadata);
+      }
+    } else if (contentSource.type === 'url') {
+      // URL content - for now treat as file content
+      // TODO: We might want a separate URL content variable type
+      const url = contentSource.raw || '';
+      variable = createFileContentVariable(identifier, resolvedValue, url, source, metadata);
+    } else {
+      // Default to simple text
+      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+    }
     
   } else if (valueNode.type === 'VariableReference') {
     // For now, create a variable based on the resolved type
@@ -705,6 +738,11 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
         // Fallback to basic extraction
         return extractSection(fileContent, sectionName);
       }
+
+    case 'load-content':
+      // Load content node in array - use the content loader
+      const { processContentLoader } = await import('./content-loader');
+      return await processContentLoader(item, env);
 
     default:
       // Handle plain objects without type property

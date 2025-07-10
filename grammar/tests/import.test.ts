@@ -61,7 +61,7 @@ describe('Import Directive Syntax Tests', () => {
     });
     
     it('should parse a namespace import with path variable and alias', async () => {
-      const input = '/import [@pathVar] as config';
+      const input = '/import "@pathVar" as config';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -109,7 +109,7 @@ describe('Import Directive Syntax Tests', () => {
     // The test for aliases has been removed as this syntax is no longer supported
     
     it('should parse an import with @var variable in path', async () => {
-      const input = '/import { var1 } from [prefix/@textVar/suffix.mlld]';
+      const input = '/import { var1 } from "prefix/@textVar/suffix.mlld"';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');

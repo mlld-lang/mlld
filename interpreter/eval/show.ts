@@ -605,6 +605,24 @@ export async function evaluateShow(
       content = String(result);
     }
     
+  } else if (directive.subtype === 'showLoadContent') {
+    // Handle load content expressions: <file.md> or <file.md # Section>
+    const loadContentNode = directive.values?.loadContent;
+    if (!loadContentNode) {
+      throw new Error('Show load content directive missing content loader');
+    }
+    
+    // Use the content loader to process the node
+    const { processContentLoader } = await import('./content-loader');
+    content = await processContentLoader(loadContentNode, env);
+    
+    // Handle rename if newTitle is specified (for section extraction)
+    const newTitleNodes = directive.values?.newTitle;
+    if (newTitleNodes && loadContentNode.options?.section) {
+      const newTitle = await interpolate(newTitleNodes, env);
+      content = applyHeaderTransform(content, newTitle);
+    }
+    
   } else {
     throw new Error(`Unsupported show subtype: ${directive.subtype}`);
   }
