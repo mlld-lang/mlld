@@ -25,8 +25,8 @@
 /var @spacePath = <"path with spaces.txt">
 /show @spacePath
 
-## Multiple items always array (with quotes)
-/var @multi1 = <"array-path-disambiguation-test.md", "array-path-disambiguation-section.md">
+## Multiple items always array (with alligators)
+/var @multi1 = [<array-path-disambiguation-test.md>, <array-path-disambiguation-section.md>]
 /show @multi1
 
 ## Comma makes it array

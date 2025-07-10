@@ -114,20 +114,26 @@ This design keeps documents readable as regular Markdown while enabling programm
 /show @welcome("Bob", "developer")
 ```
 
-### 8. File Dereferencing with Brackets
+### 8. File Loading with Angle Brackets (Alligators)
 
-**Key Concept**: Brackets `[...]` mean "give me the contents of this file", not the filename itself.
+**Key Concept**: Angle brackets `<...>` mean "give me the contents of this file", not the filename itself.
 
 ```mlld
-/var @content = [README.md]      << Loads file contents into @content
+/var @content = <README.md>      << Loads file contents into @content
 /var @path = "README.md"         << Stores the string "README.md" in @path
 
-/show [config.json]              << Shows contents of config.json
+/show <config.json>              << Shows contents of config.json
 /show "config.json"              << Shows the text "config.json"
 
 >> Same principle applies everywhere:
-/import { data } from [local/data.json]    << Imports from file contents
-/exe @docs = [./documentation.md]          << Loads documentation content
+/import { data } from <local/data.json>    << Imports from file contents
+/exe @docs = <./documentation.md>          << Loads documentation content
+
+>> Arrays vs File Loading - Crystal Clear Distinction:
+/var @array = [1, 2, 3]          << Square brackets = array literal
+/var @files = ["a.md", "b.md"]   << Array of strings (filenames)
+/var @content = <README.md>      << Angle brackets = load file contents
+/var @contents = [<a.md>, <b.md>]  << Array of loaded file contents!
 ```
 
 ### 9. Import Patterns
@@ -139,20 +145,20 @@ This design keeps documents readable as regular Markdown while enabling programm
 /import { parallel, retry } from @mlld/core
 /import { utils } from @company/utils
 
->> PATH imports (WITH BRACKETS for resolver paths):
-/import { readme } from [@./README.md]
-/import { config } from [@PROJECTPATH/config.mld]
-/import { shared } from [@local/utils.mld]
+>> PATH imports (WITH ANGLE BRACKETS for resolver paths):
+/import { readme } from <@./README.md>
+/import { config } from <@PROJECTPATH/config.mld>
+/import { shared } from <@local/utils.mld>
 
 >> Regular path imports (quotes, no @ prefix):
 /import { helper, config } from "./utils.mld"
 ```
 
-**Why brackets matter:**
-- `[@./file.md]` - Brackets tell mlld "resolve this path and read the file"
-- `@author/module` - No brackets means "resolve this as a module reference"
+**Why angle brackets matter:**
+- `<@./file.md>` - Angle brackets tell mlld "resolve this path and read the file"
+- `@author/module` - No angle brackets means "resolve this as a module reference"
 
-Without brackets, `@./file` would be treated as trying to import from a user named "." - which is why you might see errors like "User '.' not found in registry".
+Without angle brackets, `@./file` would be treated as trying to import from a user named "." - which is why you might see errors like "User '.' not found in registry".
 
 ### 10. Conditional Logic with /when
 
@@ -293,9 +299,9 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /var @date = run "date"
 /var @files = run {ls -la | head -5}
 
->> File content - brackets dereference (load file contents)
-/var @readme = [README.md]              << Gets file contents
-/var @section = [docs.md # Installation]  << Gets specific section
+>> File content - angle brackets dereference (load file contents)
+/var @readme = <README.md>              << Gets file contents
+/var @section = <docs.md # Installation>  << Gets specific section
 /var @filename = "README.md"            << Gets literal string "README.md"
 
 >> Code execution
@@ -369,7 +375,7 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /exe @greet(name) = `Hello @name!`
 
 >> Section executable
-/exe @getIntro(file) = [@file # Introduction]
+/exe @getIntro(file) = <@file # Introduction>
 ```
 
 ## Conditional Logic (/when)
@@ -735,11 +741,11 @@ author: Your Name
 ### URL Support
 ```mlld
 >> Add content from URLs directly:
-/show [https://raw.githubusercontent.com/example/repo/main/README.md]
+/show <https://raw.githubusercontent.com/example/repo/main/README.md>
 
 >> Assign URL content to variables:
 /path @docs = "https://example.com/api-docs.md"
-/var @readme = [https://example.com/README.md]
+/var @readme = <https://example.com/README.md>
 ```
 
 ## Pipelines and Transformers
@@ -912,10 +918,10 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 /import { readme } from @./README.md      # Error: "User '.' not found in registry"
 /import { config } from @PROJECTPATH/config.mld  # Error: "User 'PROJECTPATH' not found"
 
-✅ RIGHT: Use brackets for resolver paths
-/import { readme } from [@./README.md]          # Path import needs brackets
-/import { config } from [@PROJECTPATH/config.mld]  # Resolver path needs brackets
-/import { utils } from @company/utils           # Module import - NO brackets
+✅ RIGHT: Use angle brackets for resolver paths
+/import { readme } from <@./README.md>          # Path import needs angle brackets
+/import { config } from <@PROJECTPATH/config.mld>  # Resolver path needs angle brackets
+/import { utils } from @company/utils           # Module import - NO angle brackets
 ```
 
 ### 9. JavaScript Confusion

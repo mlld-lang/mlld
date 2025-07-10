@@ -11,4 +11,5 @@ Welcome to our project! This guide will help you get up and running quickly.
 ## Installation
 
 Run `npm install` to get started.
+
 That's all!

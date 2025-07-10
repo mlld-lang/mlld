@@ -39,7 +39,7 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 ### Delimiters
 
 ```
-[ ]     Path boundaries and resolver paths
+< >     File/URL loading and content extraction
 :: ::   Template boundaries (double-bracket templates)
 { }     Command boundaries (braces for multi-line)
 " "     Command boundaries (quotes for single-line)
@@ -78,8 +78,8 @@ Syntax: Variables are created with `@identifier` and referenced with `@identifie
 ```mlld
 /path @docs = "./documentation"    # Create path variable
 @docs                              # Reference path variable
-[@./path]                          # Resolver path (needs brackets)
-[@PROJECTPATH/config]              # Project root resolver path
+<@./path>                          # Resolver path (needs alligators)
+<@PROJECTPATH/config>              # Project root resolver path
 ```
 
 ### Text Variables
@@ -126,11 +126,11 @@ def hello():
 ### /add
 
 ```mlld
-/show [path]
-/show [path # section_text]
-/show [path] as "# New Title"           # Rename section
-/show "Section" from [path]
-/show "Section" from [path] as "# New Title"
+/show <path>
+/show <path # section_text>
+/show <path> as "# New Title"           # Rename section
+/show "Section" from <path>
+/show "Section" from <path> as "# New Title"
 /show @variable                          # Add variable content
 /show "Literal text"                    # Add literal text
 /show ::Template with {{var}}::          # Add template
@@ -152,7 +152,7 @@ def hello():
 /import { greeting, config } from "shared.mld"      # File import
 /import { * } from "utils.mld"                      # Import all
 /import { fetchData } from @corp/utils              # Module import (no quotes)
-/import { readme } from [@./README.md]              # Resolver path import (brackets)
+/import { readme } from <@./README.md>              # Resolver path import (alligators)
 /import { API_KEY } from @INPUT                     # Environment variables
 ```
 
@@ -166,7 +166,7 @@ def hello():
   npm test
 }
 /exe @calculate(x) = js {return @x * 2}           # Code executable
-/exe @getIntro(file) = [@file # Introduction]     # Section executable
+/exe @getIntro(file) = <@file # Introduction>     # Section executable
 /exe @js = { formatDate, parseJSON }               # Shadow environment
 ```
 
@@ -203,7 +203,7 @@ def hello():
 ### Backtick Templates (Primary - with @ interpolation)
 ```mlld
 /var @message = `Hello @name, welcome to @place!`
-/var @link = `[@title](@url)`
+/var @link = `<@title>(@url)`
 ```
 
 ### Double-Bracket Templates (For @ heavy content)

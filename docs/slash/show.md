@@ -10,11 +10,11 @@ The `/show` directive displays content from external files, variables, or templa
 ## Syntax
 
 ```mlld
-/show [path]
-/show [path # section]
-/show [path # section] as "# New Title"
-/show "Section Title" from [path]
-/show "Section Title" from [path] as "# New Title"
+/show <path>
+/show <path # section>
+/show <path # section> as "# New Title"
+/show "Section Title" from <path>
+/show "Section Title" from <path> as "# New Title"
 /show @variable
 /show "literal text"
 /show ::template content with {{variables}}::
@@ -32,8 +32,8 @@ Where:
 
 Basic file inclusion:
 ```mlld
-/show [README.md]
-/show [docs/guide.md]
+/show <README.md>
+/show <docs/guide.md>
 ```
 
 ## Section Extraction
@@ -42,14 +42,14 @@ Extract specific sections from files:
 
 ```mlld
 # Extract a section keeping its original title
-/show [guide.md # Getting Started]
+/show <guide.md # Getting Started>
 
 # Extract a section with a new title
-/show [guide.md # Getting Started] as "# Quick Start"
+/show <guide.md # Getting Started> as "# Quick Start"
 
 # Extract by section title from the beginning
-/show "Getting Started" from [guide.md]
-/show "Getting Started" from [guide.md] as "# Quick Start"
+/show "Getting Started" from <guide.md>
+/show "Getting Started" from <guide.md> as "# Quick Start"
 ```
 
 ## Including Variables
@@ -89,12 +89,12 @@ Use template functions defined with /exec:
 ## Path Types
 
 Paths can be:
-- Relative: `[docs/guide.md]`
-- Absolute: `[/usr/local/docs/guide.md]`
-- Project relative: `[@./docs/guide.md]`
-- From path variable: `[@docsPath/guide.md]`
-- URLs: `[https://example.com/guide.md]`
-- Resolver paths: `[@PROJECTPATH/docs/guide.md]`
+- Relative: `<docs/guide.md>`
+- Absolute: `</usr/local/docs/guide.md>`
+- Project relative: `<@./docs/guide.md>`
+- From path variable: `<@docsPath/guide.md>`
+- URLs: `<https://example.com/guide.md>`
+- Resolver paths: `<@PROJECTPATH/docs/guide.md>`
 
 ## Error Handling
 
@@ -108,25 +108,25 @@ The implementation handles these error scenarios:
 
 Include entire file:
 ```mlld
-/show [README.md]
-/show [@./docs/architecture.md]
+/show <README.md>
+/show <@./docs/architecture.md>
 ```
 
 Include specific sections:
 ```mlld
-/show [docs/api.md # Authentication]
-/show "## Installation" from [README.md]
+/show <docs/api.md # Authentication>
+/show "## Installation" from <README.md>
 ```
 
 Include with renamed sections:
 ```mlld
-/show [guide.md # Getting Started] as "# Quick Start Guide"
-/show "Installation" from [README.md] as "## Setup Instructions"
+/show <guide.md # Getting Started> as "# Quick Start Guide"
+/show "Installation" from <README.md> as "## Setup Instructions"
 ```
 
 Include from URLs:
 ```mlld
-/show [https://raw.githubusercontent.com/example/repo/main/README.md]
+/show <https://raw.githubusercontent.com/example/repo/main/README.md>
 ```
 
 Include literal text and variables:

@@ -1,7 +1,6 @@
 # GitHub Issue: Object Property Access in Function Arguments
 
 This test specifically verifies the scenarios described in the GitHub issue.
-
 User name: Alice
 User age: 30
 User active: true

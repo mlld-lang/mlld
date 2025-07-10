@@ -112,18 +112,20 @@ async function extractSectionName(sectionNode: any, env: Environment): Promise<s
     });
   }
 
-  // Section identifier might be Text or could have variables
+  // Section identifier might be Text, VariableReference, or array of nodes
   const identifier = sectionNode.identifier;
   
   if (identifier.type === 'Text') {
     return identifier.content;
+  } else if (identifier.type === 'VariableReference') {
+    // Import interpolate function
+    const { interpolate } = await import('../core/interpreter');
+    // Handle variable reference as section name
+    return await interpolate([identifier], env);
   } else if (Array.isArray(identifier)) {
     // Handle array of nodes (with potential variable interpolation)
-    // For now, just concatenate text nodes
-    return identifier
-      .filter(node => node.type === 'Text')
-      .map(node => node.content)
-      .join('');
+    const { interpolate } = await import('../core/interpreter');
+    return await interpolate(identifier, env);
   }
 
   throw new MlldError('Unable to extract section name', {

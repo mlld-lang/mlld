@@ -16,10 +16,10 @@ Module imports (no quotes):
 /import { func1, func2 } from @author/module    # Import from registry module
 ```
 
-Resolver path imports (with brackets):
+Resolver path imports (with alligators):
 ```mlld
-/import { readme } from [@./README.md]          # Import from resolver path
-/import { config } from [@PROJECTPATH/config.mld]  # Project root resolver
+/import { readme } from <@./README.md>          # Import from resolver path
+/import { config } from <@PROJECTPATH/config.mld>  # Project root resolver
 ```
 
 Environment variable imports:
@@ -93,8 +93,8 @@ Module import:
 
 Resolver path import:
 ```mlld
-/import { readme } from [@./README.md]
-/import { shared } from [@lib/shared-utils.mld]  # Custom resolver prefix
+/import { readme } from <@./README.md>
+/import { shared } from <@lib/shared-utils.mld>  # Custom resolver prefix
 ```
 
 Environment variables:
@@ -129,5 +129,5 @@ The implementation handles various error scenarios:
 - Variables with the same name will be overwritten (last imported wins)
 - Circular imports are detected and will generate errors
 - Module imports don't use quotes: `@author/module`
-- Resolver paths require brackets: `[@./path]`
+- Resolver paths require alligators: `<@./path>`
 - Environment variables must be allowed in `mlld.lock.json`

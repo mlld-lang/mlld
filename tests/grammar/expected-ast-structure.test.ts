@@ -236,7 +236,12 @@ describe('Expected AST Structure - Complex Structures', () => {
       
       // Primitives stay as primitives
       expect(normalized.items[0]).toBe(1);
-      expect(normalized.items[1]).toBe('text');
+      // Strings in arrays are wrapped objects with content array
+      expect(normalized.items[1]).toHaveProperty('content');
+      expect(normalized.items[1]).toHaveProperty('wrapperType', 'doubleQuote');
+      expect(Array.isArray(normalized.items[1].content)).toBe(true);
+      expect(normalized.items[1].content[0]).toHaveProperty('type', 'Text');
+      expect(normalized.items[1].content[0]).toHaveProperty('content', 'text');
       expect(normalized.items[3]).toBe(true);
       expect(normalized.items[4]).toBe(null);
       

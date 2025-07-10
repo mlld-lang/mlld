@@ -89,7 +89,7 @@ See full docs: [fix-relative-links](./llm/modules/fix-relative-links.mld.md#docs
 Recalculates relative links when moving content between directories:
 
 ```mlld
-/import [fix-relative-links.mld.md]
+/import <fix-relative-links.mld.md>
 
 /var @content = "See the [docs](../docs/guide.md) for details."
 

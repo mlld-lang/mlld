@@ -56,7 +56,7 @@ describe('Grammar-Type System Alignment', () => {
     it('should reject invalid text subtypes', async () => {
       // This test would fail currently because grammar produces
       // subtypes like 'textPath' that don't exist in types
-      const input = '/var @content = [file.md]';
+      const input = '/var @content = <file.md>';
       const result = await parse(input);
       const ast = result.ast;
       

@@ -16,8 +16,8 @@ Path variables are used for filesystem paths and command arguments:
 ```mlld
 /path @docs = "./documentation"    # Define a path variable
 @docs                              # Reference a path variable
-[@./path]                          # Resolver path (with brackets)
-[@PROJECTPATH/config]              # Project root resolver path
+<@./path>                          # Resolver path (with alligators)
+<@PROJECTPATH/config>              # Project root resolver path
 ```
 
 - Must be defined with `/path` directive with `@` prefix
@@ -29,7 +29,7 @@ Path variables are used for filesystem paths and command arguments:
 Example:
 ```mlld
 /path @docs = "./docs"
-/show [@docs/guide.md]
+/show <@docs/guide.md>
 /path @output = "build/@version"
 ```
 

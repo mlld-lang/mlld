@@ -311,7 +311,7 @@ SlashOutput
     
   // Error: Generic /output syntax error (catch-all)
   / DirectiveContext "/output" {
-      helpers.mlldError("Invalid /output syntax. Expected: /output @variable to \"path\", /output [path], or /output @variable to stdout/stderr/env", "@", location());
+      helpers.mlldError("Invalid /output syntax. Expected: /output @variable to \"path\", /output [path], or /output @variable to stdout/stderr/env. Note: String literals cannot be used as output sources. To output text content, first assign it to a variable: /var @content = \"your text\", then use: /output @content to \"file.txt\"", "@", location());
     }
 
 // Output source types

@@ -14,7 +14,7 @@ The `/exe` directive creates reusable commands, templates, and functions that ca
 /exe @commandName(param) = "command with @param"       # Parameterized command
 /exe @funcName(param) = js {return @param * 2}         # Code function
 /exe @template(name) = `Hello @name!`                  # Template function
-/exe @section(file) = [@file # Introduction]           # Section reference
+/exe @section(file) = <@file # Introduction>           # Section reference
 /exe @js = { func1, func2 }                            # Shadow environment
 ```
 
@@ -87,7 +87,7 @@ Define JavaScript code blocks:
 Create reusable templates:
 ```mlld
 /exe @greeting(name, time) = `Good @time, @name!`
-/exe @link(text, url) = `[@text](@url)`
+/exe @link(text, url) = `<@text>(@url)`
 /exe @section(title, content) = ::
 # {{title}}
 

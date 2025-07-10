@@ -97,7 +97,7 @@ export const importFixtures: DirectiveFixture[] = [
   {
     name: 'import-with-path-variable',
     description: 'Import directive with path variable using @path format',
-    input: '/import { name } from [@path]',
+    input: '/import { name } from "@path"',
     expected: {
       kind: 'import',
       subtype: 'importSelected',

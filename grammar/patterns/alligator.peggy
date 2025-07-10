@@ -54,8 +54,30 @@ AlligatorURL "URL source"
 
 // Path source - for local files
 AlligatorPath "file path source"
+  = AlligatorQuotedPath
+  / AlligatorUnquotedPath
+
+// Quoted path - handles paths with spaces
+AlligatorQuotedPath "quoted path"
+  = '"' chars:QuotedPathChar* '"' {
+      helpers.debug('AlligatorQuotedPath matched', { chars });
+      const pathString = chars.join('');
+      const textNode = helpers.createNode(NodeType.Text, { 
+        content: pathString, 
+        location: location() 
+      });
+      return {
+        type: 'path',
+        segments: [textNode],
+        raw: pathString,
+        meta: helpers.createPathMetadata(pathString, [textNode])
+      };
+    }
+
+// Unquoted path - the existing implementation
+AlligatorUnquotedPath "unquoted path"
   = parts:AlligatorPathParts {
-      helpers.debug('AlligatorPath matched', { parts });
+      helpers.debug('AlligatorUnquotedPath matched', { parts });
       const pathString = helpers.reconstructRawString(parts);
       return {
         type: 'path',
@@ -64,6 +86,10 @@ AlligatorPath "file path source"
         meta: helpers.createPathMetadata(pathString, parts)
       };
     }
+
+// Characters allowed in quoted paths
+QuotedPathChar
+  = !'"' char:. { return char; }
 
 // Path parts that can include variables
 AlligatorPathParts "alligator path parts"

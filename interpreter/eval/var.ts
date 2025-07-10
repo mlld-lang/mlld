@@ -587,7 +587,8 @@ function hasComplexValues(properties: any): boolean {
         value.type === 'path' ||
         value.type === 'section' ||
         value.type === 'runExec' ||
-        value.type === 'ExecInvocation'
+        value.type === 'ExecInvocation' ||
+        value.type === 'load-content'
       )) {
         return true;
       }
@@ -626,7 +627,8 @@ function hasComplexArrayItems(items: any[]): boolean {
         item.type === 'array' ||
         item.type === 'object' ||
         item.type === 'path' ||
-        item.type === 'section'
+        item.type === 'section' ||
+        item.type === 'load-content'
       )) {
         return true;
       }
