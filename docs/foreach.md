@@ -15,7 +15,7 @@ Apply exec commands or text templates to arrays with cartesian product support.
 ### Pattern 2: Section Extraction (NEW)
 
 ```mlld
-/var @<result> = foreach [@array.field # section] as ::template::
+/var @<result> = foreach <@array.field # section> as ::template::
 ```
 
 Extract sections from files and apply templates directly - perfect for documentation assembly.
@@ -173,7 +173,7 @@ Extract the same section from multiple files:
 ]
 
 # Extract "introduction" section from each file
-@data intros = foreach [@files.path # introduction] as ::### {{files.name}}::
+@data intros = foreach <@files.path # introduction> as ::### {{files.name}}::
 @add @intros
 ```
 
@@ -191,7 +191,7 @@ Use dynamic section names stored in the array data:
 ]
 
 # Extract different sections based on array data
-@data sections = foreach [@docs.path # @docs.section] as ::## {{docs.title}}::
+@data sections = foreach <@docs.path # @docs.section> as ::## {{docs.title}}::
 @add @sections
 ```
 
@@ -200,11 +200,11 @@ Use dynamic section names stored in the array data:
 Perfect for building documentation from module files:
 
 ```mlld
-@import [@./scan.mld.md]  # Assume this provides file scanning
+@import <@./scan.mld.md>  # Assume this provides file scanning
 @data modules = @scanFiles("./modules", "*.mld.md")
 
 # Extract tldr sections and format as module index
-@add foreach [@modules.path # tldr] as ::### [{{modules.frontmatter.name}}]({{modules.path}})::
+@add foreach <@modules.path # tldr> as ::### [{{modules.frontmatter.name}}]({{modules.path}})::
 ```
 
 ### All Directive Support
@@ -213,13 +213,13 @@ Section extraction works with all foreach-compatible directives:
 
 ```mlld
 # Data directive - store results
-@data summaries = foreach [@files.path # summary] as ::{{files.name}}: Summary::
+@data summaries = foreach <@files.path # summary> as ::{{files.name}}: Summary::
 
 # Text directive - assign to variable  
-@text content = foreach [@docs.path # @docs.section] as ::## {{docs.title}}::
+@text content = foreach <@docs.path # @docs.section> as ::## {{docs.title}}::
 
 # Add directive - direct output
-@add foreach [@modules.path # interface] as ::```{{modules.language}}\n{{content}}\n```::
+@add foreach <@modules.path # interface> as ::```{{modules.language}}\n{{content}}\n```::
 ```
 
 ### Section Variable Collection (Traditional Method)
@@ -235,7 +235,7 @@ For comparison, the traditional method using parameterized commands:
 @add @allSections
 
 # Or extract from specific files
-@exec getSection(file, section) = run [(echo "From @file:")]\n@add [file.md # @section]
+@exec getSection(file, section) = run [(echo "From @file:")]\n@add <file.md # @section>
 @data files = ["report1.md", "report2.md", "report3.md"]
 @data sections = ["summary", "recommendations"]
 @data extracted = foreach @getSection(@files, @sections)
@@ -255,7 +255,7 @@ Build documentation by collecting sections across multiple files:
 
 @text includeSection(source) = ::
 ## {{source.section}} 
-@add [{{source.file}} # {{source.section}}]
+@add <{{source.file}} # {{source.section}}>
 ::
 
 @data documentation = foreach @includeSection(@sources)

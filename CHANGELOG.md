@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `mlld mode clear/reset` - Remove mode setting (defaults to user)
   - Mode stored in `mlld.lock.json` under `config.mode`
   - Future extensibility for security modes with different permissions
+- **Alligator Syntax**: New syntax for file loading that eliminates bracket ambiguity
+  - File loading: `<file.md>` replaces `[file.md]`
+  - Section extraction: `<file.md # Section>` replaces `[file.md # Section]`
+  - URL loading: `<https://example.com/file.md>` replaces `[https://example.com/file.md]`
+  - Resolver paths: `<@./path>` and `<@PROJECTPATH/path>` replace bracketed versions
+  - Square brackets `[...]` now exclusively mean arrays, removing all ambiguity
+  - Clear visual distinction: angles `<>` load content, brackets `[]` define arrays
 
 ### Fixed
 - Duplicate `--dev` case clause in ArgumentParser
