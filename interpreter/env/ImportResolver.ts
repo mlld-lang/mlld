@@ -160,6 +160,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       return this.fetchURL(pathOrUrl);
     }
     const resolvedPath = await this.resolvePath(pathOrUrl);
+    
     return this.dependencies.fileSystem.readFile(resolvedPath);
   }
   

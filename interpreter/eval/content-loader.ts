@@ -1,6 +1,6 @@
 import { Environment } from '@interpreter/env/Environment';
 import { MlldError } from '@core/errors';
-import { extractSectionFromMarkdown } from 'llmxml';
+import { llmxmlInstance } from '../utils/llmxml-instance';
 
 /**
  * Process content loading expressions (<file.md> syntax)
@@ -48,7 +48,9 @@ export async function processContentLoader(node: any, env: Environment): Promise
     // Extract section if specified
     if (options?.section) {
       const sectionName = await extractSectionName(options.section, env);
-      return extractSection(content, sectionName, options.section.renamed);
+      
+      
+      return await extractSection(content, sectionName, options.section.renamed);
     }
     
     return content;
@@ -65,10 +67,10 @@ export async function processContentLoader(node: any, env: Environment): Promise
  */
 function reconstructPath(pathNode: any): string {
   if (!pathNode.segments || !Array.isArray(pathNode.segments)) {
-    return pathNode.raw || '';
+    return (pathNode.raw || '').trim();
   }
 
-  return pathNode.segments.map((segment: any) => {
+  const reconstructed = pathNode.segments.map((segment: any) => {
     if (segment.type === 'Text') {
       return segment.content;
     } else if (segment.type === 'PathSeparator') {
@@ -81,6 +83,9 @@ function reconstructPath(pathNode: any): string {
     }
     return '';
   }).join('');
+  
+  // Trim the final path to handle trailing spaces before section markers
+  return reconstructed.trim();
 }
 
 /**
@@ -129,17 +134,21 @@ async function extractSectionName(sectionNode: any, env: Environment): Promise<s
 /**
  * Extract a section from markdown content
  */
-function extractSection(content: string, sectionName: string, renamedTitle?: string): string {
+async function extractSection(content: string, sectionName: string, renamedTitle?: string): Promise<string> {
   try {
-    const extracted = extractSectionFromMarkdown(content, {
-      sectionName: sectionName,
-      includeHeading: true
-    });
+    let extracted;
+    try {
+      extracted = await llmxmlInstance.getSection(content, sectionName, {
+        includeNested: true
+      });
+    } catch (llmxmlError: any) {
+      throw llmxmlError;
+    }
 
     if (!extracted) {
       throw new MlldError(`Section "${sectionName}" not found in content`, {
         sectionName: sectionName,
-        availableSections: getAvailableSections(content)
+        availableSections: await getAvailableSections(content)
       });
     }
 
@@ -168,16 +177,22 @@ function extractSection(content: string, sectionName: string, renamedTitle?: str
 /**
  * Get list of available sections in markdown content (for error messages)
  */
-function getAvailableSections(content: string): string[] {
-  const sections: string[] = [];
-  const lines = content.split('\n');
-  
-  for (const line of lines) {
-    const match = line.match(/^#+\s+(.+)$/);
-    if (match) {
-      sections.push(match[1]);
+async function getAvailableSections(content: string): Promise<string[]> {
+  try {
+    const headings = await llmxmlInstance.getHeadings(content);
+    return headings.map(h => h.title);
+  } catch {
+    // Fallback to simple regex if llmxml fails
+    const sections: string[] = [];
+    const lines = content.split('\n');
+    
+    for (const line of lines) {
+      const match = line.match(/^#+\s+(.+)$/);
+      if (match) {
+        sections.push(match[1]);
+      }
     }
+    
+    return sections;
   }
-  
-  return sections;
 }

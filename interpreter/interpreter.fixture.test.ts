@@ -38,6 +38,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     // Extract the base name from the fixture path
     const baseName = path.basename(fixtureName, '.generated-fixture.json');
     
+    
     // Map fixture names to example directory paths
     const exampleDirMappings: Record<string, string> = {
       'text-assignment-add': 'text/assignment-add',
@@ -332,6 +333,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       // Then, set up any files from the examples directory (overrides shared files)
       await setupExampleFiles(fixtureFile);
       
+      
       // Finally, set up any required files specified in the fixture (highest priority)
       if (fixture.files) {
         for (const [filePath, content] of Object.entries(fixture.files)) {
@@ -568,6 +570,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       try {
         // For path assignment tests, we need to set the correct basePath
         let basePath = fixture.basePath || '/';
+        
         if (fixture.name === 'path-assignment-project' || fixture.name === 'path-assignment-special') {
           basePath = '/mock/project';
         }

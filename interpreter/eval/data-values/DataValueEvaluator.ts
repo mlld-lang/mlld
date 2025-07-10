@@ -6,6 +6,7 @@ import { CollectionEvaluator } from './CollectionEvaluator';
 import { VariableReferenceEvaluator } from './VariableReferenceEvaluator';
 import { ForeachCommandEvaluator } from './ForeachCommandEvaluator';
 import { ForeachSectionEvaluator } from './ForeachSectionEvaluator';
+import { LoadContentEvaluator } from './LoadContentEvaluator';
 import { logger } from '@core/utils/logger';
 
 /**
@@ -30,6 +31,7 @@ export class DataValueEvaluator {
   private readonly variableReferenceEvaluator: VariableReferenceEvaluator;
   private readonly foreachCommandEvaluator: ForeachCommandEvaluator;
   private readonly foreachSectionEvaluator: ForeachSectionEvaluator;
+  private readonly loadContentEvaluator: LoadContentEvaluator;
 
   constructor() {
     // Initialize state manager
@@ -41,6 +43,7 @@ export class DataValueEvaluator {
     this.variableReferenceEvaluator = new VariableReferenceEvaluator(this.evaluate.bind(this));
     this.foreachCommandEvaluator = new ForeachCommandEvaluator(this.evaluate.bind(this));
     this.foreachSectionEvaluator = new ForeachSectionEvaluator(this.evaluate.bind(this));
+    this.loadContentEvaluator = new LoadContentEvaluator();
   }
 
   /**
@@ -72,6 +75,10 @@ export class DataValueEvaluator {
       
       if (this.foreachSectionEvaluator.canHandle(value)) {
         return await this.foreachSectionEvaluator.evaluate(value, env);
+      }
+      
+      if (this.loadContentEvaluator.canHandle(value)) {
+        return await this.loadContentEvaluator.evaluate(value, env);
       }
       
       // Fallback - return the value as-is

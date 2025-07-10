@@ -9,6 +9,8 @@ export class MemoryFileSystem implements IFileSystemService {
   
   async readFile(filePath: string): Promise<string> {
     const normalizedPath = this.normalizePath(filePath);
+    
+    
     const content = this.files.get(normalizedPath);
     if (content === undefined) {
       const error = new Error(`ENOENT: no such file or directory, open '${filePath}'`) as any;
@@ -21,6 +23,7 @@ export class MemoryFileSystem implements IFileSystemService {
   
   async writeFile(filePath: string, content: string): Promise<void> {
     const normalizedPath = this.normalizePath(filePath);
+    
     // Create parent directories if they don't exist
     const dir = this.dirname(normalizedPath);
     if (dir && dir !== '/' && !await this.isDirectory(dir)) {
