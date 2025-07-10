@@ -95,8 +95,12 @@ AlligatorPathChar
 
 // Options for alligator expressions
 AlligatorOptions
-  = _ section:SectionClause {
-      return { section };
+  = _ section:SectionClause rename:AsRename? {
+      const options = { section };
+      if (rename) {
+        section.renamed = rename;
+      }
+      return options;
     }
 
 // Section extraction clause
@@ -129,7 +133,13 @@ AlligatorSectionIdentifier "alligator section identifier"
 
 // Characters allowed in section names (inside alligators)
 AlligatorSectionChar
-  = !">" char:. { return char; }
+  = !">" !"as" char:. { return char; }
+
+// Rename clause for sections
+AsRename "section rename"
+  = _ "as" _ title:StringLiteral {
+      return title;
+    }
 
 // URL components
 URLHost

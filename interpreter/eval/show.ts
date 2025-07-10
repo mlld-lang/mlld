@@ -31,16 +31,6 @@ import { logger } from '@core/utils/logger';
 // Template normalization now handled in grammar - no longer needed here
 
 /**
- * Remove single blank lines but preserve multiple blank lines.
- * This helps match the expected output format.
- */
-function compactBlankLines(content: string): string {
-  // This operates on final output strings, not AST content
-  // eslint-disable-next-line mlld/no-ast-string-manipulation
-  return content.replace(/\n\n/g, '\n');
-}
-
-/**
  * Evaluate /show directives.
  * Handles variable references, paths, and templates.
  * 
@@ -318,8 +308,8 @@ export async function evaluateShow(
       content = await llmxmlInstance.getSection(fileContent, titleWithoutHash, {
         includeNested: true
       });
-      // Compact blank lines and trim
-      content = compactBlankLines(content).trimEnd();
+      // Just trim trailing whitespace
+      content = content.trimEnd();
     } catch (error) {
       // Fallback to basic extraction if llmxml fails
       content = extractSection(fileContent, sectionTitle);

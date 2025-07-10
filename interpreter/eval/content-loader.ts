@@ -152,17 +152,11 @@ async function extractSection(content: string, sectionName: string, renamedTitle
       });
     }
 
-    // If renamed, replace the heading
+    // If renamed, apply header transformation
     if (renamedTitle) {
-      const lines = extracted.split('\n');
-      if (lines.length > 0 && lines[0].startsWith('#')) {
-        // Preserve the heading level
-        const headingMatch = lines[0].match(/^(#+)\s/);
-        if (headingMatch) {
-          lines[0] = `${headingMatch[1]} ${renamedTitle}`;
-          return lines.join('\n');
-        }
-      }
+      // Import the shared header transform function
+      const { applyHeaderTransform } = await import('./show');
+      return applyHeaderTransform(extracted, renamedTitle);
     }
 
     return extracted;

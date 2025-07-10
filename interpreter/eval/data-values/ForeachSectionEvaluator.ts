@@ -61,9 +61,9 @@ export class ForeachSectionEvaluator {
     let actualPathField = pathField;
     let actualPath = path;
     
-    if (alligator) {
-      // Extract from alligator structure
-      actualPath = alligator.source.segments;
+    if (alligator && alligator.type === 'load-content') {
+      // Extract from new alligator structure
+      actualPath = alligator.source?.segments;
       
       // Look for a variable reference in the path segments
       if (actualPath) {
@@ -141,6 +141,8 @@ export class ForeachSectionEvaluator {
         if (actualPath) {
           // For flexible path expressions, evaluate the entire path
           pathValue = await interpolate(actualPath, childEnv);
+          // Trim any trailing whitespace from path
+          pathValue = pathValue.trim();
         } else if (actualPathField) {
           // For simple case, get path from item field
           if (!item || typeof item !== 'object') {
@@ -160,7 +162,7 @@ export class ForeachSectionEvaluator {
         
         // Get section from alligator or legacy structure
         let sectionToProcess = section;
-        if (alligator && alligator.options && alligator.options.section) {
+        if (alligator && alligator.type === 'load-content' && alligator.options?.section) {
           sectionToProcess = alligator.options.section.identifier;
         }
         

@@ -54,7 +54,7 @@ ForeachArrayArgumentList
 //   - foreach <../{{files.path}} # tldr> as [[### {{files.name}}]]
 //   - foreach <@docs.url # @docs.section> as [[## {{docs.title}}]]
 ForeachSectionExpression
-  = "foreach" _ alligator:AlligatorExpression _ "as" _ template:StringLiteral {
+  = "foreach" _ alligator:AlligatorExpression _ "as" _ template:InterpolatedDoubleQuoteContent {
       helpers.debug('ForeachSectionExpression matched', { alligator, template });
       
       // Verify this is a section extraction
@@ -101,10 +101,10 @@ ForeachSectionExpression
           sectionRaw: sectionRaw,
           template: {
             values: {
-              content: [helpers.createNode(NodeType.Text, { content: template, location: location() })]
+              content: template  // template is already an array of nodes from InterpolatedDoubleQuoteContent
             },
             raw: {
-              content: template
+              content: helpers.reconstructRawString(template)
             }
           },
           // Include simplified extraction for backward compatibility

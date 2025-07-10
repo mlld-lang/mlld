@@ -79,6 +79,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'data-array-path-disambiguation': 'data/array-path-disambiguation',
       'data-object-literals-in-arrays': 'data/object-literals-in-arrays',
       'data-array-valid-patterns': 'data/array-valid-patterns',
+      'add-foreach-section-literal': 'add/foreach-section-literal',
+      'add-foreach-section-modules': 'add/foreach-section-modules',
     };
     
     // Check if we have a mapping for this fixture
