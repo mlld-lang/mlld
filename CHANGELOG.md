@@ -29,6 +29,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Resolver paths: `<@./path>` and `<@PROJECTPATH/path>` replace bracketed versions
   - Square brackets `[...]` now exclusively mean arrays, removing all ambiguity
   - Clear visual distinction: angles `<>` load content, brackets `[]` define arrays
+- **Glob Pattern Support**: Alligator syntax now supports glob patterns for loading multiple files
+  - Glob patterns: `<*.md>`, `<**/*.ts>`, `<src/**/*.js>`
+  - Returns array of LoadContentResult objects with metadata
+  - Each file includes content and rich metadata properties
+- **Rich Metadata for Loaded Content**: Files loaded with `<>` syntax now include metadata
+  - `content`: The file's text content (default when used as string)
+  - `filename`: Just the filename (e.g., "README.md")
+  - `relative`: Relative path from current directory
+  - `absolute`: Full absolute path
+  - `tokest`: Estimated token count based on file type (750/KB for text, 500/KB for code)
+  - `tokens`: Exact token count using tiktoken (lazy-evaluated)
+  - `fm`: Parsed frontmatter for markdown files (lazy-evaluated)
+  - `json`: Parsed JSON for .json files (lazy-evaluated)
+  - Access metadata with field syntax: `@file.filename`, `@file.tokest`, etc.
+  - Smart object behavior: shows content when displayed, preserves metadata when stored
 
 ### Fixed
 - Duplicate `--dev` case clause in ArgumentParser

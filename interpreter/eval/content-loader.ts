@@ -1,7 +1,7 @@
 import { Environment } from '@interpreter/env/Environment';
 import { MlldError } from '@core/errors';
 import { llmxmlInstance } from '../utils/llmxml-instance';
-import { LoadContentResult, LoadContentResultImpl } from './load-content-types';
+import { LoadContentResult, LoadContentResultImpl } from '@core/types/load-content';
 import fastGlob from 'fast-glob';
 import * as path from 'path';
 
@@ -87,24 +87,26 @@ export async function processContentLoader(node: any, env: Environment): Promise
 }
 
 /**
- * Load a single file and return LoadContentResult
+ * Load a single file and return LoadContentResult or string (if section extracted)
  */
-async function loadSingleFile(filePath: string, options: any, env: Environment): Promise<LoadContentResult> {
+async function loadSingleFile(filePath: string, options: any, env: Environment): Promise<LoadContentResult | string> {
   // Let Environment handle path resolution and fuzzy matching
   const content = await env.readFile(filePath);
   const resolvedPath = await env.resolvePath(filePath);
   
   
   // Extract section if specified
-  let finalContent = content;
   if (options?.section) {
     const sectionName = await extractSectionName(options.section, env);
-    finalContent = await extractSection(content, sectionName, options.section.renamed);
+    const sectionContent = await extractSection(content, sectionName, options.section.renamed);
+    
+    // For backward compatibility, return plain string when section is extracted
+    return sectionContent;
   }
   
-  // Create LoadContentResult with metadata
+  // Create LoadContentResult with metadata (only when no section extraction)
   const result = new LoadContentResultImpl({
-    content: finalContent,
+    content: content,
     filename: path.basename(resolvedPath),
     relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
     absolute: resolvedPath

@@ -191,7 +191,7 @@ export async function evaluateShow(
     }
     
     // Import LoadContentResult type check
-    const { isLoadContentResult, isLoadContentResultArray } = await import('./load-content-types');
+    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
     
     // Convert final value to string
     if (typeof value === 'string') {
@@ -625,7 +625,7 @@ export async function evaluateShow(
     
     // Use the content loader to process the node
     const { processContentLoader } = await import('./content-loader');
-    const { isLoadContentResult, isLoadContentResultArray } = await import('./load-content-types');
+    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
     const loadResult = await processContentLoader(loadContentNode, env);
     
     // Handle different return types from processContentLoader

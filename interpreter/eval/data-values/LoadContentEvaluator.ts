@@ -27,7 +27,18 @@ export class LoadContentEvaluator {
     }
     
     // Use the existing content loader
-    // Default to 'var' context for data value evaluation
-    return await processContentLoader(value, env);
+    const result = await processContentLoader(value, env);
+    
+    // Import type guards
+    const { isLoadContentResult } = await import('@core/types/load-content');
+    
+    // For consistency with the smart object approach,
+    // return just the content string when used in data contexts
+    if (isLoadContentResult(result)) {
+      return result.content;
+    }
+    
+    // For arrays or other types, return as-is
+    return result;
   }
 }

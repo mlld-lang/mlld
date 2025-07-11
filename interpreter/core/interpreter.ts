@@ -849,7 +849,7 @@ export async function interpolate(
         }
       } else if (typeof value === 'object') {
         // Check if this is a LoadContentResult - use its content
-        const { isLoadContentResult } = await import('../eval/load-content-types');
+        const { isLoadContentResult } = await import('@core/types/load-content');
         if (isLoadContentResult(value)) {
           stringValue = value.content;
         } else if (variable && variable.metadata?.isNamespace && node.fields?.length === 0) {

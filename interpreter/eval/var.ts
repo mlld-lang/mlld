@@ -447,7 +447,7 @@ export async function evaluateVar(
     const { source: contentSource, options } = valueNode;
     
     // Import type guards for LoadContentResult
-    const { isLoadContentResult, isLoadContentResultArray } = await import('./load-content-types');
+    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
     
     if (isLoadContentResult(resolvedValue)) {
       // Single file with metadata - store as object variable
@@ -762,7 +762,7 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
       const loadResult = await processContentLoader(item, env);
       
       // Check if this is a LoadContentResult and return its content
-      const { isLoadContentResult } = await import('./load-content-types');
+      const { isLoadContentResult } = await import('@core/types/load-content');
       if (isLoadContentResult(loadResult)) {
         return loadResult.content;
       }

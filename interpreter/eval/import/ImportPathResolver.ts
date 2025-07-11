@@ -54,8 +54,19 @@ export class ImportPathResolver {
     } else if (Array.isArray(pathValue)) {
       // Normal case: pathValue is already an array of nodes
       return pathValue;
+    } else if (pathValue && typeof pathValue === 'object' && pathValue.type === 'path') {
+      // Handle path objects (e.g., URL paths in brackets: [https://example.com/file.mld])
+      if (pathValue.subtype === 'urlPath' && pathValue.values?.url) {
+        // URL path - extract the URL content
+        return pathValue.values.url;
+      } else if (pathValue.values?.path) {
+        // Regular path object - extract the path content
+        return pathValue.values.path;
+      } else {
+        throw new Error('Invalid path object structure in import directive');
+      }
     } else {
-      throw new Error('Import directive path must be a string or array of nodes');
+      throw new Error('Import directive path must be a string, array of nodes, or path object');
     }
   }
 
