@@ -17,7 +17,7 @@ function isGlobPattern(path: string): boolean {
  * Loads content from files or URLs and optionally extracts sections
  * Now supports glob patterns and returns metadata-rich results
  */
-export async function processContentLoader(node: any, env: Environment, context: 'show' | 'var' = 'var'): Promise<string | LoadContentResult | LoadContentResult[]> {
+export async function processContentLoader(node: any, env: Environment): Promise<string | LoadContentResult | LoadContentResult[]> {
   if (!node || node.type !== 'load-content') {
     throw new MlldError('Invalid content loader node', {
       node: node ? node.type : 'null',
@@ -75,13 +75,8 @@ export async function processContentLoader(node: any, env: Environment, context:
     // Single file loading
     const result = await loadSingleFile(pathOrUrl, options, env);
     
-    // For backward compatibility and good UX:
-    // - In 'show' context: return plain string for direct usage
-    // - In 'var' context: return full metadata object for variable storage
-    if (context === 'show') {
-      return result.content;
-    }
-    
+    // Always return the full LoadContentResult object
+    // The smart object will handle string conversion when needed
     return result;
   } catch (error: any) {
     throw new MlldError(`Failed to load content: ${pathOrUrl}`, {

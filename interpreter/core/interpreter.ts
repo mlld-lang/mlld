@@ -848,9 +848,12 @@ export async function interpolate(
           stringValue = JSONFormatter.stringify(value);
         }
       } else if (typeof value === 'object') {
-        // Check if this is a namespace object (only if no field access)
-        const hadFieldAccess = node.fields && node.fields.length > 0;
-        if (variable && variable.metadata?.isNamespace && !hadFieldAccess) {
+        // Check if this is a LoadContentResult - use its content
+        const { isLoadContentResult } = await import('../eval/load-content-types');
+        if (isLoadContentResult(value)) {
+          stringValue = value.content;
+        } else if (variable && variable.metadata?.isNamespace && node.fields?.length === 0) {
+          // Check if this is a namespace object (only if no field access)
           const { JSONFormatter } = await import('./json-formatter');
           stringValue = JSONFormatter.stringifyNamespace(value);
         } else if (value.__executable) {

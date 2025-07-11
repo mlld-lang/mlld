@@ -924,7 +924,6 @@ All literal tests completed!
 
 ## NOW as variable (returns text)
 Variable NOW: 2024-01-15T10:30:00.000Z
-
 ## NOW as variable with uppercase
 Variable NOW (uppercase): 2024-01-15T10:30:00.000Z
 ```
@@ -1051,10 +1050,10 @@ This test specifically verifies the scenarios described in the GitHub issue.
 # GitHub Issue: Object Property Access in Function Arguments
 
 This test specifically verifies the scenarios described in the GitHub issue.
+
 User name: Alice
 User age: 30
 User active: true
-
 Extracted name: Alice
 
 Test name: PASS

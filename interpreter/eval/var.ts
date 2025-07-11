@@ -210,8 +210,11 @@ export async function evaluateVar(
               }
             }
             processedObject[key] = nestedObj;
+          } else if (propValue && typeof propValue === 'object' && propValue.type) {
+            // Handle other node types (load-content, VariableReference, etc.)
+            processedObject[key] = await evaluateArrayItem(propValue, env);
           } else {
-            // For other types (numbers, booleans, null), use as-is
+            // For primitive types (numbers, booleans, null, strings), use as-is
             processedObject[key] = propValue;
           }
         }
@@ -247,7 +250,7 @@ export async function evaluateVar(
   } else if (valueNode.type === 'load-content') {
     // Content loader: <file.md> or <file.md # Section>
     const { processContentLoader } = await import('./content-loader');
-    resolvedValue = await processContentLoader(valueNode, env, 'var');
+    resolvedValue = await processContentLoader(valueNode, env);
     
   } else if (valueNode.type === 'path') {
     // Path dereference: [README.md]
@@ -756,7 +759,15 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
     case 'load-content':
       // Load content node in array - use the content loader
       const { processContentLoader } = await import('./content-loader');
-      return await processContentLoader(item, env, 'var');
+      const loadResult = await processContentLoader(item, env);
+      
+      // Check if this is a LoadContentResult and return its content
+      const { isLoadContentResult } = await import('./load-content-types');
+      if (isLoadContentResult(loadResult)) {
+        return loadResult.content;
+      }
+      
+      return loadResult;
 
     default:
       // Handle plain objects without type property

@@ -190,12 +190,22 @@ export async function evaluateShow(
       }
     }
     
+    // Import LoadContentResult type check
+    const { isLoadContentResult, isLoadContentResultArray } = await import('./load-content-types');
+    
     // Convert final value to string
     if (typeof value === 'string') {
       content = value;
     } else if (typeof value === 'number' || typeof value === 'boolean') {
       // For primitives, just convert to string
       content = String(value);
+    } else if (isLoadContentResult(value)) {
+      // For LoadContentResult, show the content by default
+      content = value.content;
+    } else if (isLoadContentResultArray(value)) {
+      // For array of LoadContentResult, show array of contents as JSON
+      const contentArray = value.map(item => item.content);
+      content = JSONFormatter.stringify(contentArray, { pretty: true, indent: 2 });
     } else if (Array.isArray(value)) {
       // Check if this is from a foreach-section expression
       if (isForeachSection && value.every(item => typeof item === 'string')) {
@@ -616,7 +626,7 @@ export async function evaluateShow(
     // Use the content loader to process the node
     const { processContentLoader } = await import('./content-loader');
     const { isLoadContentResult, isLoadContentResultArray } = await import('./load-content-types');
-    const loadResult = await processContentLoader(loadContentNode, env, 'show');
+    const loadResult = await processContentLoader(loadContentNode, env);
     
     // Handle different return types from processContentLoader
     if (typeof loadResult === 'string') {
