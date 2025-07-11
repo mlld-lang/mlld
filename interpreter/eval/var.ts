@@ -247,7 +247,7 @@ export async function evaluateVar(
   } else if (valueNode.type === 'load-content') {
     // Content loader: <file.md> or <file.md # Section>
     const { processContentLoader } = await import('./content-loader');
-    resolvedValue = await processContentLoader(valueNode, env);
+    resolvedValue = await processContentLoader(valueNode, env, 'var');
     
   } else if (valueNode.type === 'path') {
     // Path dereference: [README.md]
@@ -443,27 +443,39 @@ export async function evaluateVar(
     // Handle load-content nodes from <file.md> syntax
     const { source: contentSource, options } = valueNode;
     
-    if (contentSource.type === 'path') {
-      // For now, treat it as file content
-      // TODO: We might want to store the raw path for lazy loading
-      const filePath = contentSource.raw || '';
-      
-      if (options?.section) {
-        // Section extraction case
-        const sectionName = options.section.identifier.content || '';
-        variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
-          sectionName, 'hash', source, metadata);
+    // Import type guards for LoadContentResult
+    const { isLoadContentResult, isLoadContentResultArray } = await import('./load-content-types');
+    
+    if (isLoadContentResult(resolvedValue)) {
+      // Single file with metadata - store as object variable
+      variable = createObjectVariable(identifier, resolvedValue, true, source, metadata);
+    } else if (isLoadContentResultArray(resolvedValue)) {
+      // Array of files from glob pattern - store as array variable
+      variable = createArrayVariable(identifier, resolvedValue, true, source, metadata);
+    } else if (typeof resolvedValue === 'string') {
+      // Backward compatibility - plain string (e.g., from section extraction)
+      if (contentSource.type === 'path') {
+        const filePath = contentSource.raw || '';
+        
+        if (options?.section) {
+          // Section extraction case
+          const sectionName = options.section.identifier.content || '';
+          variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
+            sectionName, 'hash', source, metadata);
+        } else {
+          // Whole file case
+          variable = createFileContentVariable(identifier, resolvedValue, filePath, source, metadata);
+        }
+      } else if (contentSource.type === 'url') {
+        // URL content
+        const url = contentSource.raw || '';
+        variable = createFileContentVariable(identifier, resolvedValue, url, source, metadata);
       } else {
-        // Whole file case
-        variable = createFileContentVariable(identifier, resolvedValue, filePath, source, metadata);
+        // Default to simple text
+        variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
       }
-    } else if (contentSource.type === 'url') {
-      // URL content - for now treat as file content
-      // TODO: We might want a separate URL content variable type
-      const url = contentSource.raw || '';
-      variable = createFileContentVariable(identifier, resolvedValue, url, source, metadata);
     } else {
-      // Default to simple text
+      // Fallback - shouldn't happen
       variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
     }
     
@@ -744,7 +756,7 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
     case 'load-content':
       // Load content node in array - use the content loader
       const { processContentLoader } = await import('./content-loader');
-      return await processContentLoader(item, env);
+      return await processContentLoader(item, env, 'var');
 
     default:
       // Handle plain objects without type property

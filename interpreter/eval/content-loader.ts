@@ -1,12 +1,23 @@
 import { Environment } from '@interpreter/env/Environment';
 import { MlldError } from '@core/errors';
 import { llmxmlInstance } from '../utils/llmxml-instance';
+import { LoadContentResult, LoadContentResultImpl } from './load-content-types';
+import fastGlob from 'fast-glob';
+import * as path from 'path';
+
+/**
+ * Check if a path contains glob patterns
+ */
+function isGlobPattern(path: string): boolean {
+  return /[\*\?\{\}\[\]]/.test(path);
+}
 
 /**
  * Process content loading expressions (<file.md> syntax)
  * Loads content from files or URLs and optionally extracts sections
+ * Now supports glob patterns and returns metadata-rich results
  */
-export async function processContentLoader(node: any, env: Environment): Promise<string> {
+export async function processContentLoader(node: any, env: Environment, context: 'show' | 'var' = 'var'): Promise<string | LoadContentResult | LoadContentResult[]> {
   if (!node || node.type !== 'load-content') {
     throw new MlldError('Invalid content loader node', {
       node: node ? node.type : 'null',
@@ -35,31 +46,137 @@ export async function processContentLoader(node: any, env: Environment): Promise
     });
   }
 
+  // Detect glob pattern from the path
+  const isGlob = isGlobPattern(pathOrUrl);
+
   try {
-    // Use the unified loading approach - let Environment handle the distinction
-    let content: string;
+    // URLs can't be globs
     if (env.isURL(pathOrUrl)) {
-      content = await env.fetchURL(pathOrUrl);
-    } else {
-      // Let Environment handle path resolution and fuzzy matching
-      content = await env.readFile(pathOrUrl);
+      const content = await env.fetchURL(pathOrUrl);
+      
+      // Extract section if specified
+      if (options?.section) {
+        const sectionName = await extractSectionName(options.section, env);
+        const sectionContent = await extractSection(content, sectionName, options.section.renamed);
+        
+        // For URLs with sections, return plain string (backward compatibility)
+        return sectionContent;
+      }
+      
+      // For URLs without sections, return plain string (backward compatibility)
+      return content;
     }
     
-    // Extract section if specified
-    if (options?.section) {
-      const sectionName = await extractSectionName(options.section, env);
-      
-      
-      return await extractSection(content, sectionName, options.section.renamed);
+    // Handle glob patterns for file paths
+    if (isGlob) {
+      return await loadGlobPattern(pathOrUrl, options, env);
     }
     
-    return content;
+    // Single file loading
+    const result = await loadSingleFile(pathOrUrl, options, env);
+    
+    // For backward compatibility and good UX:
+    // - In 'show' context: return plain string for direct usage
+    // - In 'var' context: return full metadata object for variable storage
+    if (context === 'show') {
+      return result.content;
+    }
+    
+    return result;
   } catch (error: any) {
     throw new MlldError(`Failed to load content: ${pathOrUrl}`, {
       path: pathOrUrl,
       error: error.message
     });
   }
+}
+
+/**
+ * Load a single file and return LoadContentResult
+ */
+async function loadSingleFile(filePath: string, options: any, env: Environment): Promise<LoadContentResult> {
+  // Let Environment handle path resolution and fuzzy matching
+  const content = await env.readFile(filePath);
+  const resolvedPath = await env.resolvePath(filePath);
+  
+  
+  // Extract section if specified
+  let finalContent = content;
+  if (options?.section) {
+    const sectionName = await extractSectionName(options.section, env);
+    finalContent = await extractSection(content, sectionName, options.section.renamed);
+  }
+  
+  // Create LoadContentResult with metadata
+  const result = new LoadContentResultImpl({
+    content: finalContent,
+    filename: path.basename(resolvedPath),
+    relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+    absolute: resolvedPath
+  });
+  
+  return result;
+}
+
+/**
+ * Load files matching a glob pattern
+ */
+async function loadGlobPattern(pattern: string, options: any, env: Environment): Promise<LoadContentResult[]> {
+  // Resolve the pattern relative to current directory
+  const baseDir = env.getBasePath();
+  
+  // Use fast-glob to find matching files
+  const matches = await fastGlob(pattern, {
+    cwd: baseDir,
+    absolute: true,
+    followSymbolicLinks: true,
+    // Ignore common non-text files
+    ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
+  });
+  
+  // Sort by filename for consistent ordering
+  matches.sort();
+  
+  // Load each matching file
+  const results: LoadContentResult[] = [];
+  
+  for (const filePath of matches) {
+    try {
+      const content = await env.readFile(filePath);
+      
+      // Skip files if section extraction is requested and section doesn't exist
+      if (options?.section) {
+        const sectionName = await extractSectionName(options.section, env);
+        try {
+          const sectionContent = await extractSection(content, sectionName, options.section.renamed);
+          
+          // Create result with section content
+          results.push(new LoadContentResultImpl({
+            content: sectionContent,
+            filename: path.basename(filePath),
+            relative: `./${path.relative(baseDir, filePath)}`,
+            absolute: filePath
+          }));
+        } catch (error: any) {
+          // Skip files without the requested section
+          continue;
+        }
+      } else {
+        // No section extraction, include full content
+        results.push(new LoadContentResultImpl({
+          content: content,
+          filename: path.basename(filePath),
+          relative: `./${path.relative(baseDir, filePath)}`,
+          absolute: filePath
+        }));
+      }
+    } catch (error: any) {
+      // Skip files that can't be read
+      continue;
+    }
+  }
+  
+  return results;
 }
 
 /**

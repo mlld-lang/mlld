@@ -27,6 +27,7 @@ export class LoadContentEvaluator {
     }
     
     // Use the existing content loader
-    return await processContentLoader(value, env);
+    // Default to 'var' context for data value evaluation
+    return await processContentLoader(value, env, 'var');
   }
 }

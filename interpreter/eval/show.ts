@@ -143,6 +143,17 @@ export async function evaluateShow(
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
     }
     
+    // Debug logging for LoadContentResult
+    if (process.env.MLLD_DEBUG === 'true' && variable) {
+      logger.debug('Show variable value:', {
+        varName: variable.name,
+        varType: variable.type,
+        valueType: typeof value,
+        isObject: isObject(variable),
+        valueKeys: value && typeof value === 'object' ? Object.keys(value) : undefined
+      });
+    }
+    
     // Handle field access if present in the variable node
     if (variableNode.fields && variableNode.fields.length > 0 && typeof value === 'object' && value !== null) {
       const { accessField } = await import('../utils/field-access');
@@ -604,7 +615,22 @@ export async function evaluateShow(
     
     // Use the content loader to process the node
     const { processContentLoader } = await import('./content-loader');
-    content = await processContentLoader(loadContentNode, env);
+    const { isLoadContentResult, isLoadContentResultArray } = await import('./load-content-types');
+    const loadResult = await processContentLoader(loadContentNode, env, 'show');
+    
+    // Handle different return types from processContentLoader
+    if (typeof loadResult === 'string') {
+      // Backward compatibility - plain string
+      content = loadResult;
+    } else if (isLoadContentResult(loadResult)) {
+      // Single file with metadata - use content
+      content = loadResult.content;
+    } else if (isLoadContentResultArray(loadResult)) {
+      // Multiple files from glob - join their contents
+      content = loadResult.map(r => r.content).join('\n\n');
+    } else {
+      content = String(loadResult);
+    }
     
     // Handle rename if newTitle is specified (for section extraction)
     const newTitleNodes = directive.values?.newTitle;

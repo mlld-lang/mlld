@@ -3,6 +3,7 @@
  */
 
 import { FieldAccessNode } from '@core/types/primitives';
+import { isLoadContentResult } from '../eval/load-content-types';
 
 /**
  * Access a field on an object or array.
@@ -23,6 +24,16 @@ export function accessField(value: any, field: FieldAccessNode): any {
       
       if (typeof value !== 'object' || value === null) {
         throw new Error(`Cannot access field "${name}" on non-object value`);
+      }
+      
+      // Handle LoadContentResult objects - access metadata properties
+      if (isLoadContentResult(value)) {
+        // Try to access the property - getters will be invoked
+        const result = (value as any)[name];
+        if (result !== undefined) {
+          return result;
+        }
+        throw new Error(`Field "${name}" not found in LoadContentResult`);
       }
       
       // Handle normalized AST objects

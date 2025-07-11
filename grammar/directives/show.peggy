@@ -663,7 +663,7 @@ SlashShow
   / DirectiveContext "/show" _ "foreach" _ &{
       // Check if we have incomplete foreach syntax
       const rest = input.substring(peg$currPos).trim();
-      return !rest.startsWith('@') && !rest.startsWith('[') && !rest.startsWith('<');
+      return !rest.startsWith('@') && !rest.startsWith('<');
     } {
       helpers.mlldError("Invalid foreach syntax in /show directive. Expected '@command(@arrays)' or '<@array.field # section>' after 'foreach'.", "foreach", location());
     }
