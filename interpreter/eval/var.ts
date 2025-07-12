@@ -451,7 +451,8 @@ export async function evaluateVar(
     
     if (isLoadContentResult(resolvedValue)) {
       // Single file with metadata - store as object variable
-      variable = createObjectVariable(identifier, resolvedValue, true, source, metadata);
+      // Mark as NOT complex so it doesn't get re-evaluated
+      variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
     } else if (isLoadContentResultArray(resolvedValue)) {
       // Array of files from glob pattern - store as array variable
       variable = createArrayVariable(identifier, resolvedValue, true, source, metadata);

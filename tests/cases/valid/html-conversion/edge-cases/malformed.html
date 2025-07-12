@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edge Cases & Special Characters</title>
+</head>
+<body>
+    <article>
+        <h1>Testing Edge Cases</h1>
+        
+        <!-- Unclosed tags -->
+        <p>This paragraph has an unclosed tag
+        <p>Another paragraph starts without closing the previous
+        
+        <!-- Special characters -->
+        <h2>Special Characters & Entities</h2>
+        <p>Testing &amp; ampersand, &lt;less than&gt;, &quot;quotes&quot;, and &apos;apostrophes&apos;.</p>
+        <p>Unicode: café, naïve, 你好, 🚀 emoji support</p>
+        
+        <!-- Malformed nesting -->
+        <p>This has <strong>bold with <em>nested</strong> italic</em> text.</p>
+        
+        <!-- Empty elements -->
+        <h3></h3>
+        <p></p>
+        <div></div>
+        
+        <!-- JavaScript and CSS (should be removed) -->
+        <script>alert('This should not appear');</script>
+        <style>body { color: red; }</style>
+        
+        <!-- Data attributes and custom elements -->
+        <div data-custom="value">Content with data attributes</div>
+        <custom-element>Custom element content</custom-element>
+        
+        <!-- Very long lines -->
+        <p>This is a very long line that contains lots of text without any line breaks and it just keeps going and going and going to test how the converter handles extremely long lines of content that might cause issues with some parsers or converters that have line length limitations.</p>
+        
+        <!-- HTML comments -->
+        <!-- This is a comment that should not appear in output -->
+        <p>Visible content <!-- inline comment --> more visible content</p>
+        
+        <!-- Nested quotes and special formatting -->
+        <p>She said, "He told me, 'This is a <em>test</em> of nested quotes.'"</p>
+        
+        <!-- Non-standard whitespace -->
+        <p>Text with&nbsp;non-breaking&nbsp;spaces and   multiple   spaces.</p>
+        
+        <!-- Mixed content -->
+        <div>
+            Text directly in div
+            <p>Paragraph in div</p>
+            More text in div
+        </div>
+    </article>
+</body>
+</html>

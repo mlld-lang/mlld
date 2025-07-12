@@ -133,6 +133,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'alligator-metadata-json': 'alligator/metadata-json',
       'alligator-metadata-url': 'alligator/metadata-url',
       'alligator-section-extraction': 'alligator/section-extraction',
+      // HTML conversion tests
+      'html-conversion-basic-article': 'html-conversion/basic-article',
+      'html-conversion-complex-elements': 'html-conversion/complex-elements',
+      'html-conversion-edge-cases': 'html-conversion/edge-cases',
+      'html-conversion-metadata-extraction': 'html-conversion/metadata-extraction',
+      'html-conversion-readability-extraction': 'html-conversion/readability-extraction',
     };
     
     // Check if we have a mapping for this fixture

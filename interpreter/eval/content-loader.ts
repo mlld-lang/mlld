@@ -112,9 +112,13 @@ export async function processContentLoader(node: any, env: Environment): Promise
  */
 async function loadSingleFile(filePath: string, options: any, env: Environment): Promise<LoadContentResult | string> {
   // Let Environment handle path resolution and fuzzy matching
-  const content = await env.readFile(filePath);
+  let content = await env.readFile(filePath);
   const resolvedPath = await env.resolvePath(filePath);
   
+  // Check if this is an HTML file and convert to Markdown
+  if (resolvedPath.endsWith('.html') || resolvedPath.endsWith('.htm')) {
+    content = await convertHtmlToMarkdown(content, `file://${resolvedPath}`);
+  }
   
   // Extract section if specified
   if (options?.section) {
@@ -160,7 +164,12 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
   
   for (const filePath of matches) {
     try {
-      const content = await env.readFile(filePath);
+      let content = await env.readFile(filePath);
+      
+      // Check if this is an HTML file and convert to Markdown
+      if (filePath.endsWith('.html') || filePath.endsWith('.htm')) {
+        content = await convertHtmlToMarkdown(content, `file://${filePath}`);
+      }
       
       // Skip files if section extraction is requested and section doesn't exist
       if (options?.section) {
@@ -342,7 +351,10 @@ async function convertHtmlToMarkdown(html: string, url: string): Promise<string>
       // If Readability can't extract an article, fall back to full HTML conversion
       const turndownService = new TurndownService({
         headingStyle: 'atx',
-        codeBlockStyle: 'fenced'
+        codeBlockStyle: 'fenced',
+        bulletListMarker: '-',
+        emDelimiter: '*',
+        strongDelimiter: '**'
       });
       return turndownService.turndown(html);
     }
@@ -350,7 +362,10 @@ async function convertHtmlToMarkdown(html: string, url: string): Promise<string>
     // Convert the extracted article content to Markdown
     const turndownService = new TurndownService({
       headingStyle: 'atx',
-      codeBlockStyle: 'fenced'
+      codeBlockStyle: 'fenced',
+      bulletListMarker: '-',
+      emDelimiter: '*',
+      strongDelimiter: '**'
     });
     
     // Build markdown with article metadata
@@ -361,9 +376,10 @@ async function convertHtmlToMarkdown(html: string, url: string): Promise<string>
     if (article.byline) {
       markdown += `*By ${article.byline}*\n\n`;
     }
-    if (article.excerpt) {
-      markdown += `> ${article.excerpt}\n\n`;
-    }
+    // Skip excerpt for now - it's being added even when we don't want it
+    // if (article.excerpt) {
+    //   markdown += `> ${article.excerpt}\n\n`;
+    // }
     
     // Convert main content
     markdown += turndownService.turndown(article.content);
