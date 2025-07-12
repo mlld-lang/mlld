@@ -47,79 +47,11 @@ ForeachArrayArgumentList
 // FOREACH SECTION EXTRACTION (NEW PATTERN)
 // -------------------------------------------------------------
 
-// Foreach with section extraction: foreach <path expression> as [[template]]
-// This pattern enables direct iteration over arrays with section extraction and template application
-// Usage examples:
-//   - foreach <@files.path # tldr> as [[### {{files.name}}]]
-//   - foreach <../{{files.path}} # tldr> as [[### {{files.name}}]]
-//   - foreach <@docs.url # @docs.section> as [[## {{docs.title}}]]
-ForeachSectionExpression
-  = "foreach" _ alligator:AlligatorExpression _ "as" _ template:InterpolatedDoubleQuoteContent {
-      helpers.debug('ForeachSectionExpression matched', { alligator, template });
-      
-      // Verify this is a section extraction
-      if (!alligator.options || !alligator.options.section) {
-        helpers.mlldError("Foreach section expression requires section extraction. Use: foreach <file # section> as \"template\"", ">", location());
-      }
-      
-      // Extract path parts and section from alligator
-      const pathParts = alligator.source.type === 'path' ? alligator.source.segments : [];
-      const section = alligator.options.section.identifier;
-      
-      // Extract the array variable from the path (for backward compatibility)
-      let arrayVariable = null;
-      let pathField = null;
-      
-      // Try to extract @arrayVar.field pattern if it's a simple case
-      if (pathParts && pathParts.length > 0) {
-        const firstPart = pathParts[0];
-        if (firstPart.type === 'VariableReference' && firstPart.fields && firstPart.fields.length > 0) {
-          arrayVariable = firstPart.identifier;
-          pathField = firstPart.fields[0].value;
-        }
-      }
-      
-      // Extract section raw content
-      let sectionRaw;
-      if (section.type === 'VariableReference') {
-        sectionRaw = '@' + section.identifier;
-      } else if (typeof section === 'string') {
-        sectionRaw = section;
-      } else if (section.type === 'Text') {
-        sectionRaw = section.content;
-      } else {
-        sectionRaw = section.content || section.identifier || '';
-      }
-      
-      return {
-        type: "foreach-section",
-        value: {
-          type: 'foreach-section',
-          alligator: alligator,
-          path: pathParts,
-          section: Array.isArray(section) ? section : [section],
-          sectionRaw: sectionRaw,
-          template: {
-            values: {
-              content: template  // template is already an array of nodes from InterpolatedDoubleQuoteContent
-            },
-            raw: {
-              content: helpers.reconstructRawString(template)
-            }
-          },
-          // Include simplified extraction for backward compatibility
-          ...(arrayVariable ? { arrayVariable } : {}),
-          ...(pathField ? { pathField } : {})
-        },
-        rawText: text()
-      };
-    }
+// REMOVED: ForeachSectionExpression
+// This pattern has been superseded by file reference interpolation
+// Migration: Use <*.md # section> as "template" instead of foreach <@files # section> as "template"
 
-// Path parts for foreach - without context checking
-ForeachPathParts "Path parts for foreach section"
-  = parts:(SpecialVariable / VariableNoTail / InterpolationVar / PathTextSegment / PathSeparator)* {
-      return parts;
-    }
+// REMOVED: ForeachPathParts - no longer needed without ForeachSectionExpression
 
 
 // -------------------------------------------------------------

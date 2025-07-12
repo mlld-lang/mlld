@@ -22,42 +22,10 @@ It can be used in these forms:
 
 // Primary /show directive with all variants
 SlashShow
-  // Foreach section expression: /show foreach [@array.field # section] as [[template]]
-  = DirectiveContext "/show" _ expr:ForeachSectionExpression {
-      helpers.debug('SlashShow matched foreach section expression', { expr });
-      
-      // Extract the inner value from the ForeachSectionExpression
-      const foreachValue = expr.value;
-      
-      // Create values object with foreach section expression
-      const values = {
-        foreach: foreachValue
-      };
-      
-      // Create raw object
-      const raw = {
-        foreach: `foreach [@${foreachValue.arrayVariable}.${foreachValue.pathField} # ${foreachValue.sectionRaw}] as [[${foreachValue.template.raw.content}]]`
-      };
-      
-      // Create meta object
-      const meta = {
-        isForeachSection: true,
-        arrayVariable: foreachValue.arrayVariable,
-        pathField: foreachValue.pathField
-      };
-      
-      return helpers.createStructuredDirective(
-        DirectiveKind.show,
-        'showForeachSection',
-        values,
-        raw,
-        meta,
-        location(),
-        'foreach-section'
-      );
-    }
+  // REMOVED: Foreach section expression - superseded by file reference interpolation
+  // Migration: Use /show <*.md # section> as "template" instead
   // Foreach command expression: /show foreach @command(@arrays)
-  / DirectiveContext "/show" _ expr:ForeachCommandExpression {
+  = DirectiveContext "/show" _ expr:ForeachCommandExpression {
       helpers.debug('SlashShow matched foreach expression', { expr });
       
       // Extract the inner value from the ForeachCommandExpression

@@ -167,3 +167,16 @@ VariableReferenceWithTail "variable reference with tail modifiers"
       // No tail modifiers - return plain variable reference
       return varRef;
     }
+
+// Variable with condensed pipes for interpolation contexts
+VariableWithPipes "variable with optional pipes"
+  = varRef:VariableNoTail pipes:CondensedPipeChain? {
+      if (pipes && pipes.length > 0) {
+        // Add pipes to the variable node
+        return {
+          ...varRef,
+          pipes: pipes
+        };
+      }
+      return varRef;
+    }

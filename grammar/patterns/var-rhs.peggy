@@ -3,8 +3,7 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 VarRHSContent "var assignment value"
-  = ForeachSectionExpression    // foreach <@array.field # section> as [[template]]
-  / ForeachCommandExpression    // foreach @command(@arrays)
+  = ForeachCommandExpression    // foreach @command(@arrays)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)

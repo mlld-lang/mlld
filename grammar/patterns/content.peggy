@@ -168,12 +168,13 @@ DoubleQuotedText
 DoubleQuotedChar
   = StringEscapeSequence  // Handle \n, \t, etc.
   / EscapeSequence       // Handle \@, \", etc.
-  / !["@\n\r] char:. { return char; }
+  / !["@<\n\r] char:. { return char; }
 
-// Content inside backtick templates - supports @var and @func(args)
+// Content inside backtick templates - supports @var and @func(args) and <file.md>
 BacktickInterpolation
   = BacktickExecInvocation    // @func(args) - must come before variable
-  / VariableNoTail            // @var or @var.field
+  / FileReferenceInterpolation // <file.md> references with fields/pipes
+  / VariableWithPipes         // @var or @var.field with optional pipes
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
@@ -197,9 +198,9 @@ BacktickExecInvocation
       };
     }
 
-// Text inside backticks (excluding @ for variable interpolation)
+// Text inside backticks (excluding @ and < for interpolation)
 BacktickTextSegment
-  = chars:(![`@] char:. { return char; })+ {
+  = chars:(![`@<] char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
@@ -221,9 +222,9 @@ CommandBracketChar
 
 
 
-// Content inside double colons with {{var}} interpolation
+// Content inside double colons with {{var}} interpolation and <file.md>
 DoubleColonContent "Content with {{var}} interpolation"
-  = '::' parts:(InterpolationVar / TemplateTextSegment)* '::' {
+  = '::' parts:(InterpolationVar / FileReferenceInterpolation / TemplateTextSegment)* '::' {
       helpers.debug('DoubleColonContent matched ::...::', { 
         parts: parts,
         isArray: Array.isArray(parts),
@@ -350,7 +351,7 @@ LiteralOnlyContent "Literal text without any interpolation"
 
 // Double quoted content with @var interpolation (supports multiline)
 InterpolatedDoubleQuoteContent "Double quoted content with @var interpolation"
-  = '"' parts:(SpecialVariable / VariableNoTail / DoubleQuotedText)* '"' {
+  = '"' parts:(SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DoubleQuotedText)* '"' {
       // Handle empty string case - create Text node with empty content
       if (parts.length === 0) {
         return [helpers.createNode(NodeType.Text, { content: '', location: location() })];

@@ -19,6 +19,7 @@ export const NodeType = {
     Parameter: 'Parameter',
     ExecInvocation: 'ExecInvocation',
     CommandReference: 'CommandReference',
+    FileReference: 'FileReference',
 };
 export const DirectiveKind = {
     run: 'run',
@@ -865,4 +866,34 @@ export const helpers = {
     markDirectiveEnd(pos) {
         this.parserState.lastDirectiveEndPos = pos;
     },
+    // File Reference Helper Functions
+    // --------------------------------
+    /**
+     * Checks if content inside <...> represents a file reference
+     * File references are detected by presence of: . * @
+     * Note: We don't include / since we don't support directories
+     * Files without extensions can be used outside interpolation contexts
+     */
+    isFileReferenceContent(content) {
+        // Check if content contains file indicators: . * @
+        return /[.*@]/.test(content);
+    },
+    /**
+     * Creates a FileReference AST node
+     */
+    createFileReferenceNode(source, fields, pipes, location) {
+        return {
+            type: 'FileReference',
+            nodeId: randomUUID(),
+            source: source,
+            fields: fields || [],
+            pipes: pipes || [],
+            location: location,
+            meta: {
+                isFileReference: true,
+                hasGlob: typeof source === 'object' && source.raw && source.raw.includes('*'),
+                isPlaceholder: source && source.type === 'placeholder'
+            }
+        };
+    }
 };
