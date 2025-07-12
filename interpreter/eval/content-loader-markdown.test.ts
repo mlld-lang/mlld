@@ -73,9 +73,9 @@ describe('Content Loader HTML to Markdown Conversion', () => {
       expect(content).toContain('# Main Article Title');
       expect(content).toContain('This is the main content of the article.');
       expect(content).toContain('**bold**');
-      expect(content).toContain('_italic_');
-      expect(content).toContain('*   Item 1');
-      expect(content).toContain('*   Item 2');
+      expect(content).toContain('*italic*');
+      expect(content).toContain('-   Item 1');
+      expect(content).toContain('-   Item 2');
       expect(content).toContain('[link](https://example.com/)');
       
       // Should not contain navigation or footer

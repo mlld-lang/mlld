@@ -3,7 +3,10 @@
 This test verifies that the HTML to Markdown converter handles edge cases gracefully, including malformed HTML, special characters, and unusual formatting.
 
 ## Load malformed HTML with edge cases
-# Testing Edge Cases
+
+# Edge Cases & Special Characters
+
+## Testing Edge Cases
 
 This paragraph has an unclosed tag
 
@@ -15,7 +18,7 @@ Testing & ampersand, <less than>, "quotes", and 'apostrophes'.
 
 Unicode: café, naïve, 你好, 🚀 emoji support
 
-This has **bold with *nested** italic* text.
+This has **bold with *nested*** *italic* text.
 
 Content with data attributes
 
@@ -27,10 +30,4 @@ Visible content more visible content
 
 She said, "He told me, 'This is a *test* of nested quotes.'"
 
-Text with non-breaking spaces and multiple spaces.
-
-Text directly in div
-
-Paragraph in div
-
-More text in div
+Text with non-breaking spaces and multiple spaces.

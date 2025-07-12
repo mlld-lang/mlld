@@ -112,26 +112,59 @@ export async function processContentLoader(node: any, env: Environment): Promise
  */
 async function loadSingleFile(filePath: string, options: any, env: Environment): Promise<LoadContentResult | string> {
   // Let Environment handle path resolution and fuzzy matching
-  let content = await env.readFile(filePath);
+  const rawContent = await env.readFile(filePath);
   const resolvedPath = await env.resolvePath(filePath);
   
   // Check if this is an HTML file and convert to Markdown
   if (resolvedPath.endsWith('.html') || resolvedPath.endsWith('.htm')) {
-    content = await convertHtmlToMarkdown(content, `file://${resolvedPath}`);
+    const markdownContent = await convertHtmlToMarkdown(rawContent, `file://${resolvedPath}`);
+    
+    // Extract section if specified
+    if (options?.section) {
+      const sectionName = await extractSectionName(options.section, env);
+      const sectionContent = await extractSection(markdownContent, sectionName, options.section.renamed);
+      
+      // For backward compatibility, return plain string when section is extracted
+      return sectionContent;
+    }
+    
+    // Extract HTML metadata
+    const dom = new JSDOM(rawContent);
+    const doc = dom.window.document;
+    
+    const title = doc.querySelector('title')?.textContent || '';
+    const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
+                       doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
+    
+    // Import the HTML result class
+    const { LoadContentResultHTMLImpl } = await import('@core/types/load-content');
+    
+    // Create HTML-specific LoadContentResult with metadata
+    const result = new LoadContentResultHTMLImpl({
+      content: markdownContent,
+      rawHtml: rawContent,
+      filename: path.basename(resolvedPath),
+      relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+      absolute: resolvedPath,
+      title: title || undefined,
+      description: description || undefined
+    });
+    
+    return result;
   }
   
-  // Extract section if specified
+  // Extract section if specified (for non-HTML files)
   if (options?.section) {
     const sectionName = await extractSectionName(options.section, env);
-    const sectionContent = await extractSection(content, sectionName, options.section.renamed);
+    const sectionContent = await extractSection(rawContent, sectionName, options.section.renamed);
     
     // For backward compatibility, return plain string when section is extracted
     return sectionContent;
   }
   
-  // Create LoadContentResult with metadata (only when no section extraction)
+  // Create regular LoadContentResult (for non-HTML files)
   const result = new LoadContentResultImpl({
-    content: content,
+    content: rawContent,
     filename: path.basename(resolvedPath),
     relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
     absolute: resolvedPath
@@ -164,38 +197,77 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
   
   for (const filePath of matches) {
     try {
-      let content = await env.readFile(filePath);
+      const rawContent = await env.readFile(filePath);
       
-      // Check if this is an HTML file and convert to Markdown
+      // Check if this is an HTML file
       if (filePath.endsWith('.html') || filePath.endsWith('.htm')) {
-        content = await convertHtmlToMarkdown(content, `file://${filePath}`);
-      }
-      
-      // Skip files if section extraction is requested and section doesn't exist
-      if (options?.section) {
-        const sectionName = await extractSectionName(options.section, env);
-        try {
-          const sectionContent = await extractSection(content, sectionName, options.section.renamed);
+        const markdownContent = await convertHtmlToMarkdown(rawContent, `file://${filePath}`);
+        
+        // Skip files if section extraction is requested and section doesn't exist
+        if (options?.section) {
+          const sectionName = await extractSectionName(options.section, env);
+          try {
+            const sectionContent = await extractSection(markdownContent, sectionName, options.section.renamed);
+            
+            // For section extraction, just use regular result
+            results.push(new LoadContentResultImpl({
+              content: sectionContent,
+              filename: path.basename(filePath),
+              relative: `./${path.relative(baseDir, filePath)}`,
+              absolute: filePath
+            }));
+          } catch (error: any) {
+            // Skip files without the requested section
+            continue;
+          }
+        } else {
+          // No section extraction, create HTML result with metadata
+          const dom = new JSDOM(rawContent);
+          const doc = dom.window.document;
           
-          // Create result with section content
+          const title = doc.querySelector('title')?.textContent || '';
+          const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
+                             doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
+          
+          const { LoadContentResultHTMLImpl } = await import('@core/types/load-content');
+          
+          results.push(new LoadContentResultHTMLImpl({
+            content: markdownContent,
+            rawHtml: rawContent,
+            filename: path.basename(filePath),
+            relative: `./${path.relative(baseDir, filePath)}`,
+            absolute: filePath,
+            title: title || undefined,
+            description: description || undefined
+          }));
+        }
+      } else {
+        // Non-HTML file handling
+        if (options?.section) {
+          const sectionName = await extractSectionName(options.section, env);
+          try {
+            const sectionContent = await extractSection(rawContent, sectionName, options.section.renamed);
+            
+            // Create result with section content
+            results.push(new LoadContentResultImpl({
+              content: sectionContent,
+              filename: path.basename(filePath),
+              relative: `./${path.relative(baseDir, filePath)}`,
+              absolute: filePath
+            }));
+          } catch (error: any) {
+            // Skip files without the requested section
+            continue;
+          }
+        } else {
+          // No section extraction, include full content
           results.push(new LoadContentResultImpl({
-            content: sectionContent,
+            content: rawContent,
             filename: path.basename(filePath),
             relative: `./${path.relative(baseDir, filePath)}`,
             absolute: filePath
           }));
-        } catch (error: any) {
-          // Skip files without the requested section
-          continue;
         }
-      } else {
-        // No section extraction, include full content
-        results.push(new LoadContentResultImpl({
-          content: content,
-          filename: path.basename(filePath),
-          relative: `./${path.relative(baseDir, filePath)}`,
-          absolute: filePath
-        }));
       }
     } catch (error: any) {
       // Skip files that can't be read
@@ -383,6 +455,15 @@ async function convertHtmlToMarkdown(html: string, url: string): Promise<string>
     
     // Convert main content
     markdown += turndownService.turndown(article.content);
+    
+    // Debug logging
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('=== Readability Output ===');
+      console.log('Title:', article.title);
+      console.log('Content HTML:', article.content.substring(0, 500));
+      console.log('=== Markdown Output ===');
+      console.log(markdown.substring(0, 500));
+    }
     
     return markdown;
   } catch (error) {

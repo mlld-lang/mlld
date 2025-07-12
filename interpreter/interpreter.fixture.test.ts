@@ -139,6 +139,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'html-conversion-edge-cases': 'html-conversion/edge-cases',
       'html-conversion-metadata-extraction': 'html-conversion/metadata-extraction',
       'html-conversion-readability-extraction': 'html-conversion/readability-extraction',
+      'html-conversion-url-section-extraction': 'html-conversion/url-section-extraction',
+      'html-conversion-heading-hierarchy': 'html-conversion/heading-hierarchy',
     };
     
     // Check if we have a mapping for this fixture

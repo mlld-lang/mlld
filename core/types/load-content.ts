@@ -361,3 +361,98 @@ export function isLoadContentResultURL(value: unknown): value is LoadContentResu
     'url' in value && 
     'domain' in value;
 }
+
+/**
+ * Extended metadata for HTML file content
+ */
+export interface LoadContentResultHTML extends LoadContentResult {
+  // HTML-specific properties
+  title?: string;               // Page title from <title> tag
+  description?: string;         // Meta description
+  html: string;                 // Raw HTML content
+  text?: string;                // Plain text extraction (lazy)
+}
+
+/**
+ * HTML file content result implementation
+ */
+export class LoadContentResultHTMLImpl extends LoadContentResultImpl implements LoadContentResultHTML {
+  title?: string;
+  description?: string;
+  
+  private _html: string;
+  private _text?: string;
+  
+  constructor(data: {
+    content: string;          // The processed content (markdown)
+    rawHtml: string;         // The raw HTML content
+    filename: string;
+    relative: string;
+    absolute: string;
+    title?: string;
+    description?: string;
+  }) {
+    super({
+      content: data.content,
+      filename: data.filename,
+      relative: data.relative,
+      absolute: data.absolute
+    });
+    
+    this._html = data.rawHtml;
+    this.title = data.title;
+    this.description = data.description;
+  }
+  
+  /**
+   * Raw HTML content
+   */
+  get html(): string {
+    return this._html;
+  }
+  
+  /**
+   * Plain text extraction
+   */
+  get text(): string | undefined {
+    if (this._text === undefined) {
+      // Strip HTML tags for plain text
+      this._text = this._stripHtml(this._html);
+    }
+    return this._text;
+  }
+  
+  /**
+   * Strip HTML tags for plain text
+   */
+  private _stripHtml(html: string): string {
+    // Remove script and style elements
+    let text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    
+    // Remove HTML tags
+    text = text.replace(/<[^>]+>/g, ' ');
+    
+    // Decode HTML entities
+    text = text.replace(/&nbsp;/g, ' ')
+               .replace(/&amp;/g, '&')
+               .replace(/&lt;/g, '<')
+               .replace(/&gt;/g, '>')
+               .replace(/&quot;/g, '"')
+               .replace(/&#039;/g, "'");
+    
+    // Collapse whitespace
+    text = text.replace(/\s+/g, ' ').trim();
+    
+    return text;
+  }
+}
+
+/**
+ * Type guard for HTML content results
+ */
+export function isLoadContentResultHTML(value: unknown): value is LoadContentResultHTML {
+  return isLoadContentResult(value) && 
+    'html' in value &&
+    !('url' in value); // Distinguish from URL results
+}

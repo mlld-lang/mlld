@@ -57,7 +57,9 @@ describe('Content Loader URL Metadata', () => {
         // Content variations
         expect(result.html).toBe(mockResponse.content);
         expect(result.text).toContain('Example'); // HTML stripped
-        expect(result.content).toBe(mockResponse.content); // For now, until we add readability
+        // Content should be converted to markdown for HTML URLs
+        expect(result.content).toContain('Example Page');
+        expect(result.content).toContain('# Example');
         
         // Headers
         expect(result.headers).toEqual(mockResponse.headers);

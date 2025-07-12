@@ -1,6 +1,0 @@
-# Test User Utils Module
-
-/exe @formatName(first, last) = `@first @last`
-/exe @greet(name) = `Hello, @name!`
-
-/export { @formatName, @greet }

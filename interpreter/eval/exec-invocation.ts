@@ -244,17 +244,30 @@ export async function evaluateExecInvocation(
           
           if (variable) {
             // Get the actual value from the variable
-            const { isObject, isArray } = await import('@core/types/variable');
+            let value = variable.value;
             
-            if (isObject(variable) || isArray(variable)) {
-              // Preserve object/array values without stringification
-              argValueAny = variable.value;
-              argValue = JSON.stringify(argValueAny);
-            } else {
-              // For other types, use interpolation
-              argValue = await interpolate([arg], env, InterpolationContext.Default);
-              argValueAny = argValue;
+            // Handle field access (e.g., @user.name)
+            if (varRef.fields && varRef.fields.length > 0) {
+              // Navigate through nested fields
+              for (const field of varRef.fields) {
+                if (value && typeof value === 'object' && (field.type === 'field' || field.type === 'numericField')) {
+                  // Handle object field access (including numeric fields)
+                  value = value[field.value];
+                } else if (Array.isArray(value) && (field.type === 'index' || field.type === 'arrayIndex')) {
+                  // Handle array index access
+                  const index = parseInt(field.value, 10);
+                  value = isNaN(index) ? undefined : value[index];
+                } else {
+                  // Field not found or invalid access
+                  value = undefined;
+                  break;
+                }
+              }
             }
+            
+            // Preserve the type of the final value
+            argValueAny = value;
+            argValue = value === undefined ? 'undefined' : String(value);
           } else {
             // Variable not found - use interpolation which will throw appropriate error
             argValue = await interpolate([arg], env, InterpolationContext.Default);
