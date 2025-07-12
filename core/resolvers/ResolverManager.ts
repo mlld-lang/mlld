@@ -446,11 +446,11 @@ export class ResolverManager {
           const statusEmoji = gitStatus === 'modified' ? '📝' : '🆕';
           const statusText = gitStatus === 'modified' ? 'modified' : 'untracked';
           
-          console.warn(`\n${statusEmoji} Local ${statusText} version detected for ${prefixConfig.prefix}${resolverRef}`);
-          console.warn(`   Remote: Using ${resolver.name} resolver`);
-          console.warn(`   Local:  ${localPath}`);
-          console.warn(`   Hint:   Use --dev flag to test with local version`);
-          console.warn(`           mlld run myfile.mld --dev\n`);
+          logger.warn(`${statusEmoji} Local ${statusText} version detected for ${prefixConfig.prefix}${resolverRef}`);
+          logger.warn(`   Remote: Using ${resolver.name} resolver`);
+          logger.warn(`   Local:  ${localPath}`);
+          logger.warn(`   Hint:   Use --dev flag to test with local version`);
+          logger.warn(`           mlld run myfile.mld --dev`);
         }
       }
 

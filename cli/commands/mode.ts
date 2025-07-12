@@ -4,6 +4,7 @@ import * as fs from 'fs/promises';
 import { existsSync } from 'fs';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
+import { MLLD_MODES } from '@core/constants/modes';
 
 export async function modeCommand(args: string[], flags: Record<string, any>) {
   const mode = args[0];
@@ -76,7 +77,7 @@ async function setMode(mode: string) {
     }
     
     // Set or remove mode
-    if (normalizedMode === 'user') {
+    if (normalizedMode === MLLD_MODES.USER) {
       // Remove mode to use default user mode
       delete lockData.config.mode;
     } else {
@@ -94,11 +95,11 @@ async function setMode(mode: string) {
       console.log(chalk.green(`✓ Mode set to: ${normalizedMode}`));
     }
     
-    if (normalizedMode === 'development') {
+    if (normalizedMode === MLLD_MODES.DEVELOPMENT) {
       console.log(chalk.gray('\nDevelopment mode enabled:'));
       console.log(chalk.gray('- Local modules will be resolved from llm/modules/'));
       console.log(chalk.gray('- Use @author/module syntax to import local modules'));
-    } else if (normalizedMode === 'production') {
+    } else if (normalizedMode === MLLD_MODES.PRODUCTION) {
       console.log(chalk.gray('\nProduction mode enabled:'));
       console.log(chalk.gray('- Only published modules from registries will be resolved'));
     } else {
@@ -114,14 +115,14 @@ function normalizeMode(mode: string): string | null {
   switch (mode.toLowerCase()) {
     case 'dev':
     case 'development':
-      return 'development';
+      return MLLD_MODES.DEVELOPMENT;
     case 'prod':
     case 'production':
-      return 'production';
+      return MLLD_MODES.PRODUCTION;
     case 'user':
     case 'clear':
     case 'reset':
-      return 'user';
+      return MLLD_MODES.USER;
     default:
       return null;
   }

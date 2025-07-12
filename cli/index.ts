@@ -247,7 +247,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       returnEnvironment: true,
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
-      devMode: cliOptions.dev,
+      devMode: cliOptions.devMode,
       enableTrace: true, // Enable directive trace for better error debugging
       useMarkdownFormatter: !cliOptions.noFormat,
       captureErrors: cliOptions.captureErrors
