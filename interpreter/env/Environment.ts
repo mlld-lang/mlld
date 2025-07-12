@@ -98,6 +98,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Development mode flag
   private devMode: boolean = false;
   
+  // File interpolation circular detection
+  private interpolationStack: Set<string> = new Set();
+  private enableFileInterpolation: boolean = true;
+  
+  // Current iteration file for <> placeholder
+  private currentIterationFile?: any;
+  
   // Directive trace for debugging
   private directiveTrace: DirectiveTrace[] = [];
   private traceEnabled: boolean = true; // Default to enabled
@@ -448,6 +455,71 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.parent?.getResolverManager();
   }
   
+  // --- File Interpolation Support ---
+  
+  /**
+   * Check if file interpolation is enabled
+   */
+  isFileInterpolationEnabled(): boolean {
+    if (this.parent) return this.parent.isFileInterpolationEnabled();
+    return this.enableFileInterpolation;
+  }
+  
+  /**
+   * Set file interpolation enabled state
+   */
+  setFileInterpolationEnabled(enabled: boolean): void {
+    if (this.parent) {
+      this.parent.setFileInterpolationEnabled(enabled);
+    } else {
+      this.enableFileInterpolation = enabled;
+    }
+  }
+  
+  /**
+   * Check if a file path is in the interpolation stack (circular reference detection)
+   */
+  isInInterpolationStack(path: string): boolean {
+    if (this.interpolationStack.has(path)) return true;
+    return this.parent?.isInInterpolationStack(path) || false;
+  }
+  
+  /**
+   * Add a file path to the interpolation stack
+   */
+  pushInterpolationStack(path: string): void {
+    if (this.parent) {
+      this.parent.pushInterpolationStack(path);
+    } else {
+      this.interpolationStack.add(path);
+    }
+  }
+  
+  /**
+   * Remove a file path from the interpolation stack
+   */
+  popInterpolationStack(path: string): void {
+    if (this.parent) {
+      this.parent.popInterpolationStack(path);
+    } else {
+      this.interpolationStack.delete(path);
+    }
+  }
+  
+  /**
+   * Get the current iteration file for <> placeholder
+   */
+  getCurrentIterationFile(): any {
+    return this.currentIterationFile || this.parent?.getCurrentIterationFile();
+  }
+  
+  /**
+   * Set the current iteration file for <> placeholder
+   */
+  setCurrentIterationFile(file: any): void {
+    this.currentIterationFile = file;
+  }
+  
   // --- Variable Management ---
   
   setVariable(name: string, variable: Variable): void {
@@ -619,6 +691,26 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   hasVariable(name: string): boolean {
     return this.variableManager.hasVariable(name);
+  }
+  
+  /**
+   * Get a transform function by name
+   * First checks built-in transforms, then variables
+   */
+  getTransform(name: string): Function | undefined {
+    // Check built-in transforms first
+    const builtins = builtinTransformers;
+    if (builtins[name]) {
+      return builtins[name];
+    }
+    
+    // Check variables that might be functions
+    const variable = this.getVariable(name);
+    if (variable && typeof variable === 'object' && '__executable' in variable) {
+      return variable;
+    }
+    
+    return undefined;
   }
   
   // --- Frontmatter Support ---

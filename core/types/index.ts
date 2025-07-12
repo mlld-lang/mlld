@@ -46,7 +46,8 @@ import {
   SectionMarkerNode,
   SourceLocation,
   ExecInvocation,
-  NegationNode
+  NegationNode,
+  FileReferenceNode
 } from './nodes';
 
 /**
@@ -71,7 +72,8 @@ export type MlldNode =
   | NewlineNode
   | SectionMarkerNode
   | ExecInvocation
-  | NegationNode;
+  | NegationNode
+  | FileReferenceNode;
 
 // =========================================================================
 // VARIABLE TYPES
@@ -236,5 +238,6 @@ export {
   isCodeFenceNode,
   isVariableReferenceNode,
   isLiteralNode,
-  isNegationNode
+  isNegationNode,
+  isFileReferenceNode
 } from './guards';

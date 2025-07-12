@@ -14,9 +14,13 @@ import type {
   PathSeparatorNode,
   SectionMarkerNode,
   ExecInvocation,
-  BaseMlldNode
+  BaseMlldNode,
+  FileReferenceNode,
+  FieldAccessNode,
+  CondensedPipe
 } from '@core/types';
 import type { Variable } from '@core/types/variable';
+import type { LoadContentResult } from '@core/types/load-content';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
 import { isExecInvocation } from '@core/types';
@@ -792,6 +796,11 @@ export async function interpolate(
         }
       }
       
+      // Apply condensed pipes if present
+      if (node.pipes && node.pipes.length > 0) {
+        value = await applyCondensedPipes(value, node.pipes, env);
+      }
+      
       // Convert final value to string
       let stringValue: string;
       
@@ -890,10 +899,145 @@ export async function interpolate(
       // Apply context-appropriate escaping
       const strategy = EscapingStrategyFactory.getStrategy(context);
       parts.push(strategy.escape(stringValue));
+    } else if (node.type === 'FileReference') {
+      // Handle file reference interpolation
+      const result = await interpolateFileReference(node as any, env, context);
+      parts.push(result);
     }
   }
   
   const result = parts.join('');
+  
+  return result;
+}
+
+/**
+ * Interpolate file reference nodes (<file.md>) with optional field access and pipes
+ */
+async function interpolateFileReference(
+  node: FileReferenceNode,
+  env: Environment,
+  context: InterpolationContext
+): Promise<string> {
+  const { FileReferenceNode } = await import('@core/types');
+  
+  // Special handling for <> placeholder in 'as' contexts
+  if (node.meta?.isPlaceholder) {
+    // Get current file from iteration context
+    const currentFile = env.getCurrentIterationFile?.();
+    if (!currentFile) {
+      throw new Error('<> can only be used in "as" template contexts');
+    }
+    return processFileFields(currentFile, node.fields, node.pipes, env);
+  }
+  
+  // Process the path (may contain variables)
+  const resolvedPath = await interpolate(node.source.segments || [node.source], env);
+  
+  // Check if file interpolation is enabled
+  if (!env.isFileInterpolationEnabled()) {
+    throw new Error('File interpolation disabled by security policy');
+  }
+  
+  // Check circular reference
+  if (env.isInInterpolationStack(resolvedPath)) {
+    console.error(`Warning: Circular reference detected - '${resolvedPath}' references itself, skipping`);
+    return '';  // Return empty string and continue
+  }
+  
+  // Add to stack
+  env.pushInterpolationStack(resolvedPath);
+  
+  try {
+    // Use existing content loader
+    const { processContentLoader } = await import('../eval/content-loader');
+    const loadResult = await processContentLoader({
+      type: 'load-content',
+      source: { 
+        type: 'path', 
+        segments: node.source.segments || [node.source], 
+        raw: resolvedPath 
+      }
+    }, env);
+    
+    // Process field access and pipes
+    return processFileFields(loadResult, node.fields, node.pipes, env);
+  } finally {
+    // Remove from stack
+    env.popInterpolationStack(resolvedPath);
+  }
+}
+
+/**
+ * Process field access and pipes on file content
+ */
+async function processFileFields(
+  content: LoadContentResult | LoadContentResult[],
+  fields?: FieldAccessNode[],
+  pipes?: CondensedPipe[],
+  env: Environment
+): Promise<string> {
+  const { isLoadContentResult } = await import('@core/types/load-content');
+  let result: any = content;
+  
+  // Default to .content if no fields specified
+  if (!fields || fields.length === 0) {
+    result = isLoadContentResult(result) ? result.content : result;
+  } else {
+    // Reuse existing field access logic
+    for (const field of fields) {
+      result = accessField(result, field);
+      if (result === undefined) {
+        // Warning to stderr
+        console.error(`Warning: field '${field.value}' not found`);
+        return '';
+      }
+    }
+  }
+  
+  // Apply pipes
+  if (pipes && pipes.length > 0) {
+    result = await applyCondensedPipes(result, pipes, env);
+  }
+  
+  // Convert to string
+  return typeof result === 'string' ? result : JSON.stringify(result);
+}
+
+/**
+ * Apply condensed pipe transformations
+ */
+async function applyCondensedPipes(
+  value: any,
+  pipes: CondensedPipe[],
+  env: Environment
+): Promise<any> {
+  let result = value;
+  
+  for (const pipe of pipes) {
+    // Get transform from environment
+    const transform = env.getTransform?.(pipe.name) || env.getVariable(pipe.name);
+    if (!transform) {
+      throw new Error(`Unknown transform: @${pipe.name}`);
+    }
+    
+    // Apply transform
+    if (typeof transform === 'function') {
+      result = await transform(result, ...(pipe.args || []));
+    } else if (transform && typeof transform === 'object' && '__executable' in transform) {
+      // Handle executable variables as transforms
+      const { evaluateExecutable } = await import('../eval/executable');
+      const execResult = await evaluateExecutable(
+        transform as any,
+        [result, ...(pipe.args || [])],
+        env,
+        `@${pipe.name}`
+      );
+      result = execResult.value;
+    } else {
+      throw new Error(`@${pipe.name} is not a valid transform function`);
+    }
+  }
   
   return result;
 }

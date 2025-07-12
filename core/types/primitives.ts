@@ -48,6 +48,7 @@ export interface VariableReferenceNode extends BaseMlldNode {
   valueType: string;
   fields?: FieldAccessNode[]; // Flat array of field accesses
   format?: string;
+  pipes?: CondensedPipe[]; // NEW: Condensed pipe transformations
 }
 
 // Literal value node
@@ -220,4 +221,23 @@ export interface ExecInvocation extends BaseMlldNode {
 export interface NegationNode extends BaseMlldNode {
   type: 'Negation';
   condition: BaseMlldNode[];  // The condition being negated
+}
+
+// Condensed pipe transformation
+export interface CondensedPipe {
+  name: string;
+  args?: any[];
+}
+
+// File reference node - represents <file.md> interpolation
+export interface FileReferenceNode extends BaseMlldNode {
+  type: 'FileReference';
+  source: any; // AlligatorPath or placeholder
+  fields?: FieldAccessNode[]; // Field access chain
+  pipes?: CondensedPipe[]; // Pipe transformations
+  meta?: {
+    isFileReference: boolean;
+    hasGlob?: boolean;
+    isPlaceholder?: boolean; // For <> in 'as' contexts
+  };
 }

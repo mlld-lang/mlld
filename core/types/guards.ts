@@ -13,7 +13,8 @@ import type {
   DotSeparatorNode,
   PathSeparatorNode,
   ExecInvocation,
-  NegationNode
+  NegationNode,
+  FileReferenceNode
 } from './primitives';
 
 // Import the union type
@@ -86,6 +87,10 @@ export function isDotSeparatorNode(node: MlldNode): node is DotSeparatorNode {
 
 export function isPathSeparatorNode(node: MlldNode): node is PathSeparatorNode {
   return node.type === 'PathSeparator';
+}
+
+export function isFileReferenceNode(node: MlldNode): node is FileReferenceNode {
+  return node.type === 'FileReference';
 }
 
 /**
