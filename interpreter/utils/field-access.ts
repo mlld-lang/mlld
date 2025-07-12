@@ -3,7 +3,7 @@
  */
 
 import { FieldAccessNode } from '@core/types/primitives';
-import { isLoadContentResult } from '@core/types/load-content';
+import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
 
 /**
  * Access a field on an object or array.

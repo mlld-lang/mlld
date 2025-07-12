@@ -969,6 +969,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.importResolver.fetchURLWithSecurity(url, security, configuredBy);
   }
   
+  /**
+   * Fetch URL with full response metadata for content loading
+   */
+  async fetchURLWithMetadata(url: string): Promise<{
+    content: string;
+    headers: Record<string, string>;
+    status: number;
+  }> {
+    return this.importResolver.fetchURLWithMetadata(url);
+  }
+  
   setURLConfig(config: ResolvedURLConfig): void {
     this.urlConfig = config;
     this.cacheManager.setURLConfig(config);

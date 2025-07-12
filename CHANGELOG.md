@@ -33,17 +33,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Glob patterns: `<*.md>`, `<**/*.ts>`, `<src/**/*.js>`
   - Returns array of LoadContentResult objects with metadata
   - Each file includes content and rich metadata properties
-- **Rich Metadata for Loaded Content**: Files loaded with `<>` syntax now include metadata
-  - `content`: The file's text content (default when used as string)
-  - `filename`: Just the filename (e.g., "README.md")
-  - `relative`: Relative path from current directory
-  - `absolute`: Full absolute path
-  - `tokest`: Estimated token count based on file type (750/KB for text, 500/KB for code)
-  - `tokens`: Exact token count using tiktoken (lazy-evaluated)
-  - `fm`: Parsed frontmatter for markdown files (lazy-evaluated)
-  - `json`: Parsed JSON for .json files (lazy-evaluated)
-  - Access metadata with field syntax: `@file.filename`, `@file.tokest`, etc.
+- **Rich Metadata for Loaded Content**: Files and URLs loaded with `<>` syntax now include metadata
+  - **File Metadata**:
+    - `content`: The file's text content (default when used as string)
+    - `filename`: Just the filename (e.g., "README.md")
+    - `relative`: Relative path from current directory
+    - `absolute`: Full absolute path
+    - `tokest`: Estimated token count based on file type (750/KB for text, 500/KB for code)
+    - `tokens`: Exact token count using tiktoken (lazy-evaluated)
+    - `fm`: Parsed frontmatter for markdown files (lazy-evaluated)
+    - `json`: Parsed JSON for .json files (lazy-evaluated)
+  - **URL Metadata** (additional properties for URLs):
+    - `url`: The full URL
+    - `domain`: Just the domain (e.g., "example.com")
+    - `title`: Page title (extracted from HTML)
+    - `description`: Meta description or og:description
+    - `html`: Raw HTML content (for HTML pages)
+    - `text`: Plain text extraction (HTML stripped)
+    - `md`: Markdown version (same as content for HTML)
+    - `headers`: Response headers object
+    - `status`: HTTP status code
+    - `contentType`: Content-Type header value
+  - Access metadata with field syntax: `@file.filename`, `@url.domain`, `@page.title`, etc.
   - Smart object behavior: shows content when displayed, preserves metadata when stored
+  - Note: Some metadata properties use lazy evaluation and may not be accessible in certain contexts due to issue #315
+- **HTML to Markdown Conversion**: URLs returning HTML are automatically converted to clean Markdown
+  - Uses Mozilla's Readability to extract article content (removes navigation, ads, sidebars)
+  - Uses Turndown to convert the clean HTML to well-formatted Markdown
+  - `/show <https://example.com/article>` displays the article as Markdown by default
+  - Raw HTML still accessible via `@page.html` property (when #315 is resolved)
 
 ### Fixed
 - Duplicate `--dev` case clause in ArgumentParser

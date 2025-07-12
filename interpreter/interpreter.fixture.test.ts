@@ -1,9 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { interpret } from './index';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import * as fs from 'fs';
 import * as path from 'path';
+import { minimatch } from 'minimatch';
+import { glob } from 'tinyglobby';
+
+// Mock tinyglobby for fixture tests
+vi.mock('tinyglobby', () => ({
+  glob: vi.fn()
+}));
 
 describe('Mlld Interpreter - Fixture Tests', () => {
   let fileSystem: MemoryFileSystem;
@@ -12,6 +19,45 @@ describe('Mlld Interpreter - Fixture Tests', () => {
   beforeEach(() => {
     fileSystem = new MemoryFileSystem();
     pathService = new PathService();
+    
+    // Set up tinyglobby mock to work with our virtual file system
+    vi.mocked(glob).mockImplementation(async (pattern: string, options: any) => {
+      const { cwd = '/', absolute = false } = options || {};
+      
+      // Get all files from the virtual file system
+      const allFiles: string[] = [];
+      const walkDir = async (dir: string) => {
+        try {
+          const entries = await fileSystem.readdir(dir);
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry);
+            const stat = await fileSystem.stat(fullPath);
+            if (stat.isDirectory()) {
+              await walkDir(fullPath);
+            } else if (stat.isFile()) {
+              allFiles.push(fullPath);
+            }
+          }
+        } catch (err) {
+          // Directory doesn't exist or can't be read
+        }
+      };
+      
+      await walkDir(cwd);
+      
+      // Filter files by pattern
+      const matches = allFiles.filter(file => {
+        const relativePath = path.relative(cwd, file);
+        return minimatch(relativePath, pattern);
+      });
+      
+      // Return absolute or relative paths based on options
+      return absolute ? matches : matches.map(f => path.relative(cwd, f));
+    });
+  });
+  
+  afterEach(() => {
+    vi.clearAllMocks();
   });
   
   // Helper function to recursively copy directory to virtual filesystem
@@ -81,6 +127,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'data-array-valid-patterns': 'data/array-valid-patterns',
       'add-foreach-section-literal': 'add/foreach-section-literal',
       'add-foreach-section-modules': 'add/foreach-section-modules',
+      // Alligator syntax tests
+      'alligator-glob-pattern': 'alligator/glob-pattern',
+      'alligator-metadata-file': 'alligator/metadata-file',
+      'alligator-metadata-json': 'alligator/metadata-json',
+      'alligator-metadata-url': 'alligator/metadata-url',
+      'alligator-section-extraction': 'alligator/section-extraction',
     };
     
     // Check if we have a mapping for this fixture
@@ -148,6 +200,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     'output-quoted-path': 'Issue #312: Test infrastructure needed for new output syntax variations',
     'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
     'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
+    'alligator-glob-pattern': 'Glob patterns require real filesystem - tinyglobby is well-tested',
+    'alligator-url-markdown-conversion': 'Issue #315: Getter properties (text, md, html) not accessible in mlld',
     'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
     'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
     'text-url-section': 'Issue #82: URL section support not implemented',
@@ -602,27 +656,87 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         } : undefined;
         
         // Set up fetch mock for URL tests (but not for modules-stdlib-basic which has its own mock)
-        if ((fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed') && fixture.name !== 'modules-stdlib-basic') {
+        if ((fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed' || fixture.name.includes('alligator') && fixture.name.includes('url')) && fixture.name !== 'modules-stdlib-basic') {
           global.fetch = async (url: string) => {
             if (url === 'https://raw.githubusercontent.com/example/repo/main/README.md') {
               return {
                 ok: true,
+                status: 200,
+                headers: new Map([['content-type', 'text/markdown']]),
                 text: async () => '# Example Project\n\nThis is the README content fetched from the URL.'
               } as any;
             } else if (url === 'https://raw.githubusercontent.com/example/repo/main/docs/getting-started.md') {
               return {
                 ok: true,
+                status: 200,
+                headers: new Map([['content-type', 'text/markdown']]),
                 text: async () => '# Getting Started\n\nWelcome to our project! This guide will help you get up and running quickly.\n\n## Installation\n\nRun `npm install` to get started.\n'
               } as any;
             } else if (url === 'https://raw.githubusercontent.com/example/repo/main/config.mld') {
               return {
                 ok: true,
+                status: 200,
+                headers: new Map([['content-type', 'text/x-mlld']]),
                 text: async () => '/var @greeting = "Hello from URL!"\n/var @version = "2.0.0"\n/var @author = "URL Import"'
               } as any;
             } else if (url === 'https://raw.githubusercontent.com/example/repo/main/remote-config.mld') {
               return {
                 ok: true,
+                status: 200,
+                headers: new Map([['content-type', 'text/x-mlld']]),
                 text: async () => '/var @remoteValue = "Value from remote config"\n/var @remoteData = { "loaded": true }'
+              } as any;
+            } else if (url === 'https://example.com') {
+              return {
+                ok: true,
+                status: 200,
+                headers: new Map([['content-type', 'text/html']]),
+                text: async () => `<!doctype html>
+<html>
+<head>
+    <title>Example Domain</title>
+
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type="text/css">
+    body {
+        background-color: #f0f0f2;
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        
+    }
+    div {
+        width: 600px;
+        margin: 5em auto;
+        padding: 2em;
+        background-color: #fdfdff;
+        border-radius: 0.5em;
+        box-shadow: 2px 3px 7px 2px rgba(0,0,0,0.02);
+    }
+    a:link, a:visited {
+        color: #38488f;
+        text-decoration: none;
+    }
+    @media (max-width: 700px) {
+        div {
+            margin: 0 auto;
+            width: auto;
+        }
+    }
+    </style>    
+</head>
+
+<body>
+<div>
+    <h1>Example Domain</h1>
+    <p>This domain is for use in illustrative examples in documents. You may use this
+    domain in literature without prior coordination or asking for permission.</p>
+    <p><a href="https://www.iana.org/domains/example">More information...</a></p>
+</div>
+</body>
+</html>`
               } as any;
             }
             throw new Error(`Unexpected URL in test: ${url}`);

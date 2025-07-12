@@ -191,7 +191,7 @@ export async function evaluateShow(
     }
     
     // Import LoadContentResult type check
-    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
     
     // Convert final value to string
     if (typeof value === 'string') {

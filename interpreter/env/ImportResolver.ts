@@ -84,6 +84,11 @@ export interface IImportResolver {
     security?: import('@core/types/primitives').SecurityOptions,
     configuredBy?: string
   ): Promise<string>;
+  fetchURLWithMetadata(url: string): Promise<{
+    content: string;
+    headers: Record<string, string>;
+    status: number;
+  }>;
   
   // Import tracking
   isImporting(path: string): boolean;
@@ -465,6 +470,65 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     
     // Fall back to existing fetchURL method
     return this.fetchURL(url);
+  }
+  
+  /**
+   * Fetch URL with full response metadata for content loading
+   */
+  async fetchURLWithMetadata(url: string): Promise<{
+    content: string;
+    headers: Record<string, string>;
+    status: number;
+  }> {
+    // Transform Gist URLs to raw URLs
+    if (GistTransformer.isGistUrl(url)) {
+      url = await GistTransformer.transformToRaw(url);
+    }
+    
+    // Validate URL
+    await this.validateURL(url);
+    
+    // Get timeout and max size from config
+    const urlConfig = this.dependencies.getURLConfig();
+    const defaultOptions = this.dependencies.getDefaultUrlOptions();
+    const timeout = urlConfig?.timeout || defaultOptions.timeout;
+    const maxSize = urlConfig?.maxSize || defaultOptions.maxResponseSize;
+    
+    // Fetch with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+      
+      // Check content size
+      const content = await response.text();
+      if (content.length > maxSize) {
+        throw new Error(`Response too large: ${content.length} bytes`);
+      }
+      
+      // Extract headers
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+      
+      return {
+        content,
+        headers,
+        status: response.status
+      };
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timed out after ${timeout}ms`);
+      }
+      throw error;
+    }
   }
   
   // --- Import Tracking ---

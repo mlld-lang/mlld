@@ -188,3 +188,176 @@ export function isLoadContentResult(value: unknown): value is LoadContentResult 
 export function isLoadContentResultArray(value: unknown): value is LoadContentResult[] {
   return Array.isArray(value) && value.every(isLoadContentResult);
 }
+
+/**
+ * Extended metadata for URL content
+ */
+export interface LoadContentResultURL extends LoadContentResult {
+  // URL-specific properties
+  url: string;                  // Full URL
+  domain: string;               // Just the domain (e.g., "example.com")
+  title?: string;               // Page title (from readability or <title>)
+  description?: string;         // Meta description or excerpt
+  html?: string;                // Raw HTML content (lazy)
+  text?: string;                // Plain text extraction (lazy)
+  md?: string;                  // Markdown conversion (lazy, same as content for HTML)
+  headers?: Record<string, string>;  // Response headers
+  status?: number;              // HTTP status code
+  contentType?: string;         // Content-Type header
+}
+
+/**
+ * URL content result implementation with lazy loading
+ */
+export class LoadContentResultURLImpl extends LoadContentResultImpl implements LoadContentResultURL {
+  url: string;
+  domain: string;
+  title?: string;
+  description?: string;
+  status?: number;
+  contentType?: string;
+  
+  private _html?: string;
+  private _text?: string;
+  private _md?: string;
+  private _mdParsed = false;
+  private _headers?: Record<string, string>;
+  private _rawContent: string;
+  private _isHtml: boolean;
+  
+  constructor(data: {
+    content: string;          // The processed content (markdown for HTML, raw for others)
+    rawContent: string;       // The raw response content
+    url: string;
+    headers?: Record<string, string>;
+    status?: number;
+  }) {
+    // Extract filename from URL
+    const urlObj = new URL(data.url);
+    const pathname = urlObj.pathname;
+    const filename = pathname.split('/').pop() || 'index.html';
+    
+    super({
+      content: data.content,
+      filename: filename,
+      relative: data.url,     // For URLs, relative is the URL itself
+      absolute: data.url      // For URLs, absolute is the URL itself
+    });
+    
+    this.url = data.url;
+    this.domain = urlObj.hostname;
+    this._rawContent = data.rawContent;
+    this._headers = data.headers;
+    this.status = data.status;
+    this.contentType = data.headers?.['content-type'] || data.headers?.['Content-Type'];
+    this._isHtml = this.contentType?.includes('text/html') || false;
+    
+    // For HTML content, extract title and description
+    if (this._isHtml) {
+      this._extractHtmlMetadata();
+    }
+  }
+  
+  /**
+   * Raw HTML content (only for HTML pages)
+   */
+  get html(): string | undefined {
+    if (!this._isHtml) return undefined;
+    return this._rawContent;
+  }
+  
+  /**
+   * Plain text extraction
+   */
+  get text(): string | undefined {
+    if (this._text === undefined) {
+      if (this._isHtml) {
+        // Strip HTML tags for plain text
+        this._text = this._stripHtml(this._rawContent);
+      } else {
+        // For non-HTML, text is same as raw content
+        this._text = this._rawContent;
+      }
+    }
+    return this._text;
+  }
+  
+  /**
+   * Markdown version (same as content for HTML, undefined for others)
+   */
+  get md(): string | undefined {
+    if (!this._mdParsed) {
+      this._mdParsed = true;
+      if (this._isHtml) {
+        // For HTML, markdown is the processed content
+        this._md = this.content;
+      }
+      // For non-HTML, md is undefined
+    }
+    return this._md;
+  }
+  
+  /**
+   * Response headers
+   */
+  get headers(): Record<string, string> | undefined {
+    return this._headers;
+  }
+  
+  /**
+   * Extract title and description from HTML
+   */
+  private _extractHtmlMetadata(): void {
+    // Extract title
+    const titleMatch = this._rawContent.match(/<title[^>]*>([^<]+)<\/title>/i);
+    if (titleMatch) {
+      this.title = titleMatch[1].trim();
+    }
+    
+    // Extract meta description
+    const descMatch = this._rawContent.match(/<meta\s+name=["']description["']\s+content=["']([^"']+)["']/i);
+    if (descMatch) {
+      this.description = descMatch[1].trim();
+    } else {
+      // Try og:description
+      const ogDescMatch = this._rawContent.match(/<meta\s+property=["']og:description["']\s+content=["']([^"']+)["']/i);
+      if (ogDescMatch) {
+        this.description = ogDescMatch[1].trim();
+      }
+    }
+  }
+  
+  /**
+   * Strip HTML tags for plain text
+   */
+  private _stripHtml(html: string): string {
+    // Remove script and style elements
+    let text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+    text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+    
+    // Remove HTML tags
+    text = text.replace(/<[^>]+>/g, ' ');
+    
+    // Decode HTML entities
+    text = text.replace(/&nbsp;/g, ' ')
+               .replace(/&amp;/g, '&')
+               .replace(/&lt;/g, '<')
+               .replace(/&gt;/g, '>')
+               .replace(/&quot;/g, '"')
+               .replace(/&#039;/g, "'");
+    
+    // Collapse whitespace
+    text = text.replace(/\s+/g, ' ').trim();
+    
+    return text;
+  }
+}
+
+/**
+ * Type guard for URL content results
+ */
+export function isLoadContentResultURL(value: unknown): value is LoadContentResultURL {
+  return isLoadContentResult(value) && 
+    'url' in value && 
+    'domain' in value;
+}

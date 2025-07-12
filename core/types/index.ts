@@ -27,7 +27,7 @@ export * from './run';
 export * from './output';
 export * from './when';
 export * from './var'; // New unified var directive
-export * from './load-content'; // Load content types and utilities
+export * from './load-content'; // Load content types and utilities including URL metadata
 
 // Import node types for the MlldNode union
 import {

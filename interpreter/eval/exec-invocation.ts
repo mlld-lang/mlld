@@ -237,6 +237,31 @@ export async function evaluateExecInvocation(
           break;
           
         case 'VariableReference':
+          // Special handling for variable references to preserve objects
+          const varRef = arg as any;
+          const varName = varRef.identifier;
+          const variable = env.getVariable(varName);
+          
+          if (variable) {
+            // Get the actual value from the variable
+            const { isObject, isArray } = await import('@core/types/variable');
+            
+            if (isObject(variable) || isArray(variable)) {
+              // Preserve object/array values without stringification
+              argValueAny = variable.value;
+              argValue = JSON.stringify(argValueAny);
+            } else {
+              // For other types, use interpolation
+              argValue = await interpolate([arg], env, InterpolationContext.Default);
+              argValueAny = argValue;
+            }
+          } else {
+            // Variable not found - use interpolation which will throw appropriate error
+            argValue = await interpolate([arg], env, InterpolationContext.Default);
+            argValueAny = argValue;
+          }
+          break;
+          
         case 'ExecInvocation':
         case 'Text':
         default:

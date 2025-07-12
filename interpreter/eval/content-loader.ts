@@ -1,9 +1,12 @@
 import { Environment } from '@interpreter/env/Environment';
 import { MlldError } from '@core/errors';
 import { llmxmlInstance } from '../utils/llmxml-instance';
-import { LoadContentResult, LoadContentResultImpl } from '@core/types/load-content';
-import fastGlob from 'fast-glob';
+import { LoadContentResult, LoadContentResultImpl, LoadContentResultURLImpl } from '@core/types/load-content';
+import { glob } from 'tinyglobby';
 import * as path from 'path';
+import { Readability } from '@mozilla/readability';
+import TurndownService from 'turndown';
+import { JSDOM } from 'jsdom';
 
 /**
  * Check if a path contains glob patterns
@@ -52,19 +55,37 @@ export async function processContentLoader(node: any, env: Environment): Promise
   try {
     // URLs can't be globs
     if (env.isURL(pathOrUrl)) {
-      const content = await env.fetchURL(pathOrUrl);
+      // Fetch URL with metadata
+      const response = await env.fetchURLWithMetadata(pathOrUrl);
+      
+      // Process content based on content type
+      let processedContent = response.content;
+      const contentType = response.headers['content-type'] || response.headers['Content-Type'] || '';
+      
+      // For HTML content, convert to markdown using Readability + Turndown
+      if (contentType.includes('text/html')) {
+        processedContent = await convertHtmlToMarkdown(response.content, pathOrUrl);
+      }
       
       // Extract section if specified
       if (options?.section) {
         const sectionName = await extractSectionName(options.section, env);
-        const sectionContent = await extractSection(content, sectionName, options.section.renamed);
+        const sectionContent = await extractSection(processedContent, sectionName, options.section.renamed);
         
         // For URLs with sections, return plain string (backward compatibility)
         return sectionContent;
       }
       
-      // For URLs without sections, return plain string (backward compatibility)
-      return content;
+      // Create rich URL result with metadata
+      const urlResult = new LoadContentResultURLImpl({
+        content: processedContent,    // Markdown for HTML, raw content for others
+        rawContent: response.content,  // Always the raw response
+        url: pathOrUrl,
+        headers: response.headers,
+        status: response.status
+      });
+      
+      return urlResult;
     }
     
     // Handle glob patterns for file paths
@@ -122,11 +143,11 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
   // Resolve the pattern relative to current directory
   const baseDir = env.getBasePath();
   
-  // Use fast-glob to find matching files
-  const matches = await fastGlob(pattern, {
+  // Use tinyglobby to find matching files
+  const matches = await glob(pattern, {
     cwd: baseDir,
     absolute: true,
-    followSymbolicLinks: true,
+    followSymlinks: true,
     // Ignore common non-text files
     ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
   });
@@ -304,5 +325,53 @@ async function getAvailableSections(content: string): Promise<string[]> {
     }
     
     return sections;
+  }
+}
+
+/**
+ * Convert HTML to Markdown using Readability + Turndown
+ */
+async function convertHtmlToMarkdown(html: string, url: string): Promise<string> {
+  try {
+    // Create DOM from HTML
+    const dom = new JSDOM(html, { url });
+    const reader = new Readability(dom.window.document);
+    const article = reader.parse();
+    
+    if (!article) {
+      // If Readability can't extract an article, fall back to full HTML conversion
+      const turndownService = new TurndownService({
+        headingStyle: 'atx',
+        codeBlockStyle: 'fenced'
+      });
+      return turndownService.turndown(html);
+    }
+    
+    // Convert the extracted article content to Markdown
+    const turndownService = new TurndownService({
+      headingStyle: 'atx',
+      codeBlockStyle: 'fenced'
+    });
+    
+    // Build markdown with article metadata
+    let markdown = '';
+    if (article.title) {
+      markdown += `# ${article.title}\n\n`;
+    }
+    if (article.byline) {
+      markdown += `*By ${article.byline}*\n\n`;
+    }
+    if (article.excerpt) {
+      markdown += `> ${article.excerpt}\n\n`;
+    }
+    
+    // Convert main content
+    markdown += turndownService.turndown(article.content);
+    
+    return markdown;
+  } catch (error) {
+    // If conversion fails, return the original HTML
+    console.warn('Failed to convert HTML to Markdown:', error);
+    return html;
   }
 }

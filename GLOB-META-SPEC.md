@@ -1,5 +1,7 @@
 # Alligator Enhancement Spec: Glob Support & Metadata
 
+**Status: ✅ IMPLEMENTED** - See docs/dev/GLOB-META-IMPLEMENTATION.md for implementation details
+
 ## Overview
 
 This spec describes enhancements to the alligator syntax (`<...>`) to support:

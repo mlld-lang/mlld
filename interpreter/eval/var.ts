@@ -447,7 +447,7 @@ export async function evaluateVar(
     const { source: contentSource, options } = valueNode;
     
     // Import type guards for LoadContentResult
-    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
     
     if (isLoadContentResult(resolvedValue)) {
       // Single file with metadata - store as object variable
