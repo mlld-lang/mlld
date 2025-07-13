@@ -19,7 +19,7 @@ Files without extensions can still be used outside interpolation contexts
 
 // Main file reference pattern for interpolation contexts
 FileReferenceInterpolation "file reference interpolation"
-  = "<" _ content:FileReferenceContent fields:FileFieldChain? pipes:CondensedPipeChain? _ ">" {
+  = "<" _ content:FileReferenceContent _ ">" fields:FileFieldChain? pipes:CondensedPipeChain? {
       // Extract the raw string from the content
       let contentStr;
       if (content.raw) {

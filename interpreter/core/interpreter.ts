@@ -932,7 +932,16 @@ async function interpolateFileReference(
   }
   
   // Process the path (may contain variables)
-  const resolvedPath = await interpolate(node.source.segments || [node.source], env);
+  let resolvedPath: string;
+  if (typeof node.source === 'string') {
+    resolvedPath = node.source;
+  } else if (node.source.raw) {
+    resolvedPath = node.source.raw;
+  } else if (node.source.segments) {
+    resolvedPath = await interpolate(node.source.segments, env);
+  } else {
+    resolvedPath = await interpolate([node.source], env);
+  }
   
   // Check if file interpolation is enabled
   if (!env.isFileInterpolationEnabled()) {
@@ -951,14 +960,37 @@ async function interpolateFileReference(
   try {
     // Use existing content loader
     const { processContentLoader } = await import('../eval/content-loader');
-    const loadResult = await processContentLoader({
-      type: 'load-content',
-      source: { 
-        type: 'path', 
-        segments: node.source.segments || [node.source], 
-        raw: resolvedPath 
+    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    
+    let loadResult: any;
+    try {
+      loadResult = await processContentLoader({
+        type: 'load-content',
+        source: { 
+          type: 'path', 
+          segments: node.source.segments || [node.source], 
+          raw: resolvedPath 
+        }
+      }, env);
+    } catch (error: any) {
+      // Handle file not found or access errors
+      if (error.code === 'ENOENT') {
+        throw new Error(`File not found: ${resolvedPath}`);
+      } else if (error.code === 'EACCES') {
+        throw new Error(`Permission denied: ${resolvedPath}`);
+      } else {
+        throw new Error(`Failed to load file '${resolvedPath}': ${error.message}`);
       }
-    }, env);
+    }
+    
+    // Handle glob results (array of files)
+    if (isLoadContentResultArray(loadResult)) {
+      // For glob patterns, join all file contents
+      const contents = await Promise.all(
+        loadResult.map(file => processFileFields(file, node.fields, node.pipes, env))
+      );
+      return contents.join('\n\n');
+    }
     
     // Process field access and pipes
     return processFileFields(loadResult, node.fields, node.pipes, env);
@@ -980,10 +1012,26 @@ async function processFileFields(
   const { isLoadContentResult } = await import('@core/types/load-content');
   let result: any = content;
   
-  // Default to .content if no fields specified
-  if (!fields || fields.length === 0) {
-    result = isLoadContentResult(result) ? result.content : result;
-  } else {
+  // Extract content from LoadContentResult
+  if (isLoadContentResult(result)) {
+    result = result.content;
+    
+    // Try to parse JSON if it looks like JSON and we have fields to access
+    if (fields && fields.length > 0 && typeof result === 'string') {
+      const trimmed = result.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          result = JSON.parse(trimmed);
+        } catch (e) {
+          // Not valid JSON, keep as string
+        }
+      }
+    }
+  }
+  
+  // Process field access
+  if (fields && fields.length > 0) {
     // Reuse existing field access logic
     for (const field of fields) {
       result = accessField(result, field);
@@ -1021,21 +1069,33 @@ async function applyCondensedPipes(
       throw new Error(`Unknown transform: @${pipe.name}`);
     }
     
-    // Apply transform
-    if (typeof transform === 'function') {
-      result = await transform(result, ...(pipe.args || []));
-    } else if (transform && typeof transform === 'object' && '__executable' in transform) {
-      // Handle executable variables as transforms
-      const { evaluateExecutable } = await import('../eval/executable');
-      const execResult = await evaluateExecutable(
-        transform as any,
-        [result, ...(pipe.args || [])],
-        env,
-        `@${pipe.name}`
-      );
-      result = execResult.value;
-    } else {
-      throw new Error(`@${pipe.name} is not a valid transform function`);
+    try {
+      // Apply transform
+      if (typeof transform === 'function') {
+        result = await transform(result, ...(pipe.args || []));
+      } else if (transform && typeof transform === 'object') {
+        // Check for builtin transformer
+        if (transform.metadata?.isBuiltinTransformer && transform.metadata?.transformerImplementation) {
+          const impl = transform.metadata.transformerImplementation;
+          result = await impl(String(result));
+        } else if (transform.type === 'executable' || '__executable' in transform) {
+          // Handle executable variables as transforms
+          const { evaluateExecutable } = await import('../eval/executable');
+          const execResult = await evaluateExecutable(
+            transform as any,
+            [result, ...(pipe.args || [])],
+            env,
+            `@${pipe.name}`
+          );
+          result = execResult.value;
+        } else {
+          throw new Error(`@${pipe.name} is not a valid transform function`);
+        }
+      } else {
+        throw new Error(`@${pipe.name} is not a valid transform function`);
+      }
+    } catch (error: any) {
+      throw new Error(`Error in pipe @${pipe.name}: ${error.message}`);
     }
   }
   

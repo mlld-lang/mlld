@@ -344,6 +344,47 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /run {echo "Welcome @user.name"}    >> And in brace commands
 ```
 
+### File References in Templates
+```mlld
+>> Include file content in any interpolation context
+/var @readme = `<README.md>`                    >> Load entire file
+/var @author = `<package.json>.author`         >> JSON field access
+/var @email = `<data.json>.users[0].email`     >> Array access
+/var @formatted = `<data.json>|@json`          >> With transformation
+
+>> Works in all interpolation contexts:
+/show `Documentation: <docs/api.md>`            >> In backticks
+/run "cat <config.txt>"                         >> In quoted strings
+/run {echo "<version.txt>"}                     >> In command braces
+/var @content = ::<changelog.md>::             >> In double-colon templates
+
+>> Variable substitution in paths
+/var @dir = "docs"
+/var @file = "readme"
+/var @content = `<@dir/@file.md>`              >> Dynamic paths
+
+>> Glob patterns
+/var @allDocs = `<*.md>`                        >> All markdown files
+/var @tests = `<tests/*.txt>`                   >> Pattern matching
+
+>> Circular reference protection
+>> If file A includes <B.txt> and B includes <A.txt>, returns empty
+```
+
+### Variable Pipes
+```mlld
+>> Transform variables with pipe syntax
+/var @data = {"name": "alice", "age": 30}
+/var @dataXml = @data|@json|@xml               >> Convert to XML
+
+>> Works with field access
+/var @config = {"format": "yaml"}
+/var @formatted = @config|@json                 >> Pretty print JSON
+
+>> Available transforms:
+>> @json, @xml, @csv, @md                    >> Format conversions
+```
+
 ## Exe - Defining Reusable Commands
 
 ```mlld
@@ -593,6 +634,19 @@ For complex operations, create modules instead of inline scripts:
 /var @config = {}         << CORRECT - unified /var
 /show @content           << CORRECT - new name
 /exe @cmd = run {ls}     << CORRECT - shortened name
+```
+
+### ❌ Confusing file references with HTML
+```mlld
+>> File references require . * or @ to be recognized
+<div>content</div>        << Plain text (no . * or @)
+<file.txt>                << File reference (has .)
+<*.md>                    << File reference (has *)
+<@dir/file>               << File reference (has @)
+
+>> In interpolation contexts only! Outside templates, < is literal
+This <file.txt> is literal text    << Not in directive line
+/show `Content: <file.txt>`         << File reference in template
 ```
 
 ## Creating Helper Functions
