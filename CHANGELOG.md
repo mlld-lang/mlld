@@ -5,6 +5,35 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc4]
+
+### Added
+- **File Reference Interpolation**: File references `<file.md>` can now be interpolated in strings and templates
+  - Interpolate in backticks: `` `Content: <README.md>` ``
+  - Interpolate in double quotes: `"Including <file.txt> here"`
+  - Field access on files: `<package.json>.name`, `<data.json>.users[0].email`
+  - Works with globs: `<*.md>.fm.title` gets all markdown titles
+  - Special `<>` placeholder in 'as' clauses: `<*.md> as "# <>.filename"`
+- **Condensed Pipe Syntax**: Both file references and variables support pipe transformations
+  - File pipes: `<file.json>|@json|@xml` - load JSON and convert to XML
+  - Variable pipes: `@data|@upper|@trim` - transform variable values
+  - No spaces allowed in condensed syntax (use full `| @transform` in directives)
+- **Variable Pipe Support**: Variables can now use pipes in interpolation contexts
+  - In templates: `` `Data: @myvar|@json` ``
+  - In quotes: `"Name: @user.name|@upper"`
+  - Transforms can be built-in or imported from modules
+
+### Changed
+- **Removed Foreach Section Pattern**: The `foreach <@array # section>` syntax has been removed
+  - Migration: Use `<*.md # section> as "template"` instead
+  - The new file interpolation syntax completely supersedes this pattern
+  - Simpler and more intuitive: direct glob + template in one expression
+
+### Fixed
+- Circular file references now emit warnings instead of errors
+  - `<**/*.mld>` in an .mld file correctly returns all OTHER .mld files
+  - Prevents infinite loops while allowing useful self-excluding patterns
+
 ## [2.0.0-rc3]
 
 ### Added

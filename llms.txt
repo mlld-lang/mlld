@@ -136,6 +136,63 @@ This design keeps documents readable as regular Markdown while enabling programm
 /var @contents = [<a.md>, <b.md>]  << Array of loaded file contents!
 ```
 
+### 8.1 File Reference Interpolation
+
+**MAJOR FEATURE**: File references can now be interpolated directly in strings and templates!
+
+**Smart Detection**: Only `<...>` containing `.`, `/`, `*`, or `@` are treated as file references. This means XML tags like `<thinking>` or `<answer>` work normally.
+
+```mlld
+>> Basic interpolation in templates:
+/var @greeting = `Welcome! Here's our readme: <README.md>`
+/var @docs = "Documentation: <docs/guide.md>"
+
+>> Field access on loaded files:
+/var @pkgName = `Project: <package.json>.name`
+/var @author = `Author: <package.json>.author.email`
+/var @firstUser = `Admin: <users.json>[0].name`
+
+>> With glob patterns:
+/var @titles = `<docs/*.md>.fm.title`     << Gets all markdown titles
+/var @files = `Found: <src/**/*.js>.filename`  << All JS filenames
+
+>> Special <> placeholder in 'as' templates:
+/var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
+/var @modules = <*.mld.md> as "## <>.fm.name by <>.fm.author"
+
+>> XML tags work normally (no special chars):
+/var @prompt = `<thinking>Consider the options</thinking>`
+/var @xml = "<user>Alice</user> sent <message>Hello</message>"
+```
+
+### 8.2 Pipe Transformations
+
+**Condensed Pipe Syntax**: Transform data inline with `|@transform` (no spaces!).
+
+```mlld
+>> File reference pipes:
+/var @formatted = `<data.json>|@json`         << Pretty-print JSON
+/var @xmlData = `<data.json>|@json|@xml`     << JSON to XML
+/var @upper = `<readme.md>|@upper`           << Uppercase content
+
+>> Variable pipes in templates:
+/var @name = "alice"
+/var @greeting = `Hello @name|@upper!`       << "Hello ALICE!"
+/var @data = {"user": "bob", "role": "admin"}
+/var @output = `User data: @data|@json`      << Pretty JSON
+
+>> Pipes with field access:
+/var @title = `<package.json>.name|@upper`
+/var @sorted = `<data.json>.items|@sort|@json`
+
+>> Available transforms:
+>> @json - Pretty-print JSON
+>> @xml - Convert to XML format  
+>> @upper/@lower - Case conversion
+>> @trim - Remove whitespace
+>> Plus any transforms from imported modules
+```
+
 ### 9. Import Patterns
 
 **CRITICAL DISTINCTION**: mlld has two different import syntaxes - one for modules and one for paths.
@@ -159,6 +216,28 @@ This design keeps documents readable as regular Markdown while enabling programm
 - `@author/module` - No angle brackets means "resolve this as a module reference"
 
 Without angle brackets, `@./file` would be treated as trying to import from a user named "." - which is why you might see errors like "User '.' not found in registry".
+
+### 9.1 'As' Template Syntax for Globs
+
+**Power Feature**: Process multiple files with templates using `as`:
+
+```mlld
+>> The <> placeholder represents the current file:
+/var @docs = <*.md> as "# <>.filename"
+/var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
+
+>> With section extraction:
+/var @summaries = <posts/*.md # summary> as "## <>.fm.title\n<>.content"
+
+>> Complex templates:
+/var @modules = <modules/*.mld> as `
+### <>.fm.name (<>.fm.version)
+Author: <>.fm.author
+Path: <>.relative
+`
+
+>> Note: <> only works in 'as' templates, not elsewhere
+```
 
 ### 10. Conditional Logic with /when
 
