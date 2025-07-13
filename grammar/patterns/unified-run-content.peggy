@@ -257,13 +257,13 @@ UnifiedCommandQuotedString
       for (const item of content) {
         if (typeof item === 'string') {
           currentText += item;
-        } else if (item.type === NodeType.VariableReference) {
+        } else if (item.type === NodeType.VariableReference || item.type === 'FileReference') {
           // Flush current text if any
           if (currentText) {
             nodes.push(helpers.createNode(NodeType.Text, { content: currentText, location: location() }));
             currentText = '';
           }
-          // Add the variable reference
+          // Add the variable or file reference
           nodes.push(item);
         }
       }
@@ -288,14 +288,19 @@ UnifiedCommandQuotedString
       return helpers.createNode(NodeType.Text, { content: text, location: location() });
     }
 
-// Content inside double quotes - allows variables but no operator checks  
+// Content inside double quotes - allows variables and file references but no operator checks  
 UnifiedDoubleQuotedContent
   = varRef:VariableNoTail {
       // Variable interpolation inside double quotes - return the unified pattern result
       return varRef;
     }
-  / chars:$((!'"' !'@' .)+) { return chars; }
+  / fileRef:FileReferenceInterpolation {
+      // File reference interpolation inside double quotes
+      return fileRef;
+    }
+  / chars:$((!'"' !'@' !'<' .)+) { return chars; }
   / "@" { return '@'; }  // Lone @ without identifier
+  / "<" { return '<'; }  // Lone < without file reference
 
 // Content inside single quotes - no variables, no operator checks
 UnifiedCommandSingleQuotedContent

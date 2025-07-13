@@ -1,1 +1,2 @@
-/var @sectionContent = <file.md # Original Title> as "# Modified Title"
+/var @sectionContent = <section-file.md # Section 1>
+/show @sectionContent

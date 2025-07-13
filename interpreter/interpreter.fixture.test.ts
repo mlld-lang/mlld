@@ -95,6 +95,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'text-assignment-path': 'text/assignment-path',
       'text-assignment-run': 'text/assignment-run',
       'text-path': 'text/path',
+      'text-path-section-bracket': 'text/path',
+      'text-path-section-bracket-rename': 'text/path',
       'add-path': 'add/path',
       'add-path-section': 'add/path',
       'add-section': 'add/section',
@@ -219,8 +221,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
     'text-url-section': 'Issue #82: URL section support not implemented',
     'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
-    'add-foreach-section-variable-new': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
-    'data-foreach-section-variable': 'Issue #236: Template parsing fails with nested brackets in double-bracket templates',
     'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
     'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
     'output-exec-invocation': 'Exec invocation in @output not yet supported - future enhancement',
@@ -235,15 +235,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     'data-assignment-pipeline': 'Needs investigation - newline normalization issue',
     'pipeline-array-data': 'Needs investigation - whitespace in output',
     'run-run-code-bracket-nesting': 'Python/sh not supported yet - only JS/Node/Bash',
-    // Foreach section tests - temporarily skipped
-    'data-foreach-section-literal': 'Foreach section expressions not yet supported in /var context',
-    'text-foreach-section-literal': 'Foreach section expressions not yet supported in /var context',
-    'text-foreach-section-variable': 'Foreach section expressions not yet supported in /var context',
-    'text-foreach-section-backtick': 'Foreach section expressions not yet supported in /var context',
-    'text-foreach-section-path-expression': 'Foreach section expressions not yet supported in /var context',
-    // TODO: revisit section logic - section extraction in bracket syntax not working correctly
-    'text-assignment-add-section-bracket-rename': 'Section extraction in bracket syntax needs investigation',
-    'text-path-section-bracket-rename': 'Section extraction in bracket syntax needs investigation',
     // Module import tests that need published modules
     'data-object-strings-array-functions': 'Issue #254: Registry tests need isolation - @mlld/array not published yet',
     // Bracket notation tests - skipped until grammar issue resolved

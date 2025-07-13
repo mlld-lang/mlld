@@ -1081,25 +1081,25 @@ Formatted JSON: {
 }
 
 ### Multiple pipes
-JSON to XML: <root>
-  <name>Test User</name>
-  <users>
-    <item>
-      <email>alice@example.com</email>
-      <address>
-        <city>New York</city>
-        <state>NY</state>
-      </address>
-    </item>
-    <item>
-      <email>bob@example.com</email>
-      <address>
-        <city>Boston</city>
-        <state>MA</state>
-      </address>
-    </item>
-  </users>
-</root>
+JSON to XML: <ROOT>
+  <NAME>Test User</NAME>
+  <USERS>
+    <ITEM>
+      <EMAIL>alice@example.com</EMAIL>
+      <ADDRESS>
+        <CITY>New York</CITY>
+        <STATE>NY</STATE>
+      </ADDRESS>
+    </ITEM>
+    <ITEM>
+      <EMAIL>bob@example.com</EMAIL>
+      <ADDRESS>
+        <CITY>Boston</CITY>
+        <STATE>MA</STATE>
+      </ADDRESS>
+    </ITEM>
+  </USERS>
+</ROOT>
 
 ### Pipes with field access
 User data formatted: {
@@ -1112,9 +1112,9 @@ User data formatted: {
 
 ## Variable Pipes
 
-Variable to XML: <root>
-  <message>hello world</message>
-</root>
+Variable to XML: <ROOT>
+  <MESSAGE>hello world</MESSAGE>
+</ROOT>
 
 Object formatted: {
   "name": "alice",
@@ -1124,7 +1124,7 @@ Object formatted: {
 ## Complex Scenarios
 
 ### Nested templates
-User Bob from Test User lives in New York
+User Test User from Test User lives in New York
 
 ### In double quotes
 File content: Hello from test content file!

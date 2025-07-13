@@ -1045,16 +1045,18 @@ async function processFileFields(
   // Apply pipes
   if (pipes && pipes.length > 0) {
     result = await applyCondensedPipes(result, pipes, env);
+    // Pipes already handle conversion to string format, so return as-is
+    return String(result);
   }
   
-  // Convert to string
+  // Convert to string only if no pipes were applied
   return typeof result === 'string' ? result : JSON.stringify(result);
 }
 
 /**
  * Apply condensed pipe transformations
  */
-async function applyCondensedPipes(
+export async function applyCondensedPipes(
   value: any,
   pipes: CondensedPipe[],
   env: Environment

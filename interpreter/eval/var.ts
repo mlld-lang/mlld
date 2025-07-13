@@ -312,6 +312,12 @@ export async function evaluateVar(
       }
     }
     
+    // Apply condensed pipes if present (e.g., @var|@transform)
+    if (valueNode.pipes && valueNode.pipes.length > 0) {
+      const { applyCondensedPipes } = await import('../core/interpreter');
+      resolvedValue = await applyCondensedPipes(resolvedValue, valueNode.pipes, env);
+    }
+    
   } else if (Array.isArray(valueNode)) {
     // For backtick templates, we should extract the text content directly
     // Check if this is a simple text array (backtick template)
