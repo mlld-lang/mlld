@@ -46,7 +46,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
                        source;
   
   if (actualSource.type === 'path') {
-    pathOrUrl = reconstructPath(actualSource);
+    pathOrUrl = await reconstructPath(actualSource, env);
   } else if (actualSource.type === 'url') {
     pathOrUrl = reconstructUrl(actualSource);
   } else {
@@ -294,21 +294,27 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
 /**
  * Reconstruct path string from path AST node
  */
-function reconstructPath(pathNode: any): string {
+async function reconstructPath(pathNode: any, env: Environment): Promise<string> {
   if (!pathNode.segments || !Array.isArray(pathNode.segments)) {
     return (pathNode.raw || '').trim();
   }
 
+  // If segments contain variable references, we need to interpolate
+  const hasVariables = pathNode.segments.some((seg: any) => seg.type === 'VariableReference');
+  
+  if (hasVariables) {
+    // Import interpolate function to handle variable references
+    const { interpolate } = await import('../core/interpreter');
+    const interpolated = await interpolate(pathNode.segments, env);
+    return interpolated.trim();
+  }
+
+  // No variables, simple reconstruction
   const reconstructed = pathNode.segments.map((segment: any) => {
     if (segment.type === 'Text') {
       return segment.content;
     } else if (segment.type === 'PathSeparator') {
       return segment.value;
-    } else if (segment.type === 'VariableReference') {
-      // For now, throw error - variable interpolation in paths needs env context
-      throw new MlldError('Variable interpolation in content loader paths not yet implemented', {
-        variable: segment.identifier
-      });
     }
     return '';
   }).join('');

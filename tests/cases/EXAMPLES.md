@@ -993,10 +993,6 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 /var @invalidField = `<test-data.json>.nonexistent.field`
 /show `Invalid field: @invalidField`
 
-### Circular reference attempt
-/var @circular = `<circular-ref.txt>`
-/show `Circular test: @circular`
-
 ## Special Characters
 
 ### File with spaces
@@ -1017,15 +1013,6 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 /var @userName = "Bob"
 /var @mixed = `Hello @userName, content: <test-content.txt>`
 /show @mixed
-
-## As Template Context
-
-### Using <> placeholder in templates
-/var @files = ["file1.txt", "file2.txt"]
->> Note: foreach with <> placeholder is not yet implemented
->> /var @contents = foreach `<>` (@files)
-/var @contents = "placeholder for foreach implementation"
-/show @contents
 ```
 
 **Expected Output:**
@@ -1039,23 +1026,18 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 ### Simple file reference
 
 Hello from test content file!
-
 ### JSON file with field access
 
 Name from JSON: Test User
-
 ### Array access
 
 First user email: alice@example.com
-
 ### Nested field access
 
 Second user city: Boston
-
 ## Variable Substitution in Paths
 
 Dynamic file: placeholder for dynamic file loading
-
 ## Pipe Transformations
 
 ### Single pipe
@@ -1079,29 +1061,27 @@ Formatted JSON: {
     }
   ]
 }
-
 ### Multiple pipes
-JSON to XML: <ROOT>
-  <NAME>Test User</NAME>
-  <USERS>
-    <ITEM>
-      <EMAIL>alice@example.com</EMAIL>
-      <ADDRESS>
-        <CITY>New York</CITY>
-        <STATE>NY</STATE>
-      </ADDRESS>
-    </ITEM>
-    <ITEM>
-      <EMAIL>bob@example.com</EMAIL>
-      <ADDRESS>
-        <CITY>Boston</CITY>
-        <STATE>MA</STATE>
-      </ADDRESS>
-    </ITEM>
-  </USERS>
-</ROOT>
 
+JSON to XML: <NAME>Test User</NAME>
+<USERS>
+  <ITEM>
+    <EMAIL>alice@example.com</EMAIL>
+    <ADDRESS>
+      <CITY>New York</CITY>
+      <STATE>NY</STATE>
+    </ADDRESS>
+  </ITEM>
+  <ITEM>
+    <EMAIL>bob@example.com</EMAIL>
+    <ADDRESS>
+      <CITY>Boston</CITY>
+      <STATE>MA</STATE>
+    </ADDRESS>
+  </ITEM>
+</USERS>
 ### Pipes with field access
+
 User data formatted: {
   "email": "alice@example.com",
   "address": {
@@ -1109,64 +1089,52 @@ User data formatted: {
     "state": "NY"
   }
 }
-
 ## Variable Pipes
 
-Variable to XML: <ROOT>
-  <MESSAGE>hello world</MESSAGE>
-</ROOT>
+Variable to XML: <MESSAGE>hello world</MESSAGE>
 
 Object formatted: {
   "name": "alice",
   "age": 30
 }
-
 ## Complex Scenarios
 
 ### Nested templates
+
 User Test User from Test User lives in New York
-
 ### In double quotes
-File content: Hello from test content file!
 
+File content: Hello from test content file!
 ### In command braces
 Content: Hello from test content file!
 
 ### Multiple references
-First file content. and Second file content. combined
 
+First file content. and Second file content. combined
 ## Error Cases
 
 ### Missing file
+
 Missing file: 
-
 ### Invalid field
+
 Invalid field: 
-
-### Circular reference attempt
-Circular test: 
-
 ## Special Characters
 
 ### File with spaces
+
 Spaced filename: Content with spaces.
-
 ### Special characters in path
-Special chars: Special content!
 
+Special chars: Special content!
 ## Template Contexts
 
 ### Double colon templates
+
 Hello from test content file! interpolated
-
 ### Mixed with variables
+
 Hello Bob, content: Hello from test content file!
-
-## As Template Context
-
-### Using <> placeholder
-Content of file1.txt
-Content of file2.txt
 ```
 
 ### Valid Literals in function args

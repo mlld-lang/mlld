@@ -964,9 +964,14 @@ async function interpolateFileReference(
     
     let loadResult: any;
     try {
+      // If we already have a resolved path (from variable interpolation), create a simple path source
+      const sourceToUse = resolvedPath !== node.source?.raw ? 
+        { type: 'path', raw: resolvedPath, segments: [{ type: 'Text', content: resolvedPath }] } : 
+        node.source;
+      
       loadResult = await processContentLoader({
         type: 'load-content',
-        source: node.source // Pass the source as-is since it's already a path object
+        source: sourceToUse
       }, env);
     } catch (error: any) {
       // Handle file not found or access errors gracefully by returning empty string
@@ -1084,7 +1089,9 @@ export async function applyCondensedPipes(
         // Check for builtin transformer
         if (transform.metadata?.isBuiltinTransformer && transform.metadata?.transformerImplementation) {
           const impl = transform.metadata.transformerImplementation;
-          result = await impl(String(result));
+          // Convert the value to string - handle objects properly
+          const stringValue = typeof result === 'string' ? result : JSON.stringify(result);
+          result = await impl(stringValue);
         } else if (transform.type === 'executable' || '__executable' in transform) {
           // Handle executable variables as transforms
           const { evaluateExecutable } = await import('../eval/executable');

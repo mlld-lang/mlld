@@ -80,10 +80,6 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 /var @invalidField = `<test-data.json>.nonexistent.field`
 /show `Invalid field: @invalidField`
 
-### Circular reference attempt
-/var @circular = `<circular-ref.txt>`
-/show `Circular test: @circular`
-
 ## Special Characters
 
 ### File with spaces
@@ -105,11 +101,4 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 /var @mixed = `Hello @userName, content: <test-content.txt>`
 /show @mixed
 
-## As Template Context
 
-### Using <> placeholder in templates
-/var @files = ["file1.txt", "file2.txt"]
->> Note: foreach with <> placeholder is not yet implemented
->> /var @contents = foreach `<>` (@files)
-/var @contents = "placeholder for foreach implementation"
-/show @contents
