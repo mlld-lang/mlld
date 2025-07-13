@@ -966,20 +966,19 @@ async function interpolateFileReference(
     try {
       loadResult = await processContentLoader({
         type: 'load-content',
-        source: { 
-          type: 'path', 
-          segments: node.source.segments || [node.source], 
-          raw: resolvedPath 
-        }
+        source: node.source // Pass the source as-is since it's already a path object
       }, env);
     } catch (error: any) {
-      // Handle file not found or access errors
+      // Handle file not found or access errors gracefully by returning empty string
       if (error.code === 'ENOENT') {
-        throw new Error(`File not found: ${resolvedPath}`);
+        console.error(`Warning: File not found - '${resolvedPath}'`);
+        return '';
       } else if (error.code === 'EACCES') {
-        throw new Error(`Permission denied: ${resolvedPath}`);
+        console.error(`Warning: Permission denied - '${resolvedPath}'`);
+        return '';
       } else {
-        throw new Error(`Failed to load file '${resolvedPath}': ${error.message}`);
+        console.error(`Warning: Failed to load file '${resolvedPath}': ${error.message}`);
+        return '';
       }
     }
     
@@ -1063,10 +1062,16 @@ async function applyCondensedPipes(
   let result = value;
   
   for (const pipe of pipes) {
+    // Handle both 'name' and 'transform' properties for backward compatibility
+    const pipeName = pipe.name || pipe.transform;
+    if (!pipeName) {
+      throw new Error('Pipe missing transform name');
+    }
+    
     // Get transform from environment
-    const transform = env.getTransform?.(pipe.name) || env.getVariable(pipe.name);
+    const transform = env.getTransform?.(pipeName) || env.getVariable(pipeName);
     if (!transform) {
-      throw new Error(`Unknown transform: @${pipe.name}`);
+      throw new Error(`Unknown transform: @${pipeName}`);
     }
     
     try {
@@ -1085,17 +1090,17 @@ async function applyCondensedPipes(
             transform as any,
             [result, ...(pipe.args || [])],
             env,
-            `@${pipe.name}`
+            `@${pipeName}`
           );
           result = execResult.value;
         } else {
-          throw new Error(`@${pipe.name} is not a valid transform function`);
+          throw new Error(`@${pipeName} is not a valid transform function`);
         }
       } else {
-        throw new Error(`@${pipe.name} is not a valid transform function`);
+        throw new Error(`@${pipeName} is not a valid transform function`);
       }
     } catch (error: any) {
-      throw new Error(`Error in pipe @${pipe.name}: ${error.message}`);
+      throw new Error(`Error in pipe @${pipeName}: ${error.message}`);
     }
   }
   

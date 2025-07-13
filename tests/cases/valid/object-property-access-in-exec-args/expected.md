@@ -5,6 +5,7 @@ This test specifically verifies the scenarios described in the GitHub issue.
 User name: Alice
 User age: 30
 User active: true
+
 Extracted name: Alice
 
 Test name: PASS

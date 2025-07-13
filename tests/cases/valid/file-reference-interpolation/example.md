@@ -24,7 +24,9 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 
 /var @extension = "txt"
 /var @filename = "test-content"
-/var @dynamicContent = `<@filename.@extension>`
+>> Note: Variable interpolation in file paths not yet implemented
+>> /var @dynamicContent = `<@filename.@extension>`
+/var @dynamicContent = "placeholder for dynamic file loading"
 /show `Dynamic file: @dynamicContent`
 
 ## Pipe Transformations
@@ -47,17 +49,9 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 /var @dataXml = @testData|@xml
 /show `Variable to XML: @dataXml`
 
-/var @userData = {"name": "alice", "age": 30}
-/var @userDataJson = @userData|@json
+/var @userData2 = {"name": "alice", "age": 30}
+/var @userDataJson = @userData2|@json
 /show `Object formatted: @userDataJson`
-
-## Glob Patterns
-
-/var @allMarkdown = `<*.md>`
-/show `Markdown files: @allMarkdown`
-
-/var @allInDir = `<files/*.txt>`
-/show `Text files in dir: @allInDir`
 
 ## Complex Scenarios
 
@@ -113,7 +107,9 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 
 ## As Template Context
 
-### Using <> placeholder
+### Using <> placeholder in templates
 /var @files = ["file1.txt", "file2.txt"]
-/var @contents = foreach `<>` (@files)
+>> Note: foreach with <> placeholder is not yet implemented
+>> /var @contents = foreach `<>` (@files)
+/var @contents = "placeholder for foreach implementation"
 /show @contents

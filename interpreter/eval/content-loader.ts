@@ -38,13 +38,20 @@ export async function processContentLoader(node: any, env: Environment): Promise
 
   // Reconstruct the path/URL string from the source
   let pathOrUrl: string;
-  if (source.type === 'path') {
-    pathOrUrl = reconstructPath(source);
-  } else if (source.type === 'url') {
-    pathOrUrl = reconstructUrl(source);
+  
+  // The source could be the path object directly (from file reference interpolation)
+  // or it could be wrapped in a node with source.type
+  const actualSource = source.type === 'path' || source.type === 'url' ? source : 
+                       (source.segments && source.raw !== undefined) ? { ...source, type: 'path' } :
+                       source;
+  
+  if (actualSource.type === 'path') {
+    pathOrUrl = reconstructPath(actualSource);
+  } else if (actualSource.type === 'url') {
+    pathOrUrl = reconstructUrl(actualSource);
   } else {
-    throw new MlldError(`Unknown content loader source type: ${source.type}`, {
-      sourceType: source.type,
+    throw new MlldError(`Unknown content loader source type: ${actualSource.type}`, {
+      sourceType: actualSource.type,
       expected: ['path', 'url']
     });
   }
@@ -180,14 +187,20 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
   // Resolve the pattern relative to current directory
   const baseDir = env.getBasePath();
   
+  
   // Use tinyglobby to find matching files
-  const matches = await glob(pattern, {
-    cwd: baseDir,
-    absolute: true,
-    followSymlinks: true,
-    // Ignore common non-text files
-    ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
-  });
+  let matches: string[];
+  try {
+    matches = await glob(pattern, {
+      cwd: baseDir,
+      absolute: true,
+      followSymlinks: true,
+      // Ignore common non-text files
+      ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
+    });
+  } catch (globError: any) {
+    throw globError;
+  }
   
   // Sort by filename for consistent ordering
   matches.sort();

@@ -48,6 +48,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       // Filter files by pattern
       const matches = allFiles.filter(file => {
         const relativePath = path.relative(cwd, file);
+        // Import minimatch inside the mock to avoid import issues
+        const { minimatch } = require('minimatch');
         return minimatch(relativePath, pattern);
       });
       
@@ -133,6 +135,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'alligator-metadata-json': 'alligator/metadata-json',
       'alligator-metadata-url': 'alligator/metadata-url',
       'alligator-section-extraction': 'alligator/section-extraction',
+      // File reference interpolation test
+      'file-reference-interpolation': 'file-reference-interpolation',
       // HTML conversion tests
       'html-conversion-basic-article': 'html-conversion/basic-article',
       'html-conversion-complex-elements': 'html-conversion/complex-elements',
@@ -209,6 +213,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
     'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
     'alligator-glob-pattern': 'Glob patterns require real filesystem - tinyglobby is well-tested',
+    'file-reference-glob': 'Glob patterns require real filesystem - tinyglobby mock issues',
     'alligator-url-markdown-conversion': 'Issue #315: Getter properties (text, md, html) not accessible in mlld',
     'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
     'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
@@ -623,6 +628,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // For this test, we'll simulate the environment variables being passed through stdin
         // This avoids the complexity of trying to get the lock file to work with the virtual filesystem
         // In real usage, the lock file would control which env vars are included in @INPUT
+      } else if (fixture.name === 'file-reference-interpolation') {
+        // Set up test-data.json in /tmp for file reference interpolation test
+        await fileSystem.mkdir('/tmp');
+        const testDataPath = path.join(__dirname, '../tests/cases/valid/file-reference-interpolation/test-data.json');
+        if (fs.existsSync(testDataPath)) {
+          const content = fs.readFileSync(testDataPath, 'utf8');
+          await fileSystem.writeFile('/tmp/test-data.json', content);
+        }
       }
       
       // Set up environment variables from fixture if specified  

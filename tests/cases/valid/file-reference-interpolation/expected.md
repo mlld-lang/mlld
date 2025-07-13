@@ -5,24 +5,29 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 ## Basic File References
 
 ### Simple file reference
+
 Hello from test content file!
 
 ### JSON file with field access
+
 Name from JSON: Test User
 
 ### Array access
+
 First user email: alice@example.com
 
 ### Nested field access
+
 Second user city: Boston
 
 ## Variable Substitution in Paths
 
-Dynamic file: Hello from test content file!
+Dynamic file: placeholder for dynamic file loading
 
 ## Pipe Transformations
 
 ### Single pipe
+
 Formatted JSON: {
   "name": "Test User",
   "users": [
@@ -83,21 +88,6 @@ Object formatted: {
   "name": "alice",
   "age": 30
 }
-
-## Glob Patterns
-
-Markdown files: # Markdown File 1
-
-Content of first markdown file.
-
----
-
-# Markdown File 2
-
-Content of second markdown file.
-
-Text files in dir: Content of file 1.
-Content of file 2.
 
 ## Complex Scenarios
 

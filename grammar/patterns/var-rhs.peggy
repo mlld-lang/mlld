@@ -11,9 +11,52 @@ VarRHSContent "var assignment value"
   / DataObjectLiteral           // Use data-context object parsing for proper typing
   / ArrayLiteral                // Arrays: [1, 2, 3] - always arrays!
   / AlligatorExpression         // File/URL loading: <file.md> - always loading!
+  / VariableWithSpacedPipes     // Variable references @var with spaced or unspaced pipes
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
   / PrimitiveValue              // Direct primitives: 42, true, false, null
+
+// VARIABLE WITH SPACED PIPES - Allows both "@var | @pipe" and "@var|@pipe" in var RHS
+VariableWithSpacedPipes "variable with flexible pipe syntax"
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* firstPipe:(_ "|" _ "@" transform:BaseIdentifier { return transform; })? restPipes:SpacedOrCondensedPipe* {
+      const normalizedId = helpers.normalizePathVar(id);
+      const varRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+      
+      // Collect all pipes
+      const pipes = [];
+      if (firstPipe) {
+        pipes.push({
+          type: 'CondensedPipe',
+          transform: firstPipe,
+          hasAt: true
+        });
+      }
+      if (restPipes && restPipes.length > 0) {
+        pipes.push(...restPipes);
+      }
+      
+      if (pipes.length > 0) {
+        return {
+          ...varRef,
+          pipes: pipes
+        };
+      }
+      
+      return varRef;
+    }
+
+// Flexible pipe pattern for var RHS - allows whitespace
+SpacedOrCondensedPipe
+  = _ "|" _ "@" transform:BaseIdentifier {
+      return {
+        type: 'CondensedPipe',
+        transform: transform,
+        hasAt: true
+      };
+    }
 
 // FIELD ACCESS EXEC PATTERN - Matches @obj.field() with nested field access
 FieldAccessExecPattern "field access exec invocation"
