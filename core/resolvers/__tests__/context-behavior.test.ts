@@ -15,18 +15,18 @@ describe('Context-Dependent Behavior', () => {
     resolverManager = new ResolverManager();
   });
 
-  describe('NOW Resolver', () => {
+  describe('now Resolver', () => {
     beforeEach(() => {
       resolverManager.registerResolver(new NowResolver());
-      // Configure NOW resolver
+      // Configure now resolver
       resolverManager.configurePrefixes([{
-        prefix: '@NOW',
-        resolver: 'NOW',
+        prefix: '@now',
+        resolver: 'now',
               }]);
     });
 
     it('returns text in variable context', async () => {
-      const result = await resolverManager.resolve('@NOW', { context: 'variable' });
+      const result = await resolverManager.resolve('@now', { context: 'variable' });
       
       expect(result.content.contentType).toBe('text');
       expect(typeof result.content.content).toBe('string');
@@ -35,7 +35,7 @@ describe('Context-Dependent Behavior', () => {
     });
 
     it('returns data in import context', async () => {
-      const result = await resolverManager.resolve('@NOW', { context: 'import' });
+      const result = await resolverManager.resolve('@now', { context: 'import' });
       
       expect(result.content.contentType).toBe('data');
       // Should be JSON with time formats
@@ -47,25 +47,25 @@ describe('Context-Dependent Behavior', () => {
     });
 
     it('returns data in path context (not typical use)', async () => {
-      const result = await resolverManager.resolve('@NOW', { context: 'path' });
+      const result = await resolverManager.resolve('@now', { context: 'path' });
       
       // Path context should return the default (variable) behavior
       expect(result.content.contentType).toBe('text');
     });
   });
 
-  describe('DEBUG Resolver', () => {
+  describe('debug Resolver', () => {
     beforeEach(() => {
       resolverManager.registerResolver(new DebugResolver());
-      // Configure DEBUG resolver
+      // Configure debug resolver
       resolverManager.configurePrefixes([{
-        prefix: '@DEBUG',
-        resolver: 'DEBUG',
+        prefix: '@debug',
+        resolver: 'debug',
               }]);
     });
 
     it('returns data in variable context', async () => {
-      const result = await resolverManager.resolve('@DEBUG', { context: 'variable' });
+      const result = await resolverManager.resolve('@debug', { context: 'variable' });
       
       expect(result.content.contentType).toBe('data');
       const data = JSON.parse(result.content.content);
@@ -74,7 +74,7 @@ describe('Context-Dependent Behavior', () => {
     });
 
     it('returns data in import context', async () => {
-      const result = await resolverManager.resolve('@DEBUG', { context: 'import' });
+      const result = await resolverManager.resolve('@debug', { context: 'import' });
       
       expect(result.content.contentType).toBe('data');
       const data = JSON.parse(result.content.content);
@@ -85,26 +85,26 @@ describe('Context-Dependent Behavior', () => {
     });
   });
 
-  describe('INPUT Resolver', () => {
+  describe('input Resolver', () => {
     beforeEach(() => {
       const inputResolver = new InputResolver('{"config": "test"}');
       resolverManager.registerResolver(inputResolver);
-      // Configure INPUT resolver
+      // Configure input resolver
       resolverManager.configurePrefixes([{
-        prefix: '@INPUT',
-        resolver: 'INPUT',
+        prefix: '@input',
+        resolver: 'input',
               }]);
     });
 
     it('returns appropriate type in variable context', async () => {
-      const result = await resolverManager.resolve('@INPUT', { context: 'variable' });
+      const result = await resolverManager.resolve('@input', { context: 'variable' });
       
       expect(result.content.contentType).toBe('data');
       expect(result.content.content).toContain('config');
     });
 
     it('returns data in import context', async () => {
-      const result = await resolverManager.resolve('@INPUT', { context: 'import' });
+      const result = await resolverManager.resolve('@input', { context: 'import' });
       
       expect(result.content.contentType).toBe('data');
       const data = JSON.parse(result.content.content);
@@ -220,12 +220,12 @@ describe('Context-Dependent Behavior', () => {
 
     it('supports path context', async () => {
       resolverManager.configurePrefixes([{
-        prefix: '@PROJECTPATH',
-        resolver: 'PROJECTPATH',
+        prefix: '@base',
+        resolver: 'base',
         config: { basePath: '/project' }
       }]);
       
-      const result = await resolverManager.resolve('@PROJECTPATH/src/index.ts', { context: 'path' });
+      const result = await resolverManager.resolve('@base/src/index.ts', { context: 'path' });
       
       expect(result.content.contentType).toBe('text');
       expect(result.content.content).toBe('export {}');
@@ -235,12 +235,12 @@ describe('Context-Dependent Behavior', () => {
       await fileSystem.writeFile('/project/lib.mld', '/var @name = "lib"');
       
       resolverManager.configurePrefixes([{
-        prefix: '@PROJECTPATH',
-        resolver: 'PROJECTPATH',
+        prefix: '@base',
+        resolver: 'base',
         config: { basePath: '/project' }
       }]);
       
-      const result = await resolverManager.resolve('@PROJECTPATH/lib.mld', { context: 'import' });
+      const result = await resolverManager.resolve('@base/lib.mld', { context: 'import' });
       
       expect(result.content.contentType).toBe('module');
     });

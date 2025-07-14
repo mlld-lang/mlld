@@ -47,12 +47,12 @@ FileReferenceInterpolation "file reference interpolation"
       // Create file reference node
       return helpers.createFileReferenceNode(content, fields, pipes, location());
     }
-  / "<" _ ">" {
+  / "<" _ ">" fields:FileFieldChain? pipes:CondensedPipeChain? {
       // Special <> placeholder for 'as' contexts
       return helpers.createFileReferenceNode(
         { type: 'placeholder', raw: '' },
-        null,
-        null,
+        fields,
+        pipes,
         location()
       );
     }

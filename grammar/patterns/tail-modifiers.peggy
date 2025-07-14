@@ -32,7 +32,7 @@ TailValue
   / transformers:PipelineShorthand { return transformers; }  // for '|'
   / level:TrustLevel { return level; }                       // for 'trust'
   / deps:NeedsObject { return deps; }                        // for 'needs'
-  / title:LiteralContent { return title; }                   // for 'as'
+  / title:AsSectionRenameString { return title; }            // for 'as'
 
 PipelineShorthand
   = first:PipelineCommand rest:(HWS &{ 

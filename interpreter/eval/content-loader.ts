@@ -36,6 +36,18 @@ export async function processContentLoader(node: any, env: Environment): Promise
     });
   }
 
+  // Check if we have a transform template
+  const hasTransform = options?.transform?.type === 'template';
+  
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('[content-loader] processContentLoader called');
+    console.log('[content-loader] Options:', JSON.stringify(options, null, 2));
+    console.log('[content-loader] Has transform:', hasTransform);
+    if (hasTransform) {
+      console.log('[content-loader] Transform parts:', JSON.stringify(options.transform.parts, null, 2));
+    }
+  }
+
   // Reconstruct the path/URL string from the source
   let pathOrUrl: string;
   
@@ -77,7 +89,8 @@ export async function processContentLoader(node: any, env: Environment): Promise
       // Extract section if specified
       if (options?.section) {
         const sectionName = await extractSectionName(options.section, env);
-        const sectionContent = await extractSection(processedContent, sectionName, options.section.renamed);
+        // URLs don't have frontmatter, so no file context for rename interpolation
+        const sectionContent = await extractSection(processedContent, sectionName, options.section.renamed, undefined, env);
         
         // For URLs with sections, return plain string (backward compatibility)
         return sectionContent;
@@ -97,11 +110,28 @@ export async function processContentLoader(node: any, env: Environment): Promise
     
     // Handle glob patterns for file paths
     if (isGlob) {
-      return await loadGlobPattern(pathOrUrl, options, env);
+      const results = await loadGlobPattern(pathOrUrl, options, env);
+      
+      // Apply transform if specified
+      if (hasTransform && options.transform) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('[content-loader] Applying transform to', results.length, 'results');
+          console.log('[content-loader] Transform:', JSON.stringify(options.transform, null, 2));
+        }
+        return await applyTransformToResults(results, options.transform, env);
+      }
+      
+      return results;
     }
     
     // Single file loading
     const result = await loadSingleFile(pathOrUrl, options, env);
+    
+    // Apply transform if specified (for single file)
+    if (hasTransform && options.transform) {
+      const transformed = await applyTransformToResults([result], options.transform, env);
+      return transformed[0]; // Return single result
+    }
     
     // Always return the full LoadContentResult object
     // The smart object will handle string conversion when needed
@@ -129,10 +159,38 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
     // Extract section if specified
     if (options?.section) {
       const sectionName = await extractSectionName(options.section, env);
-      const sectionContent = await extractSection(markdownContent, sectionName, options.section.renamed);
+      // Create file context for rename interpolation
+      const fileContext = new LoadContentResultImpl({
+        content: rawContent,
+        filename: path.basename(resolvedPath),
+        relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+        absolute: resolvedPath
+      });
       
-      // For backward compatibility, return plain string when section is extracted
-      return sectionContent;
+      const sectionContent = await extractSection(markdownContent, sectionName, options.section.renamed, fileContext, env);
+      
+      // Extract HTML metadata
+      const dom = new JSDOM(rawContent);
+      const doc = dom.window.document;
+      
+      const title = doc.querySelector('title')?.textContent || '';
+      const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
+                         doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
+      
+      // Import the HTML result class
+      const { LoadContentResultHTMLImpl } = await import('@core/types/load-content');
+      
+      // Always return LoadContentResult to maintain metadata
+      const result = new LoadContentResultHTMLImpl({
+        content: sectionContent,
+        rawHtml: rawContent,
+        filename: path.basename(resolvedPath),
+        relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+        absolute: resolvedPath,
+        title: title || undefined,
+        description: description || undefined
+      });
+      return result;
     }
     
     // Extract HTML metadata
@@ -162,11 +220,31 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
   
   // Extract section if specified (for non-HTML files)
   if (options?.section) {
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[loadSingleFile] Section options:', JSON.stringify(options.section, null, 2));
+    }
     const sectionName = await extractSectionName(options.section, env);
-    const sectionContent = await extractSection(rawContent, sectionName, options.section.renamed);
+    // Create file context for rename interpolation
+    const fileContext = new LoadContentResultImpl({
+      content: rawContent,
+      filename: path.basename(resolvedPath),
+      relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+      absolute: resolvedPath
+    });
     
-    // For backward compatibility, return plain string when section is extracted
-    return sectionContent;
+    const sectionContent = await extractSection(rawContent, sectionName, options.section.renamed, fileContext, env);
+    
+    // Always return LoadContentResult to maintain metadata
+    // The result will have the section content but preserve the full file for frontmatter parsing
+    const result = new LoadContentResultImpl({
+      content: sectionContent,
+      filename: path.basename(resolvedPath),
+      relative: `./${path.relative(env.getBasePath(), resolvedPath)}`,
+      absolute: resolvedPath,
+      // Pass the full raw content so frontmatter can be parsed
+      _rawContent: rawContent
+    });
+    return result;
   }
   
   // Create regular LoadContentResult (for non-HTML files)
@@ -183,7 +261,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
 /**
  * Load files matching a glob pattern
  */
-async function loadGlobPattern(pattern: string, options: any, env: Environment): Promise<LoadContentResult[]> {
+async function loadGlobPattern(pattern: string, options: any, env: Environment): Promise<LoadContentResult[] | string[]> {
   // Resolve the pattern relative to current directory
   const baseDir = env.getBasePath();
   
@@ -206,7 +284,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
   matches.sort();
   
   // Load each matching file
-  const results: LoadContentResult[] = [];
+  const results: (LoadContentResult | string)[] = [];
   
   for (const filePath of matches) {
     try {
@@ -220,15 +298,41 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
         if (options?.section) {
           const sectionName = await extractSectionName(options.section, env);
           try {
-            const sectionContent = await extractSection(markdownContent, sectionName, options.section.renamed);
-            
-            // For section extraction, just use regular result
-            results.push(new LoadContentResultImpl({
-              content: sectionContent,
+            // Create file context for rename interpolation
+            const fileContext = new LoadContentResultImpl({
+              content: rawContent,
               filename: path.basename(filePath),
               relative: `./${path.relative(baseDir, filePath)}`,
               absolute: filePath
-            }));
+            });
+            
+            const sectionContent = await extractSection(markdownContent, sectionName, options.section.renamed, fileContext, env);
+            
+            // If there's a rename, return the string directly
+            if (options.section.renamed) {
+              results.push(sectionContent);
+            } else {
+              // Extract HTML metadata even for sections
+              const dom = new JSDOM(rawContent);
+              const doc = dom.window.document;
+              
+              const title = doc.querySelector('title')?.textContent || '';
+              const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
+                                 doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
+              
+              const { LoadContentResultHTMLImpl } = await import('@core/types/load-content');
+              
+              // Use HTML result to preserve metadata
+              results.push(new LoadContentResultHTMLImpl({
+                content: sectionContent,
+                rawHtml: rawContent,
+                filename: path.basename(filePath),
+                relative: `./${path.relative(baseDir, filePath)}`,
+                absolute: filePath,
+                title: title || undefined,
+                description: description || undefined
+              }));
+            }
           } catch (error: any) {
             // Skip files without the requested section
             continue;
@@ -257,17 +361,38 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
       } else {
         // Non-HTML file handling
         if (options?.section) {
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.log('[loadGlobPattern] Section options for file', filePath, ':', JSON.stringify(options.section, null, 2));
+          }
           const sectionName = await extractSectionName(options.section, env);
           try {
-            const sectionContent = await extractSection(rawContent, sectionName, options.section.renamed);
-            
-            // Create result with section content
-            results.push(new LoadContentResultImpl({
-              content: sectionContent,
+            // Create file context for rename interpolation
+            const fileContext = new LoadContentResultImpl({
+              content: rawContent,
               filename: path.basename(filePath),
               relative: `./${path.relative(baseDir, filePath)}`,
               absolute: filePath
-            }));
+            });
+            
+            const sectionContent = await extractSection(rawContent, sectionName, options.section.renamed, fileContext, env);
+            
+            // If there's a rename, we're returning a transformed string that should be used directly
+            if (options.section.renamed) {
+              if (process.env.MLLD_DEBUG === 'true') {
+                console.log('[loadGlobPattern] Renamed section content:', sectionContent);
+              }
+              // For renamed sections, return the string directly (will be collected as string array)
+              results.push(sectionContent as any); // Type assertion needed because results is LoadContentResult[]
+            } else {
+              // Create result with section content, preserving raw content for frontmatter
+              results.push(new LoadContentResultImpl({
+                content: sectionContent,
+                filename: path.basename(filePath),
+                relative: `./${path.relative(baseDir, filePath)}`,
+                absolute: filePath,
+                _rawContent: rawContent
+              }));
+            }
           } catch (error: any) {
             // Skip files without the requested section
             continue;
@@ -288,7 +413,12 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
     }
   }
   
-  return results;
+  // Type assertion based on what we're returning
+  if (options?.section?.renamed) {
+    return results as string[];
+  } else {
+    return results as LoadContentResult[];
+  }
 }
 
 /**
@@ -371,7 +501,7 @@ async function extractSectionName(sectionNode: any, env: Environment): Promise<s
 /**
  * Extract a section from markdown content
  */
-async function extractSection(content: string, sectionName: string, renamedTitle?: string): Promise<string> {
+async function extractSection(content: string, sectionName: string, renamedTitle?: any, fileContext?: LoadContentResult, env?: Environment): Promise<string> {
   try {
     let extracted;
     try {
@@ -391,9 +521,86 @@ async function extractSection(content: string, sectionName: string, renamedTitle
 
     // If renamed, apply header transformation
     if (renamedTitle) {
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('[extractSection] renamedTitle:', typeof renamedTitle, JSON.stringify(renamedTitle, null, 2));
+      }
+      
+      let finalTitle: string;
+      
+      // Check if renamedTitle is a template object or a string
+      if (typeof renamedTitle === 'object' && renamedTitle.type === 'rename-template') {
+        // It's a template with parts that need interpolation
+        if (!fileContext) {
+          throw new MlldError('File context required for template interpolation in rename', {
+            sectionName: sectionName
+          });
+        }
+        
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('[extractSection] Rename template parts:', JSON.stringify(renamedTitle.parts, null, 2));
+        }
+        
+        // Create an environment for interpolation with the file context bound to <>
+        const { interpolate } = await import('../core/interpreter');
+        
+        // Process the template parts, replacing placeholders with actual values
+        const processedParts: any[] = [];
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('[extractSection] Processing parts:', renamedTitle.parts?.map((p: any) => ({ type: p.type, source: p.source })));
+        }
+        for (const part of renamedTitle.parts || []) {
+          if (part.type === 'FileReference' && part.source?.type === 'placeholder') {
+            // Handle <> and <>.field references
+            if (part.fields && part.fields.length > 0) {
+              // Access fields on the file context
+              let value: any = fileContext;
+              for (const field of part.fields) {
+                if (value && typeof value === 'object') {
+                  value = value[field.value];
+                } else {
+                  value = undefined;
+                  break;
+                }
+              }
+              processedParts.push({
+                type: 'Text',
+                content: value !== undefined ? String(value) : ''
+              });
+            } else {
+              // Just <> - use the extracted section content without the header
+              // Remove the first line if it's a markdown header
+              const lines = extracted.split('\n');
+              let contentWithoutHeader = extracted;
+              if (lines.length > 0 && lines[0].match(/^#+\s/)) {
+                // Skip the header line
+                contentWithoutHeader = lines.slice(1).join('\n').trim();
+              }
+              processedParts.push({
+                type: 'Text',
+                content: contentWithoutHeader
+              });
+            }
+          } else {
+            // Regular text parts
+            processedParts.push(part);
+          }
+        }
+        
+        // Interpolate the processed template using the passed environment
+        if (!env) {
+          throw new MlldError('Environment required for template interpolation', {
+            sectionName: sectionName
+          });
+        }
+        finalTitle = await interpolate(processedParts, env);
+      } else {
+        // It's a plain string (legacy behavior)
+        finalTitle = renamedTitle;
+      }
+      
       // Import the shared header transform function
       const { applyHeaderTransform } = await import('./show');
-      return applyHeaderTransform(extracted, renamedTitle);
+      return applyHeaderTransform(extracted, finalTitle);
     }
 
     return extracted;
@@ -490,4 +697,97 @@ async function convertHtmlToMarkdown(html: string, url: string): Promise<string>
     console.warn('Failed to convert HTML to Markdown:', error);
     return html;
   }
+}
+
+/**
+ * Apply transform template to array of LoadContentResults
+ */
+async function applyTransformToResults(
+  results: LoadContentResult[],
+  transform: any,
+  env: Environment
+): Promise<string[]> {
+  const { interpolate } = await import('../core/interpreter');
+  const transformed: string[] = [];
+  
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('[applyTransformToResults] Processing', results.length, 'results');
+    console.log('[applyTransformToResults] Transform:', JSON.stringify(transform, null, 2));
+    console.log('[applyTransformToResults] First result:', results[0]);
+  }
+  
+  for (const result of results) {
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[applyTransformToResults] Processing result:', {
+        filename: result.filename,
+        hasFm: !!result.fm,
+        fmName: result.fm?.name,
+        resultType: result.constructor.name,
+        hasRawContent: !!result._rawContent
+      });
+    }
+    
+    // Create a child environment with the current result bound to <>
+    const childEnv = env.createChild();
+    
+    // Create a special variable for <> placeholder
+    const placeholderVar = {
+      type: 'placeholder',
+      value: result,
+      // Make the LoadContentResult properties available
+      fm: result.fm,
+      content: result.content,
+      filename: result.filename,
+      relative: result.relative,
+      absolute: result.absolute
+    };
+    
+    // Process the template parts
+    const templateParts = transform.parts || [];
+    const processedParts: any[] = [];
+    
+    for (const part of templateParts) {
+      if (part.type === 'placeholder') {
+        // Handle <> and <>.field references
+        if (part.fields && part.fields.length > 0) {
+          // Access fields on the result
+          let value: any = result;
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.log('[applyTransformToResults] Accessing fields:', part.fields.map((f: any) => f.value));
+          }
+          for (const field of part.fields) {
+            if (value && typeof value === 'object') {
+              const fieldName = field.value;
+              value = value[fieldName];
+              if (process.env.MLLD_DEBUG === 'true') {
+                console.log(`[applyTransformToResults] Field ${fieldName} = ${value}`);
+              }
+            } else {
+              value = undefined;
+              break;
+            }
+          }
+          processedParts.push({
+            type: 'Text',
+            content: value !== undefined ? String(value) : ''
+          });
+        } else {
+          // Just <> - use the content
+          processedParts.push({
+            type: 'Text',
+            content: result.content
+          });
+        }
+      } else {
+        // Regular template parts (text, variables)
+        processedParts.push(part);
+      }
+    }
+    
+    // Interpolate the processed template
+    const transformedContent = await interpolate(processedParts, childEnv);
+    transformed.push(transformedContent);
+  }
+  
+  return transformed;
 }

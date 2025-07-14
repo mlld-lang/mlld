@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `<**/*.mld>` in an .mld file correctly returns all OTHER .mld files
   - Prevents infinite loops while allowing useful self-excluding patterns
 
+### Changed
+- **Reserved Variables Now Lowercase**: All built-in reserved variables have been converted to lowercase for consistency
+  - `@NOW` → `@now` (current timestamp)
+  - `@DEBUG` → `@debug` (debug information)
+  - `@INPUT` → `@input` (stdin/environment access)
+  - `@PROJECTPATH` → `@base` (project root directory)
+- **Removed @. Alias**: The `@.` alias for project root has been removed; use `@base` instead
+- **Simplified Naming**: Aligns with interpreter's `basePath` terminology and modern naming conventions
+
 ## [2.0.0-rc3]
 
 ### Added
@@ -134,7 +143,6 @@ The `/` command approach creates clear disambiguiation between commands and vari
   - JavaScript semantics: Type coercion follows JavaScript rules (e.g., `"text" + 5 = "text5"`)
   - Exec invocation support: Primitive literals in function calls (e.g., `@add(@num, 8)`)
 - **Built-in @now Variable**: New built-in variable for current timestamp
-  - Replaces the previous @time built-in variable (breaking change)
   - Returns ISO 8601 timestamp: `2024-01-15T10:30:00.000Z`
   - Available in all contexts where variables are allowed
   - Also available as `mlld_now()` function in JavaScript/Node shadow environments

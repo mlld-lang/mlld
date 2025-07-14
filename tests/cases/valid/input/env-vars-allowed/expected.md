@@ -1,7 +1,7 @@
-# Environment Variables with @INPUT
+# Environment Variables with @input
 
-This test shows @INPUT importing with environment variables through stdin.
+This test shows @input importing with environment variables through stdin.
 
-Variables from @INPUT:
+Variables from @input:
 - MY_ALLOWED_VAR: test-value-1
 - ANOTHER_ALLOWED: test-value-2

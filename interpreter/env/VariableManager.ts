@@ -136,20 +136,14 @@ export class VariableManager implements IVariableManager {
     // FAST PATH: Check local variables first (most common case)
     let variable = this.variables.get(name);
     
-    // Handle lowercase reserved variable aliases
+    // Reserved variables are now all lowercase
     const parent = this.deps.getParent();
-    if (!variable && !parent) {
-      const upperName = name.toUpperCase();
-      if (upperName === 'TIME' || upperName === 'DEBUG' || upperName === 'INPUT' || upperName === 'PROJECTPATH') {
-        variable = this.variables.get(upperName);
-      }
-    }
     
     if (variable) {
-      // Special handling for lazy variables like @DEBUG
+      // Special handling for lazy variables like @debug
       if (variable.metadata && 'isLazy' in variable.metadata && variable.metadata.isLazy && variable.value === null) {
         // For lazy variables, we need to compute the value
-        if (name.toUpperCase() === 'DEBUG') {
+        if (name === 'debug') {
           const debugValue = this.deps.createDebugObject(3); // Use markdown format
           return {
             ...variable,
@@ -172,19 +166,19 @@ export class VariableManager implements IVariableManager {
     // Since we enforce name protection at setVariable time,
     // we know there are no conflicts between variables and resolvers
     const reservedNames = this.deps.getReservedNames();
-    if (!parent && reservedNames.has(name.toUpperCase())) {
-      const upperName = name.toUpperCase();
+    if (!parent && reservedNames.has(name)) {
+      const resolveName = name;
       
       // Check cache first
-      const cached = this.deps.cacheManager.getResolverVariable(upperName);
+      const cached = this.deps.cacheManager.getResolverVariable(resolveName);
       if (cached) {
         return cached;
       }
       
       // Create and cache the resolver variable
-      const resolverVar = this.createResolverVariable(upperName);
+      const resolverVar = this.createResolverVariable(resolveName);
       if (resolverVar) {
-        this.deps.cacheManager.setResolverVariable(upperName, resolverVar);
+        this.deps.cacheManager.setResolverVariable(resolveName, resolverVar);
         return resolverVar;
       }
     }
@@ -216,7 +210,7 @@ export class VariableManager implements IVariableManager {
    */
   private createResolverVariable(resolverName: string): Variable | undefined {
     // For resolver variables, we check if there's already a reserved variable
-    // This handles TIME, DEBUG, INPUT, PROJECTPATH which are pre-initialized
+    // This handles now, debug, input, base which are pre-initialized
     const existingVar = this.variables.get(resolverName);
     if (existingVar) {
       return existingVar;
@@ -274,11 +268,10 @@ export class VariableManager implements IVariableManager {
       return true;
     }
     
-    // Check lowercase reserved variable aliases only in root environment
+    // Check reserved variables only in root environment
     if (!parent) {
-      const upperName = name.toUpperCase();
-      if ((upperName === 'NOW' || upperName === 'DEBUG' || upperName === 'INPUT' || upperName === 'PROJECTPATH') && this.variables.has(upperName)) {
-        return true;
+      if (name === 'now' || name === 'debug' || name === 'input' || name === 'base') {
+        return this.variables.has(name);
       }
     }
     
@@ -313,15 +306,14 @@ export class VariableManager implements IVariableManager {
    * Initialize reserved variables that are available in all environments
    */
   initializeReservedVariables(): void {
-    // Initialize @INPUT from merged stdin content and environment variables
+    // Initialize @input from merged stdin content and environment variables
     const inputVar = this.createInputValue();
     if (inputVar !== null) {
       // Direct assignment for reserved variables during initialization
-      this.variables.set('INPUT', inputVar);
-      // Note: lowercase 'input' is handled in getVariable() to avoid conflicts
+      this.variables.set('input', inputVar);
     }
     
-    // Initialize @NOW with current timestamp
+    // Initialize @now with current timestamp
     const nowSource: VariableSource = {
       directive: 'var',
       syntax: 'quoted',
@@ -329,7 +321,7 @@ export class VariableManager implements IVariableManager {
       isMultiLine: false
     };
     const nowVar = createSimpleTextVariable(
-      'NOW',
+      'now',
       getTimeValue(),
       nowSource,
       {
@@ -338,10 +330,9 @@ export class VariableManager implements IVariableManager {
       }
     );
     // Direct assignment for reserved variables during initialization
-    this.variables.set('NOW', nowVar);
-    // Note: lowercase 'now' is handled in getVariable() to avoid conflicts
+    this.variables.set('now', nowVar);
     
-    // Initialize @DEBUG with environment information
+    // Initialize @debug with environment information
     // This is a lazy variable that generates its value when accessed
     const debugSource: VariableSource = {
       directive: 'var',
@@ -350,7 +341,7 @@ export class VariableManager implements IVariableManager {
       isMultiLine: false
     };
     const debugVar = createObjectVariable(
-      'DEBUG',
+      'debug',
       null as any, // Null for lazy evaluation
       false, // Not complex
       debugSource,
@@ -361,24 +352,23 @@ export class VariableManager implements IVariableManager {
       }
     );
     // Direct assignment for reserved variables during initialization
-    this.variables.set('DEBUG', debugVar);
-    // Note: lowercase 'debug' is handled in getVariable() to avoid conflicts
+    this.variables.set('debug', debugVar);
     
-    // Initialize @PROJECTPATH with project path
-    const projectPathSource: VariableSource = {
+    // Initialize @base with project path
+    const baseSource: VariableSource = {
       directive: 'var',
       syntax: 'quoted',
       hasInterpolation: false,
       isMultiLine: false
     };
-    const projectPath = getProjectPathValue(this.deps.getBasePath());
-    const projectPathVar = createPathVariable(
-      'PROJECTPATH',
-      projectPath,
-      projectPath,
+    const basePath = getProjectPathValue(this.deps.getBasePath());
+    const baseVar = createPathVariable(
+      'base',
+      basePath,
+      basePath,
       false, // Not a URL
       true, // Is absolute
-      projectPathSource,
+      baseSource,
       undefined, // No security metadata
       {
         isReserved: true,
@@ -386,8 +376,7 @@ export class VariableManager implements IVariableManager {
       }
     );
     // Direct assignment for reserved variables during initialization
-    this.variables.set('PROJECTPATH', projectPathVar);
-    // Note: lowercase 'projectpath' is handled in getVariable() to avoid conflicts
+    this.variables.set('base', baseVar);
     
     // Built-in transformers are initialized separately in Environment.initializeBuiltinTransformers()
   }
@@ -434,10 +423,10 @@ export class VariableManager implements IVariableManager {
     if (stdinData !== null && Object.keys(envVars).length > 0) {
       if (typeof stdinData === 'object' && stdinData !== null && !Array.isArray(stdinData)) {
         // Merge objects (env vars take precedence)
-        return createObjectVariable('INPUT', { ...stdinData, ...envVars }, true, inputSource, metadata);
+        return createObjectVariable('input', { ...stdinData, ...envVars }, true, inputSource, metadata);
       } else {
         // Stdin is not an object, create object with separate fields
-        return createObjectVariable('INPUT', {
+        return createObjectVariable('input', {
           stdin: stdinData,
           ...envVars
         }, true, inputSource, metadata);
@@ -446,16 +435,16 @@ export class VariableManager implements IVariableManager {
     
     // If we only have env vars
     if (Object.keys(envVars).length > 0) {
-      return createObjectVariable('INPUT', envVars, true, inputSource, metadata);
+      return createObjectVariable('input', envVars, true, inputSource, metadata);
     }
     
     // If we only have stdin
     if (stdinData !== null) {
       if (typeof stdinData === 'object' && stdinData !== null) {
-        return createObjectVariable('INPUT', stdinData, true, inputSource, metadata);
+        return createObjectVariable('input', stdinData, true, inputSource, metadata);
       } else {
         // Simple text
-        return createSimpleTextVariable('INPUT', stdinData, textSource, metadata);
+        return createSimpleTextVariable('input', stdinData, textSource, metadata);
       }
     }
     

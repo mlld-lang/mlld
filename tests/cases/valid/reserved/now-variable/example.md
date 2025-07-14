@@ -1,11 +1,11 @@
-# @NOW Reserved Variable Test
+# @now Reserved Variable Test
 
-This tests the @NOW reserved variable.
+This tests the @now reserved variable.
 
 Current timestamp: 
-/show @NOW
+/show @now
 
-/var @logEntry = `Log entry at @NOW: System check completed`
+/var @logEntry = `Log entry at @now: System check completed`
 /show @logEntry
 
-/run {echo "Script executed at @NOW"}
+/run {echo "Script executed at @now"}

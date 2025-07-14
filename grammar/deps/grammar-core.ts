@@ -249,8 +249,6 @@ export const helpers = {
   },
 
   normalizePathVar(id: string) {
-    if (id === '.') return 'PROJECTPATH';
-    if (id === 'TIME') return 'TIME';
     return id;
   },
 

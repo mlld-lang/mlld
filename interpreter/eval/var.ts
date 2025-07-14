@@ -250,6 +250,22 @@ export async function evaluateVar(
   } else if (valueNode.type === 'load-content') {
     // Content loader: <file.md> or <file.md # Section>
     const { processContentLoader } = await import('./content-loader');
+    
+    // Pass the withClause to the content loader if it has asSection
+    if (directive.values?.withClause?.asSection) {
+      // Add the asSection to the load-content options
+      if (!valueNode.options) {
+        valueNode.options = {};
+      }
+      if (!valueNode.options.section) {
+        valueNode.options.section = {};
+      }
+      valueNode.options.section.renamed = {
+        type: 'rename-template',
+        parts: directive.values.withClause.asSection
+      };
+    }
+    
     resolvedValue = await processContentLoader(valueNode, env);
     
   } else if (valueNode.type === 'path') {
@@ -462,6 +478,9 @@ export async function evaluateVar(
     } else if (isLoadContentResultArray(resolvedValue)) {
       // Array of files from glob pattern - store as array variable
       variable = createArrayVariable(identifier, resolvedValue, true, source, metadata);
+    } else if (Array.isArray(resolvedValue) && resolvedValue.every(item => typeof item === 'string')) {
+      // Array of strings from transformed content - store as simple array
+      variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
     } else if (typeof resolvedValue === 'string') {
       // Backward compatibility - plain string (e.g., from section extraction)
       if (contentSource.type === 'path') {

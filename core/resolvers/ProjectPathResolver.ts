@@ -27,12 +27,12 @@ export interface ProjectPathResolverConfig {
 }
 
 /**
- * Project Path Resolver - handles @PROJECTPATH/ references
- * Maps @PROJECTPATH to the project root directory
+ * Base Path Resolver - handles @base/ references
+ * Maps @base to the project root directory
  */
 export class ProjectPathResolver implements Resolver {
-  name = 'PROJECTPATH';
-  description = 'Resolves @PROJECTPATH references to project root files';
+  name = 'base';
+  description = 'Resolves @base references to project root files';
   type: ResolverType = 'io';
   
   capabilities: ResolverCapabilities = {
@@ -49,13 +49,13 @@ export class ProjectPathResolver implements Resolver {
   }
 
   canResolve(ref: string, config?: ProjectPathResolverConfig): boolean {
-    // Can resolve if reference starts with @PROJECTPATH or @. 
+    // Can resolve if reference starts with @base
     // OR if we have a config (which means prefix was stripped)
-    return ref.startsWith('@PROJECTPATH') || ref.startsWith('@.') || !!config;
+    return ref.startsWith('@base') || !!config;
   }
 
   /**
-   * Resolve a @PROJECTPATH reference
+   * Resolve a @base reference
    */
   async resolve(ref: string, config?: ProjectPathResolverConfig): Promise<ResolverContent> {
     // Try config basePath first
@@ -71,20 +71,20 @@ export class ProjectPathResolver implements Resolver {
       throw new MlldResolutionError(
         'ProjectPathResolver: Unable to determine project root. ' +
         'This usually means the resolver registry was not properly configured. ' +
-        'Check that @. or @PROJECTPATH prefixes are mapped to PROJECTPATH resolver with basePath.',
+        'Check that @base prefix is mapped to base resolver with basePath.',
         { reference: ref, availableConfig: Object.keys(config || {}) }
       );
     }
 
     // Variable context - return the project path as text
     if (!config || !config.context || config.context === 'variable') {
-      // If it's just @PROJECTPATH, return the base path
-      if (ref === '@PROJECTPATH' || ref === 'PROJECTPATH') {
+      // If it's just @base, return the base path
+      if (ref === '@base' || ref === 'base') {
         return {
           content: basePath,
           contentType: 'text',
           metadata: {
-            source: 'PROJECTPATH',
+            source: 'base',
             timestamp: new Date()
           }
         };
@@ -93,16 +93,12 @@ export class ProjectPathResolver implements Resolver {
 
     // Path context - read the file content
     if (config.context === 'path') {
-      // Extract the path after @PROJECTPATH or @.
+      // Extract the path after @base
       let relativePath: string;
-      if (ref.startsWith('@PROJECTPATH/')) {
-        relativePath = ref.substring('@PROJECTPATH/'.length);
-      } else if (ref.startsWith('@PROJECTPATH')) {
-        relativePath = ref.substring('@PROJECTPATH'.length);
-      } else if (ref.startsWith('@./')) {
-        relativePath = ref.substring('@./'.length);
-      } else if (ref.startsWith('@.')) {
-        relativePath = ref.substring('@.'.length);
+      if (ref.startsWith('@base/')) {
+        relativePath = ref.substring('@base/'.length);
+      } else if (ref.startsWith('@base')) {
+        relativePath = ref.substring('@base'.length);
       } else {
         // With prefix stripping, we might just get the path directly
         relativePath = ref;
@@ -119,7 +115,7 @@ export class ProjectPathResolver implements Resolver {
           content: basePath,
           contentType: 'text',
           metadata: {
-            source: 'PROJECTPATH',
+            source: 'base',
             timestamp: new Date()
           }
         };
@@ -204,7 +200,7 @@ export class ProjectPathResolver implements Resolver {
     }
 
     throw new MlldResolutionError(
-      `PROJECTPATH resolver does not support context: ${config.context}`,
+      `base resolver does not support context: ${config.context}`,
       {}
     );
   }

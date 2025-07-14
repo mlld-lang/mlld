@@ -31,7 +31,7 @@ SlashVar "var directive"
         metaInfo.isEmptyArray = value.items.length === 0;
       }
       // Handle alligator expressions (file/URL loading)
-      else if (value && value.type === 'alligator') {
+      else if (value && value.type === 'load-content') {
         processedValue = [value];
         metaInfo.inferredType = value.options && value.options.section ? 'section-content' : 'file-content';
         metaInfo.sourceType = value.source.type; // 'path' or 'url'

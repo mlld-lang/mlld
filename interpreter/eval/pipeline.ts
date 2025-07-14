@@ -58,7 +58,7 @@ export async function executePipeline(
     };
     
     const inputVar = createPipelineInputVariable(
-      'INPUT',
+      'input',
       pipelineInputObj,
       (format || 'text') as 'json' | 'csv' | 'xml' | 'text',
       currentOutput,
@@ -71,7 +71,7 @@ export async function executePipeline(
     );
     
     // Set the pipeline input variable as a parameter (allows overriding reserved names)
-    pipelineEnv.setParameterVariable('INPUT', inputVar);
+    pipelineEnv.setParameterVariable('input', inputVar);
     
     try {
       // Resolve the command reference

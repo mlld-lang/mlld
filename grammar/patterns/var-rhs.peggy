@@ -10,11 +10,14 @@ VarRHSContent "var assignment value"
   / TemplateStyleInterpolation  // Handles backtick, [[...]], double/single quotes
   / DataObjectLiteral           // Use data-context object parsing for proper typing
   / ArrayLiteral                // Arrays: [1, 2, 3] - always arrays!
-  / AlligatorExpression         // File/URL loading: <file.md> - always loading!
+  / AlligatorExpression         // File/URL loading: <file.md> - always loading! (includes transform/rename)
   / VariableWithSpacedPipes     // Variable references @var with spaced or unspaced pipes
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
   / PrimitiveValue              // Direct primitives: 42, true, false, null
+
+// Note: AlligatorWithTransform was removed because AlligatorExpression 
+// already handles "as" clauses internally in alligator.peggy
 
 // VARIABLE WITH SPACED PIPES - Allows both "@var | @pipe" and "@var|@pipe" in var RHS
 VariableWithSpacedPipes "variable with flexible pipe syntax"

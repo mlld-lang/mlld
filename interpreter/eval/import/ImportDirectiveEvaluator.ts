@@ -76,18 +76,18 @@ export class ImportDirectiveEvaluator {
   }
 
   /**
-   * Handle INPUT imports (@INPUT, @stdin)
+   * Handle input imports (@input, @stdin)
    */
   private async evaluateInputImport(directive: DirectiveNode, env: Environment): Promise<EvalResult> {
-    // Get INPUT resolver
+    // Get input resolver
     const resolverManager = env.getResolverManager();
     if (!resolverManager) {
       throw new Error('Resolver manager not available');
     }
 
-    const resolver = resolverManager.getResolver('INPUT');
+    const resolver = resolverManager.getResolver('input');
     if (!resolver) {
-      throw new Error('INPUT resolver not found');
+      throw new Error('input resolver not found');
     }
 
     // Extract requested imports for the resolver
@@ -96,7 +96,7 @@ export class ImportDirectiveEvaluator {
       : undefined;
 
     // Use resolver to get input data with proper import context
-    const result = await resolver.resolve('@INPUT', { 
+    const result = await resolver.resolve('@input', { 
       context: 'import',
       requestedImports
     });
@@ -113,13 +113,13 @@ export class ImportDirectiveEvaluator {
     }
 
     // Import variables based on directive type
-    await this.importResolverVariables(directive, exportData, env, '@INPUT');
+    await this.importResolverVariables(directive, exportData, env, '@input');
 
     return { value: undefined, env };
   }
 
   /**
-   * Handle resolver imports (@TIME, @DEBUG, etc.)
+   * Handle resolver imports (@now, @debug, etc.)
    */
   private async evaluateResolverImport(
     directive: DirectiveNode,

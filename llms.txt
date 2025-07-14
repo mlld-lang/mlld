@@ -203,8 +203,8 @@ This design keeps documents readable as regular Markdown while enabling programm
 /import { utils } from @company/utils
 
 >> PATH imports (WITH ANGLE BRACKETS for resolver paths):
-/import { readme } from <@./README.md>
-/import { config } from <@PROJECTPATH/config.mld>
+/import { readme } from <@base/README.md>
+/import { config } from <@base/config.mld>
 /import { shared } from <@local/utils.mld>
 
 >> Regular path imports (quotes, no @ prefix):
@@ -212,10 +212,10 @@ This design keeps documents readable as regular Markdown while enabling programm
 ```
 
 **Why angle brackets matter:**
-- `<@./file.md>` - Angle brackets tell mlld "resolve this path and read the file"
+- `<@base/file.md>` - Angle brackets tell mlld "resolve this path and read the file"
 - `@author/module` - No angle brackets means "resolve this as a module reference"
 
-Without angle brackets, `@./file` would be treated as trying to import from a user named "." - which is why you might see errors like "User '.' not found in registry".
+Without angle brackets, `@base/file` would be treated as trying to import from a user named "base" - which is why you might see errors like "User 'base' not found in registry".
 
 ### 9.1 'As' Template Syntax for Globs
 
@@ -529,7 +529,7 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /import @corp/utils as corpUtils  << Custom namespace
 
 >> Environment variables (must be in mlld.lock.json)
-/import { API_KEY, NODE_ENV } from @INPUT
+/import { API_KEY, NODE_ENV } from @input
 ```
 
 ## Paths
@@ -838,10 +838,10 @@ Remember: If you're wishing mlld had a feature, you can probably create it as a 
 
 ### Reserved Variables
 ```mlld
-/show `Current time: @NOW`         # Current timestamp
-/show `Input data: @INPUT.config`  # Access stdin/env vars  
-/show `Project root: @PROJECTPATH` # Project directory
-/show @DEBUG                       # Show extensive debug info
+/show `Current time: @now`         # Current timestamp
+/show `Input data: @input.config`  # Access stdin/env vars  
+/show `Project root: @base`        # Project directory
+/show @debug                       # Show extensive debug info
 ```
 
 ### Environment Variables
@@ -854,9 +854,9 @@ Environment variables require explicit permission in `mlld.lock.json`:
 }
 ```
 
-Then access them via @INPUT:
+Then access them via @input:
 ```mlld
-/import { NODE_ENV, API_KEY } from @INPUT
+/import { NODE_ENV, API_KEY } from @input
 /show `Running in @NODE_ENV mode with API access`
 ```
 
@@ -898,14 +898,14 @@ mlld supports Unix-style pipelines for chaining commands:
 
 ### How Pipelines Work
 - Output flows left to right (stdin)
-- Each step gets an @INPUT variable with the piped data
+- Each step gets an @input variable with the piped data
 - Functions without arguments get smart parameter handling
 - Each step runs in a child environment
 - Use `with { format: "json|csv|xml|text" }` to specify parsing
 
 ### Smart Parameter Handling
 
-Single parameter functions automatically receive @INPUT:
+Single parameter functions automatically receive @input:
 ```mlld
 /exe @double(n) = js {(@n * 2)}
 /var @result = run {echo "5"} | @double  # n = "5"
@@ -932,7 +932,7 @@ mlld includes transformers for common formats (both UPPERCASE and lowercase):
 /var @users = run {curl api.com/users} | @json | @csv
 
 >> Chain with custom functions
-/exe @addTotal(data) = ::Total: {{data.length}} items\n{{INPUT}}::
+/exe @addTotal(data) = ::Total: {{data.length}} items\n{{input}}::
 /var @report = run {cat data.json} | @json | @addTotal | @md
 ```
 
@@ -1048,13 +1048,13 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 ### 8. Import Bracket Confusion
 ```mlld
 ❌ WRONG: Forgetting brackets for path imports
-/import { readme } from @./README.md      # Error: "User '.' not found in registry"
-/import { config } from @PROJECTPATH/config.mld  # Error: "User 'PROJECTPATH' not found"
+/import { readme } from @base/README.md      # Error: "User 'base' not found in registry"
+/import { config } from @local/config.mld    # Error: "User 'local' not found"
 
 ✅ RIGHT: Use angle brackets for resolver paths
-/import { readme } from <@./README.md>          # Path import needs angle brackets
-/import { config } from <@PROJECTPATH/config.mld>  # Resolver path needs angle brackets
-/import { utils } from @company/utils           # Module import - NO angle brackets
+/import { readme } from <@base/README.md>        # Path import needs angle brackets
+/import { config } from <@local/config.mld>      # Resolver path needs angle brackets
+/import { utils } from @company/utils            # Module import - NO angle brackets
 ```
 
 ### 9. JavaScript Confusion
@@ -1146,8 +1146,8 @@ mlld shines when orchestrating external tools and data. Here are patterns that s
 
 ### Pattern 3: Conditional Workflows
 ```mlld
->> Environment variables via @INPUT (requires mlld.lock.json allowedEnv)
-/import { NODE_ENV, API_KEY } from @INPUT
+>> Environment variables via @input (requires mlld.lock.json allowedEnv)
+/import { NODE_ENV, API_KEY } from @input
 
 /exe @loadConfig(env) = run {cat "./config/@env.json"}
 /var @config = @loadConfig(@NODE_ENV)
@@ -1277,7 +1277,7 @@ mlld 1.4+ introduces a resolver system with customizable prefixes that "open doo
 ### Key Concepts
 - **Prefix**: An @ symbol that opens access to data (e.g., `@lib/`, `@company/`)
 - **Resolver**: The data provider that handles requests for a prefix (e.g., LOCAL, GITHUB, REGISTRY)
-- **Built-in Resolvers**: Special resolvers like @NOW, @DEBUG that don't need prefixes
+- **Built-in Resolvers**: Special resolvers like @now, @debug that don't need prefixes
 - **Registry**: The REGISTRY resolver that ONLY provides validated modules from registries
 
 ### Quick Setup with CLI Commands
@@ -1396,10 +1396,10 @@ Usage:
 - **REGISTRY**: Special - ONLY provides validated modules from registries
 
 **Built-in resolvers (no prefix needed)**:
-- **NOW**: Dynamic timestamps (`@NOW`, not `@now/`)
-- **DEBUG**: Environment info (`@DEBUG`, not `@debug/`)
-- **INPUT**: Stdin/env data (`@INPUT`, not `@input/`)
-- **PROJECTPATH**: Project root (`@PROJECTPATH` or `@.`)
+- **now**: Dynamic timestamps (`@now`, not `@now/`)
+- **debug**: Environment info (`@debug`, not `@debug/`)
+- **input**: Stdin/env data (`@input`, not `@input/`)
+- **base**: Project root (`@base`, not `@base/`)
 
 ### Configuration Files
 

@@ -36,17 +36,20 @@ export class LoadContentResultImpl implements LoadContentResult {
   private _fmParsed = false;
   private _json?: any;
   private _jsonParsed = false;
+  private _rawContent?: string; // For frontmatter parsing when content is a section
   
   constructor(data: {
     content: string;
     filename: string;
     relative: string;
     absolute: string;
+    _rawContent?: string; // Optional: full file content for frontmatter when content is just a section
   }) {
     this.content = data.content;
     this.filename = data.filename;
     this.relative = data.relative;
     this.absolute = data.absolute;
+    this._rawContent = data._rawContent;
     
     // Extract extension for token estimation
     const match = this.filename.match(/\.([a-zA-Z0-9]+)$/);
@@ -145,19 +148,22 @@ export class LoadContentResultImpl implements LoadContentResult {
    * Parse frontmatter from markdown content
    */
   private _parseFrontmatter(): any | undefined {
+    // Use raw content if available (for section extraction), otherwise use content
+    const contentToParse = this._rawContent || this.content;
+    
     // Check if content starts with frontmatter
-    if (!this.content.startsWith('---\n')) {
+    if (!contentToParse.startsWith('---\n')) {
       return undefined;
     }
     
     // Find the closing frontmatter delimiter
-    const endIndex = this.content.indexOf('\n---\n', 4);
+    const endIndex = contentToParse.indexOf('\n---\n', 4);
     if (endIndex === -1) {
       return undefined;
     }
     
     // Extract frontmatter content
-    const frontmatterContent = this.content.substring(4, endIndex);
+    const frontmatterContent = contentToParse.substring(4, endIndex);
     
     try {
       // Try to parse as YAML

@@ -193,7 +193,7 @@ Bob,25,LA\`
   return input.data[0].value * multiplier;
 }
 /var @data = [{"value": 10},]
-/var @result = @data with { format: "json", pipeline: [@useParent(@INPUT, @multiplier)] }
+/var @result = @data with { format: "json", pipeline: [@useParent(@input, @multiplier)] }
 /show @result`;
 
       const result = await interpret(input, { fileSystem, pathService });

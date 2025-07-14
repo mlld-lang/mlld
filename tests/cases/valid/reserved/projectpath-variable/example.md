@@ -1,12 +1,12 @@
-# @PROJECTPATH Reserved Variable Test
+# @base Reserved Variable Test
 
-This tests the @PROJECTPATH reserved variable.
+This tests the @base reserved variable.
 
 Project root: 
-/show @PROJECTPATH
+/show @base
 
-/path @configPath = "@PROJECTPATH/config"
+/path @configPath = "@base/config"
 /show ::Config location: {{configPath}}::
 
-/var @readme = ::Project README is at {{PROJECTPATH}}/README.md::
+/var @readme = ::Project README is at {{base}}/README.md::
 /show @readme

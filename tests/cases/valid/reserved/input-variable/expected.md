@@ -1,6 +1,6 @@
-# @INPUT Reserved Variable Test
+# @input Reserved Variable Test
 
-This tests the @INPUT reserved variable with various usage patterns.
+This tests the @input reserved variable with various usage patterns.
 
 ## Direct Usage
 Input content: {"config": "test-value", "data": "sample-data"}
@@ -11,7 +11,7 @@ Input lowercase: {"config": "test-value", "data": "sample-data"}
 ## Template Usage
 Received input: {"config": "test-value", "data": "sample-data"}
 
-## Import from @INPUT
+## Import from @input
 Config value: test-value
 
 ## Import from lowercase

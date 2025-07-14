@@ -41,6 +41,9 @@ WithProperty
   / "format" _ ":" _ format:StringLiteral {
       return ["format", format];
     }
+  / "asSection" _ ":" _ title:AsSectionRenameString {
+      return ["asSection", title];
+    }
 
 // -------------------------------------------------------------
 // PIPELINE SUPPORT

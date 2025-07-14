@@ -10,7 +10,7 @@ import { ResolverError, ResolverErrorCode } from '@core/errors';
  * Built-in resolver for input data (stdin + environment variables)
  */
 export class InputResolver implements Resolver {
-  name = 'INPUT';
+  name = 'input';
   description = 'Provides merged stdin and environment variable data';
   type = 'input' as const;
   
@@ -35,7 +35,7 @@ export class InputResolver implements Resolver {
 
   canResolve(ref: string): boolean {
     const cleanRef = ref.replace(/^@/, '');
-    return cleanRef === 'INPUT' || cleanRef.startsWith('INPUT/');
+    return cleanRef === 'input' || cleanRef.startsWith('input/');
   }
 
   async resolve(ref: string, config?: any): Promise<ResolverContent> {
@@ -50,7 +50,7 @@ export class InputResolver implements Resolver {
         content: JSON.stringify(this.inputData, null, 2),
         contentType: 'data',
         metadata: {
-          source: 'INPUT',
+          source: 'input',
           timestamp: new Date()
         }
       };
@@ -69,7 +69,7 @@ export class InputResolver implements Resolver {
           content: JSON.stringify(exportData),
           contentType: 'data',
           metadata: {
-            source: 'INPUT',
+            source: 'input',
             timestamp: new Date()
           }
         };
@@ -87,14 +87,14 @@ export class InputResolver implements Resolver {
         content: JSON.stringify(exports),
         contentType: 'data',
         metadata: {
-          source: 'INPUT',
+          source: 'input',
           timestamp: new Date()
         }
       };
     }
     
     throw new ResolverError(
-      'INPUT resolver only supports variable and import contexts',
+      'input resolver only supports variable and import contexts',
       ResolverErrorCode.UNSUPPORTED_CONTEXT,
       {
         resolverName: this.name,

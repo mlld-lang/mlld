@@ -203,9 +203,8 @@ export async function evaluateShow(
       // For LoadContentResult, show the content by default
       content = value.content;
     } else if (isLoadContentResultArray(value)) {
-      // For array of LoadContentResult, show array of contents as JSON
-      const contentArray = value.map(item => item.content);
-      content = JSONFormatter.stringify(contentArray, { pretty: true, indent: 2 });
+      // For array of LoadContentResult, concatenate content with double newlines
+      content = value.map(item => item.content).join('\n\n');
     } else if (Array.isArray(value)) {
       // Check if this is from a foreach-section expression
       if (isForeachSection && value.every(item => typeof item === 'string')) {

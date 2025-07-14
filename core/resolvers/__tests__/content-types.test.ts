@@ -330,21 +330,21 @@ describe('Content Type Detection', () => {
       resolverManager.registerResolver(new InputResolver('{"test": "data"}'));
     });
 
-    it('NOW resolver returns text by default', async () => {
-      const result = await resolverManager.resolve('@NOW');
+    it('now resolver returns text by default', async () => {
+      const result = await resolverManager.resolve('@now');
       
       expect(result.content.contentType).toBe('text');
       expect(typeof result.content.content).toBe('string');
     });
 
-    it('DEBUG resolver returns data', async () => {
-      const result = await resolverManager.resolve('@DEBUG');
+    it('debug resolver returns data', async () => {
+      const result = await resolverManager.resolve('@debug');
       
       expect(result.content.contentType).toBe('data');
     });
 
-    it('INPUT resolver returns appropriate type based on content', async () => {
-      const result = await resolverManager.resolve('@INPUT');
+    it('input resolver returns appropriate type based on content', async () => {
+      const result = await resolverManager.resolve('@input');
       
       expect(result.content.contentType).toBe('data');
       expect(result.content.content).toContain('"test"');

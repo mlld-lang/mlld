@@ -1,6 +1,6 @@
-# @PROJECTPATH Reserved Variable Test
+# @base Reserved Variable Test
 
-This tests the @PROJECTPATH reserved variable.
+This tests the @base reserved variable.
 
 Project root: 
 /Users/adam/dev/mlld/tests/cases/valid/reserved/projectpath-variable

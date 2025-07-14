@@ -222,10 +222,6 @@ export const helpers = {
         return this.createNode(NodeType.VariableReference, { valueType, ...data });
     },
     normalizePathVar(id) {
-        if (id === '.')
-            return 'PROJECTPATH';
-        if (id === 'TIME')
-            return 'TIME';
         return id;
     },
     validateRunContent: () => true,

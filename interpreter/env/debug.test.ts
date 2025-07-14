@@ -3,7 +3,7 @@ import { Environment } from './Environment';
 import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 
-describe('@DEBUG variable', () => {
+describe('@debug variable', () => {
   it('should produce markdown output with multiple sections', async () => {
     const fileSystem = new MemoryFileSystem();
     const pathService = new PathService();
@@ -16,10 +16,10 @@ describe('@DEBUG variable', () => {
     // Initialize built-in resolvers
     await env.registerBuiltinResolvers();
 
-    // Get the DEBUG variable
-    const debugVar = env.getVariable('DEBUG');
+    // Get the debug variable
+    const debugVar = env.getVariable('debug');
     expect(debugVar).toBeDefined();
-    expect(debugVar?.type).toBe('simple-text'); // DEBUG returns markdown text
+    expect(debugVar?.type).toBe('simple-text'); // debug returns markdown text
     
     // Check the output
     const debugOutput = debugVar?.value as string;
@@ -40,8 +40,8 @@ describe('@DEBUG variable', () => {
     expect(lines.length).toBeGreaterThan(5);
     
     // Verify it contains some expected content
-    expect(debugOutput).toContain('@NOW');
-    expect(debugOutput).toContain('@PROJECTPATH');
+    expect(debugOutput).toContain('@now');
+    expect(debugOutput).toContain('@base');
     expect(debugOutput).toContain('Total variables:');
     expect(debugOutput).toContain('Output nodes:');
   });
@@ -61,7 +61,7 @@ describe('@DEBUG variable', () => {
     // Get lowercase debug
     const debugVar = env.getVariable('debug');
     expect(debugVar).toBeDefined();
-    expect(debugVar?.type).toBe('simple-text'); // DEBUG returns markdown text
+    expect(debugVar?.type).toBe('simple-text'); // debug returns markdown text
     
     // Should produce the same markdown output
     const debugOutput = debugVar?.value as string;
@@ -81,8 +81,8 @@ describe('@DEBUG variable', () => {
     // Initialize built-in resolvers
     await env.registerBuiltinResolvers();
 
-    // Get DEBUG once
-    const debug1 = env.getVariable('DEBUG');
+    // Get debug once
+    const debug1 = env.getVariable('debug');
     const output1 = debug1?.value as string;
     
     // Add a user variable
@@ -94,8 +94,8 @@ describe('@DEBUG variable', () => {
       { definedAt: { line: 1, column: 1 } }
     ));
     
-    // Get DEBUG again - should include the new variable
-    const debug2 = env.getVariable('DEBUG');
+    // Get debug again - should include the new variable
+    const debug2 = env.getVariable('debug');
     const output2 = debug2?.value as string;
     
     // Verify the second output includes our new variable
@@ -129,8 +129,8 @@ describe('@DEBUG variable', () => {
       isMultiLine: false
     }));
     
-    // Get DEBUG
-    const debugVar = env.getVariable('DEBUG');
+    // Get debug
+    const debugVar = env.getVariable('debug');
     const debugOutput = debugVar?.value as string;
     
     // Verify the value is truncated

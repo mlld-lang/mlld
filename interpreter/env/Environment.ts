@@ -194,7 +194,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         // This allows the constructor to remain synchronous
         
         // Register path resolvers (priority 1)
-        // ProjectPathResolver should be first to handle @PROJECTPATH references
+        // ProjectPathResolver should be first to handle @base references
         this.resolverManager.registerResolver(new ProjectPathResolver(this.fileSystem));
         
         // Register module resolvers (priority 10)
@@ -209,17 +209,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         // Configure built-in prefixes
         this.resolverManager.configurePrefixes([
           {
-            prefix: '@PROJECTPATH',
-            resolver: 'PROJECTPATH',
-            type: 'io',
-            config: {
-              basePath: this.basePath,
-              readonly: false
-            }
-          },
-          {
-            prefix: '@.',
-            resolver: 'PROJECTPATH', 
+            prefix: '@base',
+            resolver: 'base',
             type: 'io',
             config: {
               basePath: this.basePath,
@@ -248,13 +239,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       }
       
       // Note: ImportApproval and ImmutableCache are now handled by ImportResolver
-      
-      // Initialize reserved variables (these are different from resolvers)
-      // Resolvers handle imports/paths, but these are actual variables
-      // Note: This will be called after VariableManager is initialized
-      
-      // Reserve module prefixes from resolver configuration
-      this.reserveModulePrefixes();
     }
     
     // Initialize utility managers
@@ -284,6 +268,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       
       // Initialize built-in transformers
       this.initializeBuiltinTransformers();
+      
+      // Reserve module prefixes from resolver configuration and create path variables
+      this.reserveModulePrefixes();
     }
     
     // Initialize import resolver with dependencies
@@ -344,19 +331,19 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.resolverManager.registerResolver(inputResolver);
     
     // Only reserve names for built-in function resolvers (not file/module resolvers)
-    // Function resolvers are those that provide computed values like NOW, DEBUG, etc.
-    const functionResolvers = ['NOW', 'DEBUG', 'INPUT', 'PROJECTPATH'];
+    // Function resolvers are those that provide computed values like now, debug, etc.
+    const functionResolvers = ['now', 'debug', 'input', 'base'];
     for (const name of functionResolvers) {
       this.reservedNames.add(name);
-      this.reservedNames.add(name.toLowerCase());
     }
     
     logger.debug(`Reserved resolver names: ${Array.from(this.reservedNames).join(', ')}`);
   }
 
   /**
-   * Reserve module prefixes from resolver configuration
+   * Reserve module prefixes from resolver configuration and create path variables
    * This prevents variables from using names that conflict with module prefixes
+   * and makes prefixes available as path variables for file references
    */
   private reserveModulePrefixes(): void {
     if (!this.resolverManager) {
@@ -373,6 +360,32 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         const prefixName = match[1];
         this.reservedNames.add(prefixName);
         logger.debug(`Reserved module prefix name: ${prefixName}`);
+        
+        // Create a path variable for prefixes that have a basePath
+        if (prefixConfig.config?.basePath) {
+          const pathVar = createPathVariable(
+            prefixName,
+            prefixConfig.config.basePath,
+            prefixConfig.config.basePath,
+            false, // Not a URL
+            path.isAbsolute(prefixConfig.config.basePath), // Check if absolute
+            {
+              directive: 'var',
+              syntax: 'quoted',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            undefined, // No security metadata
+            {
+              isReserved: true,
+              isPrefixPath: true,
+              prefixConfig: prefixConfig,
+              definedAt: { line: 0, column: 0, filePath: '<prefix-config>' }
+            }
+          );
+          this.variableManager.setVariable(prefixName, pathVar);
+          logger.debug(`Created path variable for prefix: @${prefixName} -> ${prefixConfig.config.basePath}`);
+        }
       }
     }
   }
@@ -590,18 +603,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Get a resolver variable with proper async resolution
-   * This handles context-dependent behavior for resolvers like @TIME
+   * This handles context-dependent behavior for resolvers
    */
   async getResolverVariable(name: string): Promise<Variable | undefined> {
-    const upperName = name.toUpperCase();
-    
     // Check if it's a reserved resolver name
-    if (!this.reservedNames.has(upperName)) {
+    if (!this.reservedNames.has(name)) {
       return undefined;
     }
     
-    // Special handling for DEBUG variable - compute dynamically
-    if (upperName === 'DEBUG') {
+    // Special handling for debug variable - compute dynamically
+    if (name === 'debug') {
       const debugValue = this.createDebugObject(3); // Use markdown format
       
       
@@ -612,7 +623,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         isMultiLine: false
       };
       const debugVar = createObjectVariable(
-        'DEBUG',
+        'debug',
         debugValue,
         false, // Not complex, it's just a string
         debugSource,
@@ -625,7 +636,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     
     // Check cache first
-    const cached = this.cacheManager.getResolverVariable(upperName);
+    const cached = this.cacheManager.getResolverVariable(name);
     if (cached && cached.metadata && 'needsResolution' in cached.metadata && !cached.metadata.needsResolution) {
       return cached;
     }
@@ -634,12 +645,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const resolverManager = this.getResolverManager();
     if (!resolverManager) {
       // Fallback to creating a basic resolver variable
-      return this.createResolverVariable(upperName);
+      return this.createResolverVariable(name);
     }
     
     try {
       // Resolve with 'variable' context to get the appropriate content
-      const resolverContent = await resolverManager.resolve(`@${upperName}`, { context: 'variable' });
+      const resolverContent = await resolverManager.resolve(`@${name}`, { context: 'variable' });
       
       // Convert content based on contentType
       let varType: 'text' | 'data' = 'text';
@@ -665,26 +676,26 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         isMultiLine: false
       };
       const resolvedVar = varType === 'data' ?
-        createObjectVariable(upperName, varValue, true, resolverSource, {
+        createObjectVariable(name, varValue, true, resolverSource, {
           isReserved: true,
           isResolver: true,
-          resolverName: upperName,
+          resolverName: name,
           definedAt: { line: 0, column: 0, filePath: '<resolver>' }
         }) :
-        createSimpleTextVariable(upperName, varValue, resolverSource, {
+        createSimpleTextVariable(name, varValue, resolverSource, {
           isReserved: true,
           isResolver: true,
-          resolverName: upperName,
+          resolverName: name,
           definedAt: { line: 0, column: 0, filePath: '<resolver>' }
         });
       
       // Cache the resolved variable
-      this.cacheManager.setResolverVariable(upperName, resolvedVar);
+      this.cacheManager.setResolverVariable(name, resolvedVar);
       
       return resolvedVar;
     } catch (error) {
       // If resolution fails, return undefined
-      console.warn(`Failed to resolve variable @${upperName}: ${(error as Error).message}`);
+      console.warn(`Failed to resolve variable @${name}: ${(error as Error).message}`);
       return undefined;
     }
   }
@@ -916,7 +927,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       
       // Update the InputResolver if it exists
       if (this.resolverManager) {
-        const inputResolver = this.resolverManager.getResolver('INPUT');
+        const inputResolver = this.resolverManager.getResolver('input');
         if (inputResolver && 'setStdinContent' in inputResolver) {
           (inputResolver as any).setStdinContent(content);
         }

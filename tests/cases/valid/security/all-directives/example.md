@@ -10,7 +10,7 @@ This tests security options on various directives.
 
 ## @path with security
 /path (1h) trust always configPath = "./config"
-/path (30m) projectPath = @PROJECTPATH/src
+/path (30m) projectPath = @base/src
 
 ## @text with security (on RHS)
 /var (24h) cachedTemplate = @add (1h) "./template.md"

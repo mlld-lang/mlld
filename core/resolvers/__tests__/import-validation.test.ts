@@ -255,9 +255,9 @@ describe('Import Content Type Validation', () => {
   });
 
   describe('Built-in Resolver Imports', () => {
-    it('should accept imports from NOW resolver', async () => {
+    it('should accept imports from now resolver', async () => {
       const code = `
-/import { iso, date } from @NOW
+/import { iso, date } from @now
 /show ::Today is {{date}}::
 `;
       

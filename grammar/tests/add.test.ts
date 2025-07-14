@@ -19,7 +19,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic path add', async () => {
-    const content = `/show [@PROJECTPATH/README.md]`;
+    const content = `/show [@base/README.md]`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -95,7 +95,7 @@ describe('Add Directive', () => {
   
   test('Complex path add with all modifiers', async () => {
     // Updated to use separate path with no section
-    const content = `/show [@PROJECTPATH/doc.md] as ## under API Documentation`;
+    const content = `/show [@base/doc.md] as ## under API Documentation`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -129,7 +129,7 @@ describe('Add Directive', () => {
   
   test('Complex section add with new title', async () => {
     // The new recommended syntax for section extraction with a new title
-    const content = `/show "# API Reference" from [@PROJECTPATH/doc.md] as "## API"`;
+    const content = `/show "# API Reference" from [@base/doc.md] as "## API"`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result
@@ -330,7 +330,7 @@ describe('Add Directive', () => {
   });
   
   test('Section add with variable in path', async () => {
-    const content = `/show "# API Reference" from [@PROJECTPATH/docs/api.md]`;
+    const content = `/show "# API Reference" from [@base/docs/api.md]`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)

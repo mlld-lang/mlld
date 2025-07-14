@@ -152,8 +152,8 @@ export class DebugUtils {
         // Categorize variables according to test expectations
         for (const [name, variable] of variables) {
           if (reservedNames.has(name) || variable.source === 'builtin') {
-            // Environment variables are reserved/builtin like TIME, PROJECTPATH, DEBUG
-            if (name === 'TIME' || name === 'PROJECTPATH' || variable.source === 'builtin') {
+            // Environment variables are reserved/builtin like now, base, debug
+            if (name === 'now' || name === 'base' || variable.source === 'builtin') {
               categories.environment.push([name, variable]);
             } else {
               categories.global.push([name, variable]);

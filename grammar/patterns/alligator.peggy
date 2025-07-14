@@ -117,16 +117,29 @@ AlligatorPathSegment "alligator path segment"
 
 // Valid characters in path segments (inside alligators)
 AlligatorPathChar
-  = !">" !"#" !"@" !PathSeparator char:. { return char; }
+  = !">" !"#" !"@" !" as " !PathSeparator char:. { return char; }
 
 // Options for alligator expressions
 AlligatorOptions
-  = _ section:SectionClause rename:AsRename? {
+  = _ section:SectionClause _ transform:AsTransform {
+      // Section with transform - try this first
       const options = { section };
-      if (rename) {
-        section.renamed = rename;
-      }
+      options.transform = transform;
       return options;
+    }
+  / _ section:SectionClause _ rename:AsRename {
+      // Section with rename - only if not transform
+      const options = { section };
+      section.renamed = rename;
+      return options;
+    }
+  / _ section:SectionClause {
+      // Just section without transform or rename
+      return { section };
+    }
+  / _ transform:AsTransform {
+      // Just the transform without section
+      return { transform };
     }
 
 // Section extraction clause
@@ -163,8 +176,104 @@ AlligatorSectionChar
 
 // Rename clause for sections
 AsRename "section rename"
-  = _ "as" _ title:StringLiteral {
-      return title;
+  = _ "as" _ title:AsSectionRenameString {
+      return {
+        type: 'rename-template',
+        parts: title
+      };
+    }
+
+// Parse the content of a quoted or backtick string as a template for section rename
+// Supports both "..." and `...` with <> placeholder interpolation
+AsSectionRenameString "section rename string template"
+  = '"' parts:RenameStringPart* '"' {
+      return parts;
+    }
+  / '`' parts:RenameBacktickPart* '`' {
+      return parts;
+    }
+
+// Parts inside rename string - reuse file reference interpolation
+RenameStringPart
+  = FileReferenceInterpolation  // Reuse the existing pattern that handles <> and <file> 
+  / chars:(![<"] char:. { return char; })+ {
+      // Plain text
+      return helpers.createNode(NodeType.Text, { 
+        content: chars.join(''), 
+        location: location() 
+      });
+    }
+
+// Parts inside rename backtick template - supports <> placeholder and @variables
+RenameBacktickPart
+  = FileReferenceInterpolation  // Handles <> and <file> with field access
+  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      // Regular variable reference
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / chars:(![`<@] char:. { return char; })+ {
+      // Plain text
+      return helpers.createNode(NodeType.Text, { 
+        content: chars.join(''), 
+        location: location() 
+      });
+    }
+
+// Transform clause for array elements
+AsTransform "as transform"
+  = _ "as" _ template:AlligatorTransformTemplate {
+      return template;
+    }
+
+// Backtick template for transformations
+AlligatorTransformTemplate "alligator transform template"
+  = "`" parts:BacktickTransformPart* "`" {
+      return {
+        type: 'template',
+        parts: parts
+      };
+    }
+
+// Parts inside transform template - supports <> placeholder
+BacktickTransformPart
+  = "<>" fields:TransformFieldChain? {
+      // Placeholder for current item with optional field access
+      return {
+        type: 'placeholder',
+        fields: fields
+      };
+    }
+  / "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      // Regular variable reference
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+  / chars:(![`<@] char:. { return char; })+ {
+      // Plain text
+      return helpers.createNode(NodeType.Text, { 
+        content: chars.join(''), 
+        location: location() 
+      });
+    }
+
+// Field access for transform placeholders
+TransformFieldChain
+  = "." first:TransformField rest:("." field:TransformField { return field; })* {
+      return [first, ...rest];
+    }
+
+// Individual field in transform
+TransformField
+  = id:BaseIdentifier {
+      return {
+        type: 'field',
+        value: id
+      };
     }
 
 // URL components
