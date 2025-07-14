@@ -189,10 +189,44 @@ export function isLoadContentResult(value: unknown): value is LoadContentResult 
 }
 
 /**
+ * Array of LoadContentResult with smart toString behavior
+ */
+export class LoadContentResultArrayImpl extends Array<LoadContentResult> {
+  /**
+   * Override toString to concatenate content
+   */
+  toString(): string {
+    return this.map(item => item.content).join('\n\n');
+  }
+  
+  /**
+   * Access .content property to get concatenated content
+   */
+  get content(): string {
+    return this.toString();
+  }
+}
+
+/**
+ * Type for LoadContentResultArray
+ */
+export type LoadContentResultArray = LoadContentResultArrayImpl;
+
+/**
+ * Create a LoadContentResultArray from regular array
+ */
+export function createLoadContentResultArray(items: LoadContentResult[]): LoadContentResultArray {
+  const array = new LoadContentResultArrayImpl();
+  array.push(...items);
+  return array;
+}
+
+/**
  * Type guard to check if a value is an array of LoadContentResult
  */
-export function isLoadContentResultArray(value: unknown): value is LoadContentResult[] {
-  return Array.isArray(value) && value.every(isLoadContentResult);
+export function isLoadContentResultArray(value: unknown): value is LoadContentResultArray {
+  return value instanceof LoadContentResultArrayImpl || 
+    (Array.isArray(value) && value.every(isLoadContentResult));
 }
 
 /**

@@ -1,7 +1,7 @@
 import { Environment } from '@interpreter/env/Environment';
 import { MlldError } from '@core/errors';
 import { llmxmlInstance } from '../utils/llmxml-instance';
-import { LoadContentResult, LoadContentResultImpl, LoadContentResultURLImpl } from '@core/types/load-content';
+import { LoadContentResult, LoadContentResultImpl, LoadContentResultURLImpl, createLoadContentResultArray } from '@core/types/load-content';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
 import { Readability } from '@mozilla/readability';
@@ -417,7 +417,7 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
   if (options?.section?.renamed) {
     return results as string[];
   } else {
-    return results as LoadContentResult[];
+    return createLoadContentResultArray(results as LoadContentResult[]);
   }
 }
 

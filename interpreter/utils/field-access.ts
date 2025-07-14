@@ -3,7 +3,7 @@
  */
 
 import { FieldAccessNode } from '@core/types/primitives';
-import { isLoadContentResult, isLoadContentResultURL } from '@core/types/load-content';
+import { isLoadContentResult, isLoadContentResultURL, isLoadContentResultArray } from '@core/types/load-content';
 
 /**
  * Access a field on an object or array.
@@ -34,6 +34,20 @@ export function accessField(value: any, field: FieldAccessNode): any {
           return result;
         }
         throw new Error(`Field "${name}" not found in LoadContentResult`);
+      }
+      
+      // Handle LoadContentResultArray - special case for .content
+      if (isLoadContentResultArray(value)) {
+        if (name === 'content') {
+          // Return concatenated content
+          return value.map(item => item.content).join('\n\n');
+        }
+        // Try to access as array property
+        const result = (value as any)[name];
+        if (result !== undefined) {
+          return result;
+        }
+        throw new Error(`Field "${name}" not found in LoadContentResultArray`);
       }
       
       // Handle normalized AST objects

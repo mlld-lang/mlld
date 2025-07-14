@@ -858,9 +858,12 @@ export async function interpolate(
         }
       } else if (typeof value === 'object') {
         // Check if this is a LoadContentResult - use its content
-        const { isLoadContentResult } = await import('@core/types/load-content');
+        const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
         if (isLoadContentResult(value)) {
           stringValue = value.content;
+        } else if (isLoadContentResultArray(value)) {
+          // For array of LoadContentResult, concatenate content with double newlines
+          stringValue = value.map(item => item.content).join('\n\n');
         } else if (variable && variable.metadata?.isNamespace && node.fields?.length === 0) {
           // Check if this is a namespace object (only if no field access)
           const { JSONFormatter } = await import('./json-formatter');

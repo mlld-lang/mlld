@@ -138,6 +138,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'alligator-metadata-url': 'alligator/metadata-url',
       'alligator-section-extraction': 'alligator/section-extraction',
       'alligator-glob-rename': 'alligator-glob-rename',
+      'alligator-glob-concat': 'alligator-glob-concat',
       // File reference interpolation test
       'file-reference-interpolation': 'file-reference-interpolation',
       // HTML conversion tests
@@ -217,6 +218,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
     'alligator-glob-pattern': 'Glob patterns require real filesystem - tinyglobby is well-tested',
     'alligator-glob-rename': 'Glob patterns require real filesystem - tinyglobby is well-tested',
+    'alligator-glob-concat': 'Glob patterns require real filesystem - tinyglobby is well-tested',
     'file-reference-glob': 'Glob patterns require real filesystem - tinyglobby mock issues',
     'alligator-url-markdown-conversion': 'Issue #315: Getter properties (text, md, html) not accessible in mlld',
     'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
