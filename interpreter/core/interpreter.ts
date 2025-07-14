@@ -837,8 +837,29 @@ export async function interpolate(
           stringValue = JSON.stringify(value);
         }
       } else if (Array.isArray(value)) {
-        // Special handling for arrays in shell command context
-        if (context === InterpolationContext.ShellCommand) {
+        // Check if this is a LoadContentResultArray first
+        const { isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
+        
+        // Debug logging
+        if (process.env.MLLD_DEBUG === 'true') {
+          logger.debug('Array interpolation:', {
+            identifier: node.identifier,
+            isLoadContentResultArray: isLoadContentResultArray(value),
+            isRenamedContentArray: isRenamedContentArray(value),
+            arrayLength: value.length,
+            firstItemType: value.length > 0 ? typeof value[0] : 'empty',
+            firstItemKeys: value.length > 0 && typeof value[0] === 'object' ? Object.keys(value[0]) : []
+          });
+        }
+        
+        if (isLoadContentResultArray(value)) {
+          // For LoadContentResultArray, use its .content getter (which concatenates all content)
+          stringValue = value.content;
+        } else if (isRenamedContentArray(value)) {
+          // For RenamedContentArray (from alligator glob with renaming), use its .content getter
+          stringValue = value.content;
+        } else if (context === InterpolationContext.ShellCommand) {
+          // Special handling for arrays in shell command context
           // For shell commands, expand arrays into space-separated arguments
           // Each element is escaped individually
           const strategy = EscapingStrategyFactory.getStrategy(context);
@@ -858,7 +879,7 @@ export async function interpolate(
         }
       } else if (typeof value === 'object') {
         // Check if this is a LoadContentResult - use its content
-        const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+        const { isLoadContentResult, isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
         if (isLoadContentResult(value)) {
           stringValue = value.content;
         } else if (isLoadContentResultArray(value)) {
@@ -1097,12 +1118,19 @@ export async function applyCondensedPipes(
           result = await impl(stringValue);
         } else if (transform.type === 'executable' || '__executable' in transform) {
           // Handle executable variables as transforms
-          const { evaluateExecutable } = await import('../eval/executable');
-          const execResult = await evaluateExecutable(
-            transform as any,
-            [result, ...(pipe.args || [])],
-            env,
-            `@${pipeName}`
+          const { evaluateExecInvocation } = await import('../eval/exec-invocation');
+          // Create an ExecInvocation node to execute the transform
+          const execInvocationNode = {
+            type: 'ExecInvocation',
+            commandRef: {
+              identifier: pipeName,
+              type: 'VariableReference'
+            },
+            args: [result, ...(pipe.args || [])]
+          };
+          const execResult = await evaluateExecInvocation(
+            execInvocationNode as any,
+            env
           );
           result = execResult.value;
         } else {

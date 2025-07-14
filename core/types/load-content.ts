@@ -222,11 +222,46 @@ export function createLoadContentResultArray(items: LoadContentResult[]): LoadCo
 }
 
 /**
+ * Array of renamed strings that behaves like LoadContentResultArray for concatenation
+ */
+export class RenamedContentArray extends Array<string> {
+  /**
+   * Override toString to concatenate content
+   */
+  toString(): string {
+    return this.join('\n\n');
+  }
+  
+  /**
+   * Access .content property to get concatenated content
+   */
+  get content(): string {
+    return this.toString();
+  }
+}
+
+/**
+ * Create a RenamedContentArray from string array
+ */
+export function createRenamedContentArray(items: string[]): RenamedContentArray {
+  const array = new RenamedContentArray();
+  array.push(...items);
+  return array;
+}
+
+/**
  * Type guard to check if a value is an array of LoadContentResult
  */
 export function isLoadContentResultArray(value: unknown): value is LoadContentResultArray {
   return value instanceof LoadContentResultArrayImpl || 
-    (Array.isArray(value) && value.every(isLoadContentResult));
+    (Array.isArray(value) && value.length > 0 && value.every(isLoadContentResult));
+}
+
+/**
+ * Type guard to check if a value is a RenamedContentArray
+ */
+export function isRenamedContentArray(value: unknown): value is RenamedContentArray {
+  return value instanceof RenamedContentArray;
 }
 
 /**
