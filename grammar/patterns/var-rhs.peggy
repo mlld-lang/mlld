@@ -7,6 +7,7 @@ VarRHSContent "var assignment value"
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
+  / TemplateWithPipeline        // Template content with pipeline support
   / TemplateStyleInterpolation  // Handles backtick, [[...]], double/single quotes
   / DataObjectLiteral           // Use data-context object parsing for proper typing
   / ArrayLiteral                // Arrays: [1, 2, 3] - always arrays!
@@ -18,6 +19,37 @@ VarRHSContent "var assignment value"
 
 // Note: AlligatorWithTransform was removed because AlligatorExpression 
 // already handles "as" clauses internally in alligator.peggy
+
+// TEMPLATE WITH PIPELINE - Handles template content (quoted/backtick) followed by pipes
+TemplateWithPipeline "template with pipeline"
+  = template:TemplateStyleInterpolation pipes:CondensedPipeChain {
+      helpers.debug('TemplateWithPipeline matched', { 
+        template: template.wrapperType,
+        pipelineCount: pipes.length
+      });
+      
+      // Extract the actual content from the template
+      const content = template.content || [helpers.createNode(NodeType.Text, { content: '', location: location() })];
+      
+      // Convert condensed pipes to pipeline format
+      const pipeline = pipes.map(pipe => ({
+        identifier: [helpers.createVariableReferenceNode('varIdentifier', { 
+          identifier: pipe.name 
+        }, location())],
+        args: pipe.args || [],
+        fields: [],
+        rawIdentifier: pipe.name,
+        rawArgs: pipe.args || []
+      }));
+      
+      return {
+        content: content,
+        wrapperType: template.wrapperType,
+        withClause: {
+          pipeline: pipeline
+        }
+      };
+    }
 
 // VARIABLE WITH SPACED PIPES - Allows both "@var | @pipe" and "@var|@pipe" in var RHS
 VariableWithSpacedPipes "variable with flexible pipe syntax"

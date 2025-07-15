@@ -18,6 +18,11 @@ SlashVar "var directive"
         processedValue = value.content; // value.content is already an array of nodes
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
+        
+        // Check if template has a pipeline attached
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
       }
       // Handle object literals (already typed by DataObjectLiteral)
       else if (value && value.type === 'object') {

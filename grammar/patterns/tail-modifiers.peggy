@@ -4,6 +4,11 @@
 
 TailModifiers "tail modifiers"
   = _ keyword:TailKeyword _ value:TailValue {
+      helpers.debug('TailModifiers matched', { 
+        keyword,
+        valueType: Array.isArray(value) ? 'array' : typeof value,
+        valueLength: Array.isArray(value) ? value.length : undefined
+      });
       if (keyword === "with") {
         return value; // Already an object
       } else if (keyword === "|") {
@@ -35,13 +40,17 @@ TailValue
   / title:AsSectionRenameString { return title; }            // for 'as'
 
 PipelineShorthand
-  = first:PipelineCommand rest:(HWS &{ 
-      // Check if we're still on the same line
-      const pos = peg$currPos;
-      const beforePos = input.lastIndexOf('\n', pos - 1);
-      const afterPos = input.indexOf('\n', pos);
-      const hasNewlineBefore = beforePos >= 0 && !input.substring(beforePos + 1, pos).trim();
-      return !hasNewlineBefore;
-    } "|" HWS ref:PipelineCommand { return ref; })* {
+  = first:PipelineCommand rest:PipelineRest* {
+      helpers.debug('PipelineShorthand matched', { 
+        first: first?.rawIdentifier || first,
+        restCount: rest.length,
+        rest: rest.map(r => r?.rawIdentifier || r)
+      });
       return [first, ...rest];
+    }
+
+PipelineRest
+  = _ "|" _ cmd:PipelineCommand {
+      helpers.debug('PipelineRest matched', { cmd: cmd?.rawIdentifier || cmd });
+      return cmd;
     }

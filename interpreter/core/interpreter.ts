@@ -1119,14 +1119,19 @@ export async function applyCondensedPipes(
         } else if (transform.type === 'executable' || '__executable' in transform) {
           // Handle executable variables as transforms
           const { evaluateExecInvocation } = await import('../eval/exec-invocation');
+          // Create a Text node for the pipeline input value
+          const inputTextNode = {
+            type: 'Text',
+            content: String(result)
+          };
           // Create an ExecInvocation node to execute the transform
           const execInvocationNode = {
             type: 'ExecInvocation',
             commandRef: {
+              type: 'CommandReference',
               identifier: pipeName,
-              type: 'VariableReference'
-            },
-            args: [result, ...(pipe.args || [])]
+              args: [inputTextNode, ...(pipe.args || [])]
+            }
           };
           const execResult = await evaluateExecInvocation(
             execInvocationNode as any,
