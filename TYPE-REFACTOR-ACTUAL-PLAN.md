@@ -288,32 +288,109 @@ function resolveVariableValue(variable: Variable): Variable {
 4. **Reversibility** - Can roll back any phase
 5. **Documentation first** - Understand before changing
 
-## For the Next Session
+## Progress Update
 
-**CURRENT STATUS**: Phase 1 ✅ COMPLETE | Phase 2 🚀 Next
+### ✅ Phase 1: Enhance Variable Metadata System (COMPLETE)
+**Commits**: `acee533c`, `d8f71882`, `8550015e`
 
-Phase 1 successfully completed:
-- Step 1: Enhanced VariableMetadata with behavior preservation fields
-- Step 2: Tagged special arrays with __variable metadata 
-- Step 3: Updated type guards to check metadata first
-- All 818 tests passing
+Completed all three steps:
+1. **Enhanced VariableMetadata** - Added fields for behavior preservation
+2. **Tagged special arrays** - Arrays now carry __variable metadata
+3. **Fixed type guards** - Check metadata first, fall back to instanceof
 
-Next: Phase 2 - Migrate special classes to Variables directly
+**Result**: Foundation laid for reliable type detection through metadata.
 
-**Critical files for Step 2**:
-- `interpreter/eval/content-loader.ts` - Where to add Variable creation/tagging
-- `interpreter/eval/load-content-impl.ts` - Special array classes to understand
-- Look for: `createRenamedContentArray` and `LoadContentResultArray` usage
+### ✅ Phase 2: Migrate Special Classes to Variables (COMPLETE)
+**Commits**: `eef3aa80`, `911986f6`
 
-**Test with these scenarios**:
-- Glob patterns with renamed sections (tests/cases/valid/alligator/)
-- Verify special toString() behaviors still work
-- Confirm arrays are tagged with `__variable` property
+Successfully migrated from special array classes to Variables:
+1. **Created migration utilities** (`variable-migration.ts`)
+   - `extractVariableValue()` preserves behaviors when extracting values
+   - `createRenamedContentVariable()` and `createLoadContentResultVariable()`
+   - Helper functions for metadata detection
 
-**Success criteria for Step 2**:
-- Special arrays are tagged with `__variable` containing Variable metadata
-- All existing tests pass (no behavior changes)
-- Foundation laid for Step 3 (fixing type guards)
+2. **Updated content-loader.ts**
+   - Now creates Variables instead of special arrays
+   - Uses migration utilities to preserve behaviors
+   - Removed dependency on factory functions
+
+3. **Updated type guards**
+   - `isRenamedContentArray` checks metadata first
+   - `isLoadContentResultArray` checks metadata first
+   - Removed dependency on factory function imports
+
+4. **Deprecated factory functions**
+   - Added @deprecated notices
+   - Still exist for backward compatibility
+   - No longer used in the codebase
+
+**Result**: All 821 tests pass. Special behaviors preserved through metadata.
+
+## Phase 3: Update Core Resolution (NEXT)
+
+**Goal**: Make Variables flow through resolution instead of extracting raw values.
+
+### Step 1: Analyze Current Resolution Points
+Map every place where we currently extract raw values from Variables:
+- `resolveVariableValue()` in various contexts
+- Template interpolation
+- Command execution contexts
+- Array/object evaluation
+
+**Deliverable**: `RESOLUTION-POINTS.md` documenting each extraction point and why it happens.
+
+### Step 2: Create Resolution Strategy
+Design how Variables should flow through:
+- When to preserve the Variable wrapper
+- When extraction is truly necessary
+- How to handle nested resolution (Variables containing Variables)
+
+### Step 3: Update Interpolation Logic
+The interpreter's `interpolate()` function is key:
+- Currently extracts values for string building
+- Should preserve Variables when possible
+- Only extract at the final output boundary
+
+### Step 4: Test Critical Paths
+Focus on high-risk areas:
+- Template interpolation with complex Variables
+- Command execution with Variable arguments
+- Nested data structures
+- Cross-file imports
+
+**Success Criteria**:
+- Variables flow deeper into the system
+- Type information available where needed
+- All tests continue to pass
+- No performance regression
+
+## Phase 4: System-wide Variable Flow
+
+**Goal**: Update all consumers to work with Variables natively.
+
+### Areas to Update:
+1. **Command Execution** - Pass Variables to shadow environments
+2. **Template System** - Preserve Variables in template AST
+3. **Import System** - Return Variables from imports
+4. **Output System** - Format Variables based on type
+5. **Error Messages** - Show actual Variable types
+
+### Migration Strategy:
+- One subsystem at a time
+- Add Variable-aware code paths
+- Maintain backward compatibility
+- Gradually phase out extraction
+
+## Phase 5: Cleanup and Optimization
+
+**Goal**: Remove legacy code and optimize Variable usage.
+
+### Tasks:
+1. Remove deprecated factory functions
+2. Remove special array classes entirely
+3. Optimize Variable creation/access
+4. Update documentation
+5. Performance profiling and optimization
 
 ## The Ultimate Goal
 

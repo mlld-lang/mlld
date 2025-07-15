@@ -237,18 +237,106 @@ export function extractVariableValue(variable: Variable): any {
 - ✅ Added comprehensive tests for all type guards
 - ✅ All 818 tests pass
 
-## Phase 2: Migrate Special Classes to Variables
+## Phase 2: Migrate Special Classes to Variables ✅ COMPLETED
 
-Now that we have the metadata infrastructure in place, we can start migrating the special classes to use the Variable system directly.
+Successfully migrated from special array classes to Variables with full behavior preservation.
 
-### Step 1: Create Migration Helper
-Create a utility to help migrate from special classes to Variables while preserving behaviors.
+### Step 1: Created Migration Helper ✅
+**File**: `interpreter/utils/variable-migration.ts`
 
-### Step 2: Update Content Loader to Return Variables
-Modify `content-loader.ts` to return Variables directly instead of special array classes.
+Key functions implemented:
+- `extractVariableValue()` - Extracts value while preserving behaviors via defineProperty
+- `createRenamedContentVariable()` - Creates Variable with RenamedContentArray behavior
+- `createLoadContentResultVariable()` - Creates Variable with LoadContentResultArray behavior
+- Helper functions: `hasVariableMetadata()`, `getVariableMetadata()`
 
-### Step 3: Update Consumers
-Update all places that consume LoadContentResult arrays to work with Variables.
+### Step 2: Updated Content Loader ✅
+**File**: `interpreter/eval/content-loader.ts`
 
-### Step 4: Remove Special Classes
-Once all consumers are updated, remove the special array classes entirely.
+Changes:
+- Removed imports of deprecated factory functions
+- Now uses `createRenamedContentVariable()` for renamed sections
+- Now uses `createLoadContentResultVariable()` for glob results
+- Arrays are extracted with behaviors preserved via `extractVariableValue()`
+
+### Step 3: Updated Consumers ✅
+**Files**: `core/types/load-content.ts`
+
+Type guards updated:
+- `isRenamedContentArray` - Checks `__variable.metadata.arrayType` first
+- `isLoadContentResultArray` - Checks `__variable.metadata.arrayType` first
+- Removed dependency on factory function imports
+- Added fallback behavior detection for untagged arrays
+
+### Step 4: Deprecated Special Classes ✅
+**File**: `interpreter/eval/load-content.ts`
+
+Status:
+- Factory functions marked with `@deprecated`
+- Still exist for backward compatibility
+- No longer imported or used anywhere
+- Can be removed in Phase 5
+
+### Results
+- All 821 tests passing
+- Zero breaking changes
+- Type detection now O(1) via metadata
+- Foundation laid for broader Variable flow
+
+## Phase 3: Update Core Resolution 🚀 NEXT
+
+**Goal**: Make Variables flow through the interpreter instead of extracting values early.
+
+### Step 1: Document Resolution Points
+Create `RESOLUTION-POINTS.md` mapping where values are extracted:
+
+**Key areas to investigate**:
+```typescript
+// 1. Variable resolution in interpreter
+resolveVariableValue(variable: Variable): any  // Should return Variable
+
+// 2. Template interpolation
+interpolate(nodes: any[], env: Environment): Promise<string>  // Extract only at end
+
+// 3. Array/object evaluation
+evaluateArrayItem(item: any, env: Environment): Promise<any>  // Preserve Variables
+
+// 4. Command execution
+executeCommand(cmd: string, env: Environment): Promise<string>  // May need values
+```
+
+### Step 2: Design Variable Flow Rules
+
+**When to preserve Variables**:
+- Variable-to-variable assignment
+- Array/object member storage
+- Function parameter passing
+- Cross-file imports
+
+**When to extract values**:
+- String interpolation (final output)
+- Command execution (shell needs strings)
+- File I/O operations
+- External API calls
+
+### Step 3: Update Core Functions
+
+**Priority order**:
+1. `resolveVariableValue()` - Return Variables instead of values
+2. `evaluateArrayItem()` - Preserve Variable wrappers
+3. `interpolate()` - Extract only when building final string
+4. Variable assignment in `var.ts` - Already handles Variables well
+
+### Step 4: Handle Edge Cases
+
+**Complex scenarios**:
+- Variables containing Variables
+- Lazy evaluation preservation
+- Circular reference detection
+- Performance optimization
+
+### Success Metrics
+- Type information available deeper in call stack
+- Better error messages with actual types
+- No performance degradation
+- All tests continue passing
