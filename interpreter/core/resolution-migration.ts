@@ -8,6 +8,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { ResolutionContext } from '@interpreter/utils/variable-resolution';
 import { resolveVariableValue as resolveVariableValueOriginal } from './interpreter';
 import { resolveVariableValue as resolveVariableValueEnhanced } from './interpreter-enhanced';
+import { isEnhancedResolutionEnabled } from '@interpreter/utils/enhanced-mode-config';
 
 /**
  * Wrapper function that delegates to either original or enhanced resolution
@@ -31,20 +32,18 @@ export async function resolveVariableValue(
 /**
  * Helper to determine if enhanced resolution is enabled
  */
-export function isEnhancedResolutionEnabled(): boolean {
-  return process.env.MLLD_ENHANCED_RESOLUTION === 'true';
-}
+export { isEnhancedResolutionEnabled } from '@interpreter/utils/enhanced-mode-config';
 
 /**
  * Enable enhanced resolution for testing
  */
 export function enableEnhancedResolution(): void {
-  process.env.MLLD_ENHANCED_RESOLUTION = 'true';
+  delete process.env.MLLD_ENHANCED_RESOLUTION; // Remove any 'false' setting
 }
 
 /**
  * Disable enhanced resolution
  */
 export function disableEnhancedResolution(): void {
-  delete process.env.MLLD_ENHANCED_RESOLUTION;
+  process.env.MLLD_ENHANCED_RESOLUTION = 'false';
 }

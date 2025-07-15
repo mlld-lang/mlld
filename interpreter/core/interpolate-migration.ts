@@ -7,6 +7,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import { ResolutionContext } from '@interpreter/utils/variable-resolution';
 import { interpolate as interpolateOriginal } from './interpreter';
 import { interpolateWithContext } from './interpreter-enhanced';
+import { isEnhancedInterpolationEnabled } from '@interpreter/utils/enhanced-mode-config';
 
 /**
  * Enhanced interpolate that can preserve Variables based on feature flag
@@ -43,23 +44,19 @@ export async function interpolateEnhanced(
   return interpolateWithContext(nodes, env, context);
 }
 
-/**
- * Helper to check if enhanced interpolation is enabled
- */
-export function isEnhancedInterpolationEnabled(): boolean {
-  return process.env.MLLD_ENHANCED_INTERPOLATION === 'true';
-}
+// Re-export for convenience
+export { isEnhancedInterpolationEnabled } from '@interpreter/utils/enhanced-mode-config';
 
 /**
  * Enable enhanced interpolation
  */
 export function enableEnhancedInterpolation(): void {
-  process.env.MLLD_ENHANCED_INTERPOLATION = 'true';
+  delete process.env.MLLD_ENHANCED_INTERPOLATION; // Remove any 'false' setting
 }
 
 /**
  * Disable enhanced interpolation
  */
 export function disableEnhancedInterpolation(): void {
-  delete process.env.MLLD_ENHANCED_INTERPOLATION;
+  process.env.MLLD_ENHANCED_INTERPOLATION = 'false';
 }

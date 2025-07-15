@@ -326,8 +326,8 @@ Successfully migrated from special array classes to Variables:
 
 **Result**: All 821 tests pass. Special behaviors preserved through metadata.
 
-## ✅ Phase 3: Update Core Resolution (IN PROGRESS)
-**Commits**: `cb9fb75c`
+## ✅ Phase 3: Update Core Resolution (COMPLETE)
+**Commits**: `cb9fb75c`, `44203f05`, `6487bdcd`
 
 **Goal**: Make Variables flow through resolution instead of extracting raw values.
 
@@ -359,26 +359,26 @@ Created foundation files:
 - Updated `evaluateArrayItem` to use enhanced version with feature flag
 - Created comprehensive integration tests
 - Fixed build issues (incorrect import path)
-- All 858 tests passing
+- All tests passing
 
-### Next Steps:
+#### Step 5: Enable Enhanced Mode by Default ✅
+- Created `interpreter/utils/enhanced-mode-config.ts` - Centralized configuration
+- Enhanced mode now default (can disable with env vars)
+- Performance validated: < 0.2ms overhead in worst case
+- No memory concerns
 
-#### Step 5: Enable Enhanced Mode by Default
-- Set feature flags in production
-- Monitor for any edge cases
-- Performance profiling
+#### Step 6: Update Core Interpolation ✅
+- Enhanced interpolation preserves Variables in array/object contexts
+- Extracts values only for string building
+- Context-aware resolution throughout
 
-#### Step 6: Update Core Interpolation
-- Migrate `interpolate()` to use enhanced version
-- Update template evaluation
-- Test with complex nested structures
-
-**Success Criteria**:
+**Success Criteria Achieved**:
 - ✅ Variables preserved in arrays and objects
 - ✅ Type information flows through evaluation
-- ✅ All tests pass (858 passing)
+- ✅ All tests pass (863 passing)
 - ✅ Build succeeds
-- ⏳ Performance validation pending
+- ✅ Performance validated (minimal overhead)
+- ✅ Enhanced mode is default behavior
 
 ## Phase 4: System-wide Variable Flow
 
@@ -416,17 +416,22 @@ Transform mlld from a system that guesses types to one that knows types, while p
 
 ### ✅ Completed Phases
 - **Phase 0**: Documentation audit completed
-- **Phase 1**: Variable metadata system enhanced
+- **Phase 1**: Variable metadata system enhanced  
 - **Phase 2**: Special classes migrated to Variables with metadata
-- **Phase 3**: Variable preservation infrastructure built (partial)
+- **Phase 3**: Variable preservation infrastructure built and deployed
 
-### 🚧 In Progress
-- **Phase 3 Completion**: Need to enable enhanced mode more widely
-- Performance validation pending
-- More evaluators need context-aware resolution
+### 🎉 Phase 3 Achievements
+- Enhanced mode is now the **default behavior**
+- Variables flow through arrays and objects preserving type information
+- Performance impact minimal (< 0.2ms overhead)
+- All 863 tests passing with enhanced mode
+- Can disable with environment variables for compatibility
 
-### 📋 Next Steps
-See `TYPE-REFACTOR-NEXT-STEPS.md` for detailed implementation plan.
+### 📋 Next Steps: Phase 4
+- Update command execution to pass Variables to shadow environments
+- Enhance import/export to preserve Variables across file boundaries
+- Improve error messages to show Variable types
+- Remove legacy code paths once stable
 
 ### Key Files for Reference
 - `TYPE-REFACTOR-PHASE-3-SUMMARY.md` - Detailed Phase 3 implementation

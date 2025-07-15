@@ -5,6 +5,7 @@
 
 import { evaluateArrayItemEnhanced } from './var-enhanced';
 import { Environment } from '@interpreter/env/Environment';
+import { isEnhancedArraysEnabled } from '@interpreter/utils/enhanced-mode-config';
 
 /**
  * Wrapper for evaluateArrayItem that conditionally uses enhanced version
@@ -26,19 +27,17 @@ export async function evaluateArrayItemMigration(
  * Enable enhanced array evaluation
  */
 export function enableEnhancedArrays(): void {
-  process.env.MLLD_ENHANCED_ARRAYS = 'true';
+  delete process.env.MLLD_ENHANCED_ARRAYS; // Remove any 'false' setting
 }
 
 /**
  * Disable enhanced array evaluation
  */
 export function disableEnhancedArrays(): void {
-  delete process.env.MLLD_ENHANCED_ARRAYS;
+  process.env.MLLD_ENHANCED_ARRAYS = 'false';
 }
 
 /**
  * Check if enhanced arrays are enabled
  */
-export function isEnhancedArraysEnabled(): boolean {
-  return process.env.MLLD_ENHANCED_ARRAYS === 'true';
-}
+export { isEnhancedArraysEnabled } from '@interpreter/utils/enhanced-mode-config';
