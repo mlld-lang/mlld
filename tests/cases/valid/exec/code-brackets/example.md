@@ -29,7 +29,7 @@
 /var @arrayTestResult = @arrayTest()
 /var @regexTestResult = @regexTest(@contentInput)
 
-/show ::Bracket check: {{bracketCheck}}::
-/show ::Has brackets: {{hasBracketsResult}}::  
-/show ::Array test: {{arrayTestResult}}::
-/show ::Regex test: {{regexTestResult}}::
+/show :::Bracket check: {{bracketCheck}}:::
+/show :::Has brackets: {{hasBracketsResult}}:::  
+/show :::Array test: {{arrayTestResult}}:::
+/show :::Regex test: {{regexTestResult}}:::

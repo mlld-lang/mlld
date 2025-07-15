@@ -14,7 +14,7 @@ api: "v2"
 metadata: null
 }
 
-/show ::Application Config:
+/show :::Application Config:
 Name: {{config.name}}
 Version: {{config.version}}
 Description: {{config.description}}
@@ -23,4 +23,4 @@ Log Level: {{config.settings.logLevel}}
 Auth: {{config.settings.features.auth}}
 Cache: {{config.settings.features.cache}}
 API: {{config.settings.features.api}}
-Metadata: {{config.metadata}}::
+Metadata: {{config.metadata}}:::

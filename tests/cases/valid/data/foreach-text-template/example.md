@@ -3,8 +3,8 @@
 /var @names = ["Alice", "Bob", "Charlie"]
 /var @greetings = ["Hello", "Hi", "Hey"]
 
-/exe @greeting(name) = ::{{name}}, welcome to the team!::
-/exe @custom_greeting(greet, name) = ::{{greet}}, {{name}}! Nice to see you.::
+/exe @greeting(name) = :::{{name}}, welcome to the team!:::
+/exe @custom_greeting(greet, name) = :::{{greet}}, {{name}}! Nice to see you.:::
 
 # Single parameter text template
 /var @welcomes = foreach @greeting(@names)

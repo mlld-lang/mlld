@@ -4,7 +4,7 @@ This test verifies that template executables can be invoked with run.
 
 ## Define executables
 /exe @greet(name) = {echo "Hello, @name!"}
-/exe @templateGreet(name) = ::Template says: {{name}}!::
+/exe @templateGreet(name) = :::Template says: {{name}}!:::
 /exe @backtickGreet(name) = `Backtick says: @name!`
 
 ## Test run with different exec types

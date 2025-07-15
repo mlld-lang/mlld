@@ -6,6 +6,6 @@ Template syntax like `{{myvar}}` only works inside template content (within `::.
 
 **To fix this:**
 ```mlld
-/var @greeting = ::This line uses template syntax: {{myvar}}::
+/var @greeting = :::This line uses template syntax: {{myvar}}:::
 /show @greeting
 ```

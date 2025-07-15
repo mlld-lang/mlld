@@ -65,7 +65,7 @@ describe('Mlld API', () => {
     it('should handle template interpolation', async () => {
       const content = `
 /var @name = "World"
-/var @greeting = ::Hello, {{name}}!::
+/var @greeting = :::Hello, {{name}}!:::
 /show @greeting
       `.trim();
       const result = await processMlld(content);

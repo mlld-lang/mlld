@@ -22,8 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - In templates: `` `Data: @myvar|@json` ``
   - In quotes: `"Name: @user.name|@upper"`
   - Transforms can be built-in or imported from modules
+- **Triple Colon Template Syntax**: New `:::...:::` syntax for `{{var}}` interpolation
+  - Addresses the common case of needing backticks inside templates
+  - Example: `:::Code example: `getData()` returns {{data}}:::`
+  - Double colon `::...::` syntax now uses `@var` interpolation instead of `{{var}}`
 
 ### Changed
+- **Template Interpolation Syntax**: Double colon `::...::` now uses `@var` interpolation instead of `{{var}}`
+  - **Migration required**: Change `::Hello {{name}}::` to `:::Hello {{name}}:::`
+  - Double colon templates can now include backticks: `::The `function()` returns @value::`
+  - This change enables technical documentation with inline code examples
 - **Removed Foreach Section Pattern**: The `foreach <@array # section>` syntax has been removed
   - Migration: Use `<*.md # section> as "template"` instead
   - The new file interpolation syntax completely supersedes this pattern

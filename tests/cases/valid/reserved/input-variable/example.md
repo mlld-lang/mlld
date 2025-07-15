@@ -6,7 +6,7 @@ This tests the @input reserved variable with various usage patterns.
 Input content: /show @input
 
 ## Template Usage
-/var @greeting = ::Received input: {{input}}::
+/var @greeting = :::Received input: {{input}}:::
 /show @greeting
 
 ## Import from @input

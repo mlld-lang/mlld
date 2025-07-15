@@ -10,4 +10,4 @@ mode: run {echo "production"}
   },
 debug: true
 }
-/show ::Server running on {{config.server.host}}:{{config.server.port}}::
+/show :::Server running on {{config.server.host}}:{{config.server.port}}:::

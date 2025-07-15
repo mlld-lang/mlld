@@ -13,4 +13,4 @@
 /show `Backtick template: @greeting, @name!`
 
 ## Double bracket template (with curly braces interpolation)
-/show ::Double bracket: {{greeting}}, {{name}}!::
+/show :::Double bracket: {{greeting}}, {{name}}!:::

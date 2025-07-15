@@ -80,7 +80,7 @@ describe('Grammar-Type System Alignment', () => {
 
   describe('Variable Reference Type Validation', () => {
     it('should produce valid VariableReferenceNode structure', async () => {
-      const input = '/var @message = ::Hello {{user.name}}!::';
+      const input = '/var @message = :::Hello {{user.name}}!:::';
       const result = await parse(input);
       const ast = result.ast;
       

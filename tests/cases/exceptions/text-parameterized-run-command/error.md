@@ -13,5 +13,5 @@ The syntax `@exec codecat(dir) = run {...}` is invalid. For parameterized comman
 
 **Alternative for text templates:**
 ```mlld
-/exe @greeting(name) = ::Hello {{name}}!::
+/exe @greeting(name) = :::Hello {{name}}!:::
 ```

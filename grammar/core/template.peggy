@@ -29,9 +29,11 @@ TemplateCore
       );
       
       // Use wrapper type to determine if this is template content
-      // Double brackets [[...]] always indicate template content
+      // Double brackets [[...]], double colons ::...::, and triple colons :::...::: all indicate template content
       // For now, use direct string comparison rather than WrapperType constant
-      const isTemplateContent = template.wrapperType === 'doubleBracket';
+      const isTemplateContent = template.wrapperType === 'doubleBracket' || 
+                               template.wrapperType === 'doubleColon' || 
+                               template.wrapperType === 'tripleColon';
     
       // Structure for outputting a template
       return {
@@ -45,7 +47,8 @@ TemplateCore
         },
         meta: {
           ...helpers.createTemplateMetadata(template.parts, template.wrapperType),
-          wrapperType: template.wrapperType
+          wrapperType: template.wrapperType,
+          isTemplateContent: isTemplateContent
         }
       };
     }

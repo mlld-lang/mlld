@@ -179,7 +179,7 @@ describe('Add Directive', () => {
   });
   
   test('Template add with variable interpolation', async () => {
-    const content = `/show ::Hello {{name}}!::`;
+    const content = `/show :::Hello {{name}}!:::`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -194,7 +194,7 @@ describe('Add Directive', () => {
     expect(directiveNode.values).toHaveProperty('content');
     expect(Array.isArray(directiveNode.values.content)).toBe(true);
     
-    // Verify content includes variable nodes - normalized to @name in raw
+    // Verify content includes variable nodes - {{name}} is normalized to @name in raw
     const contentText = directiveNode.raw.content;
     expect(contentText.includes('@name')).toBe(true);
   });

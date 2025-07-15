@@ -20,4 +20,4 @@ This test verifies that exe parameters can be defined with or without @ prefix.
 
 /var @sum1 = @addAt(5, 3)
 /var @sum2 = @addPlain(5, 3)
-/show ::Sum with @: {{sum1}}, Sum without @: {{sum2}}::
+/show :::Sum with @: {{sum1}}, Sum without @: {{sum2}}:::

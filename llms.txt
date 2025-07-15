@@ -89,7 +89,8 @@ This design keeps documents readable as regular Markdown while enabling programm
 - Backtick templates: `` `Hello @name!` `` - @name IS interpolated (PREFERRED)
 - String literals: `/var @msg = "Hello @name"` - @name is NOT interpolated (literal text)
 - Command context: `{echo "Hello @name"}` - @name IS interpolated (variable value)
-- Double-bracket escape hatch: `::Hello {{name}}::` - For social media with many @ symbols
+- Double-colon escape: `::Hello @name!::` - For text with backticks (uses @var interpolation)
+- Triple-colon escape: `:::Hello {{name}}!:::` - For social media with many @ symbols
 
 ### 6. Field Access Rules
 ```mlld
@@ -405,15 +406,22 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /show `Count: @count`  << Shows "Count: 42" (number → string)
 ```
 
-### Double-bracket templates (ESCAPE HATCH ONLY)
+### Double-colon templates (ESCAPE for backticks)
 ```mlld
->> ONLY use ::...:: when you have many @ symbols to escape (social media)
-/var @tweet = ::Hey @{{handle}}, check out @{{otherHandle}}'s post!::
+>> Use ::...:: when you need backticks in your template
+/var @docs = ::The `getData()` function returns @dataType::
+/var @example = ::To use this feature, run `npm install` and then call `init(@name)`::
 
->> Limitations of ::...:: templates:
->> - Cannot call @executables
->> - More verbose {{variable}} syntax
->> - Only for avoiding @ symbol conflicts
+>> Double colon uses @var interpolation (same as backticks)
+```
+
+### Triple-colon templates (ESCAPE for @ symbols)  
+```mlld
+>> Use :::...::: when you have many @ symbols to escape (social media)
+/var @tweet = :::Hey @alice, check out @bob's post about {{topic}}!:::
+/var @mention = :::@{{handle}} just posted: "{{message}}":::
+
+>> Triple colon uses {{var}} interpolation to avoid @ conflicts
 ```
 
 ### @ interpolation in double quotes
@@ -633,12 +641,12 @@ Understanding when to use `run` vs `sh` is critical for shell commands:
 
 ### Template with many @ symbols
 ```mlld
->> Use ::...:: when you have many @ symbols to escape
-/var @twitterTemplate = ::
+>> Use :::...::: when you have many @ symbols to escape
+/var @twitterTemplate = :::
   Hey @{{handle}}, love your work!
   @{{otherHandle}} you should check this out.
   Reply to this tweet @{{originalAuthor}}
-::
+:::
 ```
 
 ### Field access
@@ -997,9 +1005,10 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 
 ### 4. Mixing Variable Syntaxes
 ```mlld
-❌ /show ::Hello @name::           # Wrong syntax in template
+❌ /show :::Hello @name:::         # Wrong syntax in triple-colon template
 ❌ /run {echo "{{message}}"}       # Wrong syntax in command
-✅ /show ::Hello {{name}}::        # Correct template syntax
+✅ /show ::Hello @name::           # Correct double-colon syntax
+✅ /show :::Hello {{name}}:::      # Correct triple-colon syntax
 ✅ /run {echo "@message"}          # Correct command syntax
 
 >> String literal vs command context example:
@@ -1493,16 +1502,18 @@ Understanding where different variable syntaxes work is crucial:
 
 | Context | Syntax | Example | Notes |
 |---------|--------|---------|-------|
-| Templates `::...::` | `{{variable}}` | `::Hello {{name}}!::` | Double brackets, double braces |
-| Backtick templates | `@variable` | `` `Hello @name!` `` | Simpler template syntax |
+| Double-colon `::...::` | `@variable` | `::Hello @name!::` | When you need backticks |
+| Triple-colon `:::...:::` | `{{variable}}` | `:::Hello {{name}}!:::` | When you have many @ symbols |
+| Backtick templates | `@variable` | `` `Hello @name!` `` | Primary template syntax |
 | Commands `{...}` | `@variable` | `{echo "@message"}` | @ prefix for interpolation |
 | JavaScript | Plain names | `{(@array.join(@sep))}` | Parameters are JS variables |
 | String literals | No interpolation | `"Hello @name"` | @name is literal text |
 | Directive level | `@variable` | `/show @greeting` | Direct variable reference |
 
 ### Key Rules:
-- **In templates**: Always use `{{variable}}` or `{{object.field}}`
-- **In backtick templates**: Use `@variable` or `@object.field`
+- **In backtick templates**: Use `@variable` or `@object.field` (primary syntax)
+- **In double-colon templates**: Use `@variable` or `@object.field` (for text with backticks)
+- **In triple-colon templates**: Use `{{variable}}` or `{{object.field}}` (for text with @ symbols)
 - **In commands**: Always use `@variable` or `@object.field`
 - **In JavaScript**: Parameters become plain JavaScript variables
 - **String assignments**: Variables are NOT interpolated (they're literals)
