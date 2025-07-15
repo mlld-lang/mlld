@@ -91,7 +91,7 @@ export async function evaluateArrayItemEnhanced(item: any, env: Environment): Pr
       const sectionFileContent = await env.readFile(sectionFilePath);
       
       try {
-        const { extractSection } = await import('../utils/markdown');
+        const { extractSection } = await import('./show');
         const { extractEnhancedSection } = await import('../utils/markdown-enhanced');
         
         return await extractEnhancedSection(sectionFileContent, sectionName, {
@@ -101,7 +101,7 @@ export async function evaluateArrayItemEnhanced(item: any, env: Environment): Pr
         });
       } catch (error) {
         // Fallback to basic extraction
-        const { extractSection } = await import('../utils/markdown');
+        const { extractSection } = await import('./show');
         return extractSection(sectionFileContent, sectionName);
       }
 

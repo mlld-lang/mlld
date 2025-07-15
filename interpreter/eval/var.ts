@@ -743,6 +743,13 @@ function hasComplexArrayItems(items: any[]): boolean {
  * Evaluate an array item based on its type
  */
 async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
+  // If enhanced arrays are enabled, use the enhanced version
+  if (process.env.MLLD_ENHANCED_ARRAYS === 'true') {
+    const { evaluateArrayItemEnhanced } = await import('./var-enhanced');
+    return evaluateArrayItemEnhanced(item, env);
+  }
+  
+  // Original implementation
   if (!item || typeof item !== 'object') {
     return item;
   }

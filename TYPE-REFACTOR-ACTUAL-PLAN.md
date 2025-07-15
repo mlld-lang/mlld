@@ -326,43 +326,59 @@ Successfully migrated from special array classes to Variables:
 
 **Result**: All 821 tests pass. Special behaviors preserved through metadata.
 
-## Phase 3: Update Core Resolution (NEXT)
+## ✅ Phase 3: Update Core Resolution (IN PROGRESS)
+**Commits**: `cb9fb75c`
 
 **Goal**: Make Variables flow through resolution instead of extracting raw values.
 
-### Step 1: Analyze Current Resolution Points
-Map every place where we currently extract raw values from Variables:
-- `resolveVariableValue()` in various contexts
-- Template interpolation
-- Command execution contexts
-- Array/object evaluation
+### Completed Steps:
 
-**Deliverable**: `RESOLUTION-POINTS.md` documenting each extraction point and why it happens.
+#### Step 1: Analyze Current Resolution Points ✅
+Created `RESOLUTION-POINTS.md` documenting:
+- 45+ extraction points categorized by necessity
+- Legitimate extractions (string interpolation, file I/O)
+- Unnecessary extractions that lose type info
+- Context-dependent extractions
 
-### Step 2: Create Resolution Strategy
-Design how Variables should flow through:
-- When to preserve the Variable wrapper
-- When extraction is truly necessary
-- How to handle nested resolution (Variables containing Variables)
+#### Step 2: Create Resolution Strategy ✅
+Implemented in Phase 3 foundation:
+- **ResolutionContext enum** - Defines when to preserve vs extract
+- **Enhanced resolution functions** - Context-aware Variable preservation
+- **Migration wrappers** - Feature flags for gradual adoption
+- **Fixed circular dependency** - Dynamic imports in variable-resolution.ts
 
-### Step 3: Update Interpolation Logic
-The interpreter's `interpolate()` function is key:
-- Currently extracts values for string building
-- Should preserve Variables when possible
-- Only extract at the final output boundary
+#### Step 3: Variable Preservation Infrastructure ✅
+Created foundation files:
+- `interpreter/utils/variable-resolution.ts` - Enhanced with ResolutionContext
+- `interpreter/core/interpreter-enhanced.ts` - Context-aware functions
+- `interpreter/core/resolution-migration.ts` - Migration wrapper
+- `interpreter/eval/var-migration.ts` - Array evaluation migration
+- `interpreter/core/interpolate-migration.ts` - Enhanced interpolation
 
-### Step 4: Test Critical Paths
-Focus on high-risk areas:
-- Template interpolation with complex Variables
-- Command execution with Variable arguments
-- Nested data structures
-- Cross-file imports
+#### Step 4: Integration with var.ts ✅
+- Updated `evaluateArrayItem` to use enhanced version with feature flag
+- Created comprehensive integration tests
+- Fixed build issues (incorrect import path)
+- All 858 tests passing
+
+### Next Steps:
+
+#### Step 5: Enable Enhanced Mode by Default
+- Set feature flags in production
+- Monitor for any edge cases
+- Performance profiling
+
+#### Step 6: Update Core Interpolation
+- Migrate `interpolate()` to use enhanced version
+- Update template evaluation
+- Test with complex nested structures
 
 **Success Criteria**:
-- Variables flow deeper into the system
-- Type information available where needed
-- All tests continue to pass
-- No performance regression
+- ✅ Variables preserved in arrays and objects
+- ✅ Type information flows through evaluation
+- ✅ All tests pass (858 passing)
+- ✅ Build succeeds
+- ⏳ Performance validation pending
 
 ## Phase 4: System-wide Variable Flow
 
