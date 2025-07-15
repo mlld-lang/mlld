@@ -385,7 +385,12 @@ Created foundation files:
 **Goal**: Update all consumers to work with Variables natively.
 
 ### Areas to Update:
-1. **Command Execution** - Pass Variables to shadow environments
+1. **Command Execution** - Pass Variables to shadow environments ⚠️ Partially Complete
+   - ✅ JavaScript shadow environment support with proxies
+   - ✅ Type introspection available via `__mlld_*` properties
+   - ⚠️ Disabled by default due to primitive type handling
+   - 🔄 NodeExecutor pending
+   - 🔄 Python/Bash pending
 2. **Template System** - Preserve Variables in template AST
 3. **Import System** - Return Variables from imports
 4. **Output System** - Format Variables based on type

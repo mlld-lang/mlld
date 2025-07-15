@@ -10,6 +10,17 @@ import { applyWithClause } from './with-clause';
 import { MlldInterpreterError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
+import { prepareValueForShadow } from '../env/variable-proxy';
+
+/**
+ * Check if enhanced Variable passing to shadow environments is enabled
+ */
+function isEnhancedVariablePassingEnabled(): boolean {
+  // Check environment variable
+  const envVar = process.env.MLLD_ENHANCED_VARIABLE_PASSING;
+  // Default to false until we fix primitive handling
+  return envVar === 'true';
+}
 
 /**
  * Evaluate an ExecInvocation node
@@ -298,6 +309,21 @@ export async function evaluateExecInvocation(
     evaluatedArgs.push(argValueAny);
   }
   
+  // Track original Variables for arguments
+  const originalVariables: (any | undefined)[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg && typeof arg === 'object' && 'type' in arg && arg.type === 'VariableReference') {
+      const varRef = arg as any;
+      const varName = varRef.identifier;
+      const variable = env.getVariable(varName);
+      if (variable && !varRef.fields) {
+        // Only preserve if no field access
+        originalVariables[i] = variable;
+      }
+    }
+  }
+  
   // Bind evaluated arguments to parameters
   for (let i = 0; i < params.length; i++) {
     const paramName = params[i];
@@ -307,8 +333,22 @@ export async function evaluateExecInvocation(
     if (argValue !== undefined) {
       let paramVar;
       
+      // Check if we have the original Variable
+      const originalVar = originalVariables[i];
+      if (originalVar) {
+        // Use the original Variable directly, just update the name
+        paramVar = {
+          ...originalVar,
+          name: paramName,
+          metadata: {
+            ...originalVar.metadata,
+            isSystem: true,
+            isParameter: true
+          }
+        };
+      }
       // Create appropriate variable type based on actual data
-      if (typeof argValue === 'object' && argValue !== null && !Array.isArray(argValue)) {
+      else if (typeof argValue === 'object' && argValue !== null && !Array.isArray(argValue)) {
         // Object type - preserve structure
         paramVar = createObjectVariable(
           paramName,
@@ -440,6 +480,18 @@ export async function evaluateExecInvocation(
       if (paramVar && paramVar.type === 'pipeline-input') {
         // Pass the pipeline input object directly for code execution
         codeParams[paramName] = paramVar.value;
+      } else if (isEnhancedVariablePassingEnabled() && paramVar) {
+        // Enhanced mode: Pass Variable as proxy to shadow environment
+        codeParams[paramName] = prepareValueForShadow(paramVar);
+        
+        if (process.env.DEBUG_EXEC || process.env.MLLD_DEBUG === 'true') {
+          logger.debug(`Enhanced Variable passing for ${paramName}:`, {
+            variableType: paramVar.type,
+            variableSubtype: paramVar.subtype,
+            hasMetadata: !!paramVar.metadata,
+            enhancedMode: true
+          });
+        }
       } else if (paramVar && paramVar.metadata?.actualValue !== undefined) {
         // Use the actual value from the parameter variable if available
         // Normalize arrays to ensure plain JavaScript values
@@ -651,7 +703,8 @@ export async function evaluateExecInvocation(
     env,
     // For stdout, convert the parsed value back to string for backward compatibility
     // but preserve the actual value in the value field for truthiness checks
-    stdout: typeof result === 'string' ? result : String(result),
+    stdout: typeof result === 'string' ? result : 
+            (typeof result === 'object' && result !== null ? JSON.stringify(result) : String(result)),
     stderr: '',
     exitCode: 0
   };

@@ -1,6 +1,7 @@
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
+import { createMlldHelpers } from '../variable-proxy';
 
 export interface ShadowEnvironment {
   /**
@@ -87,6 +88,15 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       // Then prepend mlld built-in values to the function body
       if (!params || !params['mlld_now']) {
         functionBody = `const mlld_now = () => new Date().toISOString();\n${functionBody}`;
+      }
+      
+      // Add mlld helpers if enhanced mode is enabled
+      const isEnhancedMode = process.env.MLLD_ENHANCED_VARIABLE_PASSING === 'true';
+      if (isEnhancedMode && (!params || !params['mlld'])) {
+        // Create mlld helpers and add to params
+        const mlldHelpers = createMlldHelpers();
+        allParamNames.push('mlld');
+        allParamValues.push(mlldHelpers);
       }
 
       // Debug exec-code issue
