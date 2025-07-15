@@ -14,6 +14,7 @@ import { PathService } from '@services/fs/PathService';
 import { interpret } from '@interpreter/index';
 import { cliLogger } from '@core/utils/logger';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
+import { PathContextBuilder } from '@core/services/PathContextService';
 
 export interface RunOptions {
   // Future options like --watch, --env, etc
@@ -122,9 +123,15 @@ export class RunCommand {
       const fileSystem = new NodeFileSystem();
       const pathService = new PathService();
       
+      // Build PathContext for the script
+      const pathContext = await PathContextBuilder.fromFile(
+        scriptPath,
+        fileSystem
+      );
+      
       // Run the script
       const result = await interpret(content, {
-        basePath: path.dirname(scriptPath),
+        pathContext,
         filePath: scriptPath,
         format: 'markdown',
         fileSystem,

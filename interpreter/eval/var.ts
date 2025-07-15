@@ -132,6 +132,12 @@ export async function evaluateVar(
     
     if (isComplex) {
       // For complex arrays, store the AST node for lazy evaluation
+      if (process.env.MLLD_DEBUG === 'true') {
+        logger.debug('var.ts: Storing complex array AST for lazy evaluation:', {
+          identifier,
+          valueNode
+        });
+      }
       resolvedValue = valueNode;
     } else {
       // Process simple array items immediately
@@ -446,6 +452,18 @@ export async function evaluateVar(
     
   } else if (valueNode.type === 'array') {
     const isComplex = hasComplexArrayItems(valueNode.items || valueNode.elements || []);
+    
+    // Debug logging
+    if (process.env.MLLD_DEBUG === 'true') {
+      logger.debug('var.ts: Creating array variable:', {
+        identifier,
+        isComplex,
+        resolvedValueType: typeof resolvedValue,
+        resolvedValueIsArray: Array.isArray(resolvedValue),
+        resolvedValue
+      });
+    }
+    
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);
     
   } else if (valueNode.type === 'object') {
@@ -683,7 +701,8 @@ function hasComplexArrayItems(items: any[]): boolean {
         item.type === 'object' ||
         item.type === 'path' ||
         item.type === 'section' ||
-        item.type === 'load-content'
+        item.type === 'load-content' ||
+        item.type === 'ExecInvocation'
       )) {
         return true;
       }

@@ -120,6 +120,16 @@ export class CollectionEvaluator {
   private async evaluateArray(value: DataArrayValue, env: Environment): Promise<any[]> {
     const evaluatedElements: any[] = [];
     
+    // Debug logging
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('CollectionEvaluator.evaluateArray:', {
+        hasItems: !!value.items,
+        itemsLength: value.items?.length || 0,
+        valueKeys: Object.keys(value),
+        firstItem: value.items?.[0]
+      });
+    }
+    
     for (let i = 0; i < value.items.length; i++) {
       try {
         const evaluatedItem = await this.evaluateDataValue(value.items[i], env);

@@ -8,6 +8,7 @@ import type { FuzzyMatchConfig } from '@core/resolvers/types';
 import { findProjectRoot } from '@core/utils/findProjectRoot';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 import * as path from 'path';
+import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 
 import type { ResolvedURLConfig } from '@core/config/types';
 
@@ -24,8 +25,9 @@ interface CommandExecutionOptions {
  * Options for the interpreter
  */
 export interface InterpretOptions {
-  basePath?: string;
+  basePath?: string; // @deprecated Use filePath or pathContext instead
   filePath?: string; // Current file being processed (for error reporting)
+  pathContext?: PathContext; // Explicit path context
   strict?: boolean;
   format?: 'markdown' | 'xml';
   fileSystem: IFileSystemService;
@@ -173,26 +175,36 @@ export async function interpret(
   
   const ast = parseResult.ast;
   
-  // Find the project root for lock file discovery
-  // If we have a filePath, start from its directory, otherwise use basePath
-  const basePath = options.basePath || process.cwd();
-  const searchStartPath = options.filePath 
-    ? path.dirname(path.resolve(basePath, options.filePath))
-    : basePath;
-  const projectRoot = await findProjectRoot(searchStartPath, options.fileSystem);
+  // Build or use provided PathContext
+  let pathContext: PathContext;
   
-  // Create the root environment with the project root
+  if (options.pathContext) {
+    // Use explicitly provided context
+    pathContext = options.pathContext;
+  } else if (options.filePath) {
+    // Build context from file path
+    pathContext = await PathContextBuilder.fromFile(
+      options.filePath,
+      options.fileSystem
+    );
+  } else {
+    // Build default context (stdin or REPL mode)
+    const basePath = options.basePath || process.cwd();
+    const projectRoot = await findProjectRoot(basePath, options.fileSystem);
+    pathContext = {
+      projectRoot,
+      fileDirectory: basePath,
+      executionDirectory: basePath,
+      invocationDirectory: process.cwd()
+    };
+  }
+  
+  // Create the root environment with PathContext
   const env = new Environment(
     options.fileSystem,
     options.pathService,
-    projectRoot
+    pathContext
   );
-  
-  // If the project root is different from basePath, we may need to update
-  // the current file path to be relative to the project root
-  if (projectRoot !== basePath && options.filePath) {
-    // Keep the filePath as-is, it's already absolute or relative to basePath
-  }
   
   // Register built-in resolvers (async initialization)
   await env.registerBuiltinResolvers();

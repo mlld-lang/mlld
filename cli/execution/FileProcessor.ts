@@ -11,6 +11,7 @@ import type { ResolvedURLConfig } from '@core/config/types';
 import type { CLIOptions } from '../index';
 import type { UserInteraction } from '../interaction/UserInteraction';
 import type { OptionProcessor } from '../parsers/OptionProcessor';
+import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 
 export interface ProcessingEnvironment {
   fileSystem: NodeFileSystem;
@@ -132,10 +133,16 @@ export class FileProcessor {
     // Get output config
     const outputConfig = environment.configLoader.resolveOutputConfig(environment.configLoader.load());
     
-    // Call the interpreter
+    // Build PathContext from the input file
+    const pathContext = await PathContextBuilder.fromFile(
+      cliOptions.input,
+      environment.fileSystem
+    );
+    
+    // Call the interpreter with PathContext
     const interpretResult = await interpret(content, {
-      basePath: path.resolve(path.dirname(cliOptions.input)),
-      filePath: path.resolve(cliOptions.input),
+      pathContext,
+      filePath: path.resolve(cliOptions.input), // Still pass for error reporting
       format: this.normalizeFormat(cliOptions.format),
       fileSystem: environment.fileSystem,
       pathService: environment.pathService,

@@ -1,7 +1,8 @@
 import { Environment } from '@interpreter/env/Environment';
 import { MlldError } from '@core/errors';
 import { llmxmlInstance } from '../utils/llmxml-instance';
-import { LoadContentResult, LoadContentResultImpl, LoadContentResultURLImpl, createLoadContentResultArray, createRenamedContentArray } from '@core/types/load-content';
+import type { LoadContentResult } from '@core/types/load-content';
+import { LoadContentResultImpl, LoadContentResultURLImpl, LoadContentResultHTMLImpl, createLoadContentResultArray, createRenamedContentArray } from './load-content-impl';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
 import { Readability } from '@mozilla/readability';
@@ -177,9 +178,6 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
       const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
                          doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
       
-      // Import the HTML result class
-      const { LoadContentResultHTMLImpl } = await import('@core/types/load-content');
-      
       // Always return LoadContentResult to maintain metadata
       const result = new LoadContentResultHTMLImpl({
         content: sectionContent,
@@ -200,9 +198,6 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
     const title = doc.querySelector('title')?.textContent || '';
     const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
                        doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-    
-    // Import the HTML result class
-    const { LoadContentResultHTMLImpl } = await import('@core/types/load-content');
     
     // Create HTML-specific LoadContentResult with metadata
     const result = new LoadContentResultHTMLImpl({
@@ -320,8 +315,6 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
               const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
                                  doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
               
-              const { LoadContentResultHTMLImpl } = await import('@core/types/load-content');
-              
               // Use HTML result to preserve metadata
               results.push(new LoadContentResultHTMLImpl({
                 content: sectionContent,
@@ -345,8 +338,6 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
           const title = doc.querySelector('title')?.textContent || '';
           const description = doc.querySelector('meta[name="description"]')?.getAttribute('content') || 
                              doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
-          
-          const { LoadContentResultHTMLImpl } = await import('@core/types/load-content');
           
           results.push(new LoadContentResultHTMLImpl({
             content: markdownContent,

@@ -65,7 +65,7 @@ export function isFullyEvaluated(value: DataValue): boolean {
   }
   
   if (value?.type === 'array') {
-    return value.elements.every(isFullyEvaluated);
+    return value.items.every(isFullyEvaluated);
   }
   
   return true;
@@ -107,8 +107,8 @@ export function hasUnevaluatedDirectives(value: DataValue): boolean {
     return value.some(hasUnevaluatedDirectives);
   }
   
-  if (value?.type === 'array' && 'elements' in value) {
-    return value.elements.some(hasUnevaluatedDirectives);
+  if (value?.type === 'array' && 'items' in value) {
+    return value.items.some(hasUnevaluatedDirectives);
   }
   
   if (value?.type === 'object' && 'properties' in value) {

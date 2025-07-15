@@ -89,7 +89,7 @@ export class DataValueEvaluator {
       // Provide better error context
       const errorContext = {
         value: typeof value === 'object' ? { type: value?.type, keys: Object.keys(value || {}) } : value,
-        environment: env.getWorkingDirectory(),
+        environment: env.getExecutionDirectory(),
         error: error instanceof Error ? error.message : String(error)
       };
       

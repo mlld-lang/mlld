@@ -41,6 +41,14 @@ export async function evaluateShow(
   env: Environment
 ): Promise<EvalResult> {
   
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('[SHOW DEBUG] evaluateShow called:', {
+      subtype: directive.subtype,
+      hasVariable: !!directive.values?.variable,
+      variableName: directive.values?.variable?.[0]?.identifier
+    });
+  }
+  
   let content = '';
   
   if (directive.subtype === 'showVariable') {
@@ -104,10 +112,31 @@ export async function evaluateShow(
       value = variable.value;
       originalValue = value;
       
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        logger.debug('show.ts: Processing array variable:', {
+          varName: variable.name,
+          valueType: typeof value,
+          hasType: value && typeof value === 'object' && 'type' in value,
+          typeValue: value && typeof value === 'object' && value.type,
+          hasItems: value && typeof value === 'object' && 'items' in value,
+          isArray: Array.isArray(value),
+          value: value
+        });
+      }
+      
       // Check if it's a lazy-evaluated array (still in AST form)
       if (value && typeof value === 'object' && value.type === 'array' && 'items' in value) {
         // Evaluate the array to get the actual values
         value = await evaluateDataValue(value, env);
+        
+        // Debug logging
+        if (process.env.MLLD_DEBUG === 'true') {
+          logger.debug('show.ts: After evaluation:', {
+            varName: variable.name,
+            value: value
+          });
+        }
       }
     } else if (isComputed(variable)) {
       // Computed value from code execution
@@ -206,6 +235,16 @@ export async function evaluateShow(
       // For array of LoadContentResult, concatenate content with double newlines
       content = value.map(item => item.content).join('\n\n');
     } else if (Array.isArray(value)) {
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        logger.debug('show.ts: Formatting array:', {
+          varName: variable.name,
+          valueLength: value.length,
+          value: value,
+          isForeachSection: isForeachSection
+        });
+      }
+      
       // Check if this is from a foreach-section expression
       if (isForeachSection && value.every(item => typeof item === 'string')) {
         // Join string array with double newlines for foreach-section results
@@ -380,8 +419,23 @@ export async function evaluateShow(
       throw new Error('Add template directive missing content');
     }
     
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[SHOW DEBUG] showTemplate interpolating:', {
+        nodeCount: templateNodes.length,
+        nodes: templateNodes.map((n: any) => ({ 
+          type: n.type, 
+          identifier: n.identifier,
+          content: n.content 
+        }))
+      });
+    }
+    
     // Interpolate the template
     content = await interpolate(templateNodes, env);
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[SHOW DEBUG] showTemplate result:', { content });
+    }
     
     // Template normalization is now handled in the grammar at parse time
     

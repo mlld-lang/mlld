@@ -5,6 +5,7 @@ import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { ErrorFormatSelector } from '@core/utils/errorFormatSelector';
 import { logger } from '@core/utils/logger';
 import type { CLIOptions } from '../index';
+import { PathContextBuilder } from '@core/services/PathContextService';
 
 export class ErrorHandler {
   private readonly fileSystem: NodeFileSystem;
@@ -51,14 +52,20 @@ export class ErrorHandler {
     try {
       let result: string;
 
+      // Build path context for error display
+      const pathContext = await PathContextBuilder.fromFile(
+        options.input,
+        this.fileSystem
+      );
+      
       if (isCommandError && options.showCommandContext) {
         // Enhanced formatting for command errors with full context
         result = await this.errorFormatter.formatForCLI(error, {
           useColors: true,
           useSourceContext: true,
           useSmartPaths: true,
-          basePath: path.resolve(path.dirname(options.input)),
-          workingDirectory: process.cwd(),
+          basePath: pathContext.projectRoot,
+          workingDirectory: pathContext.invocationDirectory,
           contextLines: 3 // More context for command errors
         });
       } else {
@@ -67,8 +74,8 @@ export class ErrorHandler {
           useColors: true,
           useSourceContext: true,
           useSmartPaths: true,
-          basePath: path.resolve(path.dirname(options.input)),
-          workingDirectory: process.cwd(),
+          basePath: pathContext.projectRoot,
+          workingDirectory: pathContext.invocationDirectory,
           contextLines: 2
         });
       }

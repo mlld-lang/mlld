@@ -35,6 +35,8 @@ import { ErrorUtils, type CollectedError, type CommandExecutionContext } from '.
 import { CommandExecutorFactory, type ExecutorDependencies, type CommandExecutionOptions } from './executors';
 import { VariableManager, type IVariableManager, type VariableManagerDependencies, type VariableManagerContext } from './VariableManager';
 import { ImportResolver, type IImportResolver, type ImportResolverDependencies, type ImportResolverContext } from './ImportResolver';
+import type { PathContext } from '@core/services/PathContextService';
+import { PathContextBuilder } from '@core/services/PathContextService';
 
 
 /**
@@ -55,6 +57,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private urlCacheManager?: URLCache; // URL cache manager
   private reservedNames: Set<string> = new Set(); // Now dynamic based on registered resolvers
   private initialNodeCount: number = 0; // Track initial nodes to prevent duplicate merging
+  
+  // Path context for clear path handling
+  private pathContext?: PathContext;
+  // Legacy basePath for backward compatibility
+  private basePath: string;
   
   // Utility managers
   private cacheManager: CacheManager;
@@ -122,12 +129,34 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     timeout: 30000 // 30 seconds
   };
   
+  // Constructor overloads
+  constructor(
+    fileSystem: IFileSystemService,
+    pathService: IPathService,
+    basePathOrContext: string | PathContext,
+    parent?: Environment
+  );
+  
   constructor(
     private fileSystem: IFileSystemService,
     private pathService: IPathService,
-    private basePath: string,
+    basePathOrContext: string | PathContext,
     parent?: Environment
   ) {
+    // Handle both legacy basePath and new PathContext
+    if (typeof basePathOrContext === 'string') {
+      // Legacy mode - basePath provided
+      this.basePath = basePathOrContext;
+      logger.debug('Environment created with legacy basePath', { basePath: this.basePath });
+    } else {
+      // New mode - PathContext provided
+      this.pathContext = basePathOrContext;
+      this.basePath = basePathOrContext.projectRoot; // Use project root as basePath for compatibility
+      logger.debug('Environment created with PathContext', { 
+        projectRoot: this.pathContext.projectRoot,
+        fileDirectory: this.pathContext.fileDirectory 
+      });
+    }
     this.parent = parent;
     
     // Inherit reserved names from parent environment
@@ -140,7 +169,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Initialize security components for root environment only
     if (!parent) {
       try {
-        this.securityManager = SecurityManager.getInstance(basePath);
+        this.securityManager = SecurityManager.getInstance(this.getProjectRoot());
       } catch (error) {
         // If security manager fails to initialize, continue with legacy components
         console.warn('SecurityManager not available, using legacy security components');
@@ -148,7 +177,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       
       // Initialize registry manager
       try {
-        this.registryManager = new RegistryManager(basePath);
+        this.registryManager = new RegistryManager(this.getProjectRoot());
       } catch (error) {
         console.warn('RegistryManager not available:', error);
       }
@@ -160,7 +189,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       try {
         moduleCache = new ModuleCache();
         // Create lock file instance - it will load lazily when accessed
-        const lockFilePath = path.join(basePath, 'mlld.lock.json');
+        const lockFilePath = path.join(this.getProjectRoot(), 'mlld.lock.json');
         lockFile = new LockFile(lockFilePath);
         
         // Initialize URL cache manager with a simple cache adapter and lock file
@@ -213,7 +242,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
             resolver: 'base',
             type: 'io',
             config: {
-              basePath: this.basePath,
+              basePath: this.getProjectRoot(),
               readonly: false
             }
           }
@@ -258,7 +287,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getFsService: () => this.fileSystem,
       getPathService: () => this.pathService,
       getSecurityManager: () => this.securityManager,
-      getBasePath: () => this.basePath
+      getBasePath: () => this.getProjectRoot(),
+      getFileDirectory: () => this.getFileDirectory(),
+      getExecutionDirectory: () => this.getExecutionDirectory()
     };
     this.variableManager = new VariableManager(variableManagerDependencies);
     
@@ -277,7 +308,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const importResolverDependencies: ImportResolverDependencies = {
       fileSystem: this.fileSystem,
       pathService: this.pathService,
-      basePath: this.basePath,
+      basePath: this.getFileDirectory(), // Use file directory for relative imports
       cacheManager: this.cacheManager,
       getSecurityManager: () => this.getSecurityManager(),
       getRegistryManager: () => this.getRegistryManager(),
@@ -287,14 +318,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getApproveAllImports: () => this.approveAllImports,
       getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
       getURLConfig: () => this.urlConfig,
-      getDefaultUrlOptions: () => this.defaultUrlOptions
+      getDefaultUrlOptions: () => this.defaultUrlOptions,
+      getProjectRoot: () => this.getProjectRoot() // Add project root for module resolution
     };
     this.importResolver = new ImportResolver(importResolverDependencies);
     
     // Initialize command executor factory with dependencies
     const executorDependencies: ExecutorDependencies = {
       errorUtils: this.errorUtils,
-      workingDirectory: this.basePath,
+      workingDirectory: this.getExecutionDirectory(),
       shadowEnvironment: {
         getShadowEnv: (language: string) => this.getShadowEnv(language)
       },
@@ -438,8 +470,55 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // --- Property Accessors ---
   
-  getBasePath(): string {
+  /**
+   * Get the PathContext for this environment
+   */
+  getPathContext(): PathContext | undefined {
+    return this.pathContext || this.parent?.getPathContext();
+  }
+  
+  /**
+   * Get the project root directory
+   */
+  getProjectRoot(): string {
+    const context = this.getPathContext();
+    if (context) {
+      return context.projectRoot;
+    }
+    // Fallback to basePath for legacy mode
     return this.basePath;
+  }
+  
+  /**
+   * Get the file directory (directory of current .mld file)
+   */
+  getFileDirectory(): string {
+    const context = this.getPathContext();
+    if (context) {
+      return context.fileDirectory;
+    }
+    // In legacy mode, use basePath
+    return this.basePath;
+  }
+  
+  /**
+   * Get the execution directory (where commands run)
+   */
+  getExecutionDirectory(): string {
+    const context = this.getPathContext();
+    if (context) {
+      return context.executionDirectory;
+    }
+    // In legacy mode, use basePath
+    return this.basePath;
+  }
+  
+  /**
+   * Legacy method - returns project root for backward compatibility
+   * @deprecated Use getProjectRoot() or getFileDirectory() instead
+   */
+  getBasePath(): string {
+    return this.getProjectRoot();
   }
   
   getCurrentFilePath(): string | undefined {
@@ -777,7 +856,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       // Create or get Node shadow environment
       if (!this.nodeShadowEnv) {
         this.nodeShadowEnv = new NodeShadowEnvironment(
-          this.basePath,
+          this.getFileDirectory(),
           this.currentFilePath
         );
       }
@@ -843,7 +922,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     
     // Create a new one for this environment
     this.nodeShadowEnv = new NodeShadowEnvironment(
-      this.basePath,
+      this.getFileDirectory(),
       this.currentFilePath
     );
     
@@ -983,10 +1062,30 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // --- Scope Management ---
   
   createChild(newBasePath?: string): Environment {
+    let childContext: PathContext | string;
+    
+    if (this.pathContext) {
+      // If we have a PathContext, create child context
+      if (newBasePath) {
+        // Create new context with updated file directory
+        childContext = {
+          ...this.pathContext,
+          fileDirectory: newBasePath,
+          executionDirectory: newBasePath
+        };
+      } else {
+        // Use parent context as-is
+        childContext = this.pathContext;
+      }
+    } else {
+      // Legacy mode
+      childContext = newBasePath || this.basePath;
+    }
+    
     const child = new Environment(
       this.fileSystem,
       this.pathService,
-      newBasePath || this.basePath,
+      childContext,
       this
     );
     // Track the current node count so we know which nodes are new in the child
@@ -1238,10 +1337,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   createChildEnvironment(): Environment {
+    const childContext = this.pathContext || this.basePath;
     const child = new Environment(
       this.fileSystem,
       this.pathService,
-      this.basePath,
+      childContext,
       this
     );
     // Share import stack with parent via ImportResolver

@@ -29,7 +29,7 @@ import type { CacheManager } from './CacheManager';
 export interface ImportResolverDependencies {
   fileSystem: IFileSystemService;
   pathService: IPathService;
-  basePath: string;
+  basePath: string; // File directory for relative imports
   cacheManager: CacheManager;
   getSecurityManager: () => SecurityManager | undefined;
   getRegistryManager: () => RegistryManager | undefined;
@@ -46,6 +46,7 @@ export interface ImportResolverDependencies {
     maxResponseSize: number;
     timeout: number;
   };
+  getProjectRoot?: () => string; // Project root for module resolution
 }
 
 /**
@@ -272,7 +273,12 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
   }
   
   async getProjectPath(): Promise<string> {
-    // Walk up from basePath to find project root
+    // If getProjectRoot is available, use it (new PathContext mode)
+    if (this.dependencies.getProjectRoot) {
+      return this.dependencies.getProjectRoot();
+    }
+    
+    // Legacy mode: Walk up from basePath to find project root
     let current = this.dependencies.basePath;
     
     while (current !== path.dirname(current)) {
