@@ -2,7 +2,7 @@ import { Environment } from '@interpreter/env/Environment';
 import { MlldError } from '@core/errors';
 import { llmxmlInstance } from '../utils/llmxml-instance';
 import type { LoadContentResult } from '@core/types/load-content';
-import { LoadContentResultImpl, LoadContentResultURLImpl, LoadContentResultHTMLImpl, createLoadContentResultArray, createRenamedContentArray } from './load-content-impl';
+import { LoadContentResultImpl, LoadContentResultURLImpl, LoadContentResultHTMLImpl, createLoadContentResultArray, createRenamedContentArray } from './load-content';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
 import { Readability } from '@mozilla/readability';
