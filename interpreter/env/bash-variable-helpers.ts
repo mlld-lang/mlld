@@ -99,12 +99,34 @@ export -f mlld_get_metadata
 
 /**
  * Inject mlld helpers into Bash code
+ * @param code - The user's bash code
+ * @param isEnhancedMode - Whether enhanced mode is enabled
+ * @param metadata - Optional metadata for primitives
  */
-export function injectBashHelpers(code: string, isEnhancedMode: boolean): string {
+export function injectBashHelpers(code: string, isEnhancedMode: boolean, metadata?: Record<string, any>): string {
   if (!isEnhancedMode) {
     return code;
   }
   
+  let helpers = generateBashMlldHelpers();
+  
+  // If we have metadata, also inject it as environment variables
+  if (metadata) {
+    helpers += '\n# Primitive metadata\n';
+    for (const [key, meta] of Object.entries(metadata)) {
+      if (meta.isVariable) {
+        helpers += `export MLLD_IS_VARIABLE_${key}="true"\n`;
+        helpers += `export MLLD_TYPE_${key}="${meta.type || ''}"\n`;
+        if (meta.subtype) {
+          helpers += `export MLLD_SUBTYPE_${key}="${meta.subtype}"\n`;
+        }
+        if (meta.metadata) {
+          helpers += `export MLLD_METADATA_${key}='${JSON.stringify(meta.metadata)}'\n`;
+        }
+      }
+    }
+  }
+  
   // Prepend helper functions
-  return generateBashMlldHelpers() + '\n\n# User code:\n' + code;
+  return helpers + '\n\n# User code:\n' + code;
 }

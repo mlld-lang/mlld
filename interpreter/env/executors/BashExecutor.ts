@@ -29,19 +29,21 @@ export class BashExecutor extends BaseCommandExecutor {
     code: string,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext,
-    params?: Record<string, any>
+    params?: Record<string, any>,
+    metadata?: Record<string, any>
   ): Promise<string> {
     return this.executeWithCommonHandling(
       `bash: ${code.substring(0, 50)}...`,
       options,
       context,
-      () => this.executeBashCode(code, params, context)
+      () => this.executeBashCode(code, params, metadata, context)
     );
   }
 
   private async executeBashCode(
     code: string,
     params?: Record<string, any>,
+    metadata?: Record<string, any>,
     context?: CommandExecutionContext
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
@@ -55,6 +57,30 @@ export class BashExecutor extends BaseCommandExecutor {
         if (isEnhancedMode) {
           // Use Variable-aware conversion
           envVars = prepareVariablesForBash(params);
+          
+          // Also add metadata for primitive values if provided
+          if (metadata) {
+            for (const [key, meta] of Object.entries(metadata)) {
+              if (meta.isVariable) {
+                // Ensure the value itself is in envVars
+                if (params[key] !== undefined && !envVars[key]) {
+                  envVars[key] = String(params[key]);
+                }
+                if (!envVars[`MLLD_IS_VARIABLE_${key}`]) {
+                  envVars[`MLLD_IS_VARIABLE_${key}`] = 'true';
+                }
+                if (!envVars[`MLLD_TYPE_${key}`] && meta.type) {
+                  envVars[`MLLD_TYPE_${key}`] = meta.type;
+                }
+                if (!envVars[`MLLD_SUBTYPE_${key}`] && meta.subtype) {
+                  envVars[`MLLD_SUBTYPE_${key}`] = meta.subtype;
+                }
+                if (!envVars[`MLLD_METADATA_${key}`] && meta.metadata) {
+                  envVars[`MLLD_METADATA_${key}`] = JSON.stringify(meta.metadata);
+                }
+              }
+            }
+          }
         } else {
           // Standard conversion
           for (const [key, value] of Object.entries(params)) {
@@ -101,7 +127,7 @@ export class BashExecutor extends BaseCommandExecutor {
       }
       
       // Inject mlld helper functions if in enhanced mode
-      const codeWithHelpers = injectBashHelpers(code, isEnhancedMode);
+      const codeWithHelpers = injectBashHelpers(code, isEnhancedMode, metadata);
       
       // Detect command substitution patterns and automatically add stderr capture
       const enhancedCode = CommandUtils.enhanceShellCodeForCommandSubstitution(codeWithHelpers);
@@ -173,6 +199,12 @@ export class BashExecutor extends BaseCommandExecutor {
     if (process.env.MOCK_BASH !== 'true') {
       return null;
     }
+    
+    // Debug logging for test environment
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Mock bash handling code:', code.substring(0, 200) + '...');
+      console.log('Mock bash env vars:', Object.keys(envVars).filter(k => k.startsWith('MLLD_')));
+    }
 
     // Enhanced mock for specific test cases
     if (code.includes('names=("Alice" "Bob" "Charlie")')) {
@@ -202,9 +234,19 @@ export class BashExecutor extends BaseCommandExecutor {
     // Simple mock that handles echo commands and bash -c
     const lines = code.trim().split('\n');
     const outputs: string[] = [];
+    const localEnvVars = { ...envVars }; // Create a local copy to handle exports
     
     for (const line of lines) {
       const trimmed = line.trim();
+      
+      // Handle export commands from injected helpers
+      if (trimmed.startsWith('export ')) {
+        const exportMatch = trimmed.match(/^export\s+(\w+)="([^"]*)"/);
+        if (exportMatch) {
+          localEnvVars[exportMatch[1]] = exportMatch[2];
+        }
+        continue;
+      }
       if (trimmed.startsWith('echo ')) {
         // Extract the string to echo, handling quotes
         const echoContent = trimmed.substring(5).trim();
@@ -217,9 +259,25 @@ export class BashExecutor extends BaseCommandExecutor {
         }
         
         // Replace environment variables
-        for (const [key, value] of Object.entries(envVars)) {
+        for (const [key, value] of Object.entries(localEnvVars)) {
           output = output.replace(new RegExp(`\\$${key}`, 'g'), value);
         }
+        
+        // Handle mlld helper function calls
+        output = output.replace(/\$\(mlld_get_type\s+(\w+)\)/g, (match, varName) => {
+          const typeVar = `MLLD_TYPE_${varName}`;
+          return localEnvVars[typeVar] || '';
+        });
+        
+        output = output.replace(/\$\(mlld_get_subtype\s+(\w+)\)/g, (match, varName) => {
+          const subtypeVar = `MLLD_SUBTYPE_${varName}`;
+          return localEnvVars[subtypeVar] || '';
+        });
+        
+        output = output.replace(/\$\(mlld_is_variable\s+(\w+)\s+&&\s+echo\s+'true'\s+\|\|\s+echo\s+'false'\)/g, (match, varName) => {
+          const isVarVar = `MLLD_IS_VARIABLE_${varName}`;
+          return localEnvVars[isVarVar] === 'true' ? 'true' : 'false';
+        });
         
         outputs.push(output);
       }

@@ -168,12 +168,35 @@ export function getVariableType(value: any): string | undefined {
 
 /**
  * Create mlld helper object for shadow environments
+ * @param primitiveMetadata - Optional metadata for primitive values that can't be proxied
  */
-export function createMlldHelpers() {
+export function createMlldHelpers(primitiveMetadata?: Record<string, any>) {
   return {
-    // Type checking
-    isVariable: isVariableProxy,
-    getType: getVariableType,
+    // Type checking - also check primitive metadata
+    isVariable: (value: any, name?: string) => {
+      // First check if it's a proxy
+      if (isVariableProxy(value)) {
+        return true;
+      }
+      // Then check if we have metadata for this primitive
+      if (name && primitiveMetadata && primitiveMetadata[name]) {
+        return primitiveMetadata[name].isVariable === true;
+      }
+      return false;
+    },
+    
+    getType: (value: any, name?: string) => {
+      // First check if it's a proxy
+      const proxyType = getVariableType(value);
+      if (proxyType !== undefined) {
+        return proxyType;
+      }
+      // Then check primitive metadata
+      if (name && primitiveMetadata && primitiveMetadata[name]) {
+        return primitiveMetadata[name].type;
+      }
+      return undefined;
+    },
     
     // Property names for direct access
     TYPE: VARIABLE_PROXY_PROPS.TYPE,
@@ -181,24 +204,61 @@ export function createMlldHelpers() {
     METADATA: VARIABLE_PROXY_PROPS.METADATA,
     VARIABLE: VARIABLE_PROXY_PROPS.VARIABLE,
     
-    // Metadata helpers
-    getMetadata: (value: any) => {
-      if (!isVariableProxy(value)) return undefined;
-      try {
-        return value[VARIABLE_PROXY_PROPS.METADATA];
-      } catch {
-        return undefined;
+    // Metadata helpers - also check primitive metadata
+    getMetadata: (value: any, name?: string) => {
+      if (isVariableProxy(value)) {
+        try {
+          return value[VARIABLE_PROXY_PROPS.METADATA];
+        } catch {
+          return undefined;
+        }
       }
+      // Check primitive metadata
+      if (name && primitiveMetadata && primitiveMetadata[name]) {
+        return primitiveMetadata[name].metadata || {};
+      }
+      return undefined;
     },
     
-    // Get the full Variable object
-    getVariable: (value: any) => {
-      if (!isVariableProxy(value)) return undefined;
-      try {
-        return value[VARIABLE_PROXY_PROPS.VARIABLE];
-      } catch {
-        return undefined;
+    // Get subtype - also check primitive metadata
+    getSubtype: (value: any, name?: string) => {
+      if (isVariableProxy(value)) {
+        try {
+          return value[VARIABLE_PROXY_PROPS.SUBTYPE];
+        } catch {
+          return undefined;
+        }
       }
+      // Check primitive metadata
+      if (name && primitiveMetadata && primitiveMetadata[name]) {
+        return primitiveMetadata[name].subtype;
+      }
+      return undefined;
+    },
+    
+    // Get the full Variable object - or reconstruct from metadata
+    getVariable: (value: any, name?: string) => {
+      if (isVariableProxy(value)) {
+        try {
+          return value[VARIABLE_PROXY_PROPS.VARIABLE];
+        } catch {
+          return undefined;
+        }
+      }
+      // Check primitive metadata
+      if (name && primitiveMetadata && primitiveMetadata[name]) {
+        const meta = primitiveMetadata[name];
+        // Reconstruct a Variable-like object
+        return {
+          name,
+          value,
+          type: meta.type,
+          subtype: meta.subtype,
+          metadata: meta.metadata,
+          isVariable: true
+        };
+      }
+      return undefined;
     }
   };
 }

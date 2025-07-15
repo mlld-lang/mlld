@@ -320,6 +320,19 @@ export async function evaluateExecInvocation(
       if (variable && !varRef.fields) {
         // Only preserve if no field access
         originalVariables[i] = variable;
+        
+        if (process.env.MLLD_DEBUG === 'true') {
+          const subtype = variable.type === 'primitive' && 'primitiveType' in variable 
+            ? (variable as any).primitiveType 
+            : variable.subtype;
+            
+          logger.debug(`Preserving original Variable for arg ${i}:`, {
+            varName,
+            variableType: variable.type,
+            variableSubtype: subtype,
+            isPrimitive: typeof variable.value !== 'object' || variable.value === null
+          });
+        }
       }
     }
   }
@@ -346,6 +359,18 @@ export async function evaluateExecInvocation(
             isParameter: true
           }
         };
+        
+        if (process.env.MLLD_DEBUG === 'true') {
+          const subtype = paramVar.type === 'primitive' && 'primitiveType' in paramVar 
+            ? (paramVar as any).primitiveType 
+            : paramVar.subtype;
+            
+          logger.debug(`Using original Variable for param ${paramName}:`, {
+            type: paramVar.type,
+            subtype: subtype,
+            hasMetadata: !!paramVar.metadata
+          });
+        }
       }
       // Create appropriate variable type based on actual data
       else if (typeof argValue === 'object' && argValue !== null && !Array.isArray(argValue)) {
@@ -464,6 +489,8 @@ export async function evaluateExecInvocation(
     
     // Build params object for code execution
     const codeParams: Record<string, any> = {};
+    const variableMetadata: Record<string, any> = {};
+    
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
       
@@ -484,11 +511,31 @@ export async function evaluateExecInvocation(
         // Enhanced mode: Pass Variable as proxy to shadow environment
         codeParams[paramName] = prepareValueForShadow(paramVar);
         
+        // Store metadata for primitives that can't be proxied
+        if (paramVar.value === null || typeof paramVar.value !== 'object') {
+          // Handle PrimitiveVariable which has primitiveType instead of subtype
+          const subtype = paramVar.type === 'primitive' && 'primitiveType' in paramVar 
+            ? (paramVar as any).primitiveType 
+            : paramVar.subtype;
+          
+          variableMetadata[paramName] = {
+            type: paramVar.type,
+            subtype: subtype,
+            metadata: paramVar.metadata,
+            isVariable: true
+          };
+        }
+        
         if (process.env.DEBUG_EXEC || process.env.MLLD_DEBUG === 'true') {
+          const subtype = paramVar.type === 'primitive' && 'primitiveType' in paramVar 
+            ? (paramVar as any).primitiveType 
+            : paramVar.subtype;
+            
           logger.debug(`Enhanced Variable passing for ${paramName}:`, {
             variableType: paramVar.type,
-            variableSubtype: paramVar.subtype,
+            variableSubtype: subtype,
             hasMetadata: !!paramVar.metadata,
+            isPrimitive: paramVar.value === null || typeof paramVar.value !== 'object',
             enhancedMode: true
           });
         }
@@ -524,11 +571,12 @@ export async function evaluateExecInvocation(
       }
     }
     
-    // Execute the code with parameters
+    // Execute the code with parameters and metadata
     const codeResult = await execEnv.executeCode(
       code,
       definition.language || 'javascript',
-      codeParams
+      codeParams,
+      isEnhancedVariablePassingEnabled() && Object.keys(variableMetadata).length > 0 ? variableMetadata : undefined
     );
     
     // If the result looks like JSON (from return statement), parse it
