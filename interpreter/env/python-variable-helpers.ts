@@ -10,35 +10,52 @@ import { isVariable } from '@interpreter/utils/variable-resolution';
 
 /**
  * Generate Python code that defines mlld helper functions
+ * @param primitiveMetadata - Optional metadata for primitive values
  */
-export function generatePythonMlldHelpers(): string {
+export function generatePythonMlldHelpers(primitiveMetadata?: Record<string, any>): string {
+  const metadataJson = primitiveMetadata ? JSON.stringify(primitiveMetadata) : '{}';
+  
   return `
 # mlld helper functions
 class MlldHelpers:
-    @staticmethod
-    def is_variable(value):
-        """Check if a value has mlld Variable metadata"""
-        return hasattr(value, '__mlld_metadata__')
+    def __init__(self):
+        self._primitive_metadata = ${metadataJson}
     
-    @staticmethod
-    def get_type(value):
+    def is_variable(self, value, name=None):
+        """Check if a value has mlld Variable metadata"""
+        # First check if it has attributes
+        if hasattr(value, '__mlld_metadata__'):
+            return True
+        # Then check primitive metadata
+        if name and name in self._primitive_metadata:
+            return self._primitive_metadata[name].get('isVariable', False)
+        return False
+    
+    def get_type(self, value, name=None):
         """Get the mlld type of a value"""
         if hasattr(value, '__mlld_type__'):
             return value.__mlld_type__
+        # Check primitive metadata
+        if name and name in self._primitive_metadata:
+            return self._primitive_metadata[name].get('type')
         return None
     
-    @staticmethod
-    def get_subtype(value):
+    def get_subtype(self, value, name=None):
         """Get the mlld subtype of a value"""
         if hasattr(value, '__mlld_subtype__'):
             return value.__mlld_subtype__
+        # Check primitive metadata
+        if name and name in self._primitive_metadata:
+            return self._primitive_metadata[name].get('subtype')
         return None
     
-    @staticmethod
-    def get_metadata(value):
+    def get_metadata(self, value, name=None):
         """Get the mlld metadata of a value"""
         if hasattr(value, '__mlld_metadata__'):
             return value.__mlld_metadata__
+        # Check primitive metadata
+        if name and name in self._primitive_metadata:
+            return self._primitive_metadata[name].get('metadata', {})
         return {}
 
 mlld = MlldHelpers()

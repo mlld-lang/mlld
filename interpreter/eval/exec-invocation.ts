@@ -11,16 +11,7 @@ import { MlldInterpreterError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
-
-/**
- * Check if enhanced Variable passing to shadow environments is enabled
- */
-function isEnhancedVariablePassingEnabled(): boolean {
-  // Check environment variable
-  const envVar = process.env.MLLD_ENHANCED_VARIABLE_PASSING;
-  // Default to false until we fix primitive handling
-  return envVar === 'true';
-}
+import { isEnhancedVariablePassingEnabled } from '@interpreter/utils/enhanced-mode-config';
 
 /**
  * Evaluate an ExecInvocation node

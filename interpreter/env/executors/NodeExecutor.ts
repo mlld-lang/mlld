@@ -41,7 +41,8 @@ export class NodeExecutor extends BaseCommandExecutor {
     code: string,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext,
-    params?: Record<string, any>
+    params?: Record<string, any>,
+    metadata?: Record<string, any>
   ): Promise<string> {
     
     // For Node.js execution, always halt on errors (don't use continue behavior)
@@ -51,13 +52,14 @@ export class NodeExecutor extends BaseCommandExecutor {
       `node: ${code.substring(0, 50)}...`,
       nodeOptions,
       context,
-      () => this.executeNodeCode(code, params, context)
+      () => this.executeNodeCode(code, params, metadata, context)
     );
   }
 
   private async executeNodeCode(
     code: string,
     params?: Record<string, any>,
+    metadata?: Record<string, any>,
     context?: CommandExecutionContext
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
@@ -76,9 +78,9 @@ export class NodeExecutor extends BaseCommandExecutor {
       
       if (isEnhancedMode && params) {
         shadowParams = prepareParamsForShadow(params);
-        // Also add mlld helpers
+        // Also add mlld helpers with metadata
         if (!shadowParams.mlld) {
-          shadowParams.mlld = createMlldHelpers();
+          shadowParams.mlld = createMlldHelpers(metadata);
         }
       }
       
@@ -155,7 +157,7 @@ export class NodeExecutor extends BaseCommandExecutor {
       
       // Add mlld helpers in enhanced mode
       if (isEnhancedMode && !shadowParams.mlld) {
-        const mlldHelpers = createMlldHelpers();
+        const mlldHelpers = createMlldHelpers(metadata);
         nodeCode += `const mlld = ${JSON.stringify(mlldHelpers)};\n`;
       }
     }

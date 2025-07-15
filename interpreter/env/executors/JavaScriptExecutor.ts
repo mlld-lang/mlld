@@ -26,7 +26,8 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
     code: string,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext,
-    params?: Record<string, any>
+    params?: Record<string, any>,
+    metadata?: Record<string, any>
   ): Promise<string> {
     // For JavaScript execution, always halt on errors (don't use continue behavior)
     // This ensures that JS errors propagate properly for testing and error handling
@@ -35,13 +36,14 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       `js: ${code.substring(0, 50)}...`,
       jsOptions,
       context,
-      () => this.executeJavaScript(code, params)
+      () => this.executeJavaScript(code, params, metadata)
     );
   }
 
   private async executeJavaScript(
     code: string,
-    params?: Record<string, any>
+    params?: Record<string, any>,
+    metadata?: Record<string, any>
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
 
@@ -93,8 +95,8 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       // Add mlld helpers if enhanced mode is enabled
       const isEnhancedMode = process.env.MLLD_ENHANCED_VARIABLE_PASSING === 'true';
       if (isEnhancedMode && (!params || !params['mlld'])) {
-        // Create mlld helpers and add to params
-        const mlldHelpers = createMlldHelpers();
+        // Create mlld helpers with primitive metadata
+        const mlldHelpers = createMlldHelpers(metadata);
         allParamNames.push('mlld');
         allParamValues.push(mlldHelpers);
       }

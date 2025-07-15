@@ -32,19 +32,21 @@ export class PythonExecutor extends BaseCommandExecutor {
     code: string,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext,
-    params?: Record<string, any>
+    params?: Record<string, any>,
+    metadata?: Record<string, any>
   ): Promise<string> {
     return this.executeWithCommonHandling(
       `python: ${code.substring(0, 50)}...`,
       options,
       context,
-      () => this.executePythonCode(code, params, options, context)
+      () => this.executePythonCode(code, params, metadata, options, context)
     );
   }
 
   private async executePythonCode(
     code: string,
     params?: Record<string, any>,
+    metadata?: Record<string, any>,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<CommandExecutionResult> {
@@ -59,7 +61,7 @@ export class PythonExecutor extends BaseCommandExecutor {
       
       // Add mlld helpers in enhanced mode
       if (isEnhancedMode) {
-        pythonCode += generatePythonMlldHelpers() + '\n';
+        pythonCode += generatePythonMlldHelpers(metadata) + '\n';
       }
       
       if (params && typeof params === 'object') {

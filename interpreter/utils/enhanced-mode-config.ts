@@ -34,12 +34,24 @@ export function isEnhancedInterpolationEnabled(): boolean {
 }
 
 /**
+ * Check if enhanced Variable passing to shadow environments is enabled
+ * Default: false for now (can be enabled with MLLD_ENHANCED_VARIABLE_PASSING=true)
+ * TODO: Enable by default once all edge cases are handled
+ */
+export function isEnhancedVariablePassingEnabled(): boolean {
+  const envVar = process.env.MLLD_ENHANCED_VARIABLE_PASSING;
+  // Default to false until we handle all edge cases
+  return envVar === 'true';
+}
+
+/**
  * Enable all enhanced features (for testing)
  */
 export function enableAllEnhancedFeatures(): void {
   delete process.env.MLLD_ENHANCED_ARRAYS;
   delete process.env.MLLD_ENHANCED_RESOLUTION;
   delete process.env.MLLD_ENHANCED_INTERPOLATION;
+  delete process.env.MLLD_ENHANCED_VARIABLE_PASSING;
 }
 
 /**
@@ -49,4 +61,5 @@ export function disableAllEnhancedFeatures(): void {
   process.env.MLLD_ENHANCED_ARRAYS = 'false';
   process.env.MLLD_ENHANCED_RESOLUTION = 'false';
   process.env.MLLD_ENHANCED_INTERPOLATION = 'false';
+  process.env.MLLD_ENHANCED_VARIABLE_PASSING = 'false';
 }

@@ -1047,10 +1047,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     code: string, 
     language: string, 
     params?: Record<string, any>,
+    metadata?: Record<string, any> | CommandExecutionContext,
     context?: CommandExecutionContext
   ): Promise<string> {
+    // Handle overloaded signatures for backward compatibility
+    if (metadata && !context && 'sourceLocation' in metadata) {
+      // Old signature: executeCode(code, language, params, context)
+      context = metadata as CommandExecutionContext;
+      metadata = undefined;
+    }
+    
     // Delegate to command executor factory
-    return this.commandExecutorFactory.executeCode(code, language, params, this.outputOptions, context);
+    return this.commandExecutorFactory.executeCode(code, language, params, metadata as Record<string, any> | undefined, this.outputOptions, context);
   }
 
   
