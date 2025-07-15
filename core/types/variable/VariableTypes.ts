@@ -42,6 +42,32 @@ export interface VariableMetadata extends Record<string, any> {
   isComplex?: boolean;
   isPipelineInput?: boolean;
   pipelineStage?: number;
+  
+  // Array-specific metadata
+  arrayType?: 'renamed-content' | 'load-content-result' | 'regular';
+  joinSeparator?: string; // '\n\n' for special arrays
+  
+  // Behavior preservation
+  customToString?: () => string;
+  customToJSON?: () => any;
+  contentGetter?: () => string;
+  
+  // Content loading metadata
+  fromGlobPattern?: boolean;
+  globPattern?: string;
+  fileCount?: number;
+  
+  // Header transformation metadata
+  headerTransform?: {
+    applied: boolean;
+    template: string;
+  };
+  
+  // Namespace metadata
+  isNamespace?: boolean;
+  
+  // Template metadata
+  templateAst?: any[]; // For lazy-evaluated templates
 }
 
 // =========================================================================
