@@ -58,7 +58,30 @@ export interface RenamedContentArray extends Array<string> {
  * Type guard for RenamedContentArray
  */
 export function isRenamedContentArray(value: unknown): value is RenamedContentArray {
-  return Array.isArray(value) && value.every(item => typeof item === 'string');
+  // Check for tagged Variable first
+  const variable = (value as any)?.__variable;
+  if (variable && variable.type === 'array' && variable.metadata?.arrayType === 'renamed-content') {
+    return true;
+  }
+  
+  // Fallback to instanceof for backward compatibility
+  // This requires the RenamedContentArray class to be available
+  try {
+    // Import the implementation to check instanceof
+    const { createRenamedContentArray } = require('@interpreter/eval/load-content');
+    const RenamedContentArray = Object.getPrototypeOf(createRenamedContentArray([])).constructor;
+    if (value instanceof RenamedContentArray) {
+      return true;
+    }
+  } catch {
+    // If we can't import the class, skip instanceof check
+  }
+  
+  // REMOVED: The broken content-based check that was too generic
+  // DO NOT use: Array.isArray(value) && value.every(item => typeof item === 'string')
+  // This would match ANY string array, not just RenamedContentArray
+  
+  return false;
 }
 
 /**
