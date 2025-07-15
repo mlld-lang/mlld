@@ -34,7 +34,7 @@ const consoleFormat = winston.format.combine(
     // In non-debug mode, use more concise output
     if (process.env.MLLD_DEBUG !== 'true') {
       // Only show error messages, no debug/info/etc
-      if (level !== 'error') {
+      if (!level.includes('error')) {
         return '';
       }
       // For errors, include minimal context

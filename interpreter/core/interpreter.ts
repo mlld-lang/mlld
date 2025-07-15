@@ -534,18 +534,13 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
       });
     }
     
+    
     if (complexFlag) {
       // Complex data needs evaluation
+      
       const evaluatedValue = await evaluateDataValue(variable.value, env);
       
       // Debug logging
-      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
-        logger.debug('resolveVariableValue - evaluated complex data:', {
-          variableName: variable.name,
-          evaluatedValue,
-          evaluatedType: typeof evaluatedValue
-        });
-      }
       
       return evaluatedValue;
     }
@@ -671,6 +666,8 @@ export async function interpolate(
   env: Environment,
   context: InterpolationContext = InterpolationContext.Default
 ): Promise<string> {
+  logger.info('[INTERPOLATE] interpolate() called');
+  
   // Handle non-array inputs
   if (!Array.isArray(nodes)) {
     if (typeof nodes === 'string') {
@@ -685,6 +682,7 @@ export async function interpolate(
   const parts: string[] = [];
   
   for (const node of nodes) {
+    
     if (node.type === 'Text') {
       // Handle Text nodes - directly use string content
       parts.push(node.content || '');
@@ -731,21 +729,24 @@ export async function interpolate(
       } else if (typeof value === 'object') {
         stringValue = JSON.stringify(value);
         if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[INTERPOLATE DEBUG] Converting object to string:', {
-            name: variable.name,
-            stringValue
-          });
         }
       } else {
         stringValue = String(value);
       }
       
       parts.push(stringValue);
+      logger.debug('[INTERPOLATE] Pushed to parts:', { stringValue, partsLength: parts.length });
     } else if (node.type === 'VariableReference') {
       const varName = node.identifier || node.name;
-      if (!varName) continue;
+      
+      if (!varName) {
+        continue;
+      }
       
       let variable = env.getVariable(varName);
+      
+      if (variable) {
+      }
       
       // Check if this is a resolver variable that needs async resolution
       if (!variable && env.hasVariable(varName)) {
@@ -787,7 +788,10 @@ export async function interpolate(
       } else {
         // Use the already imported resolveVariableValue function
         try {
+          if (process.env.MLLD_DEBUG === 'true') {
+          }
           value = await resolveVariableValue(variable, env);
+          
         } catch (error) {
           // Handle executable variables specially in interpolation
           if (error instanceof Error && error.message.includes('Cannot interpolate executable')) {
@@ -803,13 +807,6 @@ export async function interpolate(
       
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('[INTERPOLATE DEBUG] Variable resolved in template:', {
-          name: variable.name,
-          type: variable.type,
-          resolvedValue: value,
-          resolvedType: typeof value,
-          isArray: Array.isArray(value)
-        });
       }
       
       // Special handling for lazy reserved variables like DEBUG
@@ -852,29 +849,6 @@ export async function interpolate(
       // Convert final value to string
       let stringValue: string;
       
-      // Debug logging for data variables
-      if (process.env.MLLD_DEBUG === 'true' && node.identifier) {
-        console.log('[INTERPOLATE DEBUG] Before string conversion:', {
-          identifier: node.identifier,
-          value,
-          valueType: typeof value,
-          isNull: value === null,
-          isArray: Array.isArray(value)
-        });
-        
-        // Special debug for @sum
-        if (node.identifier === 'sum') {
-          logger.debug('Interpolating @sum:', {
-            rawValue: value,
-            stringValue: String(value),
-            willBe: `"${String(value)}"`
-          });
-        }
-      }
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log('[INTERPOLATE DEBUG] Starting string conversion for:', node.identifier);
-      }
       
       if (value === null) {
         stringValue = 'null';
@@ -883,40 +857,45 @@ export async function interpolate(
         stringValue = await interpolate(value.content as InterpolationNode[], env, context);
       } else if (typeof value === 'object' && 'type' in value) {
         const nodeValue = value as Record<string, unknown>;
-        if (nodeValue.type === 'Null') {
+        if (process.env.MLLD_DEBUG === 'true') {
+        }
+        
+        // Check if this is a complex array that needs evaluation
+        if (nodeValue.type === 'array' && 'items' in nodeValue) {
+          // This is an unevaluated complex array!
+          if (process.env.MLLD_DEBUG === 'true') {
+          }
+          const evaluatedArray = await evaluateDataValue(value, env);
+          if (process.env.MLLD_DEBUG === 'true') {
+          }
+          // Now handle it as a regular array
+          if (Array.isArray(evaluatedArray)) {
+            const { JSONFormatter } = await import('./json-formatter');
+            stringValue = JSONFormatter.stringify(evaluatedArray);
+          } else {
+            stringValue = String(evaluatedArray);
+          }
+        } else if (nodeValue.type === 'Null') {
           // Handle null nodes from the grammar
           stringValue = 'null';
         } else {
           stringValue = JSON.stringify(value);
+          if (process.env.MLLD_DEBUG === 'true') {
+          }
         }
       } else if (Array.isArray(value)) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[INTERPOLATE DEBUG] Handling array for:', node.identifier);
-        }
         // Check if this is a LoadContentResultArray first
         const { isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
         
         // Debug logging
         if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[INTERPOLATE DEBUG] Array interpolation:', {
-            identifier: node.identifier,
-            isLoadContentResultArray: isLoadContentResultArray(value),
-            isRenamedContentArray: isRenamedContentArray(value),
-            arrayLength: value.length,
-            firstItemType: value.length > 0 ? typeof value[0] : 'empty',
-            firstItemKeys: value.length > 0 && typeof value[0] === 'object' ? Object.keys(value[0]) : []
-          });
         }
+        
         
         if (isLoadContentResultArray(value)) {
           // For LoadContentResultArray, use its .content getter (which concatenates all content)
-          console.log('[INTERPOLATE DEBUG] LoadContentResultArray detected!', {
-            identifier: node.identifier,
-            hasContent: 'content' in value,
-            contentValue: value.content
-          });
           stringValue = value.content;
-        } else if (isRenamedContentArray(value)) {
+        } else if (isRenamedContentArray(value) && 'content' in value) {
           // For RenamedContentArray (from alligator glob with renaming), use its .content getter
           stringValue = value.content;
         } else if (context === InterpolationContext.ShellCommand) {
@@ -936,16 +915,7 @@ export async function interpolate(
           // For other contexts, use JSON representation with custom replacer
           // Note: No indentation for template interpolation - keep it compact
           const { JSONFormatter } = await import('./json-formatter');
-          console.log('[INTERPOLATE DEBUG] Calling JSONFormatter.stringify:', {
-            identifier: node.identifier,
-            value,
-            valueLength: value.length
-          });
           stringValue = JSONFormatter.stringify(value);
-          console.log('[INTERPOLATE DEBUG] JSONFormatter result:', {
-            identifier: node.identifier,
-            stringValue
-          });
         }
       } else if (typeof value === 'object') {
         // Check if this is a LoadContentResult - use its content
@@ -983,12 +953,6 @@ export async function interpolate(
       const escapedValue = strategy.escape(stringValue);
       
       if (process.env.MLLD_DEBUG === 'true' && node.identifier) {
-        console.log('[INTERPOLATE DEBUG] After escaping:', {
-          identifier: node.identifier,
-          stringValue,
-          escapedValue,
-          strategyName: strategy.constructor.name
-        });
       }
       
       parts.push(escapedValue);

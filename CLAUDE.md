@@ -23,6 +23,8 @@ npm run build        # Build the project
 npm test <dir>       # Run tests for a specific section of code
 npm test <file_path> # Run specific test file (e.g. npm test cli/priority-cli.test.ts)
 npm run ast -- '<mlld syntax>'  # Shows AST for any valid mlld syntax
+npm run ast -- file.mld         # Shows AST for a file (auto-detects if file exists)
+cat file.mld | npm run ast      # Shows AST from stdin
 mlld run <script>    # Run mlld script from script directory (default: llm/run/)
 ```
 
@@ -272,4 +274,8 @@ The `llms.txt` file serves as the authoritative onboarding guide for LLMs learni
    - Test all examples before committing
 
 ## Debugging
-- When adding debugging output, use `MLLD_DEBUG=true` or `--debug` and winston for debug logging output
+- When adding debugging output, use `MLLD_DEBUG=true` or `--debug`
+- **For debug output**: Use `if (process.env.MLLD_DEBUG === 'true') console.log()` pattern
+  - This is simple, works reliably, and is used throughout the codebase
+  - The winston logger has issues with dynamic level changes and is overcomplicated
+- **For errors**: Use `logger.error()` - this always works correctly

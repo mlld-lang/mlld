@@ -42,11 +42,6 @@ export async function evaluateShow(
 ): Promise<EvalResult> {
   
   if (process.env.MLLD_DEBUG === 'true') {
-    console.log('[SHOW DEBUG] evaluateShow called:', {
-      subtype: directive.subtype,
-      hasVariable: !!directive.values?.variable,
-      variableName: directive.values?.variable?.[0]?.identifier
-    });
   }
   
   let content = '';
@@ -419,23 +414,10 @@ export async function evaluateShow(
       throw new Error('Add template directive missing content');
     }
     
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[SHOW DEBUG] showTemplate interpolating:', {
-        nodeCount: templateNodes.length,
-        nodes: templateNodes.map((n: any) => ({ 
-          type: n.type, 
-          identifier: n.identifier,
-          content: n.content 
-        }))
-      });
-    }
     
     // Interpolate the template
     content = await interpolate(templateNodes, env);
     
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[SHOW DEBUG] showTemplate result:', { content });
-    }
     
     // Template normalization is now handled in the grammar at parse time
     

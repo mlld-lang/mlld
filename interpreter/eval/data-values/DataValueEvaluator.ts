@@ -55,6 +55,7 @@ export class DataValueEvaluator {
    * @returns The evaluated result
    */
   async evaluate(value: DataValue, env: Environment): Promise<any> {
+    
     try {
       // Route to appropriate evaluator based on type
       if (this.primitiveEvaluator.canHandle(value)) {
@@ -62,7 +63,8 @@ export class DataValueEvaluator {
       }
       
       if (this.collectionEvaluator.canHandle(value)) {
-        return await this.collectionEvaluator.evaluate(value, env);
+        const result = await this.collectionEvaluator.evaluate(value, env);
+        return result;
       }
       
       if (this.variableReferenceEvaluator.canHandle(value)) {
