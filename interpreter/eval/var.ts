@@ -67,9 +67,12 @@ function createVariableSource(valueNode: VarValue | undefined, directive: Direct
     if (directive.meta.wrapperType === 'singleQuote') {
       baseSource.syntax = 'quoted';
       baseSource.hasInterpolation = false;
-    } else if (directive.meta.wrapperType === 'doubleQuote' || directive.meta.wrapperType === 'backtick') {
+    } else if (directive.meta.wrapperType === 'doubleQuote' || directive.meta.wrapperType === 'backtick' || directive.meta.wrapperType === 'doubleColon') {
       baseSource.syntax = 'template';
       baseSource.hasInterpolation = true; // Assume interpolation for these types
+    } else if (directive.meta.wrapperType === 'tripleColon') {
+      baseSource.syntax = 'template';
+      baseSource.hasInterpolation = true; // Triple colon uses {{var}} interpolation
     }
   }
 
@@ -339,14 +342,19 @@ export async function evaluateVar(
     // Check if this is a simple text array (backtick template)
     if (valueNode.length === 1 && valueNode[0].type === 'Text' && directive.meta?.wrapperType === 'backtick') {
         resolvedValue = valueNode[0].content;
-    } else if (directive.meta?.wrapperType === 'doubleBracket') {
-      // For double-bracket templates, store the AST for later interpolation
-      // DO NOT interpolate now - that happens when displayed
-      resolvedValue = valueNode; // Store the AST array as the value
-      logger.debug('Storing template AST for double-bracket template', {
-        identifier,
-        ast: valueNode
-      });
+    } else if (directive.meta?.wrapperType === 'doubleColon' || directive.meta?.wrapperType === 'tripleColon') {
+      // For double/triple colon templates, handle interpolation based on type
+      if (directive.meta?.wrapperType === 'tripleColon') {
+        // Triple colon uses {{var}} interpolation - store AST for lazy evaluation
+        resolvedValue = valueNode; // Store the AST array as the value
+        logger.debug('Storing template AST for triple-colon template', {
+          identifier,
+          ast: valueNode
+        });
+      } else {
+        // Double colon uses @var interpolation - interpolate now
+        resolvedValue = await interpolate(valueNode, env);
+      }
     } else {
       // Template or string content - need to interpolate
         resolvedValue = await interpolate(valueNode, env);
@@ -555,14 +563,20 @@ export async function evaluateVar(
     
     if (directive.meta?.wrapperType === 'singleQuote') {
       variable = createSimpleTextVariable(identifier, strValue, source, metadata);
-    } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick' || directive.meta?.wrapperType === 'doubleBracket') {
+    } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick' || directive.meta?.wrapperType === 'doubleColon' || directive.meta?.wrapperType === 'tripleColon') {
       // Template variable
-      const templateType = directive.meta?.wrapperType === 'doubleBracket' ? 'doubleBracket' : 'backtick';
-      // For double-bracket templates, the value is the AST array, not a string
-      const templateValue = directive.meta?.wrapperType === 'doubleBracket' && Array.isArray(resolvedValue) 
+      let templateType: 'backtick' | 'doubleColon' | 'tripleColon' = 'backtick';
+      if (directive.meta?.wrapperType === 'doubleColon') {
+        templateType = 'doubleColon';
+      } else if (directive.meta?.wrapperType === 'tripleColon') {
+        templateType = 'tripleColon';
+      }
+      
+      // For triple-colon templates, the value is the AST array, not a string
+      const templateValue = directive.meta?.wrapperType === 'tripleColon' && Array.isArray(resolvedValue) 
         ? resolvedValue as any // Pass the AST array
         : strValue; // For other templates, use the string value
-      variable = createTemplateVariable(identifier, templateValue, undefined, templateType, source, metadata);
+      variable = createTemplateVariable(identifier, templateValue, undefined, templateType as any, source, metadata);
     } else if (directive.meta?.wrapperType === 'doubleQuote' || source.hasInterpolation) {
       // Interpolated text - need to track interpolation points
       // For now, create without interpolation points - TODO: extract these from AST

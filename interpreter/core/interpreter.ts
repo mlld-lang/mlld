@@ -660,6 +660,7 @@ interface InterpolationNode {
   value?: string;
   commandRef?: any;
   withClause?: any;
+  pipes?: any[];
 }
 
 /**
@@ -694,6 +695,46 @@ export async function interpolate(
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');
       const result = await evaluateExecInvocation(node as any, env);
       parts.push(String(result.value));
+    } else if (node.type === 'InterpolationVar') {
+      // Handle {{var}} style interpolation (from triple colon templates)
+      const varName = node.identifier || node.name;
+      if (!varName) continue;
+      
+      let variable = env.getVariable(varName);
+      
+      // Check if this is a resolver variable that needs async resolution
+      if (!variable && env.hasVariable(varName)) {
+        // Try to get it as a resolver variable
+        const resolverVar = await env.getResolverVariable(varName);
+        if (resolverVar) {
+          variable = resolverVar;
+        }
+      }
+      
+      if (!variable) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          logger.debug('Variable not found during {{var}} interpolation:', { varName });
+        }
+        parts.push(`{{${varName}}}`); // Keep unresolved with {{}} syntax
+        continue;
+      }
+      
+      // Resolve the variable value
+      const value = await resolveVariableValue(variable, env);
+      
+      // Convert final value to string
+      let stringValue: string;
+      if (value === null) {
+        stringValue = 'null';
+      } else if (value === undefined) {
+        stringValue = '';
+      } else if (typeof value === 'object') {
+        stringValue = JSON.stringify(value);
+      } else {
+        stringValue = String(value);
+      }
+      
+      parts.push(stringValue);
     } else if (node.type === 'VariableReference') {
       const varName = node.identifier || node.name;
       if (!varName) continue;

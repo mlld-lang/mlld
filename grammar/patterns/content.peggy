@@ -204,6 +204,12 @@ BacktickTextSegment
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
+// Text inside double colons (excluding :, @ and < for interpolation)
+DoubleColonTextSegment
+  = chars:(![:@<] char:. { return char; })+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
+    }
+
 // Permissive text content for commands - allows everything except @ and the final closing ]
 CommandTextContent "Permissive command text content"
   = chars:CommandBracketChar+ { 
@@ -222,15 +228,10 @@ CommandBracketChar
 
 
 
-// Content inside double colons with {{var}} interpolation and <file.md>
-DoubleColonContent "Content with {{var}} interpolation"
-  = '::' parts:(InterpolationVar / FileReferenceInterpolation / TemplateTextSegment)* '::' {
-      helpers.debug('DoubleColonContent matched ::...::', { 
-        parts: parts,
-        isArray: Array.isArray(parts),
-        length: Array.isArray(parts) ? parts.length : 'not array',
-        firstType: Array.isArray(parts) && parts.length > 0 ? parts[0].type : 'none'
-      });
+// Content inside double colons with @var interpolation and <file.md>
+DoubleColonContent "Content with @var interpolation"
+  = '::' parts:(DoubleColonInterpolation)* '::' {
+      helpers.debug('DoubleColonContent matched ::...::', { parts });
       
       // Strip formatting newlines at grammar level
       // Process the parts array to remove leading/trailing newlines
@@ -268,7 +269,56 @@ DoubleColonContent "Content with {{var}} interpolation"
         }
       }
       
-      // Return only the content within double brackets, not the brackets themselves
+      // Return only the content within double colons, not the colons themselves
+      return processedParts;
+    }
+
+// NEW: Interpolation pattern for :: syntax (now @var interpolation)
+DoubleColonInterpolation
+  = BacktickExecInvocation      // @func(args)
+  / FileReferenceInterpolation   // <file.md>
+  / VariableWithPipes           // @var or @var.field with pipes
+  / "@" !BaseIdentifier char:. { // @ followed by non-identifier
+      return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
+    }
+  / DoubleColonTextSegment      // Plain text
+
+// NEW: Triple colon content with {{var}} interpolation
+TripleColonContent "Content with {{var}} interpolation"
+  = ':::' parts:(InterpolationVar / FileReferenceInterpolation / TemplateTextSegment)* ':::' {
+      helpers.debug('TripleColonContent matched :::...:::', { parts });
+      
+      // Strip formatting newlines (same as current DoubleColonContent)
+      let processedParts = parts;
+      
+      // Remove leading newline if first part is a Text node starting with \n
+      if (processedParts.length > 0 && processedParts[0].type === 'Text' && processedParts[0].content) {
+        if (processedParts[0].content === '\n') {
+          processedParts = processedParts.slice(1);
+        } else if (processedParts[0].content.startsWith('\n')) {
+          processedParts[0] = {
+            ...processedParts[0],
+            content: processedParts[0].content.slice(1)
+          };
+        }
+      }
+      
+      // Remove trailing newline if last part is a Text node ending with \n
+      if (processedParts.length > 0) {
+        const lastIndex = processedParts.length - 1;
+        const lastPart = processedParts[lastIndex];
+        if (lastPart.type === 'Text' && lastPart.content) {
+          if (lastPart.content === '\n') {
+            processedParts = processedParts.slice(0, -1);
+          } else if (lastPart.content.endsWith('\n')) {
+            processedParts[lastIndex] = {
+              ...lastPart,
+              content: lastPart.content.slice(0, -1)
+            };
+          }
+        }
+      }
+      
       return processedParts;
     }
   // Support direct {{var}} without requiring [[ ]] wrapper
@@ -363,9 +413,10 @@ InterpolatedDoubleQuoteContent "Double quoted content with @var interpolation"
 InterpolatedPathContent "Path content with @var interpolation" 
   = BracketContent  // Already exists: [...]
 
-// Template content with {{var}} interpolation (double colons only)
-InterpolatedTemplateContent "Template content with {{var}} interpolation"
-  = DoubleColonContent  // Already exists: ::...:::
+// Template content with interpolation (double and triple colons)
+InterpolatedTemplateContent "Template content with interpolation"
+  = DoubleColonContent    // Now @var interpolation
+  / TripleColonContent    // Now {{var}} interpolation
 
 // -------------------------------------------------------------
 // COMBO PATTERNS - Combine different types of patterns with clear semantics
@@ -377,7 +428,15 @@ PathStyleInterpolation "Path interpolation patterns"
 
 // Template-style interpolation: multiple types with different interpolation behavior
 TemplateStyleInterpolation "Template interpolation patterns"  
-  = rule:InterpolatedTemplateContent {
+  = rule:TripleColonContent {
+      helpers.debug('TemplateStyleInterpolation matched triple colon with {{var}} interpolation', { rule });
+      
+      return {
+        content: rule,
+        wrapperType: 'tripleColon'
+      };
+    }
+  / rule:InterpolatedTemplateContent {
       helpers.debug('TemplateStyleInterpolation matched InterpolatedTemplateContent', { 
         rule, 
         isArray: Array.isArray(rule),
@@ -392,7 +451,7 @@ TemplateStyleInterpolation "Template interpolation patterns"
       
       return {
         content: rule,
-        wrapperType: 'doubleBracket'
+        wrapperType: 'doubleColon'  // Now means @var interpolation
       };
     }
   / '`' parts:(BacktickInterpolation)* '`' {
