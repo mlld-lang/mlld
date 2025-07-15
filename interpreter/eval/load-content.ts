@@ -1,5 +1,9 @@
 /**
  * Implementation classes for content loading with metadata support
+ * 
+ * Note: The special array factory functions (createLoadContentResultArray and 
+ * createRenamedContentArray) are deprecated as of Phase 2 of the type refactor.
+ * Use the Variable-based alternatives from variable-migration.ts instead.
  */
 
 import { JSDOM } from 'jsdom';
@@ -354,6 +358,7 @@ export class LoadContentResultHTMLImpl extends LoadContentResultImpl implements 
 
 /**
  * Factory function to create LoadContentResultArray with smart behavior
+ * @deprecated Use createLoadContentResultVariable from variable-migration.ts instead
  */
 export function createLoadContentResultArray(items: LoadContentResult[]): LoadContentResultArray {
   const array = items as LoadContentResultArray;
@@ -373,6 +378,7 @@ export function createLoadContentResultArray(items: LoadContentResult[]): LoadCo
 
 /**
  * Factory function to create RenamedContentArray with smart behavior
+ * @deprecated Use createRenamedContentVariable from variable-migration.ts instead
  */
 export function createRenamedContentArray(items: string[]): RenamedContentArray {
   const array = items as RenamedContentArray;

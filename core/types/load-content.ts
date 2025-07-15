@@ -71,17 +71,13 @@ export function isRenamedContentArray(value: unknown): value is RenamedContentAr
     return true;
   }
   
-  // Fallback to instanceof for backward compatibility
-  // This requires the RenamedContentArray class to be available
-  try {
-    // Import the implementation to check instanceof
-    const { createRenamedContentArray } = require('@interpreter/eval/load-content');
-    const RenamedContentArray = Object.getPrototypeOf(createRenamedContentArray([])).constructor;
-    if (value instanceof RenamedContentArray) {
+  // Check if it's a string array with custom toString
+  if (Array.isArray(value) && value.every(item => typeof item === 'string')) {
+    // Check if it has the custom toString behavior
+    const hasCustomToString = value.toString !== Array.prototype.toString;
+    if (hasCustomToString && value.toString() === value.join('\n\n')) {
       return true;
     }
-  } catch {
-    // If we can't import the class, skip instanceof check
   }
   
   // REMOVED: The broken content-based check that was too generic
