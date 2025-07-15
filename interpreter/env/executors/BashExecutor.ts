@@ -4,6 +4,7 @@ import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import { isTextLike, type Variable } from '@core/types/variable';
+import { prepareVariablesForBash, injectBashHelpers } from '../bash-variable-helpers';
 
 export interface VariableProvider {
   /**
@@ -47,15 +48,22 @@ export class BashExecutor extends BaseCommandExecutor {
 
     try {
       // Build environment variables from parameters
-      const envVars: Record<string, string> = {};
+      let envVars: Record<string, string> = {};
+      const isEnhancedMode = process.env.MLLD_ENHANCED_VARIABLE_PASSING === 'true';
       
       if (params && typeof params === 'object') {
-        for (const [key, value] of Object.entries(params)) {
-          // Convert value to string for environment variable
-          if (typeof value === 'object' && value !== null) {
-            envVars[key] = JSON.stringify(value);
-          } else {
-            envVars[key] = String(value);
+        if (isEnhancedMode) {
+          // Use Variable-aware conversion
+          envVars = prepareVariablesForBash(params);
+        } else {
+          // Standard conversion
+          for (const [key, value] of Object.entries(params)) {
+            // Convert value to string for environment variable
+            if (typeof value === 'object' && value !== null) {
+              envVars[key] = JSON.stringify(value);
+            } else {
+              envVars[key] = String(value);
+            }
           }
         }
       } else {
@@ -65,6 +73,18 @@ export class BashExecutor extends BaseCommandExecutor {
         for (const [name, variable] of variables) {
           if (isTextLike(variable) && typeof variable.value === 'string') {
             envVars[name] = variable.value;
+            
+            // In enhanced mode, also add metadata
+            if (isEnhancedMode) {
+              envVars[`MLLD_TYPE_${name}`] = variable.type;
+              if (variable.subtype) {
+                envVars[`MLLD_SUBTYPE_${name}`] = variable.subtype;
+              }
+              if (variable.metadata && Object.keys(variable.metadata).length > 0) {
+                envVars[`MLLD_METADATA_${name}`] = JSON.stringify(variable.metadata);
+              }
+              envVars[`MLLD_IS_VARIABLE_${name}`] = 'true';
+            }
           }
         }
       }
@@ -80,8 +100,11 @@ export class BashExecutor extends BaseCommandExecutor {
         };
       }
       
+      // Inject mlld helper functions if in enhanced mode
+      const codeWithHelpers = injectBashHelpers(code, isEnhancedMode);
+      
       // Detect command substitution patterns and automatically add stderr capture
-      const enhancedCode = CommandUtils.enhanceShellCodeForCommandSubstitution(code);
+      const enhancedCode = CommandUtils.enhanceShellCodeForCommandSubstitution(codeWithHelpers);
       
       // For multiline bash scripts, use stdin to avoid shell escaping issues
       // Use spawnSync to capture both stdout and stderr

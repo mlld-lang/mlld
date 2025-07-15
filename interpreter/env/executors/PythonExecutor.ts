@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
+import { generatePythonMlldHelpers, convertToPythonValue } from '../python-variable-helpers';
 
 export interface ShellCommandExecutor {
   /**
@@ -54,12 +55,25 @@ export class PythonExecutor extends BaseCommandExecutor {
     try {
       // Build Python code with parameters
       let pythonCode = '';
+      const isEnhancedMode = process.env.MLLD_ENHANCED_VARIABLE_PASSING === 'true';
+      
+      // Add mlld helpers in enhanced mode
+      if (isEnhancedMode) {
+        pythonCode += generatePythonMlldHelpers() + '\n';
+      }
+      
       if (params && typeof params === 'object') {
         for (const [key, value] of Object.entries(params)) {
-          pythonCode += `${key} = ${JSON.stringify(value)}\n`;
+          if (isEnhancedMode) {
+            // Use Variable-aware conversion
+            pythonCode += convertToPythonValue(value, key) + '\n';
+          } else {
+            // Standard JSON conversion
+            pythonCode += `${key} = ${JSON.stringify(value)}\n`;
+          }
         }
       }
-      pythonCode += code;
+      pythonCode += '\n# User code:\n' + code;
       
       // Write to temp file
       fs.writeFileSync(tmpFile, pythonCode);
