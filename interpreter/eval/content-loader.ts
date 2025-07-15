@@ -8,6 +8,7 @@ import * as path from 'path';
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
+import type { ArrayVariable } from '@core/types/variable/VariableTypes';
 
 /**
  * Check if a path contains glob patterns
@@ -406,9 +407,75 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
   
   // Type assertion based on what we're returning
   if (options?.section?.renamed) {
-    return createRenamedContentArray(results as string[]);
+    // Create RenamedContentArray with Variable metadata tagging
+    const arrayValue = results as string[];
+    
+    // Create ArrayVariable with special metadata
+    const variable: ArrayVariable = {
+      type: 'array',
+      name: 'glob-result',
+      value: arrayValue,
+      source: {
+        directive: 'var',
+        syntax: 'array',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      createdAt: Date.now(),
+      modifiedAt: Date.now(),
+      metadata: {
+        arrayType: 'renamed-content',
+        joinSeparator: '\n\n',
+        customToString: () => arrayValue.join('\n\n'),
+        fromGlobPattern: true,
+        globPattern: pattern,
+        fileCount: arrayValue.length
+      }
+    };
+    
+    // For now, still return the special class but tag it
+    const renamedArray = createRenamedContentArray(arrayValue);
+    Object.defineProperty(renamedArray, '__variable', {
+      value: variable,
+      enumerable: false
+    });
+    
+    return renamedArray;
   } else {
-    return createLoadContentResultArray(results as LoadContentResult[]);
+    // Create LoadContentResultArray with Variable metadata tagging
+    const loadContentArray = results as LoadContentResult[];
+    
+    // Create ArrayVariable with special metadata
+    const variable: ArrayVariable = {
+      type: 'array',
+      name: 'glob-result',
+      value: loadContentArray,
+      source: {
+        directive: 'var',
+        syntax: 'array',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      createdAt: Date.now(),
+      modifiedAt: Date.now(),
+      metadata: {
+        arrayType: 'load-content-result',
+        joinSeparator: '\n\n',
+        customToString: () => loadContentArray.map(item => item.content).join('\n\n'),
+        fromGlobPattern: true,
+        globPattern: pattern,
+        fileCount: loadContentArray.length
+      }
+    };
+    
+    // Still return the special array but tag it
+    const resultArray = createLoadContentResultArray(loadContentArray);
+    Object.defineProperty(resultArray, '__variable', {
+      value: variable,
+      enumerable: false
+    });
+    
+    return resultArray;
   }
 }
 

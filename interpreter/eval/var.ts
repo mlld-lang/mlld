@@ -503,10 +503,30 @@ export async function evaluateVar(
       variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
     } else if (isLoadContentResultArray(resolvedValue)) {
       // Array of files from glob pattern - store as array variable
-      variable = createArrayVariable(identifier, resolvedValue, true, source, metadata);
+      // Check if this array has been tagged with __variable metadata
+      const taggedVariable = (resolvedValue as any).__variable;
+      if (taggedVariable) {
+        // Use the metadata from the tagged variable
+        variable = createArrayVariable(identifier, resolvedValue, true, source, {
+          ...metadata,
+          ...taggedVariable.metadata
+        });
+      } else {
+        variable = createArrayVariable(identifier, resolvedValue, true, source, metadata);
+      }
     } else if (Array.isArray(resolvedValue) && resolvedValue.every(item => typeof item === 'string')) {
       // Array of strings from transformed content - store as simple array
-      variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+      // Check if this array has been tagged with __variable metadata
+      const taggedVariable = (resolvedValue as any).__variable;
+      if (taggedVariable) {
+        // Use the metadata from the tagged variable
+        variable = createArrayVariable(identifier, resolvedValue, false, source, {
+          ...metadata,
+          ...taggedVariable.metadata
+        });
+      } else {
+        variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+      }
     } else if (typeof resolvedValue === 'string') {
       // Backward compatibility - plain string (e.g., from section extraction)
       if (contentSource.type === 'path') {
