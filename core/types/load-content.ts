@@ -44,6 +44,13 @@ export interface LoadContentResultArray extends Array<LoadContentResult> {
  * Type guard for LoadContentResultArray
  */
 export function isLoadContentResultArray(value: unknown): value is LoadContentResultArray {
+  // Check for tagged Variable first
+  const variable = (value as any)?.__variable;
+  if (variable && variable.type === 'array' && variable.metadata?.arrayType === 'load-content-result') {
+    return true;
+  }
+  
+  // Original check for actual LoadContentResult arrays
   return Array.isArray(value) && value.every(isLoadContentResult);
 }
 
