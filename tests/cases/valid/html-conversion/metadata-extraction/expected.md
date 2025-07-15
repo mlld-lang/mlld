@@ -22,4 +22,4 @@ This is test content.
 
 ## Content Formats
 - HTML length: 234 characters
-- Plain text length: 49 characters
+- Plain text length: 38 characters

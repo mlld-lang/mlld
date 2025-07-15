@@ -222,7 +222,7 @@ export class LoadContentResultURLImpl extends LoadContentResultImpl implements L
     if (contentType?.includes('text/html')) {
       try {
         const dom = new JSDOM(this.rawContent);
-        return dom.window.document.body?.textContent || '';
+        return dom.window.document.body?.textContent?.trim() || '';
       } catch {
         return this.rawContent;
       }
@@ -335,11 +335,7 @@ export class LoadContentResultHTMLImpl extends LoadContentResultImpl implements 
   get text(): string {
     try {
       const dom = new JSDOM(this._rawHtml);
-      const textContent = dom.window.document.body?.textContent || '';
-      
-      // Include title text in the output to match test expectations
-      const titleText = this.title ? `${this.title}\n\n` : '';
-      return titleText + textContent.trim();
+      return dom.window.document.body?.textContent?.trim() || '';
     } catch {
       return this._rawHtml;
     }
