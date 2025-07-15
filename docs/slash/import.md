@@ -107,7 +107,7 @@ Using imported variables:
 ```mlld
 /import { importedName, importedCommand } from "./utils.mld"
 
-/var @message = ::Hello, {{importedName}}!::
+/var @message = :::Hello, {{importedName}}!:::
 /run @importedCommand(@param)
 ```
 

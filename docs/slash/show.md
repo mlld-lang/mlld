@@ -17,7 +17,7 @@ The `/show` directive displays content from external files, variables, or templa
 /show "Section Title" from <path> as "# New Title"
 /show @variable
 /show "literal text"
-/show ::template content with {{variables}}::
+/show :::template content with {{variables}}:::
 /show @templateFunction(param1, param2)
 ```
 
@@ -79,10 +79,10 @@ Display content with variable interpolation:
 Use template functions defined with /exec:
 
 ```mlld
-/exe @greet(name) = ::Hello, {{name}}!::
+/exe @greet(name) = :::Hello, {{name}}!:::
 /show @greet("World")
 
-/exe @message(user, action) = ::{{user}} {{action}} successfully!::
+/exe @message(user, action) = :::{{user}} {{action}} successfully!:::
 /show @message("Alice", "logged in")
 ```
 

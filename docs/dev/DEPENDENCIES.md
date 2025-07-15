@@ -81,8 +81,8 @@ mlld-version: ">=1.0.0-rc"
 needs: []  # No external dependencies
 ---
 
-@text upper(text) = ::{{text}}::  # Would need JS for actual uppercase
-@text join(a, b) = ::{{a}}{{b}}::
+@text upper(text) = :::{{text}}:::  # Would need JS for actual uppercase
+@text join(a, b) = :::{{a}}{{b}}:::
 ```
 
 ### JavaScript Module

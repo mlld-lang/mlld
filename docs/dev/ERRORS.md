@@ -185,7 +185,7 @@ MlldParseError: Expected closing template delimiter "::" after template content.
 ```
 VariableResolutionError: Variable 'missing' is not defined
 
-  3 | @text output = ::Hello, {{missing}}::
+  3 | @text output = :::Hello, {{missing}}:::
                               ^^^^^^^^^
 
 Available variables: name, title, date

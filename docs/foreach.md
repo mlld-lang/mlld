@@ -149,7 +149,7 @@ Generate structured reports from data:
   {"name": "Disk", "value": 67, "unit": "%"}
 ]
 
-@text metric_row(m) = ::| {{m.name}} | {{m.value}}{{m.unit}} |::
+@text metric_row(m) = :::| {{m.name}} | {{m.value}}{{m.unit}} |:::
 @data rows = foreach @metric_row(@metrics)
 
 | Metric | Usage |
@@ -173,7 +173,7 @@ Extract the same section from multiple files:
 ]
 
 # Extract "introduction" section from each file
-@data intros = foreach <@files.path # introduction> as ::### {{files.name}}::
+@data intros = foreach <@files.path # introduction> as :::### {{files.name}}:::
 @add @intros
 ```
 
@@ -191,7 +191,7 @@ Use dynamic section names stored in the array data:
 ]
 
 # Extract different sections based on array data
-@data sections = foreach <@docs.path # @docs.section> as ::## {{docs.title}}::
+@data sections = foreach <@docs.path # @docs.section> as :::## {{docs.title}}:::
 @add @sections
 ```
 
@@ -204,7 +204,7 @@ Perfect for building documentation from module files:
 @data modules = @scanFiles("./modules", "*.mld.md")
 
 # Extract tldr sections and format as module index
-@add foreach <@modules.path # tldr> as ::### [{{modules.frontmatter.name}}]({{modules.path}})::
+@add foreach <@modules.path # tldr> as :::### [{{modules.frontmatter.name}}]({{modules.path}}):::
 ```
 
 ### All Directive Support
@@ -216,10 +216,10 @@ Section extraction works with all foreach-compatible directives:
 @data summaries = foreach <@files.path # summary> as ::{{files.name}}: Summary::
 
 # Text directive - assign to variable  
-@text content = foreach <@docs.path # @docs.section> as ::## {{docs.title}}::
+@text content = foreach <@docs.path # @docs.section> as :::## {{docs.title}}:::
 
 # Add directive - direct output
-@add foreach <@modules.path # interface> as ::```{{modules.language}}\n{{content}}\n```::
+@add foreach <@modules.path # interface> as :::```{{modules.language}}\n{{content}}\n```:::
 ```
 
 ### Section Variable Collection (Traditional Method)
@@ -228,7 +228,7 @@ For comparison, the traditional method using parameterized commands:
 
 ```mlld
 @data sections = ["introduction", "methodology", "results", "conclusion"]
-@text extractSection(name) = ::Content from {{name}} section::
+@text extractSection(name) = :::Content from {{name}} section:::
 
 # Extract all sections with foreach
 @data allSections = foreach @extractSection(@sections)

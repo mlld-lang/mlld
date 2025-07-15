@@ -40,7 +40,8 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 
 ```
 < >     File/URL loading and content extraction
-:: ::   Template boundaries (double-bracket templates)
+:: ::   Double colon template boundaries (@ interpolation)
+::: ::: Triple colon template boundaries ({{}} interpolation)
 { }     Command boundaries (braces for multi-line)
 " "     Command boundaries (quotes for single-line)
 ` `     Backtick templates (with @ interpolation)
@@ -61,7 +62,7 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 - Single-line strings (', ") cannot contain newlines
 - Double quotes (") support @ interpolation: "Hello @name"
 - Backtick templates (`) support @ interpolation: `Hello @name!`
-- Double-bracket templates support {{}} interpolation: ::Hello {{name}}!::
+- Double-bracket templates support {{}} interpolation: :::Hello {{name}}!:::
 
 ### Identifiers
 
@@ -90,7 +91,7 @@ Variables are created with `@identifier` prefix and referenced differently based
 @name                              # Reference in directives
 "Hello @name"                     # Reference in double quotes
 `Welcome @name!`                   # Reference in backtick templates
-::Content with {{name}}::          # Reference in double-bracket templates
+:::Content with {{name}}:::          # Reference in double-bracket templates
 ```
 
 ### Data Variables
@@ -133,7 +134,7 @@ def hello():
 /show "Section" from <path> as "# New Title"
 /show @variable                          # Add variable content
 /show "Literal text"                    # Add literal text
-/show ::Template with {{var}}::          # Add template
+/show :::Template with {{var}}:::          # Add template
 ```
 
 ### /run
@@ -176,7 +177,7 @@ def hello():
 /var @name = "value"                    # Simple text
 /var @greeting = "Hello @name!"         # With @ interpolation
 /var @template = `Welcome @user!`       # Backtick template
-/var @content = ::Hello {{name}}!::     # Double-bracket template
+/var @content = :::Hello {{name}}!:::     # Double-bracket template
 /var @result = /run "date"              # From command output
 ```
 
@@ -206,14 +207,24 @@ def hello():
 /var @link = `<@title>(@url)`
 ```
 
-### Double-Bracket Templates (For @ heavy content)
+### Double Colon Templates (Alternative to backticks - with @ interpolation)
 ```mlld
-/var @tweet = ::Hey {{user}}, check out {{handle}}'s new post!::
-/var @prompt = ::
+/var @docs = ::The `getData()` function returns @value::
+/var @code = ::
+  Use `npm install` to setup
+  Then call `init(@name)` to start
+::
+```
+Double colon syntax is useful when you need backticks inside your template.
+
+### Triple Colon Templates (For {{}} interpolation)
+```mlld
+/var @tweet = :::Hey {{user}}, check out {{handle}}'s new post!:::
+/var @prompt = :::
   System: {{role}}
   Context: {{context.data}}
   User: {{username}}
-::
+:::
 ```
 
 ## Variable Interpolation Rules
@@ -222,9 +233,11 @@ def hello():
 - **Double quotes**: `"Hello @name"` - @ interpolation works
 - **Single quotes**: `'Hello @name'` - @ is literal text (no interpolation)
 - **Backtick templates**: `` `Hello @name!` `` - @ interpolation works
-- **Double-bracket templates**: `::Hello {{name}}!::` - Use {{}} for variables
+- **Double colon templates**: `::Hello @name!::` - @ interpolation works
+- **Triple colon templates**: `:::Hello {{name}}!:::` - Use {{}} for variables
 - **Commands in braces**: `{echo "User: @name"}` - @ interpolation works
 - **Directives**: `/add @greeting` - Direct @ reference
 
-### Key Rule: "Double brackets, double braces"
-In `::...::` templates, always use `{{variable}}` syntax.
+### Key Rule: Template Interpolation
+- Single/double quotes, backticks, and `::...::` use `@variable` syntax
+- Triple colons `:::...:::` use `{{variable}}` syntax

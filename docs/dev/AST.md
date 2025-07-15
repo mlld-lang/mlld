@@ -68,7 +68,7 @@ VariableReference nodes appear in many contexts with different `valueType` value
 - **Context**: Variable inside template interpolation using `{{}}` syntax
 - **Examples**: `{{name}}`, `{{user.email}}`
 - **Appears in**:
-  - Template content: `::Hello {{name}}!::`
+  - Template content: `:::Hello {{name}}!:::`
   - Quoted strings in templates
 
 #### `valueType: 'identifier'`
