@@ -216,7 +216,11 @@ export async function evaluateShow(
       }
     }
     
-    // Extract Variable value if needed before display
+    /**
+     * Extract Variable value for display output
+     * WHY: Display contexts need raw values because users see final content,
+     *      not internal Variable metadata or wrapper objects
+     */
     const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
     value = await resolveValue(value, env, ResolutionContext.Display);
     

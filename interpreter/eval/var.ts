@@ -323,7 +323,11 @@ export async function evaluateVar(
     const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
     const { accessField } = await import('../utils/field-access');
     
-    // Preserve the Variable when copying
+    /**
+     * Preserve Variable wrapper when copying variable references
+     * WHY: Variable copies need to maintain metadata and type information
+     *      for proper Variable flow through the system
+     */
     const resolvedVar = await resolveVariable(sourceVar, env, ResolutionContext.VariableCopy);
     
     // Handle field access if present
@@ -369,7 +373,11 @@ export async function evaluateVar(
     // Apply condensed pipes if present (e.g., @var|@transform)
     if (valueNode.pipes && valueNode.pipes.length > 0) {
       const { applyCondensedPipes } = await import('../core/interpreter');
-      // Extract Variable value before passing to pipeline
+      /**
+       * Extract Variable value for pipeline processing
+       * WHY: Pipeline stages need raw values because they perform text transformations
+       *      on content, not Variable metadata
+       */
       const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
       const pipelineInput = await resolveValue(resolvedValue, env, ResolutionContext.PipelineInput);
       resolvedValue = await applyCondensedPipes(pipelineInput, valueNode.pipes, env);
@@ -911,7 +919,11 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
         throw new Error(`Variable not found: ${item.identifier}`);
       }
       
-      // Use enhanced resolution that preserves Variables in array context
+      /**
+       * Preserve Variable wrapper when storing in array elements
+       * WHY: Array elements should maintain Variable metadata to enable proper
+       *      Variable flow through data structures
+       */
       const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
       return await resolveVariable(variable, env, ResolutionContext.ArrayElement);
 

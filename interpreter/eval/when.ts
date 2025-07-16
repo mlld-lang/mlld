@@ -21,7 +21,11 @@ import {
  * Compares two values according to mlld's when comparison rules
  */
 async function compareValues(expressionValue: any, conditionValue: any, env: Environment): Promise<boolean> {
-  // Extract Variable values if needed before comparison
+  /**
+   * Extract Variable values for equality comparison
+   * WHY: Equality operations need raw values because comparisons work on
+   *      primitive types, not Variable wrapper objects
+   */
   const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
   expressionValue = await resolveValue(expressionValue, env, ResolutionContext.Equality);
   conditionValue = await resolveValue(conditionValue, env, ResolutionContext.Equality);
@@ -588,6 +592,11 @@ async function evaluateCondition(
             return false;
           }
           if (result.value !== undefined && result.value !== result.stdout) {
+            /**
+             * Extract Variable value for truthiness evaluation
+             * WHY: Truthiness checks need raw values because boolean logic operates on
+             *      primitive types, not Variable metadata
+             */
             const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
             const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
             return isTruthy(finalValue);
@@ -595,6 +604,11 @@ async function evaluateCondition(
           return isTruthy(result.stdout.trim());
         }
         
+        /**
+         * Extract Variable value for truthiness evaluation
+         * WHY: Truthiness checks need raw values because boolean logic operates on
+         *      primitive types, not Variable metadata
+         */
         const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
         const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
         return isTruthy(finalValue);
@@ -681,6 +695,11 @@ async function evaluateCondition(
     // If we have a parsed value (from exec functions with return values), use that
     // This handles the case where JSON stringified empty string '""' should be falsy
     if (result.value !== undefined && result.value !== result.stdout) {
+      /**
+       * Extract Variable value for truthiness evaluation
+       * WHY: Truthiness checks need raw values because boolean logic operates on
+       *      primitive types, not Variable metadata
+       */
       const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
       const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
       return isTruthy(finalValue);
@@ -693,7 +712,11 @@ async function evaluateCondition(
     return isTruthy(trimmedStdout);
   }
   
-  // Extract Variable value if needed before truthiness check
+  /**
+   * Extract Variable value for truthiness evaluation
+   * WHY: Truthiness checks need raw values because boolean logic operates on
+   *      primitive types, not Variable metadata
+   */
   const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
   const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
   

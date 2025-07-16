@@ -422,8 +422,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       }
     }
     
-    // Handle complex data variables with lazy evaluation
-    // Use enhanced resolution to preserve Variable context for field access
+    /**
+     * Preserve Variable wrapper for field access operations
+     * WHY: Field access needs Variable metadata to properly resolve complex data
+     *      structures and maintain access path information
+     */
     const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
     let resolvedValue = await resolveVariable(variable, env, ResolutionContext.FieldAccess);
     
@@ -724,7 +727,11 @@ export async function interpolate(
         continue;
       }
       
-      // Resolve the variable value - extract for string interpolation
+      /**
+       * Extract Variable value for string interpolation
+       * WHY: String interpolation needs raw values because template engines
+       *      work with primitive types, not Variable wrapper objects
+       */
       const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
       const value = await resolveVariable(variable, env, ResolutionContext.StringInterpolation);
       
@@ -798,7 +805,11 @@ export async function interpolate(
         try {
           if (process.env.MLLD_DEBUG === 'true') {
           }
-          // Use context-aware resolution for string interpolation
+          /**
+           * Extract Variable value for string interpolation
+           * WHY: String interpolation needs raw values because template engines
+           *      work with primitive types, not Variable wrapper objects
+           */
           const { resolveVariable, ResolutionContext: ResCtx } = await import('../utils/variable-resolution');
           value = await resolveVariable(variable, env, ResCtx.StringInterpolation);
           
@@ -876,7 +887,11 @@ export async function interpolate(
       // Convert final value to string
       let stringValue: string;
       
-      // Extract Variable value if needed before string conversion
+      /**
+       * Extract Variable value for string interpolation
+       * WHY: String interpolation needs raw values because template engines
+       *      work with primitive types, not Variable wrapper objects
+       */
       const { isVariable, resolveValue, ResolutionContext: ResContext } = await import('../utils/variable-resolution');
       value = await resolveValue(value, env, ResContext.StringInterpolation);
       
