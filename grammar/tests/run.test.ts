@@ -155,7 +155,7 @@ describe('Run directive', () => {
   
   describe('runExec subtype', () => {
     // Skip: Issue #100 - raw.identifier not populated in runExec AST nodes
-    test.skip('Basic command execution', async () => {
+    test('Basic command execution', async () => {
       const content = '/run @listFiles';
       const parseResult = await parse(content);
       
@@ -168,7 +168,7 @@ describe('Run directive', () => {
       
       // Check structured format
       expect(directiveNode.values.identifier).toBeDefined();
-      expect(directiveNode.values.identifier[0].content).toBe('listFiles');
+      expect(directiveNode.values.identifier[0].identifier).toBe('listFiles');
       expect(directiveNode.values.args).toEqual([]);
       expect(directiveNode.raw.identifier).toBe('listFiles');
       expect(directiveNode.raw.args).toEqual([]);
@@ -178,7 +178,7 @@ describe('Run directive', () => {
       expect(isRunExecDirective(directiveNode)).toBe(true);
     });
     
-    // Skip: Issue #100 - raw.identifier not populated in runExec AST nodes
+    // Skip: Grammar issue - space between identifier and arguments causes parsing problems
     test.skip('Command with arguments (with space)', async () => {
       const content = '/run @formatData ("large_file.json", "pretty")';
       const parseResult = await parse(content);
@@ -192,7 +192,7 @@ describe('Run directive', () => {
       
       // Check structured format
       expect(directiveNode.values.identifier).toBeDefined();
-      expect(directiveNode.values.identifier[0].content).toBe('formatData');
+      expect(directiveNode.values.identifier[0].identifier).toBe('formatData');
       expect(directiveNode.values.args).toHaveLength(2);
       expect(directiveNode.values.args[0].content).toBe('large_file.json');
       expect(directiveNode.values.args[1].content).toBe('pretty');
@@ -205,7 +205,7 @@ describe('Run directive', () => {
     });
     
     // Skip: Issue #100 - raw.identifier not populated in runExec AST nodes
-    test.skip('Command with arguments (without space)', async () => {
+    test('Command with arguments (without space)', async () => {
       const content = '/run @formatData("large_file.json", "pretty")';
       const parseResult = await parse(content);
       
@@ -218,7 +218,7 @@ describe('Run directive', () => {
       
       // Check structured format
       expect(directiveNode.values.identifier).toBeDefined();
-      expect(directiveNode.values.identifier[0].content).toBe('formatData');
+      expect(directiveNode.values.identifier[0].identifier).toBe('formatData');
       expect(directiveNode.values.args).toHaveLength(2);
       expect(directiveNode.values.args[0].content).toBe('large_file.json');
       expect(directiveNode.values.args[1].content).toBe('pretty');

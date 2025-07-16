@@ -252,7 +252,7 @@ describe('Fuzzy Local File Imports', () => {
       expect(result.trim()).toBe('# Important Content');
     });
     
-    it.skip('should fuzzy match directories in @path assignments', async () => {
+    it('should fuzzy match directories in @path assignments', async () => {
       // TODO: This test is failing with a parse error. The fuzzy matching
       // for paths used in variable interpolation within brackets may not be
       // working correctly. Needs investigation.
