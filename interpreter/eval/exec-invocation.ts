@@ -519,7 +519,19 @@ export async function evaluateExecInvocation(
         codeParams[paramName] = paramVar.value;
       } else if (isEnhancedVariablePassingEnabled() && paramVar) {
         // Enhanced mode: Pass Variable as proxy to shadow environment
-        codeParams[paramName] = prepareValueForShadow(paramVar);
+        // But first, check if it's a complex Variable that needs resolution
+        if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
+          // Complex Variable with AST - resolve it first
+          const resolvedValue = await resolveVariableValue(paramVar, execEnv);
+          const resolvedVar = {
+            ...paramVar,
+            value: resolvedValue,
+            isComplex: false
+          };
+          codeParams[paramName] = prepareValueForShadow(resolvedVar);
+        } else {
+          codeParams[paramName] = prepareValueForShadow(paramVar);
+        }
         
         // Store metadata for primitives that can't be proxied
         if (paramVar.value === null || typeof paramVar.value !== 'object') {

@@ -29,13 +29,15 @@ export const VARIABLE_PROXY_PROPS = {
 export function createVariableProxy(variable: Variable): any {
   const value = variable.value;
   
-  if (process.env.DEBUG_EXEC === 'true') {
+  if (process.env.DEBUG_EXEC === 'true' || variable.name === 'users') {
     console.log('createVariableProxy called:', {
       variableName: variable.name,
       variableType: variable.type,
       valueType: typeof value,
       isArray: Array.isArray(value),
-      valueKeys: value && typeof value === 'object' ? Object.keys(value) : 'not-object'
+      valueKeys: value && typeof value === 'object' ? Object.keys(value) : 'not-object',
+      sampleValue: value && typeof value === 'object' && 'type' in value ? 
+        { type: value.type, hasItems: 'items' in value } : 'no-type'
     });
   }
   
