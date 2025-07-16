@@ -180,7 +180,7 @@ export async function evaluateShow(
     
     // Handle field access if present in the variable node
     if (variableNode.fields && variableNode.fields.length > 0 && typeof value === 'object' && value !== null) {
-      const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
+      const { accessField } = await import('../utils/field-access');
       for (const field of variableNode.fields) {
         // Handle variableIndex type - need to resolve the variable first
         if (field.type === 'variableIndex') {
@@ -195,11 +195,11 @@ export async function evaluateShow(
           }
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = accessFieldEnhanced(value, resolvedField);
-          value = fieldResult.value;
+          const fieldResult = accessField(value, resolvedField, { preserveContext: true });
+          value = (fieldResult as any).value;
         } else {
-          const fieldResult = accessFieldEnhanced(value, field);
-          value = fieldResult.value;
+          const fieldResult = accessField(value, field, { preserveContext: true });
+          value = (fieldResult as any).value;
         }
         if (value === undefined) break;
       }

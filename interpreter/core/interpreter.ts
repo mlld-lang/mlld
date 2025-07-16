@@ -429,9 +429,9 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     
     // Handle field access if present
     if (node.fields && node.fields.length > 0) {
-      const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
+      const { accessField } = await import('../utils/field-access');
       
-      // accessFieldEnhanced handles Variable extraction internally when needed
+      // accessField handles Variable extraction internally when needed
       // No need to manually extract here
       
       // Apply each field access in sequence
@@ -449,11 +449,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           }
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = accessFieldEnhanced(resolvedValue, resolvedField);
-          resolvedValue = fieldResult.value;
+          const fieldResult = accessField(resolvedValue, resolvedField, { preserveContext: true });
+          resolvedValue = (fieldResult as any).value;
         } else {
-          const fieldResult = accessFieldEnhanced(resolvedValue, field);
-          resolvedValue = fieldResult.value;
+          const fieldResult = accessField(resolvedValue, field, { preserveContext: true });
+          resolvedValue = (fieldResult as any).value;
         }
         if (resolvedValue === undefined) break;
       }
@@ -829,7 +829,7 @@ export async function interpolate(
       
       // Handle field access if present
       if (node.fields && node.fields.length > 0 && typeof value === 'object' && value !== null) {
-        const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
+        const { accessField } = await import('../utils/field-access');
         for (const field of node.fields) {
           // Handle variableIndex type - need to resolve the variable first
           if (field.type === 'variableIndex') {
@@ -844,11 +844,11 @@ export async function interpolate(
             }
             // Create a new field with the resolved value
             const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-            const fieldResult = accessFieldEnhanced(value, resolvedField);
-            value = fieldResult.value;
+            const fieldResult = accessField(value, resolvedField, { preserveContext: true });
+            value = (fieldResult as any).value;
           } else {
-            const fieldResult = accessFieldEnhanced(value, field);
-            value = fieldResult.value;
+            const fieldResult = accessField(value, field, { preserveContext: true });
+            value = (fieldResult as any).value;
           }
           
           // Handle null nodes from the grammar
@@ -1134,11 +1134,11 @@ async function processFileFields(
   // Process field access
   if (fields && fields.length > 0) {
     // Use enhanced field access for better error messages
-    const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
+    const { accessField } = await import('../utils/field-access');
     for (const field of fields) {
       try {
-        const fieldResult = accessFieldEnhanced(result, field);
-        result = fieldResult.value;
+        const fieldResult = accessField(result, field, { preserveContext: true });
+        result = (fieldResult as any).value;
         if (result === undefined) {
           // Warning to stderr
           console.error(`Warning: field '${field.value}' not found`);

@@ -11,7 +11,7 @@ import {
   Variable
 } from '@core/types/variable';
 import { interpolate, resolveVariableValue } from '../../core/interpreter';
-import { accessFieldEnhanced, accessFieldsEnhanced } from '../../utils/field-access-enhanced';
+import { accessField, accessFields } from '../../utils/field-access';
 import { logger } from '@core/utils/logger';
 
 /**
@@ -171,11 +171,11 @@ export class VariableReferenceEvaluator {
           }
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = accessFieldEnhanced(result, resolvedField);
-          result = fieldResult.value;
+          const fieldResult = accessField(result, resolvedField, { preserveContext: true });
+          result = (fieldResult as any).value;
         } else {
-          const fieldResult = accessFieldEnhanced(result, field);
-          result = fieldResult.value;
+          const fieldResult = accessField(result, field, { preserveContext: true });
+          result = (fieldResult as any).value;
         }
       }
     }
@@ -231,8 +231,8 @@ export class VariableReferenceEvaluator {
     
     // Apply field access if present
     if (varRef.fields && varRef.fields.length > 0) {
-      const { accessFieldsEnhanced } = await import('../../utils/field-access-enhanced');
-      const fieldResult = accessFieldsEnhanced(result, varRef.fields);
+      const { accessFields } = await import('../../utils/field-access');
+      const fieldResult = accessFields(result, varRef.fields, { preserveContext: true });
       result = fieldResult.value;
     }
     
@@ -296,11 +296,11 @@ export class VariableReferenceEvaluator {
           }
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = accessFieldEnhanced(result, resolvedField);
-          result = fieldResult.value;
+          const fieldResult = accessField(result, resolvedField, { preserveContext: true });
+          result = (fieldResult as any).value;
         } else {
-          const fieldResult = accessFieldEnhanced(result, field);
-          result = fieldResult.value;
+          const fieldResult = accessField(result, field, { preserveContext: true });
+          result = (fieldResult as any).value;
         }
       }
     }

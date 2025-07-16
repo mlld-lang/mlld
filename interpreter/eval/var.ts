@@ -321,7 +321,7 @@ export async function evaluateVar(
     
     // Copy the variable type from source - preserve Variables!
     const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
-    const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
+    const { accessField } = await import('../utils/field-access');
     
     // Preserve the Variable when copying
     const resolvedVar = await resolveVariable(sourceVar, env, ResolutionContext.VariableCopy);
@@ -332,12 +332,15 @@ export async function evaluateVar(
       // No need to extract again - field access will handle extraction if needed
       
       // Use enhanced field access to preserve context
-      const fieldResult = accessFieldEnhanced(resolvedVar, valueNode.fields[0]);
-      let currentResult = fieldResult;
+      const fieldResult = accessField(resolvedVar, valueNode.fields[0], { preserveContext: true });
+      let currentResult = fieldResult as any;
       
       // Apply remaining fields if any
       for (let i = 1; i < valueNode.fields.length; i++) {
-        currentResult = accessFieldEnhanced(currentResult.value, valueNode.fields[i], currentResult.accessPath);
+        currentResult = accessField(currentResult.value, valueNode.fields[i], { 
+          preserveContext: true, 
+          parentPath: currentResult.accessPath 
+        });
       }
       
       resolvedValue = currentResult.value;
@@ -425,7 +428,7 @@ export async function evaluateVar(
     
     // Get the base value - preserve Variable for field access
     const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
-    const { accessFieldsEnhanced } = await import('../utils/field-access-enhanced');
+    const { accessFields } = await import('../utils/field-access');
     
     // Determine appropriate context based on what operations will be performed
     const needsPipelineExtraction = varWithTail.withClause && varWithTail.withClause.pipeline;
@@ -442,8 +445,8 @@ export async function evaluateVar(
     // Apply field access if present
     if (varWithTail.variable.fields && varWithTail.variable.fields.length > 0) {
       // Use enhanced field access to track context
-      const fieldResult = accessFieldsEnhanced(resolvedVar, varWithTail.variable.fields);
-      result = fieldResult.value;
+      const fieldResult = accessFields(resolvedVar, varWithTail.variable.fields, { preserveContext: true });
+      result = (fieldResult as any).value;
     }
     
     // Apply pipeline if present
@@ -452,7 +455,7 @@ export async function evaluateVar(
       const format = varWithTail.withClause.format as string | undefined;
       
       // Result should already be properly resolved based on context
-      // If we had field access, it's already extracted by accessFieldsEnhanced
+      // If we had field access, it's already extracted by accessFields
       // If we didn't have field access and have pipeline, we used PipelineInput context
       
       // Convert result to string for pipeline

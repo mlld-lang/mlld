@@ -125,11 +125,11 @@ export async function evaluateDataValue(
     
     // Apply field access if present
     if (value.fields && value.fields.length > 0) {
-      const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
+      const { accessField } = await import('../utils/field-access');
       // Apply each field access in sequence
       for (const field of value.fields) {
-        const fieldResult = accessFieldEnhanced(result, field);
-        result = fieldResult.value;
+        const fieldResult = accessField(result, field, { preserveContext: true });
+        result = (fieldResult as any).value;
       }
     }
     
