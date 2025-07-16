@@ -329,6 +329,80 @@ Test coverage includes:
 - Backwards compatibility
 - Multi-stage pipelines with format specified
 
+## Variable Type System Integration (v2.0.0+)
+
+The pipeline system integrates with mlld's Variable type system, which wraps all values with metadata about their source, type, and context.
+
+### Variable Extraction at Pipeline Boundaries
+
+Pipelines operate on raw values, not Variable objects. The system automatically extracts values at pipeline boundaries:
+
+```mlld
+/var @data = `[{"name": "Alice"}, {"name": "Bob"}]`  # Creates a Variable<string>
+/var @result = @data with { format: "json", pipeline: [@extractNames] }
+
+# The pipeline receives the raw string value, not the Variable wrapper
+```
+
+### Resolution Context
+
+The pipeline system uses `ResolutionContext.PipelineInput` to signal that Variables should be extracted:
+
+```typescript
+// In var.ts when processing pipelines
+const stringValue = await resolveValue(variable.value, env, ResolutionContext.PipelineInput);
+```
+
+### PipelineInput Variables
+
+Pipeline stages create special `PipelineInputVariable` types that preserve both the wrapped input and raw text:
+
+```typescript
+export interface PipelineInputVariable extends BaseVariable {
+  type: 'pipeline-input';
+  value: PipelineInput;      // The wrapped input object
+  format: 'json' | 'csv' | 'xml' | 'text';
+  rawText: string;           // Original text for fallback
+}
+```
+
+### Design Principles
+
+1. **Variables flow through data structures** - Arrays and objects can contain Variables
+2. **Extraction at boundaries** - Pipelines, display, and commands extract values
+3. **Type preservation** - Variable metadata flows until extraction is needed
+4. **No surprises** - Consistent behavior based on ResolutionContext
+
+### Implementation Notes
+
+When implementing pipeline features:
+- Use `ResolutionContext.PipelineInput` when passing data to pipelines
+- Preserve Variables in data structures (`ResolutionContext.ArrayElement`, etc.)
+- Extract only at system boundaries (display, file output, command execution)
+- Document extraction points with clear comments explaining WHY
+
+### Variable Flow Example
+
+```typescript
+// 1. Variable created with metadata
+/var @jsonData = `[{"id": 1}, {"id": 2}]`  // Variable<string>
+
+// 2. Variable reference preserves wrapper
+/var @copy = @jsonData  // Still Variable<string>
+
+// 3. Pipeline boundary extracts value
+/var @result = @jsonData with { 
+  format: "json", 
+  pipeline: [@extractIds]  // Receives raw string "[{"id": 1}, {"id": 2}]"
+}
+
+// 4. Arrays preserve Variables
+/var @list = [@jsonData, @copy]  // Array<Variable<string>>
+
+// 5. Display extracts for output
+/show @jsonData  // Extracts string value for display
+```
+
 ### Context Management
 
 Pipeline context is managed through the Environment class:
