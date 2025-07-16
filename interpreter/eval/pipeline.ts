@@ -50,6 +50,18 @@ export async function executePipeline(
       });
     }
     const pipelineInputObj = createPipelineInput(currentOutput, format || 'text');
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      logger.debug('Created PipelineInput object:', {
+        type: typeof pipelineInputObj,
+        keys: Object.keys(pipelineInputObj),
+        hasText: 'text' in pipelineInputObj,
+        hasType: 'type' in pipelineInputObj,
+        textPreview: pipelineInputObj.text ? pipelineInputObj.text.substring(0, 50) : 'N/A',
+        typeValue: pipelineInputObj.type
+      });
+    }
+    
     const inputSource: VariableSource = {
       directive: 'var',
       syntax: 'template',
@@ -588,6 +600,14 @@ async function executeCommandVariable(
             
             if (process.env.MLLD_DEBUG === 'true') {
               logger.debug('Using PipelineInputVariable value for param:', paramName);
+              logger.debug('PipelineInput object details:', {
+                type: typeof paramVar.value,
+                isObject: typeof paramVar.value === 'object',
+                keys: paramVar.value ? Object.keys(paramVar.value) : [],
+                hasText: paramVar.value && 'text' in paramVar.value,
+                hasType: paramVar.value && 'type' in paramVar.value,
+                hasData: paramVar.value && 'data' in paramVar.value
+              });
             }
           } else if (paramVar.metadata?.isPipelineInput && paramVar.metadata?.pipelineInput) {
             // Legacy: Use the wrapped pipeline input from metadata

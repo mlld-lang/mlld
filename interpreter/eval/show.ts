@@ -216,6 +216,10 @@ export async function evaluateShow(
       }
     }
     
+    // Extract Variable value if needed before display
+    const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+    value = await resolveValue(value, env, ResolutionContext.Display);
+    
     // Import LoadContentResult type check
     const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
     

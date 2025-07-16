@@ -79,8 +79,17 @@ function parseXML(text: string): any {
  * Create a pipeline input wrapper with lazy parsing
  */
 export function createPipelineInput(text: string, format: string = 'json'): PipelineInput {
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('createPipelineInput called with:', {
+      textType: typeof text,
+      textLength: typeof text === 'string' ? text.length : 'N/A',
+      format: format,
+      textPreview: typeof text === 'string' ? text.substring(0, 50) : String(text)
+    });
+  }
+  
   const input: any = {
-    text,
+    text: String(text), // Ensure it's a string
     type: format,
     _parsed: undefined
   };
@@ -94,13 +103,21 @@ export function createPipelineInput(text: string, format: string = 'json'): Pipe
           if (this._parsed === undefined) {
             try {
               if (process.env.MLLD_DEBUG === 'true') {
-                console.log('Parsing JSON from text:', this.text);
-                console.log('Text length:', this.text.length);
+                console.log('JSON getter called');
+                console.log('this:', this);
+                console.log('this.text exists:', 'text' in this);
+                console.log('this.text value:', this.text);
                 console.log('Text type:', typeof this.text);
-                console.log('this object:', this);
-                console.log('this.constructor:', this.constructor?.name);
-                console.log('First 200 chars:', typeof this.text === 'string' ? this.text.substring(0, 200) : 'NOT A STRING');
+                if (this.text) {
+                  console.log('Text length:', this.text.length);
+                  console.log('First 200 chars:', this.text.substring(0, 200));
+                }
               }
+              
+              if (!this.text) {
+                throw new Error('PipelineInput.text is undefined or null');
+              }
+              
               this._parsed = JSON.parse(this.text);
             } catch (e: any) {
               if (process.env.MLLD_DEBUG === 'true') {

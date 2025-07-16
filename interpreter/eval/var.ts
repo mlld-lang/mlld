@@ -319,8 +319,15 @@ export async function evaluateVar(
     
     // Handle field access if present
     if (valueNode.fields && valueNode.fields.length > 0) {
+      // Extract Variable value before field access
+      const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
+      let baseValue = resolvedVar;
+      if (isVariable(baseValue)) {
+        baseValue = await extractVariableValue(baseValue, env);
+      }
+      
       // Use enhanced field access to preserve context
-      const fieldResult = accessFieldEnhanced(resolvedVar, valueNode.fields[0]);
+      const fieldResult = accessFieldEnhanced(baseValue, valueNode.fields[0]);
       let currentResult = fieldResult;
       
       // Apply remaining fields if any
@@ -351,7 +358,10 @@ export async function evaluateVar(
     // Apply condensed pipes if present (e.g., @var|@transform)
     if (valueNode.pipes && valueNode.pipes.length > 0) {
       const { applyCondensedPipes } = await import('../core/interpreter');
-      resolvedValue = await applyCondensedPipes(resolvedValue, valueNode.pipes, env);
+      // Extract Variable value before passing to pipeline
+      const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+      const pipelineInput = await resolveValue(resolvedValue, env, ResolutionContext.PipelineInput);
+      resolvedValue = await applyCondensedPipes(pipelineInput, valueNode.pipes, env);
     }
     
   } else if (Array.isArray(valueNode)) {
@@ -396,6 +406,9 @@ export async function evaluateVar(
     
   } else if (valueNode && valueNode.type === 'VariableReferenceWithTail') {
     // Variable with tail modifiers (e.g., @var @result = @data with { pipeline: [@transform] })
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Processing VariableReferenceWithTail in var.ts');
+    }
     const varWithTail = valueNode;
     const sourceVar = env.getVariable(varWithTail.variable.identifier);
     if (!sourceVar) {
@@ -410,6 +423,28 @@ export async function evaluateVar(
     const resolvedVar = await resolveVariable(sourceVar, env, ResolutionContext.FieldAccess);
     let result = resolvedVar;
     
+    // If no field access and no pipeline, we need to extract the value
+    // Otherwise we'll pass a Variable object to the pipeline
+    if (!varWithTail.variable.fields || varWithTail.variable.fields.length === 0) {
+      const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('VariableReferenceWithTail - checking if extraction needed:', {
+          isVar: isVariable(result),
+          resultType: typeof result,
+          hasFields: !!varWithTail.variable.fields
+        });
+      }
+      if (isVariable(result)) {
+        result = await extractVariableValue(result, env);
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('Extracted value:', {
+            type: typeof result,
+            preview: typeof result === 'string' ? result.substring(0, 50) : 'not string'
+          });
+        }
+      }
+    }
+    
     // Apply field access if present
     if (varWithTail.variable.fields && varWithTail.variable.fields.length > 0) {
       // Use enhanced field access to track context
@@ -422,8 +457,15 @@ export async function evaluateVar(
       const { executePipeline } = await import('./pipeline');
       const format = varWithTail.withClause.format as string | undefined;
       
+      // Extract value from Variable if needed
+      const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
+      let value = result;
+      if (isVariable(result)) {
+        value = await extractVariableValue(result, env);
+      }
+      
       // Convert result to string for pipeline
-      const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
+      const stringResult = typeof value === 'string' ? value : JSON.stringify(value);
       
       result = await executePipeline(
         stringResult,
@@ -568,15 +610,22 @@ export async function evaluateVar(
     }
     
   } else if (valueNode.type === 'VariableReference') {
-    // For now, create a variable based on the resolved type
-    if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-      if (Array.isArray(resolvedValue)) {
-        variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+    // Check if resolvedValue is a Variable that needs extraction
+    const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
+    let finalValue = resolvedValue;
+    if (isVariable(resolvedValue)) {
+      finalValue = await extractVariableValue(resolvedValue, env);
+    }
+    
+    // Create variable based on the extracted value type
+    if (typeof finalValue === 'object' && finalValue !== null) {
+      if (Array.isArray(finalValue)) {
+        variable = createArrayVariable(identifier, finalValue, false, source, metadata);
       } else {
-        variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
+        variable = createObjectVariable(identifier, finalValue, false, source, metadata);
       }
     } else {
-      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+      variable = createSimpleTextVariable(identifier, String(finalValue), source, metadata);
     }
     
   } else if (valueNode.type === 'foreach') {
@@ -643,10 +692,32 @@ export async function evaluateVar(
     const { executePipeline } = await import('./pipeline');
     const format = directive.values.withClause.format as string | undefined;
     
-    // Get the current variable value as string
-    const { resolveVariableValue: resolveVarValue } = await import('../core/interpreter');
-    const currentValue = await resolveVarValue(variable, env);
-    const stringValue = typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue);
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Processing withClause pipeline for regular variable:', {
+        identifier,
+        variableType: variable.type,
+        valueType: typeof variable.value,
+        hasText: variable.value && typeof variable.value === 'object' && 'text' in variable.value,
+        valueKeys: variable.value && typeof variable.value === 'object' ? Object.keys(variable.value) : [],
+        valuePreview: typeof variable.value === 'string' ? variable.value.substring(0, 50) : 'not a string',
+        value: variable.value
+      });
+    }
+    
+    // Get the actual string value from the variable
+    // Since the variable was just created, we can access its value directly
+    let stringValue = variable.value;
+    
+    // If the value is not a string, we need to convert it appropriately
+    if (typeof stringValue !== 'string') {
+      if (stringValue && typeof stringValue === 'object' && 'text' in stringValue) {
+        // This might be a TextValue object
+        stringValue = stringValue.text;
+      } else {
+        // Convert to JSON string if it's an object
+        stringValue = JSON.stringify(stringValue);
+      }
+    }
     
     // Execute the pipeline
     const pipelineResult = await executePipeline(

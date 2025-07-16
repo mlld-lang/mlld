@@ -20,7 +20,12 @@ import {
 /**
  * Compares two values according to mlld's when comparison rules
  */
-function compareValues(expressionValue: any, conditionValue: any): boolean {
+async function compareValues(expressionValue: any, conditionValue: any, env: Environment): Promise<boolean> {
+  // Extract Variable values if needed before comparison
+  const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+  expressionValue = await resolveValue(expressionValue, env, ResolutionContext.Equality);
+  conditionValue = await resolveValue(conditionValue, env, ResolutionContext.Equality);
+  
   // Both null/undefined
   if ((expressionValue === null || expressionValue === undefined) &&
       (conditionValue === null || conditionValue === undefined)) {
@@ -158,7 +163,7 @@ async function evaluateWhenSwitch(
       }
       
       // Compare values using shared logic
-      let matches = compareValues(expressionValue, conditionValue);
+      let matches = await compareValues(expressionValue, conditionValue, childEnv);
       
       // Apply negation if needed
       if (isNegated) {
@@ -366,7 +371,7 @@ async function evaluateFirstMatch(
       }
       
       // Compare values using shared logic
-      matches = compareValues(expressionValue, conditionValue);
+      matches = await compareValues(expressionValue, conditionValue, env);
       
       
       // Apply negation if needed
@@ -583,12 +588,16 @@ async function evaluateCondition(
             return false;
           }
           if (result.value !== undefined && result.value !== result.stdout) {
-            return isTruthy(result.value);
+            const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+            const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+            return isTruthy(finalValue);
           }
           return isTruthy(result.stdout.trim());
         }
         
-        return isTruthy(result.value);
+        const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+        const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+        return isTruthy(finalValue);
       }
     }
     
@@ -602,12 +611,16 @@ async function evaluateCondition(
         return false;
       }
       if (result.value !== undefined && result.value !== result.stdout) {
-        return isTruthy(result.value);
+        const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+        const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+        return isTruthy(finalValue);
       }
       return isTruthy(result.stdout.trim());
     }
     
-    return isTruthy(result.value);
+    const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+    const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+    return isTruthy(finalValue);
   }
   
   // Create a child environment for condition evaluation
@@ -641,7 +654,9 @@ async function evaluateCondition(
     if (result.value && typeof result.value === 'object' && result.value.type === 'executable') {
       // The executable should have already been evaluated with _whenValue as context
       // Just check its boolean result
-      return isTruthy(result.value);
+      const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+      const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+      return isTruthy(finalValue);
     }
     
     // Get the actual value from the variable
@@ -653,7 +668,7 @@ async function evaluateCondition(
     }
     
     // Compare the variable value with the condition value
-    return compareValues(actualValue, result.value);
+    return compareValues(actualValue, result.value, childEnv);
   }
   
   // For command execution results, check stdout or exit code
@@ -666,7 +681,9 @@ async function evaluateCondition(
     // If we have a parsed value (from exec functions with return values), use that
     // This handles the case where JSON stringified empty string '""' should be falsy
     if (result.value !== undefined && result.value !== result.stdout) {
-      return isTruthy(result.value);
+      const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+      const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+      return isTruthy(finalValue);
     }
     // Otherwise check stdout - trim whitespace
     const trimmedStdout = result.stdout.trim();
@@ -676,8 +693,12 @@ async function evaluateCondition(
     return isTruthy(trimmedStdout);
   }
   
+  // Extract Variable value if needed before truthiness check
+  const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+  const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+  
   // Convert result to boolean
-  return isTruthy(result.value);
+  return isTruthy(finalValue);
 }
 
 /**

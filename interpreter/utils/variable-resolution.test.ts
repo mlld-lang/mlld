@@ -4,7 +4,7 @@ import {
   shouldPreserveVariable, 
   resolveVariable,
   isVariable,
-  extractValue
+  extractVariableValue
 } from './variable-resolution';
 import { createSimpleTextVariable, createArrayVariable, createObjectVariable } from '@core/types/variable/VariableFactories';
 import { Environment } from '@interpreter/env/Environment';
@@ -29,7 +29,7 @@ describe('Variable Resolution Strategy', () => {
       expect(shouldPreserveVariable(ResolutionContext.ArrayElement)).toBe(true);
       expect(shouldPreserveVariable(ResolutionContext.ObjectProperty)).toBe(true);
       expect(shouldPreserveVariable(ResolutionContext.FunctionArgument)).toBe(true);
-      expect(shouldPreserveVariable(ResolutionContext.PipelineStage)).toBe(true);
+      expect(shouldPreserveVariable(ResolutionContext.FieldAccess)).toBe(true);
     });
     
     it('should extract values in output contexts', () => {
@@ -91,17 +91,23 @@ describe('Variable Resolution Strategy', () => {
     });
   });
   
-  describe('extractValue', () => {
+  describe('extractVariableValue', () => {
     it('should extract value from Variable', async () => {
       const variable = createSimpleTextVariable('test', 'Hello', mockSource);
-      const result = await extractValue(variable, mockEnv);
+      const result = await extractVariableValue(variable, mockEnv);
       expect(result).toBe('Hello');
     });
     
-    it('should return non-Variable values as-is', async () => {
-      expect(await extractValue('string', mockEnv)).toBe('string');
-      expect(await extractValue(123, mockEnv)).toBe(123);
-      expect(await extractValue({ obj: true }, mockEnv)).toEqual({ obj: true });
+    it('should handle different Variable types', async () => {
+      // Test array variable
+      const arrayVar = createArrayVariable('test', ['a', 'b'], false, mockSource);
+      const arrayResult = await extractVariableValue(arrayVar, mockEnv);
+      expect(arrayResult).toEqual(['a', 'b']);
+      
+      // Test object variable
+      const objVar = createObjectVariable('test', { key: 'value' }, false, mockSource);
+      const objResult = await extractVariableValue(objVar, mockEnv);
+      expect(objResult).toEqual({ key: 'value' });
     });
   });
 });

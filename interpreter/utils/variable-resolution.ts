@@ -25,17 +25,23 @@ import {
 export enum ResolutionContext {
   // Contexts where we should preserve Variables
   VariableAssignment = 'variable-assignment',
+  VariableCopy = 'variable-copy',
   ArrayElement = 'array-element',
   ObjectProperty = 'object-property',
   FunctionArgument = 'function-argument',
-  PipelineStage = 'pipeline-stage',
+  DataStructure = 'data-structure',
+  FieldAccess = 'field-access',
+  ImportResult = 'import-result',
   
   // Contexts where we must extract values
   StringInterpolation = 'string-interpolation',
   CommandExecution = 'command-execution',
   FileOutput = 'file-output',
   Conditional = 'conditional',
-  Display = 'display'
+  Display = 'display',
+  PipelineInput = 'pipeline-input',
+  Truthiness = 'truthiness',
+  Equality = 'equality'
 }
 
 /**
@@ -43,18 +49,26 @@ export enum ResolutionContext {
  */
 export function shouldPreserveVariable(context: ResolutionContext): boolean {
   switch (context) {
+    // Preserve Variable wrapper contexts
     case ResolutionContext.VariableAssignment:
+    case ResolutionContext.VariableCopy:
     case ResolutionContext.ArrayElement:
     case ResolutionContext.ObjectProperty:
     case ResolutionContext.FunctionArgument:
-    case ResolutionContext.PipelineStage:
+    case ResolutionContext.DataStructure:
+    case ResolutionContext.FieldAccess:
+    case ResolutionContext.ImportResult:
       return true;
     
+    // Extract raw value contexts
     case ResolutionContext.StringInterpolation:
     case ResolutionContext.CommandExecution:
     case ResolutionContext.FileOutput:
     case ResolutionContext.Conditional:
     case ResolutionContext.Display:
+    case ResolutionContext.PipelineInput:
+    case ResolutionContext.Truthiness:
+    case ResolutionContext.Equality:
       return false;
       
     default:
@@ -76,6 +90,12 @@ export async function resolveVariable(
   env: Environment,
   context: ResolutionContext = ResolutionContext.Display
 ): Promise<Variable | VariableValue> {
+  
+  // Special case: PipelineInput variables should preserve their structure
+  // even in PipelineInput context, because pipeline functions need the full object
+  if (isPipelineInput(variable) && context === ResolutionContext.PipelineInput) {
+    return variable.value; // Return the PipelineInput object, not the Variable wrapper
+  }
   
   // If context allows preservation, return the Variable itself for most types
   if (shouldPreserveVariable(context)) {
@@ -110,15 +130,15 @@ export async function resolveVariable(
     return variable;
   }
   
-  // Context requires extraction - use original logic
-  return resolveVariableValueLegacy(variable, env);
+  // Context requires extraction
+  return extractVariableValue(variable, env);
 }
 
 /**
- * Legacy resolution that always extracts values
- * This is the original resolveVariableValue logic
+ * Extract raw value from a Variable
+ * Always returns the underlying JavaScript value
  */
-export async function resolveVariableValueLegacy(
+export async function extractVariableValue(
   variable: Variable, 
   env: Environment
 ): Promise<VariableValue> {
@@ -142,7 +162,9 @@ export async function resolveVariableValueLegacy(
   } else if (isPath(variable)) {
     return variable.value.resolvedPath;
   } else if (isPipelineInput(variable)) {
-    return variable.value.text;
+    // For pipeline inputs, return the whole PipelineInput object
+    // so that pipeline functions can access .json, .csv, etc.
+    return variable.value;
   } else if (isExecutableVariable(variable)) {
     // Auto-execute executables when interpolated
     const { evaluateExecInvocation } = await import('../eval/exec-invocation');
@@ -178,14 +200,20 @@ export function isVariable(value: unknown): value is Variable {
 }
 
 /**
- * Extract value from Variable or return value as-is
+ * Resolve a value that might be a Variable or raw value
+ * Uses context to determine whether to preserve or extract
  */
-export async function extractValue(
+export async function resolveValue(
   value: Variable | VariableValue,
-  env: Environment
-): Promise<VariableValue> {
+  env: Environment,
+  context: ResolutionContext
+): Promise<Variable | VariableValue> {
   if (isVariable(value)) {
-    return resolveVariableValueLegacy(value, env);
+    return resolveVariable(value, env, context);
   }
   return value;
 }
+
+// Legacy aliases for backward compatibility (to be removed)
+export const resolveVariableValue = extractVariableValue;
+export const resolveVariableValueLegacy = extractVariableValue;

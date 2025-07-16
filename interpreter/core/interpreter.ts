@@ -431,6 +431,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     if (node.fields && node.fields.length > 0) {
       const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
       
+      // Extract Variable value before field access if needed
+      const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
+      if (isVariable(resolvedValue)) {
+        resolvedValue = await extractVariableValue(resolvedValue, env);
+      }
+      
       // Apply each field access in sequence
       for (const field of node.fields) {
         // Handle variableIndex type - need to resolve the variable first
@@ -874,6 +880,9 @@ export async function interpolate(
       // Convert final value to string
       let stringValue: string;
       
+      // Extract Variable value if needed before string conversion
+      const { isVariable, resolveValue, ResolutionContext: ResContext } = await import('../utils/variable-resolution');
+      value = await resolveValue(value, env, ResContext.StringInterpolation);
       
       if (value === null) {
         stringValue = 'null';
