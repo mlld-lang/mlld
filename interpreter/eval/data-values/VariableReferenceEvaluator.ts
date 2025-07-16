@@ -11,7 +11,7 @@ import {
   Variable
 } from '@core/types/variable';
 import { interpolate, resolveVariableValue } from '../../core/interpreter';
-import { accessField } from '../../utils/field-access';
+import { accessFieldEnhanced, accessFieldsEnhanced } from '../../utils/field-access-enhanced';
 import { logger } from '@core/utils/logger';
 
 /**
@@ -171,9 +171,11 @@ export class VariableReferenceEvaluator {
           }
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          result = accessField(result, resolvedField);
+          const fieldResult = accessFieldEnhanced(result, resolvedField);
+          result = fieldResult.value;
         } else {
-          result = accessField(result, field);
+          const fieldResult = accessFieldEnhanced(result, field);
+          result = fieldResult.value;
         }
       }
     }
@@ -215,18 +217,23 @@ export class VariableReferenceEvaluator {
         result = variable;
       }
     } else if (isImported(variable)) {
-      result = variable.value;
+      // Preserve imported Variables to maintain type information
+      result = variable;
     } else if (isObject(variable) || isArray(variable)) {
-      // Handle structured data - may need evaluation
-      result = await resolveVariableValue(variable, env);
+      // Handle structured data - preserve Variables in data structures
+      const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+      result = await resolveVariable(variable, env, ResolutionContext.DataStructure);
     } else {
-      // Fallback for any other types
-      result = await resolveVariableValue(variable, env);
+      // Fallback for any other types - preserve Variables
+      const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+      result = await resolveVariable(variable, env, ResolutionContext.DataStructure);
     }
     
     // Apply field access if present
     if (varRef.fields && varRef.fields.length > 0) {
-      result = await accessField(result, varRef.fields, varRef.identifier);
+      const { accessFieldsEnhanced } = await import('../../utils/field-access-enhanced');
+      const fieldResult = accessFieldsEnhanced(result, varRef.fields);
+      result = fieldResult.value;
     }
     
     // Apply pipeline if present
@@ -289,9 +296,11 @@ export class VariableReferenceEvaluator {
           }
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          result = accessField(result, resolvedField);
+          const fieldResult = accessFieldEnhanced(result, resolvedField);
+          result = fieldResult.value;
         } else {
-          result = accessField(result, field);
+          const fieldResult = accessFieldEnhanced(result, field);
+          result = fieldResult.value;
         }
       }
     }
@@ -360,6 +369,7 @@ export class VariableReferenceEvaluator {
 
   /**
    * Extracts the actual value from a variable using type guards
+   * Note: This is used in contexts where we MUST extract the raw value
    */
   private async extractVariableValue(variable: any, env: Environment): Promise<any> {
     let result: any;
@@ -370,9 +380,13 @@ export class VariableReferenceEvaluator {
     } else if (isImported(variable)) {
       result = variable.value;
     } else if (isObject(variable) || isArray(variable)) {
-      result = await resolveVariableValue(variable, env);
+      // Use legacy resolution when we must extract
+      const { resolveVariableValueLegacy } = await import('@interpreter/utils/variable-resolution');
+      result = await resolveVariableValueLegacy(variable, env);
     } else {
-      result = await resolveVariableValue(variable, env);
+      // Use legacy resolution when we must extract
+      const { resolveVariableValueLegacy } = await import('@interpreter/utils/variable-resolution');
+      result = await resolveVariableValueLegacy(variable, env);
     }
     
     return result;

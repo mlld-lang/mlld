@@ -423,11 +423,15 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     }
     
     // Handle complex data variables with lazy evaluation
-    let resolvedValue = await resolveVariableValue(variable, env);
+    // Use enhanced resolution to preserve Variable context for field access
+    const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+    let resolvedValue = await resolveVariable(variable, env, ResolutionContext.FieldAccess);
     
     // Handle field access if present
-    if (node.fields && node.fields.length > 0 && typeof resolvedValue === 'object' && resolvedValue !== null) {
-      const { accessField } = await import('../utils/field-access');
+    if (node.fields && node.fields.length > 0) {
+      const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
+      
+      // Apply each field access in sequence
       for (const field of node.fields) {
         // Handle variableIndex type - need to resolve the variable first
         if (field.type === 'variableIndex') {
@@ -442,9 +446,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           }
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          resolvedValue = accessField(resolvedValue, resolvedField);
+          const fieldResult = accessFieldEnhanced(resolvedValue, resolvedField);
+          resolvedValue = fieldResult.value;
         } else {
-          resolvedValue = accessField(resolvedValue, field);
+          const fieldResult = accessFieldEnhanced(resolvedValue, field);
+          resolvedValue = fieldResult.value;
         }
         if (resolvedValue === undefined) break;
       }
@@ -820,8 +826,27 @@ export async function interpolate(
       
       // Handle field access if present
       if (node.fields && node.fields.length > 0 && typeof value === 'object' && value !== null) {
+        const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
         for (const field of node.fields) {
-          value = accessField(value, field);
+          // Handle variableIndex type - need to resolve the variable first
+          if (field.type === 'variableIndex') {
+            const indexVar = env.getVariable(field.value);
+            if (!indexVar) {
+              throw new Error(`Variable not found for index: ${field.value}`);
+            }
+            // Get the actual value to use as index
+            let indexValue = indexVar.value;
+            if (typeof indexValue === 'object' && indexValue !== null && 'value' in indexValue) {
+              indexValue = indexValue.value;
+            }
+            // Create a new field with the resolved value
+            const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
+            const fieldResult = accessFieldEnhanced(value, resolvedField);
+            value = fieldResult.value;
+          } else {
+            const fieldResult = accessFieldEnhanced(value, field);
+            value = fieldResult.value;
+          }
           
           // Handle null nodes from the grammar
           if (value && typeof value === 'object' && 'type' in value) {
@@ -1102,11 +1127,19 @@ async function processFileFields(
   
   // Process field access
   if (fields && fields.length > 0) {
-    // Reuse existing field access logic
+    // Use enhanced field access for better error messages
+    const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
     for (const field of fields) {
-      result = accessField(result, field);
-      if (result === undefined) {
-        // Warning to stderr
+      try {
+        const fieldResult = accessFieldEnhanced(result, field);
+        result = fieldResult.value;
+        if (result === undefined) {
+          // Warning to stderr
+          console.error(`Warning: field '${field.value}' not found`);
+          return '';
+        }
+      } catch (error) {
+        // Field not found - log warning and return empty string for backward compatibility
         console.error(`Warning: field '${field.value}' not found`);
         return '';
       }

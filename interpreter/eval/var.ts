@@ -310,17 +310,25 @@ export async function evaluateVar(
       throw new Error(`Variable not found: ${valueNode.identifier}`);
     }
     
-    // Copy the variable type from source
-    const { resolveVariableValue } = await import('../core/interpreter');
-    resolvedValue = await resolveVariableValue(sourceVar, env);
+    // Copy the variable type from source - preserve Variables!
+    const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+    const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
+    
+    // Preserve the Variable when copying
+    const resolvedVar = await resolveVariable(sourceVar, env, ResolutionContext.VariableCopy);
     
     // Handle field access if present
     if (valueNode.fields && valueNode.fields.length > 0) {
-      const { accessField } = await import('../utils/field-access');
-      // Apply each field access in sequence
-      for (const field of valueNode.fields) {
-        resolvedValue = accessField(resolvedValue, field);
+      // Use enhanced field access to preserve context
+      const fieldResult = accessFieldEnhanced(resolvedVar, valueNode.fields[0]);
+      let currentResult = fieldResult;
+      
+      // Apply remaining fields if any
+      for (let i = 1; i < valueNode.fields.length; i++) {
+        currentResult = accessFieldEnhanced(currentResult.value, valueNode.fields[i], currentResult.accessPath);
       }
+      
+      resolvedValue = currentResult.value;
       
       // Check if the accessed field is an executable variable
       if (resolvedValue && typeof resolvedValue === 'object' && 
@@ -335,6 +343,9 @@ export async function evaluateVar(
           exitCode: 0
         };
       }
+    } else {
+      // No field access - use the resolved Variable directly
+      resolvedValue = resolvedVar;
     }
     
     // Apply condensed pipes if present (e.g., @var|@transform)
@@ -391,17 +402,19 @@ export async function evaluateVar(
       throw new Error(`Variable not found: ${varWithTail.variable.identifier}`);
     }
     
-    // Get the base value
-    const { resolveVariableValue } = await import('../core/interpreter');
-    let result = await resolveVariableValue(sourceVar, env);
+    // Get the base value - preserve Variable for field access
+    const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+    const { accessFieldsEnhanced } = await import('../utils/field-access-enhanced');
+    
+    // Preserve Variable for field access context
+    const resolvedVar = await resolveVariable(sourceVar, env, ResolutionContext.FieldAccess);
+    let result = resolvedVar;
     
     // Apply field access if present
     if (varWithTail.variable.fields && varWithTail.variable.fields.length > 0) {
-      const { accessField } = await import('../utils/field-access');
-      // Iterate through fields one at a time (accessField expects a single field)
-      for (const field of varWithTail.variable.fields) {
-        result = accessField(result, field);
-      }
+      // Use enhanced field access to track context
+      const fieldResult = accessFieldsEnhanced(resolvedVar, varWithTail.variable.fields);
+      result = fieldResult.value;
     }
     
     // Apply pipeline if present

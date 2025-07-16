@@ -85,7 +85,7 @@ export async function resolveVariable(
       if (complexFlag) {
         // Complex data needs evaluation but we can wrap result in a new Variable
         // Dynamic import to avoid circular dependency
-        const { evaluateDataValue } = await import('@interpreter/eval/data-values');
+        const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
         const evaluatedValue = await evaluateDataValue(variable.value, env);
         
         // Create a new Variable with the evaluated value
@@ -133,7 +133,7 @@ export async function resolveVariableValueLegacy(
     
     if (complexFlag) {
       // Dynamic import to avoid circular dependency
-      const { evaluateDataValue } = await import('@interpreter/eval/data-values');
+      const { evaluateDataValue } = await import('@interpreter/eval/data-value-evaluator');
       const evaluatedValue = await evaluateDataValue(variable.value, env);
       return evaluatedValue;
     }

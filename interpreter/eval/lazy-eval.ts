@@ -119,16 +119,17 @@ export async function evaluateDataValue(
       return baseVar;
     }
     
-    // Resolve the variable value
-    const { resolveVariableValue } = await import('../core/interpreter');
-    let result = await resolveVariableValue(baseVar, env);
+    // Resolve the variable value with appropriate context
+    const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+    let result = await resolveVariable(baseVar, env, ResolutionContext.DataStructure);
     
     // Apply field access if present
     if (value.fields && value.fields.length > 0) {
-      const { accessField } = await import('../utils/field-access');
+      const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
       // Apply each field access in sequence
       for (const field of value.fields) {
-        result = accessField(result, field);
+        const fieldResult = accessFieldEnhanced(result, field);
+        result = fieldResult.value;
       }
     }
     
