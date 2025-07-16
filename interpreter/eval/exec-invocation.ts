@@ -522,8 +522,40 @@ export async function evaluateExecInvocation(
   }
   // Handle code executables
   else if (isCodeExecutable(definition)) {
-    // Interpolate the code template with parameters
-    const code = await interpolate(definition.codeTemplate, execEnv);
+    if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+      console.log('exec-invocation: isCodeExecutable block reached', {
+        language: definition.language,
+        isBash: definition.language === 'bash',
+        isSh: definition.language === 'sh'
+      });
+    }
+    // For bash/sh, don't interpolate the code template - bash handles its own variable substitution
+    let code: string;
+    if (definition.language === 'bash' || definition.language === 'sh') {
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+        console.log('exec-invocation: Skipping interpolation for bash/sh code:', {
+          isArray: Array.isArray(definition.codeTemplate),
+          codeTemplateType: typeof definition.codeTemplate,
+          codeTemplate: definition.codeTemplate
+        });
+      }
+      // For bash/sh, just extract the raw code without interpolation
+      if (Array.isArray(definition.codeTemplate)) {
+        // If it's an array of nodes, concatenate their content
+        code = definition.codeTemplate.map(node => {
+          if (typeof node === 'string') return node;
+          if (node && typeof node === 'object' && 'content' in node) return node.content || '';
+          return '';
+        }).join('');
+      } else if (typeof definition.codeTemplate === 'string') {
+        code = definition.codeTemplate;
+      } else {
+        code = '';
+      }
+    } else {
+      // For other languages (JS, Python), interpolate as before
+      code = await interpolate(definition.codeTemplate, execEnv);
+    }
     
     // Import ASTEvaluator for normalizing array values
     const { ASTEvaluator } = await import('../core/ast-evaluator');
@@ -549,23 +581,44 @@ export async function evaluateExecInvocation(
         // Pass the pipeline input object directly for code execution
         codeParams[paramName] = paramVar.value;
       } else if (isEnhancedVariablePassingEnabled() && paramVar) {
-        // Enhanced mode: Pass Variable as proxy to shadow environment
-        // But first, check if it's a complex Variable that needs resolution
-        if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
-          // Complex Variable with AST - resolve it first
-          const resolvedValue = await resolveVariableValue(paramVar, execEnv);
-          const resolvedVar = {
-            ...paramVar,
-            value: resolvedValue,
-            isComplex: false
+        // Enhanced mode handling
+        if (definition.language === 'bash' || definition.language === 'sh') {
+          // Bash/sh just need string values for environment variables
+          // No proxies, just resolve complex values and pass the raw value
+          if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
+            // Complex Variable with AST - resolve it first
+            const resolvedValue = await resolveVariableValue(paramVar, execEnv);
+            codeParams[paramName] = resolvedValue;
+          } else {
+            codeParams[paramName] = paramVar.value;
+          }
+          // Still store metadata for bash helpers
+          variableMetadata[paramName] = {
+            type: paramVar.type,
+            subtype: paramVar.subtype || (paramVar.type === 'primitive' && 'primitiveType' in paramVar ? (paramVar as any).primitiveType : undefined),
+            metadata: paramVar.metadata,
+            isVariable: true
           };
-          codeParams[paramName] = prepareValueForShadow(resolvedVar);
         } else {
-          codeParams[paramName] = prepareValueForShadow(paramVar);
+          // Other languages (JS, Python) get proxies for rich type info
+          // But first, check if it's a complex Variable that needs resolution
+          if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
+            // Complex Variable with AST - resolve it first
+            const resolvedValue = await resolveVariableValue(paramVar, execEnv);
+            const resolvedVar = {
+              ...paramVar,
+              value: resolvedValue,
+              isComplex: false
+            };
+            codeParams[paramName] = prepareValueForShadow(resolvedVar);
+          } else {
+            codeParams[paramName] = prepareValueForShadow(paramVar);
+          }
         }
         
-        // Store metadata for primitives that can't be proxied
-        if (paramVar.value === null || typeof paramVar.value !== 'object') {
+        // Store metadata for primitives that can't be proxied (only for non-bash languages)
+        if ((definition.language !== 'bash' && definition.language !== 'sh') && 
+            (paramVar.value === null || typeof paramVar.value !== 'object')) {
           // Handle PrimitiveVariable which has primitiveType instead of subtype
           const subtype = paramVar.type === 'primitive' && 'primitiveType' in paramVar 
             ? (paramVar as any).primitiveType 

@@ -5,17 +5,13 @@
  * Provides Variable metadata through environment variables in Bash
  */
 
-import type { Variable } from '@core/types/variable/VariableTypes';
-import { isVariable } from '@interpreter/utils/variable-resolution';
 
 /**
- * Convert Variables to environment variables with metadata
+ * Convert parameter values to environment variables for bash execution
  * 
- * For each Variable, we create:
- * - varname: The actual value
- * - MLLD_TYPE_varname: The Variable type
- * - MLLD_SUBTYPE_varname: The Variable subtype (if any)
- * - MLLD_METADATA_varname: JSON-encoded metadata
+ * In enhanced mode, we receive raw values (not Variables or proxies)
+ * and convert them to strings suitable for environment variables.
+ * Metadata is passed separately and injected via injectBashHelpers.
  */
 export function prepareVariablesForBash(
   params: Record<string, any>
@@ -27,64 +23,19 @@ export function prepareVariablesForBash(
   }
   
   for (const [key, value] of Object.entries(params)) {
-    // Check if it's a Variable proxy (has __mlld_is_variable property)
-    const isProxy = value && typeof value === 'object' && value.__mlld_is_variable === true;
-    
     if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
       console.log(`Processing param ${key}:`, {
         valueType: typeof value,
-        isProxy,
-        hasMLLDFlag: value && typeof value === 'object' ? value.__mlld_is_variable : undefined,
         valueKeys: value && typeof value === 'object' ? Object.keys(value).slice(0, 5) : 'not-object'
       });
     }
     
-    if (isVariable(value) || isProxy) {
-      // Handle both direct Variables and Variable proxies
-      const variable = isProxy ? value.__mlld_variable : (value as Variable);
-      
-      // Set the main value
-      // For proxies, we need to get the actual value from the Variable
-      const actualValue = isProxy && variable ? variable.value : value;
-      if (typeof actualValue === 'object' && actualValue !== null) {
-        envVars[key] = JSON.stringify(actualValue);
-      } else {
-        envVars[key] = String(actualValue);
-      }
-      
-      // Set type metadata (from proxy or direct Variable)
-      if (isProxy) {
-        envVars[`MLLD_TYPE_${key}`] = value.__mlld_type || 'unknown';
-        
-        if (value.__mlld_subtype) {
-          envVars[`MLLD_SUBTYPE_${key}`] = value.__mlld_subtype;
-        }
-        
-        const metadata = value.__mlld_metadata;
-        if (metadata && Object.keys(metadata).length > 0) {
-          envVars[`MLLD_METADATA_${key}`] = JSON.stringify(metadata);
-        }
-      } else if (variable) {
-        envVars[`MLLD_TYPE_${key}`] = variable.type;
-        
-        if (variable.subtype) {
-          envVars[`MLLD_SUBTYPE_${key}`] = variable.subtype;
-        }
-        
-        if (variable.metadata && Object.keys(variable.metadata).length > 0) {
-          envVars[`MLLD_METADATA_${key}`] = JSON.stringify(variable.metadata);
-        }
-      }
-      
-      // Mark as Variable
-      envVars[`MLLD_IS_VARIABLE_${key}`] = 'true';
+    // In enhanced mode, we receive raw values, not Variables or proxies
+    // Just convert to string for environment variable
+    if (typeof value === 'object' && value !== null) {
+      envVars[key] = JSON.stringify(value);
     } else {
-      // Regular value
-      if (typeof value === 'object' && value !== null) {
-        envVars[key] = JSON.stringify(value);
-      } else {
-        envVars[key] = String(value);
-      }
+      envVars[key] = String(value);
     }
   }
   
@@ -141,8 +92,22 @@ fi
  * @param metadata - Optional metadata for primitives
  */
 export function injectBashHelpers(code: string, isEnhancedMode: boolean, metadata?: Record<string, any>): string {
+  // Disable enhanced mode for bash/sh - they use environment variables, not JavaScript objects
+  // This avoids issues with JavaScript trying to evaluate bash code
+  return code;
+  
+  // Original code kept for reference but disabled:
+  /*
   if (!isEnhancedMode) {
     return code;
+  }
+  
+  if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+    console.log('injectBashHelpers called:', {
+      isEnhancedMode,
+      codeLength: code.length,
+      hasMetadata: !!metadata
+    });
   }
   
   let helpers = generateBashMlldHelpers();
@@ -166,4 +131,5 @@ export function injectBashHelpers(code: string, isEnhancedMode: boolean, metadat
   
   // Prepend helper functions
   return helpers + '\n\n# User code:\n' + code;
+  */
 }

@@ -130,8 +130,34 @@ export class BashExecutor extends BaseCommandExecutor {
       // Inject mlld helper functions if in enhanced mode (but not when mocking)
       const codeWithHelpers = isMocking ? code : injectBashHelpers(code, isEnhancedMode, metadata);
       
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+        console.log('BashExecutor: Final code to execute:', {
+          codeWithHelpers: codeWithHelpers.substring(0, 500),
+          hasHelpers: codeWithHelpers.includes('mlld_is_variable'),
+          isEnhancedMode
+        });
+      }
+      
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+        console.log('BashExecutor: About to execute code:', {
+          originalCode: code.substring(0, 100),
+          codeWithHelpers: codeWithHelpers.substring(0, 200),
+          isEnhancedMode,
+          hasMetadata: !!metadata,
+          envVarsCount: Object.keys(envVars).length,
+          envVars: Object.entries(envVars).filter(([k]) => !k.startsWith('MLLD_')).slice(0, 5)
+        });
+      }
+      
       // Detect command substitution patterns and automatically add stderr capture
       const enhancedCode = CommandUtils.enhanceShellCodeForCommandSubstitution(codeWithHelpers);
+      
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+        console.log('BashExecutor: About to spawn bash with code:', {
+          enhancedCode: enhancedCode.substring(0, 500),
+          codeLength: enhancedCode.length
+        });
+      }
       
       // For multiline bash scripts, use stdin to avoid shell escaping issues
       // Use spawnSync to capture both stdout and stderr

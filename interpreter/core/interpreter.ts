@@ -685,6 +685,12 @@ export async function interpolate(
     
     if (node.type === 'Text') {
       // Handle Text nodes - directly use string content
+      if (process.env.DEBUG_EXEC === 'true' && node.content && node.content.includes('$')) {
+        console.log('interpolate: Text node with $ character:', {
+          content: node.content,
+          context
+        });
+      }
       parts.push(node.content || '');
     } else if (node.type === 'PathSeparator') {
       parts.push(node.value || '/');
