@@ -72,11 +72,10 @@ export class NodeExecutor extends BaseCommandExecutor {
       // Only capture for 'exe' and 'var' directives, not for 'run'
       const captureConsoleLog = context?.directiveType !== 'run';
       
-      // Prepare parameters with Variable proxies if enhanced mode is enabled
-      const isEnhancedMode = process.env.MLLD_ENHANCED_VARIABLE_PASSING === 'true';
+      // Always prepare parameters with Variable proxies (enhanced mode is the standard)
       let shadowParams = params;
       
-      if (isEnhancedMode && params) {
+      if (params) {
         shadowParams = prepareParamsForShadow(params);
         // Also add mlld helpers with metadata
         if (!shadowParams.mlld) {
@@ -144,19 +143,18 @@ export class NodeExecutor extends BaseCommandExecutor {
     
     // Build Node.js code with parameters
     let nodeCode = '';
-    const isEnhancedMode = process.env.MLLD_ENHANCED_VARIABLE_PASSING === 'true';
     
     if (params && typeof params === 'object') {
-      // Prepare parameters with Variable proxies if enhanced mode is enabled
-      const shadowParams = isEnhancedMode ? prepareParamsForShadow(params) : params;
+      // Always prepare parameters with Variable proxies (enhanced mode is the standard)
+      const shadowParams = prepareParamsForShadow(params);
       
       // Inject parameters as constants
       for (const [key, value] of Object.entries(shadowParams)) {
         nodeCode += `const ${key} = ${JSON.stringify(value)};\n`;
       }
       
-      // Add mlld helpers in enhanced mode
-      if (isEnhancedMode && !shadowParams.mlld) {
+      // Always add mlld helpers
+      if (!shadowParams.mlld) {
         const mlldHelpers = createMlldHelpers(metadata);
         nodeCode += `const mlld = ${JSON.stringify(mlldHelpers)};\n`;
       }

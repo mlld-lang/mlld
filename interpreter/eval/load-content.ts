@@ -10,9 +10,7 @@ import { JSDOM } from 'jsdom';
 import type { 
   LoadContentResult, 
   LoadContentResultURL, 
-  LoadContentResultHTML,
-  LoadContentResultArray,
-  RenamedContentArray
+  LoadContentResultHTML
 } from '@core/types/load-content';
 
 /**
@@ -356,42 +354,5 @@ export class LoadContentResultHTMLImpl extends LoadContentResultImpl implements 
   }
 }
 
-/**
- * Factory function to create LoadContentResultArray with smart behavior
- * @deprecated Use createLoadContentResultVariable from variable-migration.ts instead
- */
-export function createLoadContentResultArray(items: LoadContentResult[]): LoadContentResultArray {
-  const array = items as LoadContentResultArray;
-  
-  // Add smart string conversion
-  array.toString = function() {
-    return this.map(item => item.content).join('\n\n');
-  };
-  
-  // Add smart JSON conversion
-  array.toJSON = function() {
-    return this.map(item => item.toJSON());
-  };
-  
-  return array;
-}
-
-/**
- * Factory function to create RenamedContentArray with smart behavior
- * @deprecated Use createRenamedContentVariable from variable-migration.ts instead
- */
-export function createRenamedContentArray(items: string[]): RenamedContentArray {
-  const array = items as RenamedContentArray;
-  
-  // String conversion joins all items
-  array.toString = function() {
-    return this.join('\n\n');
-  };
-  
-  // JSON conversion returns the array as-is
-  array.toJSON = function() {
-    return [...this];
-  };
-  
-  return array;
-}
+// Factory functions removed in Phase 5 of type refactor
+// Use Variable-based alternatives from variable-migration.ts instead

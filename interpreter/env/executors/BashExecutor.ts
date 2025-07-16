@@ -5,6 +5,7 @@ import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import { isTextLike, type Variable } from '@core/types/variable';
 import { prepareVariablesForBash, injectBashHelpers } from '../bash-variable-helpers';
+import { adaptVariablesForBash } from '../bash-variable-adapter';
 
 export interface VariableProvider {
   /**
@@ -51,47 +52,12 @@ export class BashExecutor extends BaseCommandExecutor {
     try {
       // Build environment variables from parameters
       let envVars: Record<string, string> = {};
-      const isEnhancedMode = process.env.MLLD_ENHANCED_VARIABLE_PASSING === 'true';
       
       if (params && typeof params === 'object') {
-        if (isEnhancedMode) {
-          // Use Variable-aware conversion
-          envVars = prepareVariablesForBash(params);
-          
-          // Also add metadata for primitive values if provided
-          if (metadata) {
-            for (const [key, meta] of Object.entries(metadata)) {
-              if (meta.isVariable) {
-                // Ensure the value itself is in envVars
-                if (params[key] !== undefined && !envVars[key]) {
-                  envVars[key] = String(params[key]);
-                }
-                if (!envVars[`MLLD_IS_VARIABLE_${key}`]) {
-                  envVars[`MLLD_IS_VARIABLE_${key}`] = 'true';
-                }
-                if (!envVars[`MLLD_TYPE_${key}`] && meta.type) {
-                  envVars[`MLLD_TYPE_${key}`] = meta.type;
-                }
-                if (!envVars[`MLLD_SUBTYPE_${key}`] && meta.subtype) {
-                  envVars[`MLLD_SUBTYPE_${key}`] = meta.subtype;
-                }
-                if (!envVars[`MLLD_METADATA_${key}`] && meta.metadata) {
-                  envVars[`MLLD_METADATA_${key}`] = JSON.stringify(meta.metadata);
-                }
-              }
-            }
-          }
-        } else {
-          // Standard conversion
-          for (const [key, value] of Object.entries(params)) {
-            // Convert value to string for environment variable
-            if (typeof value === 'object' && value !== null) {
-              envVars[key] = JSON.stringify(value);
-            } else {
-              envVars[key] = String(value);
-            }
-          }
-        }
+        // Always use the adapter to convert Variables/proxies to strings
+        // This handles both enhanced Variables and regular values
+        const env = { getVariable: () => null } as any; // Minimal env for adapter
+        envVars = await adaptVariablesForBash(params, env);
       } else {
         // When no params are provided, include all text variables as environment variables
         // This allows bash code blocks to access mlld variables via $varname
@@ -99,18 +65,6 @@ export class BashExecutor extends BaseCommandExecutor {
         for (const [name, variable] of variables) {
           if (isTextLike(variable) && typeof variable.value === 'string') {
             envVars[name] = variable.value;
-            
-            // In enhanced mode, also add metadata
-            if (isEnhancedMode) {
-              envVars[`MLLD_TYPE_${name}`] = variable.type;
-              if (variable.subtype) {
-                envVars[`MLLD_SUBTYPE_${name}`] = variable.subtype;
-              }
-              if (variable.metadata && Object.keys(variable.metadata).length > 0) {
-                envVars[`MLLD_METADATA_${name}`] = JSON.stringify(variable.metadata);
-              }
-              envVars[`MLLD_IS_VARIABLE_${name}`] = 'true';
-            }
           }
         }
       }
@@ -127,25 +81,20 @@ export class BashExecutor extends BaseCommandExecutor {
         };
       }
       
-      // Inject mlld helper functions if in enhanced mode (but not when mocking)
-      const codeWithHelpers = isMocking ? code : injectBashHelpers(code, isEnhancedMode, metadata);
+      // Don't inject helpers for bash - we just pass string values
+      const codeWithHelpers = code;
       
       if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
         console.log('BashExecutor: Final code to execute:', {
-          codeWithHelpers: codeWithHelpers.substring(0, 500),
-          hasHelpers: codeWithHelpers.includes('mlld_is_variable'),
-          isEnhancedMode
+          code: code.substring(0, 500)
         });
       }
       
       if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
         console.log('BashExecutor: About to execute code:', {
-          originalCode: code.substring(0, 100),
-          codeWithHelpers: codeWithHelpers.substring(0, 200),
-          isEnhancedMode,
-          hasMetadata: !!metadata,
+          code: code.substring(0, 100),
           envVarsCount: Object.keys(envVars).length,
-          envVars: Object.entries(envVars).filter(([k]) => !k.startsWith('MLLD_')).slice(0, 5)
+          envVars: Object.entries(envVars).slice(0, 5)
         });
       }
       

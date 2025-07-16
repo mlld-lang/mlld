@@ -92,9 +92,8 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         functionBody = `const mlld_now = () => new Date().toISOString();\n${functionBody}`;
       }
       
-      // Add mlld helpers if enhanced mode is enabled
-      const isEnhancedMode = process.env.MLLD_ENHANCED_VARIABLE_PASSING === 'true';
-      if (isEnhancedMode && (!params || !params['mlld'])) {
+      // Always add mlld helpers (enhanced mode is the standard)
+      if (!params || !params['mlld']) {
         // Create mlld helpers with primitive metadata
         const mlldHelpers = createMlldHelpers(metadata);
         allParamNames.push('mlld');

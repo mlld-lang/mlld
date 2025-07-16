@@ -11,7 +11,6 @@ import { MlldInterpreterError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
-import { isEnhancedVariablePassingEnabled } from '@interpreter/utils/enhanced-mode-config';
 
 /**
  * Evaluate an ExecInvocation node
@@ -474,28 +473,19 @@ export async function evaluateExecInvocation(
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
       
-      // When enhanced variable passing is enabled, we need to properly serialize
-      // proxy objects that can't be converted to strings directly
-      if (isEnhancedVariablePassingEnabled()) {
-        const paramVar = execEnv.getVariable(paramName);
-        if (paramVar && typeof paramVar.value === 'object' && paramVar.value !== null) {
-          // For objects and arrays, use JSON serialization
-          try {
-            envVars[paramName] = JSON.stringify(paramVar.value);
-          } catch (e) {
-            // Fallback to string version if JSON serialization fails
-            envVars[paramName] = evaluatedArgStrings[i];
-          }
-        } else {
-          // For primitives and other types, use the string version
+      // Always use enhanced mode - properly serialize proxy objects
+      const paramVar = execEnv.getVariable(paramName);
+      if (paramVar && typeof paramVar.value === 'object' && paramVar.value !== null) {
+        // For objects and arrays, use JSON serialization
+        try {
+          envVars[paramName] = JSON.stringify(paramVar.value);
+        } catch (e) {
+          // Fallback to string version if JSON serialization fails
           envVars[paramName] = evaluatedArgStrings[i];
         }
       } else {
-        // Standard mode: use string version directly
-        const argValue = evaluatedArgStrings[i];
-        if (argValue !== undefined) {
-          envVars[paramName] = String(argValue);
-        }
+        // For primitives and other types, use the string version
+        envVars[paramName] = evaluatedArgStrings[i];
       }
     }
     
@@ -580,25 +570,12 @@ export async function evaluateExecInvocation(
       if (paramVar && paramVar.type === 'pipeline-input') {
         // Pass the pipeline input object directly for code execution
         codeParams[paramName] = paramVar.value;
-      } else if (isEnhancedVariablePassingEnabled() && paramVar) {
-        // Enhanced mode handling
+      } else if (paramVar) {
+        // Always use enhanced Variable passing
         if (definition.language === 'bash' || definition.language === 'sh') {
-          // Bash/sh just need string values for environment variables
-          // No proxies, just resolve complex values and pass the raw value
-          if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
-            // Complex Variable with AST - resolve it first
-            const resolvedValue = await resolveVariableValue(paramVar, execEnv);
-            codeParams[paramName] = resolvedValue;
-          } else {
-            codeParams[paramName] = paramVar.value;
-          }
-          // Still store metadata for bash helpers
-          variableMetadata[paramName] = {
-            type: paramVar.type,
-            subtype: paramVar.subtype || (paramVar.type === 'primitive' && 'primitiveType' in paramVar ? (paramVar as any).primitiveType : undefined),
-            metadata: paramVar.metadata,
-            isVariable: true
-          };
+          // Bash/sh get simple values - the BashExecutor will handle conversion
+          // Just pass the Variable or proxy as-is, let the executor adapt it
+          codeParams[paramName] = prepareValueForShadow(paramVar);
         } else {
           // Other languages (JS, Python) get proxies for rich type info
           // But first, check if it's a complex Variable that needs resolution
@@ -637,17 +614,14 @@ export async function evaluateExecInvocation(
             ? (paramVar as any).primitiveType 
             : paramVar.subtype;
             
-          logger.debug(`Enhanced Variable passing for ${paramName}:`, {
+          logger.debug(`Variable passing for ${paramName}:`, {
             variableType: paramVar.type,
             variableSubtype: subtype,
             hasMetadata: !!paramVar.metadata,
             isPrimitive: paramVar.value === null || typeof paramVar.value !== 'object',
-            enhancedMode: true
+            language: definition.language
           });
         }
-      } else if (paramVar) {
-        // Standard mode: pass raw value
-        codeParams[paramName] = paramVar.value;
       } else {
         // Use the evaluated argument value directly - this preserves primitives
         const argValue = evaluatedArgs[i];
@@ -672,7 +646,7 @@ export async function evaluateExecInvocation(
       code,
       definition.language || 'javascript',
       codeParams,
-      isEnhancedVariablePassingEnabled() && Object.keys(variableMetadata).length > 0 ? variableMetadata : undefined
+      Object.keys(variableMetadata).length > 0 ? variableMetadata : undefined
     );
     
     // If the result looks like JSON (from return statement), parse it

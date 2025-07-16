@@ -387,8 +387,8 @@ echo "value:$files"
   });
   
   describe('Enhanced Mode Toggle', () => {
-    it('should not provide Variable metadata when enhanced mode is disabled', async () => {
-      // Disable enhanced mode
+    it('should always provide Variable metadata (enhanced mode is always on)', async () => {
+      // Enhanced mode is now always on, even if env var is set to false
       process.env.MLLD_ENHANCED_VARIABLE_PASSING = 'false';
       
       // Create test data
@@ -436,8 +436,9 @@ echo "value:$files"
       const result = await evaluateExecInvocation(invocation, env);
       const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
       
-      expect(output.hasMlld).toBe(false);
-      expect(output.hasType).toBe(false);
+      // Enhanced mode is now always on
+      expect(output.hasMlld).toBe(true);
+      expect(output.hasType).toBe('array');
       expect(output.isArray).toBe(true);
       expect(output.value).toEqual([1, 2, 3]);
     });

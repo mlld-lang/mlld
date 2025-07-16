@@ -5,6 +5,30 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc5]
+
+### Changed
+- **Variable Type System**: Complete refactor of how variables flow through mlld
+  - Variables now preserve type information and metadata throughout evaluation
+  - Type detection uses O(1) property checks instead of content inspection
+  - Shadow environments (JS, Node, Python) receive rich type info via proxies
+  
+### Added
+- **Bash Variable Adapter**: Clean adapter for bash/sh environments
+  - Bash receives string values while other languages get full type information
+  - Fixes JavaScript errors when bash tries to access helper functions
+- **Type Introspection**: New methods for runtime type checking
+  - `mlld.getType()`, `mlld.isVariable()`, `mlld.getMetadata()`
+
+### Fixed
+- ArrayVariable storing AST structure instead of evaluated values
+- Empty string returns and JavaScript errors in bash/sh execution
+- Overly broad type guards that matched any string array
+
+### Removed
+- Enhanced variable passing feature flag (now always enabled)
+- Legacy factory functions `createRenamedContentArray` and `createLoadContentResultArray`
+
 ## [2.0.0-rc4]
 
 ### Added

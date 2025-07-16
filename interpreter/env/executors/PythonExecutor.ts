@@ -57,22 +57,14 @@ export class PythonExecutor extends BaseCommandExecutor {
     try {
       // Build Python code with parameters
       let pythonCode = '';
-      const isEnhancedMode = process.env.MLLD_ENHANCED_VARIABLE_PASSING === 'true';
       
-      // Add mlld helpers in enhanced mode
-      if (isEnhancedMode) {
-        pythonCode += generatePythonMlldHelpers(metadata) + '\n';
-      }
+      // Always add mlld helpers (enhanced mode is the standard)
+      pythonCode += generatePythonMlldHelpers(metadata) + '\n';
       
       if (params && typeof params === 'object') {
         for (const [key, value] of Object.entries(params)) {
-          if (isEnhancedMode) {
-            // Use Variable-aware conversion
-            pythonCode += convertToPythonValue(value, key) + '\n';
-          } else {
-            // Standard JSON conversion
-            pythonCode += `${key} = ${JSON.stringify(value)}\n`;
-          }
+          // Always use Variable-aware conversion
+          pythonCode += convertToPythonValue(value, key) + '\n';
         }
       }
       pythonCode += '\n# User code:\n' + code;

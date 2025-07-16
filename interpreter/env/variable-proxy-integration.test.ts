@@ -308,8 +308,8 @@ describe('Variable Proxy Integration', () => {
       expect(output.isVariable).toBe(true);
     });
     
-    it('should work with disabled enhanced mode', async () => {
-      // Disable enhanced mode
+    it('should work with enhanced mode always on', async () => {
+      // Enhanced mode is now always on
       process.env.MLLD_ENHANCED_VARIABLE_PASSING = 'false';
       
       // Create a variable
@@ -356,10 +356,10 @@ describe('Variable Proxy Integration', () => {
       const result = await evaluateExecInvocation(invocation, env);
       const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
       
-      // Should not have Variable info in disabled mode
+      // Enhanced mode is now always on
       expect(output.isArray).toBe(true);
-      expect(output.hasType).toBe(false);
-      expect(output.hasMlld).toBe(false); // No mlld helpers in disabled mode
+      expect(output.hasType).toBe('array');
+      expect(output.hasMlld).toBe(true); // mlld helpers always available
     });
   });
 });

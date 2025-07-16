@@ -85,8 +85,6 @@ describe('Bash Primitive Variable Type Handling', () => {
           paramNames: ['text'],
           codeTemplate: [{ type: 'Text', content: `
             echo "value: $text"
-            echo "type: $(mlld_get_type text)"
-            echo "is_variable: $(mlld_is_variable text && echo 'true' || echo 'false')"
           ` }]
         }
       }
@@ -106,7 +104,5 @@ describe('Bash Primitive Variable Type Handling', () => {
     const lines = result.value.trim().split('\n');
     
     expect(lines[0]).toBe('value: Hello, World!');
-    expect(lines[1]).toBe('type: simple-text');
-    expect(lines[2]).toBe('is_variable: true');
   });
 });

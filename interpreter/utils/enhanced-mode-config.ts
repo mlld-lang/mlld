@@ -35,13 +35,13 @@ export function isEnhancedInterpolationEnabled(): boolean {
 
 /**
  * Check if enhanced Variable passing to shadow environments is enabled
- * Default: false for now (can be enabled with MLLD_ENHANCED_VARIABLE_PASSING=true)
- * TODO: Enable by default once all edge cases are handled
+ * Default: true (can be disabled with MLLD_ENHANCED_VARIABLE_PASSING=false)
+ * Note: Bash/sh environments use a simplified approach regardless of this setting
  */
 export function isEnhancedVariablePassingEnabled(): boolean {
   const envVar = process.env.MLLD_ENHANCED_VARIABLE_PASSING;
-  // Default to false until we handle all edge cases
-  return envVar === 'true';
+  // Default to true unless explicitly disabled
+  return envVar !== 'false';
 }
 
 /**
