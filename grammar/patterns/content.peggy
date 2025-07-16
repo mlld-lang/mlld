@@ -41,34 +41,8 @@ LiteralContent "Literal content without interpolation"
     }
 
 
-// SEMANTIC: Path content - knows it's parsing a file path
-SemanticPathContent "Semantic path content with @var interpolation"
-  = '[' pathParts:PathParts _ '#' _ section:SectionIdentifier ']' {
-      // Path with section - create structured response
-      const pathString = helpers.reconstructRawString(pathParts);
-      
-      // Extract section raw content
-      let sectionRaw;
-      if (section.type === 'VariableReference') {
-        sectionRaw = '@' + section.identifier;
-      } else if (typeof section === 'string') {
-        sectionRaw = section;
-      } else {
-        sectionRaw = section.content || section.identifier || '';
-      }
-      
-      return {
-        type: 'sectionPath',
-        parts: pathParts,
-        section: sectionRaw,
-        sectionNodes: Array.isArray(section) ? section : [section],
-        raw: pathString + ' # ' + sectionRaw
-      };
-    }
-  / '[' parts:PathParts ']' {
-      // Regular path without section
-      return parts;
-    }
+// REMOVED: Bracket syntax for paths - use <file.md> or "file.md" instead
+// SemanticPathContent was here
 
 // SEMANTIC: Section content for @add directive - shared pattern
 SemanticSectionContent "Semantic section content"
@@ -105,9 +79,7 @@ PathParts "Path component parts"
 SectionName "Section name"
   = chars:$(!']' .)+ { return chars.trim(); }
 
-// Content inside single brackets for backward compatibility
-BracketContent "Content with @var interpolation"
-  = SemanticPathContent
+// REMOVED: BracketContent - use AlligatorExpression or quoted strings instead
 
 // Removed: SectionBracketContent - now handled by directive-specific semantic parsers
 
@@ -409,9 +381,7 @@ InterpolatedDoubleQuoteContent "Double quoted content with @var interpolation"
       return parts;
     }
 
-// Path content with @var interpolation (brackets only)
-InterpolatedPathContent "Path content with @var interpolation" 
-  = BracketContent  // Already exists: [...]
+// REMOVED: InterpolatedPathContent - bracket syntax no longer supported
 
 // Template content with interpolation (double and triple colons)
 InterpolatedTemplateContent "Template content with interpolation"
@@ -422,9 +392,7 @@ InterpolatedTemplateContent "Template content with interpolation"
 // COMBO PATTERNS - Combine different types of patterns with clear semantics
 // -------------------------------------------------------------
 
-// Path-style interpolation: brackets only (enforces semantic clarity)
-PathStyleInterpolation "Path interpolation patterns"
-  = InterpolatedPathContent  // [content with @var] - all paths must be bracketed
+// REMOVED: PathStyleInterpolation - bracket syntax no longer supported
 
 // Template-style interpolation: multiple types with different interpolation behavior
 TemplateStyleInterpolation "Template interpolation patterns"  
@@ -483,7 +451,7 @@ TemplateStyleInterpolation "Template interpolation patterns"
 CommandStyleInterpolation "Command interpolation patterns"
   = InterpolatedDoubleQuoteContent // "command with @var"
   / LiteralOnlyContent            // 'literal command'
-  / InterpolatedPathContent       // [command with @var] 
+  / CommandBracketContent         // [command with @var] - permissive for shell commands
   / InterpolatedTemplateContent   // [[command with {{var}}]]
 
 // -------------------------------------------------------------
@@ -529,23 +497,8 @@ SemanticTextContent "Semantic content for @text directive"
 // WRAPPED PATTERNS - Used by directives, handle raw string construction
 // -------------------------------------------------------------
 
-// For paths in path, import, exec, add directives
-WrappedPathContent "Wrapped path content"
-  = content:PathStyleInterpolation {
-      // Check if this is a section path from SemanticPathContent
-      if (content && typeof content === 'object' && content.type === 'sectionPath') {
-        // Return the section path structure directly
-        return content;
-      }
-      
-      // PathStyleInterpolation already handles brackets
-      const rawString = helpers.reconstructRawString(content);
-      
-      return {
-        parts: content,
-        raw: rawString
-      };
-    }
+// REMOVED: WrappedPathContent - bracket syntax no longer supported
+// Paths should use quoted strings or alligator syntax instead
 
 // For templates in text, add directives
 WrappedTemplateContent "Wrapped template content"

@@ -20,7 +20,7 @@ Paths can contain:
 // -------------------------------------------------------------
 
 PathCore
-  = path:WrappedPathContent {
+  = path:PathExpression {
       helpers.debug('PathCore matched path', { path });
     
       // Structure for outputting a filesystem path
@@ -28,12 +28,12 @@ PathCore
         type: 'path',
         subtype: 'filesystemPath',
         values: { 
-          path: path.parts 
+          path: path.values.path || path.values.url 
         },
         raw: { 
-          path: path.raw 
+          path: path.raw.path || path.raw.url 
         },
-        meta: helpers.createPathMetadata(path.raw, path.parts)
+        meta: path.meta
       };
     }
 
@@ -42,7 +42,7 @@ PathCore
 // -------------------------------------------------------------
 
 SectionPathCore
-  = path:WrappedPathContent _ "#" _ section:BaseIdentifier {
+  = path:PathExpression _ "#" _ section:BaseIdentifier {
       helpers.debug('SectionPathCore matched', { path, section });
       
       // Path with section marker for specific imports
@@ -50,15 +50,15 @@ SectionPathCore
         type: 'path',
         subtype: 'sectionPath',
         values: { 
-          path: path.parts,
+          path: path.values.path || path.values.url,
           section: [helpers.createNode(NodeType.Text, { content: section, location: location() })]
         },
         raw: { 
-          path: path.raw,
+          path: path.raw.path || path.raw.url,
           section
         },
         meta: {
-          ...helpers.createPathMetadata(path.raw, path.parts),
+          ...path.meta,
           hasSection: true
         }
       };

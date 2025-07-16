@@ -7,10 +7,10 @@
 
 The show directive displays content from templates, variables, paths, or sections.
 It can be used in these forms:
-1. /show [[Template content]]                 - Show template content
+1. /show ::Template content::                 - Show template content with @var interpolation
 2. /show @variable                            - Show variable content
-3. /show [path/to/file.md]                    - Show content from a file
-4. /show "# Header" from [path.md] as "# New" - Show a specific section from a file
+3. /show <path/to/file.md>                    - Show content from a file
+4. /show "# Header" from "path.md" as "# New" - Show a specific section from a file
 */
 
 // Core content handlers (context, tokens, whitespace, variables, template, path)
@@ -479,7 +479,7 @@ SlashShow
         'path'
       );
     }
-  / DirectiveContext "/show" _ !("[[") !('[' [^#\]]* '#') path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/show" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('SlashShow matched path', { path, headerLevel, underHeader, security });
       
       // Extract header level and under header if provided
@@ -566,27 +566,34 @@ SlashShow
       helpers.mlldError("Unclosed double brackets in /show directive. Expected closing ']]' for path section expression.", "]]", location());
     }
     
-  // Error: Unclosed single bracket [
-  / DirectiveContext "/show" _ "[" &{
-      return helpers.isUnclosedArray(input, peg$currPos);
+  // Error: Unclosed alligator bracket <
+  / DirectiveContext "/show" _ "<" &{
+      // Check if we have an unclosed alligator bracket
+      let i = peg$currPos;
+      while (i < input.length) {
+        if (input[i] === '>') return false;
+        if (input[i] === '\n') return true;
+        i++;
+      }
+      return true;
     } {
-      helpers.mlldError("Unclosed path bracket in /show directive. Expected closing ']' for path specification.", "]", location());
+      helpers.mlldError("Unclosed alligator bracket in /show directive. Expected closing '>' for content loading.", ">", location());
     }
     
   // Error: Missing 'from' keyword in section syntax
   / DirectiveContext "/show" _ QuotedContent _ &{
-      // Look ahead to see if next non-whitespace is [ or path-like
+      // Look ahead to see if next non-whitespace is < or " or path-like
       let i = peg$currPos;
       while (i < input.length && (input[i] === ' ' || input[i] === '\t')) {
         i++;
       }
-      // If we see [ or a path-like character, but didn't match section syntax, must be missing 'from'
-      if (i < input.length && (input[i] === '[' || input[i] === '/' || /[a-zA-Z0-9.]/.test(input[i]))) {
+      // If we see < or " or a path-like character, but didn't match section syntax, must be missing 'from'
+      if (i < input.length && (input[i] === '<' || input[i] === '"' || input[i] === '/' || /[a-zA-Z0-9.]/.test(input[i]))) {
         return true;
       }
       return false;
     } {
-      helpers.mlldError("Invalid section syntax in /show directive. Expected 'from' keyword after section title. Use: /show \"Section Title\" from [path]", "from", location());
+      helpers.mlldError("Invalid section syntax in /show directive. Expected 'from' keyword after section title. Use: /show \"Section Title\" from \"path\"", "from", location());
     }
     
   // Error: Missing path after 'from' in section syntax
@@ -638,7 +645,7 @@ SlashShow
     
   // Error: Generic /show syntax error (catch-all)
   / DirectiveContext "/show" {
-      helpers.mlldError("Invalid /show syntax. Expected: /show `template`, /show @variable, /show [path], or /show \"section\" from [path]", "`", location());
+      helpers.mlldError("Invalid /show syntax. Expected: /show `template`, /show @variable, /show <path>, or /show \"section\" from \"path\"", "`", location());
     }
 
 // -------------------------------------------------------------
@@ -647,13 +654,25 @@ SlashShow
 
 // Reference for other directives to use
 AddDirectiveRef
-  = RHSContext _ path:WrappedPathContent {
+  = RHSContext _ content:AlligatorExpression {
+      // Handle alligator syntax for showing file content
+      return {
+        subtype: 'showLoadContent',
+        values: { loadContent: content },
+        raw: { loadContent: content.source.raw },
+        meta: { 
+          sourceType: content.source.type
+        }
+      };
+    }
+  / RHSContext _ path:InterpolatedDoubleQuoteContent {
+      // Handle quoted paths
       return {
         subtype: 'showPath',
-        values: { path: path.parts },
-        raw: { path: path.raw },
+        values: { path: path },
+        raw: { path: helpers.reconstructRawString(path) },
         meta: { 
-          path: helpers.createPathMetadata(path.raw, path.parts)
+          path: helpers.createPathMetadata(helpers.reconstructRawString(path), path)
         }
       };
     }

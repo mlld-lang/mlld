@@ -333,7 +333,7 @@ ImportPath
   / ModuleReference
   / QuotedPath
   / ImportAlligatorAdapter
-  / PathExpression
+  // REMOVED: PathExpression - bracket syntax no longer supported
 
 // Adapter to use AlligatorExpression for imports
 ImportAlligatorAdapter
@@ -367,23 +367,7 @@ ImportAlligatorAdapter
       helpers.mlldError("Invalid alligator content in import path", ">", location());
     }
 
-// DEPRECATED - Bracketed path for imports - handles [@var/path]
-BracketImportPath
-  = "[" parts:ImportPathParts "]" {
-      helpers.debug('BracketImportPath matched', { parts });
-      const rawPath = helpers.reconstructRawString(parts);
-      return {
-        type: 'path',
-        subtype: 'filePath',
-        values: { 
-          path: parts
-        },
-        raw: { 
-          path: rawPath
-        },
-        meta: helpers.createPathMetadata(rawPath, parts)
-      };
-    }
+// REMOVED: BracketImportPath - bracket syntax no longer supported
 
 // Quoted path for imports
 QuotedPath

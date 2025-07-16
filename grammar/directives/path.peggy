@@ -97,69 +97,7 @@ SlashPath
         'path'
       );
     }
-  // Bracketed path with TTL and tail modifiers - semantic parsing
-  / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ "[" parts:PathAssignmentParts "]" ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashPath matched bracketed path', { id, parts, ttl, tail });
-      
-      // Process special path variables in the parsed content (only @. special case)
-      const processedPathParts = [];
-      
-      for (const part of parts) {
-        if (part.type === 'Text' && part.content && part.content.includes('@.')) {
-          // Handle @. in text nodes by replacing with @PROJECTPATH and re-parsing as variable
-          const updatedContent = part.content.replace(/@\./g, '@PROJECTPATH');
-          
-          // If the replacement happened, we need to split this into text and variable parts
-          if (updatedContent !== part.content) {
-            // For simplicity, just replace @. with @PROJECTPATH in the text content
-            // The interpreter will handle @PROJECTPATH as a special variable
-            const newTextNode = helpers.createNode(NodeType.Text, { 
-              content: updatedContent, 
-              location: part.location 
-            });
-            processedPathParts.push(newTextNode);
-          } else {
-            processedPathParts.push(part);
-          }
-        } else {
-          processedPathParts.push(part);
-        }
-      }
-      
-      // Reconstruct raw string from processed parts for metadata
-      const rawString = helpers.reconstructRawString(processedPathParts);
-      
-      // Create variable reference node for identifier
-      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
-      
-      // Build values object
-      const values = {
-        identifier: [idNode],
-        path: processedPathParts
-      };
-      
-      // Add TTL if present
-      if (ttl) {
-        values.ttl = ttl[1]; // Extract from [_, TTLClause]
-      }
-      
-      // Add withClause if tail modifiers present
-      if (tail) {
-        values.withClause = tail;
-      }
-      
-      return helpers.createStructuredDirective(
-        'path',
-        'pathAssignment',
-        values,
-        {},  // No raw field needed - can be reconstructed from parts if needed for debugging
-        {
-          path: helpers.createPathMetadata(rawString, processedPathParts)
-        },
-        location(),
-        'path'  // Source parameter
-      );
-    }
+  // REMOVED: Bracketed path syntax - use quoted strings instead
   / DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ path:PathExpression ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashPath matched normal path', { id, path, ttl, tail });
       
@@ -234,4 +172,4 @@ SpecialPathIdentifier
       return text();
     }
 
-// We're now using WrappedPathContent from patterns/content.peggy instead of BracketedPathContent
+// Path syntax uses PathExpression from patterns/path-expression.peggy for quoted paths

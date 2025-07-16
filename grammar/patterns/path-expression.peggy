@@ -18,117 +18,44 @@ directly using PathCore, URLPathCore, etc.
 // MAIN PATH EXPRESSION - Entry point for all paths
 // -------------------------------------------------------------
 
+// REMOVED: PathExpression with bracket syntax
+// PathExpression should now use quoted strings or alligator syntax
 PathExpression "Any path expression"
-  = UnifiedSectionPath  // [path/file.md#section] or [https://example.com#section]
-  / UnifiedPath         // [path/file.md] or [https://example.com]
+  = QuotedStringPath  // "path/to/file.md" - for import/path directives
 
-// -------------------------------------------------------------
-// UNIFIED PATHS - Handle both files and URLs with identical syntax
-// -------------------------------------------------------------
-
-UnifiedSectionPath "Unified path with section marker"
-  = path:UnifiedPath _ "#" _ section:SectionIdentifier {
-      helpers.debug('UnifiedSectionPath matched', { path, section });
-      
-      // Determine if this is a URL or file path based on content
-      const isUrl = path.values.protocol !== undefined;
-      
-      // Section can be either a Text node (literal) or VariableReference node (from AtVar)
-      const sectionNodes = Array.isArray(section) ? section : [section];
-      
-      // Extract raw content for compatibility
-      let rawSection;
-      if (section.type === 'VariableReference') {
-        rawSection = '@' + section.identifier;
-      } else if (typeof section === 'string') {
-        rawSection = section;
-      } else {
-        rawSection = section.content || section.identifier || '';
-      }
-      
-      if (isUrl) {
-        return {
-          type: 'path',
-          subtype: 'urlSectionPath',
-          values: { 
-            url: path.values.url,
-            protocol: path.values.protocol,
-            parts: path.values.parts,
-            section: sectionNodes
-          },
-          raw: { 
-            url: path.raw.url || path.raw.path,
-            protocol: path.values.protocol,
-            section: rawSection
-          },
-          meta: helpers.createUrlMetadata(path.values.protocol, path.values.parts, true)
-        };
-      } else {
-        return {
-          type: 'path',
-          subtype: 'fileSectionPath',
-          values: { 
-            path: path.values.path,
-            section: sectionNodes
-          },
-          raw: { 
-            path: path.raw.path,
-            section: rawSection
-          },
-          meta: {
-            ...path.meta,
-            hasSection: true
-          }
-        };
-      }
+// Simple quoted string path
+QuotedStringPath "quoted string path"
+  = '"' content:$([^"]*) '"' {
+      return {
+        type: 'path',
+        subtype: 'filePath',
+        values: { 
+          path: [helpers.createNode(NodeType.Text, { content, location: location() })]
+        },
+        raw: { 
+          path: content
+        },
+        meta: helpers.createPathMetadata(content, [helpers.createNode(NodeType.Text, { content, location: location() })])
+      };
+    }
+  / "'" content:$([^']*) "'" {
+      return {
+        type: 'path',
+        subtype: 'filePath',
+        values: { 
+          path: [helpers.createNode(NodeType.Text, { content, location: location() })]
+        },
+        raw: { 
+          path: content
+        },
+        meta: helpers.createPathMetadata(content, [helpers.createNode(NodeType.Text, { content, location: location() })])
+      };
     }
 
-UnifiedPath "Unified path (file or URL)"
-  = path:WrappedPathContent {
-      helpers.debug('UnifiedPath matched', { path });
-      
-      // Analyze the raw content to determine if this is a URL or file path
-      const rawContent = path.raw;
-      const urlMatch = rawContent.match(/^(https?|file):\/\//);
-      
-      if (urlMatch) {
-        // This is a URL - parse it as such
-        const protocol = urlMatch[1];
-        const fullUrl = rawContent;
-        
-        helpers.debug('UnifiedPath detected URL', { protocol, fullUrl });
-        
-        return {
-          type: 'path',
-          subtype: 'urlPath',
-          values: { 
-            url: [helpers.createNode(NodeType.Text, { content: fullUrl, location: location() })],
-            protocol: [helpers.createNode(NodeType.Text, { content: protocol, location: location() })],
-            parts: path.parts
-          },
-          raw: { 
-            url: fullUrl,
-            protocol
-          },
-          meta: helpers.createUrlMetadata(protocol, path.parts)
-        };
-      } else {
-        // This is a file path
-        helpers.debug('UnifiedPath detected file path', { rawContent });
-        
-        return {
-          type: 'path',
-          subtype: 'filePath',
-          values: { 
-            path: path.parts 
-          },
-          raw: { 
-            path: path.raw 
-          },
-          meta: helpers.createPathMetadata(path.raw, path.parts)
-        };
-      }
-    }
+// -------------------------------------------------------------
+// UNIFIED PATHS - Removed: bracket syntax no longer supported
+// Use quoted strings or alligator syntax for paths instead
+// -------------------------------------------------------------
 
 // URL protocol (http, https, file)
 URLProtocolType "URL protocol type"
