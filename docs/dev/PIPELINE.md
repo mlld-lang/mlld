@@ -381,6 +381,96 @@ When implementing pipeline features:
 - Extract only at system boundaries (display, file output, command execution)
 - Document extraction points with clear comments explaining WHY
 
+### Resolution Context System
+
+The Variable resolution system uses a context-aware approach to determine when to preserve Variables versus extract raw values:
+
+```typescript
+export enum ResolutionContext {
+  // Preserve Variable wrapper
+  VariableAssignment = 'variable-assignment',
+  VariableCopy = 'variable-copy',
+  ArrayElement = 'array-element',
+  ObjectProperty = 'object-property',
+  FunctionArgument = 'function-argument',
+  DataStructure = 'data-structure',
+  FieldAccess = 'field-access',
+  ImportResult = 'import-result',
+  
+  // Extract raw value
+  StringInterpolation = 'string-interpolation',
+  CommandExecution = 'command-execution',
+  FileOutput = 'file-output',
+  Conditional = 'conditional',
+  Display = 'display',
+  PipelineInput = 'pipeline-input',
+  Truthiness = 'truthiness',
+  Equality = 'equality'
+}
+```
+
+### Context-Aware Resolution API
+
+The system provides three main resolution functions:
+
+```typescript
+// Primary API - context-aware resolution
+export async function resolveVariable(
+  variable: Variable,
+  env: Environment,
+  context: ResolutionContext
+): Promise<Variable | any>
+
+// Explicit extraction when needed
+export async function extractVariableValue(
+  variable: Variable,
+  env: Environment  
+): Promise<any>
+
+// Helper for mixed values (Variable or raw)
+export async function resolveValue(
+  value: Variable | any,
+  env: Environment,
+  context: ResolutionContext
+): Promise<Variable | any>
+```
+
+### PipelineInput Handling
+
+Pipeline inputs receive special handling to support format-aware parsing while maintaining backward compatibility:
+
+```typescript
+// PipelineInput objects have toString() for compatibility
+const input = createPipelineInput(text, format);
+console.log(String(input));  // Returns text property
+
+// But preserve structure for property access
+input.text    // Raw text
+input.data    // Parsed JSON (if format is json)
+input.csv     // Parsed CSV array (if format is csv)
+```
+
+### String Interpolation Edge Case
+
+When PipelineInput objects are used in string interpolation, they must be handled specially to avoid JSON stringification:
+
+```mlld
+/exe @format() = {echo "Result: @input"}
+/run {echo "test"} with { pipeline: [@format] }
+# Should output "Result: test" not "Result: {"text":"test","type":"text"}"
+```
+
+This is handled in the interpolate function:
+
+```typescript
+// Check if this is a PipelineInput object
+if (isPipelineInput(value)) {
+  stringValue = value.toString();  // Uses toString() method
+} else {
+  stringValue = JSON.stringify(value);
+}
+```
+
 ### Variable Flow Example
 
 ```typescript

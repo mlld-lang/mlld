@@ -49,7 +49,6 @@ describe('Variable Proxy Integration', () => {
   
   describe('Shadow Environment Variable Passing', () => {
     beforeEach(() => {
-      // Enable enhanced mode
     });
     
     afterEach(() => {
@@ -306,8 +305,7 @@ describe('Variable Proxy Integration', () => {
       expect(output.isVariable).toBe(true);
     });
     
-    it('should work with enhanced mode always on', async () => {
-      // Enhanced mode is now always on
+    it('should pass Variables with proper metadata', async () => {
       
       // Create a variable
       const arrayVar = createArrayVariable('data', [1, 2, 3], false, mockSource, {

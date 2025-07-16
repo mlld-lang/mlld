@@ -1,7 +1,7 @@
 import type { Environment } from '../env/Environment';
 import type { PipelineCommand } from '@core/types';
 import { MlldCommandExecutionError } from '@core/errors';
-import { resolveVariableValue, interpolate } from '../core/interpreter';
+import { interpolate } from '../core/interpreter';
 import { createPipelineInput, isPipelineInput } from '../utils/pipeline-input';
 import { 
   createSimpleTextVariable, 
@@ -297,8 +297,9 @@ async function resolveCommandReference(
       return baseVar;
     }
     
-    // Resolve the base variable value for non-executables
-    let value = await resolveVariableValue(baseVar, env);
+    // Extract base variable value for non-executables - WHY: Pipeline commands need raw values
+    const { extractVariableValue } = await import('../utils/variable-resolution');
+    let value = await extractVariableValue(baseVar, env);
     
     // Navigate through field access if present
     if (varRef.fields && varRef.fields.length > 0) {

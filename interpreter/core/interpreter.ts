@@ -503,7 +503,7 @@ async function evaluateText(node: TextNode, env: Environment): Promise<EvalResul
 /**
  * Resolve variable value with lazy evaluation support for complex data
  */
-export async function resolveVariableValue(variable: Variable, env: Environment): Promise<VariableValue> {
+async function resolveVariableValue(variable: Variable, env: Environment): Promise<VariableValue> {
   // Import type guards for the new Variable type system
   const {
     isTextLike,

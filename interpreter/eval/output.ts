@@ -349,9 +349,9 @@ async function evaluateSimpleVariableSource(
   if (isTextLike(variable)) {
     value = variable.value;
   } else if ('value' in variable) {
-    // For data variables, we need to resolve the actual value
-    const { resolveVariableValue } = await import('../core/interpreter');
-    value = await resolveVariableValue(variable, env);
+    // Extract Variable value for output - WHY: Output requires raw values to write/display
+    const { extractVariableValue } = await import('../utils/variable-resolution');
+    value = await extractVariableValue(variable, env);
   } else {
     throw new MlldOutputError(
       `Cannot output variable ${varName} - unknown variable type`,

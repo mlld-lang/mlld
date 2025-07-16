@@ -214,6 +214,4 @@ export async function resolveValue(
   return value;
 }
 
-// Legacy aliases for backward compatibility (to be removed)
-export const resolveVariableValue = extractVariableValue;
-export const resolveVariableValueLegacy = extractVariableValue;
+// Remove legacy aliases - use extractVariableValue or resolveVariable with context

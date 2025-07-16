@@ -10,7 +10,7 @@ import {
   isImported,
   Variable
 } from '@core/types/variable';
-import { interpolate, resolveVariableValue } from '../../core/interpreter';
+import { interpolate } from '../../core/interpreter';
 import { accessField, accessFields } from '../../utils/field-access';
 import { logger } from '@core/utils/logger';
 
@@ -164,11 +164,9 @@ export class VariableReferenceEvaluator {
           if (!indexVar) {
             throw new Error(`Variable not found for index: ${field.value}`);
           }
-          // Get the actual value to use as index
-          let indexValue = indexVar.value;
-          if (typeof indexValue === 'object' && indexValue !== null && 'value' in indexValue) {
-            indexValue = indexValue.value;
-          }
+          // Extract index value - WHY: Array/object indices must be raw values
+          const { extractVariableValue: extract } = await import('@interpreter/utils/variable-resolution');
+          const indexValue = await extract(indexVar, env);
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
           const fieldResult = accessField(result, resolvedField, { preserveContext: true });
@@ -289,11 +287,9 @@ export class VariableReferenceEvaluator {
           if (!indexVar) {
             throw new Error(`Variable not found for index: ${field.value}`);
           }
-          // Get the actual value to use as index
-          let indexValue = indexVar.value;
-          if (typeof indexValue === 'object' && indexValue !== null && 'value' in indexValue) {
-            indexValue = indexValue.value;
-          }
+          // Extract index value - WHY: Array/object indices must be raw values
+          const { extractVariableValue: extract } = await import('@interpreter/utils/variable-resolution');
+          const indexValue = await extract(indexVar, env);
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
           const fieldResult = accessField(result, resolvedField, { preserveContext: true });
@@ -380,13 +376,13 @@ export class VariableReferenceEvaluator {
     } else if (isImported(variable)) {
       result = variable.value;
     } else if (isObject(variable) || isArray(variable)) {
-      // Use legacy resolution when we must extract
-      const { resolveVariableValueLegacy } = await import('@interpreter/utils/variable-resolution');
-      result = await resolveVariableValueLegacy(variable, env);
+      // Extract Variable value - WHY: Direct variable references in templates need raw values
+      const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+      result = await extractVariableValue(variable, env);
     } else {
-      // Use legacy resolution when we must extract
-      const { resolveVariableValueLegacy } = await import('@interpreter/utils/variable-resolution');
-      result = await resolveVariableValueLegacy(variable, env);
+      // Extract Variable value - WHY: Direct variable references in templates need raw values
+      const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+      result = await extractVariableValue(variable, env);
     }
     
     return result;

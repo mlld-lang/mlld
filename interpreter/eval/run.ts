@@ -2,7 +2,7 @@ import type { DirectiveNode, TextNode, MlldNode, VariableReference, WithClause }
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableVariable, ExecutableDefinition } from '@core/types/executable';
-import { interpolate, resolveVariableValue } from '../core/interpreter';
+import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldCommandExecutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint';
@@ -175,8 +175,9 @@ export async function evaluateRun(
         throw new Error(`Base variable not found: ${varRef.identifier}`);
       }
       
-      // Resolve the field access to get the actual command
-      let value = await resolveVariableValue(baseVar, env);
+      // Extract Variable value for field access - WHY: Need raw object to navigate fields
+      const { extractVariableValue } = await import('../utils/variable-resolution');
+      let value = await extractVariableValue(baseVar, env);
       
       // Navigate through the field access chain
       for (const field of varRef.fields) {

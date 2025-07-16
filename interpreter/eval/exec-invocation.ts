@@ -3,7 +3,7 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
 import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable } from '@core/types/executable';
-import { interpolate, resolveVariableValue } from '../core/interpreter';
+import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { isExecutableVariable, createSimpleTextVariable, createObjectVariable, createArrayVariable, createPrimitiveVariable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
@@ -58,8 +58,9 @@ export async function evaluateExecInvocation(
       throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
     }
     
-    // Resolve the object value
-    const objectValue = await resolveVariableValue(objectVar, env);
+    // Extract Variable value for object field access - WHY: Need raw object to access fields
+    const { extractVariableValue } = await import('../utils/variable-resolution');
+    const objectValue = await extractVariableValue(objectVar, env);
     
     if (process.env.DEBUG_EXEC) {
       logger.debug('Object reference in exec invocation', {
@@ -566,8 +567,9 @@ export async function evaluateExecInvocation(
           // Other languages (JS, Python) get proxies for rich type info
           // But first, check if it's a complex Variable that needs resolution
           if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
-            // Complex Variable with AST - resolve it first
-            const resolvedValue = await resolveVariableValue(paramVar, execEnv);
+            // Complex Variable with AST - extract value - WHY: Shadow environments need evaluated values
+            const { extractVariableValue: extractVal } = await import('../utils/variable-resolution');
+            const resolvedValue = await extractVal(paramVar, execEnv);
             const resolvedVar = {
               ...paramVar,
               value: resolvedValue,
