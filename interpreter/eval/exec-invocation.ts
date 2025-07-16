@@ -5,7 +5,7 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable } from '@core/types/executable';
 import { interpolate, resolveVariableValue } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { isExecutableVariable, createSimpleTextVariable, createObjectVariable, createArrayVariable } from '@core/types/variable';
+import { isExecutableVariable, createSimpleTextVariable, createObjectVariable, createArrayVariable, createPrimitiveVariable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError } from '@core/errors';
 import { logger } from '@core/utils/logger';
@@ -399,21 +399,40 @@ export async function evaluateExecInvocation(
           }
         );
       } else {
-        // Primitive types - use string representation
-        paramVar = createSimpleTextVariable(
-          paramName, 
-          argStringValue,
-          {
-            directive: 'var',
-            syntax: 'quoted',
-            hasInterpolation: false,
-            isMultiLine: false
-          },
-          {
-            isSystem: true,
-            isParameter: true
-          }
-        );
+        // Primitive types - create appropriate Variable type
+        if (typeof argValue === 'number' || typeof argValue === 'boolean' || argValue === null) {
+          // Create PrimitiveVariable for number, boolean, null
+          paramVar = createPrimitiveVariable(
+            paramName,
+            argValue,
+            {
+              directive: 'var',
+              syntax: 'literal',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            {
+              isSystem: true,
+              isParameter: true
+            }
+          );
+        } else {
+          // String or other types - use SimpleTextVariable
+          paramVar = createSimpleTextVariable(
+            paramName, 
+            argStringValue,
+            {
+              directive: 'var',
+              syntax: 'quoted',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            {
+              isSystem: true,
+              isParameter: true
+            }
+          );
+        }
       }
       
       execEnv.setParameterVariable(paramName, paramVar);
@@ -530,19 +549,9 @@ export async function evaluateExecInvocation(
             enhancedMode: true
           });
         }
-      } else if (paramVar && paramVar.metadata?.actualValue !== undefined) {
-        // Use the actual value from the parameter variable if available
-        // Normalize arrays to ensure plain JavaScript values
-        const actualValue = paramVar.metadata.actualValue;
-        codeParams[paramName] = await ASTEvaluator.evaluateToRuntime(actualValue, execEnv);
-        
-        // Debug primitive values
-        if (process.env.DEBUG_EXEC) {
-          logger.debug(`Using actualValue for ${paramName}:`, {
-            actualValue: paramVar.metadata.actualValue,
-            type: typeof paramVar.metadata.actualValue
-          });
-        }
+      } else if (paramVar) {
+        // Standard mode: pass raw value
+        codeParams[paramName] = paramVar.value;
       } else {
         // Use the evaluated argument value directly - this preserves primitives
         const argValue = evaluatedArgs[i];

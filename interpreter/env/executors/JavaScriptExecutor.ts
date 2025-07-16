@@ -110,6 +110,17 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         console.log('  allParamValues:', allParamValues);
         console.log('  param types:', allParamValues.map(v => typeof v));
         console.log('  param values detail:', allParamValues.map(v => ({ value: v, type: typeof v })));
+        // More detailed debug for first param
+        if (allParamValues.length > 0) {
+          const firstParam = allParamValues[0];
+          console.log('  First param details:', {
+            type: typeof firstParam,
+            isArray: Array.isArray(firstParam),
+            constructor: firstParam?.constructor?.name,
+            keys: typeof firstParam === 'object' ? Object.keys(firstParam) : 'not-object',
+            stringified: JSON.stringify(firstParam)
+          });
+        }
       }
 
       // Create a function with dynamic parameters

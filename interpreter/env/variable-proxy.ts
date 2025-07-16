@@ -29,6 +29,16 @@ export const VARIABLE_PROXY_PROPS = {
 export function createVariableProxy(variable: Variable): any {
   const value = variable.value;
   
+  if (process.env.DEBUG_EXEC === 'true') {
+    console.log('createVariableProxy called:', {
+      variableName: variable.name,
+      variableType: variable.type,
+      valueType: typeof value,
+      isArray: Array.isArray(value),
+      valueKeys: value && typeof value === 'object' ? Object.keys(value) : 'not-object'
+    });
+  }
+  
   // Can't proxy primitives (string, number, boolean, null)
   if (value === null || typeof value !== 'object') {
     // For primitives, we'll need a different strategy

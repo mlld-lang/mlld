@@ -89,11 +89,16 @@ mlld_get_metadata() {
   echo "${!env_var}"
 }
 
-# Export functions for subshells
-export -f mlld_is_variable
-export -f mlld_get_type
-export -f mlld_get_subtype
-export -f mlld_get_metadata
+# Export functions for subshells (if supported by the shell)
+if command -v export >/dev/null 2>&1 && export -f 2>&1 | grep -q "illegal option"; then
+  # export -f not supported, skip
+  :
+else
+  export -f mlld_is_variable 2>/dev/null || true
+  export -f mlld_get_type 2>/dev/null || true
+  export -f mlld_get_subtype 2>/dev/null || true
+  export -f mlld_get_metadata 2>/dev/null || true
+fi
 `;
 }
 
