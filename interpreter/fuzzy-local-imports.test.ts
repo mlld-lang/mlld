@@ -64,7 +64,7 @@ describe('Fuzzy Local File Imports', () => {
     });
 
     it('should import files with spaces using underscores', async () => {
-      const source = '/show [./my_important_file.md]';
+      const source = '/show <./my_important_file.md>';
       
       const result = await interpret(source, {
         fileSystem,
@@ -102,7 +102,7 @@ describe('Fuzzy Local File Imports', () => {
     });
 
     it('should find .md files without extension', async () => {
-      const source = '/show [./my-important-file]';
+      const source = '/show <./my-important-file>';
       
       const result = await interpret(source, {
         fileSystem,
@@ -199,7 +199,7 @@ describe('Fuzzy Local File Imports', () => {
 
   describe('Integration with @show directive', () => {
     it('should fuzzy match files in @show', async () => {
-      const source = '/show [./my-projects/readme]';
+      const source = '/show <./my-projects/readme>';
       
       const result = await interpret(source, {
         fileSystem,
@@ -241,7 +241,7 @@ describe('Fuzzy Local File Imports', () => {
 
   describe('Integration with @path directive', () => {
     it('should fuzzy match files in @path assignments', async () => {
-      const source = '/path @doc = "./my-important-file"\n/show @doc';
+      const source = '/path @doc = "./my-important-file"\n/show <@doc>';
       
       const result = await interpret(source, {
         fileSystem,
@@ -256,7 +256,7 @@ describe('Fuzzy Local File Imports', () => {
       // TODO: This test is failing with a parse error. The fuzzy matching
       // for paths used in variable interpolation within brackets may not be
       // working correctly. Needs investigation.
-      const source = '/path @folder = "./my_projects"\n/var @readme = [@folder/README.md]\n/show @readme';
+      const source = '/path @folder = "./my_projects"\n/show <@folder/README.md>';
       
       const result = await interpret(source, {
         fileSystem,

@@ -105,7 +105,7 @@ describe('Mlld API', () => {
       // Set up a test file with sections
       await fileSystem.writeFile('/doc.md', `# Document\n\n## Section One\nContent 1\n\n## Section Two\nContent 2`);
       
-      const content = '/show "Section Two" from "/doc.md"';
+      const content = '/show </doc.md # Section Two>';
       const result = await processMlld(content, {
         fileSystem,
         pathService,

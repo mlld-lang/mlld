@@ -11,12 +11,12 @@
 /show @greeting
 
 ## Data Access
-Project: @add @config.name
-Version: @add @config.version
+/show `Project: @config.name`
+/show `Version: @config.version`
 
 ## Command Example
 /var @date = run {date +%Y-%m-%d}
-Today's date: @add @date
+/show `Today's date: @date`
 
 ## Template Example
 /var @summary = ::

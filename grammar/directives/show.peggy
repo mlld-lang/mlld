@@ -10,7 +10,7 @@ It can be used in these forms:
 1. /show ::Template content::                 - Show template content with @var interpolation
 2. /show @variable                            - Show variable content
 3. /show <path/to/file.md>                    - Show content from a file
-4. /show "# Header" from "path.md" as "# New" - Show a specific section from a file
+4. /show <path/to/file.md # Header Title>     - Show a specific section from a file
 */
 
 // Core content handlers (context, tokens, whitespace, variables, template, path)
@@ -154,54 +154,6 @@ SlashShow
         meta, 
         location(),
         'load-content'
-      );
-    }
-  / DirectiveContext "/show" _ sectionTitle:QuotedContent _ "from" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ asTitle:AsNewTitle? {
-      // This rule should match section syntax FIRST before the template rule below
-      helpers.debug('SlashShow matched section', { sectionTitle, path, asTitle, security });
-      
-      // Process the section title and path
-      const sectionTitleNode = sectionTitle[0]; // Get the first node from the array
-      
-      // Create values object
-      const values = {
-        sectionTitle: sectionTitle,
-        path: path.values.path || path.values.url
-      };
-      
-      // Add new title if provided
-      if (asTitle) {
-        values.newTitle = asTitle;
-      }
-      
-      // Create raw object
-      const raw = {
-        sectionTitle: sectionTitleNode.content,
-        path: path.raw.path || path.raw.url
-      };
-      
-      // Add new title to raw if present
-      if (asTitle) {
-        raw.newTitle = asTitle[0].content;
-      }
-      
-      // Create meta object with path metadata
-      const meta = {
-        path: {
-          ...path.meta,
-          pathSubtype: path.subtype // Preserve the specific path type
-        },
-        ...helpers.createSecurityMeta(security)
-      };
-      
-      return helpers.createStructuredDirective(
-        DirectiveKind.show, 
-        'showPathSection', 
-        values, 
-        raw, 
-        meta, 
-        location(),
-        'section'  // Added source parameter
       );
     }
   / DirectiveContext "/show" _ security:(SecurityOptions _)? template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
@@ -580,26 +532,6 @@ SlashShow
       helpers.mlldError("Unclosed alligator bracket in /show directive. Expected closing '>' for content loading.", ">", location());
     }
     
-  // Error: Missing 'from' keyword in section syntax
-  / DirectiveContext "/show" _ QuotedContent _ &{
-      // Look ahead to see if next non-whitespace is < or " or path-like
-      let i = peg$currPos;
-      while (i < input.length && (input[i] === ' ' || input[i] === '\t')) {
-        i++;
-      }
-      // If we see < or " or a path-like character, but didn't match section syntax, must be missing 'from'
-      if (i < input.length && (input[i] === '<' || input[i] === '"' || input[i] === '/' || /[a-zA-Z0-9.]/.test(input[i]))) {
-        return true;
-      }
-      return false;
-    } {
-      helpers.mlldError("Invalid section syntax in /show directive. Expected 'from' keyword after section title. Use: /show \"Section Title\" from \"path\"", "from", location());
-    }
-    
-  // Error: Missing path after 'from' in section syntax
-  / DirectiveContext "/show" _ QuotedContent _ "from" _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing path in /show section syntax. Expected a path after 'from' keyword.", "path", location());
-    }
     
   // Error: Invalid @ usage (not followed by valid identifier)
   / DirectiveContext "/show" _ "@" &{
@@ -645,7 +577,7 @@ SlashShow
     
   // Error: Generic /show syntax error (catch-all)
   / DirectiveContext "/show" {
-      helpers.mlldError("Invalid /show syntax. Expected: /show `template`, /show @variable, /show <path>, or /show \"section\" from \"path\"", "`", location());
+      helpers.mlldError("Invalid /show syntax. Expected: /show `template`, /show @variable, /show <path>, or /show <path # section>", "`", location());
     }
 
 // -------------------------------------------------------------

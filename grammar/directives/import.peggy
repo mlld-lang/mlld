@@ -106,10 +106,10 @@ SlashImport
     
   // Error: Generic /import syntax error (catch-all)
   / DirectiveContext "/import" {
-      helpers.mlldError("Invalid /import syntax. Expected: /import [path], /import @module, or /import { items } from \"path\"", "[", location());
+      helpers.mlldError("Invalid /import syntax. Expected: /import \"path\", /import @module, or /import { items } from \"path\"", "\"", location());
     }
 
-// Shorthand import: /import [path] or /import @input or /import [path] as name
+// Shorthand import: /import "path" or /import @input or /import "path" as name
 SlashImportShorthand
   = DirectiveContext "/import" _ path:ImportPath alias:(_ "as" _ name:BaseIdentifier { return name; })? ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashImportShorthand matched', { path, alias, ttl, tail });

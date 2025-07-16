@@ -41,7 +41,7 @@ describe('Import Content Type Validation', () => {
 `);
       
       const code = `
-/import [./utils.mld]
+/import "./utils.mld"
 /show @utils.helper
 `;
       
@@ -84,7 +84,7 @@ describe('Import Content Type Validation', () => {
     it('should import plain text files as namespace with empty exports', async () => {
       await fileSystem.writeFile('/readme.txt', 'This is a plain text file');
       
-      const code = `/import [./readme.txt] as text
+      const code = `/import "./readme.txt" as text
 /show @text`;
       
       const result = await interpret(code, {
@@ -115,7 +115,7 @@ describe('Import Content Type Validation', () => {
     it('should import markdown files without mlld directives as empty namespace', async () => {
       await fileSystem.writeFile('/doc.md', '# Documentation\n\nNo mlld content here.');
       
-      const code = `/import [./doc.md]
+      const code = `/import "./doc.md"
 /show @doc`;
       
       const result = await interpret(code, {

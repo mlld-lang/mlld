@@ -101,7 +101,7 @@ describe('Output Format Tests', () => {
       const source = `
     /var @message = "Hello"
     /var @config = {"version": "1.0"}
-    /path @filePath = [./test.md]
+    /path @filePath = "./test.md"
     /exe @cmd = {echo "test"}
 `;
       
@@ -148,7 +148,7 @@ describe('Integration Scenarios', () => {
 `);
       
       const source = `
-    /import [/imported.mld]
+    /import "/imported.mld" as imported
     /show @imported.greeting
     /show " by "
     /show @imported.author
@@ -235,7 +235,7 @@ describe('Integration Scenarios', () => {
       
       const source = `
     /var @conflict = "Original"
-    /import [/defs.mld]
+    /import "/defs.mld" as defs
 `;
       
       await expect(interpret(source, {

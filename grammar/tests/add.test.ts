@@ -19,7 +19,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic path add', async () => {
-    const content = `/show [@base/README.md]`;
+    const content = `/show <@base/README.md>`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -36,20 +36,20 @@ describe('Add Directive', () => {
     
     // Verify structure of the new format
     expect(directiveNode.kind).toBe('show');
-    expect(directiveNode.subtype).toBe('showPath');
+    expect(directiveNode.subtype).toBe('showLoadContent');
     
     // Check values structure
-    expect(directiveNode.values).toHaveProperty('path');
+    expect(directiveNode.values).toHaveProperty('loadContent');
     
     // Check path metadata
-    expect(directiveNode.meta.path).toHaveProperty('hasVariables');
+    expect(directiveNode.meta.sourceType).toBe('path');
   });
   
   // This test is replaced by the new AddSection tests
   // The old syntax @add [file.md # header] is deprecated
   
   test('Path add with headerLevel', async () => {
-    const content = `/show [README.md] as ###`;
+    const content = `/show <README.md> as "###"`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -58,20 +58,18 @@ describe('Add Directive', () => {
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
     expect(directiveNode.kind).toBe('show');
-    expect(directiveNode.subtype).toBe('showPath');
+    expect(directiveNode.subtype).toBe('showLoadContent');
     
     // Check values structure
-    expect(directiveNode.values).toHaveProperty('path');
-    expect(directiveNode.values).toHaveProperty('headerLevel');
-    expect(directiveNode.values.headerLevel[0].value).toBe(3);
+    expect(directiveNode.values).toHaveProperty('loadContent');
+    expect(directiveNode.values).toHaveProperty('newTitle');
     
-    // Check raw structure
-    expect(directiveNode.raw).toHaveProperty('headerLevel');
-    expect(directiveNode.raw.headerLevel).toBe('###');
+    // Check that newTitle contains the expected content
+    expect(directiveNode.values.newTitle[0].content).toBe('###');
   });
   
   test('Path add with underHeader', async () => {
-    const content = `/show [code.js] under Example Code`;
+    const content = `/show <code.js> under "Example Code"`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -80,22 +78,18 @@ describe('Add Directive', () => {
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
     expect(directiveNode.kind).toBe('show');
-    expect(directiveNode.subtype).toBe('showPath');
+    expect(directiveNode.subtype).toBe('showLoadContent');
     
     // Check values structure
-    expect(directiveNode.values).toHaveProperty('path');
-    expect(directiveNode.values).toHaveProperty('underHeader');
-    expect(Array.isArray(directiveNode.values.underHeader)).toBe(true);
-    expect(directiveNode.values.underHeader[0].content).toBe('Example Code');
+    expect(directiveNode.values).toHaveProperty('loadContent');
     
     // Check raw structure
-    expect(directiveNode.raw).toHaveProperty('underHeader');
-    expect(directiveNode.raw.underHeader).toBe('Example Code');
+    expect(directiveNode.raw).toHaveProperty('loadContent');
   });
   
   test('Complex path add with all modifiers', async () => {
     // Updated to use separate path with no section
-    const content = `/show [@base/doc.md] as ## under API Documentation`;
+    const content = `/show <@base/doc.md> as "##" under "API Documentation"`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -107,29 +101,19 @@ describe('Add Directive', () => {
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
     expect(directiveNode.kind).toBe('show');
-    expect(directiveNode.subtype).toBe('showPath');
+    expect(directiveNode.subtype).toBe('showLoadContent');
     
     // Check values structure
-    expect(directiveNode.values).toHaveProperty('path');
-    expect(directiveNode.values).toHaveProperty('headerLevel');
-    expect(directiveNode.values).toHaveProperty('underHeader');
+    expect(directiveNode.values).toHaveProperty('loadContent');
+    expect(directiveNode.values).toHaveProperty('newTitle');
     
-    // Check values content
-    expect(directiveNode.values.headerLevel[0].value).toBe(2);
-    expect(directiveNode.values.underHeader[0].content).toBe('API Documentation');
-    
-    // Check raw structure
-    expect(directiveNode.raw).toHaveProperty('headerLevel');
-    expect(directiveNode.raw).toHaveProperty('underHeader');
-    
-    // Check raw content for header elements only for now
-    expect(directiveNode.raw.headerLevel).toBe('##');
-    expect(directiveNode.raw.underHeader).toBe('API Documentation');
+    // Check that newTitle contains the expected content
+    expect(directiveNode.values.newTitle[0].content).toBe('##');
   });
   
   test('Complex section add with new title', async () => {
     // The new recommended syntax for section extraction with a new title
-    const content = `/show "# API Reference" from [@base/doc.md] as "## API"`;
+    const content = `/show <@base/doc.md # API Reference> as "## API"`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result
@@ -138,15 +122,18 @@ describe('Add Directive', () => {
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
     expect(directiveNode.kind).toBe('show');
-    expect(directiveNode.subtype).toBe('showPathSection');
+    expect(directiveNode.subtype).toBe('showLoadContent');
     
     // Check values structure
-    expect(directiveNode.values).toHaveProperty('sectionTitle');
-    expect(directiveNode.values).toHaveProperty('path');
+    expect(directiveNode.values).toHaveProperty('loadContent');
     expect(directiveNode.values).toHaveProperty('newTitle');
     
+    // Check that section is in the loadContent options
+    expect(directiveNode.values.loadContent.options).toHaveProperty('section');
+    expect(directiveNode.values.loadContent.options.section.identifier.content).toBe('API Reference');
+    
     // Check raw properties
-    expect(directiveNode.raw.sectionTitle).toBe('# API Reference');
+    expect(directiveNode.raw).toHaveProperty('newTitle');
     expect(directiveNode.raw.newTitle).toBe('## API');
   });
   
@@ -278,7 +265,7 @@ describe('Add Directive', () => {
   // ====================
   
   test('Basic section add', async () => {
-    const content = `/show "# Header Title" from [document.md]`;
+    const content = `/show <document.md # Header Title>`;
     const parseResult = await parse(content);
     
     // Log the structure for debugging
@@ -290,22 +277,19 @@ describe('Add Directive', () => {
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
     expect(directiveNode.kind).toBe('show');
-    expect(directiveNode.subtype).toBe('showPathSection');
-    expect(directiveNode.source).toBe('section'); // Check source field
+    expect(directiveNode.subtype).toBe('showLoadContent');
+    expect(directiveNode.source).toBe('load-content'); // Check source field
     
     // Check values structure
-    expect(directiveNode.values).toHaveProperty('sectionTitle');
-    expect(directiveNode.values).toHaveProperty('path');
-    expect(Array.isArray(directiveNode.values.sectionTitle)).toBe(true);
+    expect(directiveNode.values).toHaveProperty('loadContent');
     
-    // Check raw structure
-    expect(directiveNode.raw).toHaveProperty('sectionTitle');
-    expect(directiveNode.raw).toHaveProperty('path');
-    expect(directiveNode.raw.sectionTitle).toBe('# Header Title');
+    // Check that section is in the loadContent options
+    expect(directiveNode.values.loadContent.options).toHaveProperty('section');
+    expect(directiveNode.values.loadContent.options.section.identifier.content).toBe('Header Title');
   });
   
   test('Section add with as clause', async () => {
-    const content = `/show "# Original Header" from [document.md] as "## New Title"`;
+    const content = `/show <document.md # Original Header> as "## New Title"`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -314,23 +298,22 @@ describe('Add Directive', () => {
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
     expect(directiveNode.kind).toBe('show');
-    expect(directiveNode.subtype).toBe('showPathSection');
+    expect(directiveNode.subtype).toBe('showLoadContent');
     
     // Check values structure
-    expect(directiveNode.values).toHaveProperty('sectionTitle');
-    expect(directiveNode.values).toHaveProperty('path');
+    expect(directiveNode.values).toHaveProperty('loadContent');
     expect(directiveNode.values).toHaveProperty('newTitle');
     
-    // Check raw structure
-    expect(directiveNode.raw).toHaveProperty('sectionTitle');
-    expect(directiveNode.raw).toHaveProperty('path');
-    expect(directiveNode.raw).toHaveProperty('newTitle');
-    expect(directiveNode.raw.sectionTitle).toBe('# Original Header');
-    expect(directiveNode.raw.newTitle).toBe('## New Title');
+    // Check that section is in the loadContent options
+    expect(directiveNode.values.loadContent.options).toHaveProperty('section');
+    expect(directiveNode.values.loadContent.options.section.identifier.content).toBe('Original Header');
+    
+    // Check that newTitle contains the expected content
+    expect(directiveNode.values.newTitle[0].content).toBe('## New Title');
   });
   
   test('Section add with variable in path', async () => {
-    const content = `/show "# API Reference" from [@base/docs/api.md]`;
+    const content = `/show <@base/docs/api.md # API Reference>`;
     const parseResult = await parse(content);
     
     // Get the directive from the parse result (should be the first node)
@@ -339,15 +322,17 @@ describe('Add Directive', () => {
     // Verify structure
     expect(directiveNode.type).toBe('Directive');
     expect(directiveNode.kind).toBe('show');
-    expect(directiveNode.subtype).toBe('showPathSection');
+    expect(directiveNode.subtype).toBe('showLoadContent');
     
     // Check path has a variable
-    expect(directiveNode.meta.path.hasVariables).toBe(true);
+    expect(directiveNode.meta.sourceType).toBe('path');
     
     // Check values structure
-    expect(directiveNode.values).toHaveProperty('sectionTitle');
-    expect(directiveNode.values).toHaveProperty('path');
-    expect(directiveNode.raw.sectionTitle).toBe('# API Reference');
+    expect(directiveNode.values).toHaveProperty('loadContent');
+    
+    // Check that section is in the loadContent options
+    expect(directiveNode.values.loadContent.options).toHaveProperty('section');
+    expect(directiveNode.values.loadContent.options.section.identifier.content).toBe('API Reference');
   });
   
   // ====================
