@@ -2,9 +2,9 @@
 # This demonstrates how mlld with @when and foreach can replace complex YAML workflows
 
 ## Load Architecture Files
-/path @architectureDoc = [docs/ARCHITECTURE.md]
-/path @authConfigDoc = [docs/AUTH-CONFIG.md]
-/var @overallArchitecture = @path [docs/ARCHITECTURE.md]
+/path @architectureDoc = "docs/ARCHITECTURE.md"
+/path @authConfigDoc = "docs/AUTH-CONFIG.md"
+/var @overallArchitecture = <docs/ARCHITECTURE.md>
 
 ## Define Services
 /var @services = {

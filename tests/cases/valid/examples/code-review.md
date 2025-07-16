@@ -1,7 +1,7 @@
 /import {roles, tasks} from "files/prompts.mld"
 
-/var @arch = @add [files/README.md # Architecture]
-/var @standards = @add [files/README.md # Code Standards]
+/var @arch = "Architecture" from <files/README.md>
+/var @standards = "Code Standards" from <files/README.md>
 /var @diff = run {git diff | cat}
 
 /var @prompt = ::
