@@ -305,6 +305,15 @@ export async function evaluateVar(
     
   } else if (valueNode.type === 'VariableReference') {
     // Variable reference: @otherVar
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Processing VariableReference in var.ts:', {
+        identifier,
+        varIdentifier: valueNode.identifier,
+        hasFields: !!(valueNode.fields && valueNode.fields.length > 0),
+        fields: valueNode.fields?.map(f => f.value)
+      });
+    }
+    
     const sourceVar = env.getVariable(valueNode.identifier);
     if (!sourceVar) {
       throw new Error(`Variable not found: ${valueNode.identifier}`);
@@ -319,15 +328,11 @@ export async function evaluateVar(
     
     // Handle field access if present
     if (valueNode.fields && valueNode.fields.length > 0) {
-      // Extract Variable value before field access
-      const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
-      let baseValue = resolvedVar;
-      if (isVariable(baseValue)) {
-        baseValue = await extractVariableValue(baseValue, env);
-      }
+      // resolvedVar is already properly resolved with ResolutionContext.VariableCopy
+      // No need to extract again - field access will handle extraction if needed
       
       // Use enhanced field access to preserve context
-      const fieldResult = accessFieldEnhanced(baseValue, valueNode.fields[0]);
+      const fieldResult = accessFieldEnhanced(resolvedVar, valueNode.fields[0]);
       let currentResult = fieldResult;
       
       // Apply remaining fields if any
@@ -350,6 +355,9 @@ export async function evaluateVar(
           exitCode: 0
         };
       }
+      
+      // IMPORTANT: When we have field access, the resolvedValue is the field value
+      // We should NOT fall through to the duplicate VariableReference handling below
     } else {
       // No field access - use the resolved Variable directly
       resolvedValue = resolvedVar;
@@ -419,31 +427,17 @@ export async function evaluateVar(
     const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
     const { accessFieldsEnhanced } = await import('../utils/field-access-enhanced');
     
-    // Preserve Variable for field access context
-    const resolvedVar = await resolveVariable(sourceVar, env, ResolutionContext.FieldAccess);
-    let result = resolvedVar;
+    // Determine appropriate context based on what operations will be performed
+    const needsPipelineExtraction = varWithTail.withClause && varWithTail.withClause.pipeline;
+    const hasFieldAccess = varWithTail.variable.fields && varWithTail.variable.fields.length > 0;
     
-    // If no field access and no pipeline, we need to extract the value
-    // Otherwise we'll pass a Variable object to the pipeline
-    if (!varWithTail.variable.fields || varWithTail.variable.fields.length === 0) {
-      const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log('VariableReferenceWithTail - checking if extraction needed:', {
-          isVar: isVariable(result),
-          resultType: typeof result,
-          hasFields: !!varWithTail.variable.fields
-        });
-      }
-      if (isVariable(result)) {
-        result = await extractVariableValue(result, env);
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log('Extracted value:', {
-            type: typeof result,
-            preview: typeof result === 'string' ? result.substring(0, 50) : 'not string'
-          });
-        }
-      }
-    }
+    // Use appropriate resolution context
+    const context = needsPipelineExtraction && !hasFieldAccess 
+      ? ResolutionContext.PipelineInput 
+      : ResolutionContext.FieldAccess;
+    
+    const resolvedVar = await resolveVariable(sourceVar, env, context);
+    let result = resolvedVar;
     
     // Apply field access if present
     if (varWithTail.variable.fields && varWithTail.variable.fields.length > 0) {
@@ -457,15 +451,12 @@ export async function evaluateVar(
       const { executePipeline } = await import('./pipeline');
       const format = varWithTail.withClause.format as string | undefined;
       
-      // Extract value from Variable if needed
-      const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
-      let value = result;
-      if (isVariable(result)) {
-        value = await extractVariableValue(result, env);
-      }
+      // Result should already be properly resolved based on context
+      // If we had field access, it's already extracted by accessFieldsEnhanced
+      // If we didn't have field access and have pipeline, we used PipelineInput context
       
       // Convert result to string for pipeline
-      const stringResult = typeof value === 'string' ? value : JSON.stringify(value);
+      const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
       
       result = await executePipeline(
         stringResult,
@@ -493,9 +484,36 @@ export async function evaluateVar(
 
   let variable: Variable;
 
-  // Create specific variable types based on AST node type
-  // Handle primitives first (they don't have a .type property)
-  if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('Creating variable:', {
+      identifier,
+      valueNodeType: valueNode?.type,
+      resolvedValue,
+      resolvedValueType: typeof resolvedValue
+    });
+  }
+
+  // Check if resolvedValue is already a Variable that we should preserve
+  const { isVariable } = await import('../utils/variable-resolution');
+  if (isVariable(resolvedValue)) {
+    // Preserve the existing Variable (e.g., when copying an executable)
+    // Update its name and metadata to reflect the new assignment
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Preserving existing Variable:', {
+        identifier,
+        resolvedValueType: resolvedValue.type,
+        resolvedValueName: resolvedValue.name
+      });
+    }
+    variable = {
+      ...resolvedValue,
+      name: identifier,
+      metadata: {
+        ...resolvedValue.metadata,
+        ...metadata
+      }
+    };
+  } else if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
     // Direct primitive values - we need to preserve their types
     const { createPrimitiveVariable } = await import('@core/types/variable');
     variable = createPrimitiveVariable(
@@ -544,6 +562,23 @@ export async function evaluateVar(
     const sectionName = await interpolate(valueNode.section, env);
     variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
       sectionName, 'hash', source, metadata);
+    
+  } else if (valueNode.type === 'VariableReference') {
+    // For VariableReference nodes, create variable based on resolved value type
+    // This handles cases like @user.name where resolvedValue is the field value
+    if (typeof resolvedValue === 'string') {
+      variable = createSimpleTextVariable(identifier, resolvedValue, source, metadata);
+    } else if (typeof resolvedValue === 'number' || typeof resolvedValue === 'boolean' || resolvedValue === null) {
+      const { createPrimitiveVariable } = await import('@core/types/variable');
+      variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
+    } else if (Array.isArray(resolvedValue)) {
+      variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+      variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
+    } else {
+      // Fallback to text
+      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+    }
     
   } else if (valueNode.type === 'load-content') {
     // Handle load-content nodes from <file.md> syntax
@@ -607,25 +642,6 @@ export async function evaluateVar(
     } else {
       // Fallback - shouldn't happen
       variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
-    }
-    
-  } else if (valueNode.type === 'VariableReference') {
-    // Check if resolvedValue is a Variable that needs extraction
-    const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
-    let finalValue = resolvedValue;
-    if (isVariable(resolvedValue)) {
-      finalValue = await extractVariableValue(resolvedValue, env);
-    }
-    
-    // Create variable based on the extracted value type
-    if (typeof finalValue === 'object' && finalValue !== null) {
-      if (Array.isArray(finalValue)) {
-        variable = createArrayVariable(identifier, finalValue, false, source, metadata);
-      } else {
-        variable = createObjectVariable(identifier, finalValue, false, source, metadata);
-      }
-    } else {
-      variable = createSimpleTextVariable(identifier, String(finalValue), source, metadata);
     }
     
   } else if (valueNode.type === 'foreach') {

@@ -4,7 +4,7 @@
  */
 
 import type { Variable } from '@core/types/variable';
-import { isVariable, resolveVariableValueLegacy } from '@interpreter/utils/variable-resolution';
+import { resolveValue, ResolutionContext } from '@interpreter/utils/variable-resolution';
 import type { Environment } from './Environment';
 
 /**
@@ -19,14 +19,9 @@ export async function adaptVariablesForBash(
   const bashVars: Record<string, string> = {};
   
   for (const [key, value] of Object.entries(params)) {
-    // If it's a Variable, extract its value
-    if (isVariable(value)) {
-      const resolved = await resolveVariableValueLegacy(value, env);
-      bashVars[key] = convertToString(resolved);
-    } else {
-      // Already a raw value (from proxy or direct value)
-      bashVars[key] = convertToString(value);
-    }
+    // Resolve the value - will extract if it's a Variable, pass through if not
+    const resolved = await resolveValue(value, env, ResolutionContext.CommandExecution);
+    bashVars[key] = convertToString(resolved);
   }
   
   return bashVars;

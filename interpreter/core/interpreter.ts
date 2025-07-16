@@ -431,11 +431,8 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     if (node.fields && node.fields.length > 0) {
       const { accessFieldEnhanced } = await import('../utils/field-access-enhanced');
       
-      // Extract Variable value before field access if needed
-      const { isVariable, extractVariableValue } = await import('../utils/variable-resolution');
-      if (isVariable(resolvedValue)) {
-        resolvedValue = await extractVariableValue(resolvedValue, env);
-      }
+      // accessFieldEnhanced handles Variable extraction internally when needed
+      // No need to manually extract here
       
       // Apply each field access in sequence
       for (const field of node.fields) {

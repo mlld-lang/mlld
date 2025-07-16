@@ -36,8 +36,28 @@ export function accessFieldEnhanced(
   // Check if the input is a Variable
   const parentVariable = isVariable(value) ? value : (value as any)?.__variable;
   
+  // Special handling for Variable properties
+  if (isVariable(value) && field.type === 'field') {
+    const fieldName = String(field.value);
+    
+    // Check if accessing a Variable's own property (e.g., 'type')
+    // Only return Variable metadata for specific properties, not general field access
+    const variableMetadataProps = ['type', 'isComplex', 'source', 'metadata'];
+    if (variableMetadataProps.includes(fieldName)) {
+      return {
+        value: value[fieldName as keyof typeof value],
+        parentVariable,
+        accessPath: [...parentPath, fieldName],
+        isVariable: false
+      };
+    }
+  }
+  
+  // Extract the raw value if we have a Variable
+  const rawValue = isVariable(value) ? value.value : value;
+  
   // Use legacy access to get the raw value
-  const accessedValue = accessFieldLegacy(value, field);
+  const accessedValue = accessFieldLegacy(rawValue, field);
   
   // Build the access path
   const fieldName = String(field.value);
