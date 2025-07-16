@@ -29,7 +29,7 @@ export const VARIABLE_PROXY_PROPS = {
 export function createVariableProxy(variable: Variable): any {
   const value = variable.value;
   
-  if (process.env.DEBUG_EXEC === 'true' || variable.name === 'users') {
+  if (process.env.DEBUG_EXEC === 'true' || process.env.MLLD_DEBUG === 'true') {
     console.log('createVariableProxy called:', {
       variableName: variable.name,
       variableType: variable.type,

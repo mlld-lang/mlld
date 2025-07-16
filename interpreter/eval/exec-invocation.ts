@@ -269,7 +269,18 @@ export async function evaluateExecInvocation(
             
             // Preserve the type of the final value
             argValueAny = value;
-            argValue = value === undefined ? 'undefined' : String(value);
+            // For objects and arrays, use JSON.stringify to get proper string representation
+            if (value === undefined) {
+              argValue = 'undefined';
+            } else if (typeof value === 'object' && value !== null) {
+              try {
+                argValue = JSON.stringify(value);
+              } catch (e) {
+                argValue = String(value);
+              }
+            } else {
+              argValue = String(value);
+            }
           } else {
             // Variable not found - use interpolation which will throw appropriate error
             argValue = await interpolate([arg], env, InterpolationContext.Default);
@@ -462,9 +473,29 @@ export async function evaluateExecInvocation(
     const envVars: Record<string, string> = {};
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
-      const argValue = evaluatedArgStrings[i]; // Use string version for env vars
-      if (argValue !== undefined) {
-        envVars[paramName] = String(argValue);
+      
+      // When enhanced variable passing is enabled, we need to properly serialize
+      // proxy objects that can't be converted to strings directly
+      if (isEnhancedVariablePassingEnabled()) {
+        const paramVar = execEnv.getVariable(paramName);
+        if (paramVar && typeof paramVar.value === 'object' && paramVar.value !== null) {
+          // For objects and arrays, use JSON serialization
+          try {
+            envVars[paramName] = JSON.stringify(paramVar.value);
+          } catch (e) {
+            // Fallback to string version if JSON serialization fails
+            envVars[paramName] = evaluatedArgStrings[i];
+          }
+        } else {
+          // For primitives and other types, use the string version
+          envVars[paramName] = evaluatedArgStrings[i];
+        }
+      } else {
+        // Standard mode: use string version directly
+        const argValue = evaluatedArgStrings[i];
+        if (argValue !== undefined) {
+          envVars[paramName] = String(argValue);
+        }
       }
     }
     

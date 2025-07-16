@@ -22,26 +22,58 @@ export function prepareVariablesForBash(
 ): Record<string, string> {
   const envVars: Record<string, string> = {};
   
+  if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+    console.log('prepareVariablesForBash called with:', Object.keys(params));
+  }
+  
   for (const [key, value] of Object.entries(params)) {
-    if (isVariable(value)) {
-      const variable = value as Variable;
+    // Check if it's a Variable proxy (has __mlld_is_variable property)
+    const isProxy = value && typeof value === 'object' && value.__mlld_is_variable === true;
+    
+    if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+      console.log(`Processing param ${key}:`, {
+        valueType: typeof value,
+        isProxy,
+        hasMLLDFlag: value && typeof value === 'object' ? value.__mlld_is_variable : undefined,
+        valueKeys: value && typeof value === 'object' ? Object.keys(value).slice(0, 5) : 'not-object'
+      });
+    }
+    
+    if (isVariable(value) || isProxy) {
+      // Handle both direct Variables and Variable proxies
+      const variable = isProxy ? value.__mlld_variable : (value as Variable);
       
       // Set the main value
-      if (typeof variable.value === 'object' && variable.value !== null) {
-        envVars[key] = JSON.stringify(variable.value);
+      // For proxies, we need to get the actual value from the Variable
+      const actualValue = isProxy && variable ? variable.value : value;
+      if (typeof actualValue === 'object' && actualValue !== null) {
+        envVars[key] = JSON.stringify(actualValue);
       } else {
-        envVars[key] = String(variable.value);
+        envVars[key] = String(actualValue);
       }
       
-      // Set type metadata
-      envVars[`MLLD_TYPE_${key}`] = variable.type;
-      
-      if (variable.subtype) {
-        envVars[`MLLD_SUBTYPE_${key}`] = variable.subtype;
-      }
-      
-      if (variable.metadata && Object.keys(variable.metadata).length > 0) {
-        envVars[`MLLD_METADATA_${key}`] = JSON.stringify(variable.metadata);
+      // Set type metadata (from proxy or direct Variable)
+      if (isProxy) {
+        envVars[`MLLD_TYPE_${key}`] = value.__mlld_type || 'unknown';
+        
+        if (value.__mlld_subtype) {
+          envVars[`MLLD_SUBTYPE_${key}`] = value.__mlld_subtype;
+        }
+        
+        const metadata = value.__mlld_metadata;
+        if (metadata && Object.keys(metadata).length > 0) {
+          envVars[`MLLD_METADATA_${key}`] = JSON.stringify(metadata);
+        }
+      } else if (variable) {
+        envVars[`MLLD_TYPE_${key}`] = variable.type;
+        
+        if (variable.subtype) {
+          envVars[`MLLD_SUBTYPE_${key}`] = variable.subtype;
+        }
+        
+        if (variable.metadata && Object.keys(variable.metadata).length > 0) {
+          envVars[`MLLD_METADATA_${key}`] = JSON.stringify(variable.metadata);
+        }
       }
       
       // Mark as Variable
