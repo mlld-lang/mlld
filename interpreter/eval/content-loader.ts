@@ -41,15 +41,6 @@ export async function processContentLoader(node: any, env: Environment): Promise
 
   // Check if we have a transform template
   const hasTransform = options?.transform?.type === 'template';
-  
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.log('[content-loader] processContentLoader called');
-    console.log('[content-loader] Options:', JSON.stringify(options, null, 2));
-    console.log('[content-loader] Has transform:', hasTransform);
-    if (hasTransform) {
-      console.log('[content-loader] Transform parts:', JSON.stringify(options.transform.parts, null, 2));
-    }
-  }
 
   // Reconstruct the path/URL string from the source
   let pathOrUrl: string;
@@ -117,10 +108,6 @@ export async function processContentLoader(node: any, env: Environment): Promise
       
       // Apply transform if specified
       if (hasTransform && options.transform) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[content-loader] Applying transform to', results.length, 'results');
-          console.log('[content-loader] Transform:', JSON.stringify(options.transform, null, 2));
-        }
         return await applyTransformToResults(results, options.transform, env);
       }
       
@@ -217,9 +204,6 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
   
   // Extract section if specified (for non-HTML files)
   if (options?.section) {
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[loadSingleFile] Section options:', JSON.stringify(options.section, null, 2));
-    }
     const sectionName = await extractSectionName(options.section, env);
     // Create file context for rename interpolation
     const fileContext = new LoadContentResultImpl({
@@ -354,9 +338,6 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
       } else {
         // Non-HTML file handling
         if (options?.section) {
-          if (process.env.MLLD_DEBUG === 'true') {
-            console.log('[loadGlobPattern] Section options for file', filePath, ':', JSON.stringify(options.section, null, 2));
-          }
           const sectionName = await extractSectionName(options.section, env);
           try {
             // Create file context for rename interpolation
@@ -371,9 +352,6 @@ async function loadGlobPattern(pattern: string, options: any, env: Environment):
             
             // If there's a rename, we're returning a transformed string that should be used directly
             if (options.section.renamed) {
-              if (process.env.MLLD_DEBUG === 'true') {
-                console.log('[loadGlobPattern] Renamed section content:', sectionContent);
-              }
               // For renamed sections, return the string directly (will be collected as string array)
               results.push(sectionContent as any); // Type assertion needed because results is LoadContentResult[]
             } else {
@@ -544,9 +522,6 @@ async function extractSection(content: string, sectionName: string, renamedTitle
 
     // If renamed, apply header transformation
     if (renamedTitle) {
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log('[extractSection] renamedTitle:', typeof renamedTitle, JSON.stringify(renamedTitle, null, 2));
-      }
       
       let finalTitle: string;
       
@@ -559,18 +534,12 @@ async function extractSection(content: string, sectionName: string, renamedTitle
           });
         }
         
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[extractSection] Rename template parts:', JSON.stringify(renamedTitle.parts, null, 2));
-        }
         
         // Create an environment for interpolation with the file context bound to <>
         const { interpolate } = await import('../core/interpreter');
         
         // Process the template parts, replacing placeholders with actual values
         const processedParts: any[] = [];
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[extractSection] Processing parts:', renamedTitle.parts?.map((p: any) => ({ type: p.type, source: p.source })));
-        }
         for (const part of renamedTitle.parts || []) {
           if (part.type === 'FileReference' && part.source?.type === 'placeholder') {
             // Handle <> and <>.field references
@@ -706,13 +675,6 @@ async function convertHtmlToMarkdown(html: string, url: string): Promise<string>
     markdown += turndownService.turndown(article.content);
     
     // Debug logging
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('=== Readability Output ===');
-      console.log('Title:', article.title);
-      console.log('Content HTML:', article.content.substring(0, 500));
-      console.log('=== Markdown Output ===');
-      console.log(markdown.substring(0, 500));
-    }
     
     return markdown;
   } catch (error) {
@@ -733,22 +695,8 @@ async function applyTransformToResults(
   const { interpolate } = await import('../core/interpreter');
   const transformed: string[] = [];
   
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.log('[applyTransformToResults] Processing', results.length, 'results');
-    console.log('[applyTransformToResults] Transform:', JSON.stringify(transform, null, 2));
-    console.log('[applyTransformToResults] First result:', results[0]);
-  }
   
   for (const result of results) {
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[applyTransformToResults] Processing result:', {
-        filename: result.filename,
-        hasFm: !!result.fm,
-        fmName: result.fm?.name,
-        resultType: result.constructor.name,
-        hasRawContent: !!result._rawContent
-      });
-    }
     
     // Create a child environment with the current result bound to <>
     const childEnv = env.createChild();
@@ -775,16 +723,10 @@ async function applyTransformToResults(
         if (part.fields && part.fields.length > 0) {
           // Access fields on the result
           let value: any = result;
-          if (process.env.MLLD_DEBUG === 'true') {
-            console.log('[applyTransformToResults] Accessing fields:', part.fields.map((f: any) => f.value));
-          }
           for (const field of part.fields) {
             if (value && typeof value === 'object') {
               const fieldName = field.value;
               value = value[fieldName];
-              if (process.env.MLLD_DEBUG === 'true') {
-                console.log(`[applyTransformToResults] Field ${fieldName} = ${value}`);
-              }
             } else {
               value = undefined;
               break;

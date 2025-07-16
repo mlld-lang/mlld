@@ -18,18 +18,7 @@ export function prepareVariablesForBash(
 ): Record<string, string> {
   const envVars: Record<string, string> = {};
   
-  if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-    console.log('prepareVariablesForBash called with:', Object.keys(params));
-  }
-  
   for (const [key, value] of Object.entries(params)) {
-    if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-      console.log(`Processing param ${key}:`, {
-        valueType: typeof value,
-        valueKeys: value && typeof value === 'object' ? Object.keys(value).slice(0, 5) : 'not-object'
-      });
-    }
-    
     // In enhanced mode, we receive raw values, not Variables or proxies
     // Just convert to string for environment variable
     if (typeof value === 'object' && value !== null) {
@@ -95,41 +84,4 @@ export function injectBashHelpers(code: string, isEnhancedMode: boolean, metadat
   // Disable enhanced mode for bash/sh - they use environment variables, not JavaScript objects
   // This avoids issues with JavaScript trying to evaluate bash code
   return code;
-  
-  // Original code kept for reference but disabled:
-  /*
-  if (!isEnhancedMode) {
-    return code;
-  }
-  
-  if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-    console.log('injectBashHelpers called:', {
-      isEnhancedMode,
-      codeLength: code.length,
-      hasMetadata: !!metadata
-    });
-  }
-  
-  let helpers = generateBashMlldHelpers();
-  
-  // If we have metadata, also inject it as environment variables
-  if (metadata) {
-    helpers += '\n# Primitive metadata\n';
-    for (const [key, meta] of Object.entries(metadata)) {
-      if (meta.isVariable) {
-        helpers += `export MLLD_IS_VARIABLE_${key}="true"\n`;
-        helpers += `export MLLD_TYPE_${key}="${meta.type || ''}"\n`;
-        if (meta.subtype) {
-          helpers += `export MLLD_SUBTYPE_${key}="${meta.subtype}"\n`;
-        }
-        if (meta.metadata) {
-          helpers += `export MLLD_METADATA_${key}='${JSON.stringify(meta.metadata)}'\n`;
-        }
-      }
-    }
-  }
-  
-  // Prepend helper functions
-  return helpers + '\n\n# User code:\n' + code;
-  */
 }

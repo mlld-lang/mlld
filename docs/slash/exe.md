@@ -165,6 +165,51 @@ Commands can be used within data structures:
 }
 ```
 
+## Type Introspection in JavaScript/Node
+
+JavaScript and Node.js executables receive an `mlld` helper object that provides type introspection capabilities:
+
+```mlld
+/exe @analyzeType(value) = js {
+  // Check if a value is an mlld Variable
+  if (mlld.isVariable(value)) {
+    console.log('Type:', mlld.getType(value));
+    console.log('Metadata:', mlld.getMetadata(value));
+  }
+  
+  // Direct property access for non-primitives
+  if (value && value.__mlld_type) {
+    console.log('Variable type:', value.__mlld_type);
+  }
+  
+  return value;
+}
+
+/var @data = { "count": 42, "items": ["a", "b"] }
+/run @analyzeType(@data)
+```
+
+For primitive values (numbers, booleans, null), use the parameter name:
+```mlld
+/exe @checkNumber(num) = js {
+  // Primitives need the parameter name for type checking
+  if (mlld.isVariable(num, 'num')) {
+    console.log('Type:', mlld.getType(num, 'num'));  // 'primitive'
+  }
+  return num * 2;
+}
+
+/var @count = 42
+/run @checkNumber(@count)
+```
+
+Available mlld methods:
+- `mlld.isVariable(value, name?)` - Check if value is an mlld Variable
+- `mlld.getType(value, name?)` - Get the Variable type (e.g., 'array', 'object', 'primitive')
+- `mlld.getMetadata(value, name?)` - Get Variable metadata
+- `mlld.getSubtype(value, name?)` - Get Variable subtype if available
+- `mlld.getVariable(value, name?)` - Get the full Variable object
+
 ## Notes
 
 - Exe names must be created with `@` prefix: `/exe @name`
@@ -175,3 +220,4 @@ Commands can be used within data structures:
 - Templates support different interpolation based on type:
   - Backticks use `@variable`
   - Double brackets use `{{variable}}`
+- Bash/shell commands receive string values only (no type information)

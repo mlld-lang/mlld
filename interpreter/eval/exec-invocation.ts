@@ -512,23 +512,9 @@ export async function evaluateExecInvocation(
   }
   // Handle code executables
   else if (isCodeExecutable(definition)) {
-    if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-      console.log('exec-invocation: isCodeExecutable block reached', {
-        language: definition.language,
-        isBash: definition.language === 'bash',
-        isSh: definition.language === 'sh'
-      });
-    }
     // For bash/sh, don't interpolate the code template - bash handles its own variable substitution
     let code: string;
     if (definition.language === 'bash' || definition.language === 'sh') {
-      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-        console.log('exec-invocation: Skipping interpolation for bash/sh code:', {
-          isArray: Array.isArray(definition.codeTemplate),
-          codeTemplateType: typeof definition.codeTemplate,
-          codeTemplate: definition.codeTemplate
-        });
-      }
       // For bash/sh, just extract the raw code without interpolation
       if (Array.isArray(definition.codeTemplate)) {
         // If it's an array of nodes, concatenate their content

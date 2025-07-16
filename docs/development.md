@@ -128,6 +128,67 @@ This helps ensure your pipeline functions handle all expected input formats corr
 See [Pipeline Format Feature](pipeline.md#pipeline-format-feature) for more details.
 
 
+### Type Introspection in Code
+
+When developing functions that work with mlld variables, you can use the built-in `mlld` helper object to inspect type information:
+
+```mlld
+/exe @debugVariable(v) = js {
+  console.log('=== Variable Debug Info ===');
+  console.log('Is Variable:', mlld.isVariable(v));
+  
+  if (mlld.isVariable(v)) {
+    console.log('Type:', mlld.getType(v));
+    console.log('Metadata:', JSON.stringify(mlld.getMetadata(v), null, 2));
+    
+    // For arrays, check special types
+    if (mlld.getType(v) === 'array') {
+      const meta = mlld.getMetadata(v);
+      if (meta.arrayType) {
+        console.log('Array Type:', meta.arrayType);
+        console.log('Join Separator:', meta.joinSeparator);
+      }
+    }
+  }
+  
+  return v;
+}
+
+/var @data = <*.md # Introduction>
+/run @debugVariable(@data)
+```
+
+This is particularly useful when:
+- Developing pipeline transformers that need to handle different input types
+- Creating functions that work with file metadata from `<file>` syntax
+- Debugging why a variable behaves differently than expected
+
+### Handling Primitives
+
+For primitive values (numbers, booleans, null), type information requires the parameter name:
+
+```mlld
+/exe @processValue(val) = js {
+  // For primitives, provide the parameter name
+  if (mlld.isVariable(val, 'val')) {
+    const type = mlld.getType(val, 'val');
+    console.log(`Processing ${type} variable:`, val);
+    
+    if (type === 'primitive') {
+      const subtype = mlld.getSubtype(val, 'val');
+      console.log('Primitive subtype:', subtype); // 'number', 'boolean', or 'null'
+    }
+  }
+  
+  return val;
+}
+```
+
+### Language-Specific Type Support
+
+- **JavaScript/Node**: Full type introspection via `mlld` helper and proxy properties
+- **Bash/Shell**: String values only - no type information available
+
 ---
 
 *More development tips coming soon! Have a useful technique? [Contribute to this guide](../CONTRIBUTING.md).*

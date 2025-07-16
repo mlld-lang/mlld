@@ -100,37 +100,12 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         allParamValues.push(mlldHelpers);
       }
 
-      // Debug exec-code issue
-      if (process.env.DEBUG_EXEC || process.env.DEBUG_PRIMITIVES) {
-        console.log('executeCode debug:');
-        console.log('  code:', code);
-        console.log('  functionBody:', functionBody);
-        console.log('  allParamNames:', allParamNames);
-        console.log('  allParamValues:', allParamValues);
-        console.log('  param types:', allParamValues.map(v => typeof v));
-        console.log('  param values detail:', allParamValues.map(v => ({ value: v, type: typeof v })));
-        // More detailed debug for first param
-        if (allParamValues.length > 0) {
-          const firstParam = allParamValues[0];
-          console.log('  First param details:', {
-            type: typeof firstParam,
-            isArray: Array.isArray(firstParam),
-            constructor: firstParam?.constructor?.name,
-            keys: typeof firstParam === 'object' ? Object.keys(firstParam) : 'not-object',
-            stringified: JSON.stringify(firstParam)
-          });
-        }
-      }
 
       // Create a function with dynamic parameters
       let fn: Function;
       try {
         fn = new Function(...allParamNames, functionBody);
       } catch (syntaxError) {
-        console.error('Function creation failed:');
-        console.error('  allParamNames:', allParamNames);
-        console.error('  functionBody:', functionBody);
-        console.error('  Full function would be:', `function(${allParamNames.join(', ')}) { ${functionBody} }`);
         throw syntaxError;
       }
 

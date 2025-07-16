@@ -741,16 +741,10 @@ function hasComplexArrayItems(items: any[]): boolean {
 
 /**
  * Evaluate an array item based on its type
+ * This function evaluates items that will be stored in arrays, preserving Variables
+ * instead of extracting their values immediately.
  */
 async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
-  // If enhanced arrays are enabled, use the enhanced version
-  const { isEnhancedArraysEnabled } = await import('@interpreter/utils/enhanced-mode-config');
-  if (isEnhancedArraysEnabled()) {
-    const { evaluateArrayItemEnhanced } = await import('./var-enhanced');
-    return evaluateArrayItemEnhanced(item, env);
-  }
-  
-  // Original implementation
   if (!item || typeof item !== 'object') {
     return item;
   }
@@ -804,43 +798,52 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
       return nestedItems;
 
     case 'object':
-      // Nested object
-      const nestedObj: Record<string, any> = {};
+      // Object in array
+      const processedObject: Record<string, any> = {};
       if (item.properties) {
-        for (const [key, value] of Object.entries(item.properties)) {
-          nestedObj[key] = await evaluateArrayItem(value, env);
+        for (const [key, propValue] of Object.entries(item.properties)) {
+          processedObject[key] = await evaluateArrayItem(propValue, env);
         }
       }
-      return nestedObj;
+      return processedObject;
 
     case 'VariableReference':
-      // Variable reference in array
+      // Variable reference in array - PRESERVE THE VARIABLE!
       const variable = env.getVariable(item.identifier);
       if (!variable) {
         throw new Error(`Variable not found: ${item.identifier}`);
       }
-      const { resolveVariableValue } = await import('../core/interpreter');
-      return await resolveVariableValue(variable, env);
+      
+      // Use enhanced resolution that preserves Variables in array context
+      const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+      return await resolveVariable(variable, env, ResolutionContext.ArrayElement);
 
     case 'path':
       // Path node in array - read the file content
-      const filePath = await interpolate(item.segments || [], env);
-      return await env.readFile(filePath);
+      const { interpolate: pathInterpolate } = await import('../core/interpreter');
+      const filePath = await pathInterpolate(item.segments || [item], env);
+      const fileContent = await env.readFile(filePath);
+      return fileContent;
 
-    case 'section':
+    case 'SectionExtraction':
       // Section extraction in array
-      const sectionFilePath = await interpolate(item.path || [], env);
-      const sectionName = await interpolate(item.section || [], env);
-      const fileContent = await env.readFile(sectionFilePath);
-      const { llmxmlInstance } = await import('../utils/llmxml-instance');
+      const sectionName = await interpolate(item.section, env);
+      const sectionFilePath = await interpolate(item.path.segments || [item.path], env);
+      const sectionFileContent = await env.readFile(sectionFilePath);
+      
       try {
-        return await llmxmlInstance.getSection(fileContent, sectionName, {
+        const { extractSection } = await import('./show');
+        const { extractEnhancedSection } = await import('../utils/markdown-enhanced');
+        
+        return await extractEnhancedSection(sectionFileContent, sectionName, {
+          includeSubsections: true,
           includeNested: true,
           includeTitle: true
         });
       } catch (error) {
         // Fallback to basic extraction
-        return extractSection(fileContent, sectionName);
+        const { extractSection } = await import('./show');
+        return extractSection(sectionFileContent, sectionName);
       }
 
     case 'load-content':

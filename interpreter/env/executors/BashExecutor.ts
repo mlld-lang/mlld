@@ -84,29 +84,8 @@ export class BashExecutor extends BaseCommandExecutor {
       // Don't inject helpers for bash - we just pass string values
       const codeWithHelpers = code;
       
-      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-        console.log('BashExecutor: Final code to execute:', {
-          code: code.substring(0, 500)
-        });
-      }
-      
-      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-        console.log('BashExecutor: About to execute code:', {
-          code: code.substring(0, 100),
-          envVarsCount: Object.keys(envVars).length,
-          envVars: Object.entries(envVars).slice(0, 5)
-        });
-      }
-      
       // Detect command substitution patterns and automatically add stderr capture
       const enhancedCode = CommandUtils.enhanceShellCodeForCommandSubstitution(codeWithHelpers);
-      
-      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-        console.log('BashExecutor: About to spawn bash with code:', {
-          enhancedCode: enhancedCode.substring(0, 500),
-          codeLength: enhancedCode.length
-        });
-      }
       
       // For multiline bash scripts, use stdin to avoid shell escaping issues
       // Use spawnSync to capture both stdout and stderr
@@ -174,12 +153,6 @@ export class BashExecutor extends BaseCommandExecutor {
   private handleBashTestMocks(code: string, envVars: Record<string, string>): string | null {
     if (process.env.MOCK_BASH !== 'true') {
       return null;
-    }
-    
-    // Debug logging for test environment
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('Mock bash handling code:', code.substring(0, 200) + '...');
-      console.log('Mock bash env vars:', Object.keys(envVars).filter(k => k.startsWith('MLLD_')));
     }
 
     // Enhanced mock for specific test cases

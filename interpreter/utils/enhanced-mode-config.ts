@@ -1,65 +1,49 @@
 /**
- * Central configuration for enhanced Variable preservation mode
- * Part of Phase 3: Making Variables flow through the system
+ * Configuration for Variable Type System
+ * 
+ * Enhanced Variable preservation is now the standard behavior.
+ * These functions are kept for backward compatibility but always return true.
  */
 
 /**
- * Check if enhanced arrays are enabled
- * Default: true (can be disabled with MLLD_ENHANCED_ARRAYS=false)
+ * @deprecated Enhanced arrays are now the standard behavior
  */
 export function isEnhancedArraysEnabled(): boolean {
-  const envVar = process.env.MLLD_ENHANCED_ARRAYS;
-  // Default to true unless explicitly disabled
-  return envVar !== 'false';
+  return true;
 }
 
 /**
- * Check if enhanced resolution is enabled
- * Default: true (can be disabled with MLLD_ENHANCED_RESOLUTION=false)
+ * @deprecated Enhanced resolution is now the standard behavior
  */
 export function isEnhancedResolutionEnabled(): boolean {
-  const envVar = process.env.MLLD_ENHANCED_RESOLUTION;
-  // Default to true unless explicitly disabled
-  return envVar !== 'false';
+  return true;
 }
 
 /**
- * Check if enhanced interpolation is enabled
- * Default: true (can be disabled with MLLD_ENHANCED_INTERPOLATION=false)
+ * @deprecated Enhanced interpolation is now the standard behavior
  */
 export function isEnhancedInterpolationEnabled(): boolean {
-  const envVar = process.env.MLLD_ENHANCED_INTERPOLATION;
-  // Default to true unless explicitly disabled
-  return envVar !== 'false';
+  return true;
 }
 
 /**
- * Check if enhanced Variable passing to shadow environments is enabled
- * Default: true (can be disabled with MLLD_ENHANCED_VARIABLE_PASSING=false)
- * Note: Bash/sh environments use a simplified approach regardless of this setting
+ * @deprecated Enhanced Variable passing is now the standard behavior
+ * Note: Bash/sh environments use a simplified approach via BashVariableAdapter
  */
 export function isEnhancedVariablePassingEnabled(): boolean {
-  const envVar = process.env.MLLD_ENHANCED_VARIABLE_PASSING;
-  // Default to true unless explicitly disabled
-  return envVar !== 'false';
+  return true;
 }
 
 /**
- * Enable all enhanced features (for testing)
+ * @deprecated All features are now enabled by default
  */
 export function enableAllEnhancedFeatures(): void {
-  delete process.env.MLLD_ENHANCED_ARRAYS;
-  delete process.env.MLLD_ENHANCED_RESOLUTION;
-  delete process.env.MLLD_ENHANCED_INTERPOLATION;
-  delete process.env.MLLD_ENHANCED_VARIABLE_PASSING;
+  // No-op - all features are enabled by default
 }
 
 /**
- * Disable all enhanced features (for compatibility)
+ * @deprecated Cannot disable enhanced features - they are the standard behavior
  */
 export function disableAllEnhancedFeatures(): void {
-  process.env.MLLD_ENHANCED_ARRAYS = 'false';
-  process.env.MLLD_ENHANCED_RESOLUTION = 'false';
-  process.env.MLLD_ENHANCED_INTERPOLATION = 'false';
-  process.env.MLLD_ENHANCED_VARIABLE_PASSING = 'false';
+  // No-op - cannot disable standard behavior
 }
