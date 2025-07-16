@@ -138,8 +138,9 @@ export async function executePipeline(
               throw new Error(`Variable not found: ${varRef.identifier}`);
             }
             
-            // Resolve the variable value
-            const value = await resolveVariableValue(variable, env);
+            // Extract variable value for pipeline arguments - WHY: Pipeline arguments need raw values
+            const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+            const value = await resolveVariable(variable, env, ResolutionContext.PipelineInput);
             
             // Apply field access if present
             let finalValue = value;

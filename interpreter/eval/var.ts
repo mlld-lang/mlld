@@ -458,7 +458,8 @@ export async function evaluateVar(
       // If we had field access, it's already extracted by accessFields
       // If we didn't have field access and have pipeline, we used PipelineInput context
       
-      // Convert result to string for pipeline
+      // Convert result to string for pipeline - WHY: Pipelines operate on string content
+      // and transform it through various text processing operations
       const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
       
       result = await executePipeline(
@@ -723,20 +724,13 @@ export async function evaluateVar(
       });
     }
     
-    // Get the actual string value from the variable
-    // Since the variable was just created, we can access its value directly
-    let stringValue = variable.value;
+    // Extract Variable value for pipeline input - WHY: Pipelines require raw string values
+    // to transform through text processing operations
+    const { resolveValue: resolveForPipeline, ResolutionContext: ResCtx } = await import('../utils/variable-resolution');
+    const extractedValue = await resolveForPipeline(variable, env, ResCtx.PipelineInput);
     
-    // If the value is not a string, we need to convert it appropriately
-    if (typeof stringValue !== 'string') {
-      if (stringValue && typeof stringValue === 'object' && 'text' in stringValue) {
-        // This might be a TextValue object
-        stringValue = stringValue.text;
-      } else {
-        // Convert to JSON string if it's an object
-        stringValue = JSON.stringify(stringValue);
-      }
-    }
+    // Convert to string for pipeline processing
+    const stringValue = typeof extractedValue === 'string' ? extractedValue : JSON.stringify(extractedValue);
     
     // Execute the pipeline
     const pipelineResult = await executePipeline(

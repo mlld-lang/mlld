@@ -442,11 +442,9 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           if (!indexVar) {
             throw new Error(`Variable not found for index: ${field.value}`);
           }
-          // Get the actual value to use as index
-          let indexValue = indexVar.value;
-          if (typeof indexValue === 'object' && indexValue !== null && 'value' in indexValue) {
-            indexValue = indexValue.value;
-          }
+          // Extract Variable value for index access
+          const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+          const indexValue = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
           const fieldResult = accessField(resolvedValue, resolvedField, { preserveContext: true });
@@ -726,8 +724,9 @@ export async function interpolate(
         continue;
       }
       
-      // Resolve the variable value
-      const value = await resolveVariableValue(variable, env);
+      // Resolve the variable value - extract for string interpolation
+      const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+      const value = await resolveVariable(variable, env, ResolutionContext.StringInterpolation);
       
       // Convert final value to string
       let stringValue: string;
@@ -799,7 +798,9 @@ export async function interpolate(
         try {
           if (process.env.MLLD_DEBUG === 'true') {
           }
-          value = await resolveVariableValue(variable, env);
+          // Use context-aware resolution for string interpolation
+          const { resolveVariable, ResolutionContext: ResCtx } = await import('../utils/variable-resolution');
+          value = await resolveVariable(variable, env, ResCtx.StringInterpolation);
           
         } catch (error) {
           // Handle executable variables specially in interpolation
@@ -837,11 +838,9 @@ export async function interpolate(
             if (!indexVar) {
               throw new Error(`Variable not found for index: ${field.value}`);
             }
-            // Get the actual value to use as index
-            let indexValue = indexVar.value;
-            if (typeof indexValue === 'object' && indexValue !== null && 'value' in indexValue) {
-              indexValue = indexValue.value;
-            }
+            // Extract Variable value for index access - WHY: Index values must be raw strings/numbers
+            const { resolveValue: resolveVal, ResolutionContext: ResCtx2 } = await import('../utils/variable-resolution');
+            const indexValue = await resolveVal(indexVar, env, ResCtx2.StringInterpolation);
             // Create a new field with the resolved value
             const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
             const fieldResult = accessField(value, resolvedField, { preserveContext: true });
@@ -910,8 +909,15 @@ export async function interpolate(
           // Handle null nodes from the grammar
           stringValue = 'null';
         } else {
-          stringValue = JSON.stringify(value);
-          if (process.env.MLLD_DEBUG === 'true') {
+          // Check if this is a PipelineInput object - WHY: PipelineInput has toString()
+          // method that should be used for string interpolation instead of JSON.stringify
+          const { isPipelineInput } = await import('../utils/pipeline-input');
+          if (isPipelineInput(value)) {
+            stringValue = value.toString();
+          } else {
+            stringValue = JSON.stringify(value);
+            if (process.env.MLLD_DEBUG === 'true') {
+            }
           }
         }
       } else if (Array.isArray(value)) {
