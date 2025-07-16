@@ -11,8 +11,6 @@ describe('Variable Passing Integration Tests', () => {
   let pathService: IPathService;
   
   beforeEach(() => {
-    // Enable enhanced mode
-    process.env.MLLD_ENHANCED_VARIABLE_PASSING = 'true';
     
     // Create mock services
     fileSystem = {
@@ -44,7 +42,6 @@ describe('Variable Passing Integration Tests', () => {
   });
   
   afterEach(() => {
-    delete process.env.MLLD_ENHANCED_VARIABLE_PASSING;
   });
   
   const mockSource = {
@@ -386,10 +383,8 @@ echo "value:$files"
     });
   });
   
-  describe('Enhanced Mode Toggle', () => {
-    it('should always provide Variable metadata (enhanced mode is always on)', async () => {
-      // Enhanced mode is now always on, even if env var is set to false
-      process.env.MLLD_ENHANCED_VARIABLE_PASSING = 'false';
+  describe('Variable Metadata in Execution', () => {
+    it('should always provide Variable metadata', async () => {
       
       // Create test data
       const arrayVar = createArrayVariable('data', [1, 2, 3], false, mockSource, {
@@ -436,7 +431,7 @@ echo "value:$files"
       const result = await evaluateExecInvocation(invocation, env);
       const output = typeof result.value === 'string' ? JSON.parse(result.value) : result.value;
       
-      // Enhanced mode is now always on
+      // Variable metadata is always provided
       expect(output.hasMlld).toBe(true);
       expect(output.hasType).toBe('array');
       expect(output.isArray).toBe(true);

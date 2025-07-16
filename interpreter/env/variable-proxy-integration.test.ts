@@ -50,11 +50,9 @@ describe('Variable Proxy Integration', () => {
   describe('Shadow Environment Variable Passing', () => {
     beforeEach(() => {
       // Enable enhanced mode
-      process.env.MLLD_ENHANCED_VARIABLE_PASSING = 'true';
     });
     
     afterEach(() => {
-      delete process.env.MLLD_ENHANCED_VARIABLE_PASSING;
     });
     
     it('should pass Variables as proxies to JavaScript shadow environments', async () => {
@@ -310,7 +308,6 @@ describe('Variable Proxy Integration', () => {
     
     it('should work with enhanced mode always on', async () => {
       // Enhanced mode is now always on
-      process.env.MLLD_ENHANCED_VARIABLE_PASSING = 'false';
       
       // Create a variable
       const arrayVar = createArrayVariable('data', [1, 2, 3], false, mockSource, {

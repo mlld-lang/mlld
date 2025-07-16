@@ -9,7 +9,7 @@
 /**
  * Convert parameter values to environment variables for bash execution
  * 
- * In enhanced mode, we receive raw values (not Variables or proxies)
+ * We receive raw values (not Variables or proxies) for bash compatibility
  * and convert them to strings suitable for environment variables.
  * Metadata is passed separately and injected via injectBashHelpers.
  */
@@ -19,7 +19,7 @@ export function prepareVariablesForBash(
   const envVars: Record<string, string> = {};
   
   for (const [key, value] of Object.entries(params)) {
-    // In enhanced mode, we receive raw values, not Variables or proxies
+    // We receive raw values, not Variables or proxies
     // Just convert to string for environment variable
     if (typeof value === 'object' && value !== null) {
       envVars[key] = JSON.stringify(value);
@@ -77,11 +77,10 @@ fi
 /**
  * Inject mlld helpers into Bash code
  * @param code - The user's bash code
- * @param isEnhancedMode - Whether enhanced mode is enabled
  * @param metadata - Optional metadata for primitives
  */
-export function injectBashHelpers(code: string, isEnhancedMode: boolean, metadata?: Record<string, any>): string {
-  // Disable enhanced mode for bash/sh - they use environment variables, not JavaScript objects
+export function injectBashHelpers(code: string, metadata?: Record<string, any>): string {
+  // Bash/sh use environment variables, not JavaScript objects
   // This avoids issues with JavaScript trying to evaluate bash code
   return code;
 }

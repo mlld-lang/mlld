@@ -72,7 +72,7 @@ export class NodeExecutor extends BaseCommandExecutor {
       // Only capture for 'exe' and 'var' directives, not for 'run'
       const captureConsoleLog = context?.directiveType !== 'run';
       
-      // Always prepare parameters with Variable proxies (enhanced mode is the standard)
+      // Prepare parameters with Variable proxies
       let shadowParams = params;
       
       if (params) {
@@ -145,7 +145,7 @@ export class NodeExecutor extends BaseCommandExecutor {
     let nodeCode = '';
     
     if (params && typeof params === 'object') {
-      // Always prepare parameters with Variable proxies (enhanced mode is the standard)
+      // Prepare parameters with Variable proxies
       const shadowParams = prepareParamsForShadow(params);
       
       // Inject parameters as constants

@@ -58,7 +58,7 @@ export class PythonExecutor extends BaseCommandExecutor {
       // Build Python code with parameters
       let pythonCode = '';
       
-      // Always add mlld helpers (enhanced mode is the standard)
+      // Add mlld helpers for Variable access
       pythonCode += generatePythonMlldHelpers(metadata) + '\n';
       
       if (params && typeof params === 'object') {

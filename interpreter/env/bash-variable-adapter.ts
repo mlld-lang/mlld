@@ -1,7 +1,6 @@
 /**
  * Bash Variable Adapter
  * Converts Variables with proxies/metadata to simple string values for bash/sh
- * Part of Phase 5: Making enhanced Variable passing the standard
  */
 
 import type { Variable } from '@core/types/variable';

@@ -844,20 +844,9 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
       const sectionFilePath = await interpolate(item.path.segments || [item.path], env);
       const sectionFileContent = await env.readFile(sectionFilePath);
       
-      try {
-        const { extractSection } = await import('./show');
-        const { extractEnhancedSection } = await import('../utils/markdown-enhanced');
-        
-        return await extractEnhancedSection(sectionFileContent, sectionName, {
-          includeSubsections: true,
-          includeNested: true,
-          includeTitle: true
-        });
-      } catch (error) {
-        // Fallback to basic extraction
-        const { extractSection } = await import('./show');
-        return extractSection(sectionFileContent, sectionName);
-      }
+      // Use standard section extraction
+      const { extractSection } = await import('./show');
+      return extractSection(sectionFileContent, sectionName);
 
     case 'load-content':
       // Load content node in array - use the content loader

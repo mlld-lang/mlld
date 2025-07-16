@@ -12,7 +12,6 @@ describe('Primitive Variable Type Handling', () => {
   
   beforeEach(() => {
     // Enable enhanced mode
-    process.env.MLLD_ENHANCED_VARIABLE_PASSING = 'true';
     
     // Create mock services
     fileSystem = {
@@ -44,7 +43,6 @@ describe('Primitive Variable Type Handling', () => {
   });
   
   afterEach(() => {
-    delete process.env.MLLD_ENHANCED_VARIABLE_PASSING;
   });
   
   const mockSource = {

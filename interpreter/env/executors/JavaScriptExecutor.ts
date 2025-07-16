@@ -92,7 +92,7 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         functionBody = `const mlld_now = () => new Date().toISOString();\n${functionBody}`;
       }
       
-      // Always add mlld helpers (enhanced mode is the standard)
+      // Add mlld helpers for Variable access
       if (!params || !params['mlld']) {
         // Create mlld helpers with primitive metadata
         const mlldHelpers = createMlldHelpers(metadata);

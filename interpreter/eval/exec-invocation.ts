@@ -473,7 +473,7 @@ export async function evaluateExecInvocation(
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
       
-      // Always use enhanced mode - properly serialize proxy objects
+      // Properly serialize proxy objects for execution
       const paramVar = execEnv.getVariable(paramName);
       if (paramVar && typeof paramVar.value === 'object' && paramVar.value !== null) {
         // For objects and arrays, use JSON serialization
