@@ -19,6 +19,13 @@ import {
 
 /**
  * Compares two values according to mlld's when comparison rules
+ * WHY: mlld has specific comparison semantics that differ from JavaScript's ===.
+ * We support string-boolean comparisons ("true" === true), null/undefined equality,
+ * and truthy/falsy evaluation when comparing against boolean literals.
+ * GOTCHA: String comparison is case-sensitive. "True" !== true, only "true" === true.
+ * Type coercion is limited to specific cases to avoid surprising behavior.
+ * CONTEXT: Used by all when directive forms (simple, switch, block) to evaluate
+ * conditions consistently across the language.
  */
 async function compareValues(expressionValue: any, conditionValue: any, env: Environment): Promise<boolean> {
   /**
@@ -197,6 +204,14 @@ async function evaluateWhenSwitch(
 
 /**
  * Evaluates a block when directive: @when <var> <modifier>: [...]
+ * WHY: Block forms enable different conditional evaluation strategies - first match
+ * (classic switch), all conditions (AND logic), any condition (OR logic), or
+ * independent evaluation of each condition.
+ * GOTCHA: Default behavior (no modifier) differs based on presence of block action:
+ *   - With action: acts like 'all:' (ALL conditions must match)
+ *   - Without action: executes ALL matching individual actions
+ * CONTEXT: Child environment ensures variable definitions inside when blocks are
+ * scoped locally, preventing pollution of parent scope.
  */
 async function evaluateWhenBlock(
   node: WhenBlockNode,
@@ -316,6 +331,11 @@ async function evaluateWhenBlock(
 
 /**
  * Evaluates conditions using 'first' modifier - executes first matching condition
+ * WHY: Implements classic switch-case behavior where only the first matching branch
+ * executes, providing mutual exclusion between conditions.
+ * GOTCHA: Conditions are evaluated in order, so put more specific conditions first.
+ * Unlike switch statements, there's no fallthrough - only one action executes.
+ * CONTEXT: Useful for state machines, routing logic, and mutually exclusive branches.
  */
 async function evaluateFirstMatch(
   conditions: WhenConditionPair[],
@@ -403,8 +423,15 @@ async function evaluateFirstMatch(
 
 /**
  * Evaluates conditions using 'all' modifier
- * If blockAction is provided, executes it only if ALL conditions are true
- * Otherwise, executes individual actions for each true condition
+ * WHY: Supports two distinct use cases - AND logic (with block action) where ALL
+ * conditions must be true, or independent evaluation (without block action) where
+ * each true condition's action executes.
+ * GOTCHA: Behavior changes based on presence of block action:
+ *   - With block action: ALL conditions must be true (AND logic)
+ *   - Without block action: Each true condition executes independently
+ * Cannot mix block action with individual condition actions.
+ * CONTEXT: AND logic useful for validation checks, independent evaluation useful
+ * for applying multiple transformations or checks.
  */
 async function evaluateAllMatches(
   conditions: WhenConditionPair[],
@@ -473,6 +500,12 @@ async function evaluateAllMatches(
 
 /**
  * Evaluates conditions using 'any' modifier - executes action if any condition matches
+ * WHY: Implements OR logic where the block action executes if at least one condition
+ * is true, useful for triggering actions based on multiple possible triggers.
+ * GOTCHA: Requires a block action - individual condition actions are not allowed.
+ * All conditions are evaluated (no short-circuit) to ensure consistent behavior.
+ * CONTEXT: Useful for validation warnings, fallback logic, or actions that should
+ * trigger on any of several conditions.
  */
 async function evaluateAnyMatch(
   conditions: WhenConditionPair[],
@@ -726,6 +759,12 @@ async function evaluateCondition(
 
 /**
  * Determines if a value is truthy according to mlld rules
+ * WHY: mlld has specific truthiness rules that differ from JavaScript. Empty strings,
+ * empty arrays, and empty objects are falsy, while non-empty values are truthy.
+ * GOTCHA: Unlike JavaScript, empty arrays [] and empty objects {} are falsy in mlld.
+ * The string "false" is truthy (non-empty string), only the boolean false is falsy.
+ * CONTEXT: Used in when conditions to determine if branches should execute, especially
+ * important for the simple form: /when @var => /action (executes if @var is truthy).
  */
 function isTruthy(value: any): boolean {
   // Handle Variable types

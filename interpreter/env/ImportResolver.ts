@@ -421,7 +421,17 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
         throw new Error(`Response too large: ${content.length} bytes`);
       }
       
-      // For imports, check approval and cache in immutable cache
+      /**
+       * Import approval security check
+       * WHY: Remote imports can introduce malicious code. Users must review and
+       * approve content before it executes in their environment.
+       * SECURITY: Content hash-based approval ensures imported code cannot change
+       * after review. Immutable cache prevents TOCTOU attacks where content
+       * changes between approval and execution.
+       * GOTCHA: Approval happens on first import only. Subsequent imports use
+       * the immutable cache, even if remote content has changed.
+       * CONTEXT: Can be bypassed with --approve-all flag for trusted environments.
+       */
       const approveAllImports = this.dependencies.getApproveAllImports();
       if (forImport && this.getImportApproval() && !approveAllImports) {
         const approved = await this.getImportApproval()!.checkApproval(url, content);

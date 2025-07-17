@@ -15,6 +15,14 @@ import { logger } from '@core/utils/logger';
 
 /**
  * Determine the taint level of command arguments
+ * WHY: Commands containing variables may include untrusted data from LLM outputs,
+ * user inputs, or external sources that could enable command injection attacks.
+ * SECURITY: Variables are conservatively marked as potentially tainted to trigger
+ * additional security analysis before execution.
+ * GOTCHA: Currently uses simple heuristic - any variable reference triggers taint.
+ * Future versions should track actual data flow from untrusted sources.
+ * CONTEXT: Called before every command execution to determine security analysis level.
+ * TODO: Implement proper taint tracking through variable propagation
  */
 function determineTaintLevel(nodes: MlldNode[], env: Environment): TaintLevel {
   // For now, use a simple heuristic:
@@ -68,7 +76,15 @@ export async function evaluateRun(
     // Interpolate command (resolve variables) with shell command context
     const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
     
-    // NEW: Security check before execution
+    /**
+     * Security check before command execution
+     * WHY: Commands must be analyzed for potential security risks before execution
+     * to prevent command injection, data exfiltration, and system damage.
+     * SECURITY: Multi-layer defense with taint tracking, command analysis, and
+     * policy enforcement. Blocks dangerous commands and warns about risky ones.
+     * CONTEXT: Security manager is optional but when present, all commands are
+     * analyzed. Analysis considers both command structure and taint level.
+     */
     const security = env.getSecurityManager();
     if (security) {
       // Determine taint level based on command nodes

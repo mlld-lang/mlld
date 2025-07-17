@@ -848,6 +848,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Set shadow environment functions for a specific language
+   * 
+   * WHY: Shadow environments enable mlld /exec functions to be called from
+   * within JavaScript or Node.js code blocks, creating seamless integration
+   * where mlld functions become regular functions in the target language.
+   * 
+   * GOTCHA: Each function wrapper includes references to ALL shadow functions
+   * to enable cross-function calls (e.g., calculate calling add and multiply).
+   * Functions must be defined before the shadow environment that contains them.
+   * 
+   * CONTEXT: Called by /exe directive when evaluating environment declarations
+   * like: /exe js = { add, multiply, calculate }
+   * 
    * @param language The language identifier (js, node, python, etc.)
    * @param functions Map of function names to their implementations
    */
@@ -873,7 +885,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Get shadow environment functions for a specific language
-   * @param language The language identifier
+   * WHY: Language executors (JavaScript, Node.js) need access to user-defined functions
+   * during code execution. Shadow environments provide this without variable pollution.
+   * GOTCHA: Returns a Map, not an object. Functions are stored by reference and may
+   * have been defined in parent environments - this method walks the scope chain.
+   * CONTEXT: Called by JavaScriptExecutor and NodeExecutor when building the execution
+   * context for code blocks that might reference shadow functions.
+   * @param language The language identifier (js, javascript, node, nodejs, etc.)
    * @returns Map of function names to implementations, or undefined if not set
    */
   getShadowEnv(language: string): Map<string, any> | undefined {
@@ -898,6 +916,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Get Node shadow environment instance with parent environment fallback
+   * WHY: Node.js execution requires a VM-based isolated context for security and
+   * proper module resolution. The NodeShadowEnvironment wraps Node's vm module.
+   * GOTCHA: This returns the instance itself, not the functions. Parent environments
+   * are checked if the current environment doesn't have a Node shadow env.
+   * CONTEXT: Used internally by getShadowEnv() for Node.js language execution and
+   * by NodeExecutor for running Node.js code blocks.
    * @returns NodeShadowEnvironment instance or undefined if not available
    */
   getNodeShadowEnv(): NodeShadowEnvironment | undefined {
@@ -1069,6 +1093,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // --- Scope Management ---
   
+  /**
+   * Create a child environment with isolated variable scope
+   * WHY: Child environments enable proper scoping for imports, function calls, and
+   * control flow blocks. Variables defined in children don't pollute the parent.
+   * GOTCHA: Shadow environments are NOT inherited - each environment manages its
+   * own language-specific functions, preventing cross-scope function pollution.
+   * SECURITY: Child isolation prevents variable leakage between execution contexts.
+   */
   createChild(newBasePath?: string): Environment {
     let childContext: PathContext | string;
     

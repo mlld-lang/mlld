@@ -39,7 +39,15 @@ export async function executePipeline(
     // Create child environment with @input variable
     const pipelineEnv = env.createChild();
     
-    // Create pipeline input variable for this stage
+    /**
+     * Create pipeline input for this stage
+     * WHY: Each pipeline stage receives a special PipelineInput object that provides
+     * both raw text and lazily-parsed format-specific data (JSON, CSV, XML).
+     * GOTCHA: First stage gets raw string from command output, subsequent stages
+     * get string output from previous pipeline function.
+     * CONTEXT: Pipeline functions work with raw data transformations, not mlld
+     * Variable types, so we extract values at pipeline boundaries.
+     */
     if (process.env.MLLD_DEBUG === 'true') {
       logger.debug('Creating pipeline input:', {
         stage: i + 1,
@@ -69,6 +77,12 @@ export async function executePipeline(
       isMultiLine: false
     };
     
+    /**
+     * Create PipelineInputVariable wrapper
+     * WHY: Pipeline stages need access to both the PipelineInput object (for format-aware
+     * parsing) and the raw text (for fallback). The Variable wrapper preserves both.
+     * CONTEXT: This Variable has isPipelineInput metadata to signal extraction behavior.
+     */
     const inputVar = createPipelineInputVariable(
       'input',
       pipelineInputObj,
@@ -82,7 +96,12 @@ export async function executePipeline(
       }
     );
     
-    // Set the pipeline input variable as a parameter (allows overriding reserved names)
+    /**
+     * Set @input as parameter variable
+     * WHY: Parameter variables can override reserved names and are accessible in
+     * all execution contexts (templates, commands, functions).
+     * CONTEXT: Child environment ensures @input is scoped to this pipeline stage only.
+     */
     pipelineEnv.setParameterVariable('input', inputVar);
     
     try {
@@ -172,7 +191,16 @@ export async function executePipeline(
       }
       args = evaluatedArgs;
       
-      // Check if this is a direct command definition that expects parameters
+      /**
+       * Smart parameter binding for pipeline functions
+       * WHY: When piping to functions without explicit arguments (e.g., @uppercase),
+       * we need to intelligently bind the pipeline data to function parameters.
+       * GOTCHA: Multi-parameter functions attempt JSON destructuring - if the input
+       * is a JSON object with matching property names, values are extracted and
+       * mapped to parameters by name.
+       * CONTEXT: This enables patterns like: echo '{"name": "Alice", "age": 30}' | @process
+       * where @process(name, age) receives the destructured values.
+       */
       if (args.length === 0) {
         // Get the actual parameter names from the executable definition
         let paramNames: string[] | undefined;
@@ -217,12 +245,24 @@ export async function executePipeline(
       
       const result = await executeCommandVariable(commandVar, args, pipelineEnv, currentOutput);
       
-      // Check for empty output (pipeline termination)
+      /**
+       * Pipeline termination check
+       * WHY: Empty output signals intentional pipeline termination, allowing
+       * early exit from multi-stage pipelines.
+       * CONTEXT: This is a control flow mechanism, not an error condition.
+       */
       if (!result || result.trim() === '') {
         // Pipeline terminates early with empty result
         return '';
       }
       
+      /**
+       * Stage output becomes next stage input
+       * WHY: Pipeline stages are sequential transformations where each stage's
+       * output feeds into the next stage as a raw string.
+       * GOTCHA: The output is always stringified, even if the function returned
+       * an object or array - serialization happens at stage boundaries.
+       */
       currentOutput = result;
       
       // Store this stage's output for context
@@ -297,7 +337,13 @@ async function resolveCommandReference(
       return baseVar;
     }
     
-    // Extract base variable value for non-executables - WHY: Pipeline commands need raw values
+    /**
+     * Extract value for non-executable variables
+     * WHY: Pipeline commands need raw values, not Variable wrappers. Only
+     * executable variables (functions) are preserved for invocation.
+     * CONTEXT: This extraction point ensures data variables are unwrapped
+     * before being used as pipeline transformers.
+     */
     const { extractVariableValue } = await import('../utils/variable-resolution');
     let value = await extractVariableValue(baseVar, env);
     
@@ -331,7 +377,12 @@ async function executeCommandVariable(
   env: Environment,
   stdinInput?: string
 ): Promise<string> {
-  // Check if this is a built-in transformer with direct implementation
+  /**
+   * Built-in transformer handling
+   * WHY: Built-in transformers like @JSON, @CSV, @XML have direct implementations
+   * that don't go through the executable variable system for performance.
+   * CONTEXT: These transformers receive raw string input and return transformed strings.
+   */
   if (commandVar && commandVar.metadata?.isBuiltinTransformer && commandVar.metadata?.transformerImplementation) {
     try {
       const result = await commandVar.metadata.transformerImplementation(stdinInput || '');
@@ -433,7 +484,16 @@ async function executeCommandVariable(
   const pipelineCtx = env.getPipelineContext();
   const format = pipelineCtx?.format; // Don't default to json - let it be undefined
   
-  // Bind parameters if any
+  /**
+   * Parameter binding for executable functions
+   * WHY: Pipeline functions need parameters bound from either explicit arguments
+   * or the pipeline input. The first parameter gets special handling.
+   * GOTCHA: First parameter in pipeline context can be either:
+   *   - stdinInput (for first stage receiving command output)
+   *   - argValue (for subsequent stages or explicit arguments)
+   * CONTEXT: This creates the execution environment where functions can access
+   * their parameters by name (e.g., @text in templates).
+   */
   if (execDef.paramNames) {
     for (let i = 0; i < execDef.paramNames.length; i++) {
       const paramName = execDef.paramNames[i];
@@ -462,7 +522,15 @@ async function executeCommandVariable(
                          typeof argValue === 'string' ? argValue :
                          argValue.content !== undefined ? argValue.content : String(argValue);
         
-        // For backwards compatibility: if no format is specified, pass string directly
+        /**
+         * Format-aware parameter binding
+         * WHY: Pipeline functions can receive either raw strings (legacy) or
+         * format-aware PipelineInput objects that provide lazy parsing.
+         * GOTCHA: No format means backwards compatibility - pass raw string.
+         * With format, functions get an object with .text, .data, .csv, etc.
+         * CONTEXT: This enables format-aware processing while maintaining
+         * compatibility with existing string-based functions.
+         */
         if (!format) {
           // Create a simple text variable instead of PipelineInput
           const textSource: VariableSource = {
