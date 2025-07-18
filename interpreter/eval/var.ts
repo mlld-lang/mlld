@@ -607,12 +607,23 @@ export async function evaluateVar(
       // Array of files from glob pattern - store as array variable
       // Check if this array has been tagged with __variable metadata
       const taggedVariable = (resolvedValue as any).__variable;
-      if (taggedVariable) {
-        // Use the metadata from the tagged variable
+      if (taggedVariable && taggedVariable.metadata) {
+        // Use the metadata from the tagged variable, which includes custom behaviors
         variable = createArrayVariable(identifier, resolvedValue, true, source, {
           ...metadata,
           ...taggedVariable.metadata
         });
+        
+        /**
+         * Re-apply special behaviors to arrays with custom toString/content getters
+         * WHY: LoadContentResultArray and RenamedContentArray have behaviors (toString, content getter)
+         *      that must be preserved for proper output formatting in templates and display
+         * GOTCHA: The behaviors are lost during Variable creation and must be re-applied
+         * CONTEXT: This happens when arrays are created from content loading operations
+         */
+        const { extractVariableValue } = await import('../utils/variable-migration');
+        const valueWithBehaviors = extractVariableValue(variable);
+        variable.value = valueWithBehaviors;
       } else {
         variable = createArrayVariable(identifier, resolvedValue, true, source, metadata);
       }
@@ -620,12 +631,23 @@ export async function evaluateVar(
       // Array of strings from transformed content - store as simple array
       // Check if this array has been tagged with __variable metadata
       const taggedVariable = (resolvedValue as any).__variable;
-      if (taggedVariable) {
-        // Use the metadata from the tagged variable
+      if (taggedVariable && taggedVariable.metadata) {
+        // Use the metadata from the tagged variable, which includes custom behaviors
         variable = createArrayVariable(identifier, resolvedValue, false, source, {
           ...metadata,
           ...taggedVariable.metadata
         });
+        
+        /**
+         * Re-apply special behaviors to string arrays from content operations
+         * WHY: RenamedContentArray and similar types have custom toString() methods
+         *      that enable proper concatenation behavior in templates
+         * GOTCHA: Arrays tagged with __variable metadata require behavior restoration
+         * CONTEXT: String arrays from glob patterns or renamed content operations
+         */
+        const { extractVariableValue } = await import('../utils/variable-migration');
+        const valueWithBehaviors = extractVariableValue(variable);
+        variable.value = valueWithBehaviors;
       } else {
         variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
       }

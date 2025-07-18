@@ -941,15 +941,40 @@ export async function interpolate(
         
         // Debug logging
         if (process.env.MLLD_DEBUG === 'true') {
+          console.log('[INTERPOLATE] Array value check:', {
+            isArray: Array.isArray(value),
+            length: value.length,
+            hasVariable: '__variable' in value,
+            variableMetadata: (value as any).__variable?.metadata,
+            isRenamedContentArray: isRenamedContentArray(value),
+            isLoadContentResultArray: isLoadContentResultArray(value),
+            hasContent: 'content' in value,
+            contentType: typeof (value as any).content
+          });
         }
         
         
         if (isLoadContentResultArray(value)) {
           // For LoadContentResultArray, use its .content getter (which concatenates all content)
           stringValue = value.content;
-        } else if (isRenamedContentArray(value) && 'content' in value) {
-          // For RenamedContentArray (from alligator glob with renaming), use its .content getter
-          stringValue = value.content;
+        } else if (isRenamedContentArray(value)) {
+          /**
+           * Handle RenamedContentArray string interpolation
+           * WHY: RenamedContentArray has a custom content getter that formats the array
+           *      elements according to the rename pattern from alligator syntax
+           * GOTCHA: The content getter might be defined but not enumerable, so we check
+           *         multiple methods to find the proper string representation
+           * CONTEXT: Used when arrays created with <*.md> as "pattern" are interpolated
+           */
+          if ('content' in value) {
+            stringValue = value.content;
+          } else if (value.toString !== Array.prototype.toString) {
+            // Use custom toString if available
+            stringValue = value.toString();
+          } else {
+            // Fallback to manual join
+            stringValue = value.join('\n\n');
+          }
         } else if (context === InterpolationContext.ShellCommand) {
           // Special handling for arrays in shell command context
           // For shell commands, expand arrays into space-separated arguments

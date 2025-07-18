@@ -166,19 +166,29 @@ describe('Context-Dependent Behavior', () => {
       resolverManager.configurePrefixes([{
         prefix: '@test/',
         resolver: 'REGISTRY',
-              }]);
+        type: 'module',
+        config: {}
+      }]);
       
       // Mock fetch
       global.fetch = async (url: string) => {
-        if (url.includes('/registry.json')) {
+        if (url.includes('/modules.json')) {
           return {
             ok: true,
             json: async () => ({
-              author: 'test',
+              version: '1.0.0',
               modules: {
-                utils: {
-                  source: { url: 'https://example.com/utils.mld' },
-                  description: 'Utilities'
+                '@test/utils': {
+                  name: 'utils',
+                  author: 'test',
+                  source: { 
+                    url: 'https://example.com/utils.mld',
+                    contentHash: 'abc123def456'
+                  },
+                  description: 'Utilities',
+                  about: 'Test utilities module',
+                  needs: [],
+                  license: 'CC0'
                 }
               }
             })

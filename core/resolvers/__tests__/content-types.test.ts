@@ -287,19 +287,29 @@ describe('Content Type Detection', () => {
       resolverManager.configurePrefixes([{
         prefix: '@test/',
         resolver: 'REGISTRY',
-              }]);
+        type: 'module',
+        config: {}
+      }]);
       
       // Mock fetch for registry
       global.fetch = async (url: string) => {
-        if (url.includes('/registry.json')) {
+        if (url.includes('/modules.json')) {
           return {
             ok: true,
             json: async () => ({
-              author: 'test',
+              version: '1.0.0',
               modules: {
-                utils: {
-                  source: { url: 'https://example.com/utils.mld' },
-                  description: 'Utility module'
+                '@test/utils': {
+                  name: 'utils',
+                  author: 'test',
+                  source: { 
+                    url: 'https://example.com/utils.mld',
+                    contentHash: 'abc123def456'
+                  },
+                  description: 'Utility module',
+                  about: 'Utility module for testing',
+                  needs: [],
+                  license: 'CC0'
                 }
               }
             })

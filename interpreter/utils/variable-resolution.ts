@@ -201,6 +201,17 @@ export async function extractVariableValue(
       return evaluatedValue;
     }
     
+    // Check if this is an array with custom behaviors (LoadContentResultArray, RenamedContentArray)
+    // WHY: Special array types have behaviors (toString, content getter) that must be preserved
+    //      during value extraction to maintain proper output formatting
+    if (variable.type === 'array' && variable.metadata?.arrayType && 
+        (variable.metadata.arrayType === 'renamed-content' || 
+         variable.metadata.arrayType === 'load-content-result')) {
+      // Use the variable-migration extractVariableValue to preserve behaviors
+      const { extractVariableValue: extractWithBehaviors } = await import('./variable-migration');
+      return extractWithBehaviors(variable);
+    }
+    
     return variable.value;
   } else if (isPath(variable)) {
     return variable.value.resolvedPath;

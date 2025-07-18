@@ -119,14 +119,22 @@ export class RegistryResolver implements Resolver {
       );
     }
 
-    const registryRepo = config?.registryRepo || this.defaultRegistryRepo;
-    const branch = config?.branch || this.defaultBranch;
+    // Extract only the RegistryResolverConfig fields, ignore extra fields from ResolverManager
+    const registryConfig: RegistryResolverConfig = {
+      registryRepo: config?.registryRepo,
+      branch: config?.branch,
+      cacheTimeout: config?.cacheTimeout,
+      token: config?.token
+    };
+
+    const registryRepo = registryConfig.registryRepo || this.defaultRegistryRepo;
+    const branch = registryConfig.branch || this.defaultBranch;
 
     logger.debug(`Resolving ${ref} from registry: ${registryRepo}`);
 
     try {
       // Fetch the centralized registry file
-      const registryFile = await this.fetchRegistry(registryRepo, branch, config);
+      const registryFile = await this.fetchRegistry(registryRepo, branch, registryConfig);
       
       // Look up the module using the full @user/module format
       const moduleEntry = registryFile.modules[ref];
@@ -137,7 +145,7 @@ export class RegistryResolver implements Resolver {
           `Module '${moduleName}' not found in ${user}'s registry`
         );
       }
-
+      
       // Get the source URL directly from the registry
       const sourceUrl = moduleEntry.source.url;
       
@@ -160,8 +168,9 @@ export class RegistryResolver implements Resolver {
       if (error instanceof MlldResolutionError) {
         throw error;
       }
+      const errorMessage = error instanceof Error ? error.message : String(error);
       throw new MlldResolutionError(
-        `Failed to resolve ${ref} from registry: ${(error as any).message}`
+        `Failed to resolve ${ref} from registry: ${errorMessage}`
       );
     }
   }

@@ -133,19 +133,35 @@ describe('Import Content Type Validation', () => {
     beforeEach(() => {
       // Mock fetch for registry modules
       global.fetch = async (url: string) => {
-        if (url.includes('/registry.json')) {
+        if (url.includes('/modules.json')) {
           return {
             ok: true,
             json: async () => ({
-              author: 'test',
+              version: '1.0.0',
               modules: {
-                utils: {
-                  source: { url: 'https://example.com/utils.mld' },
-                  description: 'Test utilities'
+                '@test/utils': {
+                  name: 'utils',
+                  author: 'test',
+                  source: { 
+                    url: 'https://example.com/utils.mld',
+                    contentHash: 'abc123def456'
+                  },
+                  description: 'Test utilities',
+                  about: 'Test utilities module',
+                  needs: [],
+                  license: 'CC0'
                 },
-                data: {
-                  source: { url: 'https://example.com/data.json' },
-                  description: 'Data file (not a module)'
+                '@test/data': {
+                  name: 'data',
+                  author: 'test',
+                  source: { 
+                    url: 'https://example.com/data.json',
+                    contentHash: 'def456ghi789'
+                  },
+                  description: 'Data file (not a module)',
+                  about: 'Test data file',
+                  needs: [],
+                  license: 'CC0'
                 }
               }
             })
@@ -178,6 +194,7 @@ describe('Import Content Type Validation', () => {
       resolverManager.configurePrefixes([{
         prefix: '@test/',
         resolver: 'REGISTRY',
+        type: 'module',
         config: {
           registryUrl: 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules'
         }
@@ -222,6 +239,7 @@ describe('Import Content Type Validation', () => {
       resolverManager.configurePrefixes([{
         prefix: '@test/',
         resolver: 'REGISTRY',
+        type: 'module',
         config: {
           registryUrl: 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules'
         }

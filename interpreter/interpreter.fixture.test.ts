@@ -139,6 +139,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'alligator-section-extraction': 'alligator/section-extraction',
       'alligator-glob-rename': 'alligator-glob-rename',
       'alligator-glob-concat': 'alligator-glob-concat',
+      'alligator-array-template-interpolation': 'alligator/array-template-interpolation',
       // File reference interpolation test
       'file-reference-interpolation': 'file-reference-interpolation',
       // HTML conversion tests
