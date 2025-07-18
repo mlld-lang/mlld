@@ -66,6 +66,16 @@
       "resolved": "file:///Users/adam/dev/mlld-resolvers/llm/modules/confidence.mlld.md",
       "integrity": "sha256:8a9aa4171388a02634a4c27b4ea3589a8be01cb651b5ea3d6349328b32b6c779",
       "approvedAt": "2025-06-14T06:55:47.656Z"
+    },
+    "@mlld/env": {
+      "resolved": "registry://@mlld/env",
+      "integrity": "sha256:78b73f49727bfbec0ceced7d31c503aa74c59e197c70f8654ea63d08f81cc01b",
+      "approvedAt": "2025-07-18T18:44:07.154Z"
+    },
+    "@mlld/github": {
+      "resolved": "registry://@mlld/github",
+      "integrity": "sha256:45df981de415cf6de43d7e77c228faab29131e273e3e8944d23cceb60094a486",
+      "approvedAt": "2025-07-18T18:59:27.784Z"
     }
   }
 }

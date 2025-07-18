@@ -221,20 +221,27 @@ export class ImportDirectiveEvaluator {
       // Mark that we're importing this reference
       env.beginImport(ref);
       
-      // Create a mock resolution for content processing
-      const resolution: ImportResolution = {
-        type: 'module',
-        resolvedPath: ref
-      };
-
+      if (process.env.MLLD_DEBUG) {
+        console.log(`[ImportDirectiveEvaluator] Resolver content for ${ref}:`, {
+          contentLength: resolverContent.content.length,
+          contentType: resolverContent.contentType,
+          firstChars: resolverContent.content.substring(0, 100)
+        });
+      }
+      
       // Process the content through our content processor
-      // We'll need to create a temporary file-like interface for this
-      const processingResult = await this.processResolverContent(
+      const processingResult = await this.contentProcessor.processResolverContent(
         resolverContent.content,
         ref,
-        directive,
-        env
+        directive
       );
+
+      if (process.env.MLLD_DEBUG) {
+        console.log(`[ImportDirectiveEvaluator] Processing result for ${ref}:`, {
+          moduleObjectKeys: Object.keys(processingResult.moduleObject),
+          hasFrontmatter: processingResult.frontmatter !== null
+        });
+      }
 
       // Import variables into environment
       await this.variableImporter.importVariables(processingResult, directive, env);
@@ -246,55 +253,6 @@ export class ImportDirectiveEvaluator {
     }
   }
 
-  /**
-   * Process resolver content (similar to file content but from resolver)
-   */
-  private async processResolverContent(
-    content: string,
-    ref: string,
-    directive: DirectiveNode,
-    env: Environment
-  ): Promise<{ moduleObject: Record<string, any>; frontmatter: Record<string, any> | null; childEnvironment: Environment }> {
-    // Handle section extraction if specified
-    let processedContent = content;
-    const sectionNodes = directive.values?.section;
-    if (sectionNodes && Array.isArray(sectionNodes)) {
-      const section = await interpolate(sectionNodes, env);
-      if (section) {
-        processedContent = this.extractSection(content, section);
-      }
-    }
-
-    // This would use the ModuleContentProcessor logic but adapted for resolver content
-    // For now, we'll create a simplified version
-    const { parse } = await import('@grammar/parser');
-    const parseResult = await parse(processedContent);
-    
-    if (!parseResult.success) {
-      throw new Error(`Failed to parse resolver content from '${ref}': ${parseResult.error?.message}`);
-    }
-
-    // Create child environment
-    const childEnv = env.createChild(env.getBasePath());
-    childEnv.setCurrentFilePath(ref);
-
-    // Evaluate in child environment
-    const { evaluate } = await import('../../core/interpreter');
-    await evaluate(parseResult.ast, childEnv);
-
-    // Process module exports
-    const childVars = childEnv.getCurrentVariables();
-    const { moduleObject, frontmatter } = this.variableImporter.processModuleExports(
-      childVars, 
-      { frontmatter: null }
-    );
-
-    return {
-      moduleObject,
-      frontmatter,
-      childEnvironment: childEnv
-    };
-  }
 
   /**
    * Get export data from resolver with format support

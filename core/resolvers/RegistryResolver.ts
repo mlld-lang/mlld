@@ -151,17 +151,47 @@ export class RegistryResolver implements Resolver {
       
       logger.debug(`Resolved ${ref} to source: ${sourceUrl}`);
 
-      // Return the URL as content - the actual fetching will be done by HTTPResolver/GitHubResolver
+      // Fetch the actual module content from the source URL
+      logger.debug(`Fetching module content from: ${sourceUrl}`);
+      
+      const response = await fetch(sourceUrl);
+      if (!response.ok) {
+        // Check for 404 specifically
+        if (response.status === 404) {
+          throw new MlldResolutionError(
+            `Module content not found at ${sourceUrl}. The module may have been moved or deleted.`
+          );
+        }
+        throw new MlldResolutionError(
+          `Failed to fetch module content from ${sourceUrl}: ${response.status} ${response.statusText}`
+        );
+      }
+      
+      const content = await response.text();
+      
+      // Validate we got actual content, not an error page
+      if (!content || content.length === 0) {
+        throw new MlldResolutionError(
+          `Module content is empty at ${sourceUrl}`
+        );
+      }
+      
+      if (process.env.MLLD_DEBUG) {
+        console.log(`[RegistryResolver] Fetched content length: ${content.length}`);
+        console.log(`[RegistryResolver] First 100 chars:`, content.substring(0, 100));
+      }
+      
       return {
-        content: sourceUrl,
+        content,
         contentType: 'module',
         metadata: {
           source: `registry://${ref}`,
           timestamp: new Date(),
           taintLevel: (TaintLevel as any).PUBLIC,
           author: moduleEntry.author,
-          mimeType: 'text/plain', // URL is plain text
-          hash: moduleEntry.source.contentHash
+          mimeType: 'text/x-mlld-module',
+          hash: moduleEntry.source.contentHash,
+          sourceUrl
         }
       };
     } catch (error) {

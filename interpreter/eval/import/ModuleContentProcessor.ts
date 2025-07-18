@@ -62,6 +62,47 @@ export class ModuleContentProcessor {
   }
 
   /**
+   * Process module content from resolver (content already fetched)
+   */
+  async processResolverContent(
+    content: string,
+    ref: string,
+    directive: DirectiveNode
+  ): Promise<ModuleProcessingResult> {
+    // Begin import tracking for security
+    this.securityValidator.beginImport(ref);
+
+    try {
+      if (process.env.MLLD_DEBUG) {
+        console.log(`[ModuleContentProcessor] Processing resolver content for: ${ref}`);
+        console.log(`[ModuleContentProcessor] Content length: ${content.length}`);
+      }
+
+      // Parse content based on type
+      const parseResult = await this.parseContentByType(content, ref, directive);
+
+      // Check if this is a JSON file (special handling)
+      if (ref.endsWith('.json')) {
+        return this.processJSONContent(parseResult, directive, ref);
+      }
+
+      // Process mlld content
+      const result = await this.processMLLDContent(parseResult, ref, false);
+      
+      if (process.env.MLLD_DEBUG) {
+        console.log(`[ModuleContentProcessor] Module object keys: ${Object.keys(result.moduleObject).join(', ')}`);
+        console.log(`[ModuleContentProcessor] Has frontmatter: ${result.frontmatter !== null}`);
+        console.log(`[ModuleContentProcessor] Child env vars: ${result.childEnvironment.getCurrentVariables().size}`);
+      }
+      
+      return result;
+    } finally {
+      // End import tracking
+      this.securityValidator.endImport(ref);
+    }
+  }
+
+  /**
    * Read content from file or URL
    */
   private async readContentFromSource(resolvedPath: string, isURL: boolean): Promise<string> {
@@ -151,6 +192,13 @@ export class ModuleContentProcessor {
   ): Promise<ModuleProcessingResult> {
     const ast = parseResult.ast;
 
+    if (process.env.MLLD_DEBUG) {
+      console.log(`[processMLLDContent] Processing ${resolvedPath}:`, {
+        astLength: ast.length,
+        astTypes: ast.slice(0, 5).map((n: any) => n.type)
+      });
+    }
+
     // Extract and validate frontmatter
     const frontmatterData = await this.extractAndValidateFrontmatter(ast, resolvedPath);
 
@@ -162,6 +210,13 @@ export class ModuleContentProcessor {
 
     // Process module exports
     const childVars = childEnv.getCurrentVariables();
+    
+    if (process.env.MLLD_DEBUG) {
+      console.log(`[processMLLDContent] After evaluation:`, {
+        childVarsSize: childVars.size,
+        childVarNames: Array.from(childVars.keys())
+      });
+    }
     const { moduleObject, frontmatter } = this.variableImporter.processModuleExports(
       childVars, 
       { frontmatter: frontmatterData }
