@@ -686,8 +686,8 @@ async function evaluateCondition(
     logger.debug('Evaluating condition:', { condition });
   }
   
-  // Evaluate the condition
-  const result = await evaluate(condition, childEnv);
+  // Evaluate the condition with condition context
+  const result = await evaluate(condition, childEnv, { isCondition: true });
   
   if (process.env.DEBUG_WHEN) {
     logger.debug('Condition evaluation result:', { result });

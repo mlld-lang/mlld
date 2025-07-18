@@ -5,15 +5,13 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0-rc7]
-
-### Added
-- Enhanced support for `var` in `/when` 
-- Negation syntax for `/when !@condition`
-
 ## [2.0.0-rc6]
 
 ### Added
+- **Enhanced `/when` directive support**:
+  - Variable function calls in when actions: `/when !@condition => /var @result = @function(@param)`
+  - Non-existent fields now evaluate to falsy instead of throwing errors
+  - Works in all when forms: simple (`@when @obj.missing => ...`), block, and with modifiers
 - Updated module publishing flow
 
 ## [2.0.0-rc5]

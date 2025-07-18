@@ -29,6 +29,8 @@ export interface FieldAccessOptions {
   preserveContext?: boolean;
   /** Parent path for building access path */
   parentPath?: string[];
+  /** Whether to return undefined for missing fields instead of throwing */
+  returnUndefinedForMissing?: boolean;
 }
 
 /**
@@ -117,6 +119,10 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
       if (rawValue.type === 'object' && rawValue.properties) {
         // Access the properties object for normalized AST objects
         if (!(name in rawValue.properties)) {
+          if (options?.returnUndefinedForMissing) {
+            accessedValue = undefined;
+            break;
+          }
           throw new Error(`Field "${name}" not found in object`);
         }
         accessedValue = rawValue.properties[name];
@@ -125,6 +131,10 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
       
       // Handle regular objects
       if (!(name in rawValue)) {
+        if (options?.returnUndefinedForMissing) {
+          accessedValue = undefined;
+          break;
+        }
         throw new Error(`Field "${name}" not found in object`);
       }
       
@@ -143,6 +153,10 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
       // Handle normalized AST objects
       if (rawValue.type === 'object' && rawValue.properties) {
         if (!(numKey in rawValue.properties)) {
+          if (options?.returnUndefinedForMissing) {
+            accessedValue = undefined;
+            break;
+          }
           throw new Error(`Numeric field "${numKey}" not found in object`);
         }
         accessedValue = rawValue.properties[numKey];
@@ -151,6 +165,10 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
       
       // Handle regular objects
       if (!(numKey in rawValue)) {
+        if (options?.returnUndefinedForMissing) {
+          accessedValue = undefined;
+          break;
+        }
         throw new Error(`Numeric field "${numKey}" not found in object`);
       }
       
@@ -235,7 +253,8 @@ export function accessFields(
   for (const field of fields) {
     const result = accessField(current, field, {
       preserveContext: true,
-      parentPath: path
+      parentPath: path,
+      returnUndefinedForMissing: options?.returnUndefinedForMissing
     });
     
     if (options?.preserveContext) {

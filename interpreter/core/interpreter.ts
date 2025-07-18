@@ -186,10 +186,18 @@ export interface EvalResult {
 }
 
 /**
+ * Evaluation context options
+ */
+export interface EvaluationContext {
+  /** Whether we're evaluating a condition (affects field access behavior) */
+  isCondition?: boolean;
+}
+
+/**
  * Main recursive evaluation function.
  * This is the heart of the interpreter - it walks the AST and evaluates each node.
  */
-export async function evaluate(node: MlldNode | MlldNode[], env: Environment): Promise<EvalResult> {
+export async function evaluate(node: MlldNode | MlldNode[], env: Environment, context?: EvaluationContext): Promise<EvalResult> {
   // Handle array of nodes (from parser)
   if (Array.isArray(node)) {
     let lastValue: unknown = undefined;
@@ -204,7 +212,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       // Process remaining nodes
       for (let i = 1; i < node.length; i++) {
         const n = node[i];
-        const result = await evaluate(n, env);
+        const result = await evaluate(n, env, context);
         lastValue = result.value;
         lastResult = result;
         
@@ -227,7 +235,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     } else {
       // No frontmatter, process all nodes normally
       for (const n of node) {
-        const result = await evaluate(n, env);
+        const result = await evaluate(n, env, context);
         lastValue = result.value;
         lastResult = result;
         
@@ -307,7 +315,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     }
     
     // Evaluate the parsed content
-    const result = await evaluate(node.content, env);
+    const result = await evaluate(node.content, env, context);
     return result;
   }
       
@@ -450,10 +458,16 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           const indexValue = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = accessField(resolvedValue, resolvedField, { preserveContext: true });
+          const fieldResult = accessField(resolvedValue, resolvedField, { 
+            preserveContext: true,
+            returnUndefinedForMissing: context?.isCondition
+          });
           resolvedValue = (fieldResult as any).value;
         } else {
-          const fieldResult = accessField(resolvedValue, field, { preserveContext: true });
+          const fieldResult = accessField(resolvedValue, field, { 
+            preserveContext: true,
+            returnUndefinedForMissing: context?.isCondition
+          });
           resolvedValue = (fieldResult as any).value;
         }
         if (resolvedValue === undefined) break;
@@ -482,7 +496,7 @@ async function evaluateDocument(doc: DocumentNode, env: Environment): Promise<Ev
   
   // Evaluate each child node in sequence
   for (const child of doc.nodes) {
-    const result = await evaluate(child, env);
+    const result = await evaluate(child, env, context);
     lastValue = result.value;
     
     // Add text nodes to output
