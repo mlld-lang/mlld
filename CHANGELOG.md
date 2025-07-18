@@ -5,6 +5,15 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc12]
+
+### Fixed
+- **URL-relative import resolution**: Fixed relative imports when running scripts from URLs
+  - Scripts loaded from URLs (e.g., via `npx mlld@latest https://...`) can now use relative imports
+  - `../modules/file.mld` correctly resolves to full URL when current file is a URL
+  - Enables serverless execution of mlld scripts with local module dependencies
+  - Fixes registry review system import resolution issues
+
 ## [2.0.0-rc11]
 
 ### Fixed

@@ -176,6 +176,19 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       inputPath = inputPath.replace('@PROJECTPATH', await this.getProjectPath());
     }
     
+    // Handle URL-relative resolution when current file is a URL
+    const currentFile = this.dependencies.getCurrentFilePath?.();
+    if (currentFile && this.isURL(currentFile) && !this.isURL(inputPath) && !path.isAbsolute(inputPath)) {
+      try {
+        // Resolve relative path against current URL
+        const resolvedURL = new URL(inputPath, currentFile);
+        return resolvedURL.toString();
+      } catch (error) {
+        // If URL resolution fails, fall back to file-based resolution
+        console.warn(`Failed to resolve relative URL ${inputPath} against ${currentFile}:`, error);
+      }
+    }
+    
     // Use the path module that's already imported
     if (path.isAbsolute(inputPath)) {
       return inputPath;
