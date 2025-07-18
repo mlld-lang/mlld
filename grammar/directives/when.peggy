@@ -24,7 +24,21 @@ Modifiers:
 
 // Primary /when directive
 SlashWhen
-  = WhenSimpleForm
+  // Error recovery: /when @var [...] without colon (MUST come before WhenSimpleForm)
+  = DirectiveContext "/when" _ "@" id:BaseIdentifier tail:("." prop:BaseIdentifier { return prop; })* _ "[" {
+      const fullVar = "@" + id + (tail.length > 0 ? "." + tail.join(".") : "");
+      helpers.mlldError("Invalid /when syntax. Missing ':' after variable.\\n\\n" +
+            "The syntax /when " + fullVar + " [...] requires a colon after the variable.\\n" +
+            "This is the block form that compares the variable value against each condition.\\n\\n" +
+            "Correct syntax:\\n" +
+            "  /when " + fullVar + ": [\\n" +
+            "    \"value1\" => /show \"First case\"\\n" +
+            "    \"value2\" => /show \"Second case\"\\n" +
+            "  ]\\n\\n" +
+            "Or use the simple form without brackets:\\n" +
+            "  /when " + fullVar + " => /show \"Action\"", ":", location());
+    }
+  / WhenSimpleForm
   // Error recovery: any: with individual actions (MUST come before WhenBlockForm)
   / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":" _ "[" _ &{
       // Look ahead to see if there are individual actions (=> inside the block)
