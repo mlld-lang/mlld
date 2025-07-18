@@ -159,23 +159,26 @@ export const logger = winston.createLogger({
         format: consoleFormat
       })
     ]),
-    // File transport for all logs
-    new winston.transports.File({
-      filename: path.join(loggingConfig.files.directory, loggingConfig.files.mainLog),
-      format: fileFormat,
-      maxsize: loggingConfig.files.maxSize,
-      maxFiles: loggingConfig.files.maxFiles,
-      tailable: loggingConfig.files.tailable
-    }),
-    // Separate file for errors
-    new winston.transports.File({
-      filename: path.join(loggingConfig.files.directory, loggingConfig.files.errorLog),
-      level: 'error',
-      format: fileFormat,
-      maxsize: loggingConfig.files.maxSize,
-      maxFiles: loggingConfig.files.maxFiles,
-      tailable: loggingConfig.files.tailable
-    })
+    // File transports only if logs directory exists (not in serverless)
+    ...(fs.existsSync(loggingConfig.files.directory) ? [
+      // File transport for all logs
+      new winston.transports.File({
+        filename: path.join(loggingConfig.files.directory, loggingConfig.files.mainLog),
+        format: fileFormat,
+        maxsize: loggingConfig.files.maxSize,
+        maxFiles: loggingConfig.files.maxFiles,
+        tailable: loggingConfig.files.tailable
+      }),
+      // Separate file for errors
+      new winston.transports.File({
+        filename: path.join(loggingConfig.files.directory, loggingConfig.files.errorLog),
+        level: 'error',
+        format: fileFormat,
+        maxsize: loggingConfig.files.maxSize,
+        maxFiles: loggingConfig.files.maxFiles,
+        tailable: loggingConfig.files.tailable
+      })
+    ] : [])
   ]
 });
 
@@ -184,9 +187,14 @@ export function createServiceLogger(serviceName: keyof typeof loggingConfig.serv
   return loggerFactory.createServiceLogger(serviceName);
 }
 
-// Ensure logs directory exists
+// Ensure logs directory exists (skip in serverless environments)
 if (!fs.existsSync(loggingConfig.files.directory)) {
-  fs.mkdirSync(loggingConfig.files.directory);
+  try {
+    fs.mkdirSync(loggingConfig.files.directory);
+  } catch (error) {
+    // Ignore error in serverless/read-only environments
+    // File logging will be disabled
+  }
 }
 
 // Add a stream interface for use with other logging tools
@@ -214,8 +222,8 @@ export const embedLogger = createServiceLogger('embed');
 // Export default logger for general use
 export default logger;
 
-// Add file transport in production
-if (process.env.NODE_ENV === 'production') {
+// Add file transport in production (only if logs directory exists)
+if (process.env.NODE_ENV === 'production' && fs.existsSync('logs')) {
   const fileTransport = new winston.transports.File({
     filename: 'logs/error.log',
     level: 'error'

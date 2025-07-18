@@ -56,7 +56,7 @@ export class PublishingMethodDecision implements DecisionPoint<PublishingMethodC
       console.log('\nPublishing options:');
       
       if (isPublic) {
-        console.log('  [r] Publish from repository (recommended)');
+        console.log('  [r] Publish from public repository (recommended)');
         console.log('      Uses git commit URL for reproducible references');
       } else {
         console.log('  [p] Publish to private repository');

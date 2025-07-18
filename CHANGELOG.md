@@ -5,6 +5,14 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc7]
+
+### Fixed
+- **Logger compatibility with serverless environments**: 
+  - Fixed winston logger attempting to create logs directory in read-only filesystems
+  - File transports are now conditionally added only when logs directory exists
+  - Prevents ENOENT errors when running mlld in Vercel, AWS Lambda, and other serverless platforms
+
 ## [2.0.0-rc6]
 
 ### Added
