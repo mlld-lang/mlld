@@ -13,7 +13,7 @@ export class ArgumentParser {
   private readonly commandsWithSubcommands = [
     'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 
     'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 
-    'setup', 'alias', 'env', 'dev', 'mode', 'test', 'run', 'error-test'
+    'setup', 'alias', 'env', 'dev', 'mode', 'test', 'run', 'error-test', 'clean'
   ];
 
   parseArgs(args: string[]): CLIOptions {

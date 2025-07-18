@@ -15,6 +15,7 @@ import { createRunCommand } from '../commands/run';
 import { errorTestCommand } from '../commands/error-test';
 import { createDevCommand } from '../commands/dev';
 import { createModeCommand } from '../commands/mode';
+import { createCleanCommand } from '../commands/clean';
 import type { CLIOptions } from '../index';
 
 export class CommandDispatcher {
@@ -50,6 +51,7 @@ export class CommandDispatcher {
     this.commandMap.set('error-test', errorTestCommand);
     this.commandMap.set('dev', createDevCommand());
     this.commandMap.set('mode', createModeCommand());
+    this.commandMap.set('clean', createCleanCommand());
   }
 
   async executeCommand(
@@ -73,11 +75,13 @@ export class CommandDispatcher {
         await handler({ _: subcommands });
       } else {
         // Command object with execute method
-        await handler.execute(subcommands, this.parseFlags(subcommands));
+        const { flags, remaining } = this.parseCommandFlags(subcommands);
+        await handler.execute(remaining, flags);
       }
     } else if (handler && typeof handler.execute === 'function') {
       // Command object with execute method
-      await handler.execute(subcommands, this.parseFlags(subcommands));
+      const { flags, remaining } = this.parseCommandFlags(subcommands);
+      await handler.execute(remaining, flags);
     } else {
       throw new Error(`Invalid command handler for: ${command}`);
     }
@@ -174,7 +178,8 @@ export class CommandDispatcher {
       'language-server': 'Start language server',
       'test': 'Run mlld tests',
       'run': 'Run mlld scripts',
-      'error-test': 'Test error handling'
+      'error-test': 'Test error handling',
+      'clean': 'Remove modules from lock file and cache'
     };
     
     return descriptions[command] || 'No description available';

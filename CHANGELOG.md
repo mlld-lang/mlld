@@ -5,7 +5,7 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0-rc8]
+## [2.0.0-rc9]
 
 ### Added
 - **URL execution support**: Run mlld scripts directly from URLs
@@ -14,6 +14,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - In-memory execution without temporary files
   - Automatic redirect handling (up to 5 redirects)
   - Configurable timeout and size limits via CLI options
+- **mlld clean command**: New command for cleaning cached module metadata
+  - `mlld clean <module...>` - Remove specific modules from lock file and cache
+  - `mlld clean --all` - Clear all cached imports and force fresh resolution
+  - `mlld clean --registry` - Clear only registry modules (preserving local modules)
+  - `--verbose` flag for detailed output during cleaning operations
+  - Helps resolve issues with stale cached module data preventing proper imports
+
+### Fixed
+- **Registry import system**: Complete overhaul of module import processing
+  - Fixed registry imports returning empty objects instead of module exports
+  - Unified import processing path for both local and registry imports
+  - Added proper frontmatter extraction for registry resolver imports
+  - Improved error handling with specific 404 detection and clear error messages
+- **Registry URL validation**: Added publish-time verification
+  - Verify generated URLs are publicly accessible before publishing
+  - Check that published content matches recorded integrity hashes
+  - Prevent broken modules from being published without detection
+- **Lock file path handling**: Fixed CLI commands to use correct lock file location
+  - Commands now properly read `mlld.lock.json` from project root instead of `.mlld/` subdirectory
+  - Affects `mlld ls`, `mlld clean`, and other commands that manage module metadata
 
 ## [2.0.0-rc7]
 
