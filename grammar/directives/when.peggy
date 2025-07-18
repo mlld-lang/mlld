@@ -522,22 +522,103 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "/"? "var" _ "@" id:BaseIdentifier _ "=" _ value:StringLiteral {
+  / "/"? "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
+      // Support full range of var assignments in when actions
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      
+      // Process the value based on its structure (simplified from var.peggy)
+      let processedValue;
+      let metaInfo = {};
+      
+      // Handle template content (backtick, [[...]], quotes)
+      if (value && value.content && value.wrapperType) {
+        processedValue = value.content;
+        metaInfo.wrapperType = value.wrapperType;
+        metaInfo.inferredType = 'template';
+      }
+      // Handle object literals
+      else if (value && value.type === 'object') {
+        processedValue = [value];
+        metaInfo.inferredType = 'object';
+      }
+      // Handle array literals
+      else if (value && value.type === 'array') {
+        processedValue = [value];
+        metaInfo.inferredType = 'array';
+      }
+      // Handle exec invocations (function calls)
+      else if (value && value.type === 'ExecInvocation') {
+        processedValue = [value];
+        metaInfo.inferredType = 'computed';
+      }
+      // Handle variable references
+      else if (value && value.type === 'variableReference') {
+        processedValue = [value.value];
+        metaInfo.inferredType = 'reference';
+      }
+      // Handle variable references with tail modifiers
+      else if (value && value.type === 'VariableReferenceWithTail') {
+        processedValue = [value.variable];
+        metaInfo.inferredType = 'reference';
+      }
+      // Handle nested directives
+      else if (value && value.type === 'nestedDirective') {
+        processedValue = [value.directive];
+        metaInfo.inferredType = 'computed';
+      }
+      // Handle code execution
+      else if (value && value.type === 'code') {
+        processedValue = [{
+          type: 'code',
+          language: value.language,
+          code: value.code
+        }];
+        metaInfo.inferredType = 'computed';
+      }
+      // Handle command execution
+      else if (value && value.type === 'command') {
+        processedValue = [{
+          type: 'command',
+          command: value.command
+        }];
+        metaInfo.inferredType = 'computed';
+      }
+      // Handle foreach expressions
+      else if (value && value.type === 'foreach-command') {
+        processedValue = [value.value];
+        metaInfo.inferredType = 'computed';
+      }
+      // Handle primitive values
+      else if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+        processedValue = [value];
+        metaInfo.inferredType = 'primitive';
+      }
+      // Handle string literals (backward compatibility)
+      else if (typeof value === 'string') {
+        processedValue = [helpers.createNode(NodeType.Text, { 
+          content: value, 
+          location: location() 
+        })];
+        metaInfo.inferredType = 'text';
+      }
+      // Handle other types
+      else {
+        processedValue = Array.isArray(value) ? value : [value];
+        metaInfo.inferredType = 'unknown';
+      }
+      
       return [helpers.createNode(NodeType.Directive, {
         kind: 'var',
         subtype: 'var',
         values: { 
-          identifier: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
-          value: [helpers.createNode(NodeType.Text, { 
-            content: value, 
-            location: location() 
-          })]
+          identifier: [idNode],
+          value: processedValue
         },
         raw: {
           identifier: id,
-          value: value
+          value: helpers.reconstructRawString(processedValue)
         },
-        meta: { inferredType: 'text' },
+        meta: metaInfo,
         location: location()
       })];
     }
