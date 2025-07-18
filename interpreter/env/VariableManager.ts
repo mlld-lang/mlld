@@ -5,6 +5,7 @@ import {
   createPathVariable,
   isPipelineInput,
   isTextLike,
+  VariableTypeGuards,
 } from '@core/types/variable';
 import { VariableRedefinitionError } from '@core/errors/VariableRedefinitionError';
 import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
@@ -66,31 +67,40 @@ export class VariableManager implements IVariableManager {
       throw new Error(`Cannot create variable '@${name}': this name is already reserved by the system or a resolver prefix`);
     }
     
+    // Only check for collisions among legitimate mlld variables
+    // System variables like frontmatter (@fm) shouldn't cause collision errors
+    // since they can't actually be accessed in import contexts
+    const isLegitimateVariable = this.isLegitimateVariableType(variable);
+    
     // Check if variable already exists in this scope
     if (this.variables.has(name)) {
       const existing = this.variables.get(name)!;
+      const existingIsLegitimate = this.isLegitimateVariableType(existing);
       
-      // Check if this is an import conflict (one imported, one local)
-      const existingIsImported = Boolean(existing.metadata?.isImported);
-      const newIsImported = Boolean(variable.metadata?.isImported);
-      
-      if (existingIsImported !== newIsImported) {
-        // Import vs local conflict
-        const importPath = existingIsImported ? existing.metadata?.importPath : variable.metadata?.importPath;
-        throw VariableRedefinitionError.forImportConflict(
-          name,
-          existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-          variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-          importPath,
-          existingIsImported
-        );
-      } else {
-        // Same-file redefinition
-        throw VariableRedefinitionError.forSameFile(
-          name,
-          existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-          variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
-        );
+      // Only throw collision errors if both variables are legitimate mlld types
+      if (isLegitimateVariable && existingIsLegitimate) {
+        // Check if this is an import conflict (one imported, one local)
+        const existingIsImported = Boolean(existing.metadata?.isImported);
+        const newIsImported = Boolean(variable.metadata?.isImported);
+        
+        if (existingIsImported !== newIsImported) {
+          // Import vs local conflict
+          const importPath = existingIsImported ? existing.metadata?.importPath : variable.metadata?.importPath;
+          throw VariableRedefinitionError.forImportConflict(
+            name,
+            existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            importPath,
+            existingIsImported
+          );
+        } else {
+          // Same-file redefinition
+          throw VariableRedefinitionError.forSameFile(
+            name,
+            existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+            variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() }
+          );
+        }
       }
     }
     
@@ -98,16 +108,21 @@ export class VariableManager implements IVariableManager {
     const parent = this.deps.getParent();
     if (parent?.hasVariable(name)) {
       const existing = parent.getVariable(name)!;
-      const isExistingImported = existing.metadata?.isImported || false;
-      const importPath = existing.metadata?.importPath;
+      const existingIsLegitimate = this.isLegitimateVariableType(existing);
       
-      throw VariableRedefinitionError.forImportConflict(
-        name,
-        existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-        variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
-        importPath,
-        isExistingImported
-      );
+      // Only throw collision errors if both variables are legitimate mlld types
+      if (isLegitimateVariable && existingIsLegitimate) {
+        const isExistingImported = existing.metadata?.isImported || false;
+        const importPath = existing.metadata?.importPath;
+        
+        throw VariableRedefinitionError.forImportConflict(
+          name,
+          existing.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+          variable.metadata?.definedAt || { line: 0, column: 0, filePath: this.deps.getCurrentFilePath() },
+          importPath,
+          isExistingImported
+        );
+      }
     }
     
     this.variables.set(name, variable);
@@ -450,5 +465,33 @@ export class VariableManager implements IVariableManager {
     
     // No input available
     return null;
+  }
+
+  /**
+   * Check if a variable is a legitimate mlld variable type that should participate
+   * in collision detection. System variables like frontmatter (@fm) are excluded
+   * since they can't actually be accessed in import contexts.
+   */
+  private isLegitimateVariableType(variable: Variable): boolean {
+    // System variables (like frontmatter) should not participate in collision detection
+    if (variable.metadata?.isSystem || variable.metadata?.isReserved) {
+      return false;
+    }
+    
+    // Check if it's a valid mlld variable type
+    return VariableTypeGuards.isSimpleText(variable) ||
+           VariableTypeGuards.isInterpolatedText(variable) ||
+           VariableTypeGuards.isTemplate(variable) ||
+           VariableTypeGuards.isFileContent(variable) ||
+           VariableTypeGuards.isSectionContent(variable) ||
+           VariableTypeGuards.isObject(variable) ||
+           VariableTypeGuards.isArray(variable) ||
+           VariableTypeGuards.isComputed(variable) ||
+           VariableTypeGuards.isCommandResult(variable) ||
+           VariableTypeGuards.isPath(variable) ||
+           VariableTypeGuards.isImported(variable) ||
+           VariableTypeGuards.isExecutable(variable) ||
+           VariableTypeGuards.isPipelineInput(variable) ||
+           VariableTypeGuards.isPrimitive(variable);
   }
 }

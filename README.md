@@ -263,6 +263,11 @@ mlld run data/process            # Run nested scripts
 mlld test                        # Run all tests
 mlld test array                  # Run tests matching pattern
 
+# Module cache management
+mlld clean @mlld/env             # Remove specific module from cache
+mlld clean --all                 # Clear all cached modules
+mlld clean --registry            # Clear only registry modules
+
 # Analyze dependencies
 mlld add-needs my-module.mld     # Auto-detect and add runtime deps
 ```

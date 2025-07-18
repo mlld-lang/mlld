@@ -5,6 +5,15 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc11]
+
+### Fixed
+- **Import collision detection**: Fixed false positive collisions with system variables
+  - System variables like frontmatter (`@fm`) no longer trigger import collision errors
+  - Multiple modules with frontmatter can now be imported without conflicts
+  - Collision detection now only applies to legitimate user-defined variables
+  - Resolves registry review deployment issues caused by frontmatter variable conflicts
+
 ## [2.0.0-rc10]
 
 ### Added

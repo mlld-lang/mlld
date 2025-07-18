@@ -9,7 +9,8 @@ import {
   createExecutableVariable,
   isExecutable,
   isExecutableVariable,
-  getEffectiveType
+  getEffectiveType,
+  VariableTypeGuards
 } from '@core/types/variable';
 import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
@@ -54,13 +55,21 @@ export class VariableImporter {
     // Always start with auto-export of all top-level variables
     const moduleObject: Record<string, any> = {};
     
-    // Export all top-level variables directly
+    // Export all top-level variables directly (except system variables)
     if (process.env.MLLD_DEBUG === 'true') {
       console.log(`[processModuleExports] childVars size: ${childVars.size}`);
       console.log(`[processModuleExports] childVars keys: ${Array.from(childVars.keys()).join(', ')}`);
     }
     
     for (const [name, variable] of childVars) {
+      // Only export legitimate mlld variables - this automatically excludes
+      // system variables like frontmatter (@fm) that don't have valid mlld types
+      if (!this.isLegitimateVariableForExport(variable)) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log(`[processModuleExports] Skipping non-legitimate variable '${name}' with type: ${variable.type}`);
+        }
+        continue;
+      }
       if (process.env.DEBUG_MODULE_EXPORT || process.env.MLLD_DEBUG === 'true') {
         console.error(`[DEBUG] Exporting variable '${name}' of type '${variable.type}'`);
       }
@@ -358,5 +367,29 @@ export class VariableImporter {
       // Numbers, booleans, etc. convert to text
       return 'simple-text';
     }
+  }
+
+  /**
+   * Check if a variable is a legitimate mlld variable that can be exported/imported.
+   * Uses the type system to ensure only valid mlld variables are shared between modules.
+   * This automatically excludes system variables like frontmatter (@fm) that have invalid types.
+   */
+  private isLegitimateVariableForExport(variable: Variable): boolean {
+    // Use our comprehensive type guard system to validate the variable
+    // If the variable doesn't match any of our legitimate types, it's not exportable
+    return VariableTypeGuards.isSimpleText(variable) ||
+           VariableTypeGuards.isInterpolatedText(variable) ||
+           VariableTypeGuards.isTemplate(variable) ||
+           VariableTypeGuards.isFileContent(variable) ||
+           VariableTypeGuards.isSectionContent(variable) ||
+           VariableTypeGuards.isObject(variable) ||
+           VariableTypeGuards.isArray(variable) ||
+           VariableTypeGuards.isComputed(variable) ||
+           VariableTypeGuards.isCommandResult(variable) ||
+           VariableTypeGuards.isPath(variable) ||
+           VariableTypeGuards.isImported(variable) ||
+           VariableTypeGuards.isExecutable(variable) ||
+           VariableTypeGuards.isPipelineInput(variable) ||
+           VariableTypeGuards.isPrimitive(variable);
   }
 }
