@@ -3,7 +3,7 @@
 This example demonstrates how to use URLs in Meld directives.
 
 ## Import from URL
-/import { * } from "https://raw.githubusercontent.com/example/repo/main/config.mld"
+/import from "https://raw.githubusercontent.com/example/repo/main/config.mld"
 
 ## Text from URL
 /var @readme = <https://raw.githubusercontent.com/example/repo/main/README.md>

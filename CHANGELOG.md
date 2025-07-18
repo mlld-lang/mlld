@@ -5,6 +5,16 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc8]
+
+### Added
+- **URL execution support**: Run mlld scripts directly from URLs
+  - Execute scripts from any HTTP/HTTPS URL: `mlld https://example.com/script.mld`
+  - Useful for CI/CD pipelines: `npx mlld@latest https://raw.githubusercontent.com/user/repo/main/script.mld`
+  - In-memory execution without temporary files
+  - Automatic redirect handling (up to 5 redirects)
+  - Configurable timeout and size limits via CLI options
+
 ## [2.0.0-rc7]
 
 ### Fixed

@@ -429,7 +429,7 @@ Override temporarily with --dev flag or MLLD_DEV=true environment variable.
 
   private displayMainHelp(command?: string, context?: HelpContext): void {
     console.log(`
-Usage: mlld [command] [options] <input-file>
+Usage: mlld [command] [options] <input-file-or-url>
 
 Commands:
   init                    Create a new mlld module
@@ -490,6 +490,15 @@ Import Approval Options:
 Output Formatting Options:
   --no-normalize-blank-lines  Disable blank line normalization in output
   --no-format                 Disable prettier markdown formatting (preserve original spacing)
+
+Examples:
+  mlld script.mld                     # Run a local file
+  mlld script.mld --stdout            # Output to stdout
+  mlld script.mld -o output.md        # Output to file
+  
+  # Run scripts directly from URLs
+  mlld https://example.com/script.mld
+  npx mlld@latest https://raw.githubusercontent.com/mlld-lang/registry/main/llm/scripts/review-pr.mld
 
 Configuration:
   Mlld looks for configuration in:

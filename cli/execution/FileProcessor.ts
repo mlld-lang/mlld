@@ -12,6 +12,7 @@ import type { CLIOptions } from '../index';
 import type { UserInteraction } from '../interaction/UserInteraction';
 import type { OptionProcessor } from '../parsers/OptionProcessor';
 import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
+import { URLLoader } from '../utils/url-loader';
 
 export interface ProcessingEnvironment {
   fileSystem: NodeFileSystem;
@@ -52,20 +53,30 @@ export class FileProcessor {
   }
 
   async processFileWithOptions(cliOptions: CLIOptions, apiOptions: any): Promise<void> {
-    const environment = await this.setupEnvironment(cliOptions);
-    let interpretEnvironment: any = null; // Define outside try block for cleanup access
+    // Check if input is a URL
+    const isURL = URLLoader.isURL(cliOptions.input);
     
-    try {
-      // Check if the input file exists
+    // For URLs, we need special handling
+    let environment: ProcessingEnvironment;
+    if (isURL) {
+      // For URLs, use current directory for config
+      environment = await this.setupEnvironmentForURL();
+    } else {
+      // For files, check existence first
       if (!existsSync(cliOptions.input)) {
         throw new Error(`Input file does not exist: ${cliOptions.input}`);
       }
-
+      environment = await this.setupEnvironment(cliOptions);
+    }
+    
+    let interpretEnvironment: any = null; // Define outside try block for cleanup access
+    
+    try {
       // Read stdin if available
       const stdinContent = await this.readStdinIfAvailable();
 
       // Execute interpretation
-      const { result, hasExplicitOutput, interpretEnvironment: env } = await this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent);
+      const { result, hasExplicitOutput, interpretEnvironment: env } = await this.executeInterpretation(cliOptions, apiOptions, environment, stdinContent, isURL);
       interpretEnvironment = env;
 
       // Handle output
@@ -118,14 +129,48 @@ export class FileProcessor {
     };
   }
 
+  async setupEnvironmentForURL(): Promise<ProcessingEnvironment> {
+    const fileSystem = new NodeFileSystem();
+    const pathService = new PathService(fileSystem);
+    
+    // For URLs, use current working directory for config
+    const configLoader = new ConfigLoader(process.cwd());
+    const config = configLoader.load();
+    const urlConfig = configLoader.resolveURLConfig(config);
+
+    return {
+      fileSystem,
+      pathService,
+      configLoader,
+      urlConfig
+    };
+  }
+
   private async executeInterpretation(
     cliOptions: CLIOptions, 
     apiOptions: any, 
     environment: ProcessingEnvironment,
-    stdinContent?: string
+    stdinContent?: string,
+    isURL?: boolean
   ): Promise<{ result: string; hasExplicitOutput: boolean; interpretEnvironment?: any }> {
-    // Read the input file
-    const content = await fs.readFile(cliOptions.input, 'utf8');
+    // Get content either from URL or file
+    let content: string;
+    let effectivePath: string;
+    
+    if (isURL) {
+      cliLogger.debug(`Loading content from URL: ${cliOptions.input}`);
+      const urlResult = await URLLoader.load(cliOptions.input, {
+        timeout: cliOptions.urlTimeout,
+        maxSize: cliOptions.urlMaxSize
+      });
+      content = urlResult.content;
+      // Use the URL as the effective path for error reporting
+      effectivePath = urlResult.finalUrl;
+    } else {
+      // Read the input file
+      content = await fs.readFile(cliOptions.input, 'utf8');
+      effectivePath = path.resolve(cliOptions.input);
+    }
     
     // Merge CLI URL config with loaded config
     const finalUrlConfig = this.mergeUrlConfig(cliOptions, environment.urlConfig);
@@ -133,16 +178,25 @@ export class FileProcessor {
     // Get output config
     const outputConfig = environment.configLoader.resolveOutputConfig(environment.configLoader.load());
     
-    // Build PathContext from the input file
-    const pathContext = await PathContextBuilder.fromFile(
-      cliOptions.input,
-      environment.fileSystem
-    );
+    // Build PathContext - for URLs use current directory
+    let pathContext: PathContext;
+    if (isURL) {
+      // For URLs, create a PathContext for the current directory
+      pathContext = await PathContextBuilder.fromFile(
+        path.join(process.cwd(), 'virtual.mld'), // Virtual file in current directory
+        environment.fileSystem
+      );
+    } else {
+      pathContext = await PathContextBuilder.fromFile(
+        cliOptions.input,
+        environment.fileSystem
+      );
+    }
     
     // Call the interpreter with PathContext
     const interpretResult = await interpret(content, {
       pathContext,
-      filePath: path.resolve(cliOptions.input), // Still pass for error reporting
+      filePath: effectivePath, // Use effective path for error reporting
       format: this.normalizeFormat(cliOptions.format),
       fileSystem: environment.fileSystem,
       pathService: environment.pathService,
