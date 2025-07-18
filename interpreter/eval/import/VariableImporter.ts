@@ -55,8 +55,13 @@ export class VariableImporter {
     const moduleObject: Record<string, any> = {};
     
     // Export all top-level variables directly
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log(`[processModuleExports] childVars size: ${childVars.size}`);
+      console.log(`[processModuleExports] childVars keys: ${Array.from(childVars.keys()).join(', ')}`);
+    }
+    
     for (const [name, variable] of childVars) {
-      if (process.env.DEBUG_MODULE_EXPORT) {
+      if (process.env.DEBUG_MODULE_EXPORT || process.env.MLLD_DEBUG === 'true') {
         console.error(`[DEBUG] Exporting variable '${name}' of type '${variable.type}'`);
       }
       // For executable variables, we need to preserve the full structure

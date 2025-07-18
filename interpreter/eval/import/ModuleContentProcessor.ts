@@ -73,9 +73,10 @@ export class ModuleContentProcessor {
     this.securityValidator.beginImport(ref);
 
     try {
-      if (process.env.MLLD_DEBUG) {
+      if (process.env.MLLD_DEBUG === 'true') {
         console.log(`[ModuleContentProcessor] Processing resolver content for: ${ref}`);
         console.log(`[ModuleContentProcessor] Content length: ${content.length}`);
+        console.log(`[ModuleContentProcessor] Content preview: ${content.substring(0, 200)}`);
       }
 
       // Parse content based on type
@@ -89,10 +90,11 @@ export class ModuleContentProcessor {
       // Process mlld content
       const result = await this.processMLLDContent(parseResult, ref, false);
       
-      if (process.env.MLLD_DEBUG) {
+      if (process.env.MLLD_DEBUG === 'true') {
         console.log(`[ModuleContentProcessor] Module object keys: ${Object.keys(result.moduleObject).join(', ')}`);
         console.log(`[ModuleContentProcessor] Has frontmatter: ${result.frontmatter !== null}`);
         console.log(`[ModuleContentProcessor] Child env vars: ${result.childEnvironment.getCurrentVariables().size}`);
+        console.log(`[ModuleContentProcessor] Child env var names: ${Array.from(result.childEnvironment.getCurrentVariables().keys()).join(', ')}`);
       }
       
       return result;
@@ -192,10 +194,10 @@ export class ModuleContentProcessor {
   ): Promise<ModuleProcessingResult> {
     const ast = parseResult.ast;
 
-    if (process.env.MLLD_DEBUG) {
+    if (process.env.MLLD_DEBUG === 'true') {
       console.log(`[processMLLDContent] Processing ${resolvedPath}:`, {
         astLength: ast.length,
-        astTypes: ast.slice(0, 5).map((n: any) => n.type)
+        astTypes: ast.slice(0, 10).map((n: any) => `${n.type}${n.kind ? ':' + n.kind : ''}`)
       });
     }
 
@@ -211,10 +213,11 @@ export class ModuleContentProcessor {
     // Process module exports
     const childVars = childEnv.getCurrentVariables();
     
-    if (process.env.MLLD_DEBUG) {
+    if (process.env.MLLD_DEBUG === 'true') {
       console.log(`[processMLLDContent] After evaluation:`, {
         childVarsSize: childVars.size,
-        childVarNames: Array.from(childVars.keys())
+        childVarNames: Array.from(childVars.keys()),
+        evalResult: evalResult?.value ? 'has value' : 'no value'
       });
     }
     const { moduleObject, frontmatter } = this.variableImporter.processModuleExports(

@@ -221,7 +221,7 @@ export class ImportDirectiveEvaluator {
       // Mark that we're importing this reference
       env.beginImport(ref);
       
-      if (process.env.MLLD_DEBUG) {
+      if (process.env.MLLD_DEBUG === 'true') {
         console.log(`[ImportDirectiveEvaluator] Resolver content for ${ref}:`, {
           contentLength: resolverContent.content.length,
           contentType: resolverContent.contentType,
@@ -230,15 +230,27 @@ export class ImportDirectiveEvaluator {
       }
       
       // Process the content through our content processor
+      console.log(`[DEBUG] About to process resolver content for ${ref}`);
+      console.log(`[DEBUG] Content length: ${resolverContent.content.length}`);
+      console.log(`[DEBUG] Content type: ${resolverContent.contentType}`);
+      console.log(`[DEBUG] Content first 100 chars:`, resolverContent.content.substring(0, 100));
+      console.log(`[DEBUG] Full content for ${ref}:`, JSON.stringify(resolverContent.content));
+      
       const processingResult = await this.contentProcessor.processResolverContent(
         resolverContent.content,
         ref,
         directive
       );
+      
+      console.log(`[DEBUG] Processing result for ${ref}:`, {
+        moduleObjectKeys: Object.keys(processingResult.moduleObject),
+        hasFrontmatter: processingResult.frontmatter !== null
+      });
 
-      if (process.env.MLLD_DEBUG) {
+      if (process.env.MLLD_DEBUG === 'true') {
         console.log(`[ImportDirectiveEvaluator] Processing result for ${ref}:`, {
           moduleObjectKeys: Object.keys(processingResult.moduleObject),
+          moduleObjectSize: Object.keys(processingResult.moduleObject).length,
           hasFrontmatter: processingResult.frontmatter !== null
         });
       }

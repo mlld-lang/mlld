@@ -176,9 +176,11 @@ export class RegistryResolver implements Resolver {
         );
       }
       
-      if (process.env.MLLD_DEBUG) {
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log(`[RegistryResolver] Fetched content from ${sourceUrl}`);
         console.log(`[RegistryResolver] Fetched content length: ${content.length}`);
-        console.log(`[RegistryResolver] First 100 chars:`, content.substring(0, 100));
+        console.log(`[RegistryResolver] First 200 chars:`, content.substring(0, 200));
+        console.log(`[RegistryResolver] Content includes directives:`, content.includes('/var'), content.includes('/exe'));
       }
       
       return {
