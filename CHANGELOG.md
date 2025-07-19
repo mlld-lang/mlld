@@ -5,6 +5,14 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc14]
+
+### Fixed
+- **Serverless environment support**: Fixed cache directory creation in read-only filesystems
+  - Automatically uses `/tmp` for cache in serverless environments (Vercel, AWS Lambda)
+  - Detects serverless by checking for `/var/task` path or environment variables
+  - Enables mlld to run in read-only container environments
+
 ## [2.0.0-rc13]
 
 ### Added
@@ -18,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Now clears immutable import cache in `.mlld/cache/imports/` directory
   - Removes both content files and metadata (`.meta.json` files)
   - Fixes stale import cache issues when remote files are updated
+- **Serverless environment support**: Fixed cache directory creation in read-only filesystems
+  - Automatically uses `/tmp` for cache in serverless environments (Vercel, AWS Lambda)
+  - Detects serverless by checking for `/var/task` path or environment variables
+  - Enables mlld to run in read-only container environments
 
 ## [2.0.0-rc12]
 

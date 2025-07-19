@@ -25,7 +25,15 @@ export class RegistryManager {
     basePath: string,
     config: RegistryConfig = {}
   ) {
-    const mlldDir = path.join(basePath, '.mlld');
+    // In serverless/read-only environments, use /tmp
+    const isServerless = basePath.startsWith('/var/task') || 
+                        process.env.LAMBDA_TASK_ROOT || 
+                        process.env.VERCEL || 
+                        process.env.AWS_LAMBDA_FUNCTION_NAME;
+    
+    const mlldDir = isServerless 
+      ? path.join('/tmp', '.mlld')
+      : path.join(basePath, '.mlld');
     
     // Initialize components
     this.lockFile = new LockFile(
