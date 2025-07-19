@@ -6,7 +6,7 @@ import { parseDirective } from './utils/test-helpers';
 
 describe('Import Directive Debug', () => {
   it('should log the import directive structure', async () => {
-    const input = '/import [path/to/file.mlld]';
+    const input = '/import "path/to/file.mlld"';
     const result = (await parse(input)).ast[0];
     
     // Log the structure so we can see what it looks like
@@ -17,7 +17,7 @@ describe('Import Directive Debug', () => {
 describe('Import Directive Syntax Tests', () => {
   describe('Import Namespace (Shorthand)', () => {
     it('should parse a shorthand namespace import', async () => {
-      const input = '/import [path/to/file.mlld]';
+      const input = '/import "path/to/file.mlld"';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -39,7 +39,7 @@ describe('Import Directive Syntax Tests', () => {
     });
     
     it('should parse a namespace import with explicit alias', async () => {
-      const input = '/import [path/to/file.mlld] as myModule';
+      const input = '/import "path/to/file.mlld" as myModule';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -61,7 +61,7 @@ describe('Import Directive Syntax Tests', () => {
     });
     
     it('should parse a namespace import with path variable and alias', async () => {
-      const input = '/import [@pathVar] as config';
+      const input = '/import "@pathVar" as config';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -81,7 +81,7 @@ describe('Import Directive Syntax Tests', () => {
   
   describe('Import Selected', () => {
     it('should parse a selective import', async () => {
-      const input = '/import { var1, var2 } from [path/to/file.mlld]';
+      const input = '/import { var1, var2 } from "path/to/file.mlld"';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');
@@ -109,7 +109,7 @@ describe('Import Directive Syntax Tests', () => {
     // The test for aliases has been removed as this syntax is no longer supported
     
     it('should parse an import with @var variable in path', async () => {
-      const input = '/import { var1 } from [prefix/@textVar/suffix.mlld]';
+      const input = '/import { var1 } from "prefix/@textVar/suffix.mlld"';
       const result = (await parse(input)).ast[0];
       
       expect(result.type).toBe('Directive');

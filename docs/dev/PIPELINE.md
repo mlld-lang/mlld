@@ -329,6 +329,170 @@ Test coverage includes:
 - Backwards compatibility
 - Multi-stage pipelines with format specified
 
+## Variable Type System Integration (v2.0.0+)
+
+The pipeline system integrates with mlld's Variable type system, which wraps all values with metadata about their source, type, and context.
+
+### Variable Extraction at Pipeline Boundaries
+
+Pipelines operate on raw values, not Variable objects. The system automatically extracts values at pipeline boundaries:
+
+```mlld
+/var @data = `[{"name": "Alice"}, {"name": "Bob"}]`  # Creates a Variable<string>
+/var @result = @data with { format: "json", pipeline: [@extractNames] }
+
+# The pipeline receives the raw string value, not the Variable wrapper
+```
+
+### Resolution Context
+
+The pipeline system uses `ResolutionContext.PipelineInput` to signal that Variables should be extracted:
+
+```typescript
+// In var.ts when processing pipelines
+const stringValue = await resolveValue(variable.value, env, ResolutionContext.PipelineInput);
+```
+
+### PipelineInput Variables
+
+Pipeline stages create special `PipelineInputVariable` types that preserve both the wrapped input and raw text:
+
+```typescript
+export interface PipelineInputVariable extends BaseVariable {
+  type: 'pipeline-input';
+  value: PipelineInput;      // The wrapped input object
+  format: 'json' | 'csv' | 'xml' | 'text';
+  rawText: string;           // Original text for fallback
+}
+```
+
+### Design Principles
+
+1. **Variables flow through data structures** - Arrays and objects can contain Variables
+2. **Extraction at boundaries** - Pipelines, display, and commands extract values
+3. **Type preservation** - Variable metadata flows until extraction is needed
+4. **No surprises** - Consistent behavior based on ResolutionContext
+
+### Implementation Notes
+
+When implementing pipeline features:
+- Use `ResolutionContext.PipelineInput` when passing data to pipelines
+- Preserve Variables in data structures (`ResolutionContext.ArrayElement`, etc.)
+- Extract only at system boundaries (display, file output, command execution)
+- Document extraction points with clear comments explaining WHY
+
+### Resolution Context System
+
+The Variable resolution system uses a context-aware approach to determine when to preserve Variables versus extract raw values:
+
+```typescript
+export enum ResolutionContext {
+  // Preserve Variable wrapper
+  VariableAssignment = 'variable-assignment',
+  VariableCopy = 'variable-copy',
+  ArrayElement = 'array-element',
+  ObjectProperty = 'object-property',
+  FunctionArgument = 'function-argument',
+  DataStructure = 'data-structure',
+  FieldAccess = 'field-access',
+  ImportResult = 'import-result',
+  
+  // Extract raw value
+  StringInterpolation = 'string-interpolation',
+  CommandExecution = 'command-execution',
+  FileOutput = 'file-output',
+  Conditional = 'conditional',
+  Display = 'display',
+  PipelineInput = 'pipeline-input',
+  Truthiness = 'truthiness',
+  Equality = 'equality'
+}
+```
+
+### Context-Aware Resolution API
+
+The system provides three main resolution functions:
+
+```typescript
+// Primary API - context-aware resolution
+export async function resolveVariable(
+  variable: Variable,
+  env: Environment,
+  context: ResolutionContext
+): Promise<Variable | any>
+
+// Explicit extraction when needed
+export async function extractVariableValue(
+  variable: Variable,
+  env: Environment  
+): Promise<any>
+
+// Helper for mixed values (Variable or raw)
+export async function resolveValue(
+  value: Variable | any,
+  env: Environment,
+  context: ResolutionContext
+): Promise<Variable | any>
+```
+
+### PipelineInput Handling
+
+Pipeline inputs receive special handling to support format-aware parsing while maintaining backward compatibility:
+
+```typescript
+// PipelineInput objects have toString() for compatibility
+const input = createPipelineInput(text, format);
+console.log(String(input));  // Returns text property
+
+// But preserve structure for property access
+input.text    // Raw text
+input.data    // Parsed JSON (if format is json)
+input.csv     // Parsed CSV array (if format is csv)
+```
+
+### String Interpolation Edge Case
+
+When PipelineInput objects are used in string interpolation, they must be handled specially to avoid JSON stringification:
+
+```mlld
+/exe @format() = {echo "Result: @input"}
+/run {echo "test"} with { pipeline: [@format] }
+# Should output "Result: test" not "Result: {"text":"test","type":"text"}"
+```
+
+This is handled in the interpolate function:
+
+```typescript
+// Check if this is a PipelineInput object
+if (isPipelineInput(value)) {
+  stringValue = value.toString();  // Uses toString() method
+} else {
+  stringValue = JSON.stringify(value);
+}
+```
+
+### Variable Flow Example
+
+```typescript
+// 1. Variable created with metadata
+/var @jsonData = `[{"id": 1}, {"id": 2}]`  // Variable<string>
+
+// 2. Variable reference preserves wrapper
+/var @copy = @jsonData  // Still Variable<string>
+
+// 3. Pipeline boundary extracts value
+/var @result = @jsonData with { 
+  format: "json", 
+  pipeline: [@extractIds]  // Receives raw string "[{"id": 1}, {"id": 2}]"
+}
+
+// 4. Arrays preserve Variables
+/var @list = [@jsonData, @copy]  // Array<Variable<string>>
+
+// 5. Display extracts for output
+/show @jsonData  // Extracts string value for display
+```
+
 ### Context Management
 
 Pipeline context is managed through the Environment class:

@@ -20,7 +20,7 @@ export const importFixtures: DirectiveFixture[] = [
   {
     name: 'import-namespace',
     description: 'Import directive with namespace (shorthand)',
-    input: '/import [file.md]',
+    input: '/import "file.md"',
     expected: {
       kind: 'import',
       subtype: 'importNamespace',
@@ -55,7 +55,7 @@ export const importFixtures: DirectiveFixture[] = [
   {
     name: 'import-selected',
     description: 'Import directive with selected imports',
-    input: '/import { name } from [file.md]',
+    input: '/import { name } from "file.md"',
     expected: {
       kind: 'import',
       subtype: 'importSelected',
@@ -97,7 +97,7 @@ export const importFixtures: DirectiveFixture[] = [
   {
     name: 'import-with-path-variable',
     description: 'Import directive with path variable using @path format',
-    input: '/import { name } from [@path]',
+    input: '/import { name } from "@path"',
     expected: {
       kind: 'import',
       subtype: 'importSelected',

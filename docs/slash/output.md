@@ -31,19 +31,19 @@ The `/output` directive writes content to various targets including files, strea
 
 ```mlld
 # Output the entire document
-/output [filename.ext]
+/output <filename.ext>
 
 # Output a variable's content
-/output @variable [filename.ext]
+/output @variable <filename.ext>
 
 # Output a template invocation result
-/output @template(arg1, arg2) [filename.ext]
+/output @template(arg1, arg2) <filename.ext>
 
 # Output a command execution result
-/output @command(arg1, arg2) [filename.ext]
+/output @command(arg1, arg2) <filename.ext>
 
 # Output literal text
-/output "text content" [filename.ext]
+/output "text content" <filename.ext>
 ```
 
 ## Description
@@ -56,7 +56,7 @@ The `/output` directive provides flexible ways to write content to various desti
 - **No document output**: The directive itself produces no output in the rendered document
 - **Automatic directory creation**: Creates nested directories as needed for file outputs
 - **Format conversion**: Optional `as format` clause for output formatting
-- **Variable interpolation**: File paths can include variable references in brackets
+- **Variable interpolation**: File paths can include variable references in alligators
 - **Environment integration**: Set environment variables for scripts and tools
 
 ## Examples
@@ -169,7 +169,7 @@ More content for the main document.
    - Paths can be relative (resolved from the current working directory) or absolute
    - Parent directories are created automatically if they don't exist
    - Existing files are overwritten without warning
-   - Supports variable interpolation in bracketed paths
+   - Supports variable interpolation in alligator paths
 
 2. **Stream Output**
    - `stdout`: Writes to standard output

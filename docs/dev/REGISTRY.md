@@ -4,7 +4,7 @@ This guide explains how the mlld registry system works from a developer perspect
 
 ## Overview
 
-The mlld registry is a centralized system where modules are published to a single `modules.json` file in the registry repository. This provides:
+The mlld registry uses a modular architecture where each module has its own file (`modules/{author}/{module}.json`), which are combined into a single `modules.json` for distribution. This provides:
 
 - **Module Resolution**: Maps friendly names like `@author/module` to GitHub URLs or Gists
 - **Versioning**: Modules include version information and mlld compatibility
@@ -16,24 +16,40 @@ The mlld registry is a centralized system where modules are published to a singl
 
 ### Registry Repository Structure
 
-The `github.com/mlld-lang/registry` repository uses a single-file structure:
+The `github.com/mlld-lang/registry` repository uses a modular file structure:
 
 ```
 registry/
 ├── README.md
-├── modules.json         # All published modules
-├── allowlist.json       # Auto-merge allowlist
+├── modules/             # Individual module files
+│   ├── alice/
+│   │   ├── utils.json
+│   │   └── cli.json
+│   └── mlld/
+│       ├── github.json
+│       └── env.json
+├── modules.json         # Generated combined registry
+├── modules.generated.json # Human-readable version
 ├── tools/               # Registry management tools
-│   ├── publish.js
-│   ├── validate.js
-│   └── build-registry.js
+│   ├── build-registry.js # Combines module files
+│   └── validate.js
+├── allowlist.json       # Auto-merge allowlist
 └── llm/                 # LLM-based review system
     └── review-pr.mld
 ```
 
+### How the Modular System Works
+
+1. **Source Files**: Each module is stored in `modules/{author}/{module}.json`
+2. **Pull Requests**: Authors submit PRs that add/update only their module file
+3. **Build Process**: GitHub Actions runs `tools/build-registry.js` on merge
+4. **Validation**: Build script validates all modules and fails if any are invalid
+5. **Output**: Creates `modules.json` (minified) and `modules.generated.json` (formatted)
+6. **Distribution**: The generated `modules.json` is what resolvers fetch
+
 ### Registry Format
 
-The `modules.json` file contains all modules:
+The generated `modules.json` file contains all modules:
 
 ```json
 {

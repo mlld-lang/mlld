@@ -1,8 +1,8 @@
 /var @variable = "value"
-/show ::
+/show :::
 Content with {{variable}}
 
 And some more content
 
 Hey, here's the same variable again: {{variable}}
-::
+:::

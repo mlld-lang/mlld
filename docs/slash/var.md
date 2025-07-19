@@ -13,7 +13,8 @@ The `/var` directive is the unified way to define all types of variables in mlld
 /var @identifier = "value"
 /var @identifier = "Hello @name!"
 /var @identifier = `Template with @variable`
-/var @identifier = ::Template with {{variable}}::
+/var @identifier = ::Template with @variable::
+/var @identifier = :::Template with {{variable}}:::
 /var @identifier = /run "command"
 ```
 
@@ -22,7 +23,8 @@ Where:
 - `value` can be:
   - Quoted strings (with optional @ interpolation in double quotes)
   - Backtick templates (with @ interpolation)
-  - Double-bracket templates (with {{}} interpolation)
+  - Double colon templates (with @ interpolation)
+  - Triple colon templates (with {{}} interpolation)
   - Results from `/run` or other directives
 
 ## Identifier Requirements
@@ -45,7 +47,7 @@ Text values can be defined using different quote styles:
 /var @interpolated = "Hello @name!"        # @ interpolation in double quotes
 /var @literal = 'Single quotes @name'      # Single quotes (no interpolation)
 /var @backtick = `Hello @name!`            # Backtick template with @ interpolation
-/var @template = ::Hello {{name}}!::       # Double-bracket template with {{}} interpolation
+/var @template = :::Hello {{name}}!:::       # Double-bracket template with {{}} interpolation
 ```
 
 For multi-line templates, use double brackets:
@@ -100,7 +102,7 @@ Data structures can reference and execute executable variables:
 
 ```mlld
 /exe @getTimestamp() = "date +%s"
-/exe @formatName(name) = ::{{name}} (formatted)::
+/exe @formatName(name) = :::{{name}} (formatted):::
 
 /var @info = {
   >> Store executable references (not executed)
@@ -146,7 +148,7 @@ Variables are referenced differently based on context:
 /var @name = "World"
 /var @greeting = "Hello, @name!"           # @ interpolation
 /var @welcome = `Welcome, @name!`           # @ in backticks
-/var @message = ::Greetings, {{name}}!::   # {{}} in double colons
+/var @message = :::Greetings, {{name}}!:::   # {{}} in double colons
 /show @greeting
 ```
 
@@ -157,7 +159,7 @@ Access nested fields using dot notation:
 ```mlld
 /var @user = { "name": "Alice", "id": 123 }
 /show @user.name
-/show ::User {{user.name}} has ID {{user.id}}::
+/show :::User {{user.name}} has ID {{user.id}}:::
 
 /var @config = { 
   "app": { 
@@ -165,7 +167,7 @@ Access nested fields using dot notation:
     "version": "1.0.0"
   }
 }
-/show ::Running {{config.app.name}} v{{config.app.version}}::
+/show :::Running {{config.app.name}} v{{config.app.version}}:::
 ```
 
 ### Array Access
@@ -175,7 +177,7 @@ Use dot notation to access array elements:
 ```mlld
 /var @fruits = ["apple", "banana", "cherry"]
 /show @fruits.0                              # "apple"
-/show ::My favorite is {{fruits.1}}::        # "My favorite is banana"
+/show :::My favorite is {{fruits.1}}:::        # "My favorite is banana"
 ```
 
 ## Variable Interpolation
@@ -188,7 +190,7 @@ Different template styles support different interpolation syntax:
 - Array access: `"Score: @scores.0"`
 
 ### Double-Colon Templates ({{}} interpolation)
-- Text variables: `::Hello, {{name}}!::`
+- Text variables: `:::Hello, {{name}}!:::`
 - Field access: `::User: {{user.name}}::`
 - Array access: `::Score: {{scores.0}}::`
 
@@ -217,7 +219,7 @@ Using different template styles:
 /var @name = "World"
 /var @msg1 = "Hello, @name!"              # @ in double quotes
 /var @msg2 = `Greetings, @name!`          # @ in backticks
-/var @msg3 = ::Welcome, {{name}}!::       # {{}} in double colons
+/var @msg3 = :::Welcome, {{name}}!:::       # {{}} in double colons
 ```
 
 ## Error Handling

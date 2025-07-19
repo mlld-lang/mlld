@@ -120,6 +120,7 @@ export class CollectionEvaluator {
   private async evaluateArray(value: DataArrayValue, env: Environment): Promise<any[]> {
     const evaluatedElements: any[] = [];
     
+    
     for (let i = 0; i < value.items.length; i++) {
       try {
         const evaluatedItem = await this.evaluateDataValue(value.items[i], env);

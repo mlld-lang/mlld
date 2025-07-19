@@ -1,2 +1,2 @@
 /var @variable = "value"
-/show ::Content with {{variable}}::
+/show :::Content with {{variable}}:::

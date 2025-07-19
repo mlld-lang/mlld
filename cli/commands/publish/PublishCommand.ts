@@ -298,12 +298,157 @@ export class PublishCommand {
   }
 
   private async submitToRegistry(registryEntry: any, user: any, octokit: any): Promise<void> {
-    // TODO: Implement registry submission logic
-    // This would involve:
-    // 1. Fork the registry repository
-    // 2. Update modules.json
-    // 3. Create a pull request
-    console.log(chalk.blue('Registry submission would happen here'));
-    console.log(chalk.gray(`Registry entry: ${JSON.stringify(registryEntry, null, 2)}`));
+    const REGISTRY_OWNER = 'mlld-lang';
+    const REGISTRY_REPO = 'registry';
+    const BASE_BRANCH = 'main';
+    
+    try {
+      // 1. Check if user has a fork
+      let fork;
+      try {
+        fork = await octokit.repos.get({
+          owner: user.login,
+          repo: REGISTRY_REPO
+        });
+      } catch (error) {
+        // Fork doesn't exist, create it
+        console.log(chalk.blue('Creating fork of registry...'));
+        const forkResult = await octokit.repos.createFork({
+          owner: REGISTRY_OWNER,
+          repo: REGISTRY_REPO
+        });
+        fork = forkResult.data;
+        
+        // Wait for fork to be ready
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+      
+      // 2. Sync fork with upstream
+      try {
+        await octokit.repos.mergeUpstream({
+          owner: user.login,
+          repo: REGISTRY_REPO,
+          branch: BASE_BRANCH
+        });
+      } catch (error) {
+        // Sync might fail if fork is already up to date
+      }
+      
+      // 3. Create file path - MODULAR APPROACH
+      const filePath = `modules/${registryEntry.author}/${registryEntry.name}.json`;
+      
+      // 4. Check if module already exists
+      let existingFile;
+      let existingSha;
+      try {
+        existingFile = await octokit.repos.getContent({
+          owner: REGISTRY_OWNER,
+          repo: REGISTRY_REPO,
+          path: filePath,
+          ref: BASE_BRANCH
+        });
+        
+        if ('sha' in existingFile.data) {
+          existingSha = existingFile.data.sha;
+        }
+      } catch (error) {
+        // File doesn't exist, which is fine for new modules
+      }
+      
+      // 5. Prepare module content
+      const moduleContent = {
+        ...registryEntry,
+        publishedAt: new Date().toISOString(),
+        publishedBy: user.id
+      };
+      
+      // Remove internal fields
+      delete moduleContent.ownerGithubUserIds; // This is set by the registry
+      
+      // 6. Create branch name
+      const action = existingFile ? 'update' : 'add';
+      const timestamp = Date.now();
+      const branchName = `${action}-${registryEntry.author}-${registryEntry.name}-${timestamp}`;
+      
+      // 7. Create branch
+      const mainRef = await octokit.git.getRef({
+        owner: user.login,
+        repo: REGISTRY_REPO,
+        ref: `heads/${BASE_BRANCH}`
+      });
+      
+      await octokit.git.createRef({
+        owner: user.login,
+        repo: REGISTRY_REPO,
+        ref: `refs/heads/${branchName}`,
+        sha: mainRef.data.object.sha
+      });
+      
+      // 8. Create or update file
+      const fileContent = JSON.stringify(moduleContent, null, 2) + '\n';
+      const contentBase64 = Buffer.from(fileContent).toString('base64');
+      
+      await octokit.repos.createOrUpdateFileContents({
+        owner: user.login,
+        repo: REGISTRY_REPO,
+        path: filePath,
+        message: existingFile 
+          ? `Update @${registryEntry.author}/${registryEntry.name} to v${registryEntry.version}`
+          : `Add @${registryEntry.author}/${registryEntry.name}`,
+        content: contentBase64,
+        branch: branchName,
+        sha: existingSha // Required only for updates
+      });
+      
+      // 9. Create pull request
+      const prBody = `## Module Submission
+
+**Module**: \`@${registryEntry.author}/${registryEntry.name}\`
+**Version**: ${registryEntry.version}
+**Author**: @${registryEntry.author}
+**Description**: ${registryEntry.about}
+
+### Source
+- **Type**: ${registryEntry.source.type}
+- **URL**: ${registryEntry.source.url}
+- **Hash**: \`${registryEntry.source.contentHash}\`
+
+### Module Metadata
+\`\`\`json
+${JSON.stringify(moduleContent, null, 2)}
+\`\`\`
+
+### Automated Checks
+- [ ] Valid module structure
+- [ ] Required fields present
+- [ ] Source URL accessible
+- [ ] Content hash verified
+- [ ] License is CC0
+
+---
+*This PR was created by \`mlld publish\`*`;
+
+      const pr = await octokit.pulls.create({
+        owner: REGISTRY_OWNER,
+        repo: REGISTRY_REPO,
+        title: existingFile 
+          ? `Update @${registryEntry.author}/${registryEntry.name} to v${registryEntry.version}`
+          : `Add @${registryEntry.author}/${registryEntry.name}`,
+        body: prBody,
+        head: `${user.login}:${branchName}`,
+        base: BASE_BRANCH
+      });
+      
+      console.log(chalk.green(`\n✅ Pull request created: ${pr.data.html_url}`));
+      console.log(chalk.blue('\nYour module will be reviewed and added to the registry once approved.'));
+      
+    } catch (error) {
+      if (error.response?.data?.message) {
+        console.error(chalk.red('GitHub API Error:'), error.response.data.message);
+      } else {
+        console.error(chalk.red('Failed to submit to registry:'), error.message);
+      }
+      throw error;
+    }
   }
 }

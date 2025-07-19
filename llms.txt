@@ -89,7 +89,8 @@ This design keeps documents readable as regular Markdown while enabling programm
 - Backtick templates: `` `Hello @name!` `` - @name IS interpolated (PREFERRED)
 - String literals: `/var @msg = "Hello @name"` - @name is NOT interpolated (literal text)
 - Command context: `{echo "Hello @name"}` - @name IS interpolated (variable value)
-- Double-bracket escape hatch: `::Hello {{name}}::` - For social media with many @ symbols
+- Double-colon escape: `::Hello @name!::` - For text with backticks (uses @var interpolation)
+- Triple-colon escape: `:::Hello {{name}}!:::` - For social media with many @ symbols
 
 ### 6. Field Access Rules
 ```mlld
@@ -114,20 +115,83 @@ This design keeps documents readable as regular Markdown while enabling programm
 /show @welcome("Bob", "developer")
 ```
 
-### 8. File Dereferencing with Brackets
+### 8. File Loading with Angle Brackets (Alligators)
 
-**Key Concept**: Brackets `[...]` mean "give me the contents of this file", not the filename itself.
+**Key Concept**: Angle brackets `<...>` mean "give me the contents of this file", not the filename itself.
 
 ```mlld
-/var @content = [README.md]      << Loads file contents into @content
+/var @content = <README.md>      << Loads file contents into @content
 /var @path = "README.md"         << Stores the string "README.md" in @path
 
-/show [config.json]              << Shows contents of config.json
+/show <config.json>              << Shows contents of config.json
 /show "config.json"              << Shows the text "config.json"
 
 >> Same principle applies everywhere:
-/import { data } from [local/data.json]    << Imports from file contents
-/exe @docs = [./documentation.md]          << Loads documentation content
+/import { data } from <local/data.json>    << Imports from file contents
+/exe @docs = <./documentation.md>          << Loads documentation content
+
+>> Arrays vs File Loading - Crystal Clear Distinction:
+/var @array = [1, 2, 3]          << Square brackets = array literal
+/var @files = ["a.md", "b.md"]   << Array of strings (filenames)
+/var @content = <README.md>      << Angle brackets = load file contents
+/var @contents = [<a.md>, <b.md>]  << Array of loaded file contents!
+```
+
+### 8.1 File Reference Interpolation
+
+**MAJOR FEATURE**: File references can now be interpolated directly in strings and templates!
+
+**Smart Detection**: Only `<...>` containing `.`, `/`, `*`, or `@` are treated as file references. This means XML tags like `<thinking>` or `<answer>` work normally.
+
+```mlld
+>> Basic interpolation in templates:
+/var @greeting = `Welcome! Here's our readme: <README.md>`
+/var @docs = "Documentation: <docs/guide.md>"
+
+>> Field access on loaded files:
+/var @pkgName = `Project: <package.json>.name`
+/var @author = `Author: <package.json>.author.email`
+/var @firstUser = `Admin: <users.json>[0].name`
+
+>> With glob patterns:
+/var @titles = `<docs/*.md>.fm.title`     << Gets all markdown titles
+/var @files = `Found: <src/**/*.js>.filename`  << All JS filenames
+
+>> Special <> placeholder in 'as' templates:
+/var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
+/var @modules = <*.mld.md> as "## <>.fm.name by <>.fm.author"
+
+>> XML tags work normally (no special chars):
+/var @prompt = `<thinking>Consider the options</thinking>`
+/var @xml = "<user>Alice</user> sent <message>Hello</message>"
+```
+
+### 8.2 Pipe Transformations
+
+**Condensed Pipe Syntax**: Transform data inline with `|@transform` (no spaces!).
+
+```mlld
+>> File reference pipes:
+/var @formatted = `<data.json>|@json`         << Pretty-print JSON
+/var @xmlData = `<data.json>|@json|@xml`     << JSON to XML
+/var @upper = `<readme.md>|@upper`           << Uppercase content
+
+>> Variable pipes in templates:
+/var @name = "alice"
+/var @greeting = `Hello @name|@upper!`       << "Hello ALICE!"
+/var @data = {"user": "bob", "role": "admin"}
+/var @output = `User data: @data|@json`      << Pretty JSON
+
+>> Pipes with field access:
+/var @title = `<package.json>.name|@upper`
+/var @sorted = `<data.json>.items|@sort|@json`
+
+>> Available transforms:
+>> @json - Pretty-print JSON
+>> @xml - Convert to XML format  
+>> @upper/@lower - Case conversion
+>> @trim - Remove whitespace
+>> Plus any transforms from imported modules
 ```
 
 ### 9. Import Patterns
@@ -139,20 +203,42 @@ This design keeps documents readable as regular Markdown while enabling programm
 /import { parallel, retry } from @mlld/core
 /import { utils } from @company/utils
 
->> PATH imports (WITH BRACKETS for resolver paths):
-/import { readme } from [@./README.md]
-/import { config } from [@PROJECTPATH/config.mld]
-/import { shared } from [@local/utils.mld]
+>> PATH imports (WITH ANGLE BRACKETS for resolver paths):
+/import { readme } from <@base/README.md>
+/import { config } from <@base/config.mld>
+/import { shared } from <@local/utils.mld>
 
 >> Regular path imports (quotes, no @ prefix):
 /import { helper, config } from "./utils.mld"
 ```
 
-**Why brackets matter:**
-- `[@./file.md]` - Brackets tell mlld "resolve this path and read the file"
-- `@author/module` - No brackets means "resolve this as a module reference"
+**Why angle brackets matter:**
+- `<@base/file.md>` - Angle brackets tell mlld "resolve this path and read the file"
+- `@author/module` - No angle brackets means "resolve this as a module reference"
 
-Without brackets, `@./file` would be treated as trying to import from a user named "." - which is why you might see errors like "User '.' not found in registry".
+Without angle brackets, `@base/file` would be treated as trying to import from a user named "base" - which is why you might see errors like "User 'base' not found in registry".
+
+### 9.1 'As' Template Syntax for Globs
+
+**Power Feature**: Process multiple files with templates using `as`:
+
+```mlld
+>> The <> placeholder represents the current file:
+/var @docs = <*.md> as "# <>.filename"
+/var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
+
+>> With section extraction:
+/var @summaries = <posts/*.md # summary> as "## <>.fm.title\n<>.content"
+
+>> Complex templates:
+/var @modules = <modules/*.mld> as `
+### <>.fm.name (<>.fm.version)
+Author: <>.fm.author
+Path: <>.relative
+`
+
+>> Note: <> only works in 'as' templates, not elsewhere
+```
 
 ### 10. Conditional Logic with /when
 
@@ -293,9 +379,9 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /var @date = run "date"
 /var @files = run {ls -la | head -5}
 
->> File content - brackets dereference (load file contents)
-/var @readme = [README.md]              << Gets file contents
-/var @section = [docs.md # Installation]  << Gets specific section
+>> File content - angle brackets dereference (load file contents)
+/var @readme = <README.md>              << Gets file contents
+/var @section = <docs.md # Installation>  << Gets specific section
 /var @filename = "README.md"            << Gets literal string "README.md"
 
 >> Code execution
@@ -320,15 +406,22 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /show `Count: @count`  << Shows "Count: 42" (number → string)
 ```
 
-### Double-bracket templates (ESCAPE HATCH ONLY)
+### Double-colon templates (ESCAPE for backticks)
 ```mlld
->> ONLY use ::...:: when you have many @ symbols to escape (social media)
-/var @tweet = ::Hey @{{handle}}, check out @{{otherHandle}}'s post!::
+>> Use ::...:: when you need backticks in your template
+/var @docs = ::The `getData()` function returns @dataType::
+/var @example = ::To use this feature, run `npm install` and then call `init(@name)`::
 
->> Limitations of ::...:: templates:
->> - Cannot call @executables
->> - More verbose {{variable}} syntax
->> - Only for avoiding @ symbol conflicts
+>> Double colon uses @var interpolation (same as backticks)
+```
+
+### Triple-colon templates (ESCAPE for @ symbols)  
+```mlld
+>> Use :::...::: when you have many @ symbols to escape (social media)
+/var @tweet = :::Hey @alice, check out @bob's post about {{topic}}!:::
+/var @mention = :::@{{handle}} just posted: "{{message}}":::
+
+>> Triple colon uses {{var}} interpolation to avoid @ conflicts
 ```
 
 ### @ interpolation in double quotes
@@ -336,6 +429,47 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /var @greeting = "Hello @name!"    >> @ variables work in double quotes
 /run "echo User: @username"         >> Works in quoted commands
 /run {echo "Welcome @user.name"}    >> And in brace commands
+```
+
+### File References in Templates
+```mlld
+>> Include file content in any interpolation context
+/var @readme = `<README.md>`                    >> Load entire file
+/var @author = `<package.json>.author`         >> JSON field access
+/var @email = `<data.json>.users[0].email`     >> Array access
+/var @formatted = `<data.json>|@json`          >> With transformation
+
+>> Works in all interpolation contexts:
+/show `Documentation: <docs/api.md>`            >> In backticks
+/run "cat <config.txt>"                         >> In quoted strings
+/run {echo "<version.txt>"}                     >> In command braces
+/var @content = ::<changelog.md>::             >> In double-colon templates
+
+>> Variable substitution in paths
+/var @dir = "docs"
+/var @file = "readme"
+/var @content = `<@dir/@file.md>`              >> Dynamic paths
+
+>> Glob patterns
+/var @allDocs = `<*.md>`                        >> All markdown files
+/var @tests = `<tests/*.txt>`                   >> Pattern matching
+
+>> Circular reference protection
+>> If file A includes <B.txt> and B includes <A.txt>, returns empty
+```
+
+### Variable Pipes
+```mlld
+>> Transform variables with pipe syntax
+/var @data = {"name": "alice", "age": 30}
+/var @dataXml = @data|@json|@xml               >> Convert to XML
+
+>> Works with field access
+/var @config = {"format": "yaml"}
+/var @formatted = @config|@json                 >> Pretty print JSON
+
+>> Available transforms:
+>> @json, @xml, @csv, @md                    >> Format conversions
 ```
 
 ## Exe - Defining Reusable Commands
@@ -369,7 +503,7 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /exe @greet(name) = `Hello @name!`
 
 >> Section executable
-/exe @getIntro(file) = [@file # Introduction]
+/exe @getIntro(file) = <@file # Introduction>
 ```
 
 ## Conditional Logic (/when)
@@ -403,7 +537,7 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /import @corp/utils as corpUtils  << Custom namespace
 
 >> Environment variables (must be in mlld.lock.json)
-/import { API_KEY, NODE_ENV } from @INPUT
+/import { API_KEY, NODE_ENV } from @input
 ```
 
 ## Paths
@@ -507,12 +641,12 @@ Understanding when to use `run` vs `sh` is critical for shell commands:
 
 ### Template with many @ symbols
 ```mlld
->> Use ::...:: when you have many @ symbols to escape
-/var @twitterTemplate = ::
+>> Use :::...::: when you have many @ symbols to escape
+/var @twitterTemplate = :::
   Hey @{{handle}}, love your work!
   @{{otherHandle}} you should check this out.
   Reply to this tweet @{{originalAuthor}}
-::
+:::
 ```
 
 ### Field access
@@ -587,6 +721,19 @@ For complex operations, create modules instead of inline scripts:
 /var @config = {}         << CORRECT - unified /var
 /show @content           << CORRECT - new name
 /exe @cmd = run {ls}     << CORRECT - shortened name
+```
+
+### ❌ Confusing file references with HTML
+```mlld
+>> File references require . * or @ to be recognized
+<div>content</div>        << Plain text (no . * or @)
+<file.txt>                << File reference (has .)
+<*.md>                    << File reference (has *)
+<@dir/file>               << File reference (has @)
+
+>> In interpolation contexts only! Outside templates, < is literal
+This <file.txt> is literal text    << Not in directive line
+/show `Content: <file.txt>`         << File reference in template
 ```
 
 ## Creating Helper Functions
@@ -699,10 +846,10 @@ Remember: If you're wishing mlld had a feature, you can probably create it as a 
 
 ### Reserved Variables
 ```mlld
-/show `Current time: @NOW`         # Current timestamp
-/show `Input data: @INPUT.config`  # Access stdin/env vars  
-/show `Project root: @PROJECTPATH` # Project directory
-/show @DEBUG                       # Show extensive debug info
+/show `Current time: @now`         # Current timestamp
+/show `Input data: @input.config`  # Access stdin/env vars  
+/show `Project root: @base`        # Project directory
+/show @debug                       # Show extensive debug info
 ```
 
 ### Environment Variables
@@ -715,9 +862,9 @@ Environment variables require explicit permission in `mlld.lock.json`:
 }
 ```
 
-Then access them via @INPUT:
+Then access them via @input:
 ```mlld
-/import { NODE_ENV, API_KEY } from @INPUT
+/import { NODE_ENV, API_KEY } from @input
 /show `Running in @NODE_ENV mode with API access`
 ```
 
@@ -735,11 +882,11 @@ author: Your Name
 ### URL Support
 ```mlld
 >> Add content from URLs directly:
-/show [https://raw.githubusercontent.com/example/repo/main/README.md]
+/show <https://raw.githubusercontent.com/example/repo/main/README.md>
 
 >> Assign URL content to variables:
 /path @docs = "https://example.com/api-docs.md"
-/var @readme = [https://example.com/README.md]
+/var @readme = <https://example.com/README.md>
 ```
 
 ## Pipelines and Transformers
@@ -759,14 +906,14 @@ mlld supports Unix-style pipelines for chaining commands:
 
 ### How Pipelines Work
 - Output flows left to right (stdin)
-- Each step gets an @INPUT variable with the piped data
+- Each step gets an @input variable with the piped data
 - Functions without arguments get smart parameter handling
 - Each step runs in a child environment
 - Use `with { format: "json|csv|xml|text" }` to specify parsing
 
 ### Smart Parameter Handling
 
-Single parameter functions automatically receive @INPUT:
+Single parameter functions automatically receive @input:
 ```mlld
 /exe @double(n) = js {(@n * 2)}
 /var @result = run {echo "5"} | @double  # n = "5"
@@ -793,7 +940,7 @@ mlld includes transformers for common formats (both UPPERCASE and lowercase):
 /var @users = run {curl api.com/users} | @json | @csv
 
 >> Chain with custom functions
-/exe @addTotal(data) = ::Total: {{data.length}} items\n{{INPUT}}::
+/exe @addTotal(data) = ::Total: {{data.length}} items\n{{input}}::
 /var @report = run {cat data.json} | @json | @addTotal | @md
 ```
 
@@ -858,9 +1005,10 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 
 ### 4. Mixing Variable Syntaxes
 ```mlld
-❌ /show ::Hello @name::           # Wrong syntax in template
+❌ /show :::Hello @name:::         # Wrong syntax in triple-colon template
 ❌ /run {echo "{{message}}"}       # Wrong syntax in command
-✅ /show ::Hello {{name}}::        # Correct template syntax
+✅ /show ::Hello @name::           # Correct double-colon syntax
+✅ /show :::Hello {{name}}:::      # Correct triple-colon syntax
 ✅ /run {echo "@message"}          # Correct command syntax
 
 >> String literal vs command context example:
@@ -909,13 +1057,13 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 ### 8. Import Bracket Confusion
 ```mlld
 ❌ WRONG: Forgetting brackets for path imports
-/import { readme } from @./README.md      # Error: "User '.' not found in registry"
-/import { config } from @PROJECTPATH/config.mld  # Error: "User 'PROJECTPATH' not found"
+/import { readme } from @base/README.md      # Error: "User 'base' not found in registry"
+/import { config } from @local/config.mld    # Error: "User 'local' not found"
 
-✅ RIGHT: Use brackets for resolver paths
-/import { readme } from [@./README.md]          # Path import needs brackets
-/import { config } from [@PROJECTPATH/config.mld]  # Resolver path needs brackets
-/import { utils } from @company/utils           # Module import - NO brackets
+✅ RIGHT: Use angle brackets for resolver paths
+/import { readme } from <@base/README.md>        # Path import needs angle brackets
+/import { config } from <@local/config.mld>      # Resolver path needs angle brackets
+/import { utils } from @company/utils            # Module import - NO angle brackets
 ```
 
 ### 9. JavaScript Confusion
@@ -1007,8 +1155,8 @@ mlld shines when orchestrating external tools and data. Here are patterns that s
 
 ### Pattern 3: Conditional Workflows
 ```mlld
->> Environment variables via @INPUT (requires mlld.lock.json allowedEnv)
-/import { NODE_ENV, API_KEY } from @INPUT
+>> Environment variables via @input (requires mlld.lock.json allowedEnv)
+/import { NODE_ENV, API_KEY } from @input
 
 /exe @loadConfig(env) = run {cat "./config/@env.json"}
 /var @config = @loadConfig(@NODE_ENV)
@@ -1138,7 +1286,7 @@ mlld 1.4+ introduces a resolver system with customizable prefixes that "open doo
 ### Key Concepts
 - **Prefix**: An @ symbol that opens access to data (e.g., `@lib/`, `@company/`)
 - **Resolver**: The data provider that handles requests for a prefix (e.g., LOCAL, GITHUB, REGISTRY)
-- **Built-in Resolvers**: Special resolvers like @NOW, @DEBUG that don't need prefixes
+- **Built-in Resolvers**: Special resolvers like @now, @debug that don't need prefixes
 - **Registry**: The REGISTRY resolver that ONLY provides validated modules from registries
 
 ### Quick Setup with CLI Commands
@@ -1257,10 +1405,10 @@ Usage:
 - **REGISTRY**: Special - ONLY provides validated modules from registries
 
 **Built-in resolvers (no prefix needed)**:
-- **NOW**: Dynamic timestamps (`@NOW`, not `@now/`)
-- **DEBUG**: Environment info (`@DEBUG`, not `@debug/`)
-- **INPUT**: Stdin/env data (`@INPUT`, not `@input/`)
-- **PROJECTPATH**: Project root (`@PROJECTPATH` or `@.`)
+- **now**: Dynamic timestamps (`@now`, not `@now/`)
+- **debug**: Environment info (`@debug`, not `@debug/`)
+- **input**: Stdin/env data (`@input`, not `@input/`)
+- **base**: Project root (`@base`, not `@base/`)
 
 ### Configuration Files
 
@@ -1354,16 +1502,18 @@ Understanding where different variable syntaxes work is crucial:
 
 | Context | Syntax | Example | Notes |
 |---------|--------|---------|-------|
-| Templates `::...::` | `{{variable}}` | `::Hello {{name}}!::` | Double brackets, double braces |
-| Backtick templates | `@variable` | `` `Hello @name!` `` | Simpler template syntax |
+| Double-colon `::...::` | `@variable` | `::Hello @name!::` | When you need backticks |
+| Triple-colon `:::...:::` | `{{variable}}` | `:::Hello {{name}}!:::` | When you have many @ symbols |
+| Backtick templates | `@variable` | `` `Hello @name!` `` | Primary template syntax |
 | Commands `{...}` | `@variable` | `{echo "@message"}` | @ prefix for interpolation |
 | JavaScript | Plain names | `{(@array.join(@sep))}` | Parameters are JS variables |
 | String literals | No interpolation | `"Hello @name"` | @name is literal text |
 | Directive level | `@variable` | `/show @greeting` | Direct variable reference |
 
 ### Key Rules:
-- **In templates**: Always use `{{variable}}` or `{{object.field}}`
-- **In backtick templates**: Use `@variable` or `@object.field`
+- **In backtick templates**: Use `@variable` or `@object.field` (primary syntax)
+- **In double-colon templates**: Use `@variable` or `@object.field` (for text with backticks)
+- **In triple-colon templates**: Use `{{variable}}` or `{{object.field}}` (for text with @ symbols)
 - **In commands**: Always use `@variable` or `@object.field`
 - **In JavaScript**: Parameters become plain JavaScript variables
 - **String assignments**: Variables are NOT interpolated (they're literals)

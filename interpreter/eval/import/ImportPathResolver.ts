@@ -31,7 +31,7 @@ export class ImportPathResolver {
     // Convert path to node array for consistent processing
     const pathNodes = this.normalizePathNodes(pathValue, directive);
 
-    // Check for special imports first (INPUT, stdin, resolvers)
+    // Check for special imports first (input, stdin, resolvers)
     const specialImport = await this.detectSpecialImports(pathNodes, directive);
     if (specialImport) {
       return specialImport;
@@ -54,13 +54,24 @@ export class ImportPathResolver {
     } else if (Array.isArray(pathValue)) {
       // Normal case: pathValue is already an array of nodes
       return pathValue;
+    } else if (pathValue && typeof pathValue === 'object' && pathValue.type === 'path') {
+      // Handle path objects (e.g., URL paths in brackets: [https://example.com/file.mld])
+      if (pathValue.subtype === 'urlPath' && pathValue.values?.url) {
+        // URL path - extract the URL content
+        return pathValue.values.url;
+      } else if (pathValue.values?.path) {
+        // Regular path object - extract the path content
+        return pathValue.values.path;
+      } else {
+        throw new Error('Invalid path object structure in import directive');
+      }
     } else {
-      throw new Error('Import directive path must be a string or array of nodes');
+      throw new Error('Import directive path must be a string, array of nodes, or path object');
     }
   }
 
   /**
-   * Detect special imports (@INPUT, @stdin, resolver imports)
+   * Detect special imports (@input, @stdin, resolver imports)
    */
   private async detectSpecialImports(
     pathNodes: ContentNodeArray, 
@@ -78,15 +89,15 @@ export class ImportPathResolver {
       if (content === '@INPUT' || content === '@input') {
         return {
           type: 'input',
-          resolvedPath: '@INPUT',
-          resolverName: 'INPUT'
+          resolvedPath: '@input',
+          resolverName: 'input'
         };
       } else if (content === '@stdin') {
         // Silently handle @stdin for backward compatibility
         return {
           type: 'input',
-          resolvedPath: '@INPUT',
-          resolverName: 'INPUT'
+          resolvedPath: '@input',
+          resolverName: 'input'
         };
       }
     }
@@ -95,18 +106,18 @@ export class ImportPathResolver {
     if (firstNode.type === 'VariableReference') {
       const varRef = firstNode as any;
       
-      // Handle @INPUT/@input/@stdin as variable references
+      // Handle @input/@stdin as variable references
       if (varRef.identifier === 'INPUT' || varRef.identifier === 'input') {
         return {
           type: 'input',
-          resolvedPath: '@INPUT',
-          resolverName: 'INPUT'
+          resolvedPath: '@input',
+          resolverName: 'input'
         };
       } else if (varRef.identifier === 'stdin') {
         return {
           type: 'input',
-          resolvedPath: '@INPUT',
-          resolverName: 'INPUT'
+          resolvedPath: '@input',
+          resolverName: 'input'
         };
       }
 
@@ -169,7 +180,7 @@ export class ImportPathResolver {
   }
 
   /**
-   * Handle module reference imports (@user/module, @TIME, etc.)
+   * Handle module reference imports (@user/module, @now, etc.)
    */
   private async handleModuleReference(
     importPath: string,

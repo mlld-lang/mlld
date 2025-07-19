@@ -29,7 +29,7 @@ import type { CacheManager } from './CacheManager';
 export interface ImportResolverDependencies {
   fileSystem: IFileSystemService;
   pathService: IPathService;
-  basePath: string;
+  basePath: string; // File directory for relative imports
   cacheManager: CacheManager;
   getSecurityManager: () => SecurityManager | undefined;
   getRegistryManager: () => RegistryManager | undefined;
@@ -46,6 +46,7 @@ export interface ImportResolverDependencies {
     maxResponseSize: number;
     timeout: number;
   };
+  getProjectRoot?: () => string; // Project root for module resolution
 }
 
 /**
@@ -84,6 +85,11 @@ export interface IImportResolver {
     security?: import('@core/types/primitives').SecurityOptions,
     configuredBy?: string
   ): Promise<string>;
+  fetchURLWithMetadata(url: string): Promise<{
+    content: string;
+    headers: Record<string, string>;
+    status: number;
+  }>;
   
   // Import tracking
   isImporting(path: string): boolean;
@@ -160,6 +166,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       return this.fetchURL(pathOrUrl);
     }
     const resolvedPath = await this.resolvePath(pathOrUrl);
+    
     return this.dependencies.fileSystem.readFile(resolvedPath);
   }
   
@@ -167,6 +174,19 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     // Handle special path variables
     if (inputPath.startsWith('@PROJECTPATH')) {
       inputPath = inputPath.replace('@PROJECTPATH', await this.getProjectPath());
+    }
+    
+    // Handle URL-relative resolution when current file is a URL
+    const currentFile = this.dependencies.getCurrentFilePath?.();
+    if (currentFile && this.isURL(currentFile) && !this.isURL(inputPath) && !path.isAbsolute(inputPath)) {
+      try {
+        // Resolve relative path against current URL
+        const resolvedURL = new URL(inputPath, currentFile);
+        return resolvedURL.toString();
+      } catch (error) {
+        // If URL resolution fails, fall back to file-based resolution
+        console.warn(`Failed to resolve relative URL ${inputPath} against ${currentFile}:`, error);
+      }
     }
     
     // Use the path module that's already imported
@@ -266,7 +286,12 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
   }
   
   async getProjectPath(): Promise<string> {
-    // Walk up from basePath to find project root
+    // If getProjectRoot is available, use it (new PathContext mode)
+    if (this.dependencies.getProjectRoot) {
+      return this.dependencies.getProjectRoot();
+    }
+    
+    // Legacy mode: Walk up from basePath to find project root
     let current = this.dependencies.basePath;
     
     while (current !== path.dirname(current)) {
@@ -409,7 +434,17 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
         throw new Error(`Response too large: ${content.length} bytes`);
       }
       
-      // For imports, check approval and cache in immutable cache
+      /**
+       * Import approval security check
+       * WHY: Remote imports can introduce malicious code. Users must review and
+       * approve content before it executes in their environment.
+       * SECURITY: Content hash-based approval ensures imported code cannot change
+       * after review. Immutable cache prevents TOCTOU attacks where content
+       * changes between approval and execution.
+       * GOTCHA: Approval happens on first import only. Subsequent imports use
+       * the immutable cache, even if remote content has changed.
+       * CONTEXT: Can be bypassed with --approve-all flag for trusted environments.
+       */
       const approveAllImports = this.dependencies.getApproveAllImports();
       if (forImport && this.getImportApproval() && !approveAllImports) {
         const approved = await this.getImportApproval()!.checkApproval(url, content);
@@ -464,6 +499,65 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     
     // Fall back to existing fetchURL method
     return this.fetchURL(url);
+  }
+  
+  /**
+   * Fetch URL with full response metadata for content loading
+   */
+  async fetchURLWithMetadata(url: string): Promise<{
+    content: string;
+    headers: Record<string, string>;
+    status: number;
+  }> {
+    // Transform Gist URLs to raw URLs
+    if (GistTransformer.isGistUrl(url)) {
+      url = await GistTransformer.transformToRaw(url);
+    }
+    
+    // Validate URL
+    await this.validateURL(url);
+    
+    // Get timeout and max size from config
+    const urlConfig = this.dependencies.getURLConfig();
+    const defaultOptions = this.dependencies.getDefaultUrlOptions();
+    const timeout = urlConfig?.timeout || defaultOptions.timeout;
+    const maxSize = urlConfig?.maxSize || defaultOptions.maxResponseSize;
+    
+    // Fetch with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+      
+      // Check content size
+      const content = await response.text();
+      if (content.length > maxSize) {
+        throw new Error(`Response too large: ${content.length} bytes`);
+      }
+      
+      // Extract headers
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+      
+      return {
+        content,
+        headers,
+        status: response.status
+      };
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timed out after ${timeout}ms`);
+      }
+      throw error;
+    }
   }
   
   // --- Import Tracking ---

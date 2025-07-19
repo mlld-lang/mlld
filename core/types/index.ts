@@ -27,6 +27,7 @@ export * from './run';
 export * from './output';
 export * from './when';
 export * from './var'; // New unified var directive
+export * from './load-content'; // Load content types and utilities including URL metadata
 
 // Import node types for the MlldNode union
 import {
@@ -45,7 +46,8 @@ import {
   SectionMarkerNode,
   SourceLocation,
   ExecInvocation,
-  NegationNode
+  NegationNode,
+  FileReferenceNode
 } from './nodes';
 
 /**
@@ -70,7 +72,8 @@ export type MlldNode =
   | NewlineNode
   | SectionMarkerNode
   | ExecInvocation
-  | NegationNode;
+  | NegationNode
+  | FileReferenceNode;
 
 // =========================================================================
 // VARIABLE TYPES
@@ -235,5 +238,6 @@ export {
   isCodeFenceNode,
   isVariableReferenceNode,
   isLiteralNode,
-  isNegationNode
+  isNegationNode,
+  isFileReferenceNode
 } from './guards';

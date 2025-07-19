@@ -3,17 +3,95 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 VarRHSContent "var assignment value"
-  = ForeachSectionExpression    // foreach [@array.field # section] as [[template]]
-  / ForeachCommandExpression    // foreach @command(@arrays)
-  / FieldAccessExecPattern      // NEW: Field access exec invocations @obj.method()
+  = ForeachCommandExpression    // foreach @command(@arrays)
+  / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
+  / TemplateWithPipeline        // Template content with pipeline support
   / TemplateStyleInterpolation  // Handles backtick, [[...]], double/single quotes
   / DataObjectLiteral           // Use data-context object parsing for proper typing
-  / DataBracketAmbiguous        // Use data context version for proper string unwrapping
+  / ArrayLiteral                // Arrays: [1, 2, 3] - always arrays!
+  / AlligatorExpression         // File/URL loading: <file.md> - always loading! (includes transform/rename)
+  / VariableWithSpacedPipes     // Variable references @var with spaced or unspaced pipes
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
   / PrimitiveValue              // Direct primitives: 42, true, false, null
+
+// Note: AlligatorWithTransform was removed because AlligatorExpression 
+// already handles "as" clauses internally in alligator.peggy
+
+// TEMPLATE WITH PIPELINE - Handles template content (quoted/backtick) followed by pipes
+TemplateWithPipeline "template with pipeline"
+  = template:TemplateStyleInterpolation pipes:CondensedPipeChain {
+      helpers.debug('TemplateWithPipeline matched', { 
+        template: template.wrapperType,
+        pipelineCount: pipes.length
+      });
+      
+      // Extract the actual content from the template
+      const content = template.content || [helpers.createNode(NodeType.Text, { content: '', location: location() })];
+      
+      // Convert condensed pipes to pipeline format
+      const pipeline = pipes.map(pipe => ({
+        identifier: [helpers.createVariableReferenceNode('varIdentifier', { 
+          identifier: pipe.name 
+        }, location())],
+        args: pipe.args || [],
+        fields: [],
+        rawIdentifier: pipe.name,
+        rawArgs: pipe.args || []
+      }));
+      
+      return {
+        content: content,
+        wrapperType: template.wrapperType,
+        withClause: {
+          pipeline: pipeline
+        }
+      };
+    }
+
+// VARIABLE WITH SPACED PIPES - Allows both "@var | @pipe" and "@var|@pipe" in var RHS
+VariableWithSpacedPipes "variable with flexible pipe syntax"
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* firstPipe:(_ "|" _ "@" transform:BaseIdentifier { return transform; })? restPipes:SpacedOrCondensedPipe* {
+      const normalizedId = helpers.normalizePathVar(id);
+      const varRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+      
+      // Collect all pipes
+      const pipes = [];
+      if (firstPipe) {
+        pipes.push({
+          type: 'CondensedPipe',
+          transform: firstPipe,
+          hasAt: true
+        });
+      }
+      if (restPipes && restPipes.length > 0) {
+        pipes.push(...restPipes);
+      }
+      
+      if (pipes.length > 0) {
+        return {
+          ...varRef,
+          pipes: pipes
+        };
+      }
+      
+      return varRef;
+    }
+
+// Flexible pipe pattern for var RHS - allows whitespace
+SpacedOrCondensedPipe
+  = _ "|" _ "@" transform:BaseIdentifier {
+      return {
+        type: 'CondensedPipe',
+        transform: transform,
+        hasAt: true
+      };
+    }
 
 // FIELD ACCESS EXEC PATTERN - Matches @obj.field() with nested field access
 FieldAccessExecPattern "field access exec invocation"
@@ -63,49 +141,7 @@ ExecInvocationPattern "exec invocation pattern"
       };
     }
 
-// BRACKET AMBIGUOUS - The critical disambiguation logic
-BracketAmbiguous "bracket content (array or path)"
-  = "[" _ "]" {
-      // Empty brackets - treat as empty array
-      return helpers.createEmptyArray(location());
-    }
-  / "[" _ "," _ "]" {
-      // Explicit empty array syntax
-      return helpers.createEmptyArray(location());
-    }
-  / "[" _ content:BracketContentWithComma _ "]" {
-      // Has comma = array
-      return helpers.createArrayFromContent(content, location());
-    }
-  / "[" _ content:BracketContentWithSection _ "]" {
-      // Has # = section extraction
-      return helpers.createSectionExtraction(content, location());
-    }
-  / "[" _ content:BracketContentSimple _ "]" {
-      // No comma, no # = file path
-      return helpers.createPathDereference(content, location());
-    }
-
-// Helper patterns for bracket content detection
-BracketContentWithComma
-  = first:ArrayValue rest:(_ "," _ value:ArrayValue { return value; })+ {
-      return [first, ...rest];
-    }
-  / item:ArrayValue _ "," {
-      // Single item with trailing comma
-      return [item];
-    }
-
-// Array value - any valid value for array items
-ArrayValue
-  = TemplateStyleInterpolation  // Templates
-  / DataObjectLiteral           // Use data-context object parsing for proper typing
-  / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
-  / VariableWithTail            // Variable references with optional tail modifiers
-  / BracketAmbiguous            // Nested arrays or paths - moved after AtVar
-  / NestedDirective             // Nested directives
-  / CodeExecution               // Code execution (run keyword and shortcuts)
-  / PrimitiveValue              // Strings, numbers, booleans, null
+// Note: BracketAmbiguous removed - use ArrayLiteral for arrays, AlligatorExpression for file loading
 
 
 // Primitive values for arrays
@@ -184,13 +220,7 @@ CommandContent
       return chars.map(c => c[1]).join('');
     }
 
-BracketContentWithSection
-  = path:PathParts _ "#" _ section:SectionName {
-      return { path, section };
-    }
-
-BracketContentSimple
-  = PathParts  // Reuse existing path parsing from content.peggy
+// Note: Bracket section patterns removed - use AlligatorExpression for section extraction
 
 // Code execution patterns (language + code without @run prefix)
 CodeExecution "code execution"

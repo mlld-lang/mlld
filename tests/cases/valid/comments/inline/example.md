@@ -13,4 +13,4 @@ This tests that inline comments at the end of directives are properly handled.
 
 /path @docs = "./documentation" >> Path to docs folder
 
-/show [README.md] >> Include the readme file
+/show <README.md> >> Include the readme file

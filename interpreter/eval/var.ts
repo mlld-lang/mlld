@@ -5,6 +5,7 @@ import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { astLocationToSourceLocation } from '@core/types';
 import { logger } from '@core/utils/logger';
+import { applyHeaderTransform } from './show';
 import { 
   Variable,
   VariableSource,
@@ -66,9 +67,12 @@ function createVariableSource(valueNode: VarValue | undefined, directive: Direct
     if (directive.meta.wrapperType === 'singleQuote') {
       baseSource.syntax = 'quoted';
       baseSource.hasInterpolation = false;
-    } else if (directive.meta.wrapperType === 'doubleQuote' || directive.meta.wrapperType === 'backtick') {
+    } else if (directive.meta.wrapperType === 'doubleQuote' || directive.meta.wrapperType === 'backtick' || directive.meta.wrapperType === 'doubleColon') {
       baseSource.syntax = 'template';
       baseSource.hasInterpolation = true; // Assume interpolation for these types
+    } else if (directive.meta.wrapperType === 'tripleColon') {
+      baseSource.syntax = 'template';
+      baseSource.hasInterpolation = true; // Triple colon uses {{var}} interpolation
     }
   }
 
@@ -128,6 +132,12 @@ export async function evaluateVar(
     
     if (isComplex) {
       // For complex arrays, store the AST node for lazy evaluation
+      if (process.env.MLLD_DEBUG === 'true') {
+        logger.debug('var.ts: Storing complex array AST for lazy evaluation:', {
+          identifier,
+          valueNode
+        });
+      }
       resolvedValue = valueNode;
     } else {
       // Process simple array items immediately
@@ -209,8 +219,11 @@ export async function evaluateVar(
               }
             }
             processedObject[key] = nestedObj;
+          } else if (propValue && typeof propValue === 'object' && propValue.type) {
+            // Handle other node types (load-content, VariableReference, etc.)
+            processedObject[key] = await evaluateArrayItem(propValue, env);
           } else {
-            // For other types (numbers, booleans, null), use as-is
+            // For primitive types (numbers, booleans, null, strings), use as-is
             processedObject[key] = propValue;
           }
         }
@@ -236,6 +249,33 @@ export async function evaluateVar(
       // Fallback to basic extraction
       resolvedValue = extractSection(fileContent, sectionName);
     }
+    
+    // Check if we have an asSection modifier in the withClause
+    if (directive.values?.withClause?.asSection) {
+      const newHeader = await interpolate(directive.values.withClause.asSection, env);
+      resolvedValue = applyHeaderTransform(resolvedValue, newHeader);
+    }
+    
+  } else if (valueNode.type === 'load-content') {
+    // Content loader: <file.md> or <file.md # Section>
+    const { processContentLoader } = await import('./content-loader');
+    
+    // Pass the withClause to the content loader if it has asSection
+    if (directive.values?.withClause?.asSection) {
+      // Add the asSection to the load-content options
+      if (!valueNode.options) {
+        valueNode.options = {};
+      }
+      if (!valueNode.options.section) {
+        valueNode.options.section = {};
+      }
+      valueNode.options.section.renamed = {
+        type: 'rename-template',
+        parts: directive.values.withClause.asSection
+      };
+    }
+    
+    resolvedValue = await processContentLoader(valueNode, env);
     
   } else if (valueNode.type === 'path') {
     // Path dereference: [README.md]
@@ -265,22 +305,49 @@ export async function evaluateVar(
     
   } else if (valueNode.type === 'VariableReference') {
     // Variable reference: @otherVar
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Processing VariableReference in var.ts:', {
+        identifier,
+        varIdentifier: valueNode.identifier,
+        hasFields: !!(valueNode.fields && valueNode.fields.length > 0),
+        fields: valueNode.fields?.map(f => f.value)
+      });
+    }
+    
     const sourceVar = env.getVariable(valueNode.identifier);
     if (!sourceVar) {
       throw new Error(`Variable not found: ${valueNode.identifier}`);
     }
     
-    // Copy the variable type from source
-    const { resolveVariableValue } = await import('../core/interpreter');
-    resolvedValue = await resolveVariableValue(sourceVar, env);
+    // Copy the variable type from source - preserve Variables!
+    const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+    const { accessField } = await import('../utils/field-access');
+    
+    /**
+     * Preserve Variable wrapper when copying variable references
+     * WHY: Variable copies need to maintain metadata and type information
+     *      for proper Variable flow through the system
+     */
+    const resolvedVar = await resolveVariable(sourceVar, env, ResolutionContext.VariableCopy);
     
     // Handle field access if present
     if (valueNode.fields && valueNode.fields.length > 0) {
-      const { accessField } = await import('../utils/field-access');
-      // Apply each field access in sequence
-      for (const field of valueNode.fields) {
-        resolvedValue = accessField(resolvedValue, field);
+      // resolvedVar is already properly resolved with ResolutionContext.VariableCopy
+      // No need to extract again - field access will handle extraction if needed
+      
+      // Use enhanced field access to preserve context
+      const fieldResult = accessField(resolvedVar, valueNode.fields[0], { preserveContext: true });
+      let currentResult = fieldResult as any;
+      
+      // Apply remaining fields if any
+      for (let i = 1; i < valueNode.fields.length; i++) {
+        currentResult = accessField(currentResult.value, valueNode.fields[i], { 
+          preserveContext: true, 
+          parentPath: currentResult.accessPath 
+        });
       }
+      
+      resolvedValue = currentResult.value;
       
       // Check if the accessed field is an executable variable
       if (resolvedValue && typeof resolvedValue === 'object' && 
@@ -295,6 +362,25 @@ export async function evaluateVar(
           exitCode: 0
         };
       }
+      
+      // IMPORTANT: When we have field access, the resolvedValue is the field value
+      // We should NOT fall through to the duplicate VariableReference handling below
+    } else {
+      // No field access - use the resolved Variable directly
+      resolvedValue = resolvedVar;
+    }
+    
+    // Apply condensed pipes if present (e.g., @var|@transform)
+    if (valueNode.pipes && valueNode.pipes.length > 0) {
+      const { applyCondensedPipes } = await import('../core/interpreter');
+      /**
+       * Extract Variable value for pipeline processing
+       * WHY: Pipeline stages need raw values because they perform text transformations
+       *      on content, not Variable metadata
+       */
+      const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+      const pipelineInput = await resolveValue(resolvedValue, env, ResolutionContext.PipelineInput);
+      resolvedValue = await applyCondensedPipes(pipelineInput, valueNode.pipes, env);
     }
     
   } else if (Array.isArray(valueNode)) {
@@ -302,14 +388,19 @@ export async function evaluateVar(
     // Check if this is a simple text array (backtick template)
     if (valueNode.length === 1 && valueNode[0].type === 'Text' && directive.meta?.wrapperType === 'backtick') {
         resolvedValue = valueNode[0].content;
-    } else if (directive.meta?.wrapperType === 'doubleBracket') {
-      // For double-bracket templates, store the AST for later interpolation
-      // DO NOT interpolate now - that happens when displayed
-      resolvedValue = valueNode; // Store the AST array as the value
-      logger.debug('Storing template AST for double-bracket template', {
-        identifier,
-        ast: valueNode
-      });
+    } else if (directive.meta?.wrapperType === 'doubleColon' || directive.meta?.wrapperType === 'tripleColon') {
+      // For double/triple colon templates, handle interpolation based on type
+      if (directive.meta?.wrapperType === 'tripleColon') {
+        // Triple colon uses {{var}} interpolation - store AST for lazy evaluation
+        resolvedValue = valueNode; // Store the AST array as the value
+        logger.debug('Storing template AST for triple-colon template', {
+          identifier,
+          ast: valueNode
+        });
+      } else {
+        // Double colon uses @var interpolation - interpolate now
+        resolvedValue = await interpolate(valueNode, env);
+      }
     } else {
       // Template or string content - need to interpolate
         resolvedValue = await interpolate(valueNode, env);
@@ -334,23 +425,36 @@ export async function evaluateVar(
     
   } else if (valueNode && valueNode.type === 'VariableReferenceWithTail') {
     // Variable with tail modifiers (e.g., @var @result = @data with { pipeline: [@transform] })
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Processing VariableReferenceWithTail in var.ts');
+    }
     const varWithTail = valueNode;
     const sourceVar = env.getVariable(varWithTail.variable.identifier);
     if (!sourceVar) {
       throw new Error(`Variable not found: ${varWithTail.variable.identifier}`);
     }
     
-    // Get the base value
-    const { resolveVariableValue } = await import('../core/interpreter');
-    let result = await resolveVariableValue(sourceVar, env);
+    // Get the base value - preserve Variable for field access
+    const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+    const { accessFields } = await import('../utils/field-access');
+    
+    // Determine appropriate context based on what operations will be performed
+    const needsPipelineExtraction = varWithTail.withClause && varWithTail.withClause.pipeline;
+    const hasFieldAccess = varWithTail.variable.fields && varWithTail.variable.fields.length > 0;
+    
+    // Use appropriate resolution context
+    const context = needsPipelineExtraction && !hasFieldAccess 
+      ? ResolutionContext.PipelineInput 
+      : ResolutionContext.FieldAccess;
+    
+    const resolvedVar = await resolveVariable(sourceVar, env, context);
+    let result = resolvedVar;
     
     // Apply field access if present
     if (varWithTail.variable.fields && varWithTail.variable.fields.length > 0) {
-      const { accessField } = await import('../utils/field-access');
-      // Iterate through fields one at a time (accessField expects a single field)
-      for (const field of varWithTail.variable.fields) {
-        result = accessField(result, field);
-      }
+      // Use enhanced field access to track context
+      const fieldResult = accessFields(resolvedVar, varWithTail.variable.fields, { preserveContext: true });
+      result = (fieldResult as any).value;
     }
     
     // Apply pipeline if present
@@ -358,7 +462,12 @@ export async function evaluateVar(
       const { executePipeline } = await import('./pipeline');
       const format = varWithTail.withClause.format as string | undefined;
       
-      // Convert result to string for pipeline
+      // Result should already be properly resolved based on context
+      // If we had field access, it's already extracted by accessFields
+      // If we didn't have field access and have pipeline, we used PipelineInput context
+      
+      // Convert result to string for pipeline - WHY: Pipelines operate on string content
+      // and transform it through various text processing operations
       const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
       
       result = await executePipeline(
@@ -387,9 +496,36 @@ export async function evaluateVar(
 
   let variable: Variable;
 
-  // Create specific variable types based on AST node type
-  // Handle primitives first (they don't have a .type property)
-  if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('Creating variable:', {
+      identifier,
+      valueNodeType: valueNode?.type,
+      resolvedValue,
+      resolvedValueType: typeof resolvedValue
+    });
+  }
+
+  // Check if resolvedValue is already a Variable that we should preserve
+  const { isVariable } = await import('../utils/variable-resolution');
+  if (isVariable(resolvedValue)) {
+    // Preserve the existing Variable (e.g., when copying an executable)
+    // Update its name and metadata to reflect the new assignment
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Preserving existing Variable:', {
+        identifier,
+        resolvedValueType: resolvedValue.type,
+        resolvedValueName: resolvedValue.name
+      });
+    }
+    variable = {
+      ...resolvedValue,
+      name: identifier,
+      metadata: {
+        ...resolvedValue.metadata,
+        ...metadata
+      }
+    };
+  } else if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
     // Direct primitive values - we need to preserve their types
     const { createPrimitiveVariable } = await import('@core/types/variable');
     variable = createPrimitiveVariable(
@@ -401,6 +537,18 @@ export async function evaluateVar(
     
   } else if (valueNode.type === 'array') {
     const isComplex = hasComplexArrayItems(valueNode.items || valueNode.elements || []);
+    
+    // Debug logging
+    if (process.env.MLLD_DEBUG === 'true') {
+      logger.debug('var.ts: Creating array variable:', {
+        identifier,
+        isComplex,
+        resolvedValueType: typeof resolvedValue,
+        resolvedValueIsArray: Array.isArray(resolvedValue),
+        resolvedValue
+      });
+    }
+    
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);
     
   } else if (valueNode.type === 'object') {
@@ -428,14 +576,105 @@ export async function evaluateVar(
       sectionName, 'hash', source, metadata);
     
   } else if (valueNode.type === 'VariableReference') {
-    // For now, create a variable based on the resolved type
-    if (typeof resolvedValue === 'object' && resolvedValue !== null) {
-      if (Array.isArray(resolvedValue)) {
-        variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+    // For VariableReference nodes, create variable based on resolved value type
+    // This handles cases like @user.name where resolvedValue is the field value
+    if (typeof resolvedValue === 'string') {
+      variable = createSimpleTextVariable(identifier, resolvedValue, source, metadata);
+    } else if (typeof resolvedValue === 'number' || typeof resolvedValue === 'boolean' || resolvedValue === null) {
+      const { createPrimitiveVariable } = await import('@core/types/variable');
+      variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
+    } else if (Array.isArray(resolvedValue)) {
+      variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+    } else if (typeof resolvedValue === 'object' && resolvedValue !== null) {
+      variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
+    } else {
+      // Fallback to text
+      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+    }
+    
+  } else if (valueNode.type === 'load-content') {
+    // Handle load-content nodes from <file.md> syntax
+    const { source: contentSource, options } = valueNode;
+    
+    // Import type guards for LoadContentResult
+    const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
+    
+    if (isLoadContentResult(resolvedValue)) {
+      // Single file with metadata - store as object variable
+      // Mark as NOT complex so it doesn't get re-evaluated
+      variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
+    } else if (isLoadContentResultArray(resolvedValue)) {
+      // Array of files from glob pattern - store as array variable
+      // Check if this array has been tagged with __variable metadata
+      const taggedVariable = (resolvedValue as any).__variable;
+      if (taggedVariable && taggedVariable.metadata) {
+        // Use the metadata from the tagged variable, which includes custom behaviors
+        variable = createArrayVariable(identifier, resolvedValue, true, source, {
+          ...metadata,
+          ...taggedVariable.metadata
+        });
+        
+        /**
+         * Re-apply special behaviors to arrays with custom toString/content getters
+         * WHY: LoadContentResultArray and RenamedContentArray have behaviors (toString, content getter)
+         *      that must be preserved for proper output formatting in templates and display
+         * GOTCHA: The behaviors are lost during Variable creation and must be re-applied
+         * CONTEXT: This happens when arrays are created from content loading operations
+         */
+        const { extractVariableValue } = await import('../utils/variable-migration');
+        const valueWithBehaviors = extractVariableValue(variable);
+        variable.value = valueWithBehaviors;
       } else {
-        variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
+        variable = createArrayVariable(identifier, resolvedValue, true, source, metadata);
+      }
+    } else if (Array.isArray(resolvedValue) && resolvedValue.every(item => typeof item === 'string')) {
+      // Array of strings from transformed content - store as simple array
+      // Check if this array has been tagged with __variable metadata
+      const taggedVariable = (resolvedValue as any).__variable;
+      if (taggedVariable && taggedVariable.metadata) {
+        // Use the metadata from the tagged variable, which includes custom behaviors
+        variable = createArrayVariable(identifier, resolvedValue, false, source, {
+          ...metadata,
+          ...taggedVariable.metadata
+        });
+        
+        /**
+         * Re-apply special behaviors to string arrays from content operations
+         * WHY: RenamedContentArray and similar types have custom toString() methods
+         *      that enable proper concatenation behavior in templates
+         * GOTCHA: Arrays tagged with __variable metadata require behavior restoration
+         * CONTEXT: String arrays from glob patterns or renamed content operations
+         */
+        const { extractVariableValue } = await import('../utils/variable-migration');
+        const valueWithBehaviors = extractVariableValue(variable);
+        variable.value = valueWithBehaviors;
+      } else {
+        variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);
+      }
+    } else if (typeof resolvedValue === 'string') {
+      // Backward compatibility - plain string (e.g., from section extraction)
+      if (contentSource.type === 'path') {
+        const filePath = contentSource.raw || '';
+        
+        if (options?.section) {
+          // Section extraction case
+          const sectionName = options.section.identifier.content || '';
+          variable = createSectionContentVariable(identifier, resolvedValue, filePath, 
+            sectionName, 'hash', source, metadata);
+        } else {
+          // Whole file case
+          variable = createFileContentVariable(identifier, resolvedValue, filePath, source, metadata);
+        }
+      } else if (contentSource.type === 'url') {
+        // URL content
+        const url = contentSource.raw || '';
+        variable = createFileContentVariable(identifier, resolvedValue, url, source, metadata);
+      } else {
+        // Default to simple text
+        variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
       }
     } else {
+      // Fallback - shouldn't happen
       variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
     }
     
@@ -474,14 +713,20 @@ export async function evaluateVar(
     
     if (directive.meta?.wrapperType === 'singleQuote') {
       variable = createSimpleTextVariable(identifier, strValue, source, metadata);
-    } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick' || directive.meta?.wrapperType === 'doubleBracket') {
+    } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick' || directive.meta?.wrapperType === 'doubleColon' || directive.meta?.wrapperType === 'tripleColon') {
       // Template variable
-      const templateType = directive.meta?.wrapperType === 'doubleBracket' ? 'doubleBracket' : 'backtick';
-      // For double-bracket templates, the value is the AST array, not a string
-      const templateValue = directive.meta?.wrapperType === 'doubleBracket' && Array.isArray(resolvedValue) 
+      let templateType: 'backtick' | 'doubleColon' | 'tripleColon' = 'backtick';
+      if (directive.meta?.wrapperType === 'doubleColon') {
+        templateType = 'doubleColon';
+      } else if (directive.meta?.wrapperType === 'tripleColon') {
+        templateType = 'tripleColon';
+      }
+      
+      // For triple-colon templates, the value is the AST array, not a string
+      const templateValue = directive.meta?.wrapperType === 'tripleColon' && Array.isArray(resolvedValue) 
         ? resolvedValue as any // Pass the AST array
         : strValue; // For other templates, use the string value
-      variable = createTemplateVariable(identifier, templateValue, undefined, templateType, source, metadata);
+      variable = createTemplateVariable(identifier, templateValue, undefined, templateType as any, source, metadata);
     } else if (directive.meta?.wrapperType === 'doubleQuote' || source.hasInterpolation) {
       // Interpolated text - need to track interpolation points
       // For now, create without interpolation points - TODO: extract these from AST
@@ -497,10 +742,25 @@ export async function evaluateVar(
     const { executePipeline } = await import('./pipeline');
     const format = directive.values.withClause.format as string | undefined;
     
-    // Get the current variable value as string
-    const { resolveVariableValue: resolveVarValue } = await import('../core/interpreter');
-    const currentValue = await resolveVarValue(variable, env);
-    const stringValue = typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue);
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('Processing withClause pipeline for regular variable:', {
+        identifier,
+        variableType: variable.type,
+        valueType: typeof variable.value,
+        hasText: variable.value && typeof variable.value === 'object' && 'text' in variable.value,
+        valueKeys: variable.value && typeof variable.value === 'object' ? Object.keys(variable.value) : [],
+        valuePreview: typeof variable.value === 'string' ? variable.value.substring(0, 50) : 'not a string',
+        value: variable.value
+      });
+    }
+    
+    // Extract Variable value for pipeline input - WHY: Pipelines require raw string values
+    // to transform through text processing operations
+    const { resolveValue: resolveForPipeline, ResolutionContext: ResCtx } = await import('../utils/variable-resolution');
+    const extractedValue = await resolveForPipeline(variable, env, ResCtx.PipelineInput);
+    
+    // Convert to string for pipeline processing
+    const stringValue = typeof extractedValue === 'string' ? extractedValue : JSON.stringify(extractedValue);
     
     // Execute the pipeline
     const pipelineResult = await executePipeline(
@@ -547,7 +807,8 @@ function hasComplexValues(properties: any): boolean {
         value.type === 'path' ||
         value.type === 'section' ||
         value.type === 'runExec' ||
-        value.type === 'ExecInvocation'
+        value.type === 'ExecInvocation' ||
+        value.type === 'load-content'
       )) {
         return true;
       }
@@ -586,7 +847,9 @@ function hasComplexArrayItems(items: any[]): boolean {
         item.type === 'array' ||
         item.type === 'object' ||
         item.type === 'path' ||
-        item.type === 'section'
+        item.type === 'section' ||
+        item.type === 'load-content' ||
+        item.type === 'ExecInvocation'
       )) {
         return true;
       }
@@ -605,6 +868,8 @@ function hasComplexArrayItems(items: any[]): boolean {
 
 /**
  * Evaluate an array item based on its type
+ * This function evaluates items that will be stored in arrays, preserving Variables
+ * instead of extracting their values immediately.
  */
 async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
   if (!item || typeof item !== 'object') {
@@ -660,44 +925,59 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
       return nestedItems;
 
     case 'object':
-      // Nested object
-      const nestedObj: Record<string, any> = {};
+      // Object in array
+      const processedObject: Record<string, any> = {};
       if (item.properties) {
-        for (const [key, value] of Object.entries(item.properties)) {
-          nestedObj[key] = await evaluateArrayItem(value, env);
+        for (const [key, propValue] of Object.entries(item.properties)) {
+          processedObject[key] = await evaluateArrayItem(propValue, env);
         }
       }
-      return nestedObj;
+      return processedObject;
 
     case 'VariableReference':
-      // Variable reference in array
+      // Variable reference in array - PRESERVE THE VARIABLE!
       const variable = env.getVariable(item.identifier);
       if (!variable) {
         throw new Error(`Variable not found: ${item.identifier}`);
       }
-      const { resolveVariableValue } = await import('../core/interpreter');
-      return await resolveVariableValue(variable, env);
+      
+      /**
+       * Preserve Variable wrapper when storing in array elements
+       * WHY: Array elements should maintain Variable metadata to enable proper
+       *      Variable flow through data structures
+       */
+      const { resolveVariable, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
+      return await resolveVariable(variable, env, ResolutionContext.ArrayElement);
 
     case 'path':
       // Path node in array - read the file content
-      const filePath = await interpolate(item.segments || [], env);
-      return await env.readFile(filePath);
+      const { interpolate: pathInterpolate } = await import('../core/interpreter');
+      const filePath = await pathInterpolate(item.segments || [item], env);
+      const fileContent = await env.readFile(filePath);
+      return fileContent;
 
-    case 'section':
+    case 'SectionExtraction':
       // Section extraction in array
-      const sectionFilePath = await interpolate(item.path || [], env);
-      const sectionName = await interpolate(item.section || [], env);
-      const fileContent = await env.readFile(sectionFilePath);
-      const { llmxmlInstance } = await import('../utils/llmxml-instance');
-      try {
-        return await llmxmlInstance.getSection(fileContent, sectionName, {
-          includeNested: true,
-          includeTitle: true
-        });
-      } catch (error) {
-        // Fallback to basic extraction
-        return extractSection(fileContent, sectionName);
+      const sectionName = await interpolate(item.section, env);
+      const sectionFilePath = await interpolate(item.path.segments || [item.path], env);
+      const sectionFileContent = await env.readFile(sectionFilePath);
+      
+      // Use standard section extraction
+      const { extractSection } = await import('./show');
+      return extractSection(sectionFileContent, sectionName);
+
+    case 'load-content':
+      // Load content node in array - use the content loader
+      const { processContentLoader } = await import('./content-loader');
+      const loadResult = await processContentLoader(item, env);
+      
+      // Check if this is a LoadContentResult and return its content
+      const { isLoadContentResult } = await import('@core/types/load-content');
+      if (isLoadContentResult(loadResult)) {
+        return loadResult.content;
       }
+      
+      return loadResult;
 
     default:
       // Handle plain objects without type property

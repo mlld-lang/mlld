@@ -10,8 +10,8 @@ processed: @transformed,
 array: [@config, @transformed]
 }
 
-/show ::Config: {{config}}::
-/show ::Transformed: {{transformed}}::
-/show ::Nested Original: {{nested.original}}::
-/show ::Nested Processed: {{nested.processed}}::
-/show ::Array: {{nested.array}}::
+/show :::Config: {{config}}:::
+/show :::Transformed: {{transformed}}:::
+/show :::Nested Original: {{nested.original}}:::
+/show :::Nested Processed: {{nested.processed}}:::
+/show :::Array: {{nested.array}}:::

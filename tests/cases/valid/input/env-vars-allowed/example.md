@@ -1,11 +1,11 @@
-# Environment Variables with @INPUT
+# Environment Variables with @input
 
-This test shows @INPUT importing with environment variables through stdin.
+This test shows @input importing with environment variables through stdin.
 
-/import @INPUT
+/import @input
 
-/show ::
-Variables from @INPUT:
+/show :::
+Variables from @input:
 - MY_ALLOWED_VAR: {{input.MY_ALLOWED_VAR}}
 - ANOTHER_ALLOWED: {{input.ANOTHER_ALLOWED}}
-::
+:::

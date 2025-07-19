@@ -29,8 +29,8 @@ describe('Complex Data Assignment', () => {
     
     // The value should be evaluated lazily when accessed
     // For this test, we'll manually trigger evaluation
-    const { resolveVariableValue } = await import('@interpreter/core/interpreter');
-    const resolvedValue = await resolveVariableValue(resultsVar!, env);
+    const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+    const resolvedValue = await extractVariableValue(resultsVar!, env);
     
     expect(resolvedValue).toHaveProperty('echo');
     expect(resolvedValue.echo).toBe('hello world');
@@ -46,7 +46,7 @@ describe('Complex Data Assignment', () => {
     
     const mlldContent = `
 /var @docs = {
-  readme: [/test.txt]
+  readme: </test.txt>
 }
 `;
     
@@ -58,8 +58,8 @@ describe('Complex Data Assignment', () => {
     expect(docsVar).toBeDefined();
     
     // Manually trigger evaluation
-    const { resolveVariableValue } = await import('@interpreter/core/interpreter');
-    const resolvedValue = await resolveVariableValue(docsVar!, env);
+    const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+    const resolvedValue = await extractVariableValue(docsVar!, env);
     
     expect(resolvedValue).toHaveProperty('readme');
     expect(resolvedValue.readme).toBe('File contents');
@@ -90,8 +90,8 @@ describe('Complex Data Assignment', () => {
     expect(resultsVar).toBeDefined();
     
     // Manually trigger evaluation
-    const { resolveVariableValue } = await import('@interpreter/core/interpreter');
-    const resolvedValue = await resolveVariableValue(resultsVar!, env);
+    const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+    const resolvedValue = await extractVariableValue(resultsVar!, env);
     
     expect(resolvedValue.userName).toBe('John');
     expect(resolvedValue.firstScore).toBe(10);
@@ -106,8 +106,8 @@ describe('Complex Data Assignment', () => {
 /var @name = "World"
 
 /var @messages = {
-  greeting: ::Hello {{name}}!::,
-  farewell: ::Goodbye {{name}}!::
+  greeting: :::Hello {{name}}!:::,
+  farewell: :::Goodbye {{name}}!:::
 }
 `;
     
@@ -119,8 +119,8 @@ describe('Complex Data Assignment', () => {
     expect(messagesVar).toBeDefined();
     
     // Manually trigger evaluation
-    const { resolveVariableValue } = await import('@interpreter/core/interpreter');
-    const resolvedValue = await resolveVariableValue(messagesVar!, env);
+    const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+    const resolvedValue = await extractVariableValue(messagesVar!, env);
     
     expect(resolvedValue.greeting).toBe('Hello World!');
     expect(resolvedValue.farewell).toBe('Goodbye World!');
@@ -138,7 +138,7 @@ describe('Complex Data Assignment', () => {
     version: run {echo "1.0.0"}
   },
   messages: {
-    welcome: ::Welcome to MyApp!::
+    welcome: :::Welcome to MyApp!:::
   }
 }
 `;
@@ -151,8 +151,8 @@ describe('Complex Data Assignment', () => {
     expect(configVar).toBeDefined();
     
     // Manually trigger evaluation
-    const { resolveVariableValue } = await import('@interpreter/core/interpreter');
-    const resolvedValue = await resolveVariableValue(configVar!, env);
+    const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+    const resolvedValue = await extractVariableValue(configVar!, env);
     
     expect(resolvedValue.app.name).toBe('MyApp');
     expect(resolvedValue.app.version).toBe('1.0.0');
@@ -176,8 +176,8 @@ describe('Complex Data Assignment', () => {
     expect(testsVar).toBeDefined();
     
     // Manually trigger evaluation
-    const { resolveVariableValue } = await import('@interpreter/core/interpreter');
-    const resolvedValue = await resolveVariableValue(testsVar!, env);
+    const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+    const resolvedValue = await extractVariableValue(testsVar!, env);
     
     expect(Array.isArray(resolvedValue)).toBe(true);
     expect(resolvedValue).toEqual(['test1', 'test2', 'test3']);
@@ -204,8 +204,8 @@ describe('Complex Data Assignment', () => {
     expect(resultsVar).toBeDefined();
     
     // Manually trigger evaluation
-    const { resolveVariableValue } = await import('@interpreter/core/interpreter');
-    const resolvedValue = await resolveVariableValue(resultsVar!, env);
+    const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+    const resolvedValue = await extractVariableValue(resultsVar!, env);
     
     // Should have partial results
     expect(resolvedValue.success).toBe('ok');

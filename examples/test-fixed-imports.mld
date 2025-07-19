@@ -6,9 +6,9 @@
 /show @imported_title
 
 ## Roles Available: 
-- Architect: @add @role.architect
-- UX: @add @role.ux  
-- Security: @add @role.security
+/show `- Architect: @role.architect`
+/show `- UX: @role.ux`  
+/show `- Security: @role.security`
 
 ## Test the echo function:
 /show @echo("Hello World")

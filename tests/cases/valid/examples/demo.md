@@ -90,7 +90,7 @@ The output of this command will be included in the output:
 
 Here's how to add content from a file:
 
-/show [imports.mld]
+/show <imports.mld>
 
 ## Code Fences
 

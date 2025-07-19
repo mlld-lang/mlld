@@ -488,9 +488,12 @@ export class InitModuleCommand {
 
 ## tldr
 
-Tell us:
-- what problem it solves
-- why it's useful
+${metadata.about}
+
+\`\`\`mlld
+/import { ${metadata.name} } from @${metadata.author}/${metadata.name}
+/show @${metadata.name}("example")
+\`\`\`
 
 ## docs
 

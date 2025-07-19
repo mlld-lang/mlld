@@ -41,34 +41,8 @@ LiteralContent "Literal content without interpolation"
     }
 
 
-// SEMANTIC: Path content - knows it's parsing a file path
-SemanticPathContent "Semantic path content with @var interpolation"
-  = '[' pathParts:PathParts _ '#' _ section:SectionIdentifier ']' {
-      // Path with section - create structured response
-      const pathString = helpers.reconstructRawString(pathParts);
-      
-      // Extract section raw content
-      let sectionRaw;
-      if (section.type === 'VariableReference') {
-        sectionRaw = '@' + section.identifier;
-      } else if (typeof section === 'string') {
-        sectionRaw = section;
-      } else {
-        sectionRaw = section.content || section.identifier || '';
-      }
-      
-      return {
-        type: 'sectionPath',
-        parts: pathParts,
-        section: sectionRaw,
-        sectionNodes: Array.isArray(section) ? section : [section],
-        raw: pathString + ' # ' + sectionRaw
-      };
-    }
-  / '[' parts:PathParts ']' {
-      // Regular path without section
-      return parts;
-    }
+// REMOVED: Bracket syntax for paths - use <file.md> or "file.md" instead
+// SemanticPathContent was here
 
 // SEMANTIC: Section content for @add directive - shared pattern
 SemanticSectionContent "Semantic section content"
@@ -105,9 +79,7 @@ PathParts "Path component parts"
 SectionName "Section name"
   = chars:$(!']' .)+ { return chars.trim(); }
 
-// Content inside single brackets for backward compatibility
-BracketContent "Content with @var interpolation"
-  = SemanticPathContent
+// REMOVED: BracketContent - use AlligatorExpression or quoted strings instead
 
 // Removed: SectionBracketContent - now handled by directive-specific semantic parsers
 
@@ -168,12 +140,13 @@ DoubleQuotedText
 DoubleQuotedChar
   = StringEscapeSequence  // Handle \n, \t, etc.
   / EscapeSequence       // Handle \@, \", etc.
-  / !["@\n\r] char:. { return char; }
+  / !["@<\n\r] char:. { return char; }
 
-// Content inside backtick templates - supports @var and @func(args)
+// Content inside backtick templates - supports @var and @func(args) and <file.md>
 BacktickInterpolation
   = BacktickExecInvocation    // @func(args) - must come before variable
-  / VariableNoTail            // @var or @var.field
+  / FileReferenceInterpolation // <file.md> references with fields/pipes
+  / VariableWithPipes         // @var or @var.field with optional pipes
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
@@ -197,9 +170,15 @@ BacktickExecInvocation
       };
     }
 
-// Text inside backticks (excluding @ for variable interpolation)
+// Text inside backticks (excluding @ and < for interpolation)
 BacktickTextSegment
-  = chars:(![`@] char:. { return char; })+ {
+  = chars:(![`@<] char:. { return char; })+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
+    }
+
+// Text inside double colons (excluding :, @ and < for interpolation)
+DoubleColonTextSegment
+  = chars:(![:@<] char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
@@ -221,15 +200,10 @@ CommandBracketChar
 
 
 
-// Content inside double colons with {{var}} interpolation
-DoubleColonContent "Content with {{var}} interpolation"
-  = '::' parts:(InterpolationVar / TemplateTextSegment)* '::' {
-      helpers.debug('DoubleColonContent matched ::...::', { 
-        parts: parts,
-        isArray: Array.isArray(parts),
-        length: Array.isArray(parts) ? parts.length : 'not array',
-        firstType: Array.isArray(parts) && parts.length > 0 ? parts[0].type : 'none'
-      });
+// Content inside double colons with @var interpolation and <file.md>
+DoubleColonContent "Content with @var interpolation"
+  = '::' parts:(DoubleColonInterpolation)* '::' {
+      helpers.debug('DoubleColonContent matched ::...::', { parts });
       
       // Strip formatting newlines at grammar level
       // Process the parts array to remove leading/trailing newlines
@@ -267,7 +241,56 @@ DoubleColonContent "Content with {{var}} interpolation"
         }
       }
       
-      // Return only the content within double brackets, not the brackets themselves
+      // Return only the content within double colons, not the colons themselves
+      return processedParts;
+    }
+
+// NEW: Interpolation pattern for :: syntax (now @var interpolation)
+DoubleColonInterpolation
+  = BacktickExecInvocation      // @func(args)
+  / FileReferenceInterpolation   // <file.md>
+  / VariableWithPipes           // @var or @var.field with pipes
+  / "@" !BaseIdentifier char:. { // @ followed by non-identifier
+      return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
+    }
+  / DoubleColonTextSegment      // Plain text
+
+// NEW: Triple colon content with {{var}} interpolation
+TripleColonContent "Content with {{var}} interpolation"
+  = ':::' parts:(InterpolationVar / FileReferenceInterpolation / TemplateTextSegment)* ':::' {
+      helpers.debug('TripleColonContent matched :::...:::', { parts });
+      
+      // Strip formatting newlines (same as current DoubleColonContent)
+      let processedParts = parts;
+      
+      // Remove leading newline if first part is a Text node starting with \n
+      if (processedParts.length > 0 && processedParts[0].type === 'Text' && processedParts[0].content) {
+        if (processedParts[0].content === '\n') {
+          processedParts = processedParts.slice(1);
+        } else if (processedParts[0].content.startsWith('\n')) {
+          processedParts[0] = {
+            ...processedParts[0],
+            content: processedParts[0].content.slice(1)
+          };
+        }
+      }
+      
+      // Remove trailing newline if last part is a Text node ending with \n
+      if (processedParts.length > 0) {
+        const lastIndex = processedParts.length - 1;
+        const lastPart = processedParts[lastIndex];
+        if (lastPart.type === 'Text' && lastPart.content) {
+          if (lastPart.content === '\n') {
+            processedParts = processedParts.slice(0, -1);
+          } else if (lastPart.content.endsWith('\n')) {
+            processedParts[lastIndex] = {
+              ...lastPart,
+              content: lastPart.content.slice(0, -1)
+            };
+          }
+        }
+      }
+      
       return processedParts;
     }
   // Support direct {{var}} without requiring [[ ]] wrapper
@@ -350,7 +373,7 @@ LiteralOnlyContent "Literal text without any interpolation"
 
 // Double quoted content with @var interpolation (supports multiline)
 InterpolatedDoubleQuoteContent "Double quoted content with @var interpolation"
-  = '"' parts:(SpecialVariable / VariableNoTail / DoubleQuotedText)* '"' {
+  = '"' parts:(SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DoubleQuotedText)* '"' {
       // Handle empty string case - create Text node with empty content
       if (parts.length === 0) {
         return [helpers.createNode(NodeType.Text, { content: '', location: location() })];
@@ -358,25 +381,30 @@ InterpolatedDoubleQuoteContent "Double quoted content with @var interpolation"
       return parts;
     }
 
-// Path content with @var interpolation (brackets only)
-InterpolatedPathContent "Path content with @var interpolation" 
-  = BracketContent  // Already exists: [...]
+// REMOVED: InterpolatedPathContent - bracket syntax no longer supported
 
-// Template content with {{var}} interpolation (double colons only)
-InterpolatedTemplateContent "Template content with {{var}} interpolation"
-  = DoubleColonContent  // Already exists: ::...:::
+// Template content with interpolation (double and triple colons)
+InterpolatedTemplateContent "Template content with interpolation"
+  = DoubleColonContent    // Now @var interpolation
+  / TripleColonContent    // Now {{var}} interpolation
 
 // -------------------------------------------------------------
 // COMBO PATTERNS - Combine different types of patterns with clear semantics
 // -------------------------------------------------------------
 
-// Path-style interpolation: brackets only (enforces semantic clarity)
-PathStyleInterpolation "Path interpolation patterns"
-  = InterpolatedPathContent  // [content with @var] - all paths must be bracketed
+// REMOVED: PathStyleInterpolation - bracket syntax no longer supported
 
 // Template-style interpolation: multiple types with different interpolation behavior
 TemplateStyleInterpolation "Template interpolation patterns"  
-  = rule:InterpolatedTemplateContent {
+  = rule:TripleColonContent {
+      helpers.debug('TemplateStyleInterpolation matched triple colon with {{var}} interpolation', { rule });
+      
+      return {
+        content: rule,
+        wrapperType: 'tripleColon'
+      };
+    }
+  / rule:InterpolatedTemplateContent {
       helpers.debug('TemplateStyleInterpolation matched InterpolatedTemplateContent', { 
         rule, 
         isArray: Array.isArray(rule),
@@ -391,7 +419,7 @@ TemplateStyleInterpolation "Template interpolation patterns"
       
       return {
         content: rule,
-        wrapperType: 'doubleBracket'
+        wrapperType: 'doubleColon'  // Now means @var interpolation
       };
     }
   / '`' parts:(BacktickInterpolation)* '`' {
@@ -423,7 +451,7 @@ TemplateStyleInterpolation "Template interpolation patterns"
 CommandStyleInterpolation "Command interpolation patterns"
   = InterpolatedDoubleQuoteContent // "command with @var"
   / LiteralOnlyContent            // 'literal command'
-  / InterpolatedPathContent       // [command with @var] 
+  / CommandBracketContent         // [command with @var] - permissive for shell commands
   / InterpolatedTemplateContent   // [[command with {{var}}]]
 
 // -------------------------------------------------------------
@@ -469,23 +497,8 @@ SemanticTextContent "Semantic content for @text directive"
 // WRAPPED PATTERNS - Used by directives, handle raw string construction
 // -------------------------------------------------------------
 
-// For paths in path, import, exec, add directives
-WrappedPathContent "Wrapped path content"
-  = content:PathStyleInterpolation {
-      // Check if this is a section path from SemanticPathContent
-      if (content && typeof content === 'object' && content.type === 'sectionPath') {
-        // Return the section path structure directly
-        return content;
-      }
-      
-      // PathStyleInterpolation already handles brackets
-      const rawString = helpers.reconstructRawString(content);
-      
-      return {
-        parts: content,
-        raw: rawString
-      };
-    }
+// REMOVED: WrappedPathContent - bracket syntax no longer supported
+// Paths should use quoted strings or alligator syntax instead
 
 // For templates in text, add directives
 WrappedTemplateContent "Wrapped template content"

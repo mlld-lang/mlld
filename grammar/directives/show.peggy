@@ -7,10 +7,10 @@
 
 The show directive displays content from templates, variables, paths, or sections.
 It can be used in these forms:
-1. /show [[Template content]]                 - Show template content
+1. /show ::Template content::                 - Show template content with @var interpolation
 2. /show @variable                            - Show variable content
-3. /show [path/to/file.md]                    - Show content from a file
-4. /show "# Header" from [path.md] as "# New" - Show a specific section from a file
+3. /show <path/to/file.md>                    - Show content from a file
+4. /show <path/to/file.md # Header Title>     - Show a specific section from a file
 */
 
 // Core content handlers (context, tokens, whitespace, variables, template, path)
@@ -22,42 +22,10 @@ It can be used in these forms:
 
 // Primary /show directive with all variants
 SlashShow
-  // Foreach section expression: /show foreach [@array.field # section] as [[template]]
-  = DirectiveContext "/show" _ expr:ForeachSectionExpression {
-      helpers.debug('SlashShow matched foreach section expression', { expr });
-      
-      // Extract the inner value from the ForeachSectionExpression
-      const foreachValue = expr.value;
-      
-      // Create values object with foreach section expression
-      const values = {
-        foreach: foreachValue
-      };
-      
-      // Create raw object
-      const raw = {
-        foreach: `foreach [@${foreachValue.arrayVariable}.${foreachValue.pathField} # ${foreachValue.sectionRaw}] as [[${foreachValue.template.raw.content}]]`
-      };
-      
-      // Create meta object
-      const meta = {
-        isForeachSection: true,
-        arrayVariable: foreachValue.arrayVariable,
-        pathField: foreachValue.pathField
-      };
-      
-      return helpers.createStructuredDirective(
-        DirectiveKind.show,
-        'showForeachSection',
-        values,
-        raw,
-        meta,
-        location(),
-        'foreach-section'
-      );
-    }
+  // REMOVED: Foreach section expression - superseded by file reference interpolation
+  // Migration: Use /show <*.md # section> as "template" instead
   // Foreach command expression: /show foreach @command(@arrays)
-  / DirectiveContext "/show" _ expr:ForeachCommandExpression {
+  = DirectiveContext "/show" _ expr:ForeachCommandExpression {
       helpers.debug('SlashShow matched foreach expression', { expr });
       
       // Extract the inner value from the ForeachCommandExpression
@@ -149,96 +117,43 @@ SlashShow
         'section'  // Added source parameter
       );
     }
-  // Single-bracketed path with section: [path/to/file.md # Section]  
-  / DirectiveContext "/show" _ content:SemanticSectionContent rename:AsNewTitle? {
-      helpers.debug('SlashShow matched bracketed path section', { content, rename });
+  // Load content expression: <path/to/file.md> or <path # Section>
+  / DirectiveContext "/show" _ content:AlligatorExpression rename:AsNewTitle? {
+      helpers.debug('SlashShow matched load content expression', { content, rename });
       
-      const rawPath = content.raw.split(' # ')[0];
-      const sectionText = content.section;
-      
-      // Create values object
+      // Handle content loading
       const values = {
-        sectionTitle: content.sectionNodes || [helpers.createNode(NodeType.Text, { content: sectionText, location: location() })],
-        path: content.parts
+        loadContent: content
       };
       
-      // Add new title if provided
+      // Add rename if provided
       if (rename) {
         values.newTitle = rename;
       }
       
-      // Create raw object
+      // Create raw representation
       const raw = {
-        sectionTitle: sectionText,
-        path: rawPath
+        loadContent: text()
       };
       
-      // Add new title to raw if present
       if (rename) {
         raw.newTitle = rename[0].content;
       }
       
-      // Create meta object with path metadata
+      // Create meta
       const meta = {
-        path: helpers.createPathMetadata(rawPath, content.parts)
+        hasSection: content.options && content.options.section,
+        sourceType: content.source.type
       };
       
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
-        'showPathSection', 
+        'showLoadContent', 
         values, 
         raw, 
         meta, 
         location(),
-        'section'  // Added source parameter
-      );
-    }
-  / DirectiveContext "/show" _ sectionTitle:QuotedContent _ "from" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ asTitle:AsNewTitle? {
-      // This rule should match section syntax FIRST before the template rule below
-      helpers.debug('SlashShow matched section', { sectionTitle, path, asTitle, security });
-      
-      // Process the section title and path
-      const sectionTitleNode = sectionTitle[0]; // Get the first node from the array
-      
-      // Create values object
-      const values = {
-        sectionTitle: sectionTitle,
-        path: path.values.path || path.values.url
-      };
-      
-      // Add new title if provided
-      if (asTitle) {
-        values.newTitle = asTitle;
-      }
-      
-      // Create raw object
-      const raw = {
-        sectionTitle: sectionTitleNode.content,
-        path: path.raw.path || path.raw.url
-      };
-      
-      // Add new title to raw if present
-      if (asTitle) {
-        raw.newTitle = asTitle[0].content;
-      }
-      
-      // Create meta object with path metadata
-      const meta = {
-        path: {
-          ...path.meta,
-          pathSubtype: path.subtype // Preserve the specific path type
-        },
-        ...helpers.createSecurityMeta(security)
-      };
-      
-      return helpers.createStructuredDirective(
-        DirectiveKind.show, 
-        'showPathSection', 
-        values, 
-        raw, 
-        meta, 
-        location(),
-        'section'  // Added source parameter
+        'load-content'
       );
     }
   / DirectiveContext "/show" _ security:(SecurityOptions _)? template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
@@ -516,7 +431,7 @@ SlashShow
         'path'
       );
     }
-  / DirectiveContext "/show" _ !("[[") !('[' [^#\]]* '#') path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/show" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
       helpers.debug('SlashShow matched path', { path, headerLevel, underHeader, security });
       
       // Extract header level and under header if provided
@@ -603,33 +518,20 @@ SlashShow
       helpers.mlldError("Unclosed double brackets in /show directive. Expected closing ']]' for path section expression.", "]]", location());
     }
     
-  // Error: Unclosed single bracket [
-  / DirectiveContext "/show" _ "[" &{
-      return helpers.isUnclosedArray(input, peg$currPos);
-    } {
-      helpers.mlldError("Unclosed path bracket in /show directive. Expected closing ']' for path specification.", "]", location());
-    }
-    
-  // Error: Missing 'from' keyword in section syntax
-  / DirectiveContext "/show" _ QuotedContent _ &{
-      // Look ahead to see if next non-whitespace is [ or path-like
+  // Error: Unclosed alligator bracket <
+  / DirectiveContext "/show" _ "<" &{
+      // Check if we have an unclosed alligator bracket
       let i = peg$currPos;
-      while (i < input.length && (input[i] === ' ' || input[i] === '\t')) {
+      while (i < input.length) {
+        if (input[i] === '>') return false;
+        if (input[i] === '\n') return true;
         i++;
       }
-      // If we see [ or a path-like character, but didn't match section syntax, must be missing 'from'
-      if (i < input.length && (input[i] === '[' || input[i] === '/' || /[a-zA-Z0-9.]/.test(input[i]))) {
-        return true;
-      }
-      return false;
+      return true;
     } {
-      helpers.mlldError("Invalid section syntax in /show directive. Expected 'from' keyword after section title. Use: /show \"Section Title\" from [path]", "from", location());
+      helpers.mlldError("Unclosed alligator bracket in /show directive. Expected closing '>' for content loading.", ">", location());
     }
     
-  // Error: Missing path after 'from' in section syntax
-  / DirectiveContext "/show" _ QuotedContent _ "from" _ &(LineTerminator / EOF) {
-      helpers.mlldError("Missing path in /show section syntax. Expected a path after 'from' keyword.", "path", location());
-    }
     
   // Error: Invalid @ usage (not followed by valid identifier)
   / DirectiveContext "/show" _ "@" &{
@@ -668,14 +570,14 @@ SlashShow
   / DirectiveContext "/show" _ "foreach" _ &{
       // Check if we have incomplete foreach syntax
       const rest = input.substring(peg$currPos).trim();
-      return !rest.startsWith('@') && !rest.startsWith('[');
+      return !rest.startsWith('@') && !rest.startsWith('<');
     } {
-      helpers.mlldError("Invalid foreach syntax in /show directive. Expected '@command(@arrays)' or '[@array.field # section]' after 'foreach'.", "foreach", location());
+      helpers.mlldError("Invalid foreach syntax in /show directive. Expected '@command(@arrays)' or '<@array.field # section>' after 'foreach'.", "foreach", location());
     }
     
   // Error: Generic /show syntax error (catch-all)
   / DirectiveContext "/show" {
-      helpers.mlldError("Invalid /show syntax. Expected: /show `template`, /show @variable, /show [path], or /show \"section\" from [path]", "`", location());
+      helpers.mlldError("Invalid /show syntax. Expected: /show `template`, /show @variable, /show <path>, or /show <path # section>", "`", location());
     }
 
 // -------------------------------------------------------------
@@ -684,13 +586,25 @@ SlashShow
 
 // Reference for other directives to use
 AddDirectiveRef
-  = RHSContext _ path:WrappedPathContent {
+  = RHSContext _ content:AlligatorExpression {
+      // Handle alligator syntax for showing file content
+      return {
+        subtype: 'showLoadContent',
+        values: { loadContent: content },
+        raw: { loadContent: content.source.raw },
+        meta: { 
+          sourceType: content.source.type
+        }
+      };
+    }
+  / RHSContext _ path:InterpolatedDoubleQuoteContent {
+      // Handle quoted paths
       return {
         subtype: 'showPath',
-        values: { path: path.parts },
-        raw: { path: path.raw },
+        values: { path: path },
+        raw: { path: helpers.reconstructRawString(path) },
         meta: { 
-          path: helpers.createPathMetadata(path.raw, path.parts)
+          path: helpers.createPathMetadata(helpers.reconstructRawString(path), path)
         }
       };
     }

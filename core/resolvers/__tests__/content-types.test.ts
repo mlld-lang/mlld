@@ -287,19 +287,29 @@ describe('Content Type Detection', () => {
       resolverManager.configurePrefixes([{
         prefix: '@test/',
         resolver: 'REGISTRY',
-              }]);
+        type: 'module',
+        config: {}
+      }]);
       
       // Mock fetch for registry
       global.fetch = async (url: string) => {
-        if (url.includes('/registry.json')) {
+        if (url.includes('/modules.json')) {
           return {
             ok: true,
             json: async () => ({
-              author: 'test',
+              version: '1.0.0',
               modules: {
-                utils: {
-                  source: { url: 'https://example.com/utils.mld' },
-                  description: 'Utility module'
+                '@test/utils': {
+                  name: 'utils',
+                  author: 'test',
+                  source: { 
+                    url: 'https://example.com/utils.mld',
+                    contentHash: 'abc123def456'
+                  },
+                  description: 'Utility module',
+                  about: 'Utility module for testing',
+                  needs: [],
+                  license: 'CC0'
                 }
               }
             })
@@ -330,21 +340,21 @@ describe('Content Type Detection', () => {
       resolverManager.registerResolver(new InputResolver('{"test": "data"}'));
     });
 
-    it('NOW resolver returns text by default', async () => {
-      const result = await resolverManager.resolve('@NOW');
+    it('now resolver returns text by default', async () => {
+      const result = await resolverManager.resolve('@now');
       
       expect(result.content.contentType).toBe('text');
       expect(typeof result.content.content).toBe('string');
     });
 
-    it('DEBUG resolver returns data', async () => {
-      const result = await resolverManager.resolve('@DEBUG');
+    it('debug resolver returns data', async () => {
+      const result = await resolverManager.resolve('@debug');
       
       expect(result.content.contentType).toBe('data');
     });
 
-    it('INPUT resolver returns appropriate type based on content', async () => {
-      const result = await resolverManager.resolve('@INPUT');
+    it('input resolver returns appropriate type based on content', async () => {
+      const result = await resolverManager.resolve('@input');
       
       expect(result.content.contentType).toBe('data');
       expect(result.content.content).toContain('"test"');

@@ -38,10 +38,10 @@ describe('Path Content Type Validation', () => {
       }
     ]);
     
-    // Configure PROJECTPATH resolver
+    // Configure base resolver
     resolverManager.configurePrefixes([{
-      prefix: '@PROJECTPATH',
-      resolver: 'PROJECTPATH',
+      prefix: '@base',
+      resolver: 'base',
       config: { basePath: '/' }
     }]);
     
@@ -90,13 +90,13 @@ describe('Path Content Type Validation', () => {
       expect(result.trim()).toBe('{"setting": "value"}');
     });
 
-    it('should handle @PROJECTPATH references', async () => {
+    it('should handle @base references', async () => {
       await fileSystem.mkdir('/project');
       await fileSystem.writeFile('/project/package.json', '{"name": "test-project"}');
       await fileSystem.writeFile('/project/src/data.txt', 'Project data');
       
       const code = `
-/path @data = "@PROJECTPATH/src/data.txt"
+/path @data = "@base/src/data.txt"
 /show @data
 `;
       

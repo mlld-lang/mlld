@@ -3,13 +3,14 @@ import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { ExecutableDefinition } from '@core/types/executable';
 import { isCommandExecutable, isCodeExecutable, isTemplateExecutable, isCommandRefExecutable, isSectionExecutable, isResolverExecutable } from '@core/types/executable';
-import { interpolate, resolveVariableValue } from '../core/interpreter';
+import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
-import { isExecutableVariable, createSimpleTextVariable } from '@core/types/variable';
+import { isExecutableVariable, createSimpleTextVariable, createObjectVariable, createArrayVariable, createPrimitiveVariable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
 import { MlldInterpreterError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
+import { prepareValueForShadow } from '../env/variable-proxy';
 
 /**
  * Evaluate an ExecInvocation node
@@ -57,8 +58,9 @@ export async function evaluateExecInvocation(
       throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
     }
     
-    // Resolve the object value
-    const objectValue = await resolveVariableValue(objectVar, env);
+    // Extract Variable value for object field access - WHY: Need raw object to access fields
+    const { extractVariableValue } = await import('../utils/variable-resolution');
+    const objectValue = await extractVariableValue(objectVar, env);
     
     if (process.env.DEBUG_EXEC) {
       logger.debug('Object reference in exec invocation', {
@@ -237,6 +239,55 @@ export async function evaluateExecInvocation(
           break;
           
         case 'VariableReference':
+          // Special handling for variable references to preserve objects
+          const varRef = arg as any;
+          const varName = varRef.identifier;
+          const variable = env.getVariable(varName);
+          
+          if (variable) {
+            // Get the actual value from the variable
+            let value = variable.value;
+            
+            // Handle field access (e.g., @user.name)
+            if (varRef.fields && varRef.fields.length > 0) {
+              // Navigate through nested fields
+              for (const field of varRef.fields) {
+                if (value && typeof value === 'object' && (field.type === 'field' || field.type === 'numericField')) {
+                  // Handle object field access (including numeric fields)
+                  value = value[field.value];
+                } else if (Array.isArray(value) && (field.type === 'index' || field.type === 'arrayIndex')) {
+                  // Handle array index access
+                  const index = parseInt(field.value, 10);
+                  value = isNaN(index) ? undefined : value[index];
+                } else {
+                  // Field not found or invalid access
+                  value = undefined;
+                  break;
+                }
+              }
+            }
+            
+            // Preserve the type of the final value
+            argValueAny = value;
+            // For objects and arrays, use JSON.stringify to get proper string representation
+            if (value === undefined) {
+              argValue = 'undefined';
+            } else if (typeof value === 'object' && value !== null) {
+              try {
+                argValue = JSON.stringify(value);
+              } catch (e) {
+                argValue = String(value);
+              }
+            } else {
+              argValue = String(value);
+            }
+          } else {
+            // Variable not found - use interpolation which will throw appropriate error
+            argValue = await interpolate([arg], env, InterpolationContext.Default);
+            argValueAny = argValue;
+          }
+          break;
+          
         case 'ExecInvocation':
         case 'Text':
         default:
@@ -260,26 +311,141 @@ export async function evaluateExecInvocation(
     evaluatedArgs.push(argValueAny);
   }
   
+  // Track original Variables for arguments
+  const originalVariables: (any | undefined)[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg && typeof arg === 'object' && 'type' in arg && arg.type === 'VariableReference') {
+      const varRef = arg as any;
+      const varName = varRef.identifier;
+      const variable = env.getVariable(varName);
+      if (variable && !varRef.fields) {
+        // Only preserve if no field access
+        originalVariables[i] = variable;
+        
+        if (process.env.MLLD_DEBUG === 'true') {
+          const subtype = variable.type === 'primitive' && 'primitiveType' in variable 
+            ? (variable as any).primitiveType 
+            : variable.subtype;
+            
+          logger.debug(`Preserving original Variable for arg ${i}:`, {
+            varName,
+            variableType: variable.type,
+            variableSubtype: subtype,
+            isPrimitive: typeof variable.value !== 'object' || variable.value === null
+          });
+        }
+      }
+    }
+  }
+  
   // Bind evaluated arguments to parameters
   for (let i = 0; i < params.length; i++) {
     const paramName = params[i];
+    const argValue = evaluatedArgs[i]; // Use the preserved type value
     const argStringValue = evaluatedArgStrings[i];
     
-    if (argStringValue !== undefined) {
-      const paramVar = createSimpleTextVariable(
-        paramName, 
-        argStringValue,
-        {
-          directive: 'var',
-          syntax: 'quoted',
-          hasInterpolation: false,
-          isMultiLine: false
-        },
-        {
-          isSystem: true, // Mark as system variable to bypass reserved name check
-          isParameter: true
+    if (argValue !== undefined) {
+      let paramVar;
+      
+      // Check if we have the original Variable
+      const originalVar = originalVariables[i];
+      if (originalVar) {
+        // Use the original Variable directly, just update the name
+        paramVar = {
+          ...originalVar,
+          name: paramName,
+          metadata: {
+            ...originalVar.metadata,
+            isSystem: true,
+            isParameter: true
+          }
+        };
+        
+        if (process.env.MLLD_DEBUG === 'true') {
+          const subtype = paramVar.type === 'primitive' && 'primitiveType' in paramVar 
+            ? (paramVar as any).primitiveType 
+            : paramVar.subtype;
+            
+          logger.debug(`Using original Variable for param ${paramName}:`, {
+            type: paramVar.type,
+            subtype: subtype,
+            hasMetadata: !!paramVar.metadata
+          });
         }
-      );
+      }
+      // Create appropriate variable type based on actual data
+      else if (typeof argValue === 'object' && argValue !== null && !Array.isArray(argValue)) {
+        // Object type - preserve structure
+        paramVar = createObjectVariable(
+          paramName,
+          argValue,
+          true, // isComplex = true for objects from parameters
+          {
+            directive: 'var',
+            syntax: 'object',
+            hasInterpolation: false,
+            isMultiLine: false
+          },
+          {
+            isSystem: true,
+            isParameter: true
+          }
+        );
+      } else if (Array.isArray(argValue)) {
+        // Array type - preserve structure
+        paramVar = createArrayVariable(
+          paramName,
+          argValue,
+          true, // isComplex = true for arrays from parameters
+          {
+            directive: 'var',
+            syntax: 'array',
+            hasInterpolation: false,
+            isMultiLine: false
+          },
+          {
+            isSystem: true,
+            isParameter: true
+          }
+        );
+      } else {
+        // Primitive types - create appropriate Variable type
+        if (typeof argValue === 'number' || typeof argValue === 'boolean' || argValue === null) {
+          // Create PrimitiveVariable for number, boolean, null
+          paramVar = createPrimitiveVariable(
+            paramName,
+            argValue,
+            {
+              directive: 'var',
+              syntax: 'literal',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            {
+              isSystem: true,
+              isParameter: true
+            }
+          );
+        } else {
+          // String or other types - use SimpleTextVariable
+          paramVar = createSimpleTextVariable(
+            paramName, 
+            argStringValue,
+            {
+              directive: 'var',
+              syntax: 'quoted',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            {
+              isSystem: true,
+              isParameter: true
+            }
+          );
+        }
+      }
+      
       execEnv.setParameterVariable(paramName, paramVar);
     }
   }
@@ -307,9 +473,20 @@ export async function evaluateExecInvocation(
     const envVars: Record<string, string> = {};
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
-      const argValue = evaluatedArgStrings[i]; // Use string version for env vars
-      if (argValue !== undefined) {
-        envVars[paramName] = String(argValue);
+      
+      // Properly serialize proxy objects for execution
+      const paramVar = execEnv.getVariable(paramName);
+      if (paramVar && typeof paramVar.value === 'object' && paramVar.value !== null) {
+        // For objects and arrays, use JSON serialization
+        try {
+          envVars[paramName] = JSON.stringify(paramVar.value);
+        } catch (e) {
+          // Fallback to string version if JSON serialization fails
+          envVars[paramName] = evaluatedArgStrings[i];
+        }
+      } else {
+        // For primitives and other types, use the string version
+        envVars[paramName] = evaluatedArgStrings[i];
       }
     }
     
@@ -336,14 +513,34 @@ export async function evaluateExecInvocation(
   }
   // Handle code executables
   else if (isCodeExecutable(definition)) {
-    // Interpolate the code template with parameters
-    const code = await interpolate(definition.codeTemplate, execEnv);
+    // For bash/sh, don't interpolate the code template - bash handles its own variable substitution
+    let code: string;
+    if (definition.language === 'bash' || definition.language === 'sh') {
+      // For bash/sh, just extract the raw code without interpolation
+      if (Array.isArray(definition.codeTemplate)) {
+        // If it's an array of nodes, concatenate their content
+        code = definition.codeTemplate.map(node => {
+          if (typeof node === 'string') return node;
+          if (node && typeof node === 'object' && 'content' in node) return node.content || '';
+          return '';
+        }).join('');
+      } else if (typeof definition.codeTemplate === 'string') {
+        code = definition.codeTemplate;
+      } else {
+        code = '';
+      }
+    } else {
+      // For other languages (JS, Python), interpolate as before
+      code = await interpolate(definition.codeTemplate, execEnv);
+    }
     
     // Import ASTEvaluator for normalizing array values
     const { ASTEvaluator } = await import('../core/ast-evaluator');
     
     // Build params object for code execution
     const codeParams: Record<string, any> = {};
+    const variableMetadata: Record<string, any> = {};
+    
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
       
@@ -360,17 +557,57 @@ export async function evaluateExecInvocation(
       if (paramVar && paramVar.type === 'pipeline-input') {
         // Pass the pipeline input object directly for code execution
         codeParams[paramName] = paramVar.value;
-      } else if (paramVar && paramVar.metadata?.actualValue !== undefined) {
-        // Use the actual value from the parameter variable if available
-        // Normalize arrays to ensure plain JavaScript values
-        const actualValue = paramVar.metadata.actualValue;
-        codeParams[paramName] = await ASTEvaluator.evaluateToRuntime(actualValue, execEnv);
+      } else if (paramVar) {
+        // Always use enhanced Variable passing
+        if (definition.language === 'bash' || definition.language === 'sh') {
+          // Bash/sh get simple values - the BashExecutor will handle conversion
+          // Just pass the Variable or proxy as-is, let the executor adapt it
+          codeParams[paramName] = prepareValueForShadow(paramVar);
+        } else {
+          // Other languages (JS, Python) get proxies for rich type info
+          // But first, check if it's a complex Variable that needs resolution
+          if ((paramVar as any).isComplex && paramVar.value && typeof paramVar.value === 'object' && 'type' in paramVar.value) {
+            // Complex Variable with AST - extract value - WHY: Shadow environments need evaluated values
+            const { extractVariableValue: extractVal } = await import('../utils/variable-resolution');
+            const resolvedValue = await extractVal(paramVar, execEnv);
+            const resolvedVar = {
+              ...paramVar,
+              value: resolvedValue,
+              isComplex: false
+            };
+            codeParams[paramName] = prepareValueForShadow(resolvedVar);
+          } else {
+            codeParams[paramName] = prepareValueForShadow(paramVar);
+          }
+        }
         
-        // Debug primitive values
-        if (process.env.DEBUG_EXEC) {
-          logger.debug(`Using actualValue for ${paramName}:`, {
-            actualValue: paramVar.metadata.actualValue,
-            type: typeof paramVar.metadata.actualValue
+        // Store metadata for primitives that can't be proxied (only for non-bash languages)
+        if ((definition.language !== 'bash' && definition.language !== 'sh') && 
+            (paramVar.value === null || typeof paramVar.value !== 'object')) {
+          // Handle PrimitiveVariable which has primitiveType instead of subtype
+          const subtype = paramVar.type === 'primitive' && 'primitiveType' in paramVar 
+            ? (paramVar as any).primitiveType 
+            : paramVar.subtype;
+          
+          variableMetadata[paramName] = {
+            type: paramVar.type,
+            subtype: subtype,
+            metadata: paramVar.metadata,
+            isVariable: true
+          };
+        }
+        
+        if (process.env.DEBUG_EXEC || process.env.MLLD_DEBUG === 'true') {
+          const subtype = paramVar.type === 'primitive' && 'primitiveType' in paramVar 
+            ? (paramVar as any).primitiveType 
+            : paramVar.subtype;
+            
+          logger.debug(`Variable passing for ${paramName}:`, {
+            variableType: paramVar.type,
+            variableSubtype: subtype,
+            hasMetadata: !!paramVar.metadata,
+            isPrimitive: paramVar.value === null || typeof paramVar.value !== 'object',
+            language: definition.language
           });
         }
       } else {
@@ -392,11 +629,12 @@ export async function evaluateExecInvocation(
       }
     }
     
-    // Execute the code with parameters
+    // Execute the code with parameters and metadata
     const codeResult = await execEnv.executeCode(
       code,
       definition.language || 'javascript',
-      codeParams
+      codeParams,
+      Object.keys(variableMetadata).length > 0 ? variableMetadata : undefined
     );
     
     // If the result looks like JSON (from return statement), parse it
@@ -571,7 +809,8 @@ export async function evaluateExecInvocation(
     env,
     // For stdout, convert the parsed value back to string for backward compatibility
     // but preserve the actual value in the value field for truthiness checks
-    stdout: typeof result === 'string' ? result : String(result),
+    stdout: typeof result === 'string' ? result : 
+            (typeof result === 'object' && result !== null ? JSON.stringify(result) : String(result)),
     stderr: '',
     exitCode: 0
   };

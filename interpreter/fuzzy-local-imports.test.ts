@@ -64,7 +64,7 @@ describe('Fuzzy Local File Imports', () => {
     });
 
     it('should import files with spaces using underscores', async () => {
-      const source = '/show [./my_important_file.md]';
+      const source = '/show <./my_important_file.md>';
       
       const result = await interpret(source, {
         fileSystem,
@@ -76,7 +76,7 @@ describe('Fuzzy Local File Imports', () => {
     });
 
     it('should handle nested paths with mixed separators', async () => {
-      const source = '/import { value } from "./sub_folder/nested-file"\n/show ::Value: {{value}}::';
+      const source = '/import { value } from "./sub_folder/nested-file"\n/show :::Value: {{value}}:::';
       
       const result = await interpret(source, {
         fileSystem,
@@ -102,7 +102,7 @@ describe('Fuzzy Local File Imports', () => {
     });
 
     it('should find .md files without extension', async () => {
-      const source = '/show [./my-important-file]';
+      const source = '/show <./my-important-file>';
       
       const result = await interpret(source, {
         fileSystem,
@@ -199,7 +199,7 @@ describe('Fuzzy Local File Imports', () => {
 
   describe('Integration with @show directive', () => {
     it('should fuzzy match files in @show', async () => {
-      const source = '/show [./my-projects/readme]';
+      const source = '/show <./my-projects/readme>';
       
       const result = await interpret(source, {
         fileSystem,
@@ -213,7 +213,7 @@ describe('Fuzzy Local File Imports', () => {
   
   describe('Integration with @var directive', () => {
     it('should fuzzy match files in @text assignments', async () => {
-      const source = '/var @content = [./MY_IMPORTANT_FILE.MD]\n/show @content';
+      const source = '/var @content = <./MY_IMPORTANT_FILE.MD>\n/show @content';
       
       const result = await interpret(source, {
         fileSystem,
@@ -227,7 +227,7 @@ describe('Fuzzy Local File Imports', () => {
     it('should fuzzy match files with section extraction', async () => {
       await fileSystem.writeFile('/Guide.md', '# Guide\n\n## Setup\n\nInstall steps here\n\n## Usage\n\nHow to use');
       
-      const source = '/var @section = [./guide # Setup]\n/show @section';
+      const source = '/var @section = <./guide # Setup>\n/show @section';
       
       const result = await interpret(source, {
         fileSystem,
@@ -241,7 +241,7 @@ describe('Fuzzy Local File Imports', () => {
 
   describe('Integration with @path directive', () => {
     it('should fuzzy match files in @path assignments', async () => {
-      const source = '/path @doc = "./my-important-file"\n/show @doc';
+      const source = '/path @doc = "./my-important-file"\n/show <@doc>';
       
       const result = await interpret(source, {
         fileSystem,
@@ -252,11 +252,11 @@ describe('Fuzzy Local File Imports', () => {
       expect(result.trim()).toBe('# Important Content');
     });
     
-    it.skip('should fuzzy match directories in @path assignments', async () => {
+    it('should fuzzy match directories in @path assignments', async () => {
       // TODO: This test is failing with a parse error. The fuzzy matching
       // for paths used in variable interpolation within brackets may not be
       // working correctly. Needs investigation.
-      const source = '/path @folder = "./my_projects"\n/var @readme = [@folder/README.md]\n/show @readme';
+      const source = '/path @folder = "./my_projects"\n/show <@folder/README.md>';
       
       const result = await interpret(source, {
         fileSystem,

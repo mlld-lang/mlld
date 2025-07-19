@@ -1,4 +1,4 @@
-/var @docs = @add [files/README.md]
+/var @docs = <files/README.md>
               
 /var @role = {
     "architect": "You are a software architect.",

@@ -4,7 +4,7 @@
  */
 
 /**
- * Get the current time value for @NOW variable
+ * Get the current time value for @now variable
  * Handles test mocking via MLLD_MOCK_TIME environment variable
  */
 export function getTimeValue(): string {
@@ -22,7 +22,7 @@ export function getTimeValue(): string {
 }
 
 /**
- * Get the project path value for @PROJECTPATH variable
+ * Get the project path value for @base variable
  * This is a placeholder that gets replaced with actual project path later
  */
 export function getProjectPathValue(basePath: string): string {

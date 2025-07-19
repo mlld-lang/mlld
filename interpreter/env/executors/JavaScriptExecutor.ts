@@ -1,6 +1,7 @@
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
+import { createMlldHelpers } from '../variable-proxy';
 
 export interface ShadowEnvironment {
   /**
@@ -25,7 +26,8 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
     code: string,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext,
-    params?: Record<string, any>
+    params?: Record<string, any>,
+    metadata?: Record<string, any>
   ): Promise<string> {
     // For JavaScript execution, always halt on errors (don't use continue behavior)
     // This ensures that JS errors propagate properly for testing and error handling
@@ -34,13 +36,14 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       `js: ${code.substring(0, 50)}...`,
       jsOptions,
       context,
-      () => this.executeJavaScript(code, params)
+      () => this.executeJavaScript(code, params, metadata)
     );
   }
 
   private async executeJavaScript(
     code: string,
-    params?: Record<string, any>
+    params?: Record<string, any>,
+    metadata?: Record<string, any>
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
 
@@ -88,27 +91,21 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       if (!params || !params['mlld_now']) {
         functionBody = `const mlld_now = () => new Date().toISOString();\n${functionBody}`;
       }
-
-      // Debug exec-code issue
-      if (process.env.DEBUG_EXEC || process.env.DEBUG_PRIMITIVES) {
-        console.log('executeCode debug:');
-        console.log('  code:', code);
-        console.log('  functionBody:', functionBody);
-        console.log('  allParamNames:', allParamNames);
-        console.log('  allParamValues:', allParamValues);
-        console.log('  param types:', allParamValues.map(v => typeof v));
-        console.log('  param values detail:', allParamValues.map(v => ({ value: v, type: typeof v })));
+      
+      // Add mlld helpers for Variable access
+      if (!params || !params['mlld']) {
+        // Create mlld helpers with primitive metadata
+        const mlldHelpers = createMlldHelpers(metadata);
+        allParamNames.push('mlld');
+        allParamValues.push(mlldHelpers);
       }
+
 
       // Create a function with dynamic parameters
       let fn: Function;
       try {
         fn = new Function(...allParamNames, functionBody);
       } catch (syntaxError) {
-        console.error('Function creation failed:');
-        console.error('  allParamNames:', allParamNames);
-        console.error('  functionBody:', functionBody);
-        console.error('  Full function would be:', `function(${allParamNames.join(', ')}) { ${functionBody} }`);
         throw syntaxError;
       }
 

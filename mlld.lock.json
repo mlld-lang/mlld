@@ -57,15 +57,20 @@
   "modules": {},
   "cache": {},
   "imports": {
-    "@private/test-private-module-fixed": {
-      "resolved": "file:///Users/adam/dev/mlld-resolvers/test-resolver/test-private-module-fixed.mld",
-      "integrity": "sha256:bf6641bf5f484ac2142cf731072c912f1d9fa3ce8e7b4eb5af5d7810eaee95ab",
-      "approvedAt": "2025-06-13T22:35:24.807Z"
-    },
     "@local/confidence": {
       "resolved": "file:///Users/adam/dev/mlld-resolvers/llm/modules/confidence.mlld.md",
       "integrity": "sha256:8a9aa4171388a02634a4c27b4ea3589a8be01cb651b5ea3d6349328b32b6c779",
       "approvedAt": "2025-06-14T06:55:47.656Z"
+    },
+    "@mlld/env": {
+      "resolved": "registry://@mlld/env",
+      "integrity": "sha256:2adb65cd63cc6e57fc194674dd04d5386ffc320d0677601c8a8602e494591b8d",
+      "approvedAt": "2025-07-18T22:09:32.968Z"
+    },
+    "@mlld/github": {
+      "resolved": "registry://@mlld/github",
+      "integrity": "sha256:8440ead3a31129855503bf0274668a88d8f138b1df636c0a5678fd40bea4afeb",
+      "approvedAt": "2025-07-18T22:09:33.128Z"
     }
   }
 }

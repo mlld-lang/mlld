@@ -6,6 +6,7 @@ import { CollectionEvaluator } from './CollectionEvaluator';
 import { VariableReferenceEvaluator } from './VariableReferenceEvaluator';
 import { ForeachCommandEvaluator } from './ForeachCommandEvaluator';
 import { ForeachSectionEvaluator } from './ForeachSectionEvaluator';
+import { LoadContentEvaluator } from './LoadContentEvaluator';
 import { logger } from '@core/utils/logger';
 
 /**
@@ -30,6 +31,7 @@ export class DataValueEvaluator {
   private readonly variableReferenceEvaluator: VariableReferenceEvaluator;
   private readonly foreachCommandEvaluator: ForeachCommandEvaluator;
   private readonly foreachSectionEvaluator: ForeachSectionEvaluator;
+  private readonly loadContentEvaluator: LoadContentEvaluator;
 
   constructor() {
     // Initialize state manager
@@ -41,6 +43,7 @@ export class DataValueEvaluator {
     this.variableReferenceEvaluator = new VariableReferenceEvaluator(this.evaluate.bind(this));
     this.foreachCommandEvaluator = new ForeachCommandEvaluator(this.evaluate.bind(this));
     this.foreachSectionEvaluator = new ForeachSectionEvaluator(this.evaluate.bind(this));
+    this.loadContentEvaluator = new LoadContentEvaluator();
   }
 
   /**
@@ -52,6 +55,7 @@ export class DataValueEvaluator {
    * @returns The evaluated result
    */
   async evaluate(value: DataValue, env: Environment): Promise<any> {
+    
     try {
       // Route to appropriate evaluator based on type
       if (this.primitiveEvaluator.canHandle(value)) {
@@ -59,7 +63,8 @@ export class DataValueEvaluator {
       }
       
       if (this.collectionEvaluator.canHandle(value)) {
-        return await this.collectionEvaluator.evaluate(value, env);
+        const result = await this.collectionEvaluator.evaluate(value, env);
+        return result;
       }
       
       if (this.variableReferenceEvaluator.canHandle(value)) {
@@ -74,6 +79,10 @@ export class DataValueEvaluator {
         return await this.foreachSectionEvaluator.evaluate(value, env);
       }
       
+      if (this.loadContentEvaluator.canHandle(value)) {
+        return await this.loadContentEvaluator.evaluate(value, env);
+      }
+      
       // Fallback - return the value as-is
       logger.warn('Unexpected value type in DataValueEvaluator:', { value });
       return value;
@@ -82,7 +91,7 @@ export class DataValueEvaluator {
       // Provide better error context
       const errorContext = {
         value: typeof value === 'object' ? { type: value?.type, keys: Object.keys(value || {}) } : value,
-        environment: env.getWorkingDirectory(),
+        environment: env.getExecutionDirectory(),
         error: error instanceof Error ? error.message : String(error)
       };
       

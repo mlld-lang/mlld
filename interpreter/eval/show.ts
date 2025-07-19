@@ -31,16 +31,6 @@ import { logger } from '@core/utils/logger';
 // Template normalization now handled in grammar - no longer needed here
 
 /**
- * Remove single blank lines but preserve multiple blank lines.
- * This helps match the expected output format.
- */
-function compactBlankLines(content: string): string {
-  // This operates on final output strings, not AST content
-  // eslint-disable-next-line mlld/no-ast-string-manipulation
-  return content.replace(/\n\n/g, '\n');
-}
-
-/**
  * Evaluate /show directives.
  * Handles variable references, paths, and templates.
  * 
@@ -50,6 +40,9 @@ export async function evaluateShow(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
+  
+  if (process.env.MLLD_DEBUG === 'true') {
+  }
   
   let content = '';
   
@@ -114,10 +107,31 @@ export async function evaluateShow(
       value = variable.value;
       originalValue = value;
       
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        logger.debug('show.ts: Processing array variable:', {
+          varName: variable.name,
+          valueType: typeof value,
+          hasType: value && typeof value === 'object' && 'type' in value,
+          typeValue: value && typeof value === 'object' && value.type,
+          hasItems: value && typeof value === 'object' && 'items' in value,
+          isArray: Array.isArray(value),
+          value: value
+        });
+      }
+      
       // Check if it's a lazy-evaluated array (still in AST form)
       if (value && typeof value === 'object' && value.type === 'array' && 'items' in value) {
         // Evaluate the array to get the actual values
         value = await evaluateDataValue(value, env);
+        
+        // Debug logging
+        if (process.env.MLLD_DEBUG === 'true') {
+          logger.debug('show.ts: After evaluation:', {
+            varName: variable.name,
+            value: value
+          });
+        }
       }
     } else if (isComputed(variable)) {
       // Computed value from code execution
@@ -153,6 +167,17 @@ export async function evaluateShow(
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
     }
     
+    // Debug logging for LoadContentResult
+    if (process.env.MLLD_DEBUG === 'true' && variable) {
+      logger.debug('Show variable value:', {
+        varName: variable.name,
+        varType: variable.type,
+        valueType: typeof value,
+        isObject: isObject(variable),
+        valueKeys: value && typeof value === 'object' ? Object.keys(value) : undefined
+      });
+    }
+    
     // Handle field access if present in the variable node
     if (variableNode.fields && variableNode.fields.length > 0 && typeof value === 'object' && value !== null) {
       const { accessField } = await import('../utils/field-access');
@@ -170,9 +195,11 @@ export async function evaluateShow(
           }
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          value = accessField(value, resolvedField);
+          const fieldResult = accessField(value, resolvedField, { preserveContext: true });
+          value = (fieldResult as any).value;
         } else {
-          value = accessField(value, field);
+          const fieldResult = accessField(value, field, { preserveContext: true });
+          value = (fieldResult as any).value;
         }
         if (value === undefined) break;
       }
@@ -189,13 +216,40 @@ export async function evaluateShow(
       }
     }
     
+    /**
+     * Extract Variable value for display output
+     * WHY: Display contexts need raw values because users see final content,
+     *      not internal Variable metadata or wrapper objects
+     */
+    const { isVariable, resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+    value = await resolveValue(value, env, ResolutionContext.Display);
+    
+    // Import LoadContentResult type check
+    const { isLoadContentResult, isLoadContentResultArray, isLoadContentResultURL } = await import('@core/types/load-content');
+    
     // Convert final value to string
     if (typeof value === 'string') {
       content = value;
     } else if (typeof value === 'number' || typeof value === 'boolean') {
       // For primitives, just convert to string
       content = String(value);
+    } else if (isLoadContentResult(value)) {
+      // For LoadContentResult, show the content by default
+      content = value.content;
+    } else if (isLoadContentResultArray(value)) {
+      // For array of LoadContentResult, concatenate content with double newlines
+      content = value.map(item => item.content).join('\n\n');
     } else if (Array.isArray(value)) {
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        logger.debug('show.ts: Formatting array:', {
+          varName: variable.name,
+          valueLength: value.length,
+          value: value,
+          isForeachSection: isForeachSection
+        });
+      }
+      
       // Check if this is from a foreach-section expression
       if (isForeachSection && value.every(item => typeof item === 'string')) {
         // Join string array with double newlines for foreach-section results
@@ -318,8 +372,8 @@ export async function evaluateShow(
       content = await llmxmlInstance.getSection(fileContent, titleWithoutHash, {
         includeNested: true
       });
-      // Compact blank lines and trim
-      content = compactBlankLines(content).trimEnd();
+      // Just trim trailing whitespace
+      content = content.trimEnd();
     } catch (error) {
       // Fallback to basic extraction if llmxml fails
       content = extractSection(fileContent, sectionTitle);
@@ -370,8 +424,10 @@ export async function evaluateShow(
       throw new Error('Add template directive missing content');
     }
     
+    
     // Interpolate the template
     content = await interpolate(templateNodes, env);
+    
     
     // Template normalization is now handled in the grammar at parse time
     
@@ -605,6 +661,39 @@ export async function evaluateShow(
       content = String(result);
     }
     
+  } else if (directive.subtype === 'showLoadContent') {
+    // Handle load content expressions: <file.md> or <file.md # Section>
+    const loadContentNode = directive.values?.loadContent;
+    if (!loadContentNode) {
+      throw new Error('Show load content directive missing content loader');
+    }
+    
+    // Use the content loader to process the node
+    const { processContentLoader } = await import('./content-loader');
+    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    const loadResult = await processContentLoader(loadContentNode, env);
+    
+    // Handle different return types from processContentLoader
+    if (typeof loadResult === 'string') {
+      // Backward compatibility - plain string
+      content = loadResult;
+    } else if (isLoadContentResult(loadResult)) {
+      // Single file with metadata - use content
+      content = loadResult.content;
+    } else if (isLoadContentResultArray(loadResult)) {
+      // Multiple files from glob - join their contents
+      content = loadResult.map(r => r.content).join('\n\n');
+    } else {
+      content = String(loadResult);
+    }
+    
+    // Handle rename if newTitle is specified (for section extraction)
+    const newTitleNodes = directive.values?.newTitle;
+    if (newTitleNodes && loadContentNode.options?.section) {
+      const newTitle = await interpolate(newTitleNodes, env);
+      content = applyHeaderTransform(content, newTitle);
+    }
+    
   } else {
     throw new Error(`Unsupported show subtype: ${directive.subtype}`);
   }
@@ -627,6 +716,44 @@ export async function evaluateShow(
   
   // Return the content
   return { value: content, env };
+}
+
+/**
+ * Apply header transformation to content
+ * Supports three cases:
+ * 1. Just header level: "###" -> change level only
+ * 2. Just text: "New Title" -> keep original level, replace text
+ * 3. Full header: "### New Title" -> replace entire line
+ */
+export function applyHeaderTransform(content: string, newHeader: string): string {
+  const lines = content.split('\n');
+  if (lines.length === 0) return newHeader;
+  
+  // Check if first line is a markdown header
+  if (lines[0].match(/^#+\s/)) {
+    const newHeaderTrimmed = newHeader.trim();
+    const headerMatch = newHeaderTrimmed.match(/^(#+)(\s+(.*))?$/);
+    
+    if (headerMatch) {
+      if (!headerMatch[3]) {
+        // Case 1: Just header level
+        const originalText = lines[0].replace(/^#+\s*/, '');
+        lines[0] = `${headerMatch[1]} ${originalText}`;
+      } else {
+        // Case 3: Full replacement
+        lines[0] = newHeaderTrimmed;
+      }
+    } else {
+      // Case 2: Just text, preserve original level
+      const originalLevel = lines[0].match(/^(#+)\s/)?.[1] || '#';
+      lines[0] = `${originalLevel} ${newHeaderTrimmed}`;
+    }
+  } else {
+    // No header found, prepend the new header
+    lines.unshift(newHeader);
+  }
+  
+  return lines.join('\n');
 }
 
 // We'll use llmxml for section extraction once it's properly set up

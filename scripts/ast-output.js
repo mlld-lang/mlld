@@ -4,7 +4,8 @@
  *
  * Usage:
  *   npm run ast -- "@run [echo 'hi']"              # Parse command line args
- *   npm run ast -- -f test.mld                      # Parse from file
+ *   npm run ast -- file.mld                         # Auto-detect files
+ *   npm run ast -- -f test.mld                      # Explicit file flag
  *   echo "@run [echo 'hi']" | npm run ast           # Parse from stdin
  *   npm run ast -- --debug "@text x = 'y'"         # Enable debug mode
  */
@@ -41,8 +42,18 @@ async function readSource() {
     return fs.readFile(filePath, 'utf8');
   }
   
-  // If command line args provided, use them
-  if (snippetParts.length) return snippetParts.join(' ');
+  // If command line args provided
+  if (snippetParts.length) {
+    const possibleFile = snippetParts.join(' ');
+    
+    // Auto-detect: if it's a single argument that could be a file path
+    if (snippetParts.length === 1 && existsSync(possibleFile)) {
+      return fs.readFile(possibleFile, 'utf8');
+    }
+    
+    // Otherwise treat as mlld snippet
+    return possibleFile;
+  }
   
   // Otherwise read from stdin
   return new Promise((resolve, reject) => {

@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
+import { generatePythonMlldHelpers, convertToPythonValue } from '../python-variable-helpers';
 
 export interface ShellCommandExecutor {
   /**
@@ -31,19 +32,21 @@ export class PythonExecutor extends BaseCommandExecutor {
     code: string,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext,
-    params?: Record<string, any>
+    params?: Record<string, any>,
+    metadata?: Record<string, any>
   ): Promise<string> {
     return this.executeWithCommonHandling(
       `python: ${code.substring(0, 50)}...`,
       options,
       context,
-      () => this.executePythonCode(code, params, options, context)
+      () => this.executePythonCode(code, params, metadata, options, context)
     );
   }
 
   private async executePythonCode(
     code: string,
     params?: Record<string, any>,
+    metadata?: Record<string, any>,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<CommandExecutionResult> {
@@ -54,12 +57,17 @@ export class PythonExecutor extends BaseCommandExecutor {
     try {
       // Build Python code with parameters
       let pythonCode = '';
+      
+      // Add mlld helpers for Variable access
+      pythonCode += generatePythonMlldHelpers(metadata) + '\n';
+      
       if (params && typeof params === 'object') {
         for (const [key, value] of Object.entries(params)) {
-          pythonCode += `${key} = ${JSON.stringify(value)}\n`;
+          // Always use Variable-aware conversion
+          pythonCode += convertToPythonValue(value, key) + '\n';
         }
       }
-      pythonCode += code;
+      pythonCode += '\n# User code:\n' + code;
       
       // Write to temp file
       fs.writeFileSync(tmpFile, pythonCode);

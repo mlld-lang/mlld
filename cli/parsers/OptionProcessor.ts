@@ -37,7 +37,7 @@ export class OptionProcessor {
       // Blank line normalization
       noNormalizeBlankLines: cliOptions.noNormalizeBlankLines,
       // Development mode
-      dev: cliOptions.dev,
+      dev: cliOptions.devMode,
       // Disable prettier formatting
       noFormat: cliOptions.noFormat,
       // Error capture for pattern development

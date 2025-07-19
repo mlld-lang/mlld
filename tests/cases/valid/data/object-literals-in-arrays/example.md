@@ -58,5 +58,5 @@
 /show @staticObj
 
 ## Path reference still works
-/var @pathTest = [/etc/hosts]
+/var @pathTest = </etc/hosts>
 /show `Path test (first 50 chars): @pathTest`

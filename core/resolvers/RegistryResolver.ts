@@ -35,29 +35,39 @@ export interface RegistryResolverConfig {
 }
 
 /**
- * Registry format from registry.json files
+ * Registry format from centralized modules.json file
  */
 interface RegistryFile {
   version?: string;
-  updated?: string;
-  author: string;
+  generated?: string;
   modules: Record<string, {
     name: string;
-    description: string;
-    author: {
-      name: string;
-      github: string;
-    };
+    author: string;
+    version?: string;
+    about: string;
+    needs: string[];
+    repo?: string;
+    keywords?: string[];
+    bugs?: string;
+    homepage?: string;
+    license: string;
+    mlldVersion?: string;
+    ownerGithubUserIds?: number[];
     source: {
       type: string;
-      repo: string;
-      hash: string;
       url: string;
+      contentHash: string;
+      repository?: {
+        type: string;
+        url: string;
+        commit: string;
+        path: string;
+      };
+      gistId?: string;
     };
-    dependencies: Record<string, string>;
-    keywords: string[];
-    mlldVersion: string;
+    dependencies?: Record<string, any>;
     publishedAt: string;
+    publishedBy?: number;
   }>;
 }
 
@@ -109,50 +119,90 @@ export class RegistryResolver implements Resolver {
       );
     }
 
-    const [user, moduleName] = ref.slice(1).split('/');
-    const registryRepo = config?.registryRepo || this.defaultRegistryRepo;
-    const branch = config?.branch || this.defaultBranch;
+    // Extract only the RegistryResolverConfig fields, ignore extra fields from ResolverManager
+    const registryConfig: RegistryResolverConfig = {
+      registryRepo: config?.registryRepo,
+      branch: config?.branch,
+      cacheTimeout: config?.cacheTimeout,
+      token: config?.token
+    };
+
+    const registryRepo = registryConfig.registryRepo || this.defaultRegistryRepo;
+    const branch = registryConfig.branch || this.defaultBranch;
 
     logger.debug(`Resolving ${ref} from registry: ${registryRepo}`);
 
     try {
-      // Fetch user's registry file
-      const registryFile = await this.fetchUserRegistry(user, registryRepo, branch, config);
+      // Fetch the centralized registry file
+      const registryFile = await this.fetchRegistry(registryRepo, branch, registryConfig);
       
-      // Look up the module - try both full name (@user/module) and just module name
-      const fullModuleName = `@${user}/${moduleName}`;
-      const moduleEntry = registryFile.modules[fullModuleName] || registryFile.modules[moduleName];
+      // Look up the module using the full @user/module format
+      const moduleEntry = registryFile.modules[ref];
       
       if (!moduleEntry) {
+        const [user, moduleName] = ref.slice(1).split('/');
         throw new MlldResolutionError(
           `Module '${moduleName}' not found in ${user}'s registry`
         );
       }
-
+      
       // Get the source URL directly from the registry
       const sourceUrl = moduleEntry.source.url;
       
       logger.debug(`Resolved ${ref} to source: ${sourceUrl}`);
 
-      // Return the URL as content - the actual fetching will be done by HTTPResolver/GitHubResolver
+      // Fetch the actual module content from the source URL
+      logger.debug(`Fetching module content from: ${sourceUrl}`);
+      
+      const response = await fetch(sourceUrl);
+      if (!response.ok) {
+        // Check for 404 specifically
+        if (response.status === 404) {
+          throw new MlldResolutionError(
+            `Module content not found at ${sourceUrl}. The module may have been moved or deleted.`
+          );
+        }
+        throw new MlldResolutionError(
+          `Failed to fetch module content from ${sourceUrl}: ${response.status} ${response.statusText}`
+        );
+      }
+      
+      const content = await response.text();
+      
+      // Validate we got actual content, not an error page
+      if (!content || content.length === 0) {
+        throw new MlldResolutionError(
+          `Module content is empty at ${sourceUrl}`
+        );
+      }
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log(`[RegistryResolver] Fetched content from ${sourceUrl}`);
+        console.log(`[RegistryResolver] Fetched content length: ${content.length}`);
+        console.log(`[RegistryResolver] First 200 chars:`, content.substring(0, 200));
+        console.log(`[RegistryResolver] Content includes directives:`, content.includes('/var'), content.includes('/exe'));
+      }
+      
       return {
-        content: sourceUrl,
+        content,
         contentType: 'module',
         metadata: {
           source: `registry://${ref}`,
           timestamp: new Date(),
           taintLevel: (TaintLevel as any).PUBLIC,
-          author: user,
-          mimeType: 'text/plain', // URL is plain text
-          hash: moduleEntry.source.hash
+          author: moduleEntry.author,
+          mimeType: 'text/x-mlld-module',
+          hash: moduleEntry.source.contentHash,
+          sourceUrl
         }
       };
     } catch (error) {
       if (error instanceof MlldResolutionError) {
         throw error;
       }
+      const errorMessage = error instanceof Error ? error.message : String(error);
       throw new MlldResolutionError(
-        `Failed to resolve ${ref} from registry: ${(error as any).message}`
+        `Failed to resolve ${ref} from registry: ${errorMessage}`
       );
     }
   }
@@ -195,27 +245,26 @@ export class RegistryResolver implements Resolver {
   }
 
   /**
-   * Fetch a user's registry file from GitHub
+   * Fetch the centralized registry file from GitHub
    */
-  private async fetchUserRegistry(
-    username: string, 
+  private async fetchRegistry(
     registryRepo: string, 
     branch: string,
     config?: RegistryResolverConfig
   ): Promise<RegistryFile> {
-    const cacheKey = `${registryRepo}:${branch}:${username}`;
+    const cacheKey = `${registryRepo}:${branch}:modules`;
     
     // Check cache first
     const cached = this.getCachedRegistry(cacheKey, config?.cacheTimeout);
     if (cached) {
-      logger.debug(`Registry cache hit for user: ${username}`);
+      logger.debug(`Registry cache hit`);
       return cached;
     }
 
-    // Construct GitHub raw URL - registry uses modules/{username}/registry.json structure
-    const registryUrl = `https://raw.githubusercontent.com/${registryRepo}/${branch}/modules/${username}/registry.json`;
+    // Construct GitHub raw URL - use centralized modules.json
+    const registryUrl = `https://raw.githubusercontent.com/${registryRepo}/${branch}/modules.json`;
     
-    logger.debug(`Fetching registry for ${username} from: ${registryUrl}`);
+    logger.debug(`Fetching registry from: ${registryUrl}`);
 
     // Fetch from GitHub
     const headers: HeadersInit = {
@@ -231,17 +280,9 @@ export class RegistryResolver implements Resolver {
 
     if (!response.ok) {
       if (response.status === 404) {
-        // Special handling for @local resolver
-        if (username === 'local') {
-          throw new MlldResolutionError(
-            `@local resolver is not configured. Run 'mlld setup' to enable it.`,
-            { username, registryUrl }
-          );
-        }
-        // Generic message for other resolvers
         throw new MlldResolutionError(
-          `There isn't a public module author or configured resolver with @${username}. Check your configuration or see the docs for more detail about resolvers.`,
-          { username, registryUrl }
+          `Registry not found at ${registryUrl}. The registry may be unavailable.`,
+          { registryUrl }
         );
       }
       throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
@@ -250,7 +291,7 @@ export class RegistryResolver implements Resolver {
     const registryData = await response.json();
     
     // Validate registry format
-    this.validateRegistryFile(registryData, username);
+    this.validateRegistryFile(registryData);
     
     // Cache the result
     this.cache.set(cacheKey, {
@@ -258,7 +299,7 @@ export class RegistryResolver implements Resolver {
       timestamp: Date.now()
     });
 
-    logger.debug(`Cached registry for ${username} with ${Object.keys(registryData.modules || {}).length} modules`);
+    logger.debug(`Cached registry with ${Object.keys(registryData.modules || {}).length} modules`);
 
     return registryData;
   }
@@ -283,17 +324,13 @@ export class RegistryResolver implements Resolver {
   /**
    * Validate registry file format
    */
-  private validateRegistryFile(data: any, username: string): void {
+  private validateRegistryFile(data: any): void {
     if (!data || typeof data !== 'object') {
       throw new Error('Registry file must be a valid JSON object');
     }
 
-    if (!data.author) {
-      throw new Error('Registry file missing author field');
-    }
-
-    if (data.author !== username) {
-      throw new Error(`Registry author '${data.author}' does not match username '${username}'`);
+    if (!data.version) {
+      throw new Error('Registry file missing version field');
     }
 
     if (!data.modules || typeof data.modules !== 'object') {
@@ -307,6 +344,20 @@ export class RegistryResolver implements Resolver {
       }
 
       const module = moduleData as any;
+      
+      // Validate required fields
+      if (!module.name || typeof module.name !== 'string') {
+        throw new Error(`Module '${moduleName}' missing or invalid name field`);
+      }
+
+      if (!module.author || typeof module.author !== 'string') {
+        throw new Error(`Module '${moduleName}' missing or invalid author field`);
+      }
+
+      if (!module.about || typeof module.about !== 'string') {
+        throw new Error(`Module '${moduleName}' missing or invalid about field`);
+      }
+
       if (!module.source || typeof module.source !== 'object') {
         throw new Error(`Module '${moduleName}' missing or invalid source field`);
       }
@@ -315,8 +366,16 @@ export class RegistryResolver implements Resolver {
         throw new Error(`Module '${moduleName}' missing or invalid source.url field`);
       }
 
-      if (!module.description || typeof module.description !== 'string') {
-        throw new Error(`Module '${moduleName}' missing or invalid description field`);
+      if (!module.source.contentHash || typeof module.source.contentHash !== 'string') {
+        throw new Error(`Module '${moduleName}' missing or invalid source.contentHash field`);
+      }
+
+      if (!Array.isArray(module.needs)) {
+        throw new Error(`Module '${moduleName}' missing or invalid needs field (must be array)`);
+      }
+
+      if (module.license !== 'CC0') {
+        throw new Error(`Module '${moduleName}' must have CC0 license`);
       }
     }
   }

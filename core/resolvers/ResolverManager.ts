@@ -9,11 +9,21 @@ import {
   ResolutionContext
 } from '@core/resolvers/types';
 import * as path from 'path';
+import * as fs from 'fs/promises';
 import { MlldResolutionError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { ModuleCache, LockFile } from '@core/registry';
 import { HashUtils } from '@core/registry/utils/HashUtils';
 import { hasUncommittedChanges, getGitStatus } from '@core/utils/gitStatus';
+
+/**
+ * Information about a local module for dev mode
+ */
+interface LocalModuleInfo {
+  name: string;
+  author: string;
+  path: string;
+}
 
 /**
  * Manages resolver registration, routing, and execution
@@ -28,6 +38,8 @@ export class ResolverManager {
   private lockFile?: LockFile;
   private offlineMode: boolean = false;
   private devMode: boolean = false;
+  private devPrefixes: Map<string, PrefixConfig> = new Map(); // Dynamic dev mode prefixes
+  private devModulesByAuthor: Map<string, string[]> = new Map(); // Track modules by author for dev mode
 
   constructor(
     securityPolicy?: ResolverSecurityPolicy,
@@ -130,6 +142,131 @@ export class ResolverManager {
     // Sort by prefix length (longest first) for proper matching
     this.prefixConfigs = processedPrefixes.sort((a, b) => b.prefix.length - a.prefix.length);
     logger.debug(`Configured ${prefixes.length} prefixes`);
+  }
+
+  /**
+   * Initialize dev mode by scanning local modules
+   */
+  async initializeDevMode(localModulePath: string): Promise<void> {
+    if (!this.devMode) return;
+    
+    try {
+      const modules = await this.scanLocalModules(localModulePath);
+      const authorModules = this.groupModulesByAuthor(modules);
+      
+      // Clear existing dev prefixes and modules
+      this.devPrefixes.clear();
+      this.devModulesByAuthor.clear();
+      
+      // Store modules by author for debugging
+      for (const [author, moduleNames] of authorModules) {
+        this.devModulesByAuthor.set(author, moduleNames);
+      }
+      
+      // Create dev prefix for each author
+      for (const [author, moduleNames] of authorModules) {
+        const devPrefix: PrefixConfig = {
+          prefix: `@${author}/`,
+          resolver: 'LOCAL',
+          type: 'input',
+          priority: 5, // Higher priority than registry (10)
+          config: {
+            basePath: localModulePath,
+            devMode: true,
+            moduleFilter: (name: string) => moduleNames.includes(name)
+          }
+        };
+        
+        this.devPrefixes.set(devPrefix.prefix, devPrefix);
+        logger.debug(`Dev mode: Added prefix ${devPrefix.prefix} for modules: ${moduleNames.join(', ')}`);
+      }
+      
+      logger.debug(`Dev mode initialized with ${this.devPrefixes.size} author prefixes`);
+    } catch (error) {
+      logger.warn('Failed to initialize dev mode:', error);
+    }
+  }
+
+  /**
+   * Scan local modules directory
+   */
+  private async scanLocalModules(basePath: string): Promise<LocalModuleInfo[]> {
+    const modules: LocalModuleInfo[] = [];
+    
+    try {
+      const files = await fs.readdir(basePath);
+      
+      for (const file of files) {
+        if (file.endsWith('.mlld.md') || file.endsWith('.mld.md')) {
+          try {
+            const filePath = path.join(basePath, file);
+            const content = await fs.readFile(filePath, 'utf8');
+            const metadata = this.extractMetadata(content);
+            
+            if (metadata?.name && metadata?.author) {
+              modules.push({
+                name: metadata.name,
+                author: metadata.author,
+                path: filePath
+              });
+            }
+          } catch (error) {
+            logger.debug(`Failed to read module ${file}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      logger.debug(`Failed to scan directory ${basePath}:`, error);
+    }
+    
+    return modules;
+  }
+
+  /**
+   * Extract metadata from module frontmatter
+   */
+  private extractMetadata(content: string): Record<string, any> | null {
+    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    if (!frontmatterMatch) return null;
+    
+    const frontmatter = frontmatterMatch[1];
+    const metadata: Record<string, any> = {};
+    
+    // Simple YAML parsing for basic key-value pairs
+    const lines = frontmatter.split('\n');
+    for (const line of lines) {
+      const match = line.match(/^(\w+):\s*(.+)$/);
+      if (match) {
+        const [, key, value] = match;
+        // Remove quotes if present
+        metadata[key] = value.replace(/^["']|["']$/g, '');
+      }
+    }
+    
+    return metadata;
+  }
+
+  /**
+   * Group modules by author
+   */
+  private groupModulesByAuthor(modules: LocalModuleInfo[]): Map<string, string[]> {
+    const authorModules = new Map<string, string[]>();
+    
+    for (const module of modules) {
+      if (!authorModules.has(module.author)) {
+        authorModules.set(module.author, []);
+      }
+      authorModules.get(module.author)!.push(module.name);
+    }
+    
+    return authorModules;
+  }
+
+  /**
+   * Get dev prefixes for debugging
+   */
+  getDevPrefixes(): Array<[string, string[]]> {
+    return Array.from(this.devModulesByAuthor.entries());
   }
 
   /**
@@ -309,11 +446,11 @@ export class ResolverManager {
           const statusEmoji = gitStatus === 'modified' ? '📝' : '🆕';
           const statusText = gitStatus === 'modified' ? 'modified' : 'untracked';
           
-          console.warn(`\n${statusEmoji} Local ${statusText} version detected for ${prefixConfig.prefix}${resolverRef}`);
-          console.warn(`   Remote: Using ${resolver.name} resolver`);
-          console.warn(`   Local:  ${localPath}`);
-          console.warn(`   Hint:   Use --dev flag to test with local version`);
-          console.warn(`           mlld run myfile.mld --dev\n`);
+          logger.warn(`${statusEmoji} Local ${statusText} version detected for ${prefixConfig.prefix}${resolverRef}`);
+          logger.warn(`   Remote: Using ${resolver.name} resolver`);
+          logger.warn(`   Local:  ${localPath}`);
+          logger.warn(`   Hint:   Use --dev flag to test with local version`);
+          logger.warn(`           mlld run myfile.mld --dev`);
         }
       }
 
@@ -542,6 +679,23 @@ export class ResolverManager {
    * Find the appropriate resolver for a reference
    */
   private async findResolver(ref: string, context?: ResolutionContext): Promise<{ resolver?: Resolver, prefixConfig?: PrefixConfig }> {
+    // Check dev prefixes first when in dev mode
+    if (this.devMode) {
+      for (const [prefix, config] of this.devPrefixes) {
+        if (ref.startsWith(prefix)) {
+          const resolver = this.resolvers.get(config.resolver);
+          if (resolver) {
+            const moduleRef = ref.slice(prefix.length);
+            // Verify module exists locally via the filter
+            if (config.config?.moduleFilter?.(moduleRef)) {
+              logger.debug(`Dev mode: Resolved ${ref} to local module`);
+              return { resolver, prefixConfig: config };
+            }
+          }
+        }
+      }
+    }
+    
     // First, check configured prefixes (sorted by prefix length)
     // This ensures that explicit prefix configurations take precedence
     for (const prefixConfig of this.prefixConfigs) {

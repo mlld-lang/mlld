@@ -1,6 +1,6 @@
 /exe @getValue = js {return "test-value"}
 /exe @getMessage = js {return "Hello from exec"}
-/exe @greet(name) = ::Hello, {{name}}!::
+/exe @greet(name) = :::Hello, {{name}}!:::
 
 /var @demo = {
   valueCmd: @getValue,

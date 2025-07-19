@@ -6,6 +6,6 @@
 /var @files = @getFiles(".", "*.txt")
 /var @sum = @calculate(5, 3)
 
-/show ::Version: {{version}}::
+/show :::Version: {{version}}:::
 /show @files
-/show ::Sum: {{sum}}::
+/show :::Sum: {{sum}}:::

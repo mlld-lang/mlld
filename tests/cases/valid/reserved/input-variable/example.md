@@ -1,23 +1,20 @@
-# @INPUT Reserved Variable Test
+# @input Reserved Variable Test
 
-This tests the @INPUT reserved variable with various usage patterns.
+This tests the @input reserved variable with various usage patterns.
 
 ## Direct Usage
-Input content: @add @INPUT
-
-## Lowercase Alias
-Input lowercase: @add @input
+Input content: /show @input
 
 ## Template Usage
-/var @greeting = ::Received input: {{INPUT}}::
+/var @greeting = :::Received input: {{input}}:::
 /show @greeting
 
-## Import from @INPUT
-/import { config } from @INPUT
+## Import from @input
+/import { config } from @input
 
-Config value: @add @config
+Config value: /show @config
 
-## Import from lowercase
+## Import again from @input
 /import { data } from @input
 
-Data value: @add @data
+Data value: /show @data

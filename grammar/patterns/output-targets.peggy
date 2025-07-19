@@ -85,13 +85,7 @@ OutputFilePath "output file path"
         meta: { quoted: true }
       };
     }
-  / "[" _ content:InterpolatedPathContent _ "]" {
-      return {
-        parts: content,
-        raw: `[${helpers.reconstructRawString(content)}]`,
-        meta: { bracketed: true }
-      };
-    }
+  // REMOVED: Bracket syntax - use quoted paths instead
   / chars:[^ \t\n\r"'\[\]]+ {
       const path = chars.join('');
       return {

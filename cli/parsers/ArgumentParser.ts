@@ -1,4 +1,6 @@
 import type { CLIOptions } from '../index';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export interface ParsedCLIArguments {
   command?: string;
@@ -11,7 +13,7 @@ export class ArgumentParser {
   private readonly commandsWithSubcommands = [
     'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 
     'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 
-    'setup', 'alias', 'env', 'test', 'run', 'error-test'
+    'setup', 'alias', 'env', 'dev', 'mode', 'test', 'run', 'error-test', 'clean'
   ];
 
   parseArgs(args: string[]): CLIOptions {
@@ -21,10 +23,19 @@ export class ArgumentParser {
       throw new TypeError('Internal CLI Error: Expected args to be an array.');
     }
 
+    // Check for dev mode from environment first
+    let devMode = process.env.MLLD_DEV === 'true';
+    
+    // Check lock file for development mode if not set by environment
+    if (!devMode) {
+      devMode = this.checkLockFileForMode() === 'development';
+    }
+    
     const options: CLIOptions = {
       input: '',
       format: 'markdown', // Default to markdown format
-      strict: false  // Default to permissive mode
+      strict: false,  // Default to permissive mode
+      devMode: devMode
     };
 
     // Store remaining args after command
@@ -79,6 +90,9 @@ export class ArgumentParser {
           break;
         case '--permissive':
           options.strict = false;
+          break;
+        case '--dev':
+          options.devMode = true;
           break;
         case '--home-path':
           options.homePath = args[++i];
@@ -169,10 +183,6 @@ export class ArgumentParser {
         // Blank line normalization
         case '--no-normalize-blank-lines':
           options.noNormalizeBlankLines = true;
-          break;
-        // Development mode
-        case '--dev':
-          options.dev = true;
           break;
         // Disable prettier formatting
         case '--no-format':
@@ -313,5 +323,31 @@ export class ArgumentParser {
 
   supportsSubcommands(command: string): boolean {
     return this.commandsWithSubcommands.includes(command);
+  }
+
+  private checkLockFileForMode(): string | undefined {
+    try {
+      // Check current directory first, then parent directories
+      let currentPath = process.cwd();
+      const root = path.parse(currentPath).root;
+      
+      while (currentPath !== root) {
+        const lockFilePath = path.join(currentPath, 'mlld.lock.json');
+        
+        if (fs.existsSync(lockFilePath)) {
+          const lockFileContent = fs.readFileSync(lockFilePath, 'utf8');
+          const lockData = JSON.parse(lockFileContent);
+          
+          // Return mode if it exists, otherwise undefined (user mode)
+          return lockData.config?.mode;
+        }
+        
+        currentPath = path.dirname(currentPath);
+      }
+    } catch (error) {
+      // Ignore errors, return undefined (user mode)
+    }
+    
+    return undefined;
   }
 }

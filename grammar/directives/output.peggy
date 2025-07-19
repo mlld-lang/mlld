@@ -99,41 +99,7 @@ SlashOutput
         location()
       );
     }
-  // Legacy bracket syntax for backward compatibility
-  / DirectiveContext "/output" _ source:OutputSource _ path:WrappedPathContent {
-      helpers.debug('SlashOutput legacy syntax with source matched', { source, path });
-      
-      const values = {
-        source: source.values,
-        target: {
-          type: 'file',
-          path: path.parts,
-          raw: path.raw,
-          meta: path.meta
-        }
-      };
-      
-      const raw = {
-        source: source.raw,
-        target: path.raw
-      };
-      
-      const meta = {
-        sourceType: source.type,
-        targetType: 'file',
-        hasSource: true,
-        legacy: true
-      };
-      
-      return helpers.createStructuredDirective(
-        'output',
-        'outputFile',
-        values,
-        raw,
-        meta,
-        location()
-      );
-    }
+  // REMOVED: Legacy bracket syntax - use quoted paths instead
   // Support for quoted path syntax with source (legacy) - for syntax like: /output @var "file.txt"
   // BUT don't match if followed by bracket (that would be invalid syntax anyway)
   / DirectiveContext "/output" _ source:OutputSource _ path:StringLiteral !(_ "[") {
@@ -158,7 +124,7 @@ SlashOutput
         sourceType: source.type,
         targetType: 'file',
         hasSource: true,
-        legacy: true
+        quoted: true
       };
       
       return helpers.createStructuredDirective(
@@ -170,37 +136,7 @@ SlashOutput
         location()
       );
     }
-  / DirectiveContext "/output" _ path:WrappedPathContent {
-      helpers.debug('SlashOutput legacy syntax without source matched', { path });
-      
-      const values = {
-        target: {
-          type: 'file',
-          path: path.parts,
-          raw: path.raw,
-          meta: path.meta
-        }
-      };
-      
-      const raw = {
-        target: path.raw
-      };
-      
-      const meta = {
-        targetType: 'file',
-        hasSource: false,
-        legacy: true
-      };
-      
-      return helpers.createStructuredDirective(
-        'output',
-        'outputDocument',
-        values,
-        raw,
-        meta,
-        location()
-      );
-    }
+  // REMOVED: Legacy bracket syntax without source - use quoted paths instead
   // New enhanced syntax for document output
   / DirectiveContext "/output" _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
       helpers.debug('SlashOutput enhanced syntax without source matched', { target, format });
@@ -244,8 +180,7 @@ SlashOutput
       // Look ahead to see if there's a target but no 'to'
       const rest = input.substring(peg$currPos).trim();
       // Check if next content looks like a target OTHER than quotes (quotes are valid without 'to')
-      // We still want to error on brackets without 'to' though
-      return rest.startsWith('[') || rest.startsWith('stdout') || 
+      return rest.startsWith('stdout') || 
              rest.startsWith('stderr') || rest.startsWith('env') || rest.startsWith('@');
     } {
       helpers.mlldError("Missing 'to' keyword in /output directive. Expected: /output @variable to \"path\"", "to", location());
@@ -268,19 +203,7 @@ SlashOutput
       helpers.mlldError("Unclosed quoted path in /output directive. Expected closing double quote (\").", "\"", location());
     }
     
-  // Error: Unclosed bracket path (legacy syntax)
-  / DirectiveContext "/output" _ OutputSource _ "[" &{
-      return helpers.isUnclosedArray(input, peg$currPos);
-    } {
-      helpers.mlldError("Unclosed path bracket in /output directive. Expected closing bracket.]", "]", location());
-    }
-    
-  // Error: Unclosed bracket path (legacy syntax without source)
-  / DirectiveContext "/output" _ "[" &{
-      return helpers.isUnclosedArray(input, peg$currPos);
-    } {
-      helpers.mlldError("Unclosed path bracket in /output directive. Expected closing bracket.]", "]", location());
-    }
+  // REMOVED: Bracket syntax error handling - brackets no longer supported
     
   // Error: Invalid format specification
   / DirectiveContext "/output" _ OutputSource _ "to" _ OutputTarget _ "as" _ &(LineTerminator / EOF) {
@@ -311,7 +234,7 @@ SlashOutput
     
   // Error: Generic /output syntax error (catch-all)
   / DirectiveContext "/output" {
-      helpers.mlldError("Invalid /output syntax. Expected: /output @variable to \"path\", /output [path], or /output @variable to stdout/stderr/env", "@", location());
+      helpers.mlldError("Invalid /output syntax. Expected: /output @variable to \"path\", /output \"path\", or /output @variable to stdout/stderr/env. Note: String literals cannot be used as output sources. To output text content, first assign it to a variable: /var @content = \"your text\", then use: /output @content to \"file.txt\"", "@", location());
     }
 
 // Output source types

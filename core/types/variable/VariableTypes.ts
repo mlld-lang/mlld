@@ -28,7 +28,7 @@ export interface BaseVariable {
 export interface VariableSource {
   directive: 'var'; // Always 'var' in the new system
   syntax: 'quoted' | 'template' | 'array' | 'object' | 'command' | 'code' | 'path' | 'reference';
-  wrapperType?: 'singleQuote' | 'doubleQuote' | 'backtick' | 'brackets';
+  wrapperType?: 'singleQuote' | 'doubleQuote' | 'backtick' | 'brackets' | 'doubleColon' | 'tripleColon';
   hasInterpolation: boolean;
   isMultiLine: boolean;
 }
@@ -42,6 +42,32 @@ export interface VariableMetadata extends Record<string, any> {
   isComplex?: boolean;
   isPipelineInput?: boolean;
   pipelineStage?: number;
+  
+  // Array-specific metadata
+  arrayType?: 'renamed-content' | 'load-content-result' | 'regular';
+  joinSeparator?: string; // '\n\n' for special arrays
+  
+  // Behavior preservation
+  customToString?: () => string;
+  customToJSON?: () => any;
+  contentGetter?: () => string;
+  
+  // Content loading metadata
+  fromGlobPattern?: boolean;
+  globPattern?: string;
+  fileCount?: number;
+  
+  // Header transformation metadata
+  headerTransform?: {
+    applied: boolean;
+    template: string;
+  };
+  
+  // Namespace metadata
+  isNamespace?: boolean;
+  
+  // Template metadata
+  templateAst?: any[]; // For lazy-evaluated templates
 }
 
 // =========================================================================
@@ -95,13 +121,13 @@ export interface InterpolatedTextVariable extends BaseVariable {
 }
 
 /**
- * Template strings with {{}} syntax
+ * Template strings with various interpolation syntaxes
  */
 export interface TemplateVariable extends BaseVariable {
   type: 'template';
   value: string | any[]; // Allow array for lazy-evaluated templates
   parameters?: string[];
-  templateSyntax: 'double-bracket' | 'backtick';
+  templateSyntax: 'double-bracket' | 'backtick' | 'doubleColon' | 'tripleColon';
   metadata?: VariableMetadata;
 }
 

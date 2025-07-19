@@ -10,7 +10,7 @@ import { ResolverError, ResolverErrorCode } from '@core/errors';
  * Built-in resolver for current timestamp
  */
 export class NowResolver implements Resolver {
-  name = 'NOW';
+  name = 'now';
   description = 'Provides current timestamp';
   type = 'input' as const;
   
@@ -20,7 +20,7 @@ export class NowResolver implements Resolver {
     supportedContentTypes: ['text', 'data'],
     defaultContentType: 'text',
     priority: 1,
-    cache: { strategy: 'none' } // TIME is always computed fresh
+    cache: { strategy: 'none' } // now is always computed fresh
   };
 
   constructor() {
@@ -28,9 +28,9 @@ export class NowResolver implements Resolver {
   }
 
   canResolve(ref: string): boolean {
-    // Match @NOW
+    // Match @now
     const cleanRef = ref.replace(/^@/, '');
-    return cleanRef === 'NOW' || cleanRef.toUpperCase() === 'NOW';
+    return cleanRef === 'now';
   }
 
   async resolve(ref: string, config?: any): Promise<ResolverContent> {
@@ -43,7 +43,7 @@ export class NowResolver implements Resolver {
         content: currentTime.toISOString(),
         contentType: 'text',
         metadata: {
-          source: 'NOW',
+          source: 'now',
           timestamp: currentTime
         }
       };
@@ -82,7 +82,7 @@ export class NowResolver implements Resolver {
         content: JSON.stringify(exports),
         contentType: 'data',
         metadata: {
-          source: 'NOW',
+          source: 'now',
           timestamp: currentTime
         }
       };

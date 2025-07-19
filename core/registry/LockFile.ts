@@ -25,6 +25,7 @@ export interface LockFileData {
   config?: {
     resolvers?: {
       prefixes?: PrefixConfig[];
+      registries?: any[];
     };
     security?: {
       allowedDomains?: string[];
@@ -33,6 +34,7 @@ export interface LockFileData {
       allowedEnv?: string[];
     };
     scriptDir?: string;
+    mode?: string; // 'development', 'production', or undefined (default user mode)
   };
   security?: {
     registries?: Record<string, RegistryEntry>;

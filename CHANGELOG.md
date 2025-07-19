@@ -5,6 +5,229 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc14]
+
+### Fixed
+- **Serverless environment support**: Fixed cache directory creation in read-only filesystems
+  - Automatically uses `/tmp` for cache in serverless environments (Vercel, AWS Lambda)
+  - Detects serverless by checking for `/var/task` path or environment variables
+  - Enables mlld to run in read-only container environments
+
+## [2.0.0-rc13]
+
+### Added
+- **Import auto-approval CLI flags**: New flags for non-interactive environments
+  - `--risky-approve-all`, `--yolo`, `-y` flags to bypass import security prompts
+  - Essential for serverless/CI environments where interactive prompts would hang
+  - Enables registry review system to work in Vercel functions
+
+### Fixed
+- **mlld clean command cache clearing**: Enhanced to remove all cached imports
+  - Now clears immutable import cache in `.mlld/cache/imports/` directory
+  - Removes both content files and metadata (`.meta.json` files)
+  - Fixes stale import cache issues when remote files are updated
+- **Serverless environment support**: Fixed cache directory creation in read-only filesystems
+  - Automatically uses `/tmp` for cache in serverless environments (Vercel, AWS Lambda)
+  - Detects serverless by checking for `/var/task` path or environment variables
+  - Enables mlld to run in read-only container environments
+
+## [2.0.0-rc12]
+
+### Fixed
+- **URL-relative import resolution**: Fixed relative imports when running scripts from URLs
+  - Scripts loaded from URLs (e.g., via `npx mlld@latest https://...`) can now use relative imports
+  - `../modules/file.mld` correctly resolves to full URL when current file is a URL
+  - Enables serverless execution of mlld scripts with local module dependencies
+  - Fixes registry review system import resolution issues
+
+## [2.0.0-rc11]
+
+### Fixed
+- **Import collision detection**: Fixed false positive collisions with system variables
+  - System variables like frontmatter (`@fm`) no longer trigger import collision errors
+  - Multiple modules with frontmatter can now be imported without conflicts
+  - Collision detection now only applies to legitimate user-defined variables
+  - Resolves registry review deployment issues caused by frontmatter variable conflicts
+
+## [2.0.0-rc10]
+
+### Added
+- **URL execution support**: Run mlld scripts directly from URLs
+  - Execute scripts from any HTTP/HTTPS URL: `mlld https://example.com/script.mld`
+  - Useful for CI/CD pipelines: `npx mlld@latest https://raw.githubusercontent.com/user/repo/main/script.mld`
+  - In-memory execution without temporary files
+  - Automatic redirect handling (up to 5 redirects)
+  - Configurable timeout and size limits via CLI options
+- **mlld clean command**: New command for cleaning cached module metadata
+  - `mlld clean <module...>` - Remove specific modules from lock file and cache
+  - `mlld clean --all` - Clear all cached imports and force fresh resolution
+  - `mlld clean --registry` - Clear only registry modules (preserving local modules)
+  - `--verbose` flag for detailed output during cleaning operations
+  - Helps resolve issues with stale cached module data preventing proper imports
+
+### Fixed
+- **Registry import system**: Complete overhaul of module import processing
+  - Fixed registry imports returning empty objects instead of module exports
+  - Unified import processing path for both local and registry imports
+  - Added proper frontmatter extraction for registry resolver imports
+  - Improved error handling with specific 404 detection and clear error messages
+- **Registry URL validation**: Added publish-time verification
+  - Verify generated URLs are publicly accessible before publishing
+  - Check that published content matches recorded integrity hashes
+  - Prevent broken modules from being published without detection
+- **Lock file path handling**: Fixed CLI commands to use correct lock file location
+  - Commands now properly read `mlld.lock.json` from project root instead of `.mlld/` subdirectory
+  - Affects `mlld ls`, `mlld clean`, and other commands that manage module metadata
+
+## [2.0.0-rc7]
+
+### Fixed
+- **Logger compatibility with serverless environments**: 
+  - Fixed winston logger attempting to create logs directory in read-only filesystems
+  - File transports are now conditionally added only when logs directory exists
+  - Prevents ENOENT errors when running mlld in Vercel, AWS Lambda, and other serverless platforms
+
+## [2.0.0-rc6]
+
+### Added
+- **Enhanced `/when` directive support**:
+  - Variable function calls in when actions: `/when !@condition => /var @result = @function(@param)`
+  - Non-existent fields now evaluate to falsy instead of throwing errors
+  - Works in all when forms: simple (`@when @obj.missing => ...`), block, and with modifiers
+- Updated module publishing flow
+
+## [2.0.0-rc5]
+
+### Changed
+- **Variable Type System**: Complete refactor of how variables flow through mlld
+  - Variables now preserve type information and metadata throughout evaluation
+  - Type detection uses O(1) property checks instead of content inspection
+  - Shadow environments (JS, Node, Python) receive rich type info via proxies
+  
+### Added
+- **Bash Variable Adapter**: Clean adapter for bash/sh environments
+  - Bash receives string values while other languages get full type information
+  - Fixes JavaScript errors when bash tries to access helper functions
+- **Type Introspection**: New methods for runtime type checking
+  - `mlld.getType()`, `mlld.isVariable()`, `mlld.getMetadata()`
+
+### Fixed
+- ArrayVariable storing AST structure instead of evaluated values
+- Empty string returns and JavaScript errors in bash/sh execution
+- Overly broad type guards that matched any string array
+
+### Removed
+- Enhanced variable passing feature flag (now always enabled)
+- Legacy factory functions `createRenamedContentArray` and `createLoadContentResultArray`
+
+## [2.0.0-rc4]
+
+### Added
+- **File Reference Interpolation**: File references `<file.md>` can now be interpolated in strings and templates
+  - Interpolate in backticks: `` `Content: <README.md>` ``
+  - Interpolate in double quotes: `"Including <file.txt> here"`
+  - Field access on files: `<package.json>.name`, `<data.json>.users[0].email`
+  - Works with globs: `<*.md>.fm.title` gets all markdown titles
+  - Special `<>` placeholder in 'as' clauses: `<*.md> as "# <>.filename"`
+- **Condensed Pipe Syntax**: Both file references and variables support pipe transformations
+  - File pipes: `<file.json>|@json|@xml` - load JSON and convert to XML
+  - Variable pipes: `@data|@upper|@trim` - transform variable values
+  - No spaces allowed in condensed syntax (use full `| @transform` in directives)
+- **Variable Pipe Support**: Variables can now use pipes in interpolation contexts
+  - In templates: `` `Data: @myvar|@json` ``
+  - In quotes: `"Name: @user.name|@upper"`
+  - Transforms can be built-in or imported from modules
+- **Triple Colon Template Syntax**: New `:::...:::` syntax for `{{var}}` interpolation
+  - Addresses the common case of needing backticks inside templates
+  - Example: `:::Code example: `getData()` returns {{data}}:::`
+  - Double colon `::...::` syntax now uses `@var` interpolation instead of `{{var}}`
+
+### Changed
+- **Template Interpolation Syntax**: Double colon `::...::` now uses `@var` interpolation instead of `{{var}}`
+  - **Migration required**: Change `::Hello {{name}}::` to `:::Hello {{name}}:::`
+  - Double colon templates can now include backticks: `::The `function()` returns @value::`
+  - This change enables technical documentation with inline code examples
+- **Removed Foreach Section Pattern**: The `foreach <@array # section>` syntax has been removed
+  - Migration: Use `<*.md # section> as "template"` instead
+  - The new file interpolation syntax completely supersedes this pattern
+  - Simpler and more intuitive: direct glob + template in one expression
+
+### Fixed
+- Circular file references now emit warnings instead of errors
+  - `<**/*.mld>` in an .mld file correctly returns all OTHER .mld files
+  - Prevents infinite loops while allowing useful self-excluding patterns
+
+### Changed
+- **Reserved Variables Now Lowercase**: All built-in reserved variables have been converted to lowercase for consistency
+  - `@NOW` → `@now` (current timestamp)
+  - `@DEBUG` → `@debug` (debug information)
+  - `@INPUT` → `@input` (stdin/environment access)
+  - `@PROJECTPATH` → `@base` (project root directory)
+- **Removed @. Alias**: The `@.` alias for project root has been removed; use `@base` instead
+- **Simplified Naming**: Aligns with interpreter's `basePath` terminology and modern naming conventions
+
+## [2.0.0-rc3]
+
+### Added
+- **Dev Mode**: Local module development support with automatic prefix mapping
+  - `mlld mode dev` - Enable dev mode (persists in lock file)
+  - `mlld dev status` - Show current mode and detected local modules
+  - `mlld dev list` - List all local modules with their publish names
+  - `--dev` flag for one-time dev mode override
+  - `MLLD_DEV=true` environment variable support
+  - Automatically maps `@author/module` imports to local files in `llm/modules/`
+- **Mode Command**: Set mlld execution mode
+  - `mlld mode dev/development` - Enable development mode
+  - `mlld mode prod/production` - Enable production mode
+  - `mlld mode user` - Default user mode
+  - `mlld mode clear/reset` - Remove mode setting (defaults to user)
+  - Mode stored in `mlld.lock.json` under `config.mode`
+  - Future extensibility for security modes with different permissions
+- **Alligator Syntax**: New syntax for file loading that eliminates bracket ambiguity
+  - File loading: `<file.md>` replaces `[file.md]`
+  - Section extraction: `<file.md # Section>` replaces `[file.md # Section]`
+  - URL loading: `<https://example.com/file.md>` replaces `[https://example.com/file.md]`
+  - Resolver paths: `<@./path>` and `<@PROJECTPATH/path>` replace bracketed versions
+  - Square brackets `[...]` now exclusively mean arrays, removing all ambiguity
+  - Clear visual distinction: angles `<>` load content, brackets `[]` define arrays
+- **Glob Pattern Support**: Alligator syntax now supports glob patterns for loading multiple files
+  - Glob patterns: `<*.md>`, `<**/*.ts>`, `<src/**/*.js>`
+  - Returns array of LoadContentResult objects with metadata
+  - Each file includes content and rich metadata properties
+- **Rich Metadata for Loaded Content**: Files and URLs loaded with `<>` syntax now include metadata
+  - **File Metadata**:
+    - `content`: The file's text content (default when used as string)
+    - `filename`: Just the filename (e.g., "README.md")
+    - `relative`: Relative path from current directory
+    - `absolute`: Full absolute path
+    - `tokest`: Estimated token count based on file type (750/KB for text, 500/KB for code)
+    - `tokens`: Exact token count using tiktoken (lazy-evaluated)
+    - `fm`: Parsed frontmatter for markdown files (lazy-evaluated)
+    - `json`: Parsed JSON for .json files (lazy-evaluated)
+  - **URL Metadata** (additional properties for URLs):
+    - `url`: The full URL
+    - `domain`: Just the domain (e.g., "example.com")
+    - `title`: Page title (extracted from HTML)
+    - `description`: Meta description or og:description
+    - `html`: Raw HTML content (for HTML pages)
+    - `text`: Plain text extraction (HTML stripped)
+    - `md`: Markdown version (same as content for HTML)
+    - `headers`: Response headers object
+    - `status`: HTTP status code
+    - `contentType`: Content-Type header value
+  - Access metadata with field syntax: `@file.filename`, `@url.domain`, `@page.title`, etc.
+  - Smart object behavior: shows content when displayed, preserves metadata when stored
+  - Note: Some metadata properties use lazy evaluation and may not be accessible in certain contexts due to issue #315
+- **HTML to Markdown Conversion**: URLs returning HTML are automatically converted to clean Markdown
+  - Uses Mozilla's Readability to extract article content (removes navigation, ads, sidebars)
+  - Uses Turndown to convert the clean HTML to well-formatted Markdown
+  - `/show <https://example.com/article>` displays the article as Markdown by default
+  - Raw HTML still accessible via `@page.html` property (when #315 is resolved)
+
+### Fixed
+- Duplicate `--dev` case clause in ArgumentParser
+- Property name consistency (`dev` vs `devMode`) across CLI interfaces
+
 ## [2.0.0]
 
 Represents an overhaul and consolidation of all syntax. 
@@ -43,7 +266,6 @@ The `/` command approach creates clear disambiguiation between commands and vari
   - JavaScript semantics: Type coercion follows JavaScript rules (e.g., `"text" + 5 = "text5"`)
   - Exec invocation support: Primitive literals in function calls (e.g., `@add(@num, 8)`)
 - **Built-in @now Variable**: New built-in variable for current timestamp
-  - Replaces the previous @time built-in variable (breaking change)
   - Returns ISO 8601 timestamp: `2024-01-15T10:30:00.000Z`
   - Available in all contexts where variables are allowed
   - Also available as `mlld_now()` function in JavaScript/Node shadow environments

@@ -19,8 +19,24 @@ import {
 
 /**
  * Compares two values according to mlld's when comparison rules
+ * WHY: mlld has specific comparison semantics that differ from JavaScript's ===.
+ * We support string-boolean comparisons ("true" === true), null/undefined equality,
+ * and truthy/falsy evaluation when comparing against boolean literals.
+ * GOTCHA: String comparison is case-sensitive. "True" !== true, only "true" === true.
+ * Type coercion is limited to specific cases to avoid surprising behavior.
+ * CONTEXT: Used by all when directive forms (simple, switch, block) to evaluate
+ * conditions consistently across the language.
  */
-function compareValues(expressionValue: any, conditionValue: any): boolean {
+async function compareValues(expressionValue: any, conditionValue: any, env: Environment): Promise<boolean> {
+  /**
+   * Extract Variable values for equality comparison
+   * WHY: Equality operations need raw values because comparisons work on
+   *      primitive types, not Variable wrapper objects
+   */
+  const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+  expressionValue = await resolveValue(expressionValue, env, ResolutionContext.Equality);
+  conditionValue = await resolveValue(conditionValue, env, ResolutionContext.Equality);
+  
   // Both null/undefined
   if ((expressionValue === null || expressionValue === undefined) &&
       (conditionValue === null || conditionValue === undefined)) {
@@ -158,7 +174,7 @@ async function evaluateWhenSwitch(
       }
       
       // Compare values using shared logic
-      let matches = compareValues(expressionValue, conditionValue);
+      let matches = await compareValues(expressionValue, conditionValue, childEnv);
       
       // Apply negation if needed
       if (isNegated) {
@@ -188,6 +204,14 @@ async function evaluateWhenSwitch(
 
 /**
  * Evaluates a block when directive: @when <var> <modifier>: [...]
+ * WHY: Block forms enable different conditional evaluation strategies - first match
+ * (classic switch), all conditions (AND logic), any condition (OR logic), or
+ * independent evaluation of each condition.
+ * GOTCHA: Default behavior (no modifier) differs based on presence of block action:
+ *   - With action: acts like 'all:' (ALL conditions must match)
+ *   - Without action: executes ALL matching individual actions
+ * CONTEXT: Child environment ensures variable definitions inside when blocks are
+ * scoped locally, preventing pollution of parent scope.
  */
 async function evaluateWhenBlock(
   node: WhenBlockNode,
@@ -307,6 +331,11 @@ async function evaluateWhenBlock(
 
 /**
  * Evaluates conditions using 'first' modifier - executes first matching condition
+ * WHY: Implements classic switch-case behavior where only the first matching branch
+ * executes, providing mutual exclusion between conditions.
+ * GOTCHA: Conditions are evaluated in order, so put more specific conditions first.
+ * Unlike switch statements, there's no fallthrough - only one action executes.
+ * CONTEXT: Useful for state machines, routing logic, and mutually exclusive branches.
  */
 async function evaluateFirstMatch(
   conditions: WhenConditionPair[],
@@ -366,7 +395,7 @@ async function evaluateFirstMatch(
       }
       
       // Compare values using shared logic
-      matches = compareValues(expressionValue, conditionValue);
+      matches = await compareValues(expressionValue, conditionValue, env);
       
       
       // Apply negation if needed
@@ -394,8 +423,15 @@ async function evaluateFirstMatch(
 
 /**
  * Evaluates conditions using 'all' modifier
- * If blockAction is provided, executes it only if ALL conditions are true
- * Otherwise, executes individual actions for each true condition
+ * WHY: Supports two distinct use cases - AND logic (with block action) where ALL
+ * conditions must be true, or independent evaluation (without block action) where
+ * each true condition's action executes.
+ * GOTCHA: Behavior changes based on presence of block action:
+ *   - With block action: ALL conditions must be true (AND logic)
+ *   - Without block action: Each true condition executes independently
+ * Cannot mix block action with individual condition actions.
+ * CONTEXT: AND logic useful for validation checks, independent evaluation useful
+ * for applying multiple transformations or checks.
  */
 async function evaluateAllMatches(
   conditions: WhenConditionPair[],
@@ -464,6 +500,12 @@ async function evaluateAllMatches(
 
 /**
  * Evaluates conditions using 'any' modifier - executes action if any condition matches
+ * WHY: Implements OR logic where the block action executes if at least one condition
+ * is true, useful for triggering actions based on multiple possible triggers.
+ * GOTCHA: Requires a block action - individual condition actions are not allowed.
+ * All conditions are evaluated (no short-circuit) to ensure consistent behavior.
+ * CONTEXT: Useful for validation warnings, fallback logic, or actions that should
+ * trigger on any of several conditions.
  */
 async function evaluateAnyMatch(
   conditions: WhenConditionPair[],
@@ -583,12 +625,26 @@ async function evaluateCondition(
             return false;
           }
           if (result.value !== undefined && result.value !== result.stdout) {
-            return isTruthy(result.value);
+            /**
+             * Extract Variable value for truthiness evaluation
+             * WHY: Truthiness checks need raw values because boolean logic operates on
+             *      primitive types, not Variable metadata
+             */
+            const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+            const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+            return isTruthy(finalValue);
           }
           return isTruthy(result.stdout.trim());
         }
         
-        return isTruthy(result.value);
+        /**
+         * Extract Variable value for truthiness evaluation
+         * WHY: Truthiness checks need raw values because boolean logic operates on
+         *      primitive types, not Variable metadata
+         */
+        const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+        const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+        return isTruthy(finalValue);
       }
     }
     
@@ -602,12 +658,16 @@ async function evaluateCondition(
         return false;
       }
       if (result.value !== undefined && result.value !== result.stdout) {
-        return isTruthy(result.value);
+        const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+        const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+        return isTruthy(finalValue);
       }
       return isTruthy(result.stdout.trim());
     }
     
-    return isTruthy(result.value);
+    const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+    const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+    return isTruthy(finalValue);
   }
   
   // Create a child environment for condition evaluation
@@ -626,8 +686,8 @@ async function evaluateCondition(
     logger.debug('Evaluating condition:', { condition });
   }
   
-  // Evaluate the condition
-  const result = await evaluate(condition, childEnv);
+  // Evaluate the condition with condition context
+  const result = await evaluate(condition, childEnv, { isCondition: true });
   
   if (process.env.DEBUG_WHEN) {
     logger.debug('Condition evaluation result:', { result });
@@ -641,7 +701,9 @@ async function evaluateCondition(
     if (result.value && typeof result.value === 'object' && result.value.type === 'executable') {
       // The executable should have already been evaluated with _whenValue as context
       // Just check its boolean result
-      return isTruthy(result.value);
+      const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+      const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+      return isTruthy(finalValue);
     }
     
     // Get the actual value from the variable
@@ -653,7 +715,7 @@ async function evaluateCondition(
     }
     
     // Compare the variable value with the condition value
-    return compareValues(actualValue, result.value);
+    return compareValues(actualValue, result.value, childEnv);
   }
   
   // For command execution results, check stdout or exit code
@@ -666,7 +728,14 @@ async function evaluateCondition(
     // If we have a parsed value (from exec functions with return values), use that
     // This handles the case where JSON stringified empty string '""' should be falsy
     if (result.value !== undefined && result.value !== result.stdout) {
-      return isTruthy(result.value);
+      /**
+       * Extract Variable value for truthiness evaluation
+       * WHY: Truthiness checks need raw values because boolean logic operates on
+       *      primitive types, not Variable metadata
+       */
+      const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+      const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+      return isTruthy(finalValue);
     }
     // Otherwise check stdout - trim whitespace
     const trimmedStdout = result.stdout.trim();
@@ -676,12 +745,26 @@ async function evaluateCondition(
     return isTruthy(trimmedStdout);
   }
   
+  /**
+   * Extract Variable value for truthiness evaluation
+   * WHY: Truthiness checks need raw values because boolean logic operates on
+   *      primitive types, not Variable metadata
+   */
+  const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+  const finalValue = await resolveValue(result.value, childEnv, ResolutionContext.Truthiness);
+  
   // Convert result to boolean
-  return isTruthy(result.value);
+  return isTruthy(finalValue);
 }
 
 /**
  * Determines if a value is truthy according to mlld rules
+ * WHY: mlld has specific truthiness rules that differ from JavaScript. Empty strings,
+ * empty arrays, and empty objects are falsy, while non-empty values are truthy.
+ * GOTCHA: Unlike JavaScript, empty arrays [] and empty objects {} are falsy in mlld.
+ * The string "false" is truthy (non-empty string), only the boolean false is falsy.
+ * CONTEXT: Used in when conditions to determine if branches should execute, especially
+ * important for the simple form: /when @var => /action (executes if @var is truthy).
  */
 function isTruthy(value: any): boolean {
   // Handle Variable types

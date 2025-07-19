@@ -43,8 +43,7 @@ describe('Mlld API', () => {
       await fileSystem.writeFile('/test.md', '# Test Content\nThis is a test file.');
       
       const content = `
-/path @testFile = [/test.md]
-/show @testFile
+/show </test.md>
       `.trim();
       const result = await processMlld(content, {
         fileSystem,
@@ -65,7 +64,7 @@ describe('Mlld API', () => {
     it('should handle template interpolation', async () => {
       const content = `
 /var @name = "World"
-/var @greeting = ::Hello, {{name}}!::
+/var @greeting = :::Hello, {{name}}!:::
 /show @greeting
       `.trim();
       const result = await processMlld(content);
@@ -77,7 +76,7 @@ describe('Mlld API', () => {
       await fileSystem.writeFile('/utils.mld', '/var @helper = "Helper Text"');
       
       const content = `
-/import { helper } from [/utils.mld]
+/import { helper } from "/utils.mld"
 /show @helper
       `.trim();
       const result = await processMlld(content, {
@@ -91,7 +90,7 @@ describe('Mlld API', () => {
     it('should handle path directive correctly', async () => {
       // When a file doesn't exist, path directive should return the path as a string
       const content = `
-/path @testPath = [/nonexistent.md]
+/path @testPath = "/nonexistent.md"
 /show @testPath
       `.trim();
       const result = await processMlld(content, {
@@ -106,7 +105,7 @@ describe('Mlld API', () => {
       // Set up a test file with sections
       await fileSystem.writeFile('/doc.md', `# Document\n\n## Section One\nContent 1\n\n## Section Two\nContent 2`);
       
-      const content = '/show "Section Two" from [/doc.md]';
+      const content = '/show </doc.md # Section Two>';
       const result = await processMlld(content, {
         fileSystem,
         pathService,

@@ -39,8 +39,9 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 ### Delimiters
 
 ```
-[ ]     Path boundaries and resolver paths
-:: ::   Template boundaries (double-bracket templates)
+< >     File/URL loading and content extraction
+:: ::   Double colon template boundaries (@ interpolation)
+::: ::: Triple colon template boundaries ({{}} interpolation)
 { }     Command boundaries (braces for multi-line)
 " "     Command boundaries (quotes for single-line)
 ` `     Backtick templates (with @ interpolation)
@@ -61,7 +62,7 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 - Single-line strings (', ") cannot contain newlines
 - Double quotes (") support @ interpolation: "Hello @name"
 - Backtick templates (`) support @ interpolation: `Hello @name!`
-- Double-bracket templates support {{}} interpolation: ::Hello {{name}}!::
+- Double-bracket templates support {{}} interpolation: :::Hello {{name}}!:::
 
 ### Identifiers
 
@@ -78,8 +79,8 @@ Syntax: Variables are created with `@identifier` and referenced with `@identifie
 ```mlld
 /path @docs = "./documentation"    # Create path variable
 @docs                              # Reference path variable
-[@./path]                          # Resolver path (needs brackets)
-[@PROJECTPATH/config]              # Project root resolver path
+<@./path>                          # Resolver path (needs alligators)
+<@PROJECTPATH/config>              # Project root resolver path
 ```
 
 ### Text Variables
@@ -90,7 +91,7 @@ Variables are created with `@identifier` prefix and referenced differently based
 @name                              # Reference in directives
 "Hello @name"                     # Reference in double quotes
 `Welcome @name!`                   # Reference in backtick templates
-::Content with {{name}}::          # Reference in double-bracket templates
+:::Content with {{name}}:::          # Reference in double-bracket templates
 ```
 
 ### Data Variables
@@ -126,14 +127,14 @@ def hello():
 ### /add
 
 ```mlld
-/show [path]
-/show [path # section_text]
-/show [path] as "# New Title"           # Rename section
-/show "Section" from [path]
-/show "Section" from [path] as "# New Title"
+/show <path>
+/show <path # section_text>
+/show <path> as "# New Title"           # Rename section
+/show "Section" from <path>
+/show "Section" from <path> as "# New Title"
 /show @variable                          # Add variable content
 /show "Literal text"                    # Add literal text
-/show ::Template with {{var}}::          # Add template
+/show :::Template with {{var}}:::          # Add template
 ```
 
 ### /run
@@ -152,7 +153,7 @@ def hello():
 /import { greeting, config } from "shared.mld"      # File import
 /import { * } from "utils.mld"                      # Import all
 /import { fetchData } from @corp/utils              # Module import (no quotes)
-/import { readme } from [@./README.md]              # Resolver path import (brackets)
+/import { readme } from <@./README.md>              # Resolver path import (alligators)
 /import { API_KEY } from @INPUT                     # Environment variables
 ```
 
@@ -166,7 +167,7 @@ def hello():
   npm test
 }
 /exe @calculate(x) = js {return @x * 2}           # Code executable
-/exe @getIntro(file) = [@file # Introduction]     # Section executable
+/exe @getIntro(file) = <@file # Introduction>     # Section executable
 /exe @js = { formatDate, parseJSON }               # Shadow environment
 ```
 
@@ -176,7 +177,7 @@ def hello():
 /var @name = "value"                    # Simple text
 /var @greeting = "Hello @name!"         # With @ interpolation
 /var @template = `Welcome @user!`       # Backtick template
-/var @content = ::Hello {{name}}!::     # Double-bracket template
+/var @content = :::Hello {{name}}!:::     # Double-bracket template
 /var @result = /run "date"              # From command output
 ```
 
@@ -203,17 +204,27 @@ def hello():
 ### Backtick Templates (Primary - with @ interpolation)
 ```mlld
 /var @message = `Hello @name, welcome to @place!`
-/var @link = `[@title](@url)`
+/var @link = `<@title>(@url)`
 ```
 
-### Double-Bracket Templates (For @ heavy content)
+### Double Colon Templates (Alternative to backticks - with @ interpolation)
 ```mlld
-/var @tweet = ::Hey {{user}}, check out {{handle}}'s new post!::
-/var @prompt = ::
+/var @docs = ::The `getData()` function returns @value::
+/var @code = ::
+  Use `npm install` to setup
+  Then call `init(@name)` to start
+::
+```
+Double colon syntax is useful when you need backticks inside your template.
+
+### Triple Colon Templates (For {{}} interpolation)
+```mlld
+/var @tweet = :::Hey {{user}}, check out {{handle}}'s new post!:::
+/var @prompt = :::
   System: {{role}}
   Context: {{context.data}}
   User: {{username}}
-::
+:::
 ```
 
 ## Variable Interpolation Rules
@@ -222,9 +233,11 @@ def hello():
 - **Double quotes**: `"Hello @name"` - @ interpolation works
 - **Single quotes**: `'Hello @name'` - @ is literal text (no interpolation)
 - **Backtick templates**: `` `Hello @name!` `` - @ interpolation works
-- **Double-bracket templates**: `::Hello {{name}}!::` - Use {{}} for variables
+- **Double colon templates**: `::Hello @name!::` - @ interpolation works
+- **Triple colon templates**: `:::Hello {{name}}!:::` - Use {{}} for variables
 - **Commands in braces**: `{echo "User: @name"}` - @ interpolation works
 - **Directives**: `/add @greeting` - Direct @ reference
 
-### Key Rule: "Double brackets, double braces"
-In `::...::` templates, always use `{{variable}}` syntax.
+### Key Rule: Template Interpolation
+- Single/double quotes, backticks, and `::...::` use `@variable` syntax
+- Triple colons `:::...:::` use `{{variable}}` syntax

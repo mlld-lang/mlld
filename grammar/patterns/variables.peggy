@@ -7,53 +7,25 @@
 
 // Variable types - the root rule used by other directives
 Variable
-  = SpecialVariable    // Check special vars first (includes @., case-insensitive forms)
+  = SpecialVariable    // Check special vars first
   / InterpolationVar
   / AtVar
 
-// Special variables with case insensitivity and special forms
+// Special variables - simple lowercase names
 SpecialVariable "Special reserved variable"
-  = "@." {
-      // @. is always PROJECTPATH
+  = "@" id:SpecialVariableName {
       return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: 'PROJECTPATH',
-        isSpecial: true,
-        originalForm: '@.'
-      }, location());
-    }
-  / "@" id:SpecialVariableName {
-      // Normalize to uppercase and handle deprecations
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id.normalized,
-        isSpecial: true,
-        originalCase: id.original,
-        ...(id.deprecated ? { deprecated: true } : {})
+        identifier: id,
+        isSpecial: true
       }, location());
     }
 
-// Special variable names with case insensitive matching
+// Special variable names - all lowercase now
 SpecialVariableName
-  = id:CaseInsensitiveTime { return { original: id, normalized: 'TIME' }; }
-  / id:CaseInsensitiveProjectPath { return { original: id, normalized: 'PROJECTPATH' }; }
-  / id:CaseInsensitiveInput { return { original: id, normalized: 'INPUT' }; }
-  / id:CaseInsensitiveDebug { return { original: id, normalized: 'DEBUG' }; }
-  / id:CaseInsensitiveStdin { return { original: id, normalized: 'INPUT', deprecated: true }; }
-
-// Case insensitive matchers for special variables
-CaseInsensitiveTime
-  = chars:([Tt] [Ii] [Mm] [Ee]) { return chars.join(''); }
-
-CaseInsensitiveProjectPath
-  = chars:([Pp] [Rr] [Oo] [Jj] [Ee] [Cc] [Tt] [Pp] [Aa] [Tt] [Hh]) { return chars.join(''); }
-
-CaseInsensitiveInput
-  = chars:([Ii] [Nn] [Pp] [Uu] [Tt]) { return chars.join(''); }
-
-CaseInsensitiveDebug
-  = chars:([Dd] [Ee] [Bb] [Uu] [Gg]) { return chars.join(''); }
-
-CaseInsensitiveStdin
-  = chars:([Ss] [Tt] [Dd] [Ii] [Nn]) { return chars.join(''); }
+  = "now" { return 'now'; }
+  / "base" { return 'base'; }
+  / "input" { return 'input'; }
+  / "debug" { return 'debug'; }
 
 // AtVar for direct variable references (using context detection)
 // Used in paths, commands, and single bracket contexts
@@ -91,15 +63,13 @@ InterpolationVar
   / InterpolationSimpleVar
   / InterpolationDataVar
 
-// {{TIME}}, {{PROJECTPATH}}, {{INPUT}} - special variables in templates
+// {{now}}, {{base}}, {{input}} - special variables in templates
 InterpolationSpecialVar
   = "{{" _ id:SpecialVariableName format:VarFormat? _ "}}" {
       const node = helpers.createVariableReferenceNode('varInterpolation', {
-        identifier: id.normalized,
+        identifier: id,
         isSpecial: true,
-        originalCase: id.original,
-        ...(format ? { format } : {}),
-        ...(id.deprecated ? { deprecated: true } : {})
+        ...(format ? { format } : {})
       }, location());
       helpers.debug('CreateVAR', { rule: 'InterpolationSpecialVar', node });
       return node;
@@ -148,7 +118,7 @@ FrontmatterAccess
 
 // Variable reference with optional tail modifiers (for pipeline support)
 VariableReferenceWithTail "variable reference with tail modifiers"
-  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* tail:TailModifiers? {
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* _ tail:TailModifiers? {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -165,5 +135,18 @@ VariableReferenceWithTail "variable reference with tail modifiers"
       }
       
       // No tail modifiers - return plain variable reference
+      return varRef;
+    }
+
+// Variable with condensed pipes for interpolation contexts
+VariableWithPipes "variable with optional pipes"
+  = varRef:VariableNoTail pipes:CondensedPipeChain? {
+      if (pipes && pipes.length > 0) {
+        // Add pipes to the variable node
+        return {
+          ...varRef,
+          pipes: pipes
+        };
+      }
       return varRef;
     }

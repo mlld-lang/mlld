@@ -61,7 +61,7 @@ export function createTemplateVariable(
   name: string,
   value: string | any[],
   parameters: string[] | undefined,
-  templateSyntax: 'double-bracket' | 'backtick',
+  templateSyntax: 'double-bracket' | 'backtick' | 'doubleColon' | 'tripleColon',
   source: VariableSource,
   metadata?: VariableMetadata
 ): TemplateVariable {
@@ -286,7 +286,7 @@ export class VariableFactory {
     name: string,
     value: string | any[],
     parameters: string[] | undefined,
-    templateSyntax: 'double-bracket' | 'backtick',
+    templateSyntax: 'double-bracket' | 'backtick' | 'doubleColon' | 'tripleColon',
     source: VariableSource,
     metadata?: VariableMetadata
   ): TemplateVariable {

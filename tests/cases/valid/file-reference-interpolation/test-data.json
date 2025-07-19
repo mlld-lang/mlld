@@ -1,0 +1,19 @@
+{
+  "name": "Test User",
+  "users": [
+    {
+      "email": "alice@example.com",
+      "address": {
+        "city": "New York",
+        "state": "NY"
+      }
+    },
+    {
+      "email": "bob@example.com",
+      "address": {
+        "city": "Boston",
+        "state": "MA"
+      }
+    }
+  ]
+}

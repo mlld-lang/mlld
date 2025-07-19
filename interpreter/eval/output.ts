@@ -44,9 +44,9 @@ export async function evaluateOutput(
 ): Promise<EvalResult> {
   const hasSource = directive.meta?.hasSource;
   const sourceType = directive.meta?.sourceType;
-  const targetType = directive.meta?.targetType || 'file'; // Default to file for legacy
+  const targetType = directive.meta?.targetType || 'file'; // Default to file
   const format = directive.meta?.format;
-  const isLegacy = directive.meta?.legacy;
+  // Removed: isLegacy flag - bracket syntax no longer supported
   
   // Debug logging
   if (env.hasVariable('DEBUG')) {
@@ -57,8 +57,7 @@ export async function evaluateOutput(
         source: sourceType,
         hasSource: hasSource,
         targetType: targetType,
-        format: format,
-        isLegacy: isLegacy
+        format: format
       });
     }
   }
@@ -98,7 +97,7 @@ export async function evaluateOutput(
     }
     
     // Handle the target
-    // Check if this is a legacy structure from @when actions (has values.path instead of values.target)
+    // Check if this is a simplified structure from @when actions (has values.path instead of values.target)
     let target: OutputTarget;
     if (directive.values.target) {
       target = directive.values.target as OutputTarget;
@@ -117,8 +116,8 @@ export async function evaluateOutput(
       );
     }
     
-    if (isLegacy || targetType === 'file') {
-      // File output (legacy or new syntax)
+    if (targetType === 'file') {
+      // File output
       await outputToFile(target as OutputTargetFile, content, env, directive);
     } else if (targetType === 'stream') {
       // Stream output (stdout/stderr)
@@ -349,7 +348,9 @@ async function evaluateSimpleVariableSource(
   if (isTextLike(variable)) {
     value = variable.value;
   } else if ('value' in variable) {
-    value = variable.value;
+    // Extract Variable value for output - WHY: Output requires raw values to write/display
+    const { extractVariableValue } = await import('../utils/variable-resolution');
+    value = await extractVariableValue(variable, env);
   } else {
     throw new MlldOutputError(
       `Cannot output variable ${varName} - unknown variable type`,

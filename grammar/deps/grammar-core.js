@@ -19,6 +19,7 @@ export const NodeType = {
     Parameter: 'Parameter',
     ExecInvocation: 'ExecInvocation',
     CommandReference: 'CommandReference',
+    FileReference: 'FileReference',
 };
 export const DirectiveKind = {
     run: 'run',
@@ -221,10 +222,6 @@ export const helpers = {
         return this.createNode(NodeType.VariableReference, { valueType, ...data });
     },
     normalizePathVar(id) {
-        if (id === '.')
-            return 'PROJECTPATH';
-        if (id === 'TIME')
-            return 'TIME';
         return id;
     },
     validateRunContent: () => true,
@@ -638,16 +635,36 @@ export const helpers = {
     isUnclosedArray(input, pos) {
         let depth = 1;
         let i = pos;
+        let hasHash = false;
+        this.debug('isUnclosedArray starting at pos', pos, 'first 50 chars:', input.substring(pos, pos + 50));
         while (i < input.length && depth > 0) {
-            if (input[i] === '[')
+            const char = input[i];
+            if (char === '[') {
                 depth++;
-            else if (input[i] === ']')
+                this.debug('Found [ at', i, 'depth now', depth);
+            }
+            else if (char === ']') {
                 depth--;
-            else if (input[i] === '\n' && depth > 0)
-                return true; // Unclosed on newline
+                this.debug('Found ] at', i, 'depth now', depth);
+            }
+            else if (char === '#' && depth === 1) {
+                hasHash = true; // Section syntax detected
+                this.debug('Found # at', i, 'in brackets - this is section syntax');
+            }
+            else if (char === '\n' && depth > 0) {
+                // Only return true if genuinely unclosed
+                // Section syntax can span lines, so check if we have # 
+                if (!hasHash) {
+                    this.debug('Found newline at', i, 'without # - unclosed array');
+                    return true; // Unclosed array on newline
+                }
+                this.debug('Found newline at', i, 'but has # - continuing scan');
+            }
             i++;
         }
-        return depth > 0; // Still unclosed at end of input
+        const result = depth > 0;
+        this.debug('isUnclosedArray finished: result=', result, 'hasHash=', hasHash, 'depth=', depth, 'scanned to pos', i);
+        return result;
     },
     /**
      * Checks if an object is unclosed by scanning ahead
@@ -845,4 +862,34 @@ export const helpers = {
     markDirectiveEnd(pos) {
         this.parserState.lastDirectiveEndPos = pos;
     },
+    // File Reference Helper Functions
+    // --------------------------------
+    /**
+     * Checks if content inside <...> represents a file reference
+     * File references are detected by presence of: . * @
+     * Note: We don't include / since we don't support directories
+     * Files without extensions can be used outside interpolation contexts
+     */
+    isFileReferenceContent(content) {
+        // Check if content contains file indicators: . * @
+        return /[.*@]/.test(content);
+    },
+    /**
+     * Creates a FileReference AST node
+     */
+    createFileReferenceNode(source, fields, pipes, location) {
+        return {
+            type: 'FileReference',
+            nodeId: randomUUID(),
+            source: source,
+            fields: fields || [],
+            pipes: pipes || [],
+            location: location,
+            meta: {
+                isFileReference: true,
+                hasGlob: typeof source === 'object' && source.raw && source.raw.includes('*'),
+                isPlaceholder: source && source.type === 'placeholder'
+            }
+        };
+    }
 };

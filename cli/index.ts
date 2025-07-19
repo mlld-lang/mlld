@@ -86,7 +86,7 @@ export interface CLIOptions {
   // Blank line normalization
   noNormalizeBlankLines?: boolean;
   // Development mode
-  dev?: boolean;
+  devMode?: boolean;
   // Disable prettier formatting
   noFormat?: boolean;
   // Error capture for pattern development
@@ -247,7 +247,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       returnEnvironment: true,
       approveAllImports: cliOptions.riskyApproveAll || cliOptions.yolo || cliOptions.y,
       normalizeBlankLines: !cliOptions.noNormalizeBlankLines,
-      devMode: cliOptions.dev,
+      devMode: cliOptions.devMode,
       enableTrace: true, // Enable directive trace for better error debugging
       useMarkdownFormatter: !cliOptions.noFormat,
       captureErrors: cliOptions.captureErrors

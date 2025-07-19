@@ -34,7 +34,8 @@ CommandArgument "command argument"
   / BacktickTemplateArgument    // Backtick templates `...`
   / NestedExecInvocation       // Nested function calls @func(args)
   / DataObjectLiteral           // Object literals: {"key": "value"}
-  / DataBracketAmbiguous        // Array literals: ["a", "b"] or path references
+  / ArrayLiteral                // Arrays: [1, 2, 3]
+  / AlligatorExpression         // File loading: <file.md>
   / str:StringLiteral {
       // Create a Text node directly
       return helpers.createNode(NodeType.Text, {

@@ -1,2 +1,2 @@
-/path @docsDir = [file.md]
+/path @docsDir = "file.md"
 /show @docsDir

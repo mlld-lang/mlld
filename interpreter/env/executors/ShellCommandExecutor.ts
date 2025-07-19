@@ -45,7 +45,17 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       };
     }
 
-    // Validate and parse the command for safe execution
+    /**
+     * Validate and parse command for safe execution
+     * WHY: Shell commands can contain dangerous operators (;, &&, ||, >, <, |)
+     * that enable command chaining and redirection, potentially bypassing security.
+     * SECURITY: Commands are parsed and validated to ensure only simple commands
+     * without shell operators are executed. This prevents command injection even
+     * if tainted data reaches this point.
+     * GOTCHA: Validation happens AFTER interpolation, so variables have already
+     * been expanded. This is defense-in-depth, not the primary security boundary.
+     * CONTEXT: Works with taint analysis and command analyzer as layered defense.
+     */
     let safeCommand: string;
     try {
       safeCommand = CommandUtils.validateAndParseCommand(command);

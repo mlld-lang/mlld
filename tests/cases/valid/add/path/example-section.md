@@ -1,1 +1,1 @@
-/show "Section 1" from [file.md]
+/show <file.md # Section 1>

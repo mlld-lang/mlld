@@ -41,7 +41,7 @@ describe('Import Content Type Validation', () => {
 `);
       
       const code = `
-/import [./utils.mld]
+/import "./utils.mld"
 /show @utils.helper
 `;
       
@@ -67,7 +67,7 @@ describe('Import Content Type Validation', () => {
       
       const code = `
 /import { api, version } from "./module.mld"
-/show ::API: {{api}}, Version: {{version}}::
+/show :::API: {{api}}, Version: {{version}}:::
 `;
       
       const result = await interpret(code, {
@@ -84,7 +84,7 @@ describe('Import Content Type Validation', () => {
     it('should import plain text files as namespace with empty exports', async () => {
       await fileSystem.writeFile('/readme.txt', 'This is a plain text file');
       
-      const code = `/import [./readme.txt] as text
+      const code = `/import "./readme.txt" as text
 /show @text`;
       
       const result = await interpret(code, {
@@ -115,7 +115,7 @@ describe('Import Content Type Validation', () => {
     it('should import markdown files without mlld directives as empty namespace', async () => {
       await fileSystem.writeFile('/doc.md', '# Documentation\n\nNo mlld content here.');
       
-      const code = `/import [./doc.md]
+      const code = `/import "./doc.md"
 /show @doc`;
       
       const result = await interpret(code, {
@@ -133,19 +133,35 @@ describe('Import Content Type Validation', () => {
     beforeEach(() => {
       // Mock fetch for registry modules
       global.fetch = async (url: string) => {
-        if (url.includes('/registry.json')) {
+        if (url.includes('/modules.json')) {
           return {
             ok: true,
             json: async () => ({
-              author: 'test',
+              version: '1.0.0',
               modules: {
-                utils: {
-                  source: { url: 'https://example.com/utils.mld' },
-                  description: 'Test utilities'
+                '@test/utils': {
+                  name: 'utils',
+                  author: 'test',
+                  source: { 
+                    url: 'https://example.com/utils.mld',
+                    contentHash: 'abc123def456'
+                  },
+                  description: 'Test utilities',
+                  about: 'Test utilities module',
+                  needs: [],
+                  license: 'CC0'
                 },
-                data: {
-                  source: { url: 'https://example.com/data.json' },
-                  description: 'Data file (not a module)'
+                '@test/data': {
+                  name: 'data',
+                  author: 'test',
+                  source: { 
+                    url: 'https://example.com/data.json',
+                    contentHash: 'def456ghi789'
+                  },
+                  description: 'Data file (not a module)',
+                  about: 'Test data file',
+                  needs: [],
+                  license: 'CC0'
                 }
               }
             })
@@ -178,6 +194,7 @@ describe('Import Content Type Validation', () => {
       resolverManager.configurePrefixes([{
         prefix: '@test/',
         resolver: 'REGISTRY',
+        type: 'module',
         config: {
           registryUrl: 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules'
         }
@@ -222,6 +239,7 @@ describe('Import Content Type Validation', () => {
       resolverManager.configurePrefixes([{
         prefix: '@test/',
         resolver: 'REGISTRY',
+        type: 'module',
         config: {
           registryUrl: 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules'
         }
@@ -255,10 +273,10 @@ describe('Import Content Type Validation', () => {
   });
 
   describe('Built-in Resolver Imports', () => {
-    it('should accept imports from NOW resolver', async () => {
+    it('should accept imports from now resolver', async () => {
       const code = `
-/import { iso, date } from @NOW
-/show ::Today is {{date}}::
+/import { iso, date } from @now
+/show :::Today is {{date}}:::
 `;
       
       const result = await interpret(code, {
@@ -290,7 +308,7 @@ describe('Import Content Type Validation', () => {
     it('should accept imports from INPUT resolver', async () => {
       const code = `
 /import { test } from @INPUT
-/show ::Input value: {{test}}::
+/show :::Input value: {{test}}:::
 `;
       
       const result = await interpret(code, {

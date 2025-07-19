@@ -1,9 +1,9 @@
 # Basic NOW Compatibility Test
 
-## NOW as variable (returns text)
+## now as variable (returns text)
 /var @timestamp = @now
-/show `Variable NOW: @timestamp`
+/show `Variable now: @timestamp`
 
-## NOW as variable with uppercase
-/var @timestamp2 = @NOW
-/show `Variable NOW (uppercase): @timestamp2`
+## now as variable (same as lowercase)
+/var @timestamp2 = @now
+/show `Variable now (same): @timestamp2`

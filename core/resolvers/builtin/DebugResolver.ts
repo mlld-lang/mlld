@@ -12,7 +12,7 @@ import * as path from 'path';
  * Built-in resolver for debug/environment information
  */
 export class DebugResolver implements Resolver {
-  name = 'DEBUG';
+  name = 'debug';
   description = 'Provides environment and debug information';
   type = 'input' as const;
   
@@ -22,7 +22,7 @@ export class DebugResolver implements Resolver {
     supportedContentTypes: ['data', 'text'],
     defaultContentType: 'data',  // Returns object by default
     priority: 1,
-    cache: { strategy: 'none' } // DEBUG info should be fresh
+    cache: { strategy: 'none' } // debug info should be fresh
   };
 
   constructor() {
@@ -31,7 +31,7 @@ export class DebugResolver implements Resolver {
 
   canResolve(ref: string): boolean {
     const cleanRef = ref.replace(/^@/, '');
-    return cleanRef === 'DEBUG' || cleanRef.startsWith('DEBUG/');
+    return cleanRef === 'debug' || cleanRef.startsWith('debug/');
   }
 
   async resolve(ref: string, config?: any): Promise<ResolverContent> {
@@ -42,7 +42,7 @@ export class DebugResolver implements Resolver {
         content: JSON.stringify(info),
         contentType: 'data',
         metadata: {
-          source: 'DEBUG',
+          source: 'debug',
           timestamp: new Date()
         }
       };
@@ -99,7 +99,7 @@ export class DebugResolver implements Resolver {
         content: JSON.stringify(exports),
         contentType: 'data',
         metadata: {
-          source: 'DEBUG',
+          source: 'debug',
           timestamp: new Date()
         }
       };

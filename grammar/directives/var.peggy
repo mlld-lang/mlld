@@ -18,6 +18,11 @@ SlashVar "var directive"
         processedValue = value.content; // value.content is already an array of nodes
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
+        
+        // Check if template has a pipeline attached
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
       }
       // Handle object literals (already typed by DataObjectLiteral)
       else if (value && value.type === 'object') {
@@ -30,7 +35,13 @@ SlashVar "var directive"
         metaInfo.inferredType = 'array';
         metaInfo.isEmptyArray = value.items.length === 0;
       }
-      // Handle section extraction
+      // Handle alligator expressions (file/URL loading)
+      else if (value && value.type === 'load-content') {
+        processedValue = [value];
+        metaInfo.inferredType = value.options && value.options.section ? 'section-content' : 'file-content';
+        metaInfo.sourceType = value.source.type; // 'path' or 'url'
+      }
+      // Handle section extraction (legacy - should be removed once migrated)
       else if (value && value.type === 'section') {
         processedValue = [value];
         metaInfo.inferredType = 'section-content';
@@ -44,6 +55,15 @@ SlashVar "var directive"
       else if (value && value.type === 'variableReference') {
         processedValue = [value.value];
         metaInfo.inferredType = 'reference';
+      }
+      // Handle variable references with tail modifiers
+      else if (value && value.type === 'VariableReferenceWithTail') {
+        processedValue = [value.variable];
+        metaInfo.inferredType = 'reference';
+        // Merge the withClause from the variable reference
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
       }
       // Handle nested directives
       else if (value && value.type === 'nestedDirective') {
@@ -119,6 +139,8 @@ SlashVar "var directive"
     
   // Error: Unclosed array literal
   / DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ "[" &{
+      // peg$currPos is now after the '[', but isUnclosedArray expects to start from after '['
+      // So we pass the current position which is correct
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
       helpers.mlldError("Unclosed array in /var directive. Expected ']' to close the array.", "]", location());

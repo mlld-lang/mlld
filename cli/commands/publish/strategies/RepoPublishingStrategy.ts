@@ -90,8 +90,11 @@ export class RepoPublishingStrategy implements PublishingStrategy {
     
     console.log(chalk.blue(`\n📤 Publishing @${context.module.metadata.author}/${context.module.metadata.name} from public repository`));
     console.log(chalk.gray(`   Repository: ${gitInfo.owner}/${gitInfo.repo}`));
-    console.log(chalk.gray(`   Commit: ${gitInfo.sha?.substring(0, 7)}`));
+    console.log(chalk.gray(`   Remote URL: ${gitInfo.remoteUrl}`));
+    console.log(chalk.gray(`   Commit SHA: ${gitInfo.sha}`));
+    console.log(chalk.gray(`   Branch: ${gitInfo.branch}`));
     console.log(chalk.gray(`   Path: ${gitInfo.relPath}`));
+    console.log(chalk.gray(`   Full URL: ${sourceUrl}`));
     
     // Auto-populate repository metadata if missing
     if (!context.module.metadata.repo) {
@@ -101,6 +104,23 @@ export class RepoPublishingStrategy implements PublishingStrategy {
       context.module.metadata.bugs = `https://github.com/${gitInfo.owner}/${gitInfo.repo}/issues`;
     }
     
+    // Verify the URL is accessible before publishing
+    console.log(chalk.gray(`\n   Verifying URL accessibility...`));
+    try {
+      const response = await fetch(sourceUrl);
+      if (!response.ok) {
+        throw new Error(`URL returned ${response.status}: ${response.statusText}`);
+      }
+      const content = await response.text();
+      if (!content || content.length === 0) {
+        throw new Error('URL returned empty content');
+      }
+      console.log(chalk.green(`   ✓ URL is accessible (${content.length} bytes)`));
+    } catch (error) {
+      console.error(chalk.red(`   ✗ URL verification failed: ${error instanceof Error ? error.message : String(error)}`));
+      throw new Error(`Cannot publish: Module content is not accessible at ${sourceUrl}`);
+    }
+
     const registryEntry = this.createPublicRepoRegistryEntry(context, sourceUrl);
     
     return {

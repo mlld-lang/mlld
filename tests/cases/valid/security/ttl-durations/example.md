@@ -14,5 +14,5 @@ This tests various TTL duration formats.
 /path (1h) cachePath = "./cache"
 /show (30s) @cachePath
 
-/var @greeting = ::Hello from {{config.name}}!::
+/var @greeting = :::Hello from {{config.name}}!:::
 /show (5m) @greeting

@@ -37,14 +37,12 @@ This is the content of array-path-disambiguation-test.md file.
 ::1             localhost
 ## Path with spaces needs quotes
 
-[
-  "path with spaces.txt"
-]
-## Multiple items always array (with quotes)
+This file has spaces in its name!
+## Multiple items always array (with alligators)
 
 [
-  "array-path-disambiguation-test.md",
-  "array-path-disambiguation-section.md"
+  "This is the content of array-path-disambiguation-test.md file.",
+  "# Section Test File\n\nSome intro content.\n\n## section-name\n\nThis is the content of section-name that will be extracted.\n\n## another-section\n\nThis section should not be included."
 ]
 ## Comma makes it array
 

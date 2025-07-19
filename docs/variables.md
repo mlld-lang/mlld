@@ -16,8 +16,8 @@ Path variables are used for filesystem paths and command arguments:
 ```mlld
 /path @docs = "./documentation"    # Define a path variable
 @docs                              # Reference a path variable
-[@./path]                          # Resolver path (with brackets)
-[@PROJECTPATH/config]              # Project root resolver path
+<@./path>                          # Resolver path (with alligators)
+<@PROJECTPATH/config>              # Project root resolver path
 ```
 
 - Must be defined with `/path` directive with `@` prefix
@@ -29,7 +29,7 @@ Path variables are used for filesystem paths and command arguments:
 Example:
 ```mlld
 /path @docs = "./docs"
-/show [@docs/guide.md]
+/show <@docs/guide.md>
 /path @output = "build/@version"
 ```
 
@@ -48,15 +48,16 @@ Text variables store unstructured text:
 - Defined with `/text` directive with `@` prefix
 - No field access (text is atomic)
 - In directives and double quotes: use `@variable`
-- In double-bracket templates `::...::`: use `{{variable}}`
-- Key rule: "Double brackets, double braces"
+- In backtick templates: use `@variable`
+- In double colon templates `::...::`: use `@variable`
+- In triple colon templates `:::...:::`: use `{{variable}}`
 
 Example:
 ```mlld
 /var @greeting = "Hello"
 /var @name = "World"
 /var @message1 = "@greeting, @name!"          # @ interpolation
-/var @message2 = ::{{greeting}}, {{name}}!::  # {{}} in templates
+/var @message2 = :::{{greeting}}, {{name}}!:::  # {{}} in templates
 ```
 
 ### Data Variables
@@ -75,13 +76,14 @@ Data variables store structured data:
 - Defined with `/data` directive with `@` prefix
 - Support field access with dot notation
 - In directives and double quotes: use `@variable.field`
-- In double-bracket templates: use `{{variable.field}}`
+- In backtick and double colon templates: use `@variable.field`
+- In triple colon templates: use `{{variable.field}}`
 
 Example:
 ```mlld
 /var @user = { "name": "Alice", "id": 123 }
 /var @greeting1 = "Hello, @user.name! ID: @user.id"           # @ interpolation
-/var @greeting2 = ::Hello, {{user.name}}! Your ID is {{user.id}}.::  # {{}} in templates
+/var @greeting2 = :::Hello, {{user.name}}! Your ID is {{user.id}}.:::  # {{}} in templates
 ```
 
 ### Array Access
@@ -212,8 +214,8 @@ Variable references are context-specific:
 - In object values: `/data @config = { "user": @name }`
 
 ### {{}} Interpolation contexts:
-- In double-bracket templates: `::Hello {{name}}!::`
-- ONLY in `::...::` templates
+- In triple colon templates: `:::Hello {{name}}!:::`
+- ONLY in `:::...:::` templates
 
 ### NOT allowed in:
 - Plain text lines (not starting with `/`)

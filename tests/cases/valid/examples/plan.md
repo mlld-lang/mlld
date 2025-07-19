@@ -1,6 +1,6 @@
 /import {*} from "files/imports.mld"
 
-/path @services = [@./src/services]
+/path @services = "@./src/services"
 /var @code = run @codecat(@services)
 
 /var @context = ::

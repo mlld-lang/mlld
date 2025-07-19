@@ -19,7 +19,7 @@
 /show `Number and double: @computed`
 
 ## Nested arrays with file paths (loads file contents)
-/var @contents = [[array-valid-patterns-test1.md], [array-valid-patterns-test2.md]]
+/var @contents = [<array-valid-patterns-test1.md>, <array-valid-patterns-test2.md>]
 /show `File contents array: @contents`
 
 ## Array with objects

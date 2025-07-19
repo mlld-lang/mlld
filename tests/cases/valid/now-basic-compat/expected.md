@@ -1,8 +1,8 @@
 # Basic NOW Compatibility Test
 
-## NOW as variable (returns text)
+## now as variable (returns text)
 
-Variable NOW: 2024-01-15T10:30:00.000Z
-## NOW as variable with uppercase
+Variable now: 2024-01-15T10:30:00.000Z
+## now as variable (same as lowercase)
 
-Variable NOW (uppercase): 2024-01-15T10:30:00.000Z
+Variable now (same): 2024-01-15T10:30:00.000Z

@@ -35,6 +35,8 @@ import { ErrorUtils, type CollectedError, type CommandExecutionContext } from '.
 import { CommandExecutorFactory, type ExecutorDependencies, type CommandExecutionOptions } from './executors';
 import { VariableManager, type IVariableManager, type VariableManagerDependencies, type VariableManagerContext } from './VariableManager';
 import { ImportResolver, type IImportResolver, type ImportResolverDependencies, type ImportResolverContext } from './ImportResolver';
+import type { PathContext } from '@core/services/PathContextService';
+import { PathContextBuilder } from '@core/services/PathContextService';
 
 
 /**
@@ -55,6 +57,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private urlCacheManager?: URLCache; // URL cache manager
   private reservedNames: Set<string> = new Set(); // Now dynamic based on registered resolvers
   private initialNodeCount: number = 0; // Track initial nodes to prevent duplicate merging
+  
+  // Path context for clear path handling
+  private pathContext?: PathContext;
+  // Legacy basePath for backward compatibility
+  private basePath: string;
   
   // Utility managers
   private cacheManager: CacheManager;
@@ -98,6 +105,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Development mode flag
   private devMode: boolean = false;
   
+  // File interpolation circular detection
+  private interpolationStack: Set<string> = new Set();
+  private enableFileInterpolation: boolean = true;
+  
+  // Current iteration file for <> placeholder
+  private currentIterationFile?: any;
+  
   // Directive trace for debugging
   private directiveTrace: DirectiveTrace[] = [];
   private traceEnabled: boolean = true; // Default to enabled
@@ -115,12 +129,34 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     timeout: 30000 // 30 seconds
   };
   
+  // Constructor overloads
+  constructor(
+    fileSystem: IFileSystemService,
+    pathService: IPathService,
+    basePathOrContext: string | PathContext,
+    parent?: Environment
+  );
+  
   constructor(
     private fileSystem: IFileSystemService,
     private pathService: IPathService,
-    private basePath: string,
+    basePathOrContext: string | PathContext,
     parent?: Environment
   ) {
+    // Handle both legacy basePath and new PathContext
+    if (typeof basePathOrContext === 'string') {
+      // Legacy mode - basePath provided
+      this.basePath = basePathOrContext;
+      logger.debug('Environment created with legacy basePath', { basePath: this.basePath });
+    } else {
+      // New mode - PathContext provided
+      this.pathContext = basePathOrContext;
+      this.basePath = basePathOrContext.projectRoot; // Use project root as basePath for compatibility
+      logger.debug('Environment created with PathContext', { 
+        projectRoot: this.pathContext.projectRoot,
+        fileDirectory: this.pathContext.fileDirectory 
+      });
+    }
     this.parent = parent;
     
     // Inherit reserved names from parent environment
@@ -133,7 +169,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Initialize security components for root environment only
     if (!parent) {
       try {
-        this.securityManager = SecurityManager.getInstance(basePath);
+        this.securityManager = SecurityManager.getInstance(this.getProjectRoot());
       } catch (error) {
         // If security manager fails to initialize, continue with legacy components
         console.warn('SecurityManager not available, using legacy security components');
@@ -141,7 +177,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       
       // Initialize registry manager
       try {
-        this.registryManager = new RegistryManager(basePath);
+        this.registryManager = new RegistryManager(this.getProjectRoot());
       } catch (error) {
         console.warn('RegistryManager not available:', error);
       }
@@ -153,7 +189,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       try {
         moduleCache = new ModuleCache();
         // Create lock file instance - it will load lazily when accessed
-        const lockFilePath = path.join(basePath, 'mlld.lock.json');
+        const lockFilePath = path.join(this.getProjectRoot(), 'mlld.lock.json');
         lockFile = new LockFile(lockFilePath);
         
         // Initialize URL cache manager with a simple cache adapter and lock file
@@ -187,7 +223,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         // This allows the constructor to remain synchronous
         
         // Register path resolvers (priority 1)
-        // ProjectPathResolver should be first to handle @PROJECTPATH references
+        // ProjectPathResolver should be first to handle @base references
         this.resolverManager.registerResolver(new ProjectPathResolver(this.fileSystem));
         
         // Register module resolvers (priority 10)
@@ -202,20 +238,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         // Configure built-in prefixes
         this.resolverManager.configurePrefixes([
           {
-            prefix: '@PROJECTPATH',
-            resolver: 'PROJECTPATH',
+            prefix: '@base',
+            resolver: 'base',
             type: 'io',
             config: {
-              basePath: this.basePath,
-              readonly: false
-            }
-          },
-          {
-            prefix: '@.',
-            resolver: 'PROJECTPATH', 
-            type: 'io',
-            config: {
-              basePath: this.basePath,
+              basePath: this.getProjectRoot(),
               readonly: false
             }
           }
@@ -241,13 +268,6 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       }
       
       // Note: ImportApproval and ImmutableCache are now handled by ImportResolver
-      
-      // Initialize reserved variables (these are different from resolvers)
-      // Resolvers handle imports/paths, but these are actual variables
-      // Note: This will be called after VariableManager is initialized
-      
-      // Reserve module prefixes from resolver configuration
-      this.reserveModulePrefixes();
     }
     
     // Initialize utility managers
@@ -267,7 +287,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getFsService: () => this.fileSystem,
       getPathService: () => this.pathService,
       getSecurityManager: () => this.securityManager,
-      getBasePath: () => this.basePath
+      getBasePath: () => this.getProjectRoot(),
+      getFileDirectory: () => this.getFileDirectory(),
+      getExecutionDirectory: () => this.getExecutionDirectory()
     };
     this.variableManager = new VariableManager(variableManagerDependencies);
     
@@ -277,13 +299,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       
       // Initialize built-in transformers
       this.initializeBuiltinTransformers();
+      
+      // Reserve module prefixes from resolver configuration and create path variables
+      this.reserveModulePrefixes();
     }
     
     // Initialize import resolver with dependencies
     const importResolverDependencies: ImportResolverDependencies = {
       fileSystem: this.fileSystem,
       pathService: this.pathService,
-      basePath: this.basePath,
+      basePath: this.getFileDirectory(), // Use file directory for relative imports
       cacheManager: this.cacheManager,
       getSecurityManager: () => this.getSecurityManager(),
       getRegistryManager: () => this.getRegistryManager(),
@@ -293,14 +318,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getApproveAllImports: () => this.approveAllImports,
       getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
       getURLConfig: () => this.urlConfig,
-      getDefaultUrlOptions: () => this.defaultUrlOptions
+      getDefaultUrlOptions: () => this.defaultUrlOptions,
+      getProjectRoot: () => this.getProjectRoot() // Add project root for module resolution
     };
     this.importResolver = new ImportResolver(importResolverDependencies);
     
     // Initialize command executor factory with dependencies
     const executorDependencies: ExecutorDependencies = {
       errorUtils: this.errorUtils,
-      workingDirectory: this.basePath,
+      workingDirectory: this.getExecutionDirectory(),
       shadowEnvironment: {
         getShadowEnv: (language: string) => this.getShadowEnv(language)
       },
@@ -337,19 +363,19 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.resolverManager.registerResolver(inputResolver);
     
     // Only reserve names for built-in function resolvers (not file/module resolvers)
-    // Function resolvers are those that provide computed values like NOW, DEBUG, etc.
-    const functionResolvers = ['NOW', 'DEBUG', 'INPUT', 'PROJECTPATH'];
+    // Function resolvers are those that provide computed values like now, debug, etc.
+    const functionResolvers = ['now', 'debug', 'input', 'base'];
     for (const name of functionResolvers) {
       this.reservedNames.add(name);
-      this.reservedNames.add(name.toLowerCase());
     }
     
     logger.debug(`Reserved resolver names: ${Array.from(this.reservedNames).join(', ')}`);
   }
 
   /**
-   * Reserve module prefixes from resolver configuration
+   * Reserve module prefixes from resolver configuration and create path variables
    * This prevents variables from using names that conflict with module prefixes
+   * and makes prefixes available as path variables for file references
    */
   private reserveModulePrefixes(): void {
     if (!this.resolverManager) {
@@ -366,6 +392,32 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         const prefixName = match[1];
         this.reservedNames.add(prefixName);
         logger.debug(`Reserved module prefix name: ${prefixName}`);
+        
+        // Create a path variable for prefixes that have a basePath
+        if (prefixConfig.config?.basePath) {
+          const pathVar = createPathVariable(
+            prefixName,
+            prefixConfig.config.basePath,
+            prefixConfig.config.basePath,
+            false, // Not a URL
+            path.isAbsolute(prefixConfig.config.basePath), // Check if absolute
+            {
+              directive: 'var',
+              syntax: 'quoted',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            undefined, // No security metadata
+            {
+              isReserved: true,
+              isPrefixPath: true,
+              prefixConfig: prefixConfig,
+              definedAt: { line: 0, column: 0, filePath: '<prefix-config>' }
+            }
+          );
+          this.variableManager.setVariable(prefixName, pathVar);
+          logger.debug(`Created path variable for prefix: @${prefixName} -> ${prefixConfig.config.basePath}`);
+        }
       }
     }
   }
@@ -418,8 +470,55 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // --- Property Accessors ---
   
-  getBasePath(): string {
+  /**
+   * Get the PathContext for this environment
+   */
+  getPathContext(): PathContext | undefined {
+    return this.pathContext || this.parent?.getPathContext();
+  }
+  
+  /**
+   * Get the project root directory
+   */
+  getProjectRoot(): string {
+    const context = this.getPathContext();
+    if (context) {
+      return context.projectRoot;
+    }
+    // Fallback to basePath for legacy mode
     return this.basePath;
+  }
+  
+  /**
+   * Get the file directory (directory of current .mld file)
+   */
+  getFileDirectory(): string {
+    const context = this.getPathContext();
+    if (context) {
+      return context.fileDirectory;
+    }
+    // In legacy mode, use basePath
+    return this.basePath;
+  }
+  
+  /**
+   * Get the execution directory (where commands run)
+   */
+  getExecutionDirectory(): string {
+    const context = this.getPathContext();
+    if (context) {
+      return context.executionDirectory;
+    }
+    // In legacy mode, use basePath
+    return this.basePath;
+  }
+  
+  /**
+   * Legacy method - returns project root for backward compatibility
+   * @deprecated Use getProjectRoot() or getFileDirectory() instead
+   */
+  getBasePath(): string {
+    return this.getProjectRoot();
   }
   
   getCurrentFilePath(): string | undefined {
@@ -446,6 +545,71 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Get from this environment or parent
     if (this.resolverManager) return this.resolverManager;
     return this.parent?.getResolverManager();
+  }
+  
+  // --- File Interpolation Support ---
+  
+  /**
+   * Check if file interpolation is enabled
+   */
+  isFileInterpolationEnabled(): boolean {
+    if (this.parent) return this.parent.isFileInterpolationEnabled();
+    return this.enableFileInterpolation;
+  }
+  
+  /**
+   * Set file interpolation enabled state
+   */
+  setFileInterpolationEnabled(enabled: boolean): void {
+    if (this.parent) {
+      this.parent.setFileInterpolationEnabled(enabled);
+    } else {
+      this.enableFileInterpolation = enabled;
+    }
+  }
+  
+  /**
+   * Check if a file path is in the interpolation stack (circular reference detection)
+   */
+  isInInterpolationStack(path: string): boolean {
+    if (this.interpolationStack.has(path)) return true;
+    return this.parent?.isInInterpolationStack(path) || false;
+  }
+  
+  /**
+   * Add a file path to the interpolation stack
+   */
+  pushInterpolationStack(path: string): void {
+    if (this.parent) {
+      this.parent.pushInterpolationStack(path);
+    } else {
+      this.interpolationStack.add(path);
+    }
+  }
+  
+  /**
+   * Remove a file path from the interpolation stack
+   */
+  popInterpolationStack(path: string): void {
+    if (this.parent) {
+      this.parent.popInterpolationStack(path);
+    } else {
+      this.interpolationStack.delete(path);
+    }
+  }
+  
+  /**
+   * Get the current iteration file for <> placeholder
+   */
+  getCurrentIterationFile(): any {
+    return this.currentIterationFile || this.parent?.getCurrentIterationFile();
+  }
+  
+  /**
+   * Set the current iteration file for <> placeholder
+   */
+  setCurrentIterationFile(file: any): void {
+    this.currentIterationFile = file;
   }
   
   // --- Variable Management ---
@@ -518,18 +682,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Get a resolver variable with proper async resolution
-   * This handles context-dependent behavior for resolvers like @TIME
+   * This handles context-dependent behavior for resolvers
    */
   async getResolverVariable(name: string): Promise<Variable | undefined> {
-    const upperName = name.toUpperCase();
-    
     // Check if it's a reserved resolver name
-    if (!this.reservedNames.has(upperName)) {
+    if (!this.reservedNames.has(name)) {
       return undefined;
     }
     
-    // Special handling for DEBUG variable - compute dynamically
-    if (upperName === 'DEBUG') {
+    // Special handling for debug variable - compute dynamically
+    if (name === 'debug') {
       const debugValue = this.createDebugObject(3); // Use markdown format
       
       
@@ -540,7 +702,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         isMultiLine: false
       };
       const debugVar = createObjectVariable(
-        'DEBUG',
+        'debug',
         debugValue,
         false, // Not complex, it's just a string
         debugSource,
@@ -553,7 +715,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     
     // Check cache first
-    const cached = this.cacheManager.getResolverVariable(upperName);
+    const cached = this.cacheManager.getResolverVariable(name);
     if (cached && cached.metadata && 'needsResolution' in cached.metadata && !cached.metadata.needsResolution) {
       return cached;
     }
@@ -562,12 +724,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const resolverManager = this.getResolverManager();
     if (!resolverManager) {
       // Fallback to creating a basic resolver variable
-      return this.createResolverVariable(upperName);
+      return this.createResolverVariable(name);
     }
     
     try {
       // Resolve with 'variable' context to get the appropriate content
-      const resolverContent = await resolverManager.resolve(`@${upperName}`, { context: 'variable' });
+      const resolverContent = await resolverManager.resolve(`@${name}`, { context: 'variable' });
       
       // Convert content based on contentType
       let varType: 'text' | 'data' = 'text';
@@ -593,32 +755,52 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         isMultiLine: false
       };
       const resolvedVar = varType === 'data' ?
-        createObjectVariable(upperName, varValue, true, resolverSource, {
+        createObjectVariable(name, varValue, true, resolverSource, {
           isReserved: true,
           isResolver: true,
-          resolverName: upperName,
+          resolverName: name,
           definedAt: { line: 0, column: 0, filePath: '<resolver>' }
         }) :
-        createSimpleTextVariable(upperName, varValue, resolverSource, {
+        createSimpleTextVariable(name, varValue, resolverSource, {
           isReserved: true,
           isResolver: true,
-          resolverName: upperName,
+          resolverName: name,
           definedAt: { line: 0, column: 0, filePath: '<resolver>' }
         });
       
       // Cache the resolved variable
-      this.cacheManager.setResolverVariable(upperName, resolvedVar);
+      this.cacheManager.setResolverVariable(name, resolvedVar);
       
       return resolvedVar;
     } catch (error) {
       // If resolution fails, return undefined
-      console.warn(`Failed to resolve variable @${upperName}: ${(error as Error).message}`);
+      console.warn(`Failed to resolve variable @${name}: ${(error as Error).message}`);
       return undefined;
     }
   }
   
   hasVariable(name: string): boolean {
     return this.variableManager.hasVariable(name);
+  }
+  
+  /**
+   * Get a transform function by name
+   * First checks built-in transforms, then variables
+   */
+  getTransform(name: string): Function | undefined {
+    // Check built-in transforms first
+    const builtins = builtinTransformers;
+    if (builtins[name]) {
+      return builtins[name];
+    }
+    
+    // Check variables that might be functions
+    const variable = this.getVariable(name);
+    if (variable && typeof variable === 'object' && '__executable' in variable) {
+      return variable;
+    }
+    
+    return undefined;
   }
   
   // --- Frontmatter Support ---
@@ -666,6 +848,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Set shadow environment functions for a specific language
+   * 
+   * WHY: Shadow environments enable mlld /exec functions to be called from
+   * within JavaScript or Node.js code blocks, creating seamless integration
+   * where mlld functions become regular functions in the target language.
+   * 
+   * GOTCHA: Each function wrapper includes references to ALL shadow functions
+   * to enable cross-function calls (e.g., calculate calling add and multiply).
+   * Functions must be defined before the shadow environment that contains them.
+   * 
+   * CONTEXT: Called by /exe directive when evaluating environment declarations
+   * like: /exe js = { add, multiply, calculate }
+   * 
    * @param language The language identifier (js, node, python, etc.)
    * @param functions Map of function names to their implementations
    */
@@ -674,7 +868,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       // Create or get Node shadow environment
       if (!this.nodeShadowEnv) {
         this.nodeShadowEnv = new NodeShadowEnvironment(
-          this.basePath,
+          this.getFileDirectory(),
           this.currentFilePath
         );
       }
@@ -691,7 +885,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Get shadow environment functions for a specific language
-   * @param language The language identifier
+   * WHY: Language executors (JavaScript, Node.js) need access to user-defined functions
+   * during code execution. Shadow environments provide this without variable pollution.
+   * GOTCHA: Returns a Map, not an object. Functions are stored by reference and may
+   * have been defined in parent environments - this method walks the scope chain.
+   * CONTEXT: Called by JavaScriptExecutor and NodeExecutor when building the execution
+   * context for code blocks that might reference shadow functions.
+   * @param language The language identifier (js, javascript, node, nodejs, etc.)
    * @returns Map of function names to implementations, or undefined if not set
    */
   getShadowEnv(language: string): Map<string, any> | undefined {
@@ -716,6 +916,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   /**
    * Get Node shadow environment instance with parent environment fallback
+   * WHY: Node.js execution requires a VM-based isolated context for security and
+   * proper module resolution. The NodeShadowEnvironment wraps Node's vm module.
+   * GOTCHA: This returns the instance itself, not the functions. Parent environments
+   * are checked if the current environment doesn't have a Node shadow env.
+   * CONTEXT: Used internally by getShadowEnv() for Node.js language execution and
+   * by NodeExecutor for running Node.js code blocks.
    * @returns NodeShadowEnvironment instance or undefined if not available
    */
   getNodeShadowEnv(): NodeShadowEnvironment | undefined {
@@ -740,7 +946,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     
     // Create a new one for this environment
     this.nodeShadowEnv = new NodeShadowEnvironment(
-      this.basePath,
+      this.getFileDirectory(),
       this.currentFilePath
     );
     
@@ -824,7 +1030,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       
       // Update the InputResolver if it exists
       if (this.resolverManager) {
-        const inputResolver = this.resolverManager.getResolver('INPUT');
+        const inputResolver = this.resolverManager.getResolver('input');
         if (inputResolver && 'setStdinContent' in inputResolver) {
           (inputResolver as any).setStdinContent(content);
         }
@@ -865,10 +1071,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     code: string, 
     language: string, 
     params?: Record<string, any>,
+    metadata?: Record<string, any> | CommandExecutionContext,
     context?: CommandExecutionContext
   ): Promise<string> {
+    // Handle overloaded signatures for backward compatibility
+    if (metadata && !context && 'sourceLocation' in metadata) {
+      // Old signature: executeCode(code, language, params, context)
+      context = metadata as CommandExecutionContext;
+      metadata = undefined;
+    }
+    
     // Delegate to command executor factory
-    return this.commandExecutorFactory.executeCode(code, language, params, this.outputOptions, context);
+    return this.commandExecutorFactory.executeCode(code, language, params, metadata as Record<string, any> | undefined, this.outputOptions, context);
   }
 
   
@@ -879,11 +1093,39 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // --- Scope Management ---
   
+  /**
+   * Create a child environment with isolated variable scope
+   * WHY: Child environments enable proper scoping for imports, function calls, and
+   * control flow blocks. Variables defined in children don't pollute the parent.
+   * GOTCHA: Shadow environments are NOT inherited - each environment manages its
+   * own language-specific functions, preventing cross-scope function pollution.
+   * SECURITY: Child isolation prevents variable leakage between execution contexts.
+   */
   createChild(newBasePath?: string): Environment {
+    let childContext: PathContext | string;
+    
+    if (this.pathContext) {
+      // If we have a PathContext, create child context
+      if (newBasePath) {
+        // Create new context with updated file directory
+        childContext = {
+          ...this.pathContext,
+          fileDirectory: newBasePath,
+          executionDirectory: newBasePath
+        };
+      } else {
+        // Use parent context as-is
+        childContext = this.pathContext;
+      }
+    } else {
+      // Legacy mode
+      childContext = newBasePath || this.basePath;
+    }
+    
     const child = new Environment(
       this.fileSystem,
       this.pathService,
-      newBasePath || this.basePath,
+      childContext,
       this
     );
     // Track the current node count so we know which nodes are new in the child
@@ -969,6 +1211,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.importResolver.fetchURLWithSecurity(url, security, configuredBy);
   }
   
+  /**
+   * Fetch URL with full response metadata for content loading
+   */
+  async fetchURLWithMetadata(url: string): Promise<{
+    content: string;
+    headers: Record<string, string>;
+    status: number;
+  }> {
+    return this.importResolver.fetchURLWithMetadata(url);
+  }
+  
   setURLConfig(config: ResolvedURLConfig): void {
     this.urlConfig = config;
     this.cacheManager.setURLConfig(config);
@@ -1011,11 +1264,20 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   /**
    * Set development mode flag
    */
-  setDevMode(devMode: boolean): void {
+  async setDevMode(devMode: boolean): Promise<void> {
     this.devMode = devMode;
     // Pass to resolver manager if it exists
     if (this.resolverManager) {
       this.resolverManager.setDevMode(devMode);
+      
+      // Initialize dev mode prefixes if enabling
+      if (devMode) {
+        // Check for local modules directory
+        const localModulePath = this.pathService.join(this.basePath, 'llm', 'modules');
+        if (await this.fileSystem.exists(localModulePath)) {
+          await this.resolverManager.initializeDevMode(localModulePath);
+        }
+      }
     }
   }
   
@@ -1115,10 +1377,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   createChildEnvironment(): Environment {
+    const childContext = this.pathContext || this.basePath;
     const child = new Environment(
       this.fileSystem,
       this.pathService,
-      this.basePath,
+      childContext,
       this
     );
     // Share import stack with parent via ImportResolver

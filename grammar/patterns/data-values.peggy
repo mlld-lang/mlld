@@ -47,7 +47,8 @@ DataPropertyValue "data context property value"
   = RunCommandValue              // run {command} - preserve as-is
   / CodeExecutionValue           // js {code} - preserve as-is  
   / DataObjectLiteral            // Nested objects get typed
-  / DataBracketAmbiguous         // Arrays OR file paths - data context version
+  / ArrayLiteral                 // Arrays: [1, 2, 3] - always arrays!
+  / AlligatorExpression          // File loading: <file.md> - always loading!
   / ExecInvocationPattern        // @func() - preserve as-is
   / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / NestedDirective              // Other embedded directives - preserve as-is
@@ -93,7 +94,8 @@ DataArrayValue
   = RunCommandValue              // run {command} - preserve as-is
   / CodeExecutionValue           // js {code} - preserve as-is  
   / DataObjectLiteral            // Objects get typed
-  / DataBracketAmbiguous         // Arrays OR paths - use ambiguous version for consistency
+  / ArrayLiteral                 // Arrays: [1, 2, 3] - always arrays!
+  / AlligatorExpression          // File loading: <file.md> - always loading!
   / ExecInvocationPattern        // @func() - preserve as-is
   / VariableWithTail             // @var with optional tail modifiers - preserve as-is
   / NestedDirective              // Other embedded directives - preserve as-is
@@ -101,43 +103,4 @@ DataArrayValue
   / DataStringValue              // Plain strings (unwrapped)
   / PrimitiveValue               // Numbers, booleans, null - preserve as-is
 
-// Note: DataBracketArray removed - use DataBracketAmbiguous for consistency
-// This ensures proper array vs path disambiguation at all nesting levels
-
-// DATA BRACKET AMBIGUOUS - Data context version of BracketAmbiguous
-// Handles array vs path disambiguation with data context array parsing
-DataBracketAmbiguous "data bracket content (array or path)"
-  = "[" _ "]" {
-      // Empty brackets - treat as empty array
-      return helpers.createEmptyArray(location());
-    }
-  / "[" _ "," _ "]" {
-      // Explicit empty array syntax
-      return helpers.createEmptyArray(location());
-    }
-  / "[" _ content:DataBracketContentWithComma _ "]" {
-      // Has comma = array with data context parsing
-      return helpers.createArrayFromContent(content, location());
-    }
-  / "[" _ content:BracketContentWithSection _ "]" {
-      // Has # = section extraction (no change needed)
-      return helpers.createSectionExtraction(content, location());
-    }
-  / "[" _ value:DataArrayValue _ "]" {
-      // Single array value (object, array, string, etc.) = array with one element
-      return helpers.createArrayFromContent([value], location());
-    }
-  / "[" _ content:BracketContentSimple _ "]" {
-      // No comma, no # = file path (no change needed)
-      return helpers.createPathDereference(content, location());
-    }
-
-// DATA BRACKET CONTENT WITH COMMA - Uses data context array values
-DataBracketContentWithComma
-  = first:DataArrayValue rest:(_ "," _ value:DataArrayValue { return value; })+ {
-      return [first, ...rest];
-    }
-  / item:DataArrayValue _ "," {
-      // Single item with trailing comma
-      return [item];
-    }
+// Note: DataBracketAmbiguous removed - use ArrayLiteral for arrays, AlligatorExpression for file loading

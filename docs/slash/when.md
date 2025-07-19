@@ -456,7 +456,7 @@ The following patterns will produce helpful error messages:
 ### With Templates
 ```mlld
 /var @user_type = "premium"
-/exe @greeting(type) = ::Welcome, {{type}} user!::
+/exe @greeting(type) = :::Welcome, {{type}} user!:::
 
 /when @user_type first: [
   "premium" => /add @greeting("premium")

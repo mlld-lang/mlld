@@ -6,8 +6,20 @@ export class ImmutableCache {
   private cacheDir: string;
   
   constructor(projectPath: string) {
-    // Store cache in .mlld/cache directory
-    this.cacheDir = path.join(projectPath, '.mlld', 'cache', 'imports');
+    // In serverless/read-only environments, use /tmp
+    // Detect by checking if we're in /var/task (Vercel) or if LAMBDA_TASK_ROOT is set (AWS Lambda)
+    const isServerless = projectPath.startsWith('/var/task') || 
+                        process.env.LAMBDA_TASK_ROOT || 
+                        process.env.VERCEL || 
+                        process.env.AWS_LAMBDA_FUNCTION_NAME;
+    
+    if (isServerless) {
+      // Use /tmp which is writable in serverless environments
+      this.cacheDir = path.join('/tmp', '.mlld', 'cache', 'imports');
+    } else {
+      // Store cache in .mlld/cache directory
+      this.cacheDir = path.join(projectPath, '.mlld', 'cache', 'imports');
+    }
   }
 
   /**

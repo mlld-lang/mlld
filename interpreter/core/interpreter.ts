@@ -14,9 +14,13 @@ import type {
   PathSeparatorNode,
   SectionMarkerNode,
   ExecInvocation,
-  BaseMlldNode
+  BaseMlldNode,
+  FileReferenceNode,
+  FieldAccessNode,
+  CondensedPipe
 } from '@core/types';
 import type { Variable } from '@core/types/variable';
+import type { LoadContentResult } from '@core/types/load-content';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
 import { isExecInvocation } from '@core/types';
@@ -182,10 +186,18 @@ export interface EvalResult {
 }
 
 /**
+ * Evaluation context options
+ */
+export interface EvaluationContext {
+  /** Whether we're evaluating a condition (affects field access behavior) */
+  isCondition?: boolean;
+}
+
+/**
  * Main recursive evaluation function.
  * This is the heart of the interpreter - it walks the AST and evaluates each node.
  */
-export async function evaluate(node: MlldNode | MlldNode[], env: Environment): Promise<EvalResult> {
+export async function evaluate(node: MlldNode | MlldNode[], env: Environment, context?: EvaluationContext): Promise<EvalResult> {
   // Handle array of nodes (from parser)
   if (Array.isArray(node)) {
     let lastValue: unknown = undefined;
@@ -200,7 +212,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       // Process remaining nodes
       for (let i = 1; i < node.length; i++) {
         const n = node[i];
-        const result = await evaluate(n, env);
+        const result = await evaluate(n, env, context);
         lastValue = result.value;
         lastResult = result;
         
@@ -223,7 +235,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     } else {
       // No frontmatter, process all nodes normally
       for (const n of node) {
-        const result = await evaluate(n, env);
+        const result = await evaluate(n, env, context);
         lastValue = result.value;
         lastResult = result;
         
@@ -303,7 +315,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
     }
     
     // Evaluate the parsed content
-    const result = await evaluate(node.content, env);
+    const result = await evaluate(node.content, env, context);
     return result;
   }
       
@@ -418,12 +430,22 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
       }
     }
     
-    // Handle complex data variables with lazy evaluation
-    let resolvedValue = await resolveVariableValue(variable, env);
+    /**
+     * Preserve Variable wrapper for field access operations
+     * WHY: Field access needs Variable metadata to properly resolve complex data
+     *      structures and maintain access path information
+     */
+    const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+    let resolvedValue = await resolveVariable(variable, env, ResolutionContext.FieldAccess);
     
     // Handle field access if present
-    if (node.fields && node.fields.length > 0 && typeof resolvedValue === 'object' && resolvedValue !== null) {
+    if (node.fields && node.fields.length > 0) {
       const { accessField } = await import('../utils/field-access');
+      
+      // accessField handles Variable extraction internally when needed
+      // No need to manually extract here
+      
+      // Apply each field access in sequence
       for (const field of node.fields) {
         // Handle variableIndex type - need to resolve the variable first
         if (field.type === 'variableIndex') {
@@ -431,16 +453,22 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment): P
           if (!indexVar) {
             throw new Error(`Variable not found for index: ${field.value}`);
           }
-          // Get the actual value to use as index
-          let indexValue = indexVar.value;
-          if (typeof indexValue === 'object' && indexValue !== null && 'value' in indexValue) {
-            indexValue = indexValue.value;
-          }
+          // Extract Variable value for index access
+          const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+          const indexValue = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          resolvedValue = accessField(resolvedValue, resolvedField);
+          const fieldResult = accessField(resolvedValue, resolvedField, { 
+            preserveContext: true,
+            returnUndefinedForMissing: context?.isCondition
+          });
+          resolvedValue = (fieldResult as any).value;
         } else {
-          resolvedValue = accessField(resolvedValue, field);
+          const fieldResult = accessField(resolvedValue, field, { 
+            preserveContext: true,
+            returnUndefinedForMissing: context?.isCondition
+          });
+          resolvedValue = (fieldResult as any).value;
         }
         if (resolvedValue === undefined) break;
       }
@@ -468,7 +496,7 @@ async function evaluateDocument(doc: DocumentNode, env: Environment): Promise<Ev
   
   // Evaluate each child node in sequence
   for (const child of doc.nodes) {
-    const result = await evaluate(child, env);
+    const result = await evaluate(child, env, context);
     lastValue = result.value;
     
     // Add text nodes to output
@@ -492,7 +520,7 @@ async function evaluateText(node: TextNode, env: Environment): Promise<EvalResul
 /**
  * Resolve variable value with lazy evaluation support for complex data
  */
-export async function resolveVariableValue(variable: Variable, env: Environment): Promise<VariableValue> {
+async function resolveVariableValue(variable: Variable, env: Environment): Promise<VariableValue> {
   // Import type guards for the new Variable type system
   const {
     isTextLike,
@@ -530,18 +558,13 @@ export async function resolveVariableValue(variable: Variable, env: Environment)
       });
     }
     
+    
     if (complexFlag) {
       // Complex data needs evaluation
+      
       const evaluatedValue = await evaluateDataValue(variable.value, env);
       
       // Debug logging
-      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
-        logger.debug('resolveVariableValue - evaluated complex data:', {
-          variableName: variable.name,
-          evaluatedValue,
-          evaluatedType: typeof evaluatedValue
-        });
-      }
       
       return evaluatedValue;
     }
@@ -656,6 +679,7 @@ interface InterpolationNode {
   value?: string;
   commandRef?: any;
   withClause?: any;
+  pipes?: any[];
 }
 
 /**
@@ -666,6 +690,8 @@ export async function interpolate(
   env: Environment,
   context: InterpolationContext = InterpolationContext.Default
 ): Promise<string> {
+  logger.info('[INTERPOLATE] interpolate() called');
+  
   // Handle non-array inputs
   if (!Array.isArray(nodes)) {
     if (typeof nodes === 'string') {
@@ -680,6 +706,7 @@ export async function interpolate(
   const parts: string[] = [];
   
   for (const node of nodes) {
+    
     if (node.type === 'Text') {
       // Handle Text nodes - directly use string content
       parts.push(node.content || '');
@@ -690,11 +717,65 @@ export async function interpolate(
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');
       const result = await evaluateExecInvocation(node as any, env);
       parts.push(String(result.value));
-    } else if (node.type === 'VariableReference') {
+    } else if (node.type === 'InterpolationVar') {
+      // Handle {{var}} style interpolation (from triple colon templates)
       const varName = node.identifier || node.name;
       if (!varName) continue;
       
       let variable = env.getVariable(varName);
+      
+      // Check if this is a resolver variable that needs async resolution
+      if (!variable && env.hasVariable(varName)) {
+        // Try to get it as a resolver variable
+        const resolverVar = await env.getResolverVariable(varName);
+        if (resolverVar) {
+          variable = resolverVar;
+        }
+      }
+      
+      if (!variable) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          logger.debug('Variable not found during {{var}} interpolation:', { varName });
+        }
+        parts.push(`{{${varName}}}`); // Keep unresolved with {{}} syntax
+        continue;
+      }
+      
+      /**
+       * Extract Variable value for string interpolation
+       * WHY: String interpolation needs raw values because template engines
+       *      work with primitive types, not Variable wrapper objects
+       */
+      const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+      const value = await resolveVariable(variable, env, ResolutionContext.StringInterpolation);
+      
+      // Convert final value to string
+      let stringValue: string;
+      if (value === null) {
+        stringValue = 'null';
+      } else if (value === undefined) {
+        stringValue = '';
+      } else if (typeof value === 'object') {
+        stringValue = JSON.stringify(value);
+        if (process.env.MLLD_DEBUG === 'true') {
+        }
+      } else {
+        stringValue = String(value);
+      }
+      
+      parts.push(stringValue);
+      logger.debug('[INTERPOLATE] Pushed to parts:', { stringValue, partsLength: parts.length });
+    } else if (node.type === 'VariableReference') {
+      const varName = node.identifier || node.name;
+      
+      if (!varName) {
+        continue;
+      }
+      
+      let variable = env.getVariable(varName);
+      
+      if (variable) {
+      }
       
       // Check if this is a resolver variable that needs async resolution
       if (!variable && env.hasVariable(varName)) {
@@ -736,7 +817,16 @@ export async function interpolate(
       } else {
         // Use the already imported resolveVariableValue function
         try {
-          value = await resolveVariableValue(variable, env);
+          if (process.env.MLLD_DEBUG === 'true') {
+          }
+          /**
+           * Extract Variable value for string interpolation
+           * WHY: String interpolation needs raw values because template engines
+           *      work with primitive types, not Variable wrapper objects
+           */
+          const { resolveVariable, ResolutionContext: ResCtx } = await import('../utils/variable-resolution');
+          value = await resolveVariable(variable, env, ResCtx.StringInterpolation);
+          
         } catch (error) {
           // Handle executable variables specially in interpolation
           if (error instanceof Error && error.message.includes('Cannot interpolate executable')) {
@@ -752,12 +842,6 @@ export async function interpolate(
       
       // Debug logging
       if (process.env.MLLD_DEBUG === 'true') {
-        logger.debug('Variable resolved in template:', {
-          name: variable.name,
-          type: variable.type,
-          resolvedValue: value,
-          resolvedType: typeof value
-        });
       }
       
       // Special handling for lazy reserved variables like DEBUG
@@ -771,8 +855,25 @@ export async function interpolate(
       
       // Handle field access if present
       if (node.fields && node.fields.length > 0 && typeof value === 'object' && value !== null) {
+        const { accessField } = await import('../utils/field-access');
         for (const field of node.fields) {
-          value = accessField(value, field);
+          // Handle variableIndex type - need to resolve the variable first
+          if (field.type === 'variableIndex') {
+            const indexVar = env.getVariable(field.value);
+            if (!indexVar) {
+              throw new Error(`Variable not found for index: ${field.value}`);
+            }
+            // Extract Variable value for index access - WHY: Index values must be raw strings/numbers
+            const { resolveValue: resolveVal, ResolutionContext: ResCtx2 } = await import('../utils/variable-resolution');
+            const indexValue = await resolveVal(indexVar, env, ResCtx2.StringInterpolation);
+            // Create a new field with the resolved value
+            const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
+            const fieldResult = accessField(value, resolvedField, { preserveContext: true });
+            value = (fieldResult as any).value;
+          } else {
+            const fieldResult = accessField(value, field, { preserveContext: true });
+            value = (fieldResult as any).value;
+          }
           
           // Handle null nodes from the grammar
           if (value && typeof value === 'object' && 'type' in value) {
@@ -792,27 +893,21 @@ export async function interpolate(
         }
       }
       
+      // Apply condensed pipes if present
+      if (node.pipes && node.pipes.length > 0) {
+        value = await applyCondensedPipes(value, node.pipes, env);
+      }
+      
       // Convert final value to string
       let stringValue: string;
       
-      // Debug logging for data variables
-      if (process.env.MLLD_DEBUG === 'true' && node.identifier) {
-        logger.debug('Template interpolation:', {
-          identifier: node.identifier,
-          value,
-          valueType: typeof value,
-          isNull: value === null
-        });
-        
-        // Special debug for @sum
-        if (node.identifier === 'sum') {
-          logger.debug('Interpolating @sum:', {
-            rawValue: value,
-            stringValue: String(value),
-            willBe: `"${String(value)}"`
-          });
-        }
-      }
+      /**
+       * Extract Variable value for string interpolation
+       * WHY: String interpolation needs raw values because template engines
+       *      work with primitive types, not Variable wrapper objects
+       */
+      const { isVariable, resolveValue, ResolutionContext: ResContext } = await import('../utils/variable-resolution');
+      value = await resolveValue(value, env, ResContext.StringInterpolation);
       
       if (value === null) {
         stringValue = 'null';
@@ -821,15 +916,81 @@ export async function interpolate(
         stringValue = await interpolate(value.content as InterpolationNode[], env, context);
       } else if (typeof value === 'object' && 'type' in value) {
         const nodeValue = value as Record<string, unknown>;
-        if (nodeValue.type === 'Null') {
+        if (process.env.MLLD_DEBUG === 'true') {
+        }
+        
+        // Check if this is a complex array that needs evaluation
+        if (nodeValue.type === 'array' && 'items' in nodeValue) {
+          // This is an unevaluated complex array!
+          if (process.env.MLLD_DEBUG === 'true') {
+          }
+          const evaluatedArray = await evaluateDataValue(value, env);
+          if (process.env.MLLD_DEBUG === 'true') {
+          }
+          // Now handle it as a regular array
+          if (Array.isArray(evaluatedArray)) {
+            const { JSONFormatter } = await import('./json-formatter');
+            stringValue = JSONFormatter.stringify(evaluatedArray);
+          } else {
+            stringValue = String(evaluatedArray);
+          }
+        } else if (nodeValue.type === 'Null') {
           // Handle null nodes from the grammar
           stringValue = 'null';
         } else {
-          stringValue = JSON.stringify(value);
+          // Check if this is a PipelineInput object - WHY: PipelineInput has toString()
+          // method that should be used for string interpolation instead of JSON.stringify
+          const { isPipelineInput } = await import('../utils/pipeline-input');
+          if (isPipelineInput(value)) {
+            stringValue = value.toString();
+          } else {
+            stringValue = JSON.stringify(value);
+            if (process.env.MLLD_DEBUG === 'true') {
+            }
+          }
         }
       } else if (Array.isArray(value)) {
-        // Special handling for arrays in shell command context
-        if (context === InterpolationContext.ShellCommand) {
+        // Check if this is a LoadContentResultArray first
+        const { isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
+        
+        // Debug logging
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('[INTERPOLATE] Array value check:', {
+            isArray: Array.isArray(value),
+            length: value.length,
+            hasVariable: '__variable' in value,
+            variableMetadata: (value as any).__variable?.metadata,
+            isRenamedContentArray: isRenamedContentArray(value),
+            isLoadContentResultArray: isLoadContentResultArray(value),
+            hasContent: 'content' in value,
+            contentType: typeof (value as any).content
+          });
+        }
+        
+        
+        if (isLoadContentResultArray(value)) {
+          // For LoadContentResultArray, use its .content getter (which concatenates all content)
+          stringValue = value.content;
+        } else if (isRenamedContentArray(value)) {
+          /**
+           * Handle RenamedContentArray string interpolation
+           * WHY: RenamedContentArray has a custom content getter that formats the array
+           *      elements according to the rename pattern from alligator syntax
+           * GOTCHA: The content getter might be defined but not enumerable, so we check
+           *         multiple methods to find the proper string representation
+           * CONTEXT: Used when arrays created with <*.md> as "pattern" are interpolated
+           */
+          if ('content' in value) {
+            stringValue = value.content;
+          } else if (value.toString !== Array.prototype.toString) {
+            // Use custom toString if available
+            stringValue = value.toString();
+          } else {
+            // Fallback to manual join
+            stringValue = value.join('\n\n');
+          }
+        } else if (context === InterpolationContext.ShellCommand) {
+          // Special handling for arrays in shell command context
           // For shell commands, expand arrays into space-separated arguments
           // Each element is escaped individually
           const strategy = EscapingStrategyFactory.getStrategy(context);
@@ -848,9 +1009,15 @@ export async function interpolate(
           stringValue = JSONFormatter.stringify(value);
         }
       } else if (typeof value === 'object') {
-        // Check if this is a namespace object (only if no field access)
-        const hadFieldAccess = node.fields && node.fields.length > 0;
-        if (variable && variable.metadata?.isNamespace && !hadFieldAccess) {
+        // Check if this is a LoadContentResult - use its content
+        const { isLoadContentResult, isLoadContentResultArray, isRenamedContentArray } = await import('@core/types/load-content');
+        if (isLoadContentResult(value)) {
+          stringValue = value.content;
+        } else if (isLoadContentResultArray(value)) {
+          // For array of LoadContentResult, concatenate content with double newlines
+          stringValue = value.map(item => item.content).join('\n\n');
+        } else if (variable && variable.metadata?.isNamespace && node.fields?.length === 0) {
+          // Check if this is a namespace object (only if no field access)
           const { JSONFormatter } = await import('./json-formatter');
           stringValue = JSONFormatter.stringifyNamespace(value);
         } else if (value.__executable) {
@@ -876,6 +1043,8 @@ export async function interpolate(
       const strategy = EscapingStrategyFactory.getStrategy(context);
       const escapedValue = strategy.escape(stringValue);
       
+      if (process.env.MLLD_DEBUG === 'true' && node.identifier) {
+      }
       
       parts.push(escapedValue);
     } else if (node.type === 'ExecInvocation') {
@@ -887,10 +1056,239 @@ export async function interpolate(
       // Apply context-appropriate escaping
       const strategy = EscapingStrategyFactory.getStrategy(context);
       parts.push(strategy.escape(stringValue));
+    } else if (node.type === 'FileReference') {
+      // Handle file reference interpolation
+      const result = await interpolateFileReference(node as any, env, context);
+      parts.push(result);
     }
   }
   
   const result = parts.join('');
+  
+  return result;
+}
+
+/**
+ * Interpolate file reference nodes (<file.md>) with optional field access and pipes
+ */
+async function interpolateFileReference(
+  node: FileReferenceNode,
+  env: Environment,
+  context: InterpolationContext
+): Promise<string> {
+  const { FileReferenceNode } = await import('@core/types');
+  
+  // Special handling for <> placeholder in 'as' contexts
+  if (node.meta?.isPlaceholder) {
+    // Get current file from iteration context
+    const currentFile = env.getCurrentIterationFile?.();
+    if (!currentFile) {
+      throw new Error('<> can only be used in "as" template contexts');
+    }
+    return processFileFields(currentFile, node.fields, node.pipes, env);
+  }
+  
+  // Process the path (may contain variables)
+  let resolvedPath: string;
+  if (typeof node.source === 'string') {
+    resolvedPath = node.source;
+  } else if (node.source.raw) {
+    resolvedPath = node.source.raw;
+  } else if (node.source.segments) {
+    resolvedPath = await interpolate(node.source.segments, env);
+  } else {
+    resolvedPath = await interpolate([node.source], env);
+  }
+  
+  // Check if file interpolation is enabled
+  if (!env.isFileInterpolationEnabled()) {
+    throw new Error('File interpolation disabled by security policy');
+  }
+  
+  // Check circular reference
+  if (env.isInInterpolationStack(resolvedPath)) {
+    console.error(`Warning: Circular reference detected - '${resolvedPath}' references itself, skipping`);
+    return '';  // Return empty string and continue
+  }
+  
+  // Add to stack
+  env.pushInterpolationStack(resolvedPath);
+  
+  try {
+    // Use existing content loader
+    const { processContentLoader } = await import('../eval/content-loader');
+    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    
+    let loadResult: any;
+    try {
+      // If we already have a resolved path (from variable interpolation), create a simple path source
+      const sourceToUse = resolvedPath !== node.source?.raw ? 
+        { type: 'path', raw: resolvedPath, segments: [{ type: 'Text', content: resolvedPath }] } : 
+        node.source;
+      
+      loadResult = await processContentLoader({
+        type: 'load-content',
+        source: sourceToUse
+      }, env);
+    } catch (error: any) {
+      // Handle file not found or access errors gracefully by returning empty string
+      if (error.code === 'ENOENT') {
+        console.error(`Warning: File not found - '${resolvedPath}'`);
+        return '';
+      } else if (error.code === 'EACCES') {
+        console.error(`Warning: Permission denied - '${resolvedPath}'`);
+        return '';
+      } else {
+        console.error(`Warning: Failed to load file '${resolvedPath}': ${error.message}`);
+        return '';
+      }
+    }
+    
+    // Handle glob results (array of files)
+    if (isLoadContentResultArray(loadResult)) {
+      // For glob patterns, join all file contents
+      const contents = await Promise.all(
+        loadResult.map(file => processFileFields(file, node.fields, node.pipes, env))
+      );
+      return contents.join('\n\n');
+    }
+    
+    // Process field access and pipes
+    return processFileFields(loadResult, node.fields, node.pipes, env);
+  } finally {
+    // Remove from stack
+    env.popInterpolationStack(resolvedPath);
+  }
+}
+
+/**
+ * Process field access and pipes on file content
+ */
+async function processFileFields(
+  content: LoadContentResult | LoadContentResult[],
+  fields?: FieldAccessNode[],
+  pipes?: CondensedPipe[],
+  env: Environment
+): Promise<string> {
+  const { isLoadContentResult } = await import('@core/types/load-content');
+  let result: any = content;
+  
+  // Extract content from LoadContentResult
+  if (isLoadContentResult(result)) {
+    result = result.content;
+    
+    // Try to parse JSON if it looks like JSON and we have fields to access
+    if (fields && fields.length > 0 && typeof result === 'string') {
+      const trimmed = result.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          result = JSON.parse(trimmed);
+        } catch (e) {
+          // Not valid JSON, keep as string
+        }
+      }
+    }
+  }
+  
+  // Process field access
+  if (fields && fields.length > 0) {
+    // Use enhanced field access for better error messages
+    const { accessField } = await import('../utils/field-access');
+    for (const field of fields) {
+      try {
+        const fieldResult = accessField(result, field, { preserveContext: true });
+        result = (fieldResult as any).value;
+        if (result === undefined) {
+          // Warning to stderr
+          console.error(`Warning: field '${field.value}' not found`);
+          return '';
+        }
+      } catch (error) {
+        // Field not found - log warning and return empty string for backward compatibility
+        console.error(`Warning: field '${field.value}' not found`);
+        return '';
+      }
+    }
+  }
+  
+  // Apply pipes
+  if (pipes && pipes.length > 0) {
+    result = await applyCondensedPipes(result, pipes, env);
+    // Pipes already handle conversion to string format, so return as-is
+    return String(result);
+  }
+  
+  // Convert to string only if no pipes were applied
+  return typeof result === 'string' ? result : JSON.stringify(result);
+}
+
+/**
+ * Apply condensed pipe transformations
+ */
+export async function applyCondensedPipes(
+  value: any,
+  pipes: CondensedPipe[],
+  env: Environment
+): Promise<any> {
+  let result = value;
+  
+  for (const pipe of pipes) {
+    // Handle both 'name' and 'transform' properties for backward compatibility
+    const pipeName = pipe.name || pipe.transform;
+    if (!pipeName) {
+      throw new Error('Pipe missing transform name');
+    }
+    
+    // Get transform from environment
+    const transform = env.getTransform?.(pipeName) || env.getVariable(pipeName);
+    if (!transform) {
+      throw new Error(`Unknown transform: @${pipeName}`);
+    }
+    
+    try {
+      // Apply transform
+      if (typeof transform === 'function') {
+        result = await transform(result, ...(pipe.args || []));
+      } else if (transform && typeof transform === 'object') {
+        // Check for builtin transformer
+        if (transform.metadata?.isBuiltinTransformer && transform.metadata?.transformerImplementation) {
+          const impl = transform.metadata.transformerImplementation;
+          // Convert the value to string - handle objects properly
+          const stringValue = typeof result === 'string' ? result : JSON.stringify(result);
+          result = await impl(stringValue);
+        } else if (transform.type === 'executable' || '__executable' in transform) {
+          // Handle executable variables as transforms
+          const { evaluateExecInvocation } = await import('../eval/exec-invocation');
+          // Create a Text node for the pipeline input value
+          const inputTextNode = {
+            type: 'Text',
+            content: String(result)
+          };
+          // Create an ExecInvocation node to execute the transform
+          const execInvocationNode = {
+            type: 'ExecInvocation',
+            commandRef: {
+              type: 'CommandReference',
+              identifier: pipeName,
+              args: [inputTextNode, ...(pipe.args || [])]
+            }
+          };
+          const execResult = await evaluateExecInvocation(
+            execInvocationNode as any,
+            env
+          );
+          result = execResult.value;
+        } else {
+          throw new Error(`@${pipeName} is not a valid transform function`);
+        }
+      } else {
+        throw new Error(`@${pipeName} is not a valid transform function`);
+      }
+    } catch (error: any) {
+      throw new Error(`Error in pipe @${pipeName}: ${error.message}`);
+    }
+  }
   
   return result;
 }

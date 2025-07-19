@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Complex HTML Elements Test</title>
+</head>
+<body>
+    <article>
+        <h1>Testing Complex HTML to Markdown Conversion</h1>
+        
+        <h2>Code Blocks</h2>
+        <pre><code class="language-javascript">function greet(name) {
+    console.log(`Hello, ${name}!`);
+}
+
+greet("World");</code></pre>
+        
+        <h2>Tables</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Feature</th>
+                    <th>Supported</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Headers</td>
+                    <td>Yes</td>
+                    <td>H1-H6 supported</td>
+                </tr>
+                <tr>
+                    <td>Lists</td>
+                    <td>Yes</td>
+                    <td>Ordered and unordered</td>
+                </tr>
+                <tr>
+                    <td>Code</td>
+                    <td>Yes</td>
+                    <td>Inline and blocks</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <h2>Images and Links</h2>
+        <p>Here's an image: <img src="example.png" alt="Example Image" title="Image Title"></p>
+        <p>And a <a href="https://example.com" title="Link Title">link with title</a>.</p>
+        
+        <h2>Nested Lists</h2>
+        <ul>
+            <li>First level
+                <ul>
+                    <li>Second level
+                        <ul>
+                            <li>Third level</li>
+                        </ul>
+                    </li>
+                    <li>Another second level</li>
+                </ul>
+            </li>
+            <li>Back to first level</li>
+        </ul>
+        
+        <h2>Definition Lists</h2>
+        <dl>
+            <dt>Term 1</dt>
+            <dd>Definition of term 1</dd>
+            <dt>Term 2</dt>
+            <dd>Definition of term 2</dd>
+        </dl>
+        
+        <h2>Horizontal Rule</h2>
+        <p>Content before rule</p>
+        <hr>
+        <p>Content after rule</p>
+        
+        <h2>Inline Formatting</h2>
+        <p>This has <em>emphasis</em>, <strong>strong emphasis</strong>, <code>inline code</code>, 
+        <del>strikethrough</del>, and <mark>highlighted text</mark>.</p>
+        
+        <h2>Line Breaks</h2>
+        <p>Line one<br>
+        Line two<br>
+        Line three</p>
+    </article>
+</body>
+</html>

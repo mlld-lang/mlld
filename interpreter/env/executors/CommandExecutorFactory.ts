@@ -53,6 +53,7 @@ export class CommandExecutorFactory {
     code: string,
     language: string,
     params?: Record<string, any>,
+    metadata?: Record<string, any>,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<string> {
@@ -64,13 +65,13 @@ export class CommandExecutorFactory {
 
     // Different executors have different signatures, so we need to handle this
     if (executor === this.jsExecutor) {
-      return this.jsExecutor.execute(code, options, context, params);
+      return this.jsExecutor.execute(code, options, context, params, metadata);
     } else if (executor === this.nodeExecutor) {
-      return this.nodeExecutor.execute(code, options, context, params);
+      return this.nodeExecutor.execute(code, options, context, params, metadata);
     } else if (executor === this.pythonExecutor) {
-      return this.pythonExecutor.execute(code, options, context, params);
+      return this.pythonExecutor.execute(code, options, context, params, metadata);
     } else if (executor === this.bashExecutor) {
-      return this.bashExecutor.execute(code, options, context, params);
+      return this.bashExecutor.execute(code, options, context, params, metadata);
     }
 
     // Fallback (shouldn't reach here)

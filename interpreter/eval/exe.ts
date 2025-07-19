@@ -33,6 +33,13 @@ function extractParamNames(params: any[]): string[] {
 
 /**
  * Check if any parameter names conflict with existing variables.
+ * WHY: Parameter names shadow parent variables during execution, so we need to
+ * warn users about potential confusion when a parameter has the same name as
+ * an existing variable they might expect to access.
+ * GOTCHA: This only checks the current environment, not parent scopes. Parameters
+ * CAN shadow parent variables - this is by design for proper scoping.
+ * CONTEXT: Called before creating executable definitions to provide early feedback
+ * about naming conflicts.
  * Throws ExecParameterConflictError if a conflict is found.
  */
 function checkParameterConflicts(
@@ -197,7 +204,14 @@ export async function evaluateExe(
     }
     
   } else if (directive.subtype === 'exeCode') {
-    // Handle code definition
+    /**
+     * Handle code executable definitions
+     * WHY: Code executables run language-specific code (JS, Python, etc) with
+     * parameter binding and shadow environment access.
+     * GOTCHA: The code template is stored as AST nodes for lazy interpolation -
+     * parameters are only substituted at execution time, not definition time.
+     * CONTEXT: Enables patterns like /exe @transform(data) = js {@data.map(x => x * 2)}
+     */
     const codeNodes = directive.values?.code;
     if (!codeNodes) {
       throw new Error('Exec code directive missing code');
@@ -260,7 +274,15 @@ export async function evaluateExe(
     } satisfies ResolverExecutable;
     
   } else if (directive.subtype === 'exeTemplate') {
-    // Handle template exec: @exec name(params) = [[template]]
+    /**
+     * Handle template executable definitions
+     * WHY: Template executables provide simple text interpolation with parameter
+     * substitution, useful for generating formatted output without code execution.
+     * GOTCHA: Templates use double square brackets [[...]] syntax and support full
+     * mlld interpolation including nested directives.
+     * CONTEXT: Common for report generation, formatted messages, and string templates
+     * Example: /exe @greeting(name) = [[Hello, @name!]]
+     */
     const templateNodes = directive.values?.template;
     if (!templateNodes) {
       throw new Error('Exec template directive missing template');
@@ -333,7 +355,15 @@ export async function evaluateExe(
     ? (executableDef.language as 'js' | 'node' | 'python' | 'sh' | undefined)
     : undefined;
   
-  // Create and store the executable variable
+  /**
+   * Create the executable variable
+   * WHY: Executable variables wrap command/code/template definitions with parameter
+   * metadata, enabling them to be invoked like functions with argument binding.
+   * GOTCHA: The variable.value.template is set AFTER creation because the executable
+   * definition structure varies by type (commandTemplate vs codeTemplate vs template).
+   * CONTEXT: These variables are used by /run directives, pipelines, and anywhere
+   * a parameterized executable can be invoked.
+   */
   const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
   const variable = createExecutableVariable(
     identifier,

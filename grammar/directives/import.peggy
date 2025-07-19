@@ -106,10 +106,10 @@ SlashImport
     
   // Error: Generic /import syntax error (catch-all)
   / DirectiveContext "/import" {
-      helpers.mlldError("Invalid /import syntax. Expected: /import [path], /import @module, or /import { items } from \"path\"", "[", location());
+      helpers.mlldError("Invalid /import syntax. Expected: /import \"path\", /import @module, or /import { items } from \"path\"", "\"", location());
     }
 
-// Shorthand import: /import [path] or /import @input or /import [path] as name
+// Shorthand import: /import "path" or /import @input or /import "path" as name
 SlashImportShorthand
   = DirectiveContext "/import" _ path:ImportPath alias:(_ "as" _ name:BaseIdentifier { return name; })? ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
       helpers.debug('SlashImportShorthand matched', { path, alias, ttl, tail });
@@ -332,26 +332,42 @@ ImportPath
   / SpecialVariablePath
   / ModuleReference
   / QuotedPath
-  / BracketImportPath
-  / PathExpression
+  / ImportAlligatorAdapter
+  // REMOVED: PathExpression - bracket syntax no longer supported
 
-// Bracketed path for imports - handles [@var/path]
-BracketImportPath
-  = "[" parts:ImportPathParts "]" {
-      helpers.debug('BracketImportPath matched', { parts });
-      const rawPath = helpers.reconstructRawString(parts);
-      return {
-        type: 'path',
-        subtype: 'filePath',
-        values: { 
-          path: parts
-        },
-        raw: { 
-          path: rawPath
-        },
-        meta: helpers.createPathMetadata(rawPath, parts)
-      };
+// Adapter to use AlligatorExpression for imports
+ImportAlligatorAdapter
+  = content:AlligatorExpression {
+      helpers.debug('ImportAlligatorAdapter processing AlligatorExpression', { content });
+      
+      // Alligators in imports just load the file
+      if (content.options && content.options.section) {
+        helpers.mlldError("Section extraction is not supported in import paths. Use: /import { items } from <path>", ">", location());
+      }
+      
+      // Convert alligator source to import path format
+      if (content.source.type === 'path') {
+        return {
+          type: 'path',
+          subtype: 'filePath',
+          values: { 
+            path: content.source.segments
+          },
+          raw: { 
+            path: content.source.raw
+          },
+          meta: content.source.meta
+        };
+      } else if (content.source.type === 'url') {
+        // Future: support importing from URLs
+        helpers.mlldError("URL imports are not yet supported. Use: /import { items } from <local-file>", ">", location());
+      }
+      
+      // Should not reach here
+      helpers.mlldError("Invalid alligator content in import path", ">", location());
     }
+
+// REMOVED: BracketImportPath - bracket syntax no longer supported
 
 // Quoted path for imports
 QuotedPath

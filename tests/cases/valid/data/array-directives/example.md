@@ -6,8 +6,8 @@ suites: [
   ],
 count: 3
 }
-/show ::Test Results:
+/show :::Test Results:
 {{testResults.suites[0]}}
 {{testResults.suites[1]}}
 {{testResults.suites[2]}}
-Total: {{testResults.count}} suites::
+Total: {{testResults.count}} suites:::

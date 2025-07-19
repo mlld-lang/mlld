@@ -6,6 +6,7 @@ import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutio
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import type { NodeShadowEnvironment } from '../NodeShadowEnvironment';
+import { prepareParamsForShadow, createMlldHelpers } from '../variable-proxy';
 
 export interface NodeShadowEnvironmentProvider {
   /**
@@ -40,7 +41,8 @@ export class NodeExecutor extends BaseCommandExecutor {
     code: string,
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext,
-    params?: Record<string, any>
+    params?: Record<string, any>,
+    metadata?: Record<string, any>
   ): Promise<string> {
     
     // For Node.js execution, always halt on errors (don't use continue behavior)
@@ -50,13 +52,14 @@ export class NodeExecutor extends BaseCommandExecutor {
       `node: ${code.substring(0, 50)}...`,
       nodeOptions,
       context,
-      () => this.executeNodeCode(code, params, context)
+      () => this.executeNodeCode(code, params, metadata, context)
     );
   }
 
   private async executeNodeCode(
     code: string,
     params?: Record<string, any>,
+    metadata?: Record<string, any>,
     context?: CommandExecutionContext
   ): Promise<CommandExecutionResult> {
     const startTime = Date.now();
@@ -69,8 +72,19 @@ export class NodeExecutor extends BaseCommandExecutor {
       // Only capture for 'exe' and 'var' directives, not for 'run'
       const captureConsoleLog = context?.directiveType !== 'run';
       
+      // Prepare parameters with Variable proxies
+      let shadowParams = params;
+      
+      if (params) {
+        shadowParams = prepareParamsForShadow(params);
+        // Also add mlld helpers with metadata
+        if (!shadowParams.mlld) {
+          shadowParams.mlld = createMlldHelpers(metadata);
+        }
+      }
+      
       // Use shadow environment with VM
-      const result = await nodeShadowEnv.execute(code, params, captureConsoleLog);
+      const result = await nodeShadowEnv.execute(code, shadowParams, captureConsoleLog);
       
       // Format result (same as subprocess version)
       let output = '';
@@ -129,10 +143,20 @@ export class NodeExecutor extends BaseCommandExecutor {
     
     // Build Node.js code with parameters
     let nodeCode = '';
+    
     if (params && typeof params === 'object') {
+      // Prepare parameters with Variable proxies
+      const shadowParams = prepareParamsForShadow(params);
+      
       // Inject parameters as constants
-      for (const [key, value] of Object.entries(params)) {
+      for (const [key, value] of Object.entries(shadowParams)) {
         nodeCode += `const ${key} = ${JSON.stringify(value)};\n`;
+      }
+      
+      // Always add mlld helpers
+      if (!shadowParams.mlld) {
+        const mlldHelpers = createMlldHelpers(metadata);
+        nodeCode += `const mlld = ${JSON.stringify(mlldHelpers)};\n`;
       }
     }
     

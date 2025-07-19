@@ -11,6 +11,15 @@ import type { Environment } from '../env/Environment';
  */
 export function createASTAwareJSONReplacer() {
   const replacer = (key: string, val: unknown): unknown => {
+    // Handle LoadContentResult - return content for string representation
+    if (val && typeof val === 'object' && 'content' in val && 'filename' in val && 'tokest' in val) {
+      // This looks like a LoadContentResult - check if it has the getters
+      const obj = val as any;
+      if (typeof obj.tokest === 'number' || obj._extension !== undefined) {
+        // This is a LoadContentResult - return its content for JSON serialization
+        return obj.content;
+      }
+    }
     // Handle wrapped strings (quotes, backticks, brackets)
     if (val && typeof val === 'object' && 'wrapperType' in val && 'content' in val) {
       const valWithContent = val as { wrapperType: string; content: unknown[] };

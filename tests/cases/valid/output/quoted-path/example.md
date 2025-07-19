@@ -11,8 +11,8 @@ This tests the new quoted path syntax for `/output` directive.
 /output @data "data.json"
 
 ## Testing bracket path with 'to' keyword
-/output @greeting to [greeting-bracket.txt]
-/output @data to [data-bracket.json]
+/output @greeting to "greeting-bracket.txt"
+/output @data to "data-bracket.json"
 
 ## Mixed syntax test
 /output to "entire-doc.md"

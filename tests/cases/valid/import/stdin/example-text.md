@@ -4,4 +4,4 @@ This example demonstrates importing plain text from stdin.
 
 /import { content } from @stdin
 
-/show ::Received: {{content}}::
+/show :::Received: {{content}}:::

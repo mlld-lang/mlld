@@ -11,6 +11,7 @@ import type { IPathService } from '@services/fs/IPathService';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { ErrorFormatSelector, type FormattedErrorResult, type ErrorFormatOptions } from '@core/utils/errorFormatSelector';
+import { PathContextBuilder, type PathContext } from '@core/services/PathContextService';
 
 // Export core types/errors
 export { MlldError };
@@ -19,9 +20,11 @@ export type { FormattedErrorResult, ErrorFormatOptions };
 
 // Export utilities
 export { DependencyDetector } from '@core/utils/dependency-detector';
+export { PathContextBuilder } from '@core/services/PathContextService';
 
 // Export types
 export type { Location, Position } from '@core/types/index';
+export type { PathContext, PathContextOptions } from '@core/services/PathContextService';
 
 /**
  * Options for processing Mlld documents
@@ -29,8 +32,12 @@ export type { Location, Position } from '@core/types/index';
 export interface ProcessOptions {
   /** Output format */
   format?: 'markdown' | 'xml';
-  /** Base path for resolving relative paths */
+  /** Base path for resolving relative paths (deprecated - use filePath) */
   basePath?: string;
+  /** File path being processed (recommended) */
+  filePath?: string;
+  /** Explicit path context (advanced usage) */
+  pathContext?: PathContext;
   /** Custom file system implementation */
   fileSystem?: IFileSystemService;
   /** Custom path service implementation */
@@ -48,11 +55,20 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
   // Create default services if not provided
   const fileSystem = options?.fileSystem || new NodeFileSystem();
   const pathService = options?.pathService || new PathService();
-  const basePath: string = options?.basePath || (process.cwd as () => string)();
+  
+  // Build or use PathContext
+  let pathContext: PathContext | undefined;
+  if (options?.pathContext) {
+    pathContext = options.pathContext;
+  } else if (options?.filePath) {
+    pathContext = await PathContextBuilder.fromFile(options.filePath, fileSystem);
+  }
   
   // Call the interpreter
   const result: string = await interpret(content, {
-    basePath,
+    basePath: options?.basePath, // Keep for backward compatibility
+    filePath: options?.filePath,
+    pathContext,
     format: options?.format || 'markdown',
     fileSystem,
     pathService,

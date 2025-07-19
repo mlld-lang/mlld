@@ -1,6 +1,6 @@
-# @NOW Reserved Variable Test
+# @now Reserved Variable Test
 
-This tests the @NOW reserved variable.
+This tests the @now reserved variable.
 
 Current timestamp: 
 2009-02-13T23:31:30.000Z

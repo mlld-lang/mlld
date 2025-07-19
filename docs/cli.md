@@ -176,6 +176,39 @@ mlld info @alice/utils
 mlld info @alice/utils --format json
 ```
 
+### `mlld clean [modules...]`
+
+Remove modules from lock file and cache to resolve import issues.
+
+**Options:**
+- `--all` - Clear all cached modules
+- `--registry` - Clear only registry modules (preserve local modules)
+- `-v, --verbose` - Show detailed output during cleaning
+
+**Examples:**
+```bash
+# Remove specific module from cache
+mlld clean @mlld/env
+
+# Remove multiple modules
+mlld clean @mlld/env @alice/utils
+
+# Clear all cached modules
+mlld clean --all
+
+# Clear only registry modules
+mlld clean --registry
+
+# Verbose output
+mlld clean @mlld/env --verbose
+```
+
+**Use Cases:**
+- Fix stale cached module data preventing proper imports
+- Clear corrupted module metadata after registry updates
+- Force fresh resolution of modules with integrity issues
+- Clean up cache when switching between development and production modules
+
 ### `mlld add-needs [module.mld.md]`
 
 Analyze and update module dependencies automatically.
