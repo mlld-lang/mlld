@@ -168,9 +168,8 @@ export class InputResolver implements Resolver {
     // Include all MLLD_ prefixed variables
     for (const [key, value] of Object.entries(process.env)) {
       if (key.startsWith('MLLD_') && value !== undefined) {
-        // Remove MLLD_ prefix for cleaner access
-        const cleanKey = key.substring(5);
-        filtered[cleanKey] = value;
+        // Keep the full variable name including MLLD_ prefix
+        filtered[key] = value;
       }
     }
 

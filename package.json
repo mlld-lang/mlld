@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "2.0.0-rc15",
+  "version": "2.0.0-rc16",
   "description": "mlld: a modular prompt scripting language",
   "type": "module",
   "main": "dist/index.cjs",
@@ -66,6 +66,9 @@
     "clean": "rimraf dist",
     "clean:generated": "rm -f core/types/*.js core/types/*.js.map grammar/generated/parser/*.js grammar/generated/parser/*.cjs grammar/generated/parser/*.ts grammar/generated/parser/deps/*.js grammar/generated/parser/deps/*.cjs grammar/generated/parser/deps/*.ts && find tests/fixtures -name '*.generated-fixture.json' -delete 2>/dev/null || true && find tests/fixtures -name 'index.ts' -delete 2>/dev/null || true",
     "prepublishOnly": "npm run clean && npm run build",
+    "sync:mlldx": "node scripts/sync-mlldx.cjs",
+    "publish:mlldx": "node scripts/sync-mlldx.cjs --publish",
+    "postpublish": "npm run publish:mlldx",
     "bump": "node scripts/bump-version.js",
     "bump:patch": "node scripts/bump-version.js patch",
     "bump:minor": "node scripts/bump-version.js minor",

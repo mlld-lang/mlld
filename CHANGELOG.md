@@ -5,6 +5,13 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc16]
+
+### Changed
+- **@input resolver no longer strips MLLD_ prefix** 
+  - Environment variables with `MLLD_` prefix are now imported with their full names
+  - What you set is what you get: `MLLD_GITHUB_TOKEN` imports as `MLLD_GITHUB_TOKEN`, not `GITHUB_TOKEN`
+
 ## [2.0.0-rc15]
 
 ### Added
