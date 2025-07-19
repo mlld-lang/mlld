@@ -96,6 +96,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Import approval bypass flag
   private approveAllImports: boolean = false;
   
+  // Ephemeral mode flag for error context
+  private isEphemeralMode: boolean = false;
+  
   // Track child environments for cleanup
   private childEnvironments: Set<Environment> = new Set();
   
@@ -487,6 +490,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     // Fallback to basePath for legacy mode
     return this.basePath;
+  }
+  
+  /**
+   * Check if running in ephemeral mode
+   */
+  isEphemeral(): boolean {
+    return this.isEphemeralMode;
   }
   
   /**
@@ -1264,20 +1274,32 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       return;
     }
     
+    // Mark environment as ephemeral for error context
+    this.isEphemeralMode = ephemeral;
+    
     // Auto-approve all imports in ephemeral mode
     this.approveAllImports = true;
     
-    // Replace security components with ephemeral implementations
-    const { InMemoryModuleCache } = await import('@core/registry/InMemoryModuleCache');
-    const { NoOpLockFile } = await import('@core/registry/NoOpLockFile');
-    const { ImmutableCache } = await import('@core/security/ImmutableCache');
-    
-    // Import resolver classes needed for re-registration
-    const { ProjectPathResolver } = await import('@core/resolvers/ProjectPathResolver');
-    const { RegistryResolver } = await import('@core/resolvers/RegistryResolver');
-    const { LocalResolver } = await import('@core/resolvers/LocalResolver');
-    const { GitHubResolver } = await import('@core/resolvers/GitHubResolver');
-    const { HTTPResolver } = await import('@core/resolvers/HTTPResolver');
+    // Pre-import all required modules to avoid timing issues
+    const [
+      { InMemoryModuleCache },
+      { NoOpLockFile },
+      { ImmutableCache },
+      { ProjectPathResolver },
+      { RegistryResolver },
+      { LocalResolver },
+      { GitHubResolver },
+      { HTTPResolver }
+    ] = await Promise.all([
+      import('@core/registry/InMemoryModuleCache'),
+      import('@core/registry/NoOpLockFile'),
+      import('@core/security/ImmutableCache'),
+      import('@core/resolvers/ProjectPathResolver'),
+      import('@core/resolvers/RegistryResolver'),
+      import('@core/resolvers/LocalResolver'),
+      import('@core/resolvers/GitHubResolver'),
+      import('@core/resolvers/HTTPResolver')
+    ]);
     
     // Create ephemeral cache implementations
     const moduleCache = new InMemoryModuleCache();

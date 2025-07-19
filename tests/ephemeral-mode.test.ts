@@ -5,6 +5,7 @@ import * as fs from 'fs-extra';
 
 describe('Ephemeral Mode (mlldx)', () => {
   const testScript = path.join(__dirname, 'test-ephemeral.mld');
+  const mlldxPath = path.join(__dirname, '..', 'bin', 'mlldx-wrapper.cjs');
   
   beforeEach(async () => {
     // Create test script
@@ -32,7 +33,8 @@ describe('Ephemeral Mode (mlldx)', () => {
   });
 
   it('should run mlldx with ephemeral mode', () => {
-    const result = execSync(`mlldx-mlldx ${testScript}`, {
+    const mlldxPath = path.join(__dirname, '..', 'bin', 'mlldx-wrapper.cjs');
+    const result = execSync(`node ${mlldxPath} ${testScript}`, {
       encoding: 'utf8',
       env: { ...process.env, TEST_VAR: 'from-env' }
     });
@@ -45,14 +47,14 @@ describe('Ephemeral Mode (mlldx)', () => {
 
   it('should not persist cache between runs', () => {
     // First run
-    execSync(`mlldx-mlldx ${testScript}`, { encoding: 'utf8' });
+    execSync(`node ${mlldxPath} ${testScript}`, { encoding: 'utf8' });
     
     // Check that no cache directory was created
     const cacheDir = path.join(process.cwd(), '.mlld-cache');
     expect(fs.existsSync(cacheDir)).toBe(false);
     
     // Second run should also work (not rely on cache)
-    const result = execSync(`mlldx-mlldx ${testScript}`, { encoding: 'utf8' });
+    const result = execSync(`node ${mlldxPath} ${testScript}`, { encoding: 'utf8' });
     expect(result).toContain('Testing ephemeral mode...');
   });
 
@@ -61,7 +63,7 @@ describe('Ephemeral Mode (mlldx)', () => {
     // The test would hang if approval was required
     const startTime = Date.now();
     
-    const result = execSync(`mlldx-mlldx ${testScript}`, {
+    const result = execSync(`node ${mlldxPath} ${testScript}`, {
       encoding: 'utf8',
       timeout: 5000 // 5 second timeout
     });
@@ -83,10 +85,44 @@ describe('Ephemeral Mode (mlldx)', () => {
     
     try {
       expect(() => {
-        execSync(`mlldx-mlldx ${badScript}`, { encoding: 'utf8' });
+        execSync(`node ${mlldxPath} ${badScript}`, { encoding: 'utf8' });
       }).toThrow();
     } finally {
       fs.removeSync(badScript);
     }
+  });
+
+  it('should work with common CI environment variables', () => {
+    const result = execSync(`node ${mlldxPath} ${testScript}`, {
+      encoding: 'utf8',
+      env: { 
+        ...process.env, 
+        CI: 'true', 
+        GITHUB_ACTIONS: 'true',
+        NODE_ENV: 'production',
+        RUNNER_TEMP: '/tmp',
+        GITHUB_WORKFLOW: 'test-workflow'
+      }
+    });
+    
+    expect(result).toContain('Testing ephemeral mode...');
+    expect(result).toContain('GitHub module loaded: true');
+    expect(result).toContain('Env module loaded: true');
+  });
+
+  it('should handle serverless environment variables', () => {
+    const result = execSync(`node ${mlldxPath} ${testScript}`, {
+      encoding: 'utf8',
+      env: { 
+        ...process.env, 
+        AWS_LAMBDA_FUNCTION_NAME: 'test-function',
+        LAMBDA_TASK_ROOT: '/var/task',
+        VERCEL: '1',
+        VERCEL_ENV: 'production',
+        NOW_REGION: 'us-east-1'
+      }
+    });
+    
+    expect(result).toContain('Testing ephemeral mode...');
   });
 });
