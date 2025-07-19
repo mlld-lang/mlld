@@ -5,9 +5,12 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 // Find the mlldx binary from the mlld package
-const mlldPath = require.resolve('mlld/package.json');
+// Use the main entry point instead of package.json
+const mlldPath = require.resolve('mlld');
 const mlldDir = path.dirname(mlldPath);
-const mlldxBin = path.join(mlldDir, 'bin', 'mlldx-wrapper.cjs');
+// Go up one level from dist to get to the package root
+const mlldRoot = path.dirname(mlldDir);
+const mlldxBin = path.join(mlldRoot, 'bin', 'mlldx-wrapper.cjs');
 
 // Forward all arguments
 const child = spawn('node', [mlldxBin, ...process.argv.slice(2)], {

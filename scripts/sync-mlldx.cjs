@@ -14,7 +14,7 @@ const mainPackagePath = path.join(__dirname, '..', 'package.json');
 const mainPackage = JSON.parse(fs.readFileSync(mainPackagePath, 'utf8'));
 
 // Path to mlldx package
-const mlldxPackagePath = path.join(__dirname, '..', 'modules', 'mlldx-package', 'package.json');
+const mlldxPackagePath = path.join(__dirname, '..', 'mlldx-package', 'package.json');
 
 // Check if mlldx package exists
 if (!fs.existsSync(mlldxPackagePath)) {
@@ -38,6 +38,10 @@ console.log(`✅ Updated mlld dependency to ^${mainPackage.version}`);
 // Check if we should publish
 const shouldPublish = process.argv.includes('--publish');
 
+// Get the tag from command line arguments
+const tagIndex = process.argv.indexOf('--tag');
+const tagFromArgs = tagIndex !== -1 && process.argv[tagIndex + 1] ? process.argv[tagIndex + 1] : null;
+
 if (shouldPublish) {
   console.log('\n📦 Publishing mlldx package...');
   
@@ -60,9 +64,14 @@ if (shouldPublish) {
       // Version doesn't exist, we can publish
     }
     
-    // Publish with the same tag as main package
-    const isPrerelease = mainPackage.version.includes('-');
-    const tag = isPrerelease ? 'next' : 'latest';
+    // Use the tag from command line if provided, otherwise determine based on version
+    let tag;
+    if (tagFromArgs) {
+      tag = tagFromArgs;
+    } else {
+      const isPrerelease = mainPackage.version.includes('-');
+      tag = isPrerelease ? 'next' : 'latest';
+    }
     
     execSync(`npm publish --tag ${tag}`, {
       cwd: mlldxDir,

@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "2.0.0-rc16",
+  "version": "2.0.0-rc17",
   "description": "mlld: a modular prompt scripting language",
   "type": "module",
   "main": "dist/index.cjs",
@@ -68,6 +68,8 @@
     "prepublishOnly": "npm run clean && npm run build",
     "sync:mlldx": "node scripts/sync-mlldx.cjs",
     "publish:mlldx": "node scripts/sync-mlldx.cjs --publish",
+    "publish:all": "node scripts/publish-with-mlldx.js",
+    "pub": "node scripts/publish-with-mlldx.js",
     "postpublish": "npm run publish:mlldx",
     "bump": "node scripts/bump-version.js",
     "bump:patch": "node scripts/bump-version.js patch",
