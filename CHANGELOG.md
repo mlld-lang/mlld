@@ -5,6 +5,20 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc13]
+
+### Added
+- **Import auto-approval CLI flags**: New flags for non-interactive environments
+  - `--risky-approve-all`, `--yolo`, `-y` flags to bypass import security prompts
+  - Essential for serverless/CI environments where interactive prompts would hang
+  - Enables registry review system to work in Vercel functions
+
+### Fixed
+- **mlld clean command cache clearing**: Enhanced to remove all cached imports
+  - Now clears immutable import cache in `.mlld/cache/imports/` directory
+  - Removes both content files and metadata (`.meta.json` files)
+  - Fixes stale import cache issues when remote files are updated
+
 ## [2.0.0-rc12]
 
 ### Fixed

@@ -6,6 +6,8 @@ import { lockFileManager } from '../utils/lock-file';
 import { getCommandContext } from '../utils/command-context';
 import chalk from 'chalk';
 import * as path from 'path';
+import * as fs from 'fs/promises';
+import * as crypto from 'crypto';
 
 export interface CleanOptions {
   all?: boolean;
@@ -17,11 +19,13 @@ export interface CleanOptions {
 export class CleanCommand {
   private lockFile: LockFile;
   private cache: Cache;
+  private basePath: string;
   
   constructor(basePath: string) {
     // Use lock file in project root, not in .mlld subdirectory
     this.lockFile = new LockFile(path.join(basePath, 'mlld.lock.json'));
     this.cache = new Cache(path.join(basePath, '.mlld', 'cache'));
+    this.basePath = basePath;
   }
 
   async clean(moduleNames: string[] = [], options: CleanOptions = {}): Promise<void> {
@@ -63,6 +67,15 @@ export class CleanCommand {
     // Clear all cache entries
     await this.cache.clear();
     
+    // Also clear the import cache directory
+    const importCachePath = path.join(this.basePath, '.mlld', 'cache', 'imports');
+    try {
+      await fs.rm(importCachePath, { recursive: true, force: true });
+      await fs.mkdir(importCachePath, { recursive: true });
+    } catch (error) {
+      // Ignore errors - directory might not exist
+    }
+    
     console.log(chalk.green(`Cleaned ${Object.keys(imports).length} module(s) from lock file and cache`));
   }
 
@@ -96,7 +109,9 @@ export class CleanCommand {
     // Clear cache entries for registry modules
     for (const [, entry] of registryModules) {
       try {
-        await this.cache.remove(entry.resolved, entry.gistRevision);
+        await this.cache.invalidate(entry.resolved, entry.gistRevision);
+        // Also clean the import cache
+        await this.cleanImportCache(entry.resolved);
       } catch (error) {
         if (options.verbose) {
           console.log(chalk.yellow(`Warning: Could not remove cache for ${entry.resolved}: ${(error as Error).message}`));
@@ -133,7 +148,9 @@ export class CleanCommand {
       
       // Remove from cache
       try {
-        await this.cache.remove(entry.resolved, entry.gistRevision);
+        await this.cache.invalidate(entry.resolved, entry.gistRevision);
+        // Also clean the import cache
+        await this.cleanImportCache(entry.resolved);
       } catch (error) {
         if (options.verbose) {
           console.log(chalk.yellow(`Warning: Could not remove cache for ${entry.resolved}: ${(error as Error).message}`));
@@ -184,6 +201,24 @@ export class CleanCommand {
     }
     
     return null;
+  }
+
+  private async cleanImportCache(resolvedUrl: string): Promise<void> {
+    // Clean the immutable import cache in .mlld/cache/imports/
+    const importCachePath = path.join(this.basePath, '.mlld', 'cache', 'imports');
+    
+    try {
+      // Generate the same hash that ImportResolver uses
+      const hash = crypto.createHash('sha256').update(resolvedUrl).digest('hex');
+      const cacheFile = path.join(importCachePath, hash);
+      const metaFile = `${cacheFile}.meta.json`;
+      
+      // Remove both the content file and metadata
+      await fs.unlink(cacheFile).catch(() => {});
+      await fs.unlink(metaFile).catch(() => {});
+    } catch (error) {
+      // Ignore errors - files might not exist
+    }
   }
 
   private showUsage(): void {
