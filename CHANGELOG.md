@@ -5,6 +5,17 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc15]
+
+### Added
+- **mlldx command for ephemeral/CI environments**: New binary for serverless and CI use cases
+  - `mlldx` runs with ephemeral mode enabled - all caching happens in memory only
+  - No filesystem persistence for read-only containers and serverless functions
+  - Auto-approves all imports, no interactive prompts that would hang CI/CD pipelines
+  - Available via npx: `npx mlldx@latest script.mld` or installed globally
+  - Ships from same package as mlld
+  - Useful for GitHub Actions, Vercel functions, AWS Lambda, and other ephemeral environments
+
 ## [2.0.0-rc14]
 
 ### Fixed

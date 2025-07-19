@@ -14,6 +14,8 @@ npm install -g mlld
 
 or just run it with `npx mlld`
 
+For CI/CD and serverless environments, use `npx mlldx` for ephemeral execution.
+
 ## What is mlld for?
 
 - makes context and prompt engineering multiplayer and git-versionable
@@ -61,6 +63,7 @@ npm install -g mlld
 **Pipelines** - Chain LLM calls with `|` for iterative refinement  
 **Modules** - Share and reuse workflows like npm packages 
 **Reproducible** - Lock files ensure workflows run identically over time
+**CI-ready** - `mlldx` runs without filesystem persistence for serverless/containers
 
 ## Quick Start
 
@@ -270,6 +273,19 @@ mlld clean --registry            # Clear only registry modules
 
 # Analyze dependencies
 mlld add-needs my-module.mld     # Auto-detect and add runtime deps
+```
+
+### CI/CD and Serverless (mlldx)
+
+```bash
+# Use mlldx for ephemeral environments (no filesystem persistence)
+mlldx script.mld                 # Run with in-memory cache
+npx mlldx@latest ci-task.mld     # Perfect for CI pipelines
+
+# Examples
+mlldx github-action.mld          # GitHub Actions
+mlldx vercel-function.mld        # Vercel/AWS Lambda
+docker run -it node:18 npx mlldx@latest /scripts/task.mld
 ```
 
 ## Learn More

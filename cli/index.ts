@@ -91,6 +91,8 @@ export interface CLIOptions {
   noFormat?: boolean;
   // Error capture for pattern development
   captureErrors?: boolean;
+  // Ephemeral mode for CI/serverless
+  ephemeral?: boolean;
   _?: string[]; // Remaining args after command
 }
 

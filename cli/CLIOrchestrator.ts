@@ -35,7 +35,10 @@ export class CLIOrchestrator {
   }
 
   async main(customArgs?: string[]): Promise<void> {
-    process.title = 'mlld';
+    // Detect if running as mlldx
+    const binaryName = process.env.MLLD_BINARY_NAME || 'mlld';
+    const isEphemeral = binaryName === 'mlldx' || process.env.MLLD_EPHEMERAL === 'true';
+    process.title = binaryName;
     
     
     let cliOptions: CLIOptions = { input: '' }; // Initialize with default
@@ -48,6 +51,15 @@ export class CLIOrchestrator {
       const args = customArgs || process.argv.slice(2);
       
       cliOptions = this.argumentParser.parseArgs(args);
+      
+      // Set ephemeral mode defaults for mlldx
+      if (isEphemeral) {
+        cliOptions.ephemeral = true;
+        // Auto-approve all imports in ephemeral mode
+        if (!cliOptions.riskyApproveAll && !cliOptions.yolo && !cliOptions.y) {
+          cliOptions.riskyApproveAll = true;
+        }
+      }
       this.userInteraction.setCurrentCLIOptions(cliOptions);
       
       // Handle version flag

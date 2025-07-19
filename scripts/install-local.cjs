@@ -65,33 +65,43 @@ async function installLocal() {
     
     // Get paths
     const projectRoot = process.cwd();
-    const wrapperPath = path.join(projectRoot, 'bin', 'mlld-wrapper.cjs');
     const globalBinDir = getGlobalBinDir();
-    const targetPath = path.join(globalBinDir, commandName);
     
-    // Ensure the wrapper exists
-    if (!await fs.exists(wrapperPath)) {
-      console.error(`Wrapper script not found at: ${wrapperPath}`);
-      process.exit(1);
+    // Install both mlld and mlldx wrappers
+    const wrappers = [
+      { wrapper: 'mlld-wrapper.cjs', command: commandName },
+      { wrapper: 'mlldx-wrapper.cjs', command: commandName.replace('mlld-', 'mlldx-') }
+    ];
+    
+    for (const { wrapper, command } of wrappers) {
+      const wrapperPath = path.join(projectRoot, 'bin', wrapper);
+      const targetPath = path.join(globalBinDir, command);
+      
+      // Ensure the wrapper exists
+      if (!await fs.exists(wrapperPath)) {
+        console.error(`Wrapper script not found at: ${wrapperPath}`);
+        continue; // Skip if wrapper doesn't exist
+      }
+      
+      // Remove existing symlink if it exists
+      if (await fs.exists(targetPath)) {
+        console.log(`Removing existing ${command}...`);
+        await fs.remove(targetPath);
+      }
+      
+      // Create the symlink
+      console.log(`Creating symlink: ${targetPath} -> ${wrapperPath}`);
+      await fs.symlink(wrapperPath, targetPath);
+      
+      // Make it executable (symlink inherits permissions from target, but let's be sure)
+      if (os.platform() !== 'win32') {
+        await fs.chmod(targetPath, '755');
+      }
     }
     
-    // Remove existing symlink if it exists
-    if (await fs.exists(targetPath)) {
-      console.log(`Removing existing ${commandName}...`);
-      await fs.remove(targetPath);
-    }
-    
-    // Create the symlink
-    console.log(`Creating symlink: ${targetPath} -> ${wrapperPath}`);
-    await fs.symlink(wrapperPath, targetPath);
-    
-    // Make it executable (symlink inherits permissions from target, but let's be sure)
-    if (os.platform() !== 'win32') {
-      await fs.chmod(targetPath, '755');
-    }
-    
-    console.log(`\n✅ Successfully installed as: ${commandName}`);
+    console.log(`\n✅ Successfully installed as: ${commandName} and ${commandName.replace('mlld-', 'mlldx-')}`);
     console.log(`You can now use: ${commandName} [options] [file]`);
+    console.log(`           or: ${commandName.replace('mlld-', 'mlldx-')} [options] [file] (ephemeral mode)`);
     
     // Store metadata about this installation for cleanup
     const metadataPath = path.join(projectRoot, '.mlld-local-installs.json');
@@ -102,9 +112,17 @@ async function installLocal() {
       // File doesn't exist yet
     }
     
+    // Store metadata for both commands
     metadata[commandName] = {
       installedAt: new Date().toISOString(),
-      targetPath,
+      targetPath: path.join(globalBinDir, commandName),
+      branch: getGitBranch()
+    };
+    
+    const mlldxCommand = commandName.replace('mlld-', 'mlldx-');
+    metadata[mlldxCommand] = {
+      installedAt: new Date().toISOString(),
+      targetPath: path.join(globalBinDir, mlldxCommand),
       branch: getGitBranch()
     };
     

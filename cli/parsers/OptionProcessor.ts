@@ -41,7 +41,9 @@ export class OptionProcessor {
       // Disable prettier formatting
       noFormat: cliOptions.noFormat,
       // Error capture for pattern development
-      captureErrors: cliOptions.captureErrors
+      captureErrors: cliOptions.captureErrors,
+      // Ephemeral mode
+      ephemeral: cliOptions.ephemeral
     };
   }
 

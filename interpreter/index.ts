@@ -44,6 +44,7 @@ export interface InterpretOptions {
   localFileFuzzyMatch?: FuzzyMatchConfig | boolean; // Fuzzy matching for local file imports (default: true)
   captureEnvironment?: (env: Environment) => void; // Callback to capture environment after execution
   captureErrors?: boolean; // Capture parse errors for pattern development
+  ephemeral?: boolean; // Enable ephemeral mode (in-memory caching, no persistence)
 }
 
 /**
@@ -252,6 +253,11 @@ export async function interpret(
   // Set fuzzy matching for local files (default: true)
   if (options.localFileFuzzyMatch !== undefined) {
     env.setLocalFileFuzzyMatch(options.localFileFuzzyMatch);
+  }
+  
+  // Set ephemeral mode if provided
+  if (options.ephemeral) {
+    await env.setEphemeralMode(options.ephemeral);
   }
   
   // Evaluate the AST

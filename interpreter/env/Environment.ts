@@ -1255,6 +1255,125 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   /**
+   * Set ephemeral mode for CI/serverless environments
+   * This configures in-memory caching with no persistence
+   */
+  async setEphemeralMode(ephemeral: boolean): Promise<void> {
+    if (!ephemeral || this.parent) {
+      // Only configure ephemeral mode on root environment
+      return;
+    }
+    
+    // Auto-approve all imports in ephemeral mode
+    this.approveAllImports = true;
+    
+    // Replace security components with ephemeral implementations
+    const { InMemoryModuleCache } = await import('@core/registry/InMemoryModuleCache');
+    const { NoOpLockFile } = await import('@core/registry/NoOpLockFile');
+    const { ImmutableCache } = await import('@core/security/ImmutableCache');
+    
+    // Import resolver classes needed for re-registration
+    const { ProjectPathResolver } = await import('@core/resolvers/ProjectPathResolver');
+    const { RegistryResolver } = await import('@core/resolvers/RegistryResolver');
+    const { LocalResolver } = await import('@core/resolvers/LocalResolver');
+    const { GitHubResolver } = await import('@core/resolvers/GitHubResolver');
+    const { HTTPResolver } = await import('@core/resolvers/HTTPResolver');
+    
+    // Create ephemeral cache implementations
+    const moduleCache = new InMemoryModuleCache();
+    const lockFile = new NoOpLockFile(path.join(this.getProjectRoot(), 'mlld.lock.json'));
+    
+    // Create ephemeral URL cache
+    const cacheAdapter = {
+      async set(content: string, metadata: { source: string }): Promise<string> {
+        return moduleCache.store(content, metadata.source).then(entry => entry.hash);
+      },
+      async get(hash: string): Promise<string | null> {
+        return moduleCache.retrieve(hash);
+      },
+      async has(hash: string): Promise<boolean> {
+        return moduleCache.exists(hash);
+      }
+    };
+    
+    this.urlCacheManager = new URLCache(cacheAdapter, lockFile);
+    
+    // Re-initialize registry manager with ephemeral components
+    if (this.registryManager) {
+      // The registry manager will use the ephemeral cache and lock file
+      this.registryManager = new RegistryManager(this.getProjectRoot());
+    }
+    
+    // Re-initialize resolver manager with ephemeral components
+    if (this.resolverManager) {
+      this.resolverManager = new ResolverManager(
+        this.fileSystem,
+        this.pathService,
+        lockFile,
+        moduleCache,
+        this.urlCacheManager,
+        this.getProjectRoot()
+      );
+      
+      // Re-register all resolvers (same as in constructor)
+      // Register path resolvers (priority 1)
+      this.resolverManager.registerResolver(new ProjectPathResolver(this.fileSystem));
+      
+      // Register module resolvers (priority 10)
+      this.resolverManager.registerResolver(new RegistryResolver());
+      
+      // Register file resolvers (priority 20)
+      this.resolverManager.registerResolver(new LocalResolver(this.fileSystem));
+      this.resolverManager.registerResolver(new GitHubResolver());
+      this.resolverManager.registerResolver(new HTTPResolver());
+      
+      // Configure built-in prefixes
+      this.resolverManager.configurePrefixes([
+        {
+          prefix: '@base',
+          resolver: 'base',
+          type: 'io',
+          config: {
+            basePath: this.getProjectRoot(),
+            readonly: false
+          }
+        }
+      ]);
+      
+      // Re-register built-in function resolvers
+      await this.registerBuiltinResolvers();
+    }
+    
+    // Update ImportResolver dependencies to use ephemeral components
+    const immutableCache = new ImmutableCache(this.getProjectRoot(), { inMemory: true });
+    
+    // We need to recreate the ImportResolver with ephemeral components
+    const importResolverDependencies: ImportResolverDependencies = {
+      fileSystem: this.fileSystem,
+      pathService: this.pathService,
+      basePath: this.getFileDirectory(),
+      cacheManager: this.cacheManager,
+      getSecurityManager: () => this.securityManager,
+      getRegistryManager: () => this.registryManager,
+      getResolverManager: () => this.resolverManager,
+      getParent: () => this.parent,
+      getCurrentFilePath: () => this.currentFilePath,
+      getApproveAllImports: () => this.approveAllImports,
+      getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
+      getURLConfig: () => this.urlConfig,
+      getDefaultUrlOptions: () => this.defaultUrlOptions,
+      getProjectRoot: () => this.getProjectRoot()
+    };
+    
+    // Create new ImportResolver with ephemeral configuration
+    this.importResolver = new ImportResolver(importResolverDependencies);
+    
+    // Note: SecurityManager uses its own ImmutableCache instance
+    // We can't replace it after initialization, but that's OK since
+    // the ImportResolver will use its own ephemeral cache
+  }
+  
+  /**
    * Get blank line normalization flag
    */
   getNormalizeBlankLines(): boolean {

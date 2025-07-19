@@ -2,10 +2,32 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createHash } from 'crypto';
 
+interface CacheEntry {
+  content: string;
+  contentHash: string;
+  url: string;
+  cachedAt: string;
+  size: number;
+}
+
+export interface ImmutableCacheOptions {
+  inMemory?: boolean;
+}
+
 export class ImmutableCache {
-  private cacheDir: string;
+  private cacheDir?: string;
+  private inMemory: boolean;
+  private memoryCache: Map<string, CacheEntry>;
   
-  constructor(projectPath: string) {
+  constructor(projectPath: string, options?: ImmutableCacheOptions) {
+    this.inMemory = options?.inMemory || false;
+    this.memoryCache = new Map();
+    
+    if (this.inMemory) {
+      // In-memory mode - no filesystem operations
+      return;
+    }
+    
     // In serverless/read-only environments, use /tmp
     // Detect by checking if we're in /var/task (Vercel) or if LAMBDA_TASK_ROOT is set (AWS Lambda)
     const isServerless = projectPath.startsWith('/var/task') || 
@@ -32,7 +54,22 @@ export class ImmutableCache {
     }
     
     const urlHash = this.hashUrl(url);
-    const cachePath = path.join(this.cacheDir, urlHash);
+    
+    // Handle in-memory mode
+    if (this.inMemory) {
+      const entry = this.memoryCache.get(urlHash);
+      if (!entry) return null;
+      
+      // If hash provided, verify it matches
+      if (expectedHash && entry.contentHash !== expectedHash) {
+        return null;
+      }
+      
+      return entry.content;
+    }
+    
+    // Filesystem mode
+    const cachePath = path.join(this.cacheDir!, urlHash);
     
     try {
       // Read metadata
@@ -72,12 +109,27 @@ export class ImmutableCache {
       return createHash('sha256').update(content, 'utf8').digest('hex');
     }
     
-    // Ensure cache directory exists
-    await fs.mkdir(this.cacheDir, { recursive: true });
-    
     const urlHash = this.hashUrl(url);
-    const cachePath = path.join(this.cacheDir, urlHash);
     const contentHash = createHash('sha256').update(content, 'utf8').digest('hex');
+    
+    // Handle in-memory mode
+    if (this.inMemory) {
+      const entry: CacheEntry = {
+        url,
+        content,
+        contentHash,
+        cachedAt: new Date().toISOString(),
+        size: content.length
+      };
+      this.memoryCache.set(urlHash, entry);
+      return contentHash;
+    }
+    
+    // Filesystem mode
+    // Ensure cache directory exists
+    await fs.mkdir(this.cacheDir!, { recursive: true });
+    
+    const cachePath = path.join(this.cacheDir!, urlHash);
     
     // Write content
     await fs.writeFile(cachePath, content, 'utf8');
@@ -99,7 +151,15 @@ export class ImmutableCache {
    */
   async remove(url: string): Promise<void> {
     const urlHash = this.hashUrl(url);
-    const cachePath = path.join(this.cacheDir, urlHash);
+    
+    // Handle in-memory mode
+    if (this.inMemory) {
+      this.memoryCache.delete(urlHash);
+      return;
+    }
+    
+    // Filesystem mode
+    const cachePath = path.join(this.cacheDir!, urlHash);
     
     try {
       await fs.unlink(cachePath);
@@ -113,8 +173,15 @@ export class ImmutableCache {
    * Clear entire cache
    */
   async clear(): Promise<void> {
+    // Handle in-memory mode
+    if (this.inMemory) {
+      this.memoryCache.clear();
+      return;
+    }
+    
+    // Filesystem mode
     try {
-      await fs.rm(this.cacheDir, { recursive: true, force: true });
+      await fs.rm(this.cacheDir!, { recursive: true, force: true });
     } catch {
       // Ignore if doesn't exist
     }
@@ -128,15 +195,33 @@ export class ImmutableCache {
     totalSize: number;
     urls: string[];
   }> {
+    // Handle in-memory mode
+    if (this.inMemory) {
+      let totalSize = 0;
+      const urls: string[] = [];
+      
+      for (const entry of this.memoryCache.values()) {
+        totalSize += entry.size;
+        urls.push(entry.url);
+      }
+      
+      return {
+        entries: this.memoryCache.size,
+        totalSize,
+        urls
+      };
+    }
+    
+    // Filesystem mode
     try {
-      const files = await fs.readdir(this.cacheDir);
+      const files = await fs.readdir(this.cacheDir!);
       const metaFiles = files.filter(f => f.endsWith('.meta.json'));
       
       let totalSize = 0;
       const urls: string[] = [];
       
       for (const metaFile of metaFiles) {
-        const metaPath = path.join(this.cacheDir, metaFile);
+        const metaPath = path.join(this.cacheDir!, metaFile);
         const metaContent = await fs.readFile(metaPath, 'utf8');
         const meta = JSON.parse(metaContent);
         

@@ -192,6 +192,10 @@ export class ArgumentParser {
         case '--capture-errors':
           options.captureErrors = true;
           break;
+        // Ephemeral mode for CI/serverless
+        case '--ephemeral':
+          options.ephemeral = true;
+          break;
         // Transformation is always enabled by default
         // No transform flags needed
         default:
