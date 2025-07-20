@@ -19,9 +19,9 @@ try {
   console.log('\n📦 Syncing mlldx version...');
   execSync('npm run sync:mlldx', { stdio: 'inherit' });
   
-  // Publish main package
+  // Publish main package (with --ignore-scripts to skip postpublish)
   console.log('\n📦 Publishing mlld...');
-  execSync(`npm publish --tag ${tag}`, { stdio: 'inherit' });
+  execSync(`npm publish --tag ${tag} --ignore-scripts`, { stdio: 'inherit' });
   
   // Publish mlldx with the same tag
   console.log('\n📦 Publishing mlldx...');

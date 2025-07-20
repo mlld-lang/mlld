@@ -86,7 +86,8 @@ export class VariableImporter {
         };
       } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
         // For objects, resolve any variable references within the object
-        moduleObject[name] = this.objectResolver.resolveObjectReferences(variable.value, childVars);
+        const resolvedObject = this.objectResolver.resolveObjectReferences(variable.value, childVars);
+        moduleObject[name] = resolvedObject;
       } else {
         // For other variables, export the value directly
         moduleObject[name] = variable.value;
@@ -184,10 +185,13 @@ export class VariableImporter {
       isMultiLine: false
     };
 
+    // Check if the namespace contains complex content (like executables)
+    const isComplex = this.hasComplexContent(moduleObject);
+    
     return createObjectVariable(
       alias,
       moduleObject,
-      false, // namespace objects are not complex by default
+      isComplex, // Mark as complex if it contains AST nodes or executables
       source,
       {
         isImported: true,
@@ -371,25 +375,17 @@ export class VariableImporter {
 
   /**
    * Check if a variable is a legitimate mlld variable that can be exported/imported.
-   * Uses the type system to ensure only valid mlld variables are shared between modules.
-   * This automatically excludes system variables like frontmatter (@fm) that have invalid types.
+   * System variables (marked with metadata.isSystem) are excluded from exports to prevent
+   * namespace collisions when importing multiple modules with system variables like @fm.
    */
   private isLegitimateVariableForExport(variable: Variable): boolean {
-    // Use our comprehensive type guard system to validate the variable
-    // If the variable doesn't match any of our legitimate types, it's not exportable
-    return VariableTypeGuards.isSimpleText(variable) ||
-           VariableTypeGuards.isInterpolatedText(variable) ||
-           VariableTypeGuards.isTemplate(variable) ||
-           VariableTypeGuards.isFileContent(variable) ||
-           VariableTypeGuards.isSectionContent(variable) ||
-           VariableTypeGuards.isObject(variable) ||
-           VariableTypeGuards.isArray(variable) ||
-           VariableTypeGuards.isComputed(variable) ||
-           VariableTypeGuards.isCommandResult(variable) ||
-           VariableTypeGuards.isPath(variable) ||
-           VariableTypeGuards.isImported(variable) ||
-           VariableTypeGuards.isExecutable(variable) ||
-           VariableTypeGuards.isPipelineInput(variable) ||
-           VariableTypeGuards.isPrimitive(variable);
+    // System variables (like @fm) should not be exported
+    if (variable.metadata?.isSystem) {
+      return false;
+    }
+    
+    // All user-created variables are exportable
+    // This includes variables created by /var, /exe, /path directives
+    return true;
   }
 }

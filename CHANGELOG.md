@@ -5,6 +5,19 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc18]
+
+### Fixed
+- **Module import resolution for nested object structures**
+  - Fixed bug where functions in deeply nested module exports appeared as strings instead of executables
+  - ObjectReferenceResolver now recursively resolves VariableReference nodes in nested objects
+  - Affects modules with 3+ level nesting like `@mlld/github` where `github.pr.view` was showing as `"@pr_view"` instead of `<function>`
+  - Registry review workflow and all GitHub integrations now work properly
+- **System variable export filtering**
+  - Fixed module export filtering to properly exclude system variables using `metadata.isSystem`
+  - Prevents namespace collisions when importing multiple modules with frontmatter
+  - System variables like `@fm` are no longer incorrectly exported from modules
+
 ## [2.0.0-rc16]
 
 ### Changed
