@@ -56,5 +56,21 @@
   },
   "modules": {},
   "cache": {},
-  "imports": {}
+  "imports": {
+    "@mlld/env": {
+      "resolved": "registry://@mlld/env",
+      "integrity": "sha256:2adb65cd63cc6e57fc194674dd04d5386ffc320d0677601c8a8602e494591b8d",
+      "approvedAt": "2025-07-20T03:33:03.718Z"
+    },
+    "@mlld/github": {
+      "resolved": "registry://@mlld/github",
+      "integrity": "sha256:32d8a93c80d835347a7246f1c4756e0556d1a85808e17e232f026e96a65e1633",
+      "approvedAt": "2025-07-20T03:33:03.853Z"
+    },
+    "@mlld/ai-cli": {
+      "resolved": "registry://@mlld/ai-cli",
+      "integrity": "sha256:1d70d049c829bd70eb81735969f54079985860dd6e602305d279b408fe3f3e5f",
+      "approvedAt": "2025-07-20T03:33:04.018Z"
+    }
+  }
 }

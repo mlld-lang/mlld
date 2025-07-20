@@ -5,6 +5,14 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc19]
+
+### Added
+- **Async/await support in JavaScript executor**
+  - JavaScript code blocks now automatically support `await` syntax
+  - Detects `await` keyword and creates async functions transparently
+  - Shadow environment functions work with async code
+
 ## [2.0.0-rc18]
 
 ### Fixed

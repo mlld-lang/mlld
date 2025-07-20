@@ -102,9 +102,17 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
 
 
       // Create a function with dynamic parameters
+      // Check if code contains await to determine if we need an async function
+      const hasAwait = code.includes('await');
       let fn: Function;
       try {
-        fn = new Function(...allParamNames, functionBody);
+        if (hasAwait) {
+          // Create an async function using the AsyncFunction constructor
+          const AsyncFunction = (async function () {}).constructor as any;
+          fn = new AsyncFunction(...allParamNames, functionBody);
+        } else {
+          fn = new Function(...allParamNames, functionBody);
+        }
       } catch (syntaxError) {
         throw syntaxError;
       }
