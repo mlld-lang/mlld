@@ -123,6 +123,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'env-vars-allowed': 'input/env-vars-allowed',
       'import-namespace-json': 'import/namespace-json',
       'import-namespace-nested': 'import/namespace-nested',
+      'exec-shadow-env-import': 'exec-shadow-env-import',
       'import-namespace-shorthand': 'import/namespace-shorthand',
       'import-namespace-special-chars': 'import/namespace-special-chars',
       'import-stdin-shorthand': 'import/stdin',

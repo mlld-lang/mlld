@@ -97,18 +97,49 @@ export class ObjectReferenceResolver {
     // For executables, we need to export them with the proper structure
     if (referencedVar.type === 'executable') {
       const execVar = referencedVar as ExecutableVariable;
+      
+      // Serialize shadow environments if present (Maps don't serialize to JSON)
+      let serializedMetadata = execVar.metadata;
+      if (serializedMetadata?.capturedShadowEnvs) {
+        serializedMetadata = {
+          ...serializedMetadata,
+          capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
+        };
+      }
+      
       const result = {
         __executable: true,
         value: execVar.value,
         paramNames: execVar.paramNames,
         executableDef: execVar.metadata?.executableDef,
-        metadata: execVar.metadata
+        metadata: serializedMetadata
       };
       return result;
     } else {
       // For other variable types, return the value directly
       return referencedVar.value;
     }
+  }
+  
+  /**
+   * Serialize shadow environments for export (Maps to objects)
+   * WHY: Maps don't serialize to JSON, so we convert them to plain objects
+   */
+  private serializeShadowEnvs(envs: any): any {
+    const result: any = {};
+    
+    for (const [lang, shadowMap] of Object.entries(envs)) {
+      if (shadowMap instanceof Map && shadowMap.size > 0) {
+        // Convert Map to object
+        const obj: Record<string, any> = {};
+        for (const [name, func] of shadowMap) {
+          obj[name] = func;
+        }
+        result[lang] = obj;
+      }
+    }
+    
+    return result;
   }
 
   /**

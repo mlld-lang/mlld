@@ -11,6 +11,7 @@ import { MlldInterpreterError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
+import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
 
 /**
  * Evaluate an ExecInvocation node
@@ -127,6 +128,30 @@ export async function evaluateExecInvocation(
     
     // Handle __executable objects from resolved imports
     if (typeof variable === 'object' && variable !== null && '__executable' in variable && variable.__executable) {
+      // Deserialize shadow environments if needed
+      let metadata = variable.metadata || {};
+      if (metadata.capturedShadowEnvs && typeof metadata.capturedShadowEnvs === 'object') {
+        // Check if it needs deserialization (is plain object, not Map)
+        const needsDeserialization = Object.entries(metadata.capturedShadowEnvs).some(
+          ([lang, env]) => env && !(env instanceof Map)
+        );
+        
+        if (needsDeserialization) {
+          metadata = {
+            ...metadata,
+            capturedShadowEnvs: deserializeShadowEnvs(metadata.capturedShadowEnvs)
+          };
+        }
+      }
+      
+      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
+        console.error('[DEBUG] Converting __executable object to ExecutableVariable:', {
+          commandName,
+          hasMetadata: !!metadata,
+          hasCapturedEnvs: !!(metadata.capturedShadowEnvs),
+          metadata
+        });
+      }
       // Convert the __executable object to a proper ExecutableVariable
       const { createExecutableVariable } = await import('@core/types/variable/VariableFactories');
       variable = createExecutableVariable(
@@ -143,7 +168,7 @@ export async function evaluateExecInvocation(
         },
         {
           executableDef: variable.executableDef,
-          ...variable.metadata
+          ...metadata
         }
       );
     }
@@ -629,6 +654,22 @@ export async function evaluateExecInvocation(
       }
     }
     
+    // NEW: Pass captured shadow environments for JS/Node execution
+    const capturedEnvs = variable.metadata?.capturedShadowEnvs;
+    if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
+                         definition.language === 'node' || definition.language === 'nodejs')) {
+      (codeParams as any).__capturedShadowEnvs = capturedEnvs;
+      
+      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
+        console.error('[DEBUG] exec-invocation passing shadow envs:', {
+          commandName,
+          hasCapturedEnvs: !!capturedEnvs,
+          capturedEnvs,
+          language: definition.language
+        });
+      }
+    }
+    
     // Execute the code with parameters and metadata
     const codeResult = await execEnv.executeCode(
       code,
@@ -814,4 +855,25 @@ export async function evaluateExecInvocation(
     stderr: '',
     exitCode: 0
   };
+}
+
+/**
+ * Deserialize shadow environments after import (objects to Maps)
+ * WHY: Shadow environments are expected as Maps internally
+ */
+function deserializeShadowEnvs(envs: any): ShadowEnvironmentCapture {
+  const result: ShadowEnvironmentCapture = {};
+  
+  for (const [lang, shadowObj] of Object.entries(envs)) {
+    if (shadowObj && typeof shadowObj === 'object') {
+      // Convert object to Map
+      const map = new Map<string, any>();
+      for (const [name, func] of Object.entries(shadowObj)) {
+        map.set(name, func);
+      }
+      result[lang as keyof ShadowEnvironmentCapture] = map;
+    }
+  }
+  
+  return result;
 }

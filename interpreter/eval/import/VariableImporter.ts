@@ -27,6 +27,49 @@ export interface ModuleProcessingResult {
  */
 export class VariableImporter {
   constructor(private objectResolver: ObjectReferenceResolver) {}
+  
+  /**
+   * Serialize shadow environments for export (Maps to objects)
+   * WHY: Maps don't serialize to JSON, so we convert them to plain objects
+   * GOTCHA: Function references are preserved directly
+   */
+  private serializeShadowEnvs(envs: ShadowEnvironmentCapture): any {
+    const result: any = {};
+    
+    for (const [lang, shadowMap] of Object.entries(envs)) {
+      if (shadowMap instanceof Map && shadowMap.size > 0) {
+        // Convert Map to object
+        const obj: Record<string, any> = {};
+        for (const [name, func] of shadowMap) {
+          obj[name] = func;
+        }
+        result[lang] = obj;
+      }
+    }
+    
+    return result;
+  }
+  
+  /**
+   * Deserialize shadow environments after import (objects to Maps)  
+   * WHY: Shadow environments are expected as Maps internally
+   */
+  private deserializeShadowEnvs(envs: any): ShadowEnvironmentCapture {
+    const result: ShadowEnvironmentCapture = {};
+    
+    for (const [lang, shadowObj] of Object.entries(envs)) {
+      if (shadowObj && typeof shadowObj === 'object') {
+        // Convert object to Map
+        const map = new Map<string, any>();
+        for (const [name, func] of Object.entries(shadowObj)) {
+          map.set(name, func);
+        }
+        result[lang as keyof ShadowEnvironmentCapture] = map;
+      }
+    }
+    
+    return result;
+  }
 
   /**
    * Import variables from a processing result into the target environment
@@ -76,13 +119,23 @@ export class VariableImporter {
       // For executable variables, we need to preserve the full structure
       if (variable.type === 'executable') {
         const execVar = variable as ExecutableVariable;
+        
+        // Serialize shadow environments if present (Maps don't serialize to JSON)
+        let serializedMetadata = { ...execVar.metadata };
+        if (serializedMetadata.capturedShadowEnvs) {
+          serializedMetadata = {
+            ...serializedMetadata,
+            capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
+          };
+        }
+        
         // Export executable with all necessary metadata
         moduleObject[name] = {
           __executable: true,
           value: execVar.value,
           // paramNames removed - they're already in executableDef and shouldn't be exposed as imports
           executableDef: execVar.metadata?.executableDef,
-          metadata: execVar.metadata
+          metadata: serializedMetadata
         };
       } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
         // For objects, resolve any variable references within the object
@@ -307,6 +360,36 @@ export class VariableImporter {
     // The executable definition contains all the needed information
     // We just need to create a dummy ExecutableVariable that preserves it
     // The actual execution will use the executableDef from metadata
+    // OLD CODE that might lose metadata:
+    // return createExecutableVariable(
+    //   name,
+    //   value.value.type,
+    //   value.value.template || '',
+    //   value.value.paramNames || [],
+    //   value.value.language,
+    //   source,
+    //   metadata
+    // );
+    
+    // NEW CODE: Ensure all metadata is preserved
+    let originalMetadata = value.metadata || {};
+    
+    // Deserialize shadow environments if present
+    if (originalMetadata.capturedShadowEnvs) {
+      originalMetadata = {
+        ...originalMetadata,
+        capturedShadowEnvs: this.deserializeShadowEnvs(originalMetadata.capturedShadowEnvs)
+      };
+    }
+    
+    const enhancedMetadata = {
+      ...metadata,
+      ...originalMetadata, // Preserve ALL original metadata including capturedShadowEnvs
+      isImported: true,
+      importPath: metadata.importPath,
+      executableDef // This is what actually matters for execution
+    };
+    
     const execVariable = createExecutableVariable(
       name,
       'command', // Default type - the real type is in executableDef
@@ -314,11 +397,7 @@ export class VariableImporter {
       paramNames,
       undefined, // No language here - it's in executableDef
       source,
-      {
-        ...metadata,
-        ...value.metadata,
-        executableDef // This is what actually matters for execution
-      }
+      enhancedMetadata
     );
     
     return execVariable;

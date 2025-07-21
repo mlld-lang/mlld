@@ -37,13 +37,14 @@ import { VariableManager, type IVariableManager, type VariableManagerDependencie
 import { ImportResolver, type IImportResolver, type ImportResolverDependencies, type ImportResolverContext } from './ImportResolver';
 import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
+import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 
 
 /**
  * Environment holds all state and provides capabilities for evaluation.
  * This replaces StateService, ResolutionService, and capability injection.
  */
-export class Environment implements VariableManagerContext, ImportResolverContext {
+export class Environment implements VariableManagerContext, ImportResolverContext, ShadowEnvironmentProvider {
   private nodes: MlldNode[] = [];
   private parent?: Environment;
   // Note: importStack is now handled by ImportResolver
@@ -961,6 +962,61 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     );
     
     return this.nodeShadowEnv;
+  }
+  
+  /**
+   * Captures all shadow environments for lexical scoping in executables
+   * WHY: When executables are defined, they may reference shadow functions.
+   * This capture preserves the lexical scope, allowing imported functions
+   * to access their original shadow environment.
+   * CONTEXT: Called during executable creation in exe.ts
+   * @returns Object containing all language shadow environments
+   */
+  captureAllShadowEnvs(): ShadowEnvironmentCapture {
+    const capture: ShadowEnvironmentCapture = {};
+    
+    // Capture JavaScript environments
+    const jsEnv = this.shadowEnvs.get('js');
+    if (jsEnv && jsEnv.size > 0) {
+      capture.js = new Map(jsEnv);
+    }
+    
+    const javascriptEnv = this.shadowEnvs.get('javascript');
+    if (javascriptEnv && javascriptEnv.size > 0) {
+      capture.javascript = new Map(javascriptEnv);
+    }
+    
+    // Capture Node.js shadow functions if available
+    if (this.nodeShadowEnv) {
+      const nodeMap = new Map<string, any>();
+      const context = this.nodeShadowEnv.getContext();
+      for (const name of this.nodeShadowEnv.getFunctionNames()) {
+        if (context[name]) {
+          nodeMap.set(name, context[name]);
+        }
+      }
+      if (nodeMap.size > 0) {
+        capture.node = nodeMap;
+        capture.nodejs = nodeMap; // Both aliases point to same map
+      }
+    }
+    
+    return capture;
+  }
+  
+  /**
+   * Check if this environment has any shadow environments defined
+   * Used to avoid unnecessary capture operations
+   */
+  hasShadowEnvs(): boolean {
+    // Check regular shadow environments
+    if (this.shadowEnvs.size > 0) {
+      for (const [_, env] of this.shadowEnvs) {
+        if (env.size > 0) return true;
+      }
+    }
+    // Check Node.js shadow environment
+    return this.nodeShadowEnv !== undefined;
   }
   
   // --- Capabilities ---
