@@ -5,6 +5,20 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc20]
+
+### Added
+- **Shadow environment preservation through imports**
+  - Functions that use shadow environments now work correctly when imported from modules
+  - Implements lexical scoping for shadow environments - functions retain access to their original shadow context
+  - Supports both JavaScript and Node.js shadow environments
+
+### Fixed
+- **Shadow environment functions not accessible after import**
+  - Previously, functions relying on shadow environment helpers would fail with "function not defined" errors
+  - Shadow environments are now captured at function definition time and restored during execution
+  - Enables proper module encapsulation with internal helper functions
+
 ## [2.0.0-rc19]
 
 ### Added
