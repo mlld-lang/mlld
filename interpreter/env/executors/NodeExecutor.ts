@@ -90,9 +90,14 @@ export class NodeExecutor extends BaseCommandExecutor {
         }
       }
       
-      // When using NodeShadowEnvironment, pass captured envs
-      // This might require additional changes to NodeShadowEnvironment class
-      // For now, we'll need to handle this in a future update
+      // Merge captured shadow environments if they exist
+      if (capturedEnvs) {
+        // Resolve shadow environment for Node.js - look for 'node' or 'nodejs' keys
+        const nodeEnv = capturedEnvs.node || capturedEnvs.nodejs;
+        if (nodeEnv) {
+          nodeShadowEnv.mergeCapturedFunctions(nodeEnv);
+        }
+      }
       
       // Use shadow environment with VM
       const result = await nodeShadowEnv.execute(code, shadowParams, captureConsoleLog);
