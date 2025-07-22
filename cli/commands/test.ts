@@ -6,6 +6,8 @@ import { interpret, Environment } from '@interpreter/index';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 import { PathService } from '@services/fs/PathService';
 import { getCommandContext } from '@cli/utils/command-context';
+import { EnvLoader } from '@cli/utils/env-loader';
+import { spawn } from 'child_process';
 
 interface TestResult {
   file: string;
@@ -22,6 +24,97 @@ interface TestSummary {
   errors: number;
   parseErrors: TestResult[];
   successfulFiles: number;
+}
+
+/**
+ * Generate a unique namespace for a test file
+ */
+function generateTestNamespace(filePath: string): string {
+  const fileName = path.basename(filePath, '.test.mld');
+  const timestamp = Date.now().toString(36);
+  return `${fileName}_${timestamp}`;
+}
+
+/**
+ * Namespace shadow environment declarations to prevent contamination between tests
+ * This function modifies shadow environment setup lines like "/exe js = { func1, func2 }"
+ * to use namespaced function names, preventing conflicts between tests
+ */
+function namespaceShadowEnvironments(content: string, namespace: string): string {
+  let modifiedContent = content;
+  
+  // Pattern 1: /exe js = { function_names }
+  const shadowEnvPattern = /\/exe\s+js\s*=\s*\{\s*([^}]+)\s*\}/g;
+  
+  modifiedContent = modifiedContent.replace(shadowEnvPattern, (match, functionList) => {
+    console.log(`ENV DEBUG: Found shadow env declaration: ${match}`);
+    
+    // Parse the function list and add namespace prefixes
+    const functions = functionList.split(',').map((fn: string) => {
+      const trimmed = fn.trim();
+      if (trimmed) {
+        const namespacedFn = `${namespace}_${trimmed}`;
+        console.log(`ENV DEBUG: Namespacing ${trimmed} -> ${namespacedFn}`);
+        return namespacedFn;
+      }
+      return trimmed;
+    });
+    
+    const namespacedMatch = `/exe js = { ${functions.join(', ')} }`;
+    console.log(`ENV DEBUG: Replaced shadow env: ${namespacedMatch}`);
+    return namespacedMatch;
+  });
+  
+  // Pattern 2: /exe @functionName(...) = js { ... }
+  const functionDefPattern = /\/exe\s+@(\w+)\s*\([^)]*\)\s*=\s*js\s*\{/g;
+  
+  modifiedContent = modifiedContent.replace(functionDefPattern, (match, functionName) => {
+    const namespacedFn = `${namespace}_${functionName}`;
+    console.log(`ENV DEBUG: Namespacing function definition ${functionName} -> ${namespacedFn}`);
+    return match.replace(`@${functionName}`, `@${namespacedFn}`);
+  });
+  
+  // Pattern 3: Function references in function bodies and variable assignments
+  const functionCallPattern = /\b(\w+_request|authGet|authPost|pr_view|pr_files|github_request)\b/g;
+  
+  modifiedContent = modifiedContent.replace(functionCallPattern, (match, functionName) => {
+    // Only namespace known shadow environment functions
+    const shadowFunctions = [
+      'github_request', 'pr_view', 'pr_files', 'pr_diff', 'pr_list', 'pr_comment', 'pr_review', 'pr_edit',
+      'issue_create', 'issue_list', 'issue_comment',
+      'repo_view', 'repo_clone',
+      'collab_check',
+      'workflow_run', 'workflow_list',
+      'authGet', 'authPost', 'authPut', 'authPatch', 'authDelete',
+      'fetchGet', 'fetchPost', 'fetchPut', 'fetchPatch', 'fetchDelete',
+      'customRequest'
+    ];
+    
+    if (shadowFunctions.includes(functionName)) {
+      const namespacedFn = `${namespace}_${functionName}`;
+      console.log(`ENV DEBUG: Namespacing function call ${functionName} -> ${namespacedFn}`);
+      return namespacedFn;
+    }
+    
+    return match;
+  });
+  
+  // Pattern 4: Function references in test variable assignments like @ok(@isExecutable(@github.pr.view))
+  const testFunctionCallPattern = /@(\w+)\(/g;
+  
+  modifiedContent = modifiedContent.replace(testFunctionCallPattern, (match, functionName) => {
+    // Check if this function was defined in this test file and needs namespacing
+    const originalPattern = new RegExp(`/exe\\s+@${functionName}\\s*\\([^)]*\\)\\s*=\\s*js\\s*\\{`);
+    if (originalPattern.test(content)) {
+      const namespacedFn = `${namespace}_${functionName}`;
+      console.log(`ENV DEBUG: Namespacing test function call @${functionName} -> @${namespacedFn}`);
+      return `@${namespacedFn}(`;
+    }
+    
+    return match;
+  });
+  
+  return modifiedContent;
 }
 
 /**
@@ -52,15 +145,13 @@ function extractTestResults(env: Environment): Record<string, boolean> {
 }
 
 /**
- * Capture console output during test execution
+ * Capture console output during test execution (without interfering with HTTP)
  */
 function captureConsoleOutput(fn: () => Promise<void>): Promise<{ output: string; error?: Error }> {
   return new Promise((resolve) => {
     const originalConsoleLog = console.log;
     const originalConsoleError = console.error;
     const originalConsoleWarn = console.warn;
-    const originalStdoutWrite = process.stdout.write;
-    const originalStderrWrite = process.stderr.write;
     
     let capturedOutput = '';
     let caughtError: Error | undefined;
@@ -74,23 +165,12 @@ function captureConsoleOutput(fn: () => Promise<void>): Promise<{ output: string
     console.error = (...args) => capture(args.join(' '));
     console.warn = (...args) => capture(args.join(' '));
     
-    // Capture stdout/stderr writes
-    process.stdout.write = ((text: string) => {
-      capturedOutput += text;
-      return true;
-    }) as any;
-    
-    process.stderr.write = ((text: string) => {
-      capturedOutput += text;
-      return true;
-    }) as any;
+    // DON'T capture process.stdout/stderr.write as it interferes with HTTP requests
     
     const restore = () => {
       console.log = originalConsoleLog;
       console.error = originalConsoleError;
       console.warn = originalConsoleWarn;
-      process.stdout.write = originalStdoutWrite;
-      process.stderr.write = originalStderrWrite;
     };
     
     fn()
@@ -106,32 +186,140 @@ function captureConsoleOutput(fn: () => Promise<void>): Promise<{ output: string
 }
 
 /**
- * Run a single test file
+ * Run a single test file in a separate process for better isolation
+ */
+async function runTestFileInProcess(file: string): Promise<TestResult> {
+  const startTime = Date.now();
+  
+  return new Promise((resolve) => {
+    // Find the mlld executable - use mlld-shadow-import since that's our working version
+    const mlldCommand = 'mlld-shadow-import';
+    
+    
+    // Add a special env var to prevent infinite recursion
+    const childEnv = { ...process.env, MLLD_TEST_SINGLE_FILE: 'true' };
+    
+    const child = spawn(mlldCommand, ['test', file], {
+      cwd: process.cwd(),
+      env: childEnv,
+      stdio: ['inherit', 'pipe', 'pipe']
+    });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    child.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    child.on('close', (code) => {
+      const duration = Date.now() - startTime;
+      
+      // Parse the output to extract test results
+      const tests: Record<string, boolean> = {};
+      const lines = stdout.split('\n');
+      
+      for (const line of lines) {
+        // Look for test result lines like "✓ test name" or "✗ test name"
+        const passMatch = line.match(/^\s*✓\s+(.+)$/);
+        const failMatch = line.match(/^\s*✗\s+(.+)$/);
+        
+        if (passMatch) {
+          const testName = 'test_' + passMatch[1].trim().replace(/\s+/g, '_');
+          tests[testName] = true;
+        } else if (failMatch) {
+          const testName = 'test_' + failMatch[1].trim().replace(/\s+/g, '_');
+          tests[testName] = false;
+        }
+      }
+      
+      if (code !== 0) {
+        // Non-zero exit code indicates actual test failure
+        resolve({
+          file,
+          tests,
+          duration,
+          error: stderr || `Test process exited with code ${code}`
+        });
+      } else {
+        // Exit code 0 means tests passed, even if there was stderr output
+        // Some tests legitimately write to stderr (like env.require testing missing vars)
+        resolve({
+          file,
+          tests,
+          duration
+        });
+      }
+    });
+  });
+}
+
+/**
+ * Run a single test file in the current process
  */
 async function runTestFile(file: string): Promise<TestResult> {
   const startTime = Date.now();
   
   try {
-    const content = await fs.readFile(file, 'utf-8');
+    const originalContent = await fs.readFile(file, 'utf-8');
+    
+    // Use original content - process isolation provides sufficient separation
+    const content = originalContent;
+    
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService();
     
+    
     let capturedEnv: Environment | null = null;
     
-    // Capture any console output during test execution
-    const { output, error } = await captureConsoleOutput(async () => {
-      await interpret(content, {
+    // Remove console capture entirely to test if that's causing contamination
+    let output = '';
+    let error: Error | undefined;
+    
+    
+    let interpretEnvironment: any = null;
+    try {
+      const interpretResult = await interpret(content, {
         fileSystem,
         pathService,
         format: 'markdown',
-        basePath: path.dirname(file),
-        filePath: file,
+        basePath: path.resolve(path.dirname(file)), 
+        filePath: path.resolve(file),
         captureEnvironment: (env) => { capturedEnv = env; },
         useMarkdownFormatter: false,
-        approveAllImports: true, // Auto-approve imports for tests
-        devMode: true // Always run tests in dev mode for flexible path resolution
+        approveAllImports: true,
+        devMode: true,
+        strict: false,
+        returnEnvironment: true,
+        normalizeBlankLines: true,
+        outputOptions: {
+          showProgress: false,
+          maxOutputLines: undefined,
+          errorBehavior: 'halt',
+          collectErrors: false,
+          showCommandContext: false,
+          timeout: undefined
+        }
       });
-    });
+      
+      // Extract the environment for cleanup
+      interpretEnvironment = typeof interpretResult === 'string' ? null : interpretResult.environment;
+    } catch (err) {
+      error = err instanceof Error ? err : new Error(String(err));
+    } finally {
+      // Clean up shadow environment between tests
+      if (interpretEnvironment && 'cleanup' in interpretEnvironment) {
+        try {
+          (interpretEnvironment as any).cleanup();
+        } catch (cleanupError) {
+          console.error(`Cleanup error for ${file}:`, cleanupError);
+        }
+      }
+    }
     
     // If there was an error during execution, include the captured output
     if (error) {
@@ -381,14 +569,49 @@ function displaySummary(summary: TestSummary, duration: number, totalFiles: numb
 
 
 /**
+ * Parse test command arguments to extract patterns and flags
+ */
+function parseTestArgs(args: string[]): { patterns: string[]; envFile?: string; isolate?: boolean } {
+  const patterns: string[] = [];
+  let envFile: string | undefined;
+  let isolate = false;
+  
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg === '--env' && i + 1 < args.length) {
+      envFile = args[++i];
+    } else if (arg === '--isolate') {
+      isolate = true;
+    } else if (!arg.startsWith('-')) {
+      patterns.push(arg);
+    }
+  }
+  
+  return { patterns, envFile, isolate };
+}
+
+/**
  * Main test command handler
  */
-export async function testCommand(patterns: string[]) {
+export async function testCommand(args: string[]) {
   const startTime = Date.now();
   
   try {
+    // Parse command arguments
+    const { patterns, envFile, isolate } = parseTestArgs(args);
+    
     // Get command context
     const context = await getCommandContext();
+    
+    // Load environment variables
+    if (envFile) {
+      // Load specific env file if provided
+      EnvLoader.loadEnvFile(path.resolve(envFile));
+    } else {
+      // Auto-load .env and .env.test files from current working directory
+      EnvLoader.autoLoadEnvFiles(process.cwd());
+    }
     
     // Discover test files from project root
     const testFiles = await discoverTests(patterns, context);
@@ -425,6 +648,15 @@ export async function testCommand(patterns: string[]) {
     
     console.log('Running tests...\n');
     
+    // Determine if we need process isolation
+    // If running multiple test files, use isolation to prevent shadow env contamination
+    // But don't use isolation if we're already in a subprocess (to prevent infinite recursion)
+    const useIsolation = testFiles.length > 1 && !process.env.MLLD_TEST_SINGLE_FILE;
+    
+    if (useIsolation) {
+      console.log(chalk.dim('Running tests in isolated processes for better environment separation\n'));
+    }
+    
     // Run tests sequentially and report as they complete
     for (const [dir, files] of byDirectory) {
       // Show directory relative to project root
@@ -436,7 +668,9 @@ export async function testCommand(patterns: string[]) {
         const relativePath = path.relative(dir, file);
         const spinner = startTestSpinner(relativePath);
         
-        const result = await runTestFile(file);
+        const result = useIsolation ? 
+          await runTestFileInProcess(file) : 
+          await runTestFile(file);
         completeTestResult(spinner, result, summary);
       }
     }

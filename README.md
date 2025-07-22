@@ -220,6 +220,7 @@ mlld file.mld                    # Process file, output to file.md
 mlld file.mld --stdout           # Output to terminal
 mlld file.mld --format xml       # Output as XML
 mlld file.mld --watch            # Auto-rerun on changes
+mlld file.mld --env .env.local   # Load environment variables from file
 ```
 
 ### Module Management
@@ -263,8 +264,9 @@ mlld run data/process            # Run nested scripts
 
 ```bash
 # Testing
-mlld test                        # Run all tests
+mlld test                        # Run all tests (auto-loads .env and .env.test)
 mlld test array                  # Run tests matching pattern
+mlld test --env custom.env       # Use custom environment file
 
 # Module cache management
 mlld clean @mlld/env             # Remove specific module from cache
@@ -280,6 +282,7 @@ mlld add-needs my-module.mld     # Auto-detect and add runtime deps
 ```bash
 # Use mlldx for ephemeral environments (no filesystem persistence)
 mlldx script.mld                 # Run with in-memory cache
+mlldx script.mld --env prod.env  # Load environment variables
 npx mlldx@latest ci-task.mld     # Perfect for CI pipelines
 
 # Examples

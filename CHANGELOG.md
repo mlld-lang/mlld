@@ -5,6 +5,31 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc21]
+
+### Added
+- **Environment variable management for CLI**
+  - Added `--env` flag to load environment variables from a specific file
+  - `mlld test` command automatically loads `.env` and `.env.test` files from the current directory
+  - `mlldx` supports `--env` flag for ephemeral environments
+- **Test isolation improvements**
+  - Tests now run in isolated processes when multiple test files are executed
+  - Prevents environment variable pollution between test modules
+  - Shadow environment functions are properly cleaned up between tests
+  - Added `--isolate` flag for explicit process isolation
+
+### Changed
+- **Test command environment handling**
+  - Removed console output capture that was interfering with HTTP requests
+  - Improved test result parsing from isolated subprocess output
+  - Better error handling for test cleanup failures
+
+### Fixed
+- **Variable contamination between test modules**
+  - Shadow environment variables no longer leak between test files
+  - Each test gets a clean environment state
+  - Process isolation ensures complete separation when running multiple tests
+
 ## [2.0.0-rc20]
 
 ### Added

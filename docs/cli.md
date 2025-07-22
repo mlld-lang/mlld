@@ -34,6 +34,7 @@ mlld input.mld
 - `--watch, -w` - Watch for file changes
 - `--verbose, -v` - Show detailed output
 - `--debug` - Enable debug logging
+- `--env <file>` - Load environment variables from specified file
 
 **Examples:**
 ```bash
@@ -48,6 +49,9 @@ mlld document.mld --stdout
 
 # Watch mode for development
 mlld document.mld --watch
+
+# Load environment variables
+mlld document.mld --env .env.local
 ```
 
 ## Module Commands
@@ -231,6 +235,79 @@ mlld add-needs my-module.mld.md
 # Show detailed analysis
 mlld add-needs --verbose
 ```
+
+## Development Commands
+
+### `mlld test [patterns...]`
+
+Run mlld test files (`.test.mld` files).
+
+**Features:**
+- Automatically loads `.env` and `.env.test` files from current directory
+- Runs tests in isolated processes when multiple files are executed
+- Prevents environment variable pollution between test modules
+- Shows test results with timing and pass/fail indicators
+
+**Options:**
+- `--env <file>` - Load environment variables from specific file
+
+**Examples:**
+```bash
+# Run all tests
+mlld test
+
+# Run tests matching pattern
+mlld test array string
+
+# Use custom environment file
+mlld test --env .env.staging
+```
+
+**Environment Loading:**
+- If `--env` is specified: loads only that file
+- Otherwise: automatically loads `.env` and `.env.test` if they exist
+- Parent process environment variables are inherited
+
+**Test Isolation:**
+- Multiple test files run in separate processes automatically
+- Prevents shadow environment contamination between tests
+- Each test gets a clean environment state
+
+## CI/CD and Ephemeral Execution
+
+### `mlldx`
+
+The ephemeral version of mlld for CI/CD and serverless environments. Uses in-memory caching instead of filesystem persistence.
+
+**Usage:**
+```bash
+mlldx script.mld                 # Run with in-memory cache
+mlldx script.mld --env prod.env  # Load environment variables
+npx mlldx@latest ci-task.mld     # Run without installation
+```
+
+**Options:**
+All standard mlld options plus:
+- `--env <file>` - Load environment variables from specified file
+- `--ephemeral` - Automatically set for mlldx
+
+**Examples:**
+```bash
+# GitHub Actions
+mlldx github-workflow.mld --env .env.ci
+
+# Serverless functions
+mlldx handler.mld --env .env.production
+
+# Docker containers
+docker run -it node:18 npx mlldx@latest /scripts/task.mld
+```
+
+**Key Differences from mlld:**
+- No filesystem caching (all in-memory)
+- Useful for stateless environments
+- Same functionality, ephemeral execution
+- Designed for CI pipelines and serverless
 
 ## Configuration Commands
 

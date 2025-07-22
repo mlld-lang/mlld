@@ -9,6 +9,7 @@ import { OptionProcessor } from './parsers/OptionProcessor';
 import { FileProcessor } from './execution/FileProcessor';
 import { WatchManager } from './execution/WatchManager';
 import { CommandDispatcher } from './execution/CommandDispatcher';
+import { EnvLoader } from './utils/env-loader';
 import { logger, cliLogger } from '@core/utils/logger';
 
 export class CLIOrchestrator {
@@ -51,6 +52,11 @@ export class CLIOrchestrator {
       const args = customArgs || process.argv.slice(2);
       
       cliOptions = this.argumentParser.parseArgs(args);
+      
+      // Load environment variables if --env flag is provided
+      if (cliOptions.env) {
+        EnvLoader.loadEnvFile(cliOptions.env, true);
+      }
       
       // Set ephemeral mode defaults for mlldx
       if (isEphemeral) {

@@ -93,6 +93,8 @@ export interface CLIOptions {
   captureErrors?: boolean;
   // Ephemeral mode for CI/serverless
   ephemeral?: boolean;
+  // Environment file path
+  env?: string;
   _?: string[]; // Remaining args after command
 }
 
