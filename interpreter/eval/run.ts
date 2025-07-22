@@ -215,7 +215,10 @@ export async function evaluateRun(
           valueType: typeof value,
           hasExecutable: value && typeof value === 'object' && '__executable' in value,
           hasType: value && typeof value === 'object' && 'type' in value,
-          valueKeys: value && typeof value === 'object' ? Object.keys(value) : []
+          valueKeys: value && typeof value === 'object' ? Object.keys(value) : [],
+          hasExecutableDef: value && typeof value === 'object' && 'executableDef' in value,
+          executableDef: value && typeof value === 'object' ? value.executableDef : undefined,
+          value: process.env.DEBUG_EXEC === 'verbose' ? value : undefined
         });
       }
       
@@ -225,23 +228,58 @@ export async function evaluateRun(
         execVar = value as ExecutableVariable;
       } else if (typeof value === 'object' && value !== null && '__executable' in value && value.__executable) {
         // Serialized executable object from imports/exports
-        // Convert it back to a proper ExecutableVariable
-        const { createExecutableVariable } = await import('@core/types/variable/VariableFactories');
-        
-        // Extract the field name from the access chain for naming
-        const fieldName = varRef.fields[varRef.fields.length - 1].value;
+        // Manually reconstruct the ExecutableVariable with all metadata
         const fullName = `${varRef.identifier}.${varRef.fields.map(f => f.value).join('.')}`;
         
-        execVar = createExecutableVariable(
-          fullName,
-          'command', // Default type - the real type is in executableDef
-          '', // Empty template - the real template is in executableDef
-          value.paramNames || [],
-          {
-            ...value.metadata,
-            executableDef: value.executableDef || value.metadata?.executableDef
+        // Deserialize shadow environments if present (convert objects back to Maps)
+        let capturedShadowEnvs = value.metadata?.capturedShadowEnvs;
+        if (capturedShadowEnvs && typeof capturedShadowEnvs === 'object') {
+          const deserialized: any = {};
+          for (const [lang, shadowObj] of Object.entries(capturedShadowEnvs)) {
+            if (shadowObj && typeof shadowObj === 'object') {
+              // Convert object to Map
+              const map = new Map<string, any>();
+              for (const [name, func] of Object.entries(shadowObj)) {
+                map.set(name, func);
+              }
+              deserialized[lang] = map;
+            }
           }
-        );
+          capturedShadowEnvs = deserialized;
+        }
+        
+        execVar = {
+          type: 'executable',
+          name: fullName,
+          value: value.value || { type: 'code', template: '', language: 'js' },
+          paramNames: value.paramNames || [],
+          source: {
+            directive: 'import',
+            syntax: 'code',
+            hasInterpolation: false,
+            isMultiLine: false
+          },
+          createdAt: Date.now(),
+          modifiedAt: Date.now(),
+          metadata: {
+            ...(value.metadata || {}),
+            executableDef: value.executableDef,
+            // CRITICAL: Preserve captured shadow environments from imports (deserialized)
+            capturedShadowEnvs: capturedShadowEnvs
+          }
+        };
+        
+        // Debug shadow env preservation
+        if (process.env.DEBUG_EXEC) {
+          console.error('[DEBUG] Reconstructed executable metadata:', {
+            name: fullName,
+            hasMetadata: !!value.metadata,
+            hasCapturedShadowEnvs: !!capturedShadowEnvs,
+            capturedShadowEnvKeys: capturedShadowEnvs ? Object.keys(capturedShadowEnvs) : [],
+            deserializedLangs: capturedShadowEnvs ? Object.entries(capturedShadowEnvs).map(([lang, map]) => 
+              `${lang}: ${map instanceof Map ? map.size : 0} functions`) : []
+          });
+        }
       } else if (typeof value === 'string') {
         // String reference to an executable  
         const variable = env.getVariable(value);
@@ -269,7 +307,11 @@ export async function evaluateRun(
     // Get the executable definition from metadata
     const definition = execVar.metadata?.executableDef as ExecutableDefinition;
     if (!definition) {
-      throw new Error(`Executable ${commandName} has no definition in metadata`);
+      // For field access, provide more helpful error message
+      const fullPath = identifierNode.type === 'VariableReference' && (identifierNode as VariableReference).fields && (identifierNode as VariableReference).fields.length > 0
+        ? `${(identifierNode as VariableReference).identifier}.${(identifierNode as VariableReference).fields.map(f => f.value).join('.')}`
+        : commandName;
+      throw new Error(`Executable ${fullPath} has no definition in metadata`);
     }
     
     // Get arguments from the run directive
@@ -396,7 +438,16 @@ export async function evaluateRun(
           argValues
         });
       }
-      output = await env.executeCode(code, definition.language || 'javascript', argValues, executionContext);
+      
+      // Pass captured shadow environments to code execution
+      const codeParams = { ...argValues };
+      const capturedEnvs = execVar.metadata?.capturedShadowEnvs;
+      if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
+                           definition.language === 'node' || definition.language === 'nodejs')) {
+        (codeParams as any).__capturedShadowEnvs = capturedEnvs;
+      }
+      
+      output = await env.executeCode(code, definition.language || 'javascript', codeParams, executionContext);
     } else if (definition.type === 'template') {
       // Handle template executables
       const tempEnv = env.createChild();

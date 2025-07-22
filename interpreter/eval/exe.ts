@@ -97,6 +97,7 @@ export async function evaluateExe(
     // Collect functions to inject
     const shadowFunctions = new Map<string, any>();
     
+    // First, set up the shadow environment so it's available for capture
     for (const ref of envRefs) {
       const funcName = ref.identifier;
       const funcVar = env.getVariable(funcName);
@@ -128,9 +129,39 @@ export async function evaluateExe(
       shadowFunctions.set(funcName, effectiveWrapper);
     }
     
-    
-    // Store in environment
+    // Store in environment FIRST
     env.setShadowEnv(language, shadowFunctions);
+    
+    // NOW retroactively update all the executables in the shadow environment
+    // to capture the complete shadow environment (including each other)
+    if (env.hasShadowEnvs()) {
+      const capturedEnvs = env.captureAllShadowEnvs();
+      
+      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
+        console.error('[DEBUG] Retroactively updating shadow env executables with captured envs:', {
+          language,
+          functions: Array.from(shadowFunctions.keys()),
+          capturedEnvs
+        });
+      }
+      
+      // Update each function variable's metadata to include the captured shadow envs
+      for (const ref of envRefs) {
+        const funcName = ref.identifier;
+        const funcVar = env.getVariable(funcName);
+        
+        if (funcVar && funcVar.type === 'executable' && funcVar.metadata) {
+          // Update the metadata to include captured shadow environments
+          (funcVar.metadata as any).capturedShadowEnvs = capturedEnvs;
+          
+          // Also update the executableDef if it exists
+          const execDef = (funcVar.metadata as any).executableDef;
+          if (execDef) {
+            (execDef as any).capturedShadowEnvs = capturedEnvs;
+          }
+        }
+      }
+    }
     
     return {
       value: null,

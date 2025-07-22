@@ -15,6 +15,7 @@ import {
 import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import { MlldImportError } from '@core/errors';
+import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironmentCapture';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -301,10 +302,43 @@ export class VariableImporter {
       throw new Error('Namespace import missing alias');
     }
     
-    // Create namespace variable with the module object
+    // Smart namespace unwrapping: If the module exports a single main object
+    // with a conventional name, unwrap it for better ergonomics
+    let namespaceObject = moduleObject;
+    
+    // Get the module name from the import path
+    const importPath = directive.values?.from?.[0]?.content || '';
+    const moduleName = importPath.split('/').pop()?.replace(/\.mld$/, '') || '';
+    
+    // Check if there's a single export with the module name or common patterns
+    const exportKeys = Object.keys(moduleObject);
+    const commonNames = [moduleName, 'main', 'default', 'exports'];
+    
+    // If there's only one export, or if there's an export matching common patterns
+    if (exportKeys.length === 1) {
+      // Single export - use it directly
+      namespaceObject = moduleObject[exportKeys[0]];
+    } else {
+      // Multiple exports - check for common patterns
+      for (const name of commonNames) {
+        if (name && moduleObject[name] && typeof moduleObject[name] === 'object') {
+          // Found a main export object - check if it looks like the primary export
+          const mainExport = moduleObject[name];
+          const otherExports = exportKeys.filter(k => k !== name && !k.startsWith('_'));
+          
+          // If the main export has most of the functionality, use it
+          if (Object.keys(mainExport).length > otherExports.length) {
+            namespaceObject = mainExport;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Create namespace variable with the (potentially unwrapped) object
     const namespaceVar = this.createNamespaceVariable(
       alias, 
-      moduleObject, 
+      namespaceObject, 
       childEnv.getCurrentFilePath() || 'unknown'
     );
     

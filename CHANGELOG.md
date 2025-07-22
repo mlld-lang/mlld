@@ -5,11 +5,34 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc23]
+
+### Fixed
+- **Namespace import structure for better ergonomics**
+  - Namespace imports intelligently unwrap single-export modules
+  - `/import @mlld/env as environment` now allows `@environment.get()` instead of requiring `@environment.env.get()`
+  - Modules exporting a single main object matching common patterns (module name, 'main', 'default', 'exports') are automatically unwrapped
+  - Multiple-export modules remain unchanged, preserving full namespace structure
+
+- **Shadow environment preservation regression from rc22**
+  - Fixed issue where shadow environments were lost when accessing imported executables through field access
+  - rc22's manual reconstruction of ExecutableVariable from `__executable: true` objects was missing deserialization of captured shadow environments
+  - Shadow environments (stored as objects during export) are now properly deserialized back to Maps
+  - Captured shadow environments are correctly passed to code execution via `__capturedShadowEnvs` parameter
+  - Functions like `@github.pr.review()` can now access their required shadow environment functions
+
+- **Node.js executable path in test environments**
+  - Fixed `mlld-wrapper.cjs` to use `process.execPath` instead of hardcoded 'node'
+  - Fixed test utility to use `process.execPath` for cross-environment compatibility
+  - Resolves "spawn node ENOENT" errors in environments where 'node' is not in PATH
+
 ## [2.0.0-rc22]
 
 ### Fixed
 - **Nested executable field access in `/run` directives**
   - Fixed interpreter bug where `/run @github.pr.review(...)` and similar nested field access patterns failed
+  - Handles both local ExecutableVariable objects and serialized `__executable: true` format from imports
+  - Properly reconstructs executable metadata for imported modules with nested structure
 
 ## [2.0.0-rc21]
 
