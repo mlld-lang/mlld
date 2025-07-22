@@ -64,8 +64,8 @@
     },
     "@mlld/github": {
       "resolved": "registry://@mlld/github",
-      "integrity": "sha256:8aeb3033905b94c552c8867174bb9388c99ca1cc0b44fbcee709bda6dd19a248",
-      "approvedAt": "2025-07-20T15:46:22.133Z"
+      "integrity": "sha256:f4faa6b25effdb9a9b75022c973a3a0bfa13842bb19a09c2c6480c0797ee2902",
+      "approvedAt": "2025-07-22T05:17:45.117Z"
     },
     "@mlld/ai-cli": {
       "resolved": "registry://@mlld/ai-cli",

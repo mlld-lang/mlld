@@ -5,6 +5,12 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc22]
+
+### Fixed
+- **Nested executable field access in `/run` directives**
+  - Fixed interpreter bug where `/run @github.pr.review(...)` and similar nested field access patterns failed
+
 ## [2.0.0-rc21]
 
 ### Added

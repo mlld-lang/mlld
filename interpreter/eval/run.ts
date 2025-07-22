@@ -207,10 +207,41 @@ export async function evaluateRun(
         }
       }
       
+      // Debug logging
+      if (process.env.DEBUG_EXEC || process.env.NODE_ENV === 'test') {
+        console.error('[DEBUG] Field access resolved value:', {
+          identifier: varRef.identifier,
+          fields: varRef.fields.map(f => ({ type: f.type, value: f.value })),
+          valueType: typeof value,
+          hasExecutable: value && typeof value === 'object' && '__executable' in value,
+          hasType: value && typeof value === 'object' && 'type' in value,
+          valueKeys: value && typeof value === 'object' ? Object.keys(value) : []
+        });
+      }
+      
       // The resolved value could be an executable object directly or a string reference
       if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'executable') {
         // Direct executable object
         execVar = value as ExecutableVariable;
+      } else if (typeof value === 'object' && value !== null && '__executable' in value && value.__executable) {
+        // Serialized executable object from imports/exports
+        // Convert it back to a proper ExecutableVariable
+        const { createExecutableVariable } = await import('@core/types/variable/VariableFactories');
+        
+        // Extract the field name from the access chain for naming
+        const fieldName = varRef.fields[varRef.fields.length - 1].value;
+        const fullName = `${varRef.identifier}.${varRef.fields.map(f => f.value).join('.')}`;
+        
+        execVar = createExecutableVariable(
+          fullName,
+          'command', // Default type - the real type is in executableDef
+          '', // Empty template - the real template is in executableDef
+          value.paramNames || [],
+          {
+            ...value.metadata,
+            executableDef: value.executableDef || value.metadata?.executableDef
+          }
+        );
       } else if (typeof value === 'string') {
         // String reference to an executable  
         const variable = env.getVariable(value);

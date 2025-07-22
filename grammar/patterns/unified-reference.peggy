@@ -30,6 +30,8 @@ UnifiedReferenceNoTail "unified reference without tail support"
 
 FieldAccessExec "field access exec invocation"
   = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" tail:TailModifiers? {
+      helpers.debug('FieldAccessExec matched', { id, fields });
+      
       // Extract the last field as the method name
       const lastField = fields[fields.length - 1];
       const methodName = lastField.value;
@@ -41,12 +43,16 @@ FieldAccessExec "field access exec invocation"
         ...(objectFields.length > 0 ? { fields: objectFields } : {})
       }, location());
       
+      // Create the full path variable reference (id + all fields)
+      const fullPathRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        fields: fields
+      }, location());
+      
       // Create the exec invocation
       const ref = {
         name: methodName,
-        identifier: [helpers.createVariableReferenceNode('varIdentifier', {
-          identifier: methodName
-        }, location())],
+        identifier: [fullPathRef],  // Use the full path reference instead of just method name
         args: args || [],
         isCommandReference: true,
         objectReference: objectRef
@@ -61,6 +67,8 @@ FieldAccessExec "field access exec invocation"
 
 FieldAccessExecNoTail "field access exec invocation without tail"
   = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" !TailModifiers {
+      helpers.debug('FieldAccessExecNoTail matched', { id, fields });
+      
       // Same logic as FieldAccessExec but no tail modifiers
       const lastField = fields[fields.length - 1];
       const methodName = lastField.value;
@@ -71,11 +79,15 @@ FieldAccessExecNoTail "field access exec invocation without tail"
         ...(objectFields.length > 0 ? { fields: objectFields } : {})
       }, location());
       
+      // Create the full path variable reference (id + all fields)
+      const fullPathRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        fields: fields
+      }, location());
+      
       const ref = {
         name: methodName,
-        identifier: [helpers.createVariableReferenceNode('varIdentifier', {
-          identifier: methodName
-        }, location())],
+        identifier: [fullPathRef],  // Use the full path reference instead of just method name
         args: args || [],
         isCommandReference: true,
         objectReference: objectRef
