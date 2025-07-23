@@ -190,7 +190,75 @@ export async function evaluateExecInvocation(
     // Get command arguments from the node
     const args = node.commandRef.args || [];
     
-    // Evaluate the first argument to get the input value
+    // Special handling for @typeof - we need the Variable object, not just the value
+    if (commandName === 'typeof' || commandName === 'TYPEOF') {
+      if (args.length > 0) {
+        const arg = args[0];
+        
+        // Check if it's a variable reference
+        if (arg && typeof arg === 'object' && 'type' in arg && arg.type === 'VariableReference') {
+          const varRef = arg as any;
+          const varName = varRef.identifier;
+          const varObj = env.getVariable(varName);
+          
+          if (varObj) {
+            // Generate type information from the Variable object
+            let typeInfo = varObj.type;
+            
+            // Handle subtypes for text variables
+            if (varObj.type === 'simple-text' && 'subtype' in varObj) {
+              // For simple-text, show the main type unless it has a special subtype
+              const subtype = (varObj as any).subtype;
+              if (subtype && subtype !== 'simple' && subtype !== 'interpolated-text') {
+                typeInfo = subtype;
+              }
+            } else if (varObj.type === 'primitive' && 'primitiveType' in varObj) {
+              typeInfo = `primitive (${(varObj as any).primitiveType})`;
+            } else if (varObj.type === 'object') {
+              const objValue = varObj.value;
+              if (objValue && typeof objValue === 'object') {
+                const keys = Object.keys(objValue);
+                typeInfo = `object (${keys.length} properties)`;
+              }
+            } else if (varObj.type === 'array') {
+              const arrValue = varObj.value;
+              if (Array.isArray(arrValue)) {
+                typeInfo = `array (${arrValue.length} items)`;
+              }
+            } else if (varObj.type === 'executable') {
+              // Get executable type from metadata
+              const execDef = varObj.metadata?.executableDef;
+              if (execDef && 'type' in execDef) {
+                typeInfo = `executable (${execDef.type})`;
+              }
+            }
+            
+            // Add source information if available
+            if (varObj.source?.directive) {
+              typeInfo += ` [from /${varObj.source.directive}]`;
+            }
+            
+            // Pass the type info with a special marker
+            const result = await variable.metadata.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
+            
+            // Apply withClause transformations if present
+            if (node.withClause) {
+              return applyWithClause(String(result), node.withClause, env);
+            }
+            
+            return {
+              value: String(result),
+              env,
+              stdout: String(result),
+              stderr: '',
+              exitCode: 0
+            };
+          }
+        }
+      }
+    }
+    
+    // Regular transformer handling
     let inputValue = '';
     if (args.length > 0) {
       const arg = args[0];

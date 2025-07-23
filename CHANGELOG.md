@@ -5,6 +5,17 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc25]
+
+### Added
+- **Built-in @typeof() function for type introspection**
+  - New transformer function that returns type information for any mlld variable
+  - Syntax: `@typeof(@variable)` returns the variable's type (e.g., "simple-text", "primitive (number)", "object (3 properties)")
+  - Includes source directive information: `@typeof(@myVar)` → "simple-text [from /var]"
+  - Works with all variable types: simple-text, path, primitive, object, array, executable, pipeline-input
+  - Can be used in pipelines: `@myVar | @typeof`
+  - Available in both uppercase (@TYPEOF) and lowercase (@typeof) forms
+
 ## [2.0.0-rc24]
 
 ### Fixed
