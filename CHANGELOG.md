@@ -5,6 +5,15 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc24]
+
+### Fixed
+- **Inconsistent handling of LoadContentResult objects between /show and /output**
+  - Fixed `/output` to match `/show` behavior when outputting variables containing `<file>` alligator syntax results
+  - `/output @myfile` now outputs just the file content (not the full metadata object) when `@myfile` contains a LoadContentResult
+  - Also handles arrays of LoadContentResult objects from glob patterns, concatenating their content with double newlines
+  - Both commands now consistently treat the alligator syntax as accessing file content, not the full file object
+
 ## [2.0.0-rc23]
 
 ### Fixed

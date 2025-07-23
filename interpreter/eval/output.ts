@@ -394,9 +394,18 @@ async function evaluateSimpleVariableSource(
     }
   }
   
+  // Import LoadContentResult type check
+  const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+  
   // Convert value to string
   if (typeof value === 'string') {
     return value;
+  } else if (isLoadContentResult(value)) {
+    // For LoadContentResult, output the content by default (matching /show behavior)
+    return value.content;
+  } else if (isLoadContentResultArray(value)) {
+    // For array of LoadContentResult, concatenate content with double newlines
+    return value.map(item => item.content).join('\n\n');
   } else if (typeof value === 'object') {
     // For objects/arrays, convert to JSON
     return JSON.stringify(value, null, 2);
@@ -489,9 +498,28 @@ async function outputToFile(
   env: Environment,
   directive: DirectiveNode
 ): Promise<void> {
+  // Debug logging
+  if (env.hasVariable('DEBUG')) {
+    const debug = env.getVariable('DEBUG');
+    if (debug && debug.value) {
+      logger.debug('outputToFile target.path', { 
+        path: target.path,
+        raw: target.raw
+      });
+    }
+  }
+  
   // Evaluate the file path
   const pathResult = await interpolate(target.path, env);
   let targetPath = String(pathResult);
+  
+  // TODO: This is a hack to handle @base in quoted output paths
+  // The proper fix requires rethinking how @identifier resolution works
+  // across variables, resolvers, and paths in a unified way
+  if (targetPath.startsWith('@base/')) {
+    const projectRoot = env.getProjectRoot();
+    targetPath = path.join(projectRoot, targetPath.substring(6));
+  }
   
   // Resolve relative paths from the base path
   if (!path.isAbsolute(targetPath)) {
