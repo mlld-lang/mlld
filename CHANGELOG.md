@@ -5,6 +5,16 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc26]
+
+### Added
+- **Auto-unwrapping of LoadContentResult objects in JavaScript/Node functions**
+  - LoadContentResult objects (from `<file>` syntax) are now automatically unwrapped to their content strings when passed to JS/Node functions
+  - Enables natural usage: `/run @processFile(<data.txt>)` - the function receives the file content as a string, not the LoadContentResult object
+  - Also handles LoadContentResultArray from glob patterns: `<*.txt>` unwraps to an array of content strings
+  - Maintains mlld's content-first philosophy where file content is the primary concern
+  - Works with all JavaScript (`js`) and Node.js (`node`) executables
+
 ## [2.0.0-rc25]
 
 ### Added
