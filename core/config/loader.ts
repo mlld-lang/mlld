@@ -12,6 +12,7 @@ import type {
   CacheRule
 } from './types';
 import { parseDuration, parseSize } from './utils';
+import type { PathContext } from '@core/services/PathContextService';
 
 // Type guard to check if a value is an object
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -48,15 +49,24 @@ export class ConfigLoader {
   private globalConfigPath: string;
   private projectConfigPath: string;
   private cachedConfig?: MlldConfig;
+  private pathContext?: PathContext;
 
-  constructor(projectPath?: string) {
+  constructor(projectPathOrContext?: string | PathContext) {
     // Global config location: ~/.config/mlld/mlld.lock.json
     this.globalConfigPath = path.join(os.homedir(), '.config', 'mlld', 'mlld.lock.json');
     
-    // Project config location: <project>/mlld.config.json
-    this.projectConfigPath = projectPath 
-      ? path.join(projectPath, 'mlld.config.json')
-      : path.join(process.cwd(), 'mlld.config.json');
+    // Handle both legacy string path and new PathContext
+    if (typeof projectPathOrContext === 'string') {
+      // Legacy mode - projectPath provided
+      this.projectConfigPath = path.join(projectPathOrContext, 'mlld.config.json');
+    } else if (projectPathOrContext) {
+      // New mode - PathContext provided
+      this.pathContext = projectPathOrContext;
+      this.projectConfigPath = path.join(projectPathOrContext.projectRoot, 'mlld.config.json');
+    } else {
+      // No path provided, use current directory
+      this.projectConfigPath = path.join(process.cwd(), 'mlld.config.json');
+    }
   }
 
   /**

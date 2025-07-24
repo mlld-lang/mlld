@@ -191,6 +191,13 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       console.log('Output Path:', outputPath);
     }
 
+    // Build PathContext early
+    const pathContext = await PathContextBuilder.fromFile(
+      path.resolve(input),
+      fileSystem,
+      { invocationDirectory: process.cwd() }
+    );
+    
     // Read the input file using Node's fs directly
     const fs = await import('fs/promises');
     const content = await fs.readFile(input, 'utf8');
@@ -198,8 +205,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     // Read stdin if available
     const stdinContent = await readStdinIfAvailable();
     
-    // Load configuration
-    const configLoader = new ConfigLoader(path.dirname(input));
+    // Load configuration using PathContext
+    const configLoader = new ConfigLoader(pathContext);
     const config = configLoader.load();
     const urlConfig = configLoader.resolveURLConfig(config);
     const outputConfig = configLoader.resolveOutputConfig(config);
@@ -230,13 +237,6 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       // URLs disabled
       finalUrlConfig = undefined;
     }
-    
-    // Build PathContext early
-    const pathContext = await PathContextBuilder.fromFile(
-      path.resolve(input),
-      fileSystem,
-      { invocationDirectory: process.cwd() }
-    );
     
     // Use the new interpreter
     const interpretResult = await interpret(content, {
