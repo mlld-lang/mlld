@@ -181,7 +181,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       
       // Initialize registry manager
       try {
-        this.registryManager = new RegistryManager(this.getProjectRoot());
+        this.registryManager = new RegistryManager(
+        this.pathContext || this.getProjectRoot()
+      );
       } catch (error) {
         console.warn('RegistryManager not available:', error);
       }
@@ -1383,18 +1385,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Re-initialize registry manager with ephemeral components
     if (this.registryManager) {
       // The registry manager will use the ephemeral cache and lock file
-      this.registryManager = new RegistryManager(this.getProjectRoot());
+      this.registryManager = new RegistryManager(
+        this.pathContext || this.getProjectRoot()
+      );
     }
     
     // Re-initialize resolver manager with ephemeral components
     if (this.resolverManager) {
       this.resolverManager = new ResolverManager(
-        this.fileSystem,
-        this.pathService,
-        lockFile,
+        undefined, // Use default security policy
         moduleCache,
-        this.urlCacheManager,
-        this.getProjectRoot()
+        lockFile
       );
       
       // Re-register all resolvers (same as in constructor)
