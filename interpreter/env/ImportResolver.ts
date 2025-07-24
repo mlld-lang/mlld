@@ -22,6 +22,7 @@ import {
 import { PathMatcher } from '@core/resolvers/utils/PathMatcher';
 import { logger } from '@core/utils/logger';
 import type { CacheManager } from './CacheManager';
+import type { PathContext } from '@core/services/PathContextService';
 
 /**
  * Dependencies needed by ImportResolver from the Environment
@@ -29,7 +30,7 @@ import type { CacheManager } from './CacheManager';
 export interface ImportResolverDependencies {
   fileSystem: IFileSystemService;
   pathService: IPathService;
-  basePath: string; // File directory for relative imports
+  pathContext: PathContext; // Path context for all path operations
   cacheManager: CacheManager;
   getSecurityManager: () => SecurityManager | undefined;
   getRegistryManager: () => RegistryManager | undefined;
@@ -46,7 +47,6 @@ export interface ImportResolverDependencies {
     maxResponseSize: number;
     timeout: number;
   };
-  getProjectRoot?: () => string; // Project root for module resolution
 }
 
 /**
@@ -117,9 +117,9 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     // Initialize security components for root environment only
     if (!dependencies.getParent()) {
       try {
-        const basePath = dependencies.basePath;
-        this.importApproval = new ImportApproval(basePath);
-        this.immutableCache = new ImmutableCache(basePath);
+        const projectRoot = dependencies.pathContext.projectRoot;
+        this.importApproval = new ImportApproval(projectRoot);
+        this.immutableCache = new ImmutableCache(projectRoot);
       } catch (error) {
         console.warn('Failed to initialize import approval/cache:', error);
       }
@@ -209,7 +209,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       // Try fuzzy matching for local files
       const matchResult = await this.pathMatcher.findMatch(
         inputPath,
-        this.dependencies.basePath,
+        this.dependencies.pathContext.fileDirectory,
         typeof localFileFuzzyMatch === 'object' ? localFileFuzzyMatch : undefined
       );
       
@@ -229,7 +229,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
           const pathWithExt = inputPath + ext;
           const extMatchResult = await this.pathMatcher.findMatch(
             pathWithExt,
-            this.dependencies.basePath,
+            this.dependencies.pathContext.fileDirectory,
             typeof localFileFuzzyMatch === 'object' ? localFileFuzzyMatch : undefined
           );
           
@@ -274,7 +274,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     }
     
     // Fall back to standard path resolution, but check if the file exists
-    const resolvedPath = path.resolve(this.dependencies.basePath, inputPath);
+    const resolvedPath = path.resolve(this.dependencies.pathContext.fileDirectory, inputPath);
     
     // If fuzzy matching is enabled but didn't find anything, check if the file exists
     // If not, throw an error with better messaging
@@ -286,41 +286,8 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
   }
   
   async getProjectPath(): Promise<string> {
-    // If getProjectRoot is available, use it (new PathContext mode)
-    if (this.dependencies.getProjectRoot) {
-      return this.dependencies.getProjectRoot();
-    }
-    
-    // Legacy mode: Walk up from basePath to find project root
-    let current = this.dependencies.basePath;
-    
-    while (current !== path.dirname(current)) {
-      try {
-        // Check for common project indicators in order of preference
-        const indicators = [
-          'mlld.config.json',
-          'package.json',
-          '.git',
-          'pyproject.toml',
-          'Cargo.toml',
-          'pom.xml',
-          'build.gradle',
-          'Makefile'
-        ];
-        
-        for (const indicator of indicators) {
-          if (await this.dependencies.fileSystem.exists(path.join(current, indicator))) {
-            return current;
-          }
-        }
-      } catch {
-        // Continue searching
-      }
-      current = path.dirname(current);
-    }
-    
-    // Fallback to current base path
-    return this.dependencies.basePath;
+    // Use project root from PathContext
+    return this.dependencies.pathContext.projectRoot;
   }
   
   // --- URL Operations ---
@@ -602,10 +569,14 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
   
   // --- Child Creation ---
   
-  createChildResolver(newBasePath?: string): IImportResolver {
+  createChildResolver(newFileDirectory?: string): IImportResolver {
     const childDependencies: ImportResolverDependencies = {
       ...this.dependencies,
-      basePath: newBasePath || this.dependencies.basePath,
+      pathContext: newFileDirectory ? {
+        ...this.dependencies.pathContext,
+        fileDirectory: newFileDirectory,
+        executionDirectory: newFileDirectory
+      } : this.dependencies.pathContext,
       getParent: () => this
     };
     
