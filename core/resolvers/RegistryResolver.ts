@@ -8,6 +8,7 @@ import {
 import { MlldResolutionError } from '@core/errors';
 import { TaintLevel } from '@security/taint/TaintTracker';
 import { logger } from '@core/utils/logger';
+import { parseSemVer, compareSemVer, satisfiesVersion } from '@core/utils/version-checker';
 
 /**
  * Configuration for RegistryResolver
@@ -32,6 +33,16 @@ export interface RegistryResolverConfig {
    * GitHub API token for rate limiting (optional)
    */
   token?: string;
+}
+
+/**
+ * Module reference format for version support
+ */
+interface ModuleReference {
+  author: string;
+  module: string;
+  version?: string;      // "1.0.0", "^1.0.0", "beta"
+  isTag?: boolean;       // true if version is a tag like "beta"
 }
 
 /**
@@ -68,6 +79,11 @@ interface RegistryFile {
     dependencies?: Record<string, any>;
     publishedAt: string;
     publishedBy?: number;
+    // New fields for version support
+    availableVersions?: string[];
+    tags?: Record<string, string>;
+    owners?: string[];
+    maintainers?: string[];
   }>;
 }
 
@@ -98,26 +114,102 @@ export class RegistryResolver implements Resolver {
   private readonly defaultBranch = 'main';
 
   /**
+   * Parse module reference with version support
+   */
+  private parseModuleReference(ref: string): ModuleReference {
+    // @author/module@version or @author/module
+    const match = ref.match(/^@([^/]+)\/([^@]+)(?:@(.+))?$/);
+    if (!match) {
+      throw new MlldResolutionError(
+        `Invalid module reference format. Expected @user/module or @user/module@version, got: ${ref}`
+      );
+    }
+    
+    const [, author, module, version] = match;
+    const isTag = version && !(/^[\d^~<>=]/.test(version));
+    
+    return { author, module, version, isTag };
+  }
+
+  /**
    * Check if this resolver can handle the reference
-   * Registry resolver handles @user/module pattern
+   * Registry resolver handles @user/module pattern with optional version
    */
   canResolve(ref: string, config?: RegistryResolverConfig): boolean {
-    // Must start with @ and have exactly one /
+    // Must start with @
     if (!ref.startsWith('@')) return false;
     
-    const parts = ref.slice(1).split('/');
-    return parts.length === 2 && parts[0].length > 0 && parts[1].length > 0;
+    try {
+      this.parseModuleReference(ref);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Resolve version for a module
+   */
+  private resolveVersion(
+    available: string[],
+    requested: string
+  ): string | null {
+    // Handle tags are resolved by caller
+    
+    // Sort versions in descending order
+    const sorted = available
+      .filter(v => satisfiesVersion(v, requested))
+      .sort((a, b) => {
+        const va = parseSemVer(a);
+        const vb = parseSemVer(b);
+        return compareSemVer(vb, va);
+      });
+    
+    return sorted[0] || null;
+  }
+
+  /**
+   * Fetch version-specific data from API or GitHub
+   */
+  private async fetchVersionData(
+    author: string,
+    module: string,
+    version: string,
+    registryRepo: string,
+    branch: string,
+    config?: RegistryResolverConfig
+  ): Promise<any> {
+    // For now, fetch directly from GitHub
+    // Later this will use the API
+    const versionUrl = `https://raw.githubusercontent.com/${registryRepo}/${branch}/modules/${author}/${module}/${version}.json`;
+    
+    const headers: HeadersInit = {
+      'Accept': 'application/json',
+      'User-Agent': 'mlld-registry-resolver'
+    };
+
+    if (config?.token) {
+      headers['Authorization'] = `token ${config.token}`;
+    }
+
+    const response = await fetch(versionUrl, { headers });
+    
+    if (!response.ok) {
+      throw new MlldResolutionError(
+        `Failed to fetch version data for @${author}/${module}@${version}: ${response.status}`
+      );
+    }
+    
+    return response.json();
   }
 
   /**
    * Resolve a module reference using GitHub registry
    */
   async resolve(ref: string, config?: RegistryResolverConfig): Promise<ResolverContent> {
-    if (!this.canResolve(ref, config)) {
-      throw new MlldResolutionError(
-        `Invalid registry module reference format. Expected @user/module, got: ${ref}`
-      );
-    }
+    // Parse version from reference
+    const { author, module, version, isTag } = this.parseModuleReference(ref);
+    const moduleKey = `@${author}/${module}`;
 
     // Extract only the RegistryResolverConfig fields, ignore extra fields from ResolverManager
     const registryConfig: RegistryResolverConfig = {
@@ -136,20 +228,57 @@ export class RegistryResolver implements Resolver {
       // Fetch the centralized registry file
       const registryFile = await this.fetchRegistry(registryRepo, branch, registryConfig);
       
-      // Look up the module using the full @user/module format
-      const moduleEntry = registryFile.modules[ref];
+      // Look up the module
+      const moduleEntry = registryFile.modules[moduleKey];
       
       if (!moduleEntry) {
-        const [user, moduleName] = ref.slice(1).split('/');
         throw new MlldResolutionError(
-          `Module '${moduleName}' not found in ${user}'s registry`
+          `Module '${module}' not found in ${author}'s registry`
         );
       }
       
-      // Get the source URL directly from the registry
-      const sourceUrl = moduleEntry.source.url;
+      // Resolve version
+      let resolvedVersion = moduleEntry.version; // Default to latest
+      let versionData = moduleEntry; // Use registry data by default
       
-      logger.debug(`Resolved ${ref} to source: ${sourceUrl}`);
+      if (version) {
+        if (isTag && moduleEntry.tags?.[version]) {
+          // Resolve tag to version
+          resolvedVersion = moduleEntry.tags[version];
+          logger.debug(`Resolved tag '${version}' to version ${resolvedVersion}`);
+        } else if (moduleEntry.availableVersions) {
+          // Use version resolver
+          const resolved = this.resolveVersion(
+            moduleEntry.availableVersions,
+            version || 'latest'
+          );
+          if (!resolved) {
+            throw new MlldResolutionError(
+              `No version matching '${version}' for ${moduleKey}\nAvailable versions: ${moduleEntry.availableVersions.join(', ')}`
+            );
+          }
+          resolvedVersion = resolved;
+        } else if (version !== moduleEntry.version) {
+          // Backward compat: only one version available
+          throw new MlldResolutionError(
+            `Version ${version} not found for ${moduleKey}. Only version ${moduleEntry.version} is available.`
+          );
+        }
+      }
+      
+      // For non-latest versions, fetch version-specific data
+      if (resolvedVersion !== moduleEntry.version && moduleEntry.availableVersions) {
+        logger.debug(`Fetching version data for ${moduleKey}@${resolvedVersion}`);
+        versionData = await this.fetchVersionData(
+          author, module, resolvedVersion,
+          registryRepo, branch, registryConfig
+        );
+      }
+      
+      // Get the source URL
+      const sourceUrl = versionData.source.url;
+      
+      logger.debug(`Resolved ${ref} to ${moduleKey}@${resolvedVersion} at ${sourceUrl}`);
 
       // Fetch the actual module content from the source URL
       logger.debug(`Fetching module content from: ${sourceUrl}`);
@@ -177,23 +306,24 @@ export class RegistryResolver implements Resolver {
       }
       
       if (process.env.MLLD_DEBUG === 'true') {
+        console.log(`[RegistryResolver] Resolved to version: ${resolvedVersion}`);
         console.log(`[RegistryResolver] Fetched content from ${sourceUrl}`);
         console.log(`[RegistryResolver] Fetched content length: ${content.length}`);
         console.log(`[RegistryResolver] First 200 chars:`, content.substring(0, 200));
-        console.log(`[RegistryResolver] Content includes directives:`, content.includes('/var'), content.includes('/exe'));
       }
       
       return {
         content,
         contentType: 'module',
         metadata: {
-          source: `registry://${ref}`,
+          source: `registry://${moduleKey}@${resolvedVersion}`,
           timestamp: new Date(),
           taintLevel: (TaintLevel as any).PUBLIC,
           author: moduleEntry.author,
           mimeType: 'text/x-mlld-module',
-          hash: moduleEntry.source.contentHash,
-          sourceUrl
+          hash: versionData.source.contentHash,
+          sourceUrl,
+          version: resolvedVersion
         }
       };
     } catch (error) {

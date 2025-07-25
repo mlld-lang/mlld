@@ -1,5 +1,36 @@
 # Centralized Serializer/Deserializer Specification
 
+## ⚠️ MAJOR REFINEMENT NEEDED
+
+### Critical Issues:
+1. **Overly Ambitious Scope** - Trying to handle all types in one system
+2. **Performance Concerns** - Deep object inspection could be slow
+3. **Type Safety Complexity** - Generic type preservation is extremely difficult
+4. **Unclear Value Proposition** - Current ad-hoc serialization mostly works
+
+### Fundamental Questions to Address:
+1. What specific problems does this solve that JSON.stringify doesn't?
+2. Which types ACTUALLY need custom serialization?
+3. Is the complexity worth the benefit?
+
+### Recommended Approach:
+1. **Start with LoadContentResult Only** - This has clear value
+2. **Use Type Guards Instead** - Simple type checking might be sufficient
+3. **Consider JSON Revivers** - Might be simpler than custom serialization
+4. **Measure First** - Profile to see if this is actually a problem
+
+### Alternative Design:
+Consider a much simpler type-specific approach:
+```typescript
+// Just handle the specific cases that matter
+export const TypeHandlers = {
+  serializeLoadContent(result: LoadContentResult): string { ... },
+  deserializeLoadContent(data: any): LoadContentResult { ... }
+}
+```
+
+---
+
 ## Overview
 
 This document proposes a centralized serialization/deserialization system for mlld to handle the conversion of complex runtime objects (Variables, Executables, Shadow Environments) to/from JSON-serializable formats for import/export operations.
