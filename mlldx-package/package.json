@@ -1,6 +1,6 @@
 {
   "name": "mlldx",
-  "version": "2.0.0-rc26",
+  "version": "2.0.0-rc27",
   "description": "mlldx - ephemeral mlld for CI/CD and serverless environments",
   "bin": {
     "mlldx": "./bin/mlldx.js"
@@ -9,7 +9,7 @@
     "bin/"
   ],
   "dependencies": {
-    "mlld": "^2.0.0-rc26"
+    "mlld": "^2.0.0-rc27"
   },
   "keywords": [
     "mlld",

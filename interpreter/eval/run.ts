@@ -179,9 +179,43 @@ export async function evaluateRun(
     // Get the code - use default context for code blocks
     const code = await interpolate(codeNodes, env, InterpolationContext.Default);
     
+    // Handle arguments passed to code blocks (e.g., /run js (@var1, @var2) {...})
+    const args = directive.values?.args || [];
+    const argValues: Record<string, any> = {};
+    
+    if (args.length > 0) {
+      // Process each argument
+      for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        
+        if (arg && typeof arg === 'object' && arg.type === 'VariableReference') {
+          // This is a variable reference like @myVar
+          const varName = arg.identifier;
+          const variable = env.getVariable(varName);
+          if (!variable) {
+            throw new Error(`Variable not found: ${varName}`);
+          }
+          
+          // Extract the variable value
+          const { extractVariableValue } = await import('../utils/variable-resolution');
+          const value = await extractVariableValue(variable, env);
+          
+          // Auto-unwrap LoadContentResult objects
+          const unwrappedValue = autoUnwrapLoadContent(value);
+          
+          // The parameter name in the code will be the variable name without @
+          argValues[varName] = unwrappedValue;
+        } else if (typeof arg === 'string') {
+          // Simple string argument - shouldn't happen with current grammar
+          // but handle it just in case
+          argValues[`arg${i}`] = arg;
+        }
+      }
+    }
+    
     // Execute the code (default to JavaScript) with context for errors
     const language = (directive.meta?.language as string) || 'javascript';
-    output = await env.executeCode(code, language, undefined, executionContext);
+    output = await env.executeCode(code, language, argValues, executionContext);
     
   } else if (directive.subtype === 'runExec') {
     // Handle exec reference with field access support

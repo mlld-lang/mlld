@@ -5,6 +5,33 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc27]
+
+### Added
+- **Registry Direct Publishing for Module Updates**
+  - Module owners can now publish updates directly without PR review
+  - First module publish still requires PR for quality control
+  - Automatic PR detection prevents duplicate submissions
+  - Interactive version bump when conflicts occur
+  - Auto-grant publish rights after first module is merged
+  - API service live at registry-api.mlld.org for direct publishing
+
+- **Version and Tag Support for Registry Modules**
+  - Import specific versions: `@import { ... } from @author/module@1.0.0`
+  - Semver range support: `@import { ... } from @author/module@^1.0.0`
+  - Tag support: `@import { ... } from @author/module@beta`
+  - Version resolution follows semver rules
+  - Backward compatible - existing imports continue to work
+
+### Fixed
+- **Support for variables in /run code blocks**
+  - Fixed regression where `/run js (@variable) {...}` syntax wasn't working
+  - Variables can now be passed to code blocks: `/run js (@name, @data) { console.log(name, data) }`
+  - Changed grammar to require `@variable` references (not bare identifiers) since `/run` executes immediately
+  - Aligns with design principle: bare identifiers are for parameters in `/exe` definitions, `@` references are for existing variables
+  - Works with all supported languages: `js`, `node`, `python`, `bash`, etc.
+  - Variables are auto-unwrapped (LoadContentResult objects become their content strings)
+
 ## [2.0.0-rc26]
 
 ### Added
