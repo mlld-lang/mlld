@@ -12,6 +12,30 @@ import { isExecutableVariable, createSimpleTextVariable } from '@core/types/vari
 import { executePipeline } from './pipeline';
 import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
+import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+
+/**
+ * Auto-unwrap LoadContentResult objects to their content property
+ * WHY: LoadContentResult objects should behave like their content when passed to JS functions,
+ * maintaining consistency with how they work in mlld contexts (interpolation, display, etc).
+ * GOTCHA: LoadContentResultArray objects are unwrapped to arrays of content strings.
+ * @param value - The value to potentially unwrap
+ * @returns The unwrapped content or the original value
+ */
+function autoUnwrapLoadContent(value: any): any {
+  // Handle single LoadContentResult
+  if (isLoadContentResult(value)) {
+    return value.content;
+  }
+  
+  // Handle LoadContentResultArray - unwrap to array of content strings
+  if (isLoadContentResultArray(value)) {
+    return value.map(item => item.content);
+  }
+  
+  // Return original value if not a LoadContentResult
+  return value;
+}
 
 /**
  * Determine the taint level of command arguments
@@ -155,9 +179,43 @@ export async function evaluateRun(
     // Get the code - use default context for code blocks
     const code = await interpolate(codeNodes, env, InterpolationContext.Default);
     
+    // Handle arguments passed to code blocks (e.g., /run js (@var1, @var2) {...})
+    const args = directive.values?.args || [];
+    const argValues: Record<string, any> = {};
+    
+    if (args.length > 0) {
+      // Process each argument
+      for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        
+        if (arg && typeof arg === 'object' && arg.type === 'VariableReference') {
+          // This is a variable reference like @myVar
+          const varName = arg.identifier;
+          const variable = env.getVariable(varName);
+          if (!variable) {
+            throw new Error(`Variable not found: ${varName}`);
+          }
+          
+          // Extract the variable value
+          const { extractVariableValue } = await import('../utils/variable-resolution');
+          const value = await extractVariableValue(variable, env);
+          
+          // Auto-unwrap LoadContentResult objects
+          const unwrappedValue = autoUnwrapLoadContent(value);
+          
+          // The parameter name in the code will be the variable name without @
+          argValues[varName] = unwrappedValue;
+        } else if (typeof arg === 'string') {
+          // Simple string argument - shouldn't happen with current grammar
+          // but handle it just in case
+          argValues[`arg${i}`] = arg;
+        }
+      }
+    }
+    
     // Execute the code (default to JavaScript) with context for errors
     const language = (directive.meta?.language as string) || 'javascript';
-    output = await env.executeCode(code, language, undefined, executionContext);
+    output = await env.executeCode(code, language, argValues, executionContext);
     
   } else if (directive.subtype === 'runExec') {
     // Handle exec reference with field access support
@@ -207,10 +265,79 @@ export async function evaluateRun(
         }
       }
       
+      // Debug logging
+      if (process.env.DEBUG_EXEC || process.env.NODE_ENV === 'test') {
+        console.error('[DEBUG] Field access resolved value:', {
+          identifier: varRef.identifier,
+          fields: varRef.fields.map(f => ({ type: f.type, value: f.value })),
+          valueType: typeof value,
+          hasExecutable: value && typeof value === 'object' && '__executable' in value,
+          hasType: value && typeof value === 'object' && 'type' in value,
+          valueKeys: value && typeof value === 'object' ? Object.keys(value) : [],
+          hasExecutableDef: value && typeof value === 'object' && 'executableDef' in value,
+          executableDef: value && typeof value === 'object' ? value.executableDef : undefined,
+          value: process.env.DEBUG_EXEC === 'verbose' ? value : undefined
+        });
+      }
+      
       // The resolved value could be an executable object directly or a string reference
       if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'executable') {
         // Direct executable object
         execVar = value as ExecutableVariable;
+      } else if (typeof value === 'object' && value !== null && '__executable' in value && value.__executable) {
+        // Serialized executable object from imports/exports
+        // Manually reconstruct the ExecutableVariable with all metadata
+        const fullName = `${varRef.identifier}.${varRef.fields.map(f => f.value).join('.')}`;
+        
+        // Deserialize shadow environments if present (convert objects back to Maps)
+        let capturedShadowEnvs = value.metadata?.capturedShadowEnvs;
+        if (capturedShadowEnvs && typeof capturedShadowEnvs === 'object') {
+          const deserialized: any = {};
+          for (const [lang, shadowObj] of Object.entries(capturedShadowEnvs)) {
+            if (shadowObj && typeof shadowObj === 'object') {
+              // Convert object to Map
+              const map = new Map<string, any>();
+              for (const [name, func] of Object.entries(shadowObj)) {
+                map.set(name, func);
+              }
+              deserialized[lang] = map;
+            }
+          }
+          capturedShadowEnvs = deserialized;
+        }
+        
+        execVar = {
+          type: 'executable',
+          name: fullName,
+          value: value.value || { type: 'code', template: '', language: 'js' },
+          paramNames: value.paramNames || [],
+          source: {
+            directive: 'import',
+            syntax: 'code',
+            hasInterpolation: false,
+            isMultiLine: false
+          },
+          createdAt: Date.now(),
+          modifiedAt: Date.now(),
+          metadata: {
+            ...(value.metadata || {}),
+            executableDef: value.executableDef,
+            // CRITICAL: Preserve captured shadow environments from imports (deserialized)
+            capturedShadowEnvs: capturedShadowEnvs
+          }
+        };
+        
+        // Debug shadow env preservation
+        if (process.env.DEBUG_EXEC) {
+          console.error('[DEBUG] Reconstructed executable metadata:', {
+            name: fullName,
+            hasMetadata: !!value.metadata,
+            hasCapturedShadowEnvs: !!capturedShadowEnvs,
+            capturedShadowEnvKeys: capturedShadowEnvs ? Object.keys(capturedShadowEnvs) : [],
+            deserializedLangs: capturedShadowEnvs ? Object.entries(capturedShadowEnvs).map(([lang, map]) => 
+              `${lang}: ${map instanceof Map ? map.size : 0} functions`) : []
+          });
+        }
       } else if (typeof value === 'string') {
         // String reference to an executable  
         const variable = env.getVariable(value);
@@ -238,7 +365,11 @@ export async function evaluateRun(
     // Get the executable definition from metadata
     const definition = execVar.metadata?.executableDef as ExecutableDefinition;
     if (!definition) {
-      throw new Error(`Executable ${commandName} has no definition in metadata`);
+      // For field access, provide more helpful error message
+      const fullPath = identifierNode.type === 'VariableReference' && (identifierNode as VariableReference).fields && (identifierNode as VariableReference).fields.length > 0
+        ? `${(identifierNode as VariableReference).identifier}.${(identifierNode as VariableReference).fields.map(f => f.value).join('.')}`
+        : commandName;
+      throw new Error(`Executable ${fullPath} has no definition in metadata`);
     }
     
     // Get arguments from the run directive
@@ -365,7 +496,16 @@ export async function evaluateRun(
           argValues
         });
       }
-      output = await env.executeCode(code, definition.language || 'javascript', argValues, executionContext);
+      
+      // Pass captured shadow environments to code execution
+      const codeParams = { ...argValues };
+      const capturedEnvs = execVar.metadata?.capturedShadowEnvs;
+      if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
+                           definition.language === 'node' || definition.language === 'nodejs')) {
+        (codeParams as any).__capturedShadowEnvs = capturedEnvs;
+      }
+      
+      output = await env.executeCode(code, definition.language || 'javascript', codeParams, executionContext);
     } else if (definition.type === 'template') {
       // Handle template executables
       const tempEnv = env.createChild();

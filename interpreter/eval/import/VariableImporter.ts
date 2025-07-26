@@ -15,6 +15,7 @@ import {
 import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import { MlldImportError } from '@core/errors';
+import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironmentCapture';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -27,6 +28,49 @@ export interface ModuleProcessingResult {
  */
 export class VariableImporter {
   constructor(private objectResolver: ObjectReferenceResolver) {}
+  
+  /**
+   * Serialize shadow environments for export (Maps to objects)
+   * WHY: Maps don't serialize to JSON, so we convert them to plain objects
+   * GOTCHA: Function references are preserved directly
+   */
+  private serializeShadowEnvs(envs: ShadowEnvironmentCapture): any {
+    const result: any = {};
+    
+    for (const [lang, shadowMap] of Object.entries(envs)) {
+      if (shadowMap instanceof Map && shadowMap.size > 0) {
+        // Convert Map to object
+        const obj: Record<string, any> = {};
+        for (const [name, func] of shadowMap) {
+          obj[name] = func;
+        }
+        result[lang] = obj;
+      }
+    }
+    
+    return result;
+  }
+  
+  /**
+   * Deserialize shadow environments after import (objects to Maps)  
+   * WHY: Shadow environments are expected as Maps internally
+   */
+  private deserializeShadowEnvs(envs: any): ShadowEnvironmentCapture {
+    const result: ShadowEnvironmentCapture = {};
+    
+    for (const [lang, shadowObj] of Object.entries(envs)) {
+      if (shadowObj && typeof shadowObj === 'object') {
+        // Convert object to Map
+        const map = new Map<string, any>();
+        for (const [name, func] of Object.entries(shadowObj)) {
+          map.set(name, func);
+        }
+        result[lang as keyof ShadowEnvironmentCapture] = map;
+      }
+    }
+    
+    return result;
+  }
 
   /**
    * Import variables from a processing result into the target environment
@@ -76,17 +120,28 @@ export class VariableImporter {
       // For executable variables, we need to preserve the full structure
       if (variable.type === 'executable') {
         const execVar = variable as ExecutableVariable;
+        
+        // Serialize shadow environments if present (Maps don't serialize to JSON)
+        let serializedMetadata = { ...execVar.metadata };
+        if (serializedMetadata.capturedShadowEnvs) {
+          serializedMetadata = {
+            ...serializedMetadata,
+            capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
+          };
+        }
+        
         // Export executable with all necessary metadata
         moduleObject[name] = {
           __executable: true,
           value: execVar.value,
           // paramNames removed - they're already in executableDef and shouldn't be exposed as imports
           executableDef: execVar.metadata?.executableDef,
-          metadata: execVar.metadata
+          metadata: serializedMetadata
         };
       } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
         // For objects, resolve any variable references within the object
-        moduleObject[name] = this.objectResolver.resolveObjectReferences(variable.value, childVars);
+        const resolvedObject = this.objectResolver.resolveObjectReferences(variable.value, childVars);
+        moduleObject[name] = resolvedObject;
       } else {
         // For other variables, export the value directly
         moduleObject[name] = variable.value;
@@ -184,10 +239,13 @@ export class VariableImporter {
       isMultiLine: false
     };
 
+    // Check if the namespace contains complex content (like executables)
+    const isComplex = this.hasComplexContent(moduleObject);
+    
     return createObjectVariable(
       alias,
       moduleObject,
-      false, // namespace objects are not complex by default
+      isComplex, // Mark as complex if it contains AST nodes or executables
       source,
       {
         isImported: true,
@@ -244,10 +302,43 @@ export class VariableImporter {
       throw new Error('Namespace import missing alias');
     }
     
-    // Create namespace variable with the module object
+    // Smart namespace unwrapping: If the module exports a single main object
+    // with a conventional name, unwrap it for better ergonomics
+    let namespaceObject = moduleObject;
+    
+    // Get the module name from the import path
+    const importPath = directive.values?.from?.[0]?.content || '';
+    const moduleName = importPath.split('/').pop()?.replace(/\.mld$/, '') || '';
+    
+    // Check if there's a single export with the module name or common patterns
+    const exportKeys = Object.keys(moduleObject);
+    const commonNames = [moduleName, 'main', 'default', 'exports'];
+    
+    // If there's only one export, or if there's an export matching common patterns
+    if (exportKeys.length === 1) {
+      // Single export - use it directly
+      namespaceObject = moduleObject[exportKeys[0]];
+    } else {
+      // Multiple exports - check for common patterns
+      for (const name of commonNames) {
+        if (name && moduleObject[name] && typeof moduleObject[name] === 'object') {
+          // Found a main export object - check if it looks like the primary export
+          const mainExport = moduleObject[name];
+          const otherExports = exportKeys.filter(k => k !== name && !k.startsWith('_'));
+          
+          // If the main export has most of the functionality, use it
+          if (Object.keys(mainExport).length > otherExports.length) {
+            namespaceObject = mainExport;
+            break;
+          }
+        }
+      }
+    }
+    
+    // Create namespace variable with the (potentially unwrapped) object
     const namespaceVar = this.createNamespaceVariable(
       alias, 
-      moduleObject, 
+      namespaceObject, 
       childEnv.getCurrentFilePath() || 'unknown'
     );
     
@@ -303,6 +394,36 @@ export class VariableImporter {
     // The executable definition contains all the needed information
     // We just need to create a dummy ExecutableVariable that preserves it
     // The actual execution will use the executableDef from metadata
+    // OLD CODE that might lose metadata:
+    // return createExecutableVariable(
+    //   name,
+    //   value.value.type,
+    //   value.value.template || '',
+    //   value.value.paramNames || [],
+    //   value.value.language,
+    //   source,
+    //   metadata
+    // );
+    
+    // NEW CODE: Ensure all metadata is preserved
+    let originalMetadata = value.metadata || {};
+    
+    // Deserialize shadow environments if present
+    if (originalMetadata.capturedShadowEnvs) {
+      originalMetadata = {
+        ...originalMetadata,
+        capturedShadowEnvs: this.deserializeShadowEnvs(originalMetadata.capturedShadowEnvs)
+      };
+    }
+    
+    const enhancedMetadata = {
+      ...metadata,
+      ...originalMetadata, // Preserve ALL original metadata including capturedShadowEnvs
+      isImported: true,
+      importPath: metadata.importPath,
+      executableDef // This is what actually matters for execution
+    };
+    
     const execVariable = createExecutableVariable(
       name,
       'command', // Default type - the real type is in executableDef
@@ -310,11 +431,7 @@ export class VariableImporter {
       paramNames,
       undefined, // No language here - it's in executableDef
       source,
-      {
-        ...metadata,
-        ...value.metadata,
-        executableDef // This is what actually matters for execution
-      }
+      enhancedMetadata
     );
     
     return execVariable;
@@ -371,25 +488,17 @@ export class VariableImporter {
 
   /**
    * Check if a variable is a legitimate mlld variable that can be exported/imported.
-   * Uses the type system to ensure only valid mlld variables are shared between modules.
-   * This automatically excludes system variables like frontmatter (@fm) that have invalid types.
+   * System variables (marked with metadata.isSystem) are excluded from exports to prevent
+   * namespace collisions when importing multiple modules with system variables like @fm.
    */
   private isLegitimateVariableForExport(variable: Variable): boolean {
-    // Use our comprehensive type guard system to validate the variable
-    // If the variable doesn't match any of our legitimate types, it's not exportable
-    return VariableTypeGuards.isSimpleText(variable) ||
-           VariableTypeGuards.isInterpolatedText(variable) ||
-           VariableTypeGuards.isTemplate(variable) ||
-           VariableTypeGuards.isFileContent(variable) ||
-           VariableTypeGuards.isSectionContent(variable) ||
-           VariableTypeGuards.isObject(variable) ||
-           VariableTypeGuards.isArray(variable) ||
-           VariableTypeGuards.isComputed(variable) ||
-           VariableTypeGuards.isCommandResult(variable) ||
-           VariableTypeGuards.isPath(variable) ||
-           VariableTypeGuards.isImported(variable) ||
-           VariableTypeGuards.isExecutable(variable) ||
-           VariableTypeGuards.isPipelineInput(variable) ||
-           VariableTypeGuards.isPrimitive(variable);
+    // System variables (like @fm) should not be exported
+    if (variable.metadata?.isSystem) {
+      return false;
+    }
+    
+    // All user-created variables are exportable
+    // This includes variables created by /var, /exe, /path directives
+    return true;
   }
 }

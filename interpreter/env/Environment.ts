@@ -37,13 +37,14 @@ import { VariableManager, type IVariableManager, type VariableManagerDependencie
 import { ImportResolver, type IImportResolver, type ImportResolverDependencies, type ImportResolverContext } from './ImportResolver';
 import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
+import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 
 
 /**
  * Environment holds all state and provides capabilities for evaluation.
  * This replaces StateService, ResolutionService, and capability injection.
  */
-export class Environment implements VariableManagerContext, ImportResolverContext {
+export class Environment implements VariableManagerContext, ImportResolverContext, ShadowEnvironmentProvider {
   private nodes: MlldNode[] = [];
   private parent?: Environment;
   // Note: importStack is now handled by ImportResolver
@@ -95,6 +96,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // Import approval bypass flag
   private approveAllImports: boolean = false;
+  
+  // Ephemeral mode flag for error context
+  private isEphemeralMode: boolean = false;
   
   // Track child environments for cleanup
   private childEnvironments: Set<Environment> = new Set();
@@ -177,7 +181,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       
       // Initialize registry manager
       try {
-        this.registryManager = new RegistryManager(this.getProjectRoot());
+        this.registryManager = new RegistryManager(
+        this.pathContext || this.getProjectRoot()
+      );
       } catch (error) {
         console.warn('RegistryManager not available:', error);
       }
@@ -308,7 +314,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const importResolverDependencies: ImportResolverDependencies = {
       fileSystem: this.fileSystem,
       pathService: this.pathService,
-      basePath: this.getFileDirectory(), // Use file directory for relative imports
+      pathContext: this.pathContext || {
+        projectRoot: this.basePath,
+        fileDirectory: this.basePath,
+        executionDirectory: this.basePath,
+        invocationDirectory: process.cwd()
+      },
       cacheManager: this.cacheManager,
       getSecurityManager: () => this.getSecurityManager(),
       getRegistryManager: () => this.getRegistryManager(),
@@ -318,8 +329,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getApproveAllImports: () => this.approveAllImports,
       getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
       getURLConfig: () => this.urlConfig,
-      getDefaultUrlOptions: () => this.defaultUrlOptions,
-      getProjectRoot: () => this.getProjectRoot() // Add project root for module resolution
+      getDefaultUrlOptions: () => this.defaultUrlOptions
     };
     this.importResolver = new ImportResolver(importResolverDependencies);
     
@@ -487,6 +497,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     // Fallback to basePath for legacy mode
     return this.basePath;
+  }
+  
+  /**
+   * Check if running in ephemeral mode
+   */
+  isEphemeral(): boolean {
+    return this.isEphemeralMode;
   }
   
   /**
@@ -953,6 +970,61 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.nodeShadowEnv;
   }
   
+  /**
+   * Captures all shadow environments for lexical scoping in executables
+   * WHY: When executables are defined, they may reference shadow functions.
+   * This capture preserves the lexical scope, allowing imported functions
+   * to access their original shadow environment.
+   * CONTEXT: Called during executable creation in exe.ts
+   * @returns Object containing all language shadow environments
+   */
+  captureAllShadowEnvs(): ShadowEnvironmentCapture {
+    const capture: ShadowEnvironmentCapture = {};
+    
+    // Capture JavaScript environments
+    const jsEnv = this.shadowEnvs.get('js');
+    if (jsEnv && jsEnv.size > 0) {
+      capture.js = new Map(jsEnv);
+    }
+    
+    const javascriptEnv = this.shadowEnvs.get('javascript');
+    if (javascriptEnv && javascriptEnv.size > 0) {
+      capture.javascript = new Map(javascriptEnv);
+    }
+    
+    // Capture Node.js shadow functions if available
+    if (this.nodeShadowEnv) {
+      const nodeMap = new Map<string, any>();
+      const context = this.nodeShadowEnv.getContext();
+      for (const name of this.nodeShadowEnv.getFunctionNames()) {
+        if (context[name]) {
+          nodeMap.set(name, context[name]);
+        }
+      }
+      if (nodeMap.size > 0) {
+        capture.node = nodeMap;
+        capture.nodejs = nodeMap; // Both aliases point to same map
+      }
+    }
+    
+    return capture;
+  }
+  
+  /**
+   * Check if this environment has any shadow environments defined
+   * Used to avoid unnecessary capture operations
+   */
+  hasShadowEnvs(): boolean {
+    // Check regular shadow environments
+    if (this.shadowEnvs.size > 0) {
+      for (const [_, env] of this.shadowEnvs) {
+        if (env.size > 0) return true;
+      }
+    }
+    // Check Node.js shadow environment
+    return this.nodeShadowEnv !== undefined;
+  }
+  
   // --- Capabilities ---
   
   async readFile(pathOrUrl: string): Promise<string> {
@@ -1252,6 +1324,140 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    */
   setLocalFileFuzzyMatch(config: FuzzyMatchConfig | boolean): void {
     this.localFileFuzzyMatch = config;
+  }
+  
+  /**
+   * Set ephemeral mode for CI/serverless environments
+   * This configures in-memory caching with no persistence
+   */
+  async setEphemeralMode(ephemeral: boolean): Promise<void> {
+    if (!ephemeral || this.parent) {
+      // Only configure ephemeral mode on root environment
+      return;
+    }
+    
+    // Mark environment as ephemeral for error context
+    this.isEphemeralMode = ephemeral;
+    
+    // Auto-approve all imports in ephemeral mode
+    this.approveAllImports = true;
+    
+    // Pre-import all required modules to avoid timing issues
+    const [
+      { InMemoryModuleCache },
+      { NoOpLockFile },
+      { ImmutableCache },
+      { ProjectPathResolver },
+      { RegistryResolver },
+      { LocalResolver },
+      { GitHubResolver },
+      { HTTPResolver }
+    ] = await Promise.all([
+      import('@core/registry/InMemoryModuleCache'),
+      import('@core/registry/NoOpLockFile'),
+      import('@core/security/ImmutableCache'),
+      import('@core/resolvers/ProjectPathResolver'),
+      import('@core/resolvers/RegistryResolver'),
+      import('@core/resolvers/LocalResolver'),
+      import('@core/resolvers/GitHubResolver'),
+      import('@core/resolvers/HTTPResolver')
+    ]);
+    
+    // Create ephemeral cache implementations
+    const moduleCache = new InMemoryModuleCache();
+    const lockFile = new NoOpLockFile(path.join(this.getProjectRoot(), 'mlld.lock.json'));
+    
+    // Create ephemeral URL cache
+    const cacheAdapter = {
+      async set(content: string, metadata: { source: string }): Promise<string> {
+        return moduleCache.store(content, metadata.source).then(entry => entry.hash);
+      },
+      async get(hash: string): Promise<string | null> {
+        return moduleCache.retrieve(hash);
+      },
+      async has(hash: string): Promise<boolean> {
+        return moduleCache.exists(hash);
+      }
+    };
+    
+    this.urlCacheManager = new URLCache(cacheAdapter, lockFile);
+    
+    // Re-initialize registry manager with ephemeral components
+    if (this.registryManager) {
+      // The registry manager will use the ephemeral cache and lock file
+      this.registryManager = new RegistryManager(
+        this.pathContext || this.getProjectRoot()
+      );
+    }
+    
+    // Re-initialize resolver manager with ephemeral components
+    if (this.resolverManager) {
+      this.resolverManager = new ResolverManager(
+        undefined, // Use default security policy
+        moduleCache,
+        lockFile
+      );
+      
+      // Re-register all resolvers (same as in constructor)
+      // Register path resolvers (priority 1)
+      this.resolverManager.registerResolver(new ProjectPathResolver(this.fileSystem));
+      
+      // Register module resolvers (priority 10)
+      this.resolverManager.registerResolver(new RegistryResolver());
+      
+      // Register file resolvers (priority 20)
+      this.resolverManager.registerResolver(new LocalResolver(this.fileSystem));
+      this.resolverManager.registerResolver(new GitHubResolver());
+      this.resolverManager.registerResolver(new HTTPResolver());
+      
+      // Configure built-in prefixes
+      this.resolverManager.configurePrefixes([
+        {
+          prefix: '@base',
+          resolver: 'base',
+          type: 'io',
+          config: {
+            basePath: this.getProjectRoot(),
+            readonly: false
+          }
+        }
+      ]);
+      
+      // Re-register built-in function resolvers
+      await this.registerBuiltinResolvers();
+    }
+    
+    // Update ImportResolver dependencies to use ephemeral components
+    const immutableCache = new ImmutableCache(this.getProjectRoot(), { inMemory: true });
+    
+    // We need to recreate the ImportResolver with ephemeral components
+    const importResolverDependencies: ImportResolverDependencies = {
+      fileSystem: this.fileSystem,
+      pathService: this.pathService,
+      pathContext: this.pathContext || {
+        projectRoot: this.basePath,
+        fileDirectory: this.basePath,
+        executionDirectory: this.basePath,
+        invocationDirectory: process.cwd()
+      },
+      cacheManager: this.cacheManager,
+      getSecurityManager: () => this.securityManager,
+      getRegistryManager: () => this.registryManager,
+      getResolverManager: () => this.resolverManager,
+      getParent: () => this.parent,
+      getCurrentFilePath: () => this.currentFilePath,
+      getApproveAllImports: () => this.approveAllImports,
+      getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
+      getURLConfig: () => this.urlConfig,
+      getDefaultUrlOptions: () => this.defaultUrlOptions
+    };
+    
+    // Create new ImportResolver with ephemeral configuration
+    this.importResolver = new ImportResolver(importResolverDependencies);
+    
+    // Note: SecurityManager uses its own ImmutableCache instance
+    // We can't replace it after initialization, but that's OK since
+    // the ImportResolver will use its own ephemeral cache
   }
   
   /**

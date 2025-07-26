@@ -6,6 +6,31 @@ import { interpolate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
 import { createExecutableVariable, createSimpleTextVariable, type VariableSource } from '@core/types/variable';
 import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError';
+import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadowEnvResolver';
+import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+
+/**
+ * Auto-unwrap LoadContentResult objects to their content property
+ * WHY: LoadContentResult objects should behave like their content when passed to JS functions,
+ * maintaining consistency with how they work in mlld contexts (interpolation, display, etc).
+ * GOTCHA: LoadContentResultArray objects are unwrapped to arrays of content strings.
+ * @param value - The value to potentially unwrap
+ * @returns The unwrapped content or the original value
+ */
+function autoUnwrapLoadContent(value: any): any {
+  // Handle single LoadContentResult
+  if (isLoadContentResult(value)) {
+    return value.content;
+  }
+  
+  // Handle LoadContentResultArray - unwrap to array of content strings
+  if (isLoadContentResultArray(value)) {
+    return value.map(item => item.content);
+  }
+  
+  // Return original value if not a LoadContentResult
+  return value;
+}
 
 /**
  * Extract parameter names from the params array.
@@ -96,6 +121,7 @@ export async function evaluateExe(
     // Collect functions to inject
     const shadowFunctions = new Map<string, any>();
     
+    // First, set up the shadow environment so it's available for capture
     for (const ref of envRefs) {
       const funcName = ref.identifier;
       const funcVar = env.getVariable(funcName);
@@ -116,6 +142,8 @@ export async function evaluateExe(
           // Get the executable definition from metadata
           const execDef = (funcVar.metadata as any)?.executableDef;
           if (execDef && execDef.type === 'code') {
+            // NEW: Pass captured shadow envs through the definition
+            (execDef as any).capturedShadowEnvs = (funcVar.metadata as any)?.capturedShadowEnvs;
             effectiveWrapper = createSyncJsWrapper(funcName, execDef, env);
           }
         }
@@ -125,9 +153,39 @@ export async function evaluateExe(
       shadowFunctions.set(funcName, effectiveWrapper);
     }
     
-    
-    // Store in environment
+    // Store in environment FIRST
     env.setShadowEnv(language, shadowFunctions);
+    
+    // NOW retroactively update all the executables in the shadow environment
+    // to capture the complete shadow environment (including each other)
+    if (env.hasShadowEnvs()) {
+      const capturedEnvs = env.captureAllShadowEnvs();
+      
+      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
+        console.error('[DEBUG] Retroactively updating shadow env executables with captured envs:', {
+          language,
+          functions: Array.from(shadowFunctions.keys()),
+          capturedEnvs
+        });
+      }
+      
+      // Update each function variable's metadata to include the captured shadow envs
+      for (const ref of envRefs) {
+        const funcName = ref.identifier;
+        const funcVar = env.getVariable(funcName);
+        
+        if (funcVar && funcVar.type === 'executable' && funcVar.metadata) {
+          // Update the metadata to include captured shadow environments
+          (funcVar.metadata as any).capturedShadowEnvs = capturedEnvs;
+          
+          // Also update the executableDef if it exists
+          const execDef = (funcVar.metadata as any).executableDef;
+          if (execDef) {
+            (execDef as any).capturedShadowEnvs = capturedEnvs;
+          }
+        }
+      }
+    }
     
     return {
       value: null,
@@ -365,6 +423,16 @@ export async function evaluateExe(
    * a parameterized executable can be invoked.
    */
   const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
+  
+  // Debug shadow environment capture
+  if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
+    console.error(`[DEBUG] Creating executable '${identifier}', shadow envs available:`, env.hasShadowEnvs());
+    if (env.hasShadowEnvs()) {
+      const captured = env.captureAllShadowEnvs();
+      console.error('[DEBUG] Captured shadow environments:', captured);
+    }
+  }
+  
   const variable = createExecutableVariable(
     identifier,
     executableDef.type,
@@ -374,7 +442,11 @@ export async function evaluateExe(
     source,
     {
       definedAt: location,
-      executableDef // Store the full definition in metadata
+      executableDef, // Store the full definition in metadata
+      // NEW: Capture shadow environments if they exist
+      ...(env.hasShadowEnvs() ? { 
+        capturedShadowEnvs: env.captureAllShadowEnvs() 
+      } : {})
     }
   );
   
@@ -418,6 +490,9 @@ function createSyncJsWrapper(
       // Always add the parameter, even if undefined
       // This ensures JS code can reference all declared parameters
       if (argValue !== undefined) {
+        // Auto-unwrap LoadContentResult objects
+        argValue = autoUnwrapLoadContent(argValue);
+        
         // Try to parse numeric values (same logic as async wrapper)
         if (typeof argValue === 'string') {
           const numValue = Number(argValue);
@@ -454,23 +529,36 @@ function createSyncJsWrapper(
       throw new Error(`Cannot create synchronous wrapper for ${funcName}: ${error.message}`);
     }
     
-    // Get shadow environment functions to include in scope
-    const shadowEnv = env.getShadowEnv('js') || env.getShadowEnv('javascript');
-    const shadowFunctions: Record<string, any> = {};
-    const shadowNames: string[] = [];
-    const shadowValues: any[] = [];
+    // OLD CODE TO REPLACE:
+    // const shadowEnv = env.getShadowEnv('js') || env.getShadowEnv('javascript');
     
-    if (shadowEnv) {
-      for (const [name, func] of shadowEnv) {
-        if (!codeParams[name]) { // Don't override parameters
-          shadowFunctions[name] = func;
-          shadowNames.push(name);
-          shadowValues.push(func);
-        }
-      }
-    }
+    // NEW CODE:
+    // Resolve shadow environment with capture support
+    const capturedEnvs = (definition as any).capturedShadowEnvs;
+    const shadowEnv = resolveShadowEnvironment('js', capturedEnvs, env);
     
-    // Create and execute a synchronous function
+    // OLD CODE TO REPLACE:
+    // const shadowFunctions: Record<string, any> = {};
+    // const shadowNames: string[] = [];
+    // const shadowValues: any[] = [];
+    // 
+    // if (shadowEnv) {
+    //   for (const [name, func] of shadowEnv) {
+    //     if (!codeParams[name]) { // Don't override parameters
+    //       shadowFunctions[name] = func;
+    //       shadowNames.push(name);
+    //       shadowValues.push(func);
+    //     }
+    //   }
+    // }
+    
+    // NEW CODE:
+    // Merge shadow functions (avoiding parameter conflicts)
+    const paramSet = new Set(Object.keys(codeParams));
+    const { names: shadowNames, values: shadowValues } = 
+      mergeShadowFunctions(shadowEnv, undefined, paramSet);
+    
+    // Rest of the function remains the same...
     const allParamNames = [...Object.keys(codeParams), ...shadowNames];
     const allParamValues = [...Object.values(codeParams), ...shadowValues];
     
@@ -593,6 +681,9 @@ function createExecWrapper(
           // Ensure we await any promises in arguments
           argValue = argValue instanceof Promise ? await argValue : argValue;
           
+          // Auto-unwrap LoadContentResult objects
+          argValue = autoUnwrapLoadContent(argValue);
+          
           // Try to parse numeric values
           if (typeof argValue === 'string') {
             const numValue = Number(argValue);
@@ -605,6 +696,26 @@ function createExecWrapper(
         
         // Set the parameter value (will be undefined if not provided)
         codeParams[paramName] = argValue;
+      }
+      
+      // NEW CODE: Pass captured shadow environments to executors
+      // Get captured shadow environments from executable metadata
+      const capturedEnvs = (execVar.metadata as any)?.capturedShadowEnvs;
+      
+      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
+        console.error('[DEBUG] createExecWrapper passing shadow envs:', {
+          execName,
+          hasCapturedEnvs: !!capturedEnvs,
+          capturedEnvs,
+          language: definition.language
+        });
+      }
+      
+      // For JS/Node execution, pass captured envs through params
+      // Using __ prefix following mlld's internal property pattern
+      if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
+                           definition.language === 'node' || definition.language === 'nodejs')) {
+        (codeParams as any).__capturedShadowEnvs = capturedEnvs;
       }
       
       // Debug logging

@@ -15,6 +15,21 @@ export interface TransformerDefinition {
 
 export const builtinTransformers: TransformerDefinition[] = [
   {
+    name: 'typeof',
+    uppercase: 'TYPEOF',
+    description: 'Get type information for a variable',
+    implementation: async (input: string) => {
+      // The input will be a special marker when we have a Variable object
+      // Otherwise it's just the string value
+      if (input.startsWith('__MLLD_VARIABLE_OBJECT__:')) {
+        // This is handled specially in exec-invocation.ts
+        return input.substring('__MLLD_VARIABLE_OBJECT__:'.length);
+      }
+      // Fallback: analyze the value itself
+      return analyzeValueType(input);
+    }
+  },
+  {
     name: 'xml',
     uppercase: 'XML',
     description: 'Convert content to SCREAMING_SNAKE_CASE XML',
@@ -246,4 +261,36 @@ function escapeCSV(value: string): string {
     return '"' + value.replace(/"/g, '""') + '"';
   }
   return value;
+}
+
+/**
+ * Analyze the type of a value when we don't have Variable metadata
+ */
+function analyzeValueType(value: string): string {
+  // Try to parse as JSON to detect objects/arrays
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return `array (${parsed.length} items)`;
+    } else if (parsed === null) {
+      return 'primitive (null)';
+    } else if (typeof parsed === 'object') {
+      const keys = Object.keys(parsed);
+      return `object (${keys.length} properties)`;
+    } else if (typeof parsed === 'boolean') {
+      return 'primitive (boolean)';
+    } else if (typeof parsed === 'number') {
+      return 'primitive (number)';
+    }
+  } catch {
+    // Not JSON - it's a string
+  }
+  
+  // Check if it looks like a path
+  if (value.includes('/') || value.includes('\\')) {
+    return 'path';
+  }
+  
+  // Default to simple-text
+  return 'simple-text';
 }

@@ -14,6 +14,8 @@ npm install -g mlld
 
 or just run it with `npx mlld`
 
+For CI/CD and serverless environments, use `npx mlldx` for ephemeral execution.
+
 ## What is mlld for?
 
 - makes context and prompt engineering multiplayer and git-versionable
@@ -61,6 +63,7 @@ npm install -g mlld
 **Pipelines** - Chain LLM calls with `|` for iterative refinement  
 **Modules** - Share and reuse workflows like npm packages 
 **Reproducible** - Lock files ensure workflows run identically over time
+**CI-ready** - `mlldx` runs without filesystem persistence for serverless/containers
 
 ## Quick Start
 
@@ -217,6 +220,7 @@ mlld file.mld                    # Process file, output to file.md
 mlld file.mld --stdout           # Output to terminal
 mlld file.mld --format xml       # Output as XML
 mlld file.mld --watch            # Auto-rerun on changes
+mlld file.mld --env .env.local   # Load environment variables from file
 ```
 
 ### Module Management
@@ -260,8 +264,9 @@ mlld run data/process            # Run nested scripts
 
 ```bash
 # Testing
-mlld test                        # Run all tests
+mlld test                        # Run all tests (auto-loads .env and .env.test)
 mlld test array                  # Run tests matching pattern
+mlld test --env custom.env       # Use custom environment file
 
 # Module cache management
 mlld clean @mlld/env             # Remove specific module from cache
@@ -270,6 +275,20 @@ mlld clean --registry            # Clear only registry modules
 
 # Analyze dependencies
 mlld add-needs my-module.mld     # Auto-detect and add runtime deps
+```
+
+### CI/CD and Serverless (mlldx)
+
+```bash
+# Use mlldx for ephemeral environments (no filesystem persistence)
+mlldx script.mld                 # Run with in-memory cache
+mlldx script.mld --env prod.env  # Load environment variables
+npx mlldx@latest ci-task.mld     # Perfect for CI pipelines
+
+# Examples
+mlldx github-action.mld          # GitHub Actions
+mlldx vercel-function.mld        # Vercel/AWS Lambda
+docker run -it node:18 npx mlldx@latest /scripts/task.mld
 ```
 
 ## Learn More

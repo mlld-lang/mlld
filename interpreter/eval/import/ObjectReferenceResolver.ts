@@ -13,6 +13,7 @@ export class ObjectReferenceResolver {
     value: any,
     variableMap: Map<string, Variable>
   ): any {
+    
     if (value === null || value === undefined) {
       return value;
     }
@@ -57,6 +58,9 @@ export class ObjectReferenceResolver {
         if (process.env.DEBUG_EXEC) {
           logger.debug('Variable not found during import resolution:', varName);
         }
+        // Don't silently return the string - this causes the bug where
+        // variable references like "@pr_view" become literal strings
+        throw new Error(`Variable reference @${varName} not found during import`);
       }
     }
     
@@ -69,17 +73,15 @@ export class ObjectReferenceResolver {
   private resolveVariableReference(varName: string, variableMap: Map<string, Variable>): any {
     const referencedVar = variableMap.get(varName);
     
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('resolveObjectReferences found VariableReference AST node:', {
-        varName,
-        found: !!referencedVar,
-        referencedVarType: referencedVar?.type,
-        availableVars: Array.from(variableMap.keys())
-      });
-    }
-    
     if (referencedVar) {
-      return this.resolveExecutableReference(referencedVar);
+      const result = this.resolveExecutableReference(referencedVar);
+      
+      // If the result is an object that might contain more AST nodes, recursively resolve it
+      if (result && typeof result === 'object' && !result.__executable && !Array.isArray(result)) {
+        return this.resolveObjectReferences(result, variableMap);
+      }
+      
+      return result;
     } else {
       if (process.env.DEBUG_EXEC) {
         logger.debug('VariableReference AST node not found during import resolution:', varName);
@@ -95,17 +97,49 @@ export class ObjectReferenceResolver {
     // For executables, we need to export them with the proper structure
     if (referencedVar.type === 'executable') {
       const execVar = referencedVar as ExecutableVariable;
-      return {
+      
+      // Serialize shadow environments if present (Maps don't serialize to JSON)
+      let serializedMetadata = execVar.metadata;
+      if (serializedMetadata?.capturedShadowEnvs) {
+        serializedMetadata = {
+          ...serializedMetadata,
+          capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
+        };
+      }
+      
+      const result = {
         __executable: true,
         value: execVar.value,
         paramNames: execVar.paramNames,
         executableDef: execVar.metadata?.executableDef,
-        metadata: execVar.metadata
+        metadata: serializedMetadata
       };
+      return result;
     } else {
       // For other variable types, return the value directly
       return referencedVar.value;
     }
+  }
+  
+  /**
+   * Serialize shadow environments for export (Maps to objects)
+   * WHY: Maps don't serialize to JSON, so we convert them to plain objects
+   */
+  private serializeShadowEnvs(envs: any): any {
+    const result: any = {};
+    
+    for (const [lang, shadowMap] of Object.entries(envs)) {
+      if (shadowMap instanceof Map && shadowMap.size > 0) {
+        // Convert Map to object
+        const obj: Record<string, any> = {};
+        for (const [name, func] of shadowMap) {
+          obj[name] = func;
+        }
+        result[lang] = obj;
+      }
+    }
+    
+    return result;
   }
 
   /**

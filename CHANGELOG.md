@@ -5,6 +5,198 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc28]
+
+### Fixed
+- **ImportResolver PathContext issue in ephemeral mode**
+  - Fixed TypeError when running mlld scripts via `npx mlldx@latest` with local file paths
+  - ImportResolver was not receiving PathContext when Environment.setEphemeralMode() recreated it
+  - Ephemeral mode now properly passes PathContext to ImportResolver constructor
+  - Enables relative imports to work correctly in ephemeral/CI environments
+
+- **Parser order for /when directive colon syntax**
+  - Fixed parse error for `/when @variable: [...]` pattern incorrectly expecting `=>`
+  - Reordered grammar rules so WhenMatchForm is tried before error recovery rules
+  - The colon syntax for match form now parses correctly: `/when @status: ["active" => /show "Active"]`
+
+- **Double-colon syntax (`::...::`) now properly handles colons in content**
+  - Fixed parser incorrectly terminating on single colons (`:`) inside double-colon templates
+  - Grammar fix in `DoubleColonTextSegment` changed from `![:@<]` to `!("::" / "@" / "<")`
+  - Affects all uses of double-colon syntax: `/var`, `/exe`, `/show`, data objects, etc.
+  - Now correctly handles URLs (`https://example.com`), times (`3:30`), ratios (`16:9`), and other colon-containing content
+  - Double-colon syntax works as complete alternative to backticks for templates with `@var` interpolation
+  - Triple-colon syntax `:::...:::` continues to support `{{var}}` interpolation
+
+### Changed
+- **Renamed WhenSwitchForm to WhenMatchForm**
+  - Grammar and types now use "WhenMatchForm" for the `/when @var: [...]` syntax
+  - More accurate naming - this form executes actions for all matching conditions, not just the first
+  - Updated subtype from `whenSwitch` to `whenMatch` throughout codebase for more accurate reflection of functionality
+
+## [2.0.0-rc27]
+
+### Added
+- **Registry Direct Publishing for Module Updates**
+  - Module owners can now publish updates directly without PR review
+  - First module publish still requires PR for quality control
+  - Automatic PR detection prevents duplicate submissions
+  - Interactive version bump when conflicts occur
+  - Auto-grant publish rights after first module is merged
+  - API service live at registry-api.mlld.org for direct publishing
+
+- **Version and Tag Support for Registry Modules**
+  - Import specific versions: `@import { ... } from @author/module@1.0.0`
+  - Semver range support: `@import { ... } from @author/module@^1.0.0`
+  - Tag support: `@import { ... } from @author/module@beta`
+  - Version resolution follows semver rules
+  - Backward compatible - existing imports continue to work
+
+### Fixed
+- **Support for variables in /run code blocks**
+  - Fixed regression where `/run js (@variable) {...}` syntax wasn't working
+  - Variables can now be passed to code blocks: `/run js (@name, @data) { console.log(name, data) }`
+  - Changed grammar to require `@variable` references (not bare identifiers) since `/run` executes immediately
+  - Aligns with design principle: bare identifiers are for parameters in `/exe` definitions, `@` references are for existing variables
+  - Works with all supported languages: `js`, `node`, `python`, `bash`, etc.
+  - Variables are auto-unwrapped (LoadContentResult objects become their content strings)
+
+## [2.0.0-rc26]
+
+### Added
+- **Auto-unwrapping of LoadContentResult objects in JavaScript/Node functions**
+  - LoadContentResult objects (from `<file>` syntax) are now automatically unwrapped to their content strings when passed to JS/Node functions
+  - Enables natural usage: `/run @processFile(<data.txt>)` - the function receives the file content as a string, not the LoadContentResult object
+  - Also handles LoadContentResultArray from glob patterns: `<*.txt>` unwraps to an array of content strings
+  - Maintains mlld's content-first philosophy where file content is the primary concern
+  - Works with all JavaScript (`js`) and Node.js (`node`) executables
+
+## [2.0.0-rc25]
+
+### Added
+- **Built-in @typeof() function for type introspection**
+  - New transformer function that returns type information for any mlld variable
+  - Syntax: `@typeof(@variable)` returns the variable's type (e.g., "simple-text", "primitive (number)", "object (3 properties)")
+  - Includes source directive information: `@typeof(@myVar)` → "simple-text [from /var]"
+  - Works with all variable types: simple-text, path, primitive, object, array, executable, pipeline-input
+  - Can be used in pipelines: `@myVar | @typeof`
+  - Available in both uppercase (@TYPEOF) and lowercase (@typeof) forms
+
+## [2.0.0-rc24]
+
+### Fixed
+- **Inconsistent handling of LoadContentResult objects between /show and /output**
+  - Fixed `/output` to match `/show` behavior when outputting variables containing `<file>` alligator syntax results
+  - `/output @myfile` now outputs just the file content (not the full metadata object) when `@myfile` contains a LoadContentResult
+  - Also handles arrays of LoadContentResult objects from glob patterns, concatenating their content with double newlines
+  - Both commands now consistently treat the alligator syntax as accessing file content, not the full file object
+
+## [2.0.0-rc23]
+
+### Fixed
+- **Namespace import structure for better ergonomics**
+  - Namespace imports intelligently unwrap single-export modules
+  - `/import @mlld/env as environment` now allows `@environment.get()` instead of requiring `@environment.env.get()`
+  - Modules exporting a single main object matching common patterns (module name, 'main', 'default', 'exports') are automatically unwrapped
+  - Multiple-export modules remain unchanged, preserving full namespace structure
+
+- **Shadow environment preservation regression from rc22**
+  - Fixed issue where shadow environments were lost when accessing imported executables through field access
+  - rc22's manual reconstruction of ExecutableVariable from `__executable: true` objects was missing deserialization of captured shadow environments
+  - Shadow environments (stored as objects during export) are now properly deserialized back to Maps
+  - Captured shadow environments are correctly passed to code execution via `__capturedShadowEnvs` parameter
+  - Functions like `@github.pr.review()` can now access their required shadow environment functions
+
+- **Node.js executable path in test environments**
+  - Fixed `mlld-wrapper.cjs` to use `process.execPath` instead of hardcoded 'node'
+  - Fixed test utility to use `process.execPath` for cross-environment compatibility
+  - Resolves "spawn node ENOENT" errors in environments where 'node' is not in PATH
+
+## [2.0.0-rc22]
+
+### Fixed
+- **Nested executable field access in `/run` directives**
+  - Fixed interpreter bug where `/run @github.pr.review(...)` and similar nested field access patterns failed
+  - Handles both local ExecutableVariable objects and serialized `__executable: true` format from imports
+  - Properly reconstructs executable metadata for imported modules with nested structure
+
+## [2.0.0-rc21]
+
+### Added
+- **Environment variable management for CLI**
+  - Added `--env` flag to load environment variables from a specific file
+  - `mlld test` command automatically loads `.env` and `.env.test` files from the current directory
+  - `mlldx` supports `--env` flag for ephemeral environments
+- **Test isolation improvements**
+  - Tests now run in isolated processes when multiple test files are executed
+  - Prevents environment variable pollution between test modules
+  - Shadow environment functions are properly cleaned up between tests
+  - Added `--isolate` flag for explicit process isolation
+
+### Changed
+- **Test command environment handling**
+  - Removed console output capture that was interfering with HTTP requests
+  - Improved test result parsing from isolated subprocess output
+  - Better error handling for test cleanup failures
+
+### Fixed
+- **Variable contamination between test modules**
+  - Shadow environment variables no longer leak between test files
+  - Each test gets a clean environment state
+  - Process isolation ensures complete separation when running multiple tests
+
+## [2.0.0-rc20]
+
+### Added
+- **Shadow environment preservation through imports**
+  - Functions that use shadow environments now work correctly when imported from modules
+  - Implements lexical scoping for shadow environments - functions retain access to their original shadow context
+  - Supports both JavaScript and Node.js shadow environments
+
+### Fixed
+- **Shadow environment functions not accessible after import**
+  - Previously, functions relying on shadow environment helpers would fail with "function not defined" errors
+  - Shadow environments are now captured at function definition time and restored during execution
+  - Enables proper module encapsulation with internal helper functions
+
+## [2.0.0-rc19]
+
+### Added
+- **Async/await support in JavaScript executor**
+  - JavaScript code blocks now automatically support `await` syntax
+  - Detects `await` keyword and creates async functions transparently
+  - Shadow environment functions work with async code
+
+## [2.0.0-rc18]
+
+### Fixed
+- **Module import resolution for nested object structures**
+  - Fixed bug where functions in deeply nested module exports appeared as strings instead of executables
+  - ObjectReferenceResolver now recursively resolves VariableReference nodes in nested objects
+  - Affects modules with 3+ level nesting like `@mlld/github` where `github.pr.view` was showing as `"@pr_view"` instead of `<function>`
+  - Registry review workflow and all GitHub integrations now work properly
+- **System variable export filtering**
+  - Fixed module export filtering to properly exclude system variables using `metadata.isSystem`
+  - Prevents namespace collisions when importing multiple modules with frontmatter
+  - System variables like `@fm` are no longer incorrectly exported from modules
+
+## [2.0.0-rc16]
+
+### Changed
+- **@input resolver no longer strips MLLD_ prefix** 
+  - Environment variables with `MLLD_` prefix are now imported with their full names
+  - What you set is what you get: `MLLD_GITHUB_TOKEN` imports as `MLLD_GITHUB_TOKEN`, not `GITHUB_TOKEN`
+
+## [2.0.0-rc15]
+
+### Added
+- **mlldx command for ephemeral/CI environments**: New binary for serverless and CI use cases
+  - `mlldx` runs with ephemeral mode enabled - all caching happens in memory only
+  - No filesystem persistence for read-only containers and serverless functions
+  - Auto-approves all imports, no interactive prompts that would hang CI/CD pipelines
+  - Available via npx: `npx mlldx@latest script.mld` or installed globally
+  - Ships from same package as mlld
+  - Useful for GitHub Actions, Vercel functions, AWS Lambda, and other ephemeral environments
+
 ## [2.0.0-rc14]
 
 ### Fixed

@@ -23,10 +23,13 @@ Not zero
 ## 3. Variable Comparison (NOT a switch - bare when)
 
 Matched as boolean true
+
 ## 4. Number/String Variable Comparison
 
 Count is 42
+
 Version 1
+
 ## 5. Exec Function String Results
 
 System is ready
@@ -34,6 +37,7 @@ System is ready
 ## 6. Variable Comparison with Multiple Conditions
 
 User agreed
+
 ## 7. @when any: Block with Mixed Truthiness
 
 Has at least one artifact

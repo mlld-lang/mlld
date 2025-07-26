@@ -4,6 +4,7 @@ import { Cache } from './Cache';
 import { RegistryResolver } from './RegistryResolver';
 import { StatsCollector } from './StatsCollector';
 import { MlldImportError } from '@core/errors';
+import type { PathContext } from '@core/services/PathContextService';
 
 export interface RegistryConfig {
   enabled?: boolean;
@@ -22,18 +23,23 @@ export class RegistryManager {
   private stats: StatsCollector;
   
   constructor(
-    basePath: string,
+    basePathOrContext: string | PathContext,
     config: RegistryConfig = {}
   ) {
+    // Extract project root from PathContext or use legacy basePath
+    const projectRoot = typeof basePathOrContext === 'string' 
+      ? basePathOrContext 
+      : basePathOrContext.projectRoot;
+    
     // In serverless/read-only environments, use /tmp
-    const isServerless = basePath.startsWith('/var/task') || 
+    const isServerless = projectRoot.startsWith('/var/task') || 
                         process.env.LAMBDA_TASK_ROOT || 
                         process.env.VERCEL || 
                         process.env.AWS_LAMBDA_FUNCTION_NAME;
     
     const mlldDir = isServerless 
       ? path.join('/tmp', '.mlld')
-      : path.join(basePath, '.mlld');
+      : path.join(projectRoot, '.mlld');
     
     // Initialize components
     this.lockFile = new LockFile(

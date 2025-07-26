@@ -1,3 +1,5 @@
+THIS IS BADLY OUTDATED AND SHOULD PROBABLY BE DELETED
+
 # Module System Architecture
 
 This document explains the module system used in the Mlld project, including how we handle ES modules (ESM) and CommonJS (CJS) compatibility, as well as the Mlld module export pattern.

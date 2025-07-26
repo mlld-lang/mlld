@@ -57,20 +57,20 @@
   "modules": {},
   "cache": {},
   "imports": {
-    "@local/confidence": {
-      "resolved": "file:///Users/adam/dev/mlld-resolvers/llm/modules/confidence.mlld.md",
-      "integrity": "sha256:8a9aa4171388a02634a4c27b4ea3589a8be01cb651b5ea3d6349328b32b6c779",
-      "approvedAt": "2025-06-14T06:55:47.656Z"
-    },
     "@mlld/env": {
       "resolved": "registry://@mlld/env",
       "integrity": "sha256:2adb65cd63cc6e57fc194674dd04d5386ffc320d0677601c8a8602e494591b8d",
-      "approvedAt": "2025-07-18T22:09:32.968Z"
+      "approvedAt": "2025-07-20T03:33:03.718Z"
     },
     "@mlld/github": {
       "resolved": "registry://@mlld/github",
-      "integrity": "sha256:8440ead3a31129855503bf0274668a88d8f138b1df636c0a5678fd40bea4afeb",
-      "approvedAt": "2025-07-18T22:09:33.128Z"
+      "integrity": "sha256:f4faa6b25effdb9a9b75022c973a3a0bfa13842bb19a09c2c6480c0797ee2902",
+      "approvedAt": "2025-07-22T05:17:45.117Z"
+    },
+    "@mlld/ai-cli": {
+      "resolved": "registry://@mlld/ai-cli",
+      "integrity": "sha256:1d70d049c829bd70eb81735969f54079985860dd6e602305d279b408fe3f3e5f",
+      "approvedAt": "2025-07-20T03:33:04.018Z"
     }
   }
 }

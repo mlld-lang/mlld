@@ -1,0 +1,3 @@
+/var @sourceDocs = <@base/docs/dev/REGISTRY.md>
+/output @sourceDocs to "@base/registry/docs/REVIEW-SYSTEM.md"
+/output @sourceDocs to "@base/registry-review/REVIEW-SYSTEM.md"

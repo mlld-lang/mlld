@@ -326,14 +326,145 @@ Shadow functions can call each other within the same environment:
 
 The shadow environment architecture is designed to be extensible to other languages. The pattern of using language-specific isolation mechanisms (like Node's VM module) could be applied to Python, shell scripts, and other runtimes.
 
+## Shadow Environment Imports and Lexical Scoping
+
+### The Problem
+
+Prior to rc20, shadow environments were dynamically scoped - they were only available in the environment where they were defined. This caused issues when importing modules:
+
+```mlld
+# github.mld - Module with shadow functions
+/exe @github_request(@method, @endpoint) = js {
+  // Make API request...
+  return data;
+}
+
+/exe @js = { github_request }
+
+/exe @pr_view(@number) = js {
+  // This works in github.mld
+  return github_request('GET', `/pulls/${number}`);
+}
+
+/var @github = { pr: { view: @pr_view } }
+```
+
+```mlld
+# app.mld - Importing the module
+/import { github } from "./github.mld"
+
+# This would fail with "github_request is not defined"
+/var @pr = @github.pr.view(123)
+```
+
+### The Solution: Lexical Scoping
+
+As of rc20, shadow environments are captured at function definition time and preserved through imports. This implements lexical scoping - functions retain access to their original shadow environment context.
+
+### Implementation Architecture
+
+**New Components**:
+- `ShadowEnvironmentCapture` interface - stores captured shadow environments
+- `shadowEnvResolver.ts` - resolves shadow environments with lexical/dynamic fallback
+- Metadata preservation through import/export system
+
+**Key Changes**:
+1. **Capture at Definition**: When an executable is created, shadow environments are captured
+2. **Metadata Storage**: Captured environments stored in executable metadata
+3. **Resolution Priority**: Captured (lexical) environments take precedence over current (dynamic)
+4. **Import Preservation**: Metadata including captured environments preserved through imports
+
+### How It Works
+
+1. **Function Definition** (in module):
+   ```typescript
+   // When /exe @pr_view(...) is evaluated
+   const variable = createExecutableVariable(
+     identifier,
+     executableDef.type,
+     // ... other params
+     {
+       definedAt: location,
+       executableDef,
+       // Capture current shadow environments
+       capturedShadowEnvs: env.captureAllShadowEnvs()
+     }
+   );
+   ```
+
+2. **Import Processing**:
+   - Variable metadata including `capturedShadowEnvs` is serialized
+   - Maps are converted to objects for JSON compatibility
+   - On import, objects are deserialized back to Maps
+
+3. **Execution** (after import):
+   ```typescript
+   // Shadow environment resolution with fallback
+   const shadowEnv = resolveShadowEnvironment(
+     language,
+     capturedEnvs,  // From metadata (lexical)
+     currentEnv      // Current environment (dynamic)
+   );
+   ```
+
+### Usage Example
+
+```mlld
+# math-utils.mld - Module with helper functions
+/exe @double(x) = js { return x * 2; }
+/exe @triple(x) = js { return x * 3; }
+
+# Shadow environment must be declared BEFORE functions that use it
+/exe @js = { double, triple }
+
+/exe @calculate(@n) = js {
+  // These shadow functions are now captured
+  return double(n) + triple(n);
+}
+
+/var @math = { calculate: @calculate }
+```
+
+```mlld
+# app.mld - Import and use
+/import { math } from "./math-utils.mld"
+
+# This now works! calculate retains access to double/triple
+/var @result = @math.calculate(10)  # Returns 50 (20 + 30)
+```
+
+### Technical Details
+
+**Map Serialization**: Shadow environments use Maps internally but must be serialized to JSON for import/export:
+```typescript
+// Serialization (Map → Object)
+private serializeShadowEnvs(envs: ShadowEnvironmentCapture): any {
+  const result: any = {};
+  for (const [lang, shadowMap] of Object.entries(envs)) {
+    if (shadowMap instanceof Map && shadowMap.size > 0) {
+      const obj: Record<string, any> = {};
+      for (const [name, func] of shadowMap) {
+        obj[name] = func;
+      }
+      result[lang] = obj;
+    }
+  }
+  return result;
+}
+```
+
+**Node.js Integration**: The `NodeShadowEnvironment` class includes a `mergeCapturedFunctions` method to apply captured shadow functions to the VM context during execution.
+
 ## Testing Shadow Environments
 
 Test cases for shadow environments can be found in:
 - `tests/cases/valid/exec/`: General exec and shadow environment tests
+- `tests/cases/valid/exec-shadow-env-import/`: Shadow environment import fixtures
 - Integration tests validate both JavaScript and Node.js shadow functionality
 - `interpreter/env/NodeShadowEnvironment.test.ts`: Unit tests for Node.js shadow environment
 - `tests/integration/node-shadow-cleanup.test.ts`: Integration tests for Node.js cleanup behavior
 - `tests/integration/js-shadow-cleanup.test.ts`: Integration tests for JavaScript error handling
+- `tests/integration/shadow-env-basic-import.test.ts`: Integration tests for shadow environment imports
 
 ### Key Test Scenarios
 
@@ -341,6 +472,37 @@ Test cases for shadow environments can be found in:
 2. **Timer cleanup**: Verifies timers don't keep process alive after cleanup
 3. **Error handling**: Ensures cleanup happens even when errors occur
 4. **Context isolation**: Tests that VM contexts are properly isolated
+5. **Import preservation**: Shadow environments work correctly after import
+6. **Multi-level imports**: Functions passed through multiple import levels
+7. **Error propagation**: Missing shadow functions fail gracefully
+
+### Shadow Environment Resolution Priority
+
+When a function executes, shadow environments are resolved in this order:
+
+1. **Captured (Lexical) Environment** - Shadow functions captured at definition time
+2. **Current (Dynamic) Environment** - Shadow functions in the current execution context
+
+This means:
+- Imported functions use their original shadow environment first
+- The importing file's shadow environment acts as a fallback
+- Parameter names always take precedence over shadow functions
+
+Example:
+```mlld
+# module.mld
+/exe @helper() = js { return "module helper"; }
+/exe @js = { helper }
+/exe @useHelper() = js { return helper(); }
+
+# app.mld
+/import { useHelper } from "./module.mld"
+/exe @helper() = js { return "app helper"; }
+/exe @js = { helper }
+
+# useHelper() returns "module helper" (lexical), not "app helper"
+/var @result = @useHelper()
+```
 
 ## Debugging
 
@@ -352,6 +514,13 @@ Test cases for shadow environments can be found in:
 4. **Parameter Conflicts**: Shadow functions take precedence over params
 5. **Process Hanging**: Timers not being cleaned up properly
 6. **Missing Error Messages**: Error details not propagating to stderr
+7. **Import Issues**: Shadow functions not available after import
+   - Ensure shadow environment is declared before functions that use it
+   - Check that metadata is preserved through import chain
+   - Verify Map serialization/deserialization is working
+8. **Resolution Conflicts**: Wrong shadow function being called
+   - Use `MLLD_DEBUG=true` to see shadow environment conflicts
+   - Check resolution priority (lexical before dynamic)
 
 ### Troubleshooting Process Hanging
 
@@ -673,21 +842,31 @@ When adding a new language shadow environment:
 3. [ ] Create wrapper function generator in exec.ts
    - For sync languages: Consider the shadow function scope problem
    - For async languages: Can use environment lookups at runtime
-4. [ ] Add execution support in Environment.executeCode
-5. [ ] Handle console/output capture appropriately
-6. [ ] Add error handling and context enhancement
+4. [ ] Add shadow environment capture support
+   - Implement capture in `Environment.captureAllShadowEnvs()`
+   - Update executable creation to capture environments
+   - Add resolution logic to language executor
+5. [ ] Add execution support in Environment.executeCode
+6. [ ] Handle console/output capture appropriately
+7. [ ] Add error handling and context enhancement
    - **CRITICAL**: Use `MlldCommandExecutionError` with error details in the `details` object
    - Store original error messages in `details.stderr` for proper propagation
-7. [ ] Implement cleanup mechanism
+8. [ ] Implement cleanup mechanism
    - For isolated environments: Clear VM contexts, child processes, etc.
    - For in-process environments: Clear function references
    - Ensure cleanup is called from CLI in both success and error cases
-8. [ ] Write comprehensive tests including:
-   - Nested function calls
-   - Resource cleanup (timers, file handles, etc.)
-   - **Error scenarios with cleanup - verify stderr propagation**
-   - **Shadow environment error handling specifically**
-9. [ ] Document usage patterns and limitations
+9. [ ] Support import/export preservation
+   - Ensure captured shadow environments are included in metadata
+   - Handle serialization for import/export (Maps → Objects → Maps)
+   - Test that imported functions retain their shadow environment
+10. [ ] Write comprehensive tests including:
+    - Nested function calls
+    - Resource cleanup (timers, file handles, etc.)
+    - **Error scenarios with cleanup - verify stderr propagation**
+    - **Shadow environment error handling specifically**
+    - **Import scenarios - functions work after being imported**
+    - **Multi-level imports - shadow environments preserved through chains**
+11. [ ] Document usage patterns and limitations
 
 ### Error Handling Requirements
 

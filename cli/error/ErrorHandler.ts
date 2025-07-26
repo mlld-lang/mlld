@@ -10,10 +10,13 @@ import { PathContextBuilder } from '@core/services/PathContextService';
 export class ErrorHandler {
   private readonly fileSystem: NodeFileSystem;
   private readonly errorFormatter: ErrorFormatSelector;
+  private isEphemeralMode: boolean = false;
 
   constructor() {
     this.fileSystem = new NodeFileSystem();
     this.errorFormatter = new ErrorFormatSelector(this.fileSystem);
+    // Check if running in ephemeral mode
+    this.isEphemeralMode = process.env.MLLD_EPHEMERAL === 'true' || process.env.MLLD_BINARY_NAME === 'mlldx';
   }
 
   async handleError(error: any, options: CLIOptions): Promise<void> {
@@ -81,6 +84,11 @@ export class ErrorHandler {
       }
 
       console.error('\n' + result + '\n');
+      
+      // Add ephemeral mode context if relevant
+      if (this.isEphemeralMode && this.isEphemeralRelevantError(error)) {
+        console.error(chalk.yellow('Note: Running in ephemeral mode (mlldx) - no filesystem caching available\n'));
+      }
     } catch {
       // Fallback to basic API format if enhanced formatting fails
       const fallbackFormatter = new ErrorFormatSelector();
@@ -116,6 +124,11 @@ export class ErrorHandler {
       // No trace, show the error normally
       console.error('\n  ⎿  ' + chalk.red('Error: ') + error.message);
     }
+    
+    // Add ephemeral mode context if relevant
+    if (this.isEphemeralMode && this.isEphemeralRelevantError(error)) {
+      console.error(chalk.yellow('\nNote: Running in ephemeral mode (mlldx) - no filesystem caching available'));
+    }
 
     const cause = error.cause;
     if (cause instanceof Error) {
@@ -132,5 +145,24 @@ export class ErrorHandler {
   private handleUnknownError(error: any): void {
     logger.error('An unknown error occurred:', { error });
     console.error(chalk.red(`Unknown Error: ${String(error)}`));
+  }
+  
+  /**
+   * Check if error is relevant to ephemeral mode
+   */
+  private isEphemeralRelevantError(error: any): boolean {
+    const message = error.message?.toLowerCase() || '';
+    const code = error.code?.toLowerCase() || '';
+    
+    // Check for cache, persistence, or filesystem related errors
+    return message.includes('cache') ||
+           message.includes('lock') ||
+           message.includes('permission') ||
+           message.includes('eacces') ||
+           message.includes('enoent') ||
+           message.includes('readonly') ||
+           code === 'eacces' ||
+           code === 'enoent' ||
+           code === 'erofs';
   }
 }

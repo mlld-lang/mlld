@@ -28,6 +28,7 @@ import { logger, cliLogger } from '@core/utils/logger';
 import { ConfigLoader } from '@core/config/loader';
 import type { ResolvedURLConfig } from '@core/config/types';
 import { ErrorHandler } from './error/ErrorHandler';
+import { PathContextBuilder } from '@core/services/PathContextService';
 import { UserInteraction } from './interaction/UserInteraction';
 import { OutputManager } from './interaction/OutputManager';
 import { HelpSystem } from './interaction/HelpSystem';
@@ -91,6 +92,10 @@ export interface CLIOptions {
   noFormat?: boolean;
   // Error capture for pattern development
   captureErrors?: boolean;
+  // Ephemeral mode for CI/serverless
+  ephemeral?: boolean;
+  // Environment file path
+  env?: string;
   _?: string[]; // Remaining args after command
 }
 
@@ -186,6 +191,13 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
       console.log('Output Path:', outputPath);
     }
 
+    // Build PathContext early
+    const pathContext = await PathContextBuilder.fromFile(
+      path.resolve(input),
+      fileSystem,
+      { invocationDirectory: process.cwd() }
+    );
+    
     // Read the input file using Node's fs directly
     const fs = await import('fs/promises');
     const content = await fs.readFile(input, 'utf8');
@@ -193,8 +205,8 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     // Read stdin if available
     const stdinContent = await readStdinIfAvailable();
     
-    // Load configuration
-    const configLoader = new ConfigLoader(path.dirname(input));
+    // Load configuration using PathContext
+    const configLoader = new ConfigLoader(pathContext);
     const config = configLoader.load();
     const urlConfig = configLoader.resolveURLConfig(config);
     const outputConfig = configLoader.resolveOutputConfig(config);
@@ -228,7 +240,7 @@ async function processFileWithOptions(cliOptions: CLIOptions, apiOptions: Proces
     
     // Use the new interpreter
     const interpretResult = await interpret(content, {
-      basePath: path.resolve(path.dirname(input)),
+      pathContext: pathContext,
       filePath: path.resolve(input), // Pass the current file path for error reporting
       format: normalizedFormat,
       fileSystem: fileSystem,

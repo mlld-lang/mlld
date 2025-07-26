@@ -156,8 +156,21 @@ SlashRun
           identifier: commandRef.commandRef.identifier,
           args: commandRef.commandRef.args || []
         };
+        
+        // Construct the full identifier path for raw
+        let rawIdentifier = commandRef.commandRef.name;
+        if (commandRef.commandRef.identifier && commandRef.commandRef.identifier.length > 0) {
+          const varRef = commandRef.commandRef.identifier[0];
+          if (varRef.type === NodeType.VariableReference) {
+            rawIdentifier = varRef.identifier;
+            if (varRef.fields && varRef.fields.length > 0) {
+              rawIdentifier += varRef.fields.map(f => '.' + f.value).join('');
+            }
+          }
+        }
+        
         raw = {
-          identifier: commandRef.commandRef.name,
+          identifier: rawIdentifier,
           args: commandRef.commandRef.args ? commandRef.commandRef.args.map(arg => 
             arg.type === NodeType.Text ? arg.content : 
             arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''
@@ -334,8 +347,21 @@ RunDirectiveRef
           identifier: commandRef.commandRef.identifier,
           args: commandRef.commandRef.args || []
         };
+        
+        // Construct the full identifier path for raw
+        let rawIdentifier = commandRef.commandRef.name;
+        if (commandRef.commandRef.identifier && commandRef.commandRef.identifier.length > 0) {
+          const varRef = commandRef.commandRef.identifier[0];
+          if (varRef.type === NodeType.VariableReference) {
+            rawIdentifier = varRef.identifier;
+            if (varRef.fields && varRef.fields.length > 0) {
+              rawIdentifier += varRef.fields.map(f => '.' + f.value).join('');
+            }
+          }
+        }
+        
         raw = {
-          identifier: commandRef.commandRef.name,
+          identifier: rawIdentifier,
           args: commandRef.commandRef.args ? commandRef.commandRef.args.map(arg => 
             arg.type === NodeType.Text ? arg.content : 
             arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''

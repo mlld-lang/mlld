@@ -49,12 +49,12 @@ export interface WhenBlockNode extends DirectiveNode {
 }
 
 /**
- * Switch form of @when directive: @when <expression>: [value => action, ...]
- * Evaluates expression and matches against condition values
+ * Match form of @when directive: @when <expression>: [value => action, ...]
+ * Evaluates expression and executes actions for all matching conditions
  */
-export interface WhenSwitchNode extends DirectiveNode {
+export interface WhenMatchNode extends DirectiveNode {
   kind: 'when';
-  subtype: 'whenSwitch';
+  subtype: 'whenMatch';
   values: {
     expression: BaseMlldNode[];  // Expression to evaluate
     conditions: WhenConditionPair[]; // value => action pairs
@@ -67,7 +67,7 @@ export interface WhenSwitchNode extends DirectiveNode {
 /**
  * Union type for all when directive nodes
  */
-export type WhenNode = WhenSimpleNode | WhenBlockNode | WhenSwitchNode;
+export type WhenNode = WhenSimpleNode | WhenBlockNode | WhenMatchNode;
 
 /**
  * Type guard for when simple form
@@ -84,10 +84,10 @@ export function isWhenBlockNode(node: DirectiveNode): node is WhenBlockNode {
 }
 
 /**
- * Type guard for when switch form
+ * Type guard for when match form
  */
-export function isWhenSwitchNode(node: DirectiveNode): node is WhenSwitchNode {
-  return node.kind === 'when' && node.subtype === 'whenSwitch';
+export function isWhenMatchNode(node: DirectiveNode): node is WhenMatchNode {
+  return node.kind === 'when' && node.subtype === 'whenMatch';
 }
 
 /**

@@ -106,7 +106,7 @@ describe('Run directive', () => {
     });
     
     test('Code with arguments', async () => {
-      const content = '/run python (data, format) {\nimport json\ndata_obj = json.loads(data)\nprint(json.dumps(data_obj, indent=4 if format == "pretty" else None))\n}';
+      const content = '/run python (@data, @format) {\nimport json\ndata_obj = json.loads(data)\nprint(json.dumps(data_obj, indent=4 if format == "pretty" else None))\n}';
       const parseResult = await parse(content);
       
       expect(parseResult.ast).toHaveLength(1);
@@ -120,10 +120,12 @@ describe('Run directive', () => {
       expect(directiveNode.values.lang).toBeDefined();
       expect(directiveNode.values.lang[0].content).toBe('python');
       expect(directiveNode.values.args).toHaveLength(2);
+      expect(directiveNode.values.args[0].type).toBe('VariableReference');
       expect(directiveNode.values.args[0].identifier).toBe('data');
+      expect(directiveNode.values.args[1].type).toBe('VariableReference');
       expect(directiveNode.values.args[1].identifier).toBe('format');
       expect(directiveNode.raw.lang).toBe('python');
-      expect(directiveNode.raw.args).toEqual(['data', 'format']);
+      expect(directiveNode.raw.args).toEqual(['@data', '@format']);
       
       // Type guard
       expect(isRunCodeDirective(directiveNode)).toBe(true);

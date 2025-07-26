@@ -1,0 +1,33 @@
+{
+  "name": "mlldx",
+  "version": "2.0.0-rc28",
+  "description": "mlldx - ephemeral mlld for CI/CD and serverless environments",
+  "bin": {
+    "mlldx": "./bin/mlldx.js"
+  },
+  "files": [
+    "bin/"
+  ],
+  "dependencies": {
+    "mlld": "^2.0.0-rc28"
+  },
+  "keywords": [
+    "mlld",
+    "mlldx",
+    "ci",
+    "serverless",
+    "ephemeral"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mlld-lang/mlld.git"
+  },
+  "homepage": "https://github.com/mlld-lang/mlld",
+  "bugs": {
+    "url": "https://github.com/mlld-lang/mlld/issues"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

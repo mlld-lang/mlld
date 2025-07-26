@@ -101,6 +101,24 @@ export class NodeShadowEnvironment {
   }
   
   /**
+   * Merge captured shadow functions into this environment
+   * Used when executing imported functions that have captured shadow environments
+   */
+  mergeCapturedFunctions(capturedFunctions: Map<string, any> | undefined): void {
+    if (!capturedFunctions || capturedFunctions.size === 0) {
+      return;
+    }
+    
+    // Add each captured function to our shadow environment
+    for (const [name, func] of capturedFunctions) {
+      // Don't override existing functions in current environment
+      if (!this.shadowFunctions.has(name)) {
+        this.addFunction(name, func);
+      }
+    }
+  }
+  
+  /**
    * Execute code in the shadow environment with optional parameters
    */
   async execute(code: string, params?: Record<string, any>, captureConsoleLog: boolean = true): Promise<any> {

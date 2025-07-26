@@ -56,6 +56,11 @@ packageJson.version = newVersion;
 try {
   fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
   console.log(`Version bumped from ${currentVersion} to ${newVersion}`);
+  
+  // Also sync mlldx version
+  const { execSync } = require('child_process');
+  console.log('\nSyncing mlldx version...');
+  execSync('npm run sync:mlldx', { stdio: 'inherit' });
 } catch (error) {
   console.error('Error writing package.json:', error.message);
   process.exit(1);

@@ -19,6 +19,7 @@ export interface ProcessingEnvironment {
   pathService: PathService;
   configLoader: ConfigLoader;
   urlConfig?: ResolvedURLConfig;
+  pathContext?: PathContext;
 }
 
 export class FileProcessor {
@@ -116,8 +117,15 @@ export class FileProcessor {
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService(fileSystem);
     
-    // Load configuration
-    const configLoader = new ConfigLoader(path.dirname(options.input));
+    // Build PathContext for the input file
+    const pathContext = await PathContextBuilder.fromFile(
+      path.resolve(options.input),
+      fileSystem,
+      { invocationDirectory: process.cwd() }
+    );
+    
+    // Load configuration using PathContext
+    const configLoader = new ConfigLoader(pathContext);
     const config = configLoader.load();
     const urlConfig = configLoader.resolveURLConfig(config);
 
@@ -125,7 +133,8 @@ export class FileProcessor {
       fileSystem,
       pathService,
       configLoader,
-      urlConfig
+      urlConfig,
+      pathContext
     };
   }
 
@@ -133,8 +142,13 @@ export class FileProcessor {
     const fileSystem = new NodeFileSystem();
     const pathService = new PathService(fileSystem);
     
-    // For URLs, use current working directory for config
-    const configLoader = new ConfigLoader(process.cwd());
+    // For URLs, create default PathContext
+    const pathContext = PathContextBuilder.fromDefaults({
+      invocationDirectory: process.cwd()
+    });
+    
+    // Use PathContext for config
+    const configLoader = new ConfigLoader(pathContext);
     const config = configLoader.load();
     const urlConfig = configLoader.resolveURLConfig(config);
 
@@ -142,7 +156,8 @@ export class FileProcessor {
       fileSystem,
       pathService,
       configLoader,
-      urlConfig
+      urlConfig,
+      pathContext
     };
   }
 
@@ -178,20 +193,12 @@ export class FileProcessor {
     // Get output config
     const outputConfig = environment.configLoader.resolveOutputConfig(environment.configLoader.load());
     
-    // Build PathContext - for URLs use current directory
-    let pathContext: PathContext;
-    if (isURL) {
-      // For URLs, create a PathContext for the current directory
-      pathContext = await PathContextBuilder.fromFile(
-        path.join(process.cwd(), 'virtual.mld'), // Virtual file in current directory
-        environment.fileSystem
-      );
-    } else {
-      pathContext = await PathContextBuilder.fromFile(
-        cliOptions.input,
-        environment.fileSystem
-      );
-    }
+    // Use PathContext from environment or build one if not available
+    const pathContext = environment.pathContext || await PathContextBuilder.fromFile(
+      effectivePath,
+      environment.fileSystem,
+      { invocationDirectory: process.cwd() }
+    );
     
     // Call the interpreter with PathContext
     const interpretResult = await interpret(content, {
@@ -217,7 +224,8 @@ export class FileProcessor {
       devMode: cliOptions.devMode,
       enableTrace: true,
       useMarkdownFormatter: !cliOptions.noFormat,
-      captureErrors: cliOptions.captureErrors
+      captureErrors: cliOptions.captureErrors,
+      ephemeral: cliOptions.ephemeral
     });
     
     // Extract result and environment

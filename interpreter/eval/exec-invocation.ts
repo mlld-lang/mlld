@@ -11,6 +11,31 @@ import { MlldInterpreterError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
+import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
+import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+
+/**
+ * Auto-unwrap LoadContentResult objects to their content property
+ * WHY: LoadContentResult objects should behave like their content when passed to JS functions,
+ * maintaining consistency with how they work in mlld contexts (interpolation, display, etc).
+ * GOTCHA: LoadContentResultArray objects are unwrapped to arrays of content strings.
+ * @param value - The value to potentially unwrap
+ * @returns The unwrapped content or the original value
+ */
+function autoUnwrapLoadContent(value: any): any {
+  // Handle single LoadContentResult
+  if (isLoadContentResult(value)) {
+    return value.content;
+  }
+  
+  // Handle LoadContentResultArray - unwrap to array of content strings
+  if (isLoadContentResultArray(value)) {
+    return value.map(item => item.content);
+  }
+  
+  // Return original value if not a LoadContentResult
+  return value;
+}
 
 /**
  * Evaluate an ExecInvocation node
@@ -127,6 +152,30 @@ export async function evaluateExecInvocation(
     
     // Handle __executable objects from resolved imports
     if (typeof variable === 'object' && variable !== null && '__executable' in variable && variable.__executable) {
+      // Deserialize shadow environments if needed
+      let metadata = variable.metadata || {};
+      if (metadata.capturedShadowEnvs && typeof metadata.capturedShadowEnvs === 'object') {
+        // Check if it needs deserialization (is plain object, not Map)
+        const needsDeserialization = Object.entries(metadata.capturedShadowEnvs).some(
+          ([lang, env]) => env && !(env instanceof Map)
+        );
+        
+        if (needsDeserialization) {
+          metadata = {
+            ...metadata,
+            capturedShadowEnvs: deserializeShadowEnvs(metadata.capturedShadowEnvs)
+          };
+        }
+      }
+      
+      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
+        console.error('[DEBUG] Converting __executable object to ExecutableVariable:', {
+          commandName,
+          hasMetadata: !!metadata,
+          hasCapturedEnvs: !!(metadata.capturedShadowEnvs),
+          metadata
+        });
+      }
       // Convert the __executable object to a proper ExecutableVariable
       const { createExecutableVariable } = await import('@core/types/variable/VariableFactories');
       variable = createExecutableVariable(
@@ -143,7 +192,7 @@ export async function evaluateExecInvocation(
         },
         {
           executableDef: variable.executableDef,
-          ...variable.metadata
+          ...metadata
         }
       );
     }
@@ -165,7 +214,75 @@ export async function evaluateExecInvocation(
     // Get command arguments from the node
     const args = node.commandRef.args || [];
     
-    // Evaluate the first argument to get the input value
+    // Special handling for @typeof - we need the Variable object, not just the value
+    if (commandName === 'typeof' || commandName === 'TYPEOF') {
+      if (args.length > 0) {
+        const arg = args[0];
+        
+        // Check if it's a variable reference
+        if (arg && typeof arg === 'object' && 'type' in arg && arg.type === 'VariableReference') {
+          const varRef = arg as any;
+          const varName = varRef.identifier;
+          const varObj = env.getVariable(varName);
+          
+          if (varObj) {
+            // Generate type information from the Variable object
+            let typeInfo = varObj.type;
+            
+            // Handle subtypes for text variables
+            if (varObj.type === 'simple-text' && 'subtype' in varObj) {
+              // For simple-text, show the main type unless it has a special subtype
+              const subtype = (varObj as any).subtype;
+              if (subtype && subtype !== 'simple' && subtype !== 'interpolated-text') {
+                typeInfo = subtype;
+              }
+            } else if (varObj.type === 'primitive' && 'primitiveType' in varObj) {
+              typeInfo = `primitive (${(varObj as any).primitiveType})`;
+            } else if (varObj.type === 'object') {
+              const objValue = varObj.value;
+              if (objValue && typeof objValue === 'object') {
+                const keys = Object.keys(objValue);
+                typeInfo = `object (${keys.length} properties)`;
+              }
+            } else if (varObj.type === 'array') {
+              const arrValue = varObj.value;
+              if (Array.isArray(arrValue)) {
+                typeInfo = `array (${arrValue.length} items)`;
+              }
+            } else if (varObj.type === 'executable') {
+              // Get executable type from metadata
+              const execDef = varObj.metadata?.executableDef;
+              if (execDef && 'type' in execDef) {
+                typeInfo = `executable (${execDef.type})`;
+              }
+            }
+            
+            // Add source information if available
+            if (varObj.source?.directive) {
+              typeInfo += ` [from /${varObj.source.directive}]`;
+            }
+            
+            // Pass the type info with a special marker
+            const result = await variable.metadata.transformerImplementation(`__MLLD_VARIABLE_OBJECT__:${typeInfo}`);
+            
+            // Apply withClause transformations if present
+            if (node.withClause) {
+              return applyWithClause(String(result), node.withClause, env);
+            }
+            
+            return {
+              value: String(result),
+              env,
+              stdout: String(result),
+              stderr: '',
+              exitCode: 0
+            };
+          }
+        }
+      }
+    }
+    
+    // Regular transformer handling
     let inputValue = '';
     if (args.length > 0) {
       const arg = args[0];
@@ -577,7 +694,21 @@ export async function evaluateExecInvocation(
             };
             codeParams[paramName] = prepareValueForShadow(resolvedVar);
           } else {
-            codeParams[paramName] = prepareValueForShadow(paramVar);
+            // Auto-unwrap LoadContentResult objects for JS/Python
+            const unwrappedValue = autoUnwrapLoadContent(paramVar.value);
+            if (unwrappedValue !== paramVar.value) {
+              // Value was unwrapped, create a new variable with the unwrapped content
+              const unwrappedVar = {
+                ...paramVar,
+                value: unwrappedValue,
+                // Update type based on unwrapped value
+                type: Array.isArray(unwrappedValue) ? 'array' : 'text'
+              };
+              codeParams[paramName] = prepareValueForShadow(unwrappedVar);
+            } else {
+              // No unwrapping needed, use original
+              codeParams[paramName] = prepareValueForShadow(paramVar);
+            }
           }
         }
         
@@ -626,6 +757,22 @@ export async function evaluateExecInvocation(
             evaluatedArgStrings_i: evaluatedArgStrings[i]
           });
         }
+      }
+    }
+    
+    // NEW: Pass captured shadow environments for JS/Node execution
+    const capturedEnvs = variable.metadata?.capturedShadowEnvs;
+    if (capturedEnvs && (definition.language === 'js' || definition.language === 'javascript' || 
+                         definition.language === 'node' || definition.language === 'nodejs')) {
+      (codeParams as any).__capturedShadowEnvs = capturedEnvs;
+      
+      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
+        console.error('[DEBUG] exec-invocation passing shadow envs:', {
+          commandName,
+          hasCapturedEnvs: !!capturedEnvs,
+          capturedEnvs,
+          language: definition.language
+        });
       }
     }
     
@@ -814,4 +961,25 @@ export async function evaluateExecInvocation(
     stderr: '',
     exitCode: 0
   };
+}
+
+/**
+ * Deserialize shadow environments after import (objects to Maps)
+ * WHY: Shadow environments are expected as Maps internally
+ */
+function deserializeShadowEnvs(envs: any): ShadowEnvironmentCapture {
+  const result: ShadowEnvironmentCapture = {};
+  
+  for (const [lang, shadowObj] of Object.entries(envs)) {
+    if (shadowObj && typeof shadowObj === 'object') {
+      // Convert object to Map
+      const map = new Map<string, any>();
+      for (const [name, func] of Object.entries(shadowObj)) {
+        map.set(name, func);
+      }
+      result[lang as keyof ShadowEnvironmentCapture] = map;
+    }
+  }
+  
+  return result;
 }

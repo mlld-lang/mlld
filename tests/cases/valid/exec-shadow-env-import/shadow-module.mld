@@ -1,0 +1,12 @@
+# Module with shadow functions
+# First define helper function
+/exe @helper() = js { return "I am helper"; }
+
+# Create shadow environment with helper available
+/exe @js = { helper }
+
+# Now define user function which will capture the shadow environment
+/exe @user() = js { return helper() + " and I work"; }
+
+# Export an API object
+/var @api = { callUser: @user }

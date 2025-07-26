@@ -7,6 +7,7 @@ import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import type { NodeShadowEnvironment } from '../NodeShadowEnvironment';
 import { prepareParamsForShadow, createMlldHelpers } from '../variable-proxy';
+import { resolveShadowEnvironment } from '../../eval/helpers/shadowEnvResolver';
 
 export interface NodeShadowEnvironmentProvider {
   /**
@@ -68,6 +69,12 @@ export class NodeExecutor extends BaseCommandExecutor {
       // Always use shadow environment for Node.js execution
       const nodeShadowEnv = this.nodeShadowProvider.getOrCreateNodeShadowEnv();
       
+      // NEW CODE: Extract and handle captured shadow environments
+      const capturedEnvs = params?.__capturedShadowEnvs;
+      if (params && '__capturedShadowEnvs' in params) {
+        delete params.__capturedShadowEnvs;
+      }
+      
       // Determine if we should capture console.log based on directive type
       // Only capture for 'exe' and 'var' directives, not for 'run'
       const captureConsoleLog = context?.directiveType !== 'run';
@@ -80,6 +87,15 @@ export class NodeExecutor extends BaseCommandExecutor {
         // Also add mlld helpers with metadata
         if (!shadowParams.mlld) {
           shadowParams.mlld = createMlldHelpers(metadata);
+        }
+      }
+      
+      // Merge captured shadow environments if they exist
+      if (capturedEnvs) {
+        // Resolve shadow environment for Node.js - look for 'node' or 'nodejs' keys
+        const nodeEnv = capturedEnvs.node || capturedEnvs.nodejs;
+        if (nodeEnv) {
+          nodeShadowEnv.mergeCapturedFunctions(nodeEnv);
         }
       }
       

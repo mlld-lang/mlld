@@ -4,6 +4,8 @@ import { OutputFormatter, formatModuleReference, formatInstallTarget } from '../
 import { lockFileManager } from '../utils/lock-file';
 import { getCommandContext } from '../utils/command-context';
 import chalk from 'chalk';
+import { PathContextBuilder } from '@core/services/PathContextService';
+import { NodeFileSystem } from '@services/fs/NodeFileSystem';
 
 export interface InstallOptions {
   verbose?: boolean;
@@ -18,6 +20,7 @@ export class InstallCommand {
   private progress: ProgressIndicator;
   
   constructor(basePath: string, options: InstallOptions = {}) {
+    // For now, continue using basePath directly as RegistryManager will handle conversion
     this.registryManager = new RegistryManager(basePath, {
       enabled: true,
       telemetry: { enabled: false } // CLI should not enable telemetry by default

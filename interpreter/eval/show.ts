@@ -22,6 +22,7 @@ import {
   isExecutable,
   isTemplate,
   isStructured,
+  isPrimitive,
   createSimpleTextVariable
 } from '@core/types/variable';
 import { llmxmlInstance } from '../utils/llmxml-instance';
@@ -163,6 +164,9 @@ export async function evaluateShow(
     } else if (isExecutable(variable)) {
       // Show a representation of the executable
       value = `[executable: ${variable.name}]`;
+    } else if (isPrimitive(variable)) {
+      // Primitive variables (numbers, booleans, null)
+      value = variable.value;
     } else {
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
     }

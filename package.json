@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "2.0.0-rc14",
+  "version": "2.0.0-rc28",
   "description": "mlld: a modular prompt scripting language",
   "type": "module",
   "main": "dist/index.cjs",
@@ -19,7 +19,8 @@
     }
   },
   "bin": {
-    "mlld": "bin/mlld-wrapper.cjs"
+    "mlld": "bin/mlld-wrapper.cjs",
+    "mlldx": "bin/mlldx-wrapper.cjs"
   },
   "files": [
     "dist/",
@@ -65,6 +66,11 @@
     "clean": "rimraf dist",
     "clean:generated": "rm -f core/types/*.js core/types/*.js.map grammar/generated/parser/*.js grammar/generated/parser/*.cjs grammar/generated/parser/*.ts grammar/generated/parser/deps/*.js grammar/generated/parser/deps/*.cjs grammar/generated/parser/deps/*.ts && find tests/fixtures -name '*.generated-fixture.json' -delete 2>/dev/null || true && find tests/fixtures -name 'index.ts' -delete 2>/dev/null || true",
     "prepublishOnly": "npm run clean && npm run build",
+    "sync:mlldx": "node scripts/sync-mlldx.cjs",
+    "publish:mlldx": "node scripts/sync-mlldx.cjs --publish",
+    "publish:all": "node scripts/publish-with-mlldx.cjs",
+    "pub": "node scripts/publish-with-mlldx.cjs",
+    "postpublish": "npm run publish:mlldx",
     "bump": "node scripts/bump-version.js",
     "bump:patch": "node scripts/bump-version.js patch",
     "bump:minor": "node scripts/bump-version.js minor",
@@ -99,6 +105,7 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "@octokit/rest": "^22.0.0",
+    "@types/inquirer": "^9.0.8",
     "@types/js-yaml": "^4.0.9",
     "@types/jsdom": "^21.1.7",
     "@types/lodash": "^4.17.16",
@@ -110,6 +117,7 @@
     "fs-extra": "^11.3.0",
     "glob": "^11.0.1",
     "gray-matter": "^4.0.3",
+    "inquirer": "^12.8.2",
     "js-yaml": "^4.1.0",
     "jsdom": "^26.1.0",
     "llmxml": "^1.4.4",

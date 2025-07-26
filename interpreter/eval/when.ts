@@ -1,10 +1,10 @@
-import type { WhenNode, WhenSimpleNode, WhenBlockNode, WhenSwitchNode, WhenConditionPair } from '@core/types/when';
+import type { WhenNode, WhenSimpleNode, WhenBlockNode, WhenMatchNode, WhenConditionPair } from '@core/types/when';
 import type { BaseMlldNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
 import type { Variable } from '@core/types/variable';
 import { MlldConditionError } from '@core/errors';
-import { isWhenSimpleNode, isWhenBlockNode, isWhenSwitchNode } from '@core/types/when';
+import { isWhenSimpleNode, isWhenBlockNode, isWhenMatchNode } from '@core/types/when';
 import { evaluate } from '../core/interpreter';
 import { logger } from '@core/utils/logger';
 import {
@@ -84,8 +84,8 @@ export async function evaluateWhen(
   
   if (isWhenSimpleNode(node)) {
     return evaluateWhenSimple(node, env);
-  } else if (isWhenSwitchNode(node)) {
-    return evaluateWhenSwitch(node, env);
+  } else if (isWhenMatchNode(node)) {
+    return evaluateWhenMatch(node, env);
   } else if (isWhenBlockNode(node)) {
     return evaluateWhenBlock(node, env);
   }
@@ -124,11 +124,11 @@ async function evaluateWhenSimple(
 }
 
 /**
- * Evaluates a switch when directive: @when <expression>: [value => action, ...]
- * Evaluates the expression once and matches its result against condition values
+ * Evaluates a match when directive: @when <expression>: [value => action, ...]
+ * Evaluates the expression once and executes actions for all matching conditions
  */
-async function evaluateWhenSwitch(
-  node: WhenSwitchNode,
+async function evaluateWhenMatch(
+  node: WhenMatchNode,
   env: Environment
 ): Promise<EvalResult> {
   // Evaluate the expression once without producing output

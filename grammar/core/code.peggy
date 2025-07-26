@@ -158,6 +158,9 @@ RunLanguageCodeWithArgs
         lang: language,
         args: args ? args.map(arg => {
           // Handle different arg node types
+          if (arg.type === NodeType.VariableReference) {
+            return '@' + arg.identifier;
+          }
           if (arg.type === NodeType.Argument && arg.value) {
             if (arg.value.type === NodeType.Text) return arg.value.content;
             if (arg.value.type === NodeType.VariableReference) return '@' + arg.value.identifier;
@@ -212,6 +215,7 @@ RunArgumentList
     }
 
 RunArgument
-  = varName:BaseIdentifier {
-      return helpers.createVariableReferenceNode('varInterpolation', { identifier: varName }, location());
+  = varRef:VariableNoTail {
+      // For /run, we need actual variable references (@var), not parameter names
+      return varRef;
     }

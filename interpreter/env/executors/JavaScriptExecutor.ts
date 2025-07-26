@@ -2,6 +2,7 @@ import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutio
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import { createMlldHelpers } from '../variable-proxy';
+import { resolveShadowEnvironment } from '../../eval/helpers/shadowEnvResolver';
 
 export interface ShadowEnvironment {
   /**
@@ -55,9 +56,32 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         output += args.map(arg => String(arg)).join(' ') + '\n';
       };
 
-      // Get shadow environment functions for JavaScript
-      const shadowEnv = this.shadowEnvironment.getShadowEnv('js') || 
-                       this.shadowEnvironment.getShadowEnv('javascript');
+      // NEW CODE: Extract and handle captured shadow environments
+      const capturedEnvs = params?.__capturedShadowEnvs;
+      if (params && '__capturedShadowEnvs' in params) {
+        delete params.__capturedShadowEnvs;
+      }
+      
+      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
+        console.error('[DEBUG] JavaScriptExecutor.executeJavaScript:', {
+          hasCapturedEnvs: !!capturedEnvs,
+          capturedEnvs,
+          hasCurrentShadowEnv: !!this.shadowEnvironment,
+          currentShadowEnvSize: this.shadowEnvironment.getShadowEnv ? 
+            (this.shadowEnvironment.getShadowEnv('js')?.size || 0) : 0
+        });
+      }
+      
+      // OLD CODE TO REPLACE:
+      // const shadowEnv = this.shadowEnvironment.getShadowEnv('js') || 
+      //                  this.shadowEnvironment.getShadowEnv('javascript');
+      
+      // NEW CODE:
+      const shadowEnv = resolveShadowEnvironment(
+        'js', 
+        capturedEnvs, 
+        this.shadowEnvironment as any // Cast to Environment type
+      );
 
       // Merge shadow environment with provided parameters
       const allParams = { ...(params || {}) };
@@ -102,9 +126,17 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
 
 
       // Create a function with dynamic parameters
+      // Check if code contains await to determine if we need an async function
+      const hasAwait = code.includes('await');
       let fn: Function;
       try {
-        fn = new Function(...allParamNames, functionBody);
+        if (hasAwait) {
+          // Create an async function using the AsyncFunction constructor
+          const AsyncFunction = (async function () {}).constructor as any;
+          fn = new AsyncFunction(...allParamNames, functionBody);
+        } else {
+          fn = new Function(...allParamNames, functionBody);
+        }
       } catch (syntaxError) {
         throw syntaxError;
       }
