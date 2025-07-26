@@ -5,6 +5,34 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc28]
+
+### Fixed
+- **ImportResolver PathContext issue in ephemeral mode**
+  - Fixed TypeError when running mlld scripts via `npx mlldx@latest` with local file paths
+  - ImportResolver was not receiving PathContext when Environment.setEphemeralMode() recreated it
+  - Ephemeral mode now properly passes PathContext to ImportResolver constructor
+  - Enables relative imports to work correctly in ephemeral/CI environments
+
+- **Parser order for /when directive colon syntax**
+  - Fixed parse error for `/when @variable: [...]` pattern incorrectly expecting `=>`
+  - Reordered grammar rules so WhenMatchForm is tried before error recovery rules
+  - The colon syntax for match form now parses correctly: `/when @status: ["active" => /show "Active"]`
+
+- **Double-colon syntax (`::...::`) now properly handles colons in content**
+  - Fixed parser incorrectly terminating on single colons (`:`) inside double-colon templates
+  - Grammar fix in `DoubleColonTextSegment` changed from `![:@<]` to `!("::" / "@" / "<")`
+  - Affects all uses of double-colon syntax: `/var`, `/exe`, `/show`, data objects, etc.
+  - Now correctly handles URLs (`https://example.com`), times (`3:30`), ratios (`16:9`), and other colon-containing content
+  - Double-colon syntax works as complete alternative to backticks for templates with `@var` interpolation
+  - Triple-colon syntax `:::...:::` continues to support `{{var}}` interpolation
+
+### Changed
+- **Renamed WhenSwitchForm to WhenMatchForm**
+  - Grammar and types now use "WhenMatchForm" for the `/when @var: [...]` syntax
+  - More accurate naming - this form executes actions for all matching conditions, not just the first
+  - Updated subtype from `whenSwitch` to `whenMatch` throughout codebase for more accurate reflection of functionality
+
 ## [2.0.0-rc27]
 
 ### Added

@@ -161,7 +161,7 @@ export type DirectiveSubtype =
   // Output subtypes
   | 'outputResolver' | 'outputFile' | 'outputCommand'
   // When subtypes
-  | 'whenSimple' | 'whenBlock' | 'whenSwitch';
+  | 'whenSimple' | 'whenBlock' | 'whenMatch';
 
 export type DirectiveSource = 'path' | 'variable' | 'template' | 'literal' | 'embed' | 'run' | 'directive';
 

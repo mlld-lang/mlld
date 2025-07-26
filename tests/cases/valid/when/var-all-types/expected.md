@@ -20,6 +20,7 @@ Object count: 42
 
 Array data: ["one","two","three"]
 # Test in switch form with mixed types
+
 Switch result: ok
 # Test command execution assignment
 

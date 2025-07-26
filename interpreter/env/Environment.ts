@@ -1434,7 +1434,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const importResolverDependencies: ImportResolverDependencies = {
       fileSystem: this.fileSystem,
       pathService: this.pathService,
-      basePath: this.getFileDirectory(),
+      pathContext: this.pathContext || {
+        projectRoot: this.basePath,
+        fileDirectory: this.basePath,
+        executionDirectory: this.basePath,
+        invocationDirectory: process.cwd()
+      },
       cacheManager: this.cacheManager,
       getSecurityManager: () => this.securityManager,
       getRegistryManager: () => this.registryManager,
@@ -1444,8 +1449,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getApproveAllImports: () => this.approveAllImports,
       getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
       getURLConfig: () => this.urlConfig,
-      getDefaultUrlOptions: () => this.defaultUrlOptions,
-      getProjectRoot: () => this.getProjectRoot()
+      getDefaultUrlOptions: () => this.defaultUrlOptions
     };
     
     // Create new ImportResolver with ephemeral configuration

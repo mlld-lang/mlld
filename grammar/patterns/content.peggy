@@ -176,9 +176,9 @@ BacktickTextSegment
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
-// Text inside double colons (excluding :, @ and < for interpolation)
+// Text inside double colons (excluding ::, @ and < for interpolation)
 DoubleColonTextSegment
-  = chars:(![:@<] char:. { return char; })+ {
+  = chars:(!("::" / "@" / "<") char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 

@@ -5,12 +5,13 @@
 # When Directive
 
 The when directive provides conditional execution based on truthiness.
-It can be used in two main forms:
+It can be used in several forms:
 1. /when <condition> => <action>                    - Simple conditional
-2. /when <var> <modifier>: [conditions] => <action> - Block conditional with modifiers
+2. /when <expression>: [conditions]                 - Match form (executes all matching conditions)
+3. /when <var> <modifier>: [conditions] => <action> - Block conditional with modifiers
 
 Modifiers:
-- first: Execute the first truthy condition's action
+- first: Execute only the first truthy condition's action (switch behavior)
 - all: All conditions must be truthy
 - any: At least one condition must be truthy
 */
@@ -38,6 +39,7 @@ SlashWhen
             "Or use the simple form without brackets:\\n" +
             "  /when " + fullVar + " => /show \"Action\"", ":", location());
     }
+  / WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
   / WhenSimpleForm
   // Error recovery: any: with individual actions (MUST come before WhenBlockForm)
   / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":" _ "[" _ &{
@@ -61,7 +63,6 @@ SlashWhen
     }
   / WhenBlockForm
   / WhenBareBlockForm
-  / WhenSwitchForm
   // Error recovery: Missing => in simple form
   / DirectiveContext "/when" _ condition:WhenSimpleCondition _ !"=>" {
       helpers.mlldError("Invalid /when syntax. Expected '=>' after condition. Use: /when @condition => action", "=>", location());
@@ -168,16 +169,16 @@ WhenSimpleForm
     }
 
 // -------------------------------------------------------------
-// SWITCH FORM: /when <expression>: [value => action, ...]
+// MATCH FORM: /when <expression>: [value => action, ...]
 // -------------------------------------------------------------
 
-WhenSwitchForm
+WhenMatchForm
   = DirectiveContext "/when" _ expression:WhenConditionExpression _ ":" _ "[" _ conditions:WhenConditionList _ "]" {
-      helpers.debug('WhenSwitchForm matched', { expression, conditions });
+      helpers.debug('WhenMatchForm matched', { expression, conditions });
       
       return helpers.createStructuredDirective(
         'when',
-        'whenSwitch',
+        'whenMatch',
         {
           expression: expression,
           conditions: conditions
