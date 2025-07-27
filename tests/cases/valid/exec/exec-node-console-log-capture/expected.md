@@ -9,7 +9,9 @@ Return result: 8
 Both result: 8
 ## Test multiple console.log calls
 
-Multiple console.log result: Last
+Multiple console.log result: First
+Second
+Last
 ## Test console.log with multiple arguments
 
-Multi-arg result: ["Hello","World",123]
+Multi-arg result: Hello World 123
