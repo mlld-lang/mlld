@@ -83,13 +83,13 @@ ForeachWithOption
 // Separator option for joining foreach results
 // Usage: separator: "delimiter"
 ForeachSeparatorOption
-  = "separator" _ ":" _ value:StringLiteral {
+  = "separator" _ ":" _ value:DataString {
       return { key: 'separator', value: value };
     }
 
 // Template option for formatting foreach results  
 // Usage: template: "format string"
 ForeachTemplateOption
-  = "template" _ ":" _ value:StringLiteral {
+  = "template" _ ":" _ value:DataString {
       return { key: 'template', value: value };
     }
