@@ -121,52 +121,26 @@ export class NodeShadowEnvironment {
   /**
    * Execute code in the shadow environment with optional parameters
    */
-  async execute(code: string, params?: Record<string, any>, captureConsoleLog: boolean = true): Promise<any> {
+  async execute(code: string, params?: Record<string, any>): Promise<any> {
     // Check if cleanup has been called
     if (this.isCleaningUp) {
       throw new Error('Node shadow environment error: Cannot execute after cleanup');
     }
     
-    // Track console.log output
-    let lastConsoleLogValue: any = undefined;
-    let consoleOutput: string[] = [];
+    // Track console.log output (same approach as JavaScriptExecutor)
+    let consoleOutput = '';
     const originalLog = this.context.console.log;
     
-    if (captureConsoleLog) {
-      // Override console.log to capture the last logged value for return
-      this.context.console.log = (...args: any[]) => {
-        // Call original console.log
-        originalLog.apply(this.context.console, args);
-        
-        // Capture the last value (single arg) or array (multiple args)
-        if (args.length === 1) {
-          lastConsoleLogValue = args[0];
-        } else if (args.length > 1) {
-          lastConsoleLogValue = args;
-        }
-      };
-    } else {
-      // For /run directives, capture console output as strings
-      this.context.console.log = (...args: any[]) => {
-        // Convert all arguments to strings and join with spaces
-        const line = args.map(arg => {
-          if (typeof arg === 'object') {
-            try {
-              return JSON.stringify(arg);
-            } catch {
-              return String(arg);
-            }
-          }
-          return String(arg);
-        }).join(' ');
-        
-        // Add to output buffer
-        consoleOutput.push(line);
-        
-        // Don't call original console.log to avoid double output
-        // The output will be returned as the result instead
-      };
-    }
+    // Override console.log to always output to stdout and capture for potential return
+    this.context.console.log = (...args: any[]) => {
+      // Always call original console.log for visibility
+      originalLog.apply(this.context.console, args);
+      
+      // Also capture the output
+      consoleOutput += args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ') + '\n';
+    };
     
     // Add parameters to the existing context
     if (params) {
@@ -191,10 +165,8 @@ export class NodeShadowEnvironment {
       
       const result = await script.runInContext(this.context);
       
-      // Restore original console.log if we modified it
-      if (captureConsoleLog) {
-        this.context.console.log = originalLog;
-      }
+      // Restore original console.log
+      this.context.console.log = originalLog;
       
       // Clean up parameters from context after execution
       if (params) {
@@ -203,23 +175,20 @@ export class NodeShadowEnvironment {
         }
       }
       
-      // If we're capturing console.log (for /var and /exe directives):
-      //   - Return the explicit result if available
-      //   - Otherwise return the last console.log value
-      // If we're NOT capturing console.log (for /run directives):
-      //   - Return the console output as a string
-      if (captureConsoleLog) {
-        return result !== undefined ? result : lastConsoleLogValue;
-      } else {
-        // For /run directives, return console output as string
-        // Join lines with newlines
-        return consoleOutput.length > 0 ? consoleOutput.join('\n') : undefined;
+      // Same hybrid approach as JavaScriptExecutor:
+      // - If there's an explicit return value, use it
+      // - If no return value but console.log was used, return the console output
+      // - Otherwise return undefined
+      if (result !== undefined) {
+        return result;
+      } else if (consoleOutput) {
+        // Return console output for backward compatibility
+        return consoleOutput.trim();
       }
+      return undefined;
     } catch (error) {
-      // Restore original console.log on error if we modified it
-      if (captureConsoleLog) {
-        this.context.console.log = originalLog;
-      }
+      // Restore original console.log on error
+      this.context.console.log = originalLog;
       
       // Clean up parameters even on error
       if (params) {

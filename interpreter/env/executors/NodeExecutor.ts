@@ -75,10 +75,6 @@ export class NodeExecutor extends BaseCommandExecutor {
         delete params.__capturedShadowEnvs;
       }
       
-      // Determine if we should capture console.log based on directive type
-      // Only capture for 'exe' and 'var' directives, not for 'run'
-      const captureConsoleLog = context?.directiveType !== 'run';
-      
       // Prepare parameters with Variable proxies
       let shadowParams = params;
       
@@ -100,7 +96,7 @@ export class NodeExecutor extends BaseCommandExecutor {
       }
       
       // Use shadow environment with VM
-      const result = await nodeShadowEnv.execute(code, shadowParams, captureConsoleLog);
+      const result = await nodeShadowEnv.execute(code, shadowParams);
       
       // Format result (same as subprocess version)
       let output = '';
