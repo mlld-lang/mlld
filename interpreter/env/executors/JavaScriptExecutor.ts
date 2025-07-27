@@ -50,10 +50,13 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
 
     try {
       // Create a function that captures console.log output
-      let output = '';
+      let consoleOutput = '';
       const originalLog = console.log;
       console.log = (...args: any[]) => {
-        output += args.map(arg => String(arg)).join(' ') + '\n';
+        originalLog(...args);
+        consoleOutput += args.map(arg => 
+          typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+        ).join(' ') + '\n';
       };
 
       // NEW CODE: Extract and handle captured shadow environments
@@ -153,6 +156,9 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       console.log = originalLog;
 
       // Format the result
+      let output = '';
+      
+      // If there's an explicit return value, use it
       if (result !== undefined && result !== null) {
         // Check if this is a PipelineInput object - if so, return just the text
         if (typeof result === 'object' && 'text' in result && 'type' in result && 
@@ -166,6 +172,10 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         } else {
           output = String(result);
         }
+      } else if (consoleOutput) {
+        // If no return value but there's console output, use that as the result
+        // This maintains backward compatibility with existing tests
+        output = consoleOutput;
       }
 
       const duration = Date.now() - startTime;
