@@ -1,17 +1,17 @@
 # When Directive with Literal Condition
 
-The @when directive requires a variable to evaluate, not a literal value.
+The @when directive can accept literal values for simple conditional checks.
 
-## Invalid: Using literal true
+## Using literal true
+This always executes
 
-This is invalid syntax
-## Invalid: Using literal false  
+## Using literal false  
 
-## Invalid: Using literal null
+## Using literal null
 
-## Invalid: Using literal string
+## Using literal string
+Non-empty strings are truthy
 
-String literals are not allowed
-## Valid: Using a variable
+## Using a variable
 
-This is valid syntax
+Variables work too

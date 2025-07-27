@@ -1,19 +1,19 @@
 # When Directive with Literal Condition
 
-The @when directive requires a variable to evaluate, not a literal value.
+The @when directive can accept literal values for simple conditional checks.
 
-## Invalid: Using literal true
-/when true => show "This is invalid syntax"
+## Using literal true
+/when true => /show "This always executes"
 
-## Invalid: Using literal false  
-/when false => show "This is also invalid"
+## Using literal false  
+/when false => /show "This never executes"
 
-## Invalid: Using literal null
-/when null => show "This too is invalid"
+## Using literal null
+/when null => /show "This never executes (null is falsy)"
 
-## Invalid: Using literal string
-/when "value" => show "String literals are not allowed"
+## Using literal string
+/when "value" => /show "Non-empty strings are truthy"
 
-## Valid: Using a variable
+## Using a variable
 /var @myCondition = "true"
-/when @myCondition => show "This is valid syntax"
+/when @myCondition => /show "Variables work too"

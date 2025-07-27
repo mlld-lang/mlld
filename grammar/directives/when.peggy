@@ -25,8 +25,42 @@ Modifiers:
 
 // Primary /when directive
 SlashWhen
-  = WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
+  // Error recovery: /when @var [...] without colon (MUST come before WhenSimpleForm)
+  = DirectiveContext "/when" _ "@" id:BaseIdentifier tail:("." prop:BaseIdentifier { return prop; })* _ "[" {
+      const fullVar = "@" + id + (tail.length > 0 ? "." + tail.join(".") : "");
+      helpers.mlldError("Invalid /when syntax. Missing ':' after variable.\\n\\n" +
+            "The syntax /when " + fullVar + " [...] requires a colon after the variable.\\n" +
+            "This is the block form that compares the variable value against each condition.\\n\\n" +
+            "Correct syntax:\\n" +
+            "  /when " + fullVar + ": [\\n" +
+            "    \"value1\" => /show \"First case\"\\n" +
+            "    \"value2\" => /show \"Second case\"\\n" +
+            "  ]\\n\\n" +
+            "Or use the simple form without brackets:\\n" +
+            "  /when " + fullVar + " => /show \"Action\"", ":", location());
+    }
+  / WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
   / WhenSimpleForm
+  // Error recovery: any: with individual actions (MUST come before WhenBlockForm)
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":" _ "[" _ &{
+      // Look ahead to see if there are individual actions (=> inside the block)
+      let i = peg$currPos;
+      let depth = 1;
+      while (i < input.length && depth > 0) {
+        if (input[i] === '[') depth++;
+        else if (input[i] === ']') depth--;
+        else if (input[i] === '=' && i + 1 < input.length && input[i + 1] === '>' && depth === 1) {
+          return true; // Found => at the top level of the block
+        }
+        i++;
+      }
+      return false;
+    } {
+      helpers.mlldError("Invalid /when syntax. The 'any:' modifier requires a block action after the conditions.\\n" +
+            "Individual actions are not allowed with 'any:'.\\n\\n" +
+            "Incorrect: /when @var any: [@cond1 => action1, @cond2 => action2]\\n" +
+            "Correct:   /when @var any: [@cond1, @cond2] => /show \"Any matched\"", "=>", location());
+    }
   / WhenBlockForm
   // Bare block form with modifier: /when <modifier>: [...] => <action>
   / DirectiveContext "/when" _ modifier:WhenModifier _ ":" _ "[" _ conditions:WhenConditionList _ "]" 
@@ -73,6 +107,85 @@ SlashWhen
       );
     }
   / WhenBareBlockForm
+  // Error recovery: Missing => in simple form
+  / DirectiveContext "/when" _ condition:WhenSimpleCondition _ !"=>" {
+      helpers.mlldError("Invalid /when syntax. Expected '=>' after condition. Use: /when @condition => action", "=>", location());
+    }
+  // Error recovery: Missing action after =>
+  / DirectiveContext "/when" _ condition:WhenSimpleCondition _ "=>" _ !. {
+      helpers.mlldError("Missing action in /when directive. Expected a directive after '=>'.", "directive", location());
+    }
+  // Error recovery: all: with individual actions AND block action
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":" _ "[" _ &{
+      // Look ahead to see if there are BOTH individual actions AND a block action
+      let i = peg$currPos;
+      let depth = 1;
+      let hasIndividualActions = false;
+      let hasBlockAction = false;
+      
+      while (i < input.length && depth > 0) {
+        if (input[i] === '[') depth++;
+        else if (input[i] === ']') depth--;
+        else if (input[i] === '=' && i + 1 < input.length && input[i + 1] === '>' && depth === 1) {
+          hasIndividualActions = true;
+        }
+        i++;
+      }
+      
+      // After closing ], check for => (block action)
+      if (depth === 0 && i < input.length) {
+        while (i < input.length && (input[i] === ' ' || input[i] === '\t' || input[i] === '\n')) i++;
+        if (i + 1 < input.length && input[i] === '=' && input[i + 1] === '>') {
+          hasBlockAction = true;
+        }
+      }
+      
+      return hasIndividualActions && hasBlockAction;
+    } {
+      helpers.mlldError("Invalid /when syntax. The 'all:' modifier cannot have both individual actions and a block action.\\n" +
+            "Use either:\\n" +
+            "  /when @var all: [@cond1 => action1, @cond2 => action2]  (individual actions)\\n" +
+            "  /when @var all: [@cond1, @cond2] => /show \"All matched\"  (block action)", "]", location());
+    }
+  // Error recovery: Unclosed brackets in block form
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:WhenModifier? _ ":" _ "[" _ &{
+      // Check if we hit newline or EOF before closing bracket
+      let i = peg$currPos;
+      let depth = 1;
+      while (i < input.length && depth > 0) {
+        if (input[i] === '[') depth++;
+        else if (input[i] === ']') depth--;
+        else if (input[i] === '\n' && depth > 0) {
+          // Found newline before closing bracket
+          let j = i + 1;
+          // Skip whitespace on next line
+          while (j < input.length && (input[j] === ' ' || input[j] === '\t')) j++;
+          // Check if next line starts with a directive
+          if (j < input.length && input[j] === '/') return true;
+        }
+        i++;
+      }
+      return depth > 0; // EOF reached without closing bracket
+    } {
+      helpers.mlldError("Unclosed brackets in /when directive. Expected ']' to close the condition list.", "]", location());
+    }
+  // Error recovery: Invalid modifier - check it's not a valid modifier
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ 
+    modifier:BaseIdentifier &{ return modifier !== "first" && modifier !== "all" && modifier !== "any"; } _ ":" _ "[" {
+      helpers.mlldError("Invalid /when modifier: '" + modifier + "'. Valid modifiers are: 'first', 'all', 'any'.\\n" +
+            "Examples:\\n" +
+            "  /when @var first: [...] => action\\n" +
+            "  /when @var all: [...] => action\\n" +
+            "  /when @var any: [...] => action", "modifier", location());
+    }
+  // Error recovery: Generic catch-all
+  / DirectiveContext "/when" {
+      helpers.mlldError("Invalid /when syntax. Valid forms:\\n" +
+            "  /when @condition => action          (simple form)\\n" +
+            "  /when @variable: [...]              (switch form)\\n" +
+            "  /when @var first: [...] => action   (block form with modifier)\\n" +
+            "  /when [...] => action               (bare block form)", "@", location());
+    }
 
 // -------------------------------------------------------------
 // SIMPLE FORM: /when <condition> => <action>
@@ -245,8 +358,6 @@ WhenSimpleCondition
       // Wrap in array for consistency with existing code
       return [expr];
     }
-  / NegatedSimpleCondition
-  / NonNegatedSimpleCondition
 
 // Negated simple condition with ! prefix
 NegatedSimpleCondition
@@ -258,7 +369,7 @@ NegatedSimpleCondition
       })];
     }
 
-// Non-negated simple conditions (no literals)
+// Non-negated simple conditions
 NonNegatedSimpleCondition
   = varRef:VariableNoTail {
       return [varRef];
@@ -270,6 +381,27 @@ NonNegatedSimpleCondition
   / Variable {
       // Other variable forms (special vars, interpolation)
       return [$1];
+    }
+  / value:BooleanLiteral {
+      // Boolean literal (true/false)
+      return [helpers.createNode(NodeType.Text, { 
+        content: String(value), 
+        location: location() 
+      })];
+    }
+  / value:NullLiteral {
+      // Null literal
+      return [helpers.createNode(NodeType.Text, { 
+        content: String(value), 
+        location: location() 
+      })];
+    }
+  / value:StringLiteral {
+      // String literal ("text")
+      return [helpers.createNode(NodeType.Text, { 
+        content: value, 
+        location: location() 
+      })];
     }
 
 // Condition expression - supports full expressions with operators
@@ -336,9 +468,24 @@ WhenConditionList
       return [first, ...rest];
     }
 
-// Separator for condition pairs - whitespace only
+// Separator for condition pairs - whitespace only, with helpful error for commas
 WhenConditionSeparator
-  = _
+  = _ "," _ {
+      helpers.mlldError(
+        'Comma separators are not allowed in /when conditions. ' +
+        'For readability, /when conditions must be separated by whitespace (newlines or spaces) instead of commas.\n' +
+        '💡 Remove the comma and use a newline or space:\n' +
+        '   /when expr: [value1 => action1, value2 => action2]  ❌\n' +
+        '   /when expr: [value1 => action1  value2 => action2]  ✅\n' +
+        '   /when expr: [\n' +
+        '     value1 => action1\n' +
+        '     value2 => action2\n' +
+        '   ]  ✅',
+        "whitespace",
+        location()
+      );
+    }
+  / _
 
 // Single condition => action pair
 WhenConditionPair
