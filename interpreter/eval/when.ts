@@ -583,6 +583,16 @@ async function evaluateCondition(
     return !innerResult;
   }
   
+  // Check if this is an expression node (BinaryExpression, TernaryExpression, UnaryExpression)
+  if (condition.length === 1) {
+    const node = condition[0];
+    if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
+      const { evaluateExpression } = await import('./expression');
+      const result = await evaluateExpression(node as any, env);
+      return isTruthy(result.value);
+    }
+  }
+  
   // Check if this is an ExecInvocation node
   if (condition.length === 1 && condition[0].type === 'ExecInvocation') {
     const execNode = condition[0] as any;

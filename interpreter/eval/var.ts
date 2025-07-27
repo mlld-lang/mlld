@@ -108,6 +108,11 @@ export async function evaluateVar(
 
   // Get the value node - this contains type information from the parser
   const valueNodes = directive.values?.value;
+  
+  // Debug: Log the value structure
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('var.ts - valueNodes structure:', JSON.stringify(valueNodes, null, 2));
+  }
   if (!valueNodes || !Array.isArray(valueNodes) || valueNodes.length === 0) {
     throw new Error('Var directive missing value');
   }

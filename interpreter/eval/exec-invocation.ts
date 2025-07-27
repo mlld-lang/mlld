@@ -49,23 +49,39 @@ export async function evaluateExecInvocation(
     logger.debug('evaluateExecInvocation called with:', { commandRef: node.commandRef });
   }
   
-  // Get the command name from the command reference
+  // Get the command name from the command reference or legacy format
   let commandName: string;
+  let args: any[] = [];
   
-  // With improved type consistency, identifier is always VariableReferenceNode[]
-  if (typeof node.commandRef.identifier === 'string') {
-    // Legacy string format (should be rare)
-    commandName = node.commandRef.identifier;
-  } else if (Array.isArray(node.commandRef.identifier) && node.commandRef.identifier.length > 0) {
-    // Extract from array of VariableReference nodes
-    const identifierNode = node.commandRef.identifier[0];
-    if (identifierNode.type === 'VariableReference' && identifierNode.identifier) {
-      commandName = identifierNode.identifier as string;
+  // Handle legacy format where name and arguments are directly on the node
+  if (!node.commandRef && (node as any).name) {
+    commandName = (node as any).name;
+    args = (node as any).arguments || [];
+  } else if (node.commandRef) {
+    // Handle new format with commandRef
+    if ((node.commandRef as any).name) {
+      commandName = (node.commandRef as any).name;
+      args = node.commandRef.args || [];
+    } else if (typeof node.commandRef.identifier === 'string') {
+      // If identifier is a string, use it directly
+      commandName = node.commandRef.identifier;
+      args = node.commandRef.args || [];
+    } else if (Array.isArray((node.commandRef as any).identifier) && (node.commandRef as any).identifier.length > 0) {
+      // If identifier is an array, extract from the first node
+      const identifierNode = (node.commandRef as any).identifier[0];
+      if (identifierNode.type === 'VariableReference' && identifierNode.identifier) {
+        commandName = identifierNode.identifier as string;
+      } else if (identifierNode.type === 'Text' && identifierNode.content) {
+        commandName = identifierNode.content;
+      } else {
+        throw new Error('Unable to extract command name from identifier array');
+      }
+      args = node.commandRef.args || [];
     } else {
-      commandName = (node.commandRef as any).name as string || '';
+      throw new Error('CommandReference missing both name and identifier');
     }
   } else {
-    commandName = (node.commandRef as any).name as string || '';
+    throw new Error('ExecInvocation node missing both commandRef and name');
   }
   
   if (!commandName) {
@@ -75,7 +91,7 @@ export async function evaluateExecInvocation(
   // Check if this is a field access exec invocation (e.g., @demo.valueCmd())
   let variable;
   const commandRefWithObject = node.commandRef as any & { objectReference?: any }; // Type assertion to handle objectReference
-  if (commandRefWithObject.objectReference) {
+  if (node.commandRef && commandRefWithObject.objectReference) {
     // Get the object first
     const objectRef = commandRefWithObject.objectReference;
     const objectVar = env.getVariable(objectRef.identifier);
@@ -211,8 +227,7 @@ export async function evaluateExecInvocation(
   
   // Special handling for built-in transformers
   if (variable.metadata?.isBuiltinTransformer && variable.metadata?.transformerImplementation) {
-    // Get command arguments from the node
-    const args = node.commandRef.args || [];
+    // Args were already extracted above
     
     // Special handling for @typeof - we need the Variable object, not just the value
     if (commandName === 'typeof' || commandName === 'TYPEOF') {
@@ -321,8 +336,7 @@ export async function evaluateExecInvocation(
   // Create a child environment for parameter substitution
   const execEnv = env.createChild();
   
-  // Handle command arguments
-  const args = node.commandRef.args || [];
+  // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
   
   // Evaluate arguments using consistent interpolate() pattern

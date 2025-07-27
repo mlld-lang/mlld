@@ -238,34 +238,49 @@ async function evaluateUnaryExpression(node: UnaryExpression, env: Environment):
  * - Strings are compared as strings
  */
 export function isEqual(a: unknown, b: unknown): boolean {
+  // Extract Variable values
+  const aValue = extractValue(a);
+  const bValue = extractValue(b);
+  
   // Handle null/undefined equality
-  if (a === null || a === undefined) {
-    return b === null || b === undefined;
+  if (aValue === null || aValue === undefined) {
+    return bValue === null || bValue === undefined;
   }
-  if (b === null || b === undefined) {
+  if (bValue === null || bValue === undefined) {
     return false;
   }
   
   // Handle boolean string coercion
-  if (typeof a === 'string' && typeof b === 'boolean') {
-    return (a === 'true' && b === true) || (a === 'false' && b === false);
+  if (typeof aValue === 'string' && typeof bValue === 'boolean') {
+    return (aValue === 'true' && bValue === true) || (aValue === 'false' && bValue === false);
   }
-  if (typeof b === 'string' && typeof a === 'boolean') {
-    return (b === 'true' && a === true) || (b === 'false' && a === false);
+  if (typeof bValue === 'string' && typeof aValue === 'boolean') {
+    return (bValue === 'true' && aValue === true) || (bValue === 'false' && aValue === false);
   }
   
   // Handle numeric string comparison
-  if (typeof a === 'string' && typeof b === 'number') {
-    const numA = Number(a);
-    return !isNaN(numA) && numA === b;
+  if (typeof aValue === 'string' && typeof bValue === 'number') {
+    const numA = Number(aValue);
+    return !isNaN(numA) && numA === bValue;
   }
-  if (typeof b === 'string' && typeof a === 'number') {
-    const numB = Number(b);
-    return !isNaN(numB) && numB === a;
+  if (typeof bValue === 'string' && typeof aValue === 'number') {
+    const numB = Number(bValue);
+    return !isNaN(numB) && numB === aValue;
   }
   
   // Default to strict equality
-  return a === b;
+  return aValue === bValue;
+}
+
+/**
+ * Extract the raw value from a Variable or return the value as-is
+ */
+function extractValue(value: unknown): unknown {
+  if (value && typeof value === 'object' && 'type' in value && 'value' in value) {
+    const variable = value as Variable;
+    return variable.value;
+  }
+  return value;
 }
 
 /**
