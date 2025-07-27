@@ -113,8 +113,11 @@ async function evaluateWhenSimple(
   if (conditionResult) {
     // Execute the action if condition is true
     const result = await evaluate(node.values.action, env);
-    if (process.env.DEBUG_WHEN) {
-      logger.debug('When action result:', { result });
+    if (process.env.DEBUG_WHEN || process.env.MLLD_DEBUG === 'true') {
+      console.log('[DEBUG] When condition was true, executing action:', {
+        conditionResult,
+        actionType: node.values.action[0]?.type
+      });
     }
     return result;
   }
@@ -573,6 +576,12 @@ async function evaluateCondition(
   env: Environment,
   variableName?: string
 ): Promise<boolean> {
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('[DEBUG] evaluateCondition called with:', {
+      conditionLength: condition.length,
+      firstNodeType: condition[0]?.type
+    });
+  }
   // Check if this is a negation node
   if (condition.length === 1 && condition[0].type === 'Negation') {
     const negationNode = condition[0] as any;
@@ -589,6 +598,14 @@ async function evaluateCondition(
     if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
       const { evaluateExpression } = await import('./expression');
       const result = await evaluateExpression(node as any, env);
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('[DEBUG] Expression evaluation result:', {
+          nodeType: node.type,
+          resultValue: result.value,
+          resultType: typeof result.value,
+          isVariable: result.value && typeof result.value === 'object' && 'type' in result.value
+        });
+      }
       return isTruthy(result.value);
     }
   }

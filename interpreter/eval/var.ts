@@ -127,7 +127,25 @@ export async function evaluateVar(
   // Check for primitive values first (numbers, booleans, null)
   if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
     // Direct primitive values from the grammar
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[DEBUG] var.ts: Primitive value:', {
+        identifier,
+        valueNode,
+        type: typeof valueNode
+      });
+    }
     resolvedValue = valueNode;
+    
+  } else if (valueNode.type === 'Literal') {
+    // Handle literal nodes (booleans, numbers, strings)
+    resolvedValue = valueNode.value;
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[DEBUG] var.ts: Literal node:', {
+        identifier,
+        value: valueNode.value,
+        valueType: valueNode.valueType
+      });
+    }
     
   } else if (valueNode.type === 'array') {
     // Array literal: [1, 2, 3] or [,]
@@ -488,8 +506,21 @@ export async function evaluateVar(
     
   } else if (valueNode && (valueNode.type === 'BinaryExpression' || valueNode.type === 'TernaryExpression' || valueNode.type === 'UnaryExpression')) {
     // Handle expression nodes
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[DEBUG] var.ts: Evaluating expression node:', {
+        type: valueNode.type,
+        operator: (valueNode as any).operator
+      });
+    }
     const { evaluateExpression } = await import('./expression');
     const result = await evaluateExpression(valueNode, env);
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[DEBUG] var.ts: Expression result:', {
+        value: result.value,
+        type: typeof result.value,
+        isVariable: result.value && typeof result.value === 'object' && 'type' in result.value
+      });
+    }
     resolvedValue = result.value;
     
   } else {
@@ -725,6 +756,16 @@ export async function evaluateVar(
       variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
     } else {
       // Expression returned non-primitive (e.g., string comparison)
+      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+    }
+    
+  } else if (valueNode.type === 'Literal') {
+    // Literal nodes - create appropriate variable type based on value
+    if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
+      const { createPrimitiveVariable } = await import('@core/types/variable');
+      variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
+    } else {
+      // String literal
       variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
     }
     

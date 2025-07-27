@@ -74,7 +74,12 @@ export async function evaluateExpression(
   node: BinaryExpression | TernaryExpression | UnaryExpression,
   env: Environment
 ): Promise<EvalResult> {
-  console.log('[DEBUG] evaluateExpression called with node type:', node.type);
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('[DEBUG] evaluateExpression called with node type:', node.type);
+    if (node.type === 'BinaryExpression') {
+      console.log('[DEBUG] Binary operator:', (node as BinaryExpression).operator);
+    }
+  }
   
   if (node.type === 'BinaryExpression') {
     return evaluateBinaryExpression(node, env);
@@ -94,6 +99,7 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
   const { operator, left, right } = node;
   
   if (process.env.MLLD_DEBUG === 'true') {
+    console.log('[DEBUG] evaluateBinaryExpression called with operator:', operator);
     console.log('[DEBUG] evaluateBinaryExpression:', {
       operator,
       leftType: left.type,
@@ -124,6 +130,15 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
     const leftResult = await evaluate(left, env, expressionContext);
     const leftTruthy = isTruthy(leftResult.value);
     
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[DEBUG] || operator left side:', {
+        left: leftResult.value,
+        leftTruthy,
+        leftType: typeof leftResult.value,
+        isVariable: leftResult.value && typeof leftResult.value === 'object' && 'type' in leftResult.value
+      });
+    }
+    
     // Short-circuit: if left is truthy, return left value
     if (leftTruthy) {
       return { value: leftResult.value, env };
@@ -131,6 +146,12 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
     
     // Otherwise evaluate and return right
     const rightResult = await evaluate(right, env, expressionContext);
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[DEBUG] || operator right side:', {
+        right: rightResult.value,
+        rightTruthy: isTruthy(rightResult.value)
+      });
+    }
     return { value: rightResult.value, env };
   }
   
