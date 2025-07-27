@@ -6,8 +6,7 @@ This test verifies that console.log is NOT captured as return value in /run dire
 
 ## Test /run directive with console.log
 
-This should appear in output
-So should this
+This return value is ignored in /run
 
 ## Test /run with shadow function
 
