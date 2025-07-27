@@ -15,7 +15,7 @@ import {
  * Determines if a value is truthy according to mlld rules
  * (copied from when.ts to avoid circular dependencies)
  */
-function isTruthy(value: any): boolean {
+export function isTruthy(value: any): boolean {
   // Handle Variable types
   if (value && typeof value === 'object' && 'type' in value && 'name' in value) {
     const variable = value as Variable;
@@ -74,6 +74,8 @@ export async function evaluateExpression(
   node: BinaryExpression | TernaryExpression | UnaryExpression,
   env: Environment
 ): Promise<EvalResult> {
+  console.log('[DEBUG] evaluateExpression called with node type:', node.type);
+  
   if (node.type === 'BinaryExpression') {
     return evaluateBinaryExpression(node, env);
   } else if (node.type === 'TernaryExpression') {
@@ -86,14 +88,26 @@ export async function evaluateExpression(
 }
 
 /**
- * Evaluate binary expressions (&&, ||, ==, !=)
+ * Evaluate binary expressions (&&, ||, ==, !=, <, >, <=, >=)
  */
 async function evaluateBinaryExpression(node: BinaryExpression, env: Environment): Promise<EvalResult> {
   const { operator, left, right } = node;
   
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('[DEBUG] evaluateBinaryExpression:', {
+      operator,
+      leftType: left.type,
+      rightType: right.type,
+      left: left.type === 'VariableReference' ? (left as any).identifier : left,
+      right: right.type === 'VariableReference' ? (right as any).identifier : right
+    });
+  }
+  
   // Short-circuit evaluation for logical operators
+  const expressionContext = { isExpression: true };
+  
   if (operator === '&&') {
-    const leftResult = await evaluate(left, env);
+    const leftResult = await evaluate(left, env, expressionContext);
     const leftTruthy = isTruthy(leftResult.value);
     
     // Short-circuit: if left is falsy, return left value
@@ -102,12 +116,12 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
     }
     
     // Otherwise evaluate and return right
-    const rightResult = await evaluate(right, env);
+    const rightResult = await evaluate(right, env, expressionContext);
     return { value: rightResult.value, env };
   }
   
   if (operator === '||') {
-    const leftResult = await evaluate(left, env);
+    const leftResult = await evaluate(left, env, expressionContext);
     const leftTruthy = isTruthy(leftResult.value);
     
     // Short-circuit: if left is truthy, return left value
@@ -116,22 +130,66 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
     }
     
     // Otherwise evaluate and return right
-    const rightResult = await evaluate(right, env);
+    const rightResult = await evaluate(right, env, expressionContext);
     return { value: rightResult.value, env };
   }
   
   // Comparison operators - evaluate both sides
-  const leftResult = await evaluate(left, env);
-  const rightResult = await evaluate(right, env);
+  const leftResult = await evaluate(left, env, expressionContext);
+  const rightResult = await evaluate(right, env, expressionContext);
+  
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('[DEBUG] Evaluated operands:', {
+      leftResult: leftResult.value,
+      rightResult: rightResult.value,
+      leftIsVariable: leftResult.value && typeof leftResult.value === 'object' && 'type' in leftResult.value,
+      rightIsVariable: rightResult.value && typeof rightResult.value === 'object' && 'type' in rightResult.value
+    });
+  }
   
   if (operator === '==') {
-    const equal = mlldEquals(leftResult.value, rightResult.value);
+    const equal = isEqual(leftResult.value, rightResult.value);
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[DEBUG] == comparison:', {
+        left: leftResult.value,
+        leftType: typeof leftResult.value,
+        right: rightResult.value,
+        rightType: typeof rightResult.value,
+        equal
+      });
+    }
     return { value: equal, env };
   }
   
   if (operator === '!=') {
-    const equal = mlldEquals(leftResult.value, rightResult.value);
+    const equal = isEqual(leftResult.value, rightResult.value);
     return { value: !equal, env };
+  }
+  
+  // Numeric comparison operators
+  if (operator === '<') {
+    const leftNum = toNumber(leftResult.value);
+    const rightNum = toNumber(rightResult.value);
+    console.log('[DEBUG] < comparison:', leftResult.value, '<', rightResult.value, '=', leftNum < rightNum);
+    return { value: leftNum < rightNum, env };
+  }
+  
+  if (operator === '>') {
+    const leftNum = toNumber(leftResult.value);
+    const rightNum = toNumber(rightResult.value);
+    return { value: leftNum > rightNum, env };
+  }
+  
+  if (operator === '<=') {
+    const leftNum = toNumber(leftResult.value);
+    const rightNum = toNumber(rightResult.value);
+    return { value: leftNum <= rightNum, env };
+  }
+  
+  if (operator === '>=') {
+    const leftNum = toNumber(leftResult.value);
+    const rightNum = toNumber(rightResult.value);
+    return { value: leftNum >= rightNum, env };
   }
   
   throw new Error(`Unknown binary operator: ${operator}`);
@@ -179,7 +237,7 @@ async function evaluateUnaryExpression(node: UnaryExpression, env: Environment):
  * - Numbers are compared numerically
  * - Strings are compared as strings
  */
-function mlldEquals(a: unknown, b: unknown): boolean {
+export function isEqual(a: unknown, b: unknown): boolean {
   // Handle null/undefined equality
   if (a === null || a === undefined) {
     return b === null || b === undefined;
@@ -208,4 +266,55 @@ function mlldEquals(a: unknown, b: unknown): boolean {
   
   // Default to strict equality
   return a === b;
+}
+
+/**
+ * Convert a value to a number for numeric comparisons
+ * Follows mlld's type coercion rules:
+ * - Parse strings to numbers
+ * - true → 1, false → 0
+ * - null → 0, undefined → NaN
+ * - Non-numeric strings → NaN
+ */
+export function toNumber(value: unknown): number {
+  // Handle Variable objects by extracting their value
+  if (value && typeof value === 'object' && 'type' in value && 'value' in value) {
+    const variable = value as Variable;
+    return toNumber(variable.value);
+  }
+  
+  // Handle null and undefined
+  if (value === null) {
+    return 0;
+  }
+  if (value === undefined) {
+    return NaN;
+  }
+  
+  // Handle booleans
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0;
+  }
+  
+  // Handle numbers
+  if (typeof value === 'number') {
+    return value;
+  }
+  
+  // Handle strings
+  if (typeof value === 'string') {
+    // Special case for boolean strings
+    if (value === 'true') {
+      return 1;
+    }
+    if (value === 'false') {
+      return 0;
+    }
+    // Try to parse as number
+    const num = Number(value);
+    return num;
+  }
+  
+  // For objects and arrays, return NaN
+  return NaN;
 }

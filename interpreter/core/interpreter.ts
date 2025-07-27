@@ -23,7 +23,7 @@ import type { Variable } from '@core/types/variable';
 import type { LoadContentResult } from '@core/types/load-content';
 import type { Environment } from '../env/Environment';
 import { evaluateDirective } from '../eval/directive';
-import { isExecInvocation } from '@core/types';
+import { isExecInvocation, isLiteralNode } from '@core/types';
 import { evaluateDataValue, isFullyEvaluated, collectEvaluationErrors } from '../eval/data-value-evaluator';
 import { InterpolationContext, EscapingStrategyFactory } from './interpolation-context';
 import { parseFrontmatter } from '../utils/frontmatter-parser';
@@ -112,10 +112,6 @@ function isVariableReference(node: MlldNode): node is VariableReferenceNode {
 
 function isError(node: MlldNode): node is ErrorNode {
   return node.type === 'Error';
-}
-
-function isLiteral(node: MlldNode): node is LiteralNode {
-  return node.type === 'Literal';
 }
 
 function isDotSeparator(node: MlldNode): node is DotSeparatorNode {
@@ -436,7 +432,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
      *      structures and maintain access path information
      */
     const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
-    let resolvedValue = await resolveVariable(variable, env, ResolutionContext.FieldAccess);
+    
+    // Check if we're in an expression context that needs raw values
+    const isInExpression = context && context.isExpression;
+    const resolutionContext = isInExpression ? ResolutionContext.Equality : ResolutionContext.FieldAccess;
+    
+    let resolvedValue = await resolveVariable(variable, env, resolutionContext);
     
     // Handle field access if present
     if (node.fields && node.fields.length > 0) {
@@ -488,6 +489,11 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
     const { evaluateExpression } = await import('../eval/expression');
     return evaluateExpression(node, env);
+  }
+  
+  // Handle literal nodes
+  if (isLiteralNode(node)) {
+    return { value: node.value, env };
   }
   
   // If we get here, it's an unknown node type
@@ -1066,6 +1072,21 @@ export async function interpolate(
       // Handle file reference interpolation
       const result = await interpolateFileReference(node as any, env, context);
       parts.push(result);
+    } else if (node.type === 'Literal') {
+      // Handle literal nodes from expressions
+      const { LiteralNode } = await import('@core/types');
+      const literalNode = node as LiteralNode;
+      const value = literalNode.value;
+      let stringValue: string;
+      if (value === null) {
+        stringValue = 'null';
+      } else if (value === undefined) {
+        stringValue = '';
+      } else {
+        stringValue = String(value);
+      }
+      const strategy = EscapingStrategyFactory.getStrategy(context);
+      parts.push(strategy.escape(stringValue));
     }
   }
   

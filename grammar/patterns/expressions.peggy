@@ -72,10 +72,38 @@ AtomicExpression
         location: location()
       });
     }
-  / BooleanLiteral           // true/false (from base/literals.peggy)
-  / NullLiteral              // null (from base/literals.peggy)
-  / StringLiteral            // "string" (from base/literals.peggy)
-  / NumberLiteral            // 123 (from base/literals.peggy)
+  / value:StringLiteral {
+      // Wrap string literal in a Literal node
+      return helpers.createNode('Literal', {
+        value: value,
+        valueType: 'string',
+        location: location()
+      });
+    }
+  / value:NumberLiteral {
+      // Wrap number literal in a Literal node
+      return helpers.createNode('Literal', {
+        value: value,
+        valueType: 'number',
+        location: location()
+      });
+    }
+  / value:BooleanLiteral {
+      // Wrap boolean literal in a Literal node  
+      return helpers.createNode('Literal', {
+        value: value,
+        valueType: 'boolean',
+        location: location()
+      });
+    }
+  / value:NullLiteral {
+      // Wrap null literal in a Literal node
+      return helpers.createNode('Literal', {
+        value: value,
+        valueType: 'null',
+        location: location()
+      });
+    }
 
 // Error recovery for common mistakes
 / "(" _ expr:Expression _ &{

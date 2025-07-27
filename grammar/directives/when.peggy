@@ -62,6 +62,50 @@ SlashWhen
             "Correct:   /when @var any: [@cond1, @cond2] => /show \"Any matched\"", "=>", location());
     }
   / WhenBlockForm
+  // Bare block form with modifier: /when <modifier>: [...] => <action>
+  / DirectiveContext "/when" _ modifier:WhenModifier _ ":" _ "[" _ conditions:WhenConditionList _ "]" 
+    _ action:("=>" _ a:WhenAction { return a; })? {
+      
+      helpers.debug('WhenBareBlockWithModifierForm matched', { modifier, conditions, action });
+      
+      const values = {
+        conditions: conditions,
+        modifier: [helpers.createNode(NodeType.Text, { 
+          content: modifier, 
+          location: location() 
+        })]
+      };
+      
+      if (action) {
+        values.action = action;
+      }
+      
+      // Create raw representation
+      const raw = {
+        modifier: modifier,
+        conditions: conditions.map(c => ({
+          condition: helpers.reconstructRawString(c.condition),
+          action: c.action ? helpers.reconstructRawString(c.action) : undefined
+        }))
+      };
+      
+      if (action) {
+        raw.action = helpers.reconstructRawString(action);
+      }
+      
+      return helpers.createStructuredDirective(
+        'when',
+        'whenBlock',
+        values,
+        raw,
+        {
+          modifier: modifier,
+          conditionCount: conditions.length,
+          hasVariable: false
+        },
+        location()
+      );
+    }
   / WhenBareBlockForm
   // Error recovery: Missing => in simple form
   / DirectiveContext "/when" _ condition:WhenSimpleCondition _ !"=>" {
@@ -125,8 +169,9 @@ SlashWhen
     } {
       helpers.mlldError("Unclosed brackets in /when directive. Expected ']' to close the condition list.", "]", location());
     }
-  // Error recovery: Invalid modifier
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:BaseIdentifier _ ":" _ "[" {
+  // Error recovery: Invalid modifier - check it's not a valid modifier
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ 
+    modifier:BaseIdentifier &{ return modifier !== "first" && modifier !== "all" && modifier !== "any"; } _ ":" _ "[" {
       helpers.mlldError("Invalid /when modifier: '" + modifier + "'. Valid modifiers are: 'first', 'all', 'any'.\\n" +
             "Examples:\\n" +
             "  /when @var first: [...] => action\\n" +

@@ -481,6 +481,12 @@ export async function evaluateVar(
     
     resolvedValue = result;
     
+  } else if (valueNode && (valueNode.type === 'BinaryExpression' || valueNode.type === 'TernaryExpression' || valueNode.type === 'UnaryExpression')) {
+    // Handle expression nodes
+    const { evaluateExpression } = await import('./expression');
+    const result = await evaluateExpression(valueNode, env);
+    resolvedValue = result.value;
+    
   } else {
     // Default case - try to interpolate as text
     if (process.env.MLLD_DEBUG === 'true') {
@@ -704,6 +710,16 @@ export async function evaluateVar(
         variable = createObjectVariable(identifier, resolvedValue, false, source, metadata);
       }
     } else {
+      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+    }
+    
+  } else if (directive.meta?.expressionType) {
+    // Expression results - create primitive variables for boolean/number results
+    if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
+      const { createPrimitiveVariable } = await import('@core/types/variable');
+      variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
+    } else {
+      // Expression returned non-primitive (e.g., string comparison)
       variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
     }
     

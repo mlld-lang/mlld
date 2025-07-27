@@ -97,6 +97,12 @@ SlashVar "var directive"
         metaInfo.inferredType = 'computed';
         metaInfo.isForeach = true;
       }
+      // Handle expressions (BinaryExpression, TernaryExpression, UnaryExpression)
+      else if (value && (value.type === 'BinaryExpression' || value.type === 'TernaryExpression' || value.type === 'UnaryExpression')) {
+        processedValue = [value];
+        metaInfo.inferredType = 'expression';
+        metaInfo.expressionType = value.type;
+      }
       // Handle primitive values (numbers, booleans, null)
       else if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
         processedValue = [value];
