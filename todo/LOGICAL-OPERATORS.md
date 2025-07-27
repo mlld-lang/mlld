@@ -21,16 +21,13 @@ Currently, mlld relies entirely on function-based operations (e.g., `@eq(a, b)`,
 3. **Grammar-First**: Changes start in grammar abstractions, not individual directives
 4. **Progressive Enhancement**: Start with core operators, expand based on usage
 5. **Error Quality**: Maintain mlld's excellent error messages
+6. **Focused Scope**: mlld is not for math - include only operators essential for logic and control flow
 
 ## Operator Specification
 
 ### Comparison Operators
 - `==` - Equality (follows mlld's `compareValues` semantics)
 - `!=` - Inequality  
-- `<` - Less than
-- `>` - Greater than
-- `<=` - Less than or equal
-- `>=` - Greater than or equal
 
 ### Logical Operators
 - `&&` - Logical AND (short-circuits)
@@ -43,10 +40,10 @@ Currently, mlld relies entirely on function-based operations (e.g., `@eq(a, b)`,
 ### Grouping
 - `()` - Parentheses for explicit precedence
 
-### Future Considerations
-- `??` - Null coalescing operator
-- `in` - Membership testing
-- `+` - String concatenation (though templates handle this)
+### Explicitly Excluded
+- `<`, `>`, `<=`, `>=` - Not needed for mlld's use cases. Use inline JavaScript if math comparisons are needed.
+- `+` - String concatenation (templates handle this)
+- `??` - Null coalescing (ternary operator handles this use case)
 
 ## Type Coercion Rules
 
@@ -111,7 +108,7 @@ Comparison
     }
 
 ComparisonOp
-  = "==" / "!=" / "<=" / ">=" / "<" / ">"
+  = "==" / "!="
 
 // Primary expressions (highest precedence)
 Primary
@@ -239,14 +236,6 @@ async function evaluateBinaryExpression(
       return { value: await compareValues(leftValue, rightValue, env), env };
     case '!=':
       return { value: !(await compareValues(leftValue, rightValue, env)), env };
-    case '<':
-      return { value: leftValue < rightValue, env };
-    case '>':
-      return { value: leftValue > rightValue, env };
-    case '<=':
-      return { value: leftValue <= rightValue, env };
-    case '>=':
-      return { value: leftValue >= rightValue, env };
     default:
       throw new Error(`Unknown operator: ${operator}`);
   }
@@ -336,11 +325,11 @@ Create test cases in `tests/cases/expressions/`:
 ```mlld
 # Before
 /when @and(@a, @b) => /show "Both true"
-/var @max = @gt(@x, @y) ? @x : @y
+/var @result = @exists(@value) ? @value : 'default'
 
 # After  
 /when @a && @b => /show "Both true"
-/var @max = @x > @y ? @x : @y
+/var @result = @value ? @value : 'default'
 
 # Both syntaxes remain valid!
 ```
@@ -354,16 +343,20 @@ Existing comparison and logical functions remain available and useful for:
 ## Risks and Mitigations
 
 ### Risk 1: Grammar Conflicts
+**Risk**: Minimal - no `<`/`>` operators means no conflict with file reference syntax `<@file>`
 **Mitigation**: Carefully order grammar rules, use predicates where needed
 
 ### Risk 2: Breaking Changes
+**Risk**: Low - all existing function syntax (`@eq()`, `@and()`) remains unchanged
 **Mitigation**: Extensive testing, maintain all existing patterns
 
 ### Risk 3: Performance Impact
+**Risk**: Negligible - operators compile to same evaluation logic as functions
 **Mitigation**: Short-circuit evaluation, efficient AST structure
 
 ### Risk 4: Confusion with Existing Functions
-**Mitigation**: Clear documentation showing both approaches
+**Risk**: Users might be unsure when to use operators vs functions
+**Mitigation**: Clear documentation showing both approaches, emphasize operators for common cases
 
 ## Success Criteria
 
@@ -376,11 +369,8 @@ Existing comparison and logical functions remain available and useful for:
 ## Future Extensions
 
 Once core operators are stable, consider:
-1. Null coalescing operator (`??`)
-2. Optional chaining (`?.`)
-3. Array/object membership (`in`)
-4. String concatenation (`+`)
-5. Arithmetic operators (if needed)
+1. Array/object membership (`in`)
+2. Optional chaining (`?.`) - though mlld's field access is already forgiving
 
 ## Implementation Checklist
 
