@@ -20,6 +20,9 @@ export const NodeType = {
     ExecInvocation: 'ExecInvocation',
     CommandReference: 'CommandReference',
     FileReference: 'FileReference',
+    BinaryExpression: 'BinaryExpression',
+    TernaryExpression: 'TernaryExpression',
+    UnaryExpression: 'UnaryExpression',
 };
 export const DirectiveKind = {
     run: 'run',
@@ -891,5 +894,24 @@ export const helpers = {
                 isPlaceholder: source && source.type === 'placeholder'
             }
         };
+    },
+    // Binary expression builder with left-to-right associativity
+    createBinaryExpression(first, rest, location) {
+        if (!rest || rest.length === 0)
+            return first;
+        return rest.reduce((left, { op, right }) => this.createNode('BinaryExpression', {
+            operator: op,
+            left,
+            right,
+            location
+        }), first);
+    },
+    // Check if nodes contain newlines
+    containsNewline(nodes) {
+        if (!Array.isArray(nodes))
+            nodes = [nodes];
+        return nodes.some((n) => n.type === 'Newline' ||
+            (n.content && n.content.includes('\n')) ||
+            (n.raw && n.raw.includes('\n')));
     }
 };

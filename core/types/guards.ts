@@ -14,7 +14,10 @@ import type {
   PathSeparatorNode,
   ExecInvocation,
   NegationNode,
-  FileReferenceNode
+  FileReferenceNode,
+  BinaryExpression,
+  TernaryExpression,
+  UnaryExpression
 } from './primitives';
 
 // Import the union type
@@ -134,4 +137,19 @@ export function hasWithClause(directive: any): directive is { values: { withClau
  */
 export function isNegationNode(node: any): node is NegationNode {
   return node?.type === 'Negation';
+}
+
+/**
+ * Expression type guards for logical operators
+ */
+export function isBinaryExpression(node: any): node is BinaryExpression {
+  return node?.type === 'BinaryExpression';
+}
+
+export function isTernaryExpression(node: any): node is TernaryExpression {
+  return node?.type === 'TernaryExpression';
+}
+
+export function isUnaryExpression(node: any): node is UnaryExpression {
+  return node?.type === 'UnaryExpression';
 }

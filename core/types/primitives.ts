@@ -241,3 +241,34 @@ export interface FileReferenceNode extends BaseMlldNode {
     isPlaceholder?: boolean; // For <> in 'as' contexts
   };
 }
+
+// Expression nodes for logical operators
+export interface BinaryExpression extends BaseMlldNode {
+  type: 'BinaryExpression';
+  operator: '&&' | '||' | '==' | '!=';
+  left: Expression;
+  right: Expression;
+}
+
+export interface TernaryExpression extends BaseMlldNode {
+  type: 'TernaryExpression';
+  condition: Expression;
+  trueBranch: Expression;
+  falseBranch: Expression;
+}
+
+export interface UnaryExpression extends BaseMlldNode {
+  type: 'UnaryExpression';
+  operator: '!';
+  operand: Expression;
+}
+
+// Union type for all expression nodes
+export type Expression = 
+  | BinaryExpression 
+  | TernaryExpression 
+  | UnaryExpression 
+  | VariableReferenceNode 
+  | LiteralNode 
+  | ExecInvocation
+  | NegationNode;

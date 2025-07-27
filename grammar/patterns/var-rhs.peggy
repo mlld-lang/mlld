@@ -16,6 +16,7 @@ VarRHSContent "var assignment value"
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
   / PrimitiveValue              // Direct primitives: 42, true, false, null
+  / Expression                  // Expressions with operators (&&, ||, ==, !=, ?, :, !) - LAST to avoid conflicts
 
 // Note: AlligatorWithTransform was removed because AlligatorExpression 
 // already handles "as" clauses internally in alligator.peggy

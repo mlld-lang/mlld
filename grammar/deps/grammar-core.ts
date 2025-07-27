@@ -21,6 +21,9 @@ export const NodeType = {
   ExecInvocation: 'ExecInvocation',
   CommandReference: 'CommandReference',
   FileReference: 'FileReference',
+  BinaryExpression: 'BinaryExpression',
+  TernaryExpression: 'TernaryExpression',
+  UnaryExpression: 'UnaryExpression',
 } as const;
 export type NodeTypeKey = keyof typeof NodeType;
 
@@ -971,5 +974,28 @@ export const helpers = {
         isPlaceholder: source && source.type === 'placeholder'
       }
     };
+  },
+
+  // Binary expression builder with left-to-right associativity
+  createBinaryExpression(first: any, rest: any[], location: any): any {
+    if (!rest || rest.length === 0) return first;
+    
+    return rest.reduce((left, {op, right}) => 
+      this.createNode('BinaryExpression' as NodeTypeKey, {
+        operator: op,
+        left,
+        right,
+        location
+      }), first);
+  },
+
+  // Check if nodes contain newlines
+  containsNewline(nodes: any[] | any): boolean {
+    if (!Array.isArray(nodes)) nodes = [nodes];
+    return nodes.some((n: any) => 
+      n.type === 'Newline' || 
+      (n.content && n.content.includes('\n')) ||
+      (n.raw && n.raw.includes('\n'))
+    );
   }
 };

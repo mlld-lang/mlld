@@ -235,7 +235,13 @@ export enum NodeType {
   DOT_SEPARATOR = 'DotSeparator',
   NEWLINE = 'Newline',
   ERROR = 'Error',
-  LITERAL = 'Literal'
+  LITERAL = 'Literal',
+  BINARY_EXPRESSION = 'BinaryExpression',
+  TERNARY_EXPRESSION = 'TernaryExpression',
+  UNARY_EXPRESSION = 'UnaryExpression',
+  NEGATION = 'Negation',
+  EXEC_INVOCATION = 'ExecInvocation',
+  FILE_REFERENCE = 'FileReference'
 }
 
 /**

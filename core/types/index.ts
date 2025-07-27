@@ -47,7 +47,10 @@ import {
   SourceLocation,
   ExecInvocation,
   NegationNode,
-  FileReferenceNode
+  FileReferenceNode,
+  BinaryExpression,
+  TernaryExpression,
+  UnaryExpression
 } from './nodes';
 
 /**
@@ -73,7 +76,10 @@ export type MlldNode =
   | SectionMarkerNode
   | ExecInvocation
   | NegationNode
-  | FileReferenceNode;
+  | FileReferenceNode
+  | BinaryExpression
+  | TernaryExpression
+  | UnaryExpression;
 
 // =========================================================================
 // VARIABLE TYPES
@@ -239,5 +245,8 @@ export {
   isVariableReferenceNode,
   isLiteralNode,
   isNegationNode,
-  isFileReferenceNode
+  isFileReferenceNode,
+  isBinaryExpression,
+  isTernaryExpression,
+  isUnaryExpression
 } from './guards';

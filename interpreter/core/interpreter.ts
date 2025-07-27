@@ -484,6 +484,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     return evaluateExecInvocation(node, env);
   }
   
+  // Handle expression nodes
+  if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
+    const { evaluateExpression } = await import('../eval/expression');
+    return evaluateExpression(node, env);
+  }
+  
   // If we get here, it's an unknown node type
   throw new Error(`Unknown node type: ${node.type}`);
 }
