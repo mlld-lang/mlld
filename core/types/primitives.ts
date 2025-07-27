@@ -245,7 +245,7 @@ export interface FileReferenceNode extends BaseMlldNode {
 // Expression nodes for logical operators
 export interface BinaryExpression extends BaseMlldNode {
   type: 'BinaryExpression';
-  operator: '&&' | '||' | '==' | '!=';
+  operator: '&&' | '||' | '==' | '!=' | '<' | '>' | '<=' | '>=';
   left: Expression;
   right: Expression;
 }

@@ -34,7 +34,7 @@ Comparison
     }
 
 ComparisonOp
-  = "==" / "!="
+  = "==" / "!=" / "<=" / ">=" / "<" / ">"
 
 // Primary expressions (highest precedence)
 Primary

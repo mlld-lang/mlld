@@ -3,7 +3,8 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 VarRHSContent "var assignment value"
-  = ForeachCommandExpression    // foreach @command(@arrays)
+  = ExpressionWithOperator      // Try expressions FIRST but only if operators present
+  / ForeachCommandExpression    // foreach @command(@arrays)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
@@ -16,7 +17,17 @@ VarRHSContent "var assignment value"
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
   / PrimitiveValue              // Direct primitives: 42, true, false, null
-  / Expression                  // Expressions with operators (&&, ||, ==, !=, ?, :, !) - LAST to avoid conflicts
+
+// Expression that definitely has an operator (to avoid matching simple variables)
+ExpressionWithOperator
+  = &{
+      // Look ahead to see if there's an operator somewhere
+      const rest = input.substring(peg$currPos);
+      return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?|!))|(\s*\?\s*[^:]+\s*:)/.test(rest);
+    }
+    expr:Expression {
+      return expr;
+    }
 
 // Note: AlligatorWithTransform was removed because AlligatorExpression 
 // already handles "as" clauses internally in alligator.peggy
