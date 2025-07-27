@@ -799,7 +799,7 @@ WhenOutputSource
         raw: '@' + id
       };
     }
-  / str:StringLiteral {
+  / str:DataString {
       // Literal text
       return {
         type: 'literal',
@@ -825,7 +825,7 @@ WhenOutputTarget
         raw: varname ? `env:${varname}` : 'env'
       };
     }
-  / str:StringLiteral {
+  / str:DataString {
       // File path as quoted string
       return {
         type: 'file',
