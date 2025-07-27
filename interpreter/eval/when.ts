@@ -800,7 +800,12 @@ function isTruthy(value: any): boolean {
     
     // Type-specific truthiness for Variables
     if (isTextLike(variable)) {
-      return variable.value.length > 0;
+      // Check for mlld falsy string values
+      const str = variable.value;
+      if (str === '' || str.toLowerCase() === 'false' || str === '0') {
+        return false;
+      }
+      return true;
     } else if (isArrayVariable(variable)) {
       return variable.value.length > 0;
     } else if (isObjectVariable(variable)) {

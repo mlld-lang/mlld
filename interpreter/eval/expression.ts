@@ -22,7 +22,12 @@ export function isTruthy(value: any): boolean {
     
     // Type-specific truthiness for Variables
     if (isTextLike(variable)) {
-      return variable.value.length > 0;
+      // Check for mlld falsy string values
+      const str = variable.value;
+      if (str === '' || str.toLowerCase() === 'false' || str === '0') {
+        return false;
+      }
+      return true;
     } else if (isArrayVariable(variable)) {
       return variable.value.length > 0;
     } else if (isObjectVariable(variable)) {
@@ -52,7 +57,20 @@ export function isTruthy(value: any): boolean {
   }
   
   if (typeof value === 'string') {
-    return value.length > 0;
+    // Empty string is false
+    if (value === '') {
+      return false;
+    }
+    // String "false" is false (case insensitive)
+    if (value.toLowerCase() === 'false') {
+      return false;
+    }
+    // String "0" is false
+    if (value === '0') {
+      return false;
+    }
+    // All other strings are true
+    return true;
   }
   
   if (Array.isArray(value)) {
