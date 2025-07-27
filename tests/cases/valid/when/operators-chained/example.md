@@ -1,10 +1,3 @@
-# Chained Logical Operators in When Conditions
-
-Tests chaining of && and || operators in when conditions.
-
-## Input
-
-```mlld
 /var @isUser = true
 /var @isActive = true
 /var @hasPermission = true
@@ -29,13 +22,3 @@ Tests chaining of && and || operators in when conditions.
 
 /when @condition1 || @condition2 || @condition3 || @condition4 => /show "At least one condition is true\n"
 /when @condition1 && @condition2 && @condition3 && @condition4 => /show "This should not show\n"
-```
-
-## Expected Output
-
-```
-Access granted (user path)
-Access granted (admin or active user)
-Access granted (complex)
-At least one condition is true
-```

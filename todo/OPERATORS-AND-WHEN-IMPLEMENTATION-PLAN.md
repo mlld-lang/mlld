@@ -15,8 +15,11 @@ This document outlines the implementation plan for three major enhancements to m
 
 - ✅ **Phase 0**: Type system updates completed
 - ✅ **Phase 1**: Expression grammar created, helper functions added
-- 🚧 **Phase 2**: When integration attempted but reverted
-- 🔴 **Phases 3-6**: Not yet started
+- ✅ **Phase 2**: When integration completed successfully
+- 🔴 **Phase 3**: RHS when expressions not started
+- 🔴 **Phase 4**: Interpreter expression evaluation not started (causing test failures)
+- 🔴 **Phase 5**: Testing & validation pending interpreter implementation
+- 🔴 **Phase 6**: Documentation pending all implementation
 
 ## Key File Locations
 
@@ -543,12 +546,12 @@ WhenExpression
 3. ✅ Expression pattern added to var-rhs.peggy (as LAST choice!)
 4. 🔴 Validate operator precedence and associativity with tests
 
-### Phase 2: When Integration (Days 4-5) 🔴 NEEDS RESTART
-1. ❌ Update when conditions to use Expression pattern (changes were reverted)
-2. 🔴 Implement single-line constrained patterns for implicit actions
-3. 🔴 Add error recovery for common mistakes
-4. 🔴 Ensure AST consistency with explicit directives
-5. ✅ Verify backward compatibility (confirmed - only 2 tests failing)
+### Phase 2: When Integration (Days 4-5) ✅ COMPLETED
+1. ✅ Update when conditions to use Expression pattern
+2. ✅ When directive now supports full expressions in conditions
+3. ✅ Test cases created for operators-comparison and operators-chained
+4. ✅ AST correctly shows BinaryExpression nodes
+5. ✅ Backward compatibility maintained
 
 ### Phase 3: RHS When Expression (Day 6) 🔴 NOT STARTED
 1. 🔴 Add WhenExpression to var-rhs.peggy

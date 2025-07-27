@@ -307,9 +307,13 @@ WhenModifier
 // CONDITION EXPRESSIONS
 // -------------------------------------------------------------
 
-// Simple condition for @when simple form - no literals allowed
+// Simple condition for @when simple form - supports full expressions
 WhenSimpleCondition
-  = NegatedSimpleCondition
+  = expr:Expression {
+      // Wrap in array for consistency with existing code
+      return [expr];
+    }
+  / NegatedSimpleCondition
   / NonNegatedSimpleCondition
 
 // Negated simple condition with ! prefix
@@ -353,9 +357,13 @@ NonNegatedSimpleCondition
       );
     }
 
-// Condition expression - reuse existing patterns
+// Condition expression - supports full expressions with operators
 WhenConditionExpression
-  = NegatedCondition
+  = expr:Expression {
+      // Wrap in array for consistency
+      return [expr];
+    }
+  / NegatedCondition
   / NonNegatedCondition
 
 // Negated condition with ! prefix
