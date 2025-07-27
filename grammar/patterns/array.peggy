@@ -56,7 +56,7 @@ ArrayValue "array value"
   / TemplateStyleInterpolation  // `template`, [[template]], "string"
   / CodeExecution           // run {command} or js {code}
   / NestedDirective         // embedded directives
-  / StringLiteral           // "string"
+  / DataString              // 'string' or "string with @interpolation"
   / NumberLiteral           // 123
   / BooleanLiteral          // true/false
   / NullLiteral             // null

@@ -77,7 +77,7 @@ DataTemplateValue "data template value"
 // DATA STRING VALUE - Returns unwrapped strings
 // In data context, we want plain JavaScript strings, not AST nodes
 DataStringValue "data context string value"
-  = StringLiteral                // StringLiteral already returns unwrapped content!
+  = DataString                   // DataString handles both single and double quotes with interpolation
 
 // DATA ARRAY CONTENT - Array items with proper data handling
 DataArrayContent

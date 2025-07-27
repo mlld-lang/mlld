@@ -78,12 +78,22 @@ OutputTargetFile "file target"
 // OUTPUT FILE PATH - Flexible path parsing for output targets
 // Allows quoted strings, bracketed paths, or unquoted paths
 OutputFilePath "output file path"
-  = str:StringLiteral {
-      return {
-        parts: [helpers.createNode(NodeType.Text, { content: str, location: location() })],
-        raw: `"${str}"`,
-        meta: { quoted: true }
-      };
+  = str:DataString {
+      // Handle both simple strings and interpolated content
+      if (typeof str === 'string') {
+        return {
+          parts: [helpers.createNode(NodeType.Text, { content: str, location: location() })],
+          raw: `"${str}"`,
+          meta: { quoted: true }
+        };
+      } else if (str.needsInterpolation) {
+        // Return the parts for runtime interpolation
+        return {
+          parts: str.parts,
+          raw: helpers.reconstructRawString(str.parts),
+          meta: { quoted: true, needsInterpolation: true }
+        };
+      }
     }
   // REMOVED: Bracket syntax - use quoted paths instead
   / chars:[^ \t\n\r"'\[\]]+ {

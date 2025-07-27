@@ -72,14 +72,7 @@ AtomicExpression
         location: location()
       });
     }
-  / value:StringLiteral {
-      // Wrap string literal in a Literal node
-      return helpers.createNode('Literal', {
-        value: value,
-        valueType: 'string',
-        location: location()
-      });
-    }
+  / ExpressionString  // ExpressionString already returns a Literal node
   / value:NumberLiteral {
       // Wrap number literal in a Literal node
       return helpers.createNode('Literal', {

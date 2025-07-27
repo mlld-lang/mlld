@@ -140,7 +140,7 @@ DoubleQuotedText
 DoubleQuotedChar
   = StringEscapeSequence  // Handle \n, \t, etc.
   / EscapeSequence       // Handle \@, \", etc.
-  / !["@<\n\r] char:. { return char; }
+  / !["@\n\r] char:. { return char; }  // Removed < to allow FileReferenceInterpolation
 
 // Content inside backtick templates - supports @var and @func(args) and <file.md>
 BacktickInterpolation

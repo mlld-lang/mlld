@@ -36,12 +36,18 @@ CommandArgument "command argument"
   / DataObjectLiteral           // Object literals: {"key": "value"}
   / ArrayLiteral                // Arrays: [1, 2, 3]
   / AlligatorExpression         // File loading: <file.md>
-  / str:StringLiteral {
+  / str:DataString {
       // Create a Text node directly
-      return helpers.createNode(NodeType.Text, {
-        content: str,
-        location: location()
-      });
+      // Handle both simple strings and interpolated content
+      if (typeof str === 'string') {
+        return helpers.createNode(NodeType.Text, {
+          content: str,
+          location: location()
+        });
+      } else if (str.needsInterpolation) {
+        // Return the parts for runtime interpolation
+        return str.parts;
+      }
     }
   / varRef:VariableNoTail {  // Use unified variable pattern for command context
       // Return the VariableReference directly

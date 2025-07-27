@@ -158,7 +158,7 @@ ExecInvocationPattern "exec invocation pattern"
 
 // Primitive values for arrays
 PrimitiveValue
-  = StringLiteral
+  = ExpressionString        // Returns Literal node for both single and double quotes
   / NumberLiteral
   / BooleanLiteral
   / NullLiteral
@@ -204,7 +204,7 @@ CodeExecutionValue
 // Property key - shared between old ObjectLiteral and DataObjectLiteral
 PropertyKey
   = BaseIdentifier
-  / StringLiteral
+  / DataString      // Use DataString for object property keys
 
 // Nested directive like @run
 NestedDirective
