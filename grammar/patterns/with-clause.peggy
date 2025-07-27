@@ -38,7 +38,7 @@ WithProperty
   / "needs" _ ":" _ needs:NeedsObject {
       return ["needs", needs];
     }
-  / "format" _ ":" _ format:StringLiteral {
+  / "format" _ ":" _ format:DataString {
       return ["format", format];
     }
   / "asSection" _ ":" _ title:AsSectionRenameString {
@@ -114,7 +114,7 @@ NeedsLanguageList
 
 // Single language entry (e.g., "node": { ... })
 NeedsLanguageEntry
-  = lang:StringLiteral _ ":" _ packages:PackagesObject {
+  = lang:DataString _ ":" _ packages:PackagesObject {
       return [lang, packages];
     }
 
@@ -138,6 +138,6 @@ PackagesList
 
 // Single package entry (e.g., "lodash": "^4.17.0")
 PackageEntry
-  = pkg:StringLiteral _ ":" _ version:StringLiteral {
+  = pkg:DataString _ ":" _ version:DataString {
       return [pkg, version];
     }

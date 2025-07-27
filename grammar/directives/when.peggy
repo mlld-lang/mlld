@@ -358,6 +358,8 @@ WhenSimpleCondition
       // Wrap in array for consistency with existing code
       return [expr];
     }
+  / NegatedSimpleCondition
+  / NonNegatedSimpleCondition
 
 // Negated simple condition with ! prefix
 NegatedSimpleCondition
