@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc29]
 
+### Added
+- **Logical and Comparison Operators in Expressions**
+  - New operators for `/var` assignments and `/when` conditions: `&&`, `||`, `==`, `!=`, `!`, `?`, `:`
+  - Expression parsing with proper operator precedence: `@a && @b || @c` parses as `((@a && @b) || @c)`
+  - Ternary conditional expressions: `/var @result = @test ? @trueVal : @falseVal`
+  - Binary expressions with comparison: `/var @isEqual = @x == @y`, `/var @different = @a != @b`
+  - Unary negation: `/var @opposite = !@condition`
+  - Parentheses for explicit precedence: `/var @complex = (@a || @b) && (@c != @d)`
+  - Full expression support in when conditions: `/when @tokens > 1000 && @mode == "production" => /show "High usage detected"`
+  - Short-circuit evaluation: `&&` and `||` operators properly short-circuit for performance
+  - Type coercion following mlld semantics: `"true" == true` → true, `null == undefined` → true
+
+- **Enhanced String Interpolation**
+  - Fixed file reference interpolation in double-quoted strings: `"Content from <file.md> here"`
+  - Consistent handling of both `@variable` and `<file.md>` interpolation patterns
+  - Proper support for `wrapperType: 'doubleQuote'` in interpreter evaluation
+  - Safety checks prevent empty value arrays from causing "missing value" errors
+
 ### Changed
 - **Hybrid console.log behavior in JavaScript execution**
   - `console.log()` now always outputs to stdout for debugging visibility
@@ -15,6 +33,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - This approach maintains compatibility with existing tests while providing better debugging experience
   - Example: `js { console.log("debug"); return "result" }` shows "debug" on stdout and stores "result"
   - Example: `js { console.log("output") }` shows "output" on stdout AND stores "output" as the result
+
+### Fixed
+- **Expression Evaluation in Variable Assignments**
+  - BinaryExpression nodes are now properly evaluated when used in `/var` assignments
+  - Fixed boolean literal handling in expression contexts
+  - Proper primitive variable creation for boolean and numeric expression results
+  
+- **Grammar and Parser Improvements**
+  - Fixed CommandReference type mismatches between grammar output and TypeScript expectations
+  - Added translation layer in evaluators to handle both legacy and new AST formats
+  - Improved error recovery and backward compatibility for when directive patterns
+  
+- **Test Infrastructure Stability**
+  - Updated test expectations to align with new console.log behavior
+  - Fixed test cases that relied on specific output formatting
+  - Resolved shadow environment test issues with variable interpolation in literal strings
 
 ## [2.0.0-rc28]
 
