@@ -513,7 +513,7 @@ export async function evaluateVar(
       });
     }
     const { evaluateExpression } = await import('./expression');
-    const result = await evaluateExpression(valueNode, env);
+    const result = await evaluateExpression(valueNode, env, { isExpression: true });
     if (process.env.MLLD_DEBUG === 'true') {
       console.log('[DEBUG] var.ts: Expression result:', {
         value: result.value,

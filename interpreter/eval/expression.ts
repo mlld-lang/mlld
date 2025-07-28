@@ -90,7 +90,8 @@ export function isTruthy(value: any): boolean {
  */
 export async function evaluateExpression(
   node: BinaryExpression | TernaryExpression | UnaryExpression,
-  env: Environment
+  env: Environment,
+  context?: { isExpression?: boolean }
 ): Promise<EvalResult> {
   if (process.env.MLLD_DEBUG === 'true') {
     console.log('[DEBUG] evaluateExpression called with node type:', node.type);
@@ -100,11 +101,11 @@ export async function evaluateExpression(
   }
   
   if (node.type === 'BinaryExpression') {
-    return evaluateBinaryExpression(node, env);
+    return evaluateBinaryExpression(node, env, context);
   } else if (node.type === 'TernaryExpression') {
-    return evaluateTernaryExpression(node, env);
+    return evaluateTernaryExpression(node, env, context);
   } else if (node.type === 'UnaryExpression') {
-    return evaluateUnaryExpression(node, env);
+    return evaluateUnaryExpression(node, env, context);
   }
   
   throw new Error(`Unknown expression type: ${(node as any).type}`);
@@ -113,8 +114,13 @@ export async function evaluateExpression(
 /**
  * Evaluate binary expressions (&&, ||, ==, !=, <, >, <=, >=)
  */
-async function evaluateBinaryExpression(node: BinaryExpression, env: Environment): Promise<EvalResult> {
-  const { operator, left, right } = node;
+async function evaluateBinaryExpression(node: BinaryExpression, env: Environment, context?: { isExpression?: boolean }): Promise<EvalResult> {
+  let { operator, left, right } = node;
+  
+  // Handle operator being an array (from PEG.js negative lookahead)
+  if (Array.isArray(operator)) {
+    operator = operator[0];
+  }
   
   if (process.env.MLLD_DEBUG === 'true') {
     console.log('[DEBUG] evaluateBinaryExpression called with operator:', operator);
@@ -128,7 +134,7 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
   }
   
   // Short-circuit evaluation for logical operators
-  const expressionContext = { isExpression: true };
+  const expressionContext = { isExpression: true, ...context };
   
   if (operator === '&&') {
     const leftResult = await evaluate(left, env, expressionContext);
@@ -237,29 +243,29 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
 /**
  * Evaluate ternary expressions (condition ? trueBranch : falseBranch)
  */
-async function evaluateTernaryExpression(node: TernaryExpression, env: Environment): Promise<EvalResult> {
+async function evaluateTernaryExpression(node: TernaryExpression, env: Environment, context?: { isExpression?: boolean }): Promise<EvalResult> {
   const { condition, trueBranch, falseBranch } = node;
   
   // Evaluate condition
-  const condResult = await evaluate(condition, env);
+  const condResult = await evaluate(condition, env, { isExpression: true, ...context });
   const condTruthy = isTruthy(condResult.value);
   
   // Evaluate and return appropriate branch
   if (condTruthy) {
-    return evaluate(trueBranch, env);
+    return evaluate(trueBranch, env, { isExpression: true, ...context });
   } else {
-    return evaluate(falseBranch, env);
+    return evaluate(falseBranch, env, { isExpression: true, ...context });
   }
 }
 
 /**
  * Evaluate unary expressions (!)
  */
-async function evaluateUnaryExpression(node: UnaryExpression, env: Environment): Promise<EvalResult> {
+async function evaluateUnaryExpression(node: UnaryExpression, env: Environment, context?: { isExpression?: boolean }): Promise<EvalResult> {
   const { operator, operand } = node;
   
   if (operator === '!') {
-    const operandResult = await evaluate(operand, env);
+    const operandResult = await evaluate(operand, env, { isExpression: true, ...context });
     const operandTruthy = isTruthy(operandResult.value);
     return { value: !operandTruthy, env };
   }

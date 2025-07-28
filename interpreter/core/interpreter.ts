@@ -187,6 +187,8 @@ export interface EvalResult {
 export interface EvaluationContext {
   /** Whether we're evaluating a condition (affects field access behavior) */
   isCondition?: boolean;
+  /** Whether we're evaluating an expression (affects variable resolution) */
+  isExpression?: boolean;
 }
 
 /**
@@ -359,6 +361,10 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     }
     
     if (!variable) {
+      // In expression context, return undefined for missing variables
+      if (context?.isExpression) {
+        return { value: undefined, env };
+      }
       throw new Error(`Variable not found: ${node.identifier}`);
     }
     

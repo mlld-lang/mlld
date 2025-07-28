@@ -603,7 +603,7 @@ async function evaluateCondition(
     const node = condition[0];
     if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
       const { evaluateExpression } = await import('./expression');
-      const result = await evaluateExpression(node as any, env);
+      const result = await evaluateExpression(node as any, env, { isExpression: true });
       if (process.env.MLLD_DEBUG === 'true') {
         console.log('[DEBUG] Expression evaluation result:', {
           nodeType: node.type,
@@ -719,8 +719,8 @@ async function evaluateCondition(
     logger.debug('Evaluating condition:', { condition });
   }
   
-  // Evaluate the condition with condition context
-  const result = await evaluate(condition, childEnv, { isCondition: true });
+  // Evaluate the condition with condition and expression context
+  const result = await evaluate(condition, childEnv, { isCondition: true, isExpression: true });
   
   if (process.env.DEBUG_WHEN) {
     logger.debug('Condition evaluation result:', { result });

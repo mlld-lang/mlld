@@ -2,29 +2,35 @@
 
 ## Logical Operators in /var
 
-false
-false
-false
-false
+undefined
 
+undefined
+
+undefined
+
+undefined
 ## Comparison Operators in /var
 
 false
-true
-false
 
+true
+
+false
 ## Ternary Operator in /var
 
 production
-dev
-undefined
 
+dev
+
+undefined
 ## Unary Operator in /var
 
 true
-true
 
+true
 ## Expressions in /when
+
+Please log in
 
 ## Complex Expressions
 
@@ -32,8 +38,7 @@ undefined
 
 ## Expression Precedence Test
 
-# These should parse with correct precedence
-false
-false
-true
+undefined
+undefined
+undefined
 false

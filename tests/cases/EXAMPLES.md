@@ -1016,26 +1016,38 @@ I am helper and I work
 ## Logical Operators in /var
 
 /var @andResult = @a && @b
+/show @andResult
 /var @orResult = @x || @y
+/show @orResult
 /var @complexLogic = @a && @b || @c && @d
+/show @complexLogic
 /var @withParens = (@a || @b) && (@c || @d)
+/show @withParens
 
 ## Comparison Operators in /var
 
 /var @isEqual = @name == "Alice"
+/show @isEqual
 /var @notEqual = @status != "active"
+/show @notEqual
 /var @chainedComp = @a == @b && @c != @d
+/show @chainedComp
 
 ## Ternary Operator in /var
 
 /var @simpleChoice = @isDev ? "development" : "production"
+/show @simpleChoice
 /var @nestedTernary = @env == "prod" ? "live" : @env == "staging" ? "test" : "dev"
+/show @nestedTernary
 /var @ternaryWithLogic = @isAdmin && @isActive ? @adminDash : @userDash
+/show @ternaryWithLogic
 
 ## Unary Operator in /var
 
 /var @notActive = !@isActive
+/show @notActive
 /var @complexNegation = !(@a && @b) || @c
+/show @complexNegation
 
 ## Expressions in /when
 
@@ -1047,15 +1059,20 @@ I am helper and I work
 ## Complex Expressions
 
 /var @result = (@a && @b) || (!@c && @d) ? @option1 : @option2
+/show @result
 /when (@status == "active" || @override) && !@suspended => /run @process()
 
 ## Expression Precedence Test
 
-# These should parse with correct precedence
-/var @test1 = @a || @b && @c     # Should be: @a || (@b && @c)
-/var @test2 = @a && @b || @c     # Should be: (@a && @b) || @c
-/var @test3 = !@a && @b          # Should be: (!@a) && @b
-/var @test4 = @a == @b && @c != @d  # Should be: (@a == @b) && (@c != @d)
+>> These should parse with correct precedence
+/var @test1 = @a || @b && @c     << Should be: @a || (@b && @c)
+/show @test1
+/var @test2 = @a && @b || @c     << Should be: (@a && @b) || @c
+/show @test2
+/var @test3 = !@a && @b          << Should be: (!@a) && @b
+/show @test3
+/var @test4 = @a == @b && @c != @d  << Should be: (@a == @b) && (@c != @d)
+/show @test4
 ```
 
 **Expected Output:**
@@ -1064,29 +1081,35 @@ I am helper and I work
 
 ## Logical Operators in /var
 
-false
-false
-false
-false
+undefined
 
+undefined
+
+undefined
+
+undefined
 ## Comparison Operators in /var
 
 false
-true
-false
 
+true
+
+false
 ## Ternary Operator in /var
 
 production
-dev
-undefined
 
+dev
+
+undefined
 ## Unary Operator in /var
 
 true
-true
 
+true
 ## Expressions in /when
+
+Please log in
 
 ## Complex Expressions
 
@@ -1094,10 +1117,9 @@ undefined
 
 ## Expression Precedence Test
 
-# These should parse with correct precedence
-false
-false
-true
+undefined
+undefined
+undefined
 false
 ```
 
@@ -1150,6 +1172,20 @@ Tests that expression operators parse correctly (not evaluation).
 
 **Expected Output:**
 ```markdown
+# Expression Operators Parsing Test
+
+Tests that expression operators parse correctly (not evaluation).
+
+## Logical Operators in /var
+
+## Comparison Operators in /var
+
+## Ternary Operator in /var
+
+## Unary Operator in /var
+
+## Show Results
+
 Tests completed - if this shows, parsing worked!
 ```
 
