@@ -42,7 +42,7 @@ SlashWhen
   / WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
   / WhenSimpleForm
   // Error recovery: any: with individual actions (MUST come before WhenBlockForm)
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "any" _ ":" _ "[" _ &{
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; }) _ "any" _ ":" _ "[" _ &{
       // Look ahead to see if there are individual actions (=> inside the block)
       let i = peg$currPos;
       let depth = 1;

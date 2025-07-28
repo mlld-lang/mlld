@@ -154,10 +154,12 @@ async function evaluateWhenMatch(
       let isNegated = false;
       let actualCondition = pair.condition;
       
-      if (actualCondition.length === 1 && actualCondition[0].type === 'Negation') {
-        isNegated = true;
-        const negationNode = actualCondition[0] as any;
-        actualCondition = negationNode.condition;
+      if (actualCondition.length === 1 && actualCondition[0].type === 'UnaryExpression') {
+        const unaryNode = actualCondition[0] as any;
+        if (unaryNode.operator === '!') {
+          isNegated = true;
+          actualCondition = [unaryNode.operand];
+        }
       }
       
       // Evaluate the condition value without producing output
@@ -378,10 +380,12 @@ async function evaluateFirstMatch(
       let isNegated = false;
       let actualCondition = pair.condition;
       
-      if (actualCondition.length === 1 && actualCondition[0].type === 'Negation') {
-        isNegated = true;
-        const negationNode = actualCondition[0] as any;
-        actualCondition = negationNode.condition;
+      if (actualCondition.length === 1 && actualCondition[0].type === 'UnaryExpression') {
+        const unaryNode = actualCondition[0] as any;
+        if (unaryNode.operator === '!') {
+          isNegated = true;
+          actualCondition = [unaryNode.operand];
+        }
       }
       
       // Evaluate the condition value
@@ -582,14 +586,16 @@ async function evaluateCondition(
       firstNodeType: condition[0]?.type
     });
   }
-  // Check if this is a negation node
-  if (condition.length === 1 && condition[0].type === 'Negation') {
-    const negationNode = condition[0] as any;
-    const innerCondition = negationNode.condition;
-    
-    // Evaluate the inner condition and negate the result
-    const innerResult = await evaluateCondition(innerCondition, env, variableName);
-    return !innerResult;
+  // Check if this is a negation node (UnaryExpression with operator '!')
+  if (condition.length === 1 && condition[0].type === 'UnaryExpression') {
+    const unaryNode = condition[0] as any;
+    if (unaryNode.operator === '!') {
+      const innerCondition = [unaryNode.operand];
+      
+      // Evaluate the inner condition and negate the result
+      const innerResult = await evaluateCondition(innerCondition, env, variableName);
+      return !innerResult;
+    }
   }
   
   // Check if this is an expression node (BinaryExpression, TernaryExpression, UnaryExpression)
