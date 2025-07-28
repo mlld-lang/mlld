@@ -131,7 +131,7 @@ describe('Mlld API', () => {
 
     it('should handle exe directive', async () => {
       const content = `
-/exe @greeting = @run {echo "Hello from exe!"}
+/exe @greeting = run {echo "Hello from exe!"}
       `.trim();
       const result = await processMlld(content, {
         fileSystem,
