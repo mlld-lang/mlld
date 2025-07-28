@@ -45,9 +45,9 @@ Done!::
 /show @simpleCode("pip install -r requirements.txt")
 
 /show "\n=== Code Blocks ==="
-/show @codeBlock(@lang, "console.log('Hello @name!');")
+/show @codeBlock(@lang, `console.log("Hello @name!");`)
 /show ""
-/show @codeBlock("python", "print('Hello @name!')")
+/show @codeBlock("python", `print("Hello @name!")`)
 
 /show "\n=== Mixed Content ==="
 /show @mixed("https://example.com:3000", "node server.js")

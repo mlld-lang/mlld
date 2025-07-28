@@ -34,13 +34,13 @@ Run `pip install -r requirements.txt` to start
 === Code Blocks ===
 Here's the JavaScript code:
 ```JavaScript
-console.log('Hello @name!');
+console.log("Hello Alice!");
 ```
 Done!
 
 Here's the python code:
 ```python
-print('Hello @name!')
+print("Hello Alice!")
 ```
 Done!
 
