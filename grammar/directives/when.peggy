@@ -1041,6 +1041,7 @@ WhenImplicitFunctionCall
       })];
     }
 
+
 // Implicit rich content - multi-line templates, code blocks, etc.
 WhenImplicitRichContent
   = template:TemplateCore {

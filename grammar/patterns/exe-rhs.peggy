@@ -3,7 +3,8 @@
 // Purpose: Route to appropriate content parser based on syntax detection
 
 ExeRHSContent "exe assignment value"
-  = ExeSlashRunPattern          // /run {command} or /run js {code} - optional slash syntax
+  = WhenExpression              // when: [...] expressions for conditional execution
+  / ExeSlashRunPattern          // /run {command} or /run js {code} - optional slash syntax
   / ExeRunCommandPattern        // run {command} - explicit run command syntax
   / ExeCodePattern              // js {code} - language-specific code blocks
   / ExeEnvironmentDeclaration   // { helper1, helper2 } - environment setup (must come before command)

@@ -29,6 +29,52 @@ SlashExe
       // Process parameters
       const processedParams = params || [];
       
+      // Handle WhenExpression nodes directly
+      if (content.type === 'WhenExpression') {
+        const values = {
+          identifier: [identifierNode],
+          params: processedParams,
+          content: [content]
+        };
+        
+        const raw = {
+          identifier: id,
+          params: processedParams.map(p => p.name),
+          content: 'when: [...]'  // Simplified representation
+        };
+        
+        const metaObj = {
+          parameterCount: processedParams.length,
+          isWhenExpression: true,
+          ...helpers.createSecurityMeta({ trust }),
+          ...(meta ? { riskLevel: meta } : {})
+        };
+        
+        // Add metadata if present
+        if (meta) {
+          values.metadata = [helpers.createNode(NodeType.Text, { content: meta, location: location() })];
+          raw.metadata = meta;
+          metaObj.metadata = { type: meta };
+        }
+        
+        // Add with clause if present
+        if (withClause) {
+          values.withClause = withClause;
+          raw.withClause = withClause;
+          metaObj.withClause = withClause;
+        }
+        
+        return helpers.createStructuredDirective(
+          DirectiveKind.exe,
+          'exeWhen',
+          values,
+          raw,
+          metaObj,
+          location(),
+          'when'
+        );
+      }
+      
       // Extract subtype and source from content
       const subtype = content.subtype;
       const source = content.source;
