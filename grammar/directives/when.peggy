@@ -500,13 +500,19 @@ WhenConditionPair
 // Action (single directive or block of directives)
 WhenAction
   = WhenActionBlock
+  / WhenImplicitAction   // NEW: Implicit actions without directive prefix
   / WhenActionDirective
 
 // Block of directives as action: [directive1, directive2, ...]
 WhenActionBlock
-  = "[" _ first:WhenActionDirective rest:(_ d:WhenActionDirective { return d; })* _ "]" {
+  = "[" _ first:WhenBlockAction rest:(_ d:WhenBlockAction { return d; })* _ "]" {
       return [first, ...rest].flat();
     }
+
+// Single action within a when block - supports both implicit and explicit
+WhenBlockAction
+  = WhenImplicitAction   // Try implicit actions first
+  / WhenActionDirective  // Fall back to explicit directives
 
 // Single directive as action - simplified inline directives
 WhenActionDirective
@@ -831,4 +837,279 @@ WhenOutputTarget
         raw: `"${str}"`,
         meta: { quoted: true }
       };
+    }
+
+// -------------------------------------------------------------
+// IMPLICIT ACTIONS - Support for simplified syntax without directive prefix
+// -------------------------------------------------------------
+
+// Implicit action patterns - these match the same syntax as explicit directives but without "/"
+WhenImplicitAction
+  = WhenImplicitVarAssignment
+  / WhenImplicitExecAssignment  
+  / WhenImplicitFunctionCall
+  / WhenImplicitRichContent
+
+// Implicit var assignment: @x = "value"
+WhenImplicitVarAssignment
+  = "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
+      // Create the same structure as explicit /var but with implicit flag
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      
+      // Process the value using the same logic as explicit /var directive
+      let processedValue;
+      let metaInfo = { implicit: true };
+      
+      // Handle template content (backtick, [[...]], quotes)
+      if (value && value.content && value.wrapperType) {
+        processedValue = value.content;
+        metaInfo.wrapperType = value.wrapperType;
+        metaInfo.inferredType = 'template';
+      }
+      // Handle object literals
+      else if (value && value.type === 'object') {
+        processedValue = [value];
+        metaInfo.inferredType = 'object';
+      }
+      // Handle array literals
+      else if (value && value.type === 'array') {
+        processedValue = [value];
+        metaInfo.inferredType = 'array';
+      }
+      // Handle exec invocations (function calls)
+      else if (value && value.type === 'ExecInvocation') {
+        processedValue = [value];
+        metaInfo.inferredType = 'computed';
+      }
+      // Handle variable references
+      else if (value && value.type === 'variableReference') {
+        processedValue = [value.value];
+        metaInfo.inferredType = 'reference';
+      }
+      // Handle variable references with tail modifiers
+      else if (value && value.type === 'VariableReferenceWithTail') {
+        processedValue = [value.variable];
+        metaInfo.inferredType = 'reference';
+      }
+      // Handle nested directives
+      else if (value && value.type === 'nestedDirective') {
+        processedValue = [value.directive];
+        metaInfo.inferredType = 'computed';
+      }
+      // Handle code execution
+      else if (value && value.type === 'code') {
+        processedValue = [{
+          type: 'code',
+          language: value.language,
+          code: value.code
+        }];
+        metaInfo.inferredType = 'computed';
+      }
+      // Handle command execution
+      else if (value && value.type === 'command') {
+        processedValue = [{
+          type: 'command',
+          command: value.command
+        }];
+        metaInfo.inferredType = 'computed';
+      }
+      // Handle foreach expressions
+      else if (value && value.type === 'foreach-command') {
+        processedValue = [value.value];
+        metaInfo.inferredType = 'computed';
+      }
+      // Handle primitive values
+      else if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+        processedValue = [value];
+        metaInfo.inferredType = 'primitive';
+      }
+      // Handle string literals (backward compatibility)
+      else if (typeof value === 'string') {
+        processedValue = [helpers.createNode(NodeType.Text, { 
+          content: value, 
+          location: location() 
+        })];
+        metaInfo.inferredType = 'text';
+      }
+      // Handle other types
+      else {
+        processedValue = Array.isArray(value) ? value : [value];
+        metaInfo.inferredType = 'unknown';
+      }
+      
+      return [helpers.createNode(NodeType.Directive, {
+        kind: 'var',
+        subtype: 'var',
+        values: { 
+          identifier: [idNode],
+          value: processedValue
+        },
+        raw: {
+          identifier: id,
+          value: helpers.reconstructRawString(processedValue)
+        },
+        meta: metaInfo,
+        location: location()
+      })];
+    }
+
+// Implicit exec assignment: @func() = @helper()  
+WhenImplicitExecAssignment
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "=" _ value:VarRHSContent {
+      // Create exec directive with assignment semantics (same as /exe)
+      const ref = {
+        name,
+        identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
+        args: args || [],
+        isCommandReference: true
+      };
+      
+      // Process the value using the same logic as VarRHSContent
+      let processedValue;
+      let metaInfo = { implicit: true };
+      
+      // Handle the value using same patterns as implicit var assignment
+      if (value && value.content && value.wrapperType) {
+        processedValue = value.content;
+        metaInfo.wrapperType = value.wrapperType;
+        metaInfo.inferredType = 'template';
+      }
+      else if (value && value.type === 'ExecInvocation') {
+        processedValue = [value];
+        metaInfo.inferredType = 'computed';
+      }
+      else if (value && value.type === 'variableReference') {
+        processedValue = [value.value];
+        metaInfo.inferredType = 'reference';
+      }
+      else if (value && value.type === 'VariableReferenceWithTail') {
+        processedValue = [value.variable];
+        metaInfo.inferredType = 'reference';
+      }
+      else {
+        processedValue = Array.isArray(value) ? value : [value];
+        metaInfo.inferredType = 'unknown';
+      }
+      
+      return [helpers.createNode(NodeType.Directive, {
+        kind: 'exe',
+        subtype: 'exe',
+        values: { 
+          commandRef: ref,
+          value: processedValue
+        },
+        raw: {
+          commandRef: name,
+          value: helpers.reconstructRawString(processedValue)
+        },
+        meta: metaInfo,
+        location: location()
+      })];
+    }
+
+// Implicit function call: @doSomething()
+WhenImplicitFunctionCall  
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" tail:TailModifiers? {
+      // Create run directive for function calls (same as /run @func())
+      const ref = {
+        name,
+        identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
+        args: args || [],
+        isCommandReference: true
+      };
+      
+      const invocation = {
+        type: 'ExecInvocation',
+        commandRef: ref,
+        withClause: tail || null
+      };
+      
+      return [helpers.createNode(NodeType.Directive, {
+        kind: 'run',
+        subtype: 'runExecReference',
+        values: { 
+          execRef: invocation
+        },
+        raw: { 
+          execRef: name
+        },
+        meta: {
+          implicit: true,
+          hasWithClause: !!tail
+        },
+        location: location()
+      })];
+    }
+
+// Implicit rich content - multi-line templates, code blocks, etc.
+WhenImplicitRichContent
+  = template:TemplateCore {
+      // Multi-line template content (:: content ::, ```content```, etc.)
+      return [helpers.createNode(NodeType.Directive, {
+        kind: 'show',
+        subtype: 'showTemplate',
+        values: template.values,
+        raw: template.raw,
+        meta: {
+          ...template.meta,
+          implicit: true
+        },
+        location: location()
+      })];
+    }
+  / content:VarRHSContent &{
+      // Only allow rich content patterns that make sense as standalone actions
+      return content && (
+        (content.type === 'code') ||
+        (content.type === 'command') ||
+        (content.content && content.wrapperType) ||
+        (content.type === 'object') ||
+        (content.type === 'array')
+      );
+    } {
+      // Rich content like code blocks, object literals, etc.
+      let directive, subtype, values, raw;
+      const metaInfo = { implicit: true };
+      
+      if (content.type === 'code') {
+        directive = 'run';
+        subtype = 'runCode';
+        values = { 
+          language: content.language,
+          code: content.code
+        };
+        raw = {
+          language: content.language,
+          code: content.code
+        };
+      } else if (content.type === 'command') {
+        directive = 'run';
+        subtype = 'runCommand';
+        values = { 
+          command: content.command
+        };
+        raw = {
+          command: helpers.reconstructRawString(content.command)
+        };
+      } else if (content.content && content.wrapperType) {
+        directive = 'show';
+        subtype = 'showTemplate';
+        values = { content: content.content };
+        raw = { content: helpers.reconstructRawString(content.content) };
+        metaInfo.wrapperType = content.wrapperType;
+      } else {
+        directive = 'show';
+        subtype = 'showValue';
+        values = { value: [content] };
+        raw = { value: helpers.reconstructRawString([content]) };
+      }
+      
+      return [helpers.createNode(NodeType.Directive, {
+        kind: directive,
+        subtype: subtype,
+        values: values,
+        raw: raw,
+        meta: metaInfo,
+        location: location()
+      })];
     }
