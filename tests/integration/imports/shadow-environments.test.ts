@@ -68,7 +68,7 @@ describe('Shadow Environment Import Tests', () => {
     it('should handle multi-level shadow function calls', async () => {
       const result = await testImport(`
 /import { validator } from "./validation.mld"
-/var @result = @validator.check("test@example.com")
+/var @result = @validator.check('test@example.com')
 /show @result`, {
         files: {
           'validation.mld': `

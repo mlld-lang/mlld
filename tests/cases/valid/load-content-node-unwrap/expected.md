@@ -20,4 +20,6 @@ Data rows: 2
 SKIP: Glob test
 ## Test 4: Metadata access
 
+File test.md has 63 characters
+
 ## Cleanup

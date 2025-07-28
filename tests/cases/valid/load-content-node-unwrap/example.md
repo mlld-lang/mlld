@@ -19,14 +19,13 @@ Bob,25,LA`
 
 /exe @processNode(@content) = node {
   const lines = content.split('\n');
-  console.log(`Lines: ${lines.length}`);
-  console.log(`Type: ${typeof content}`);
   
   // Process markdown
   const hasHeading = content.includes('# Markdown');
   const hasBold = content.includes('**test**');
   
-  return hasHeading && hasBold ? 'PASS' : 'FAIL';
+  return `Lines: ${lines.length}
+Type: ${typeof content}`;
 }
 
 /run @processNode(@file)
@@ -39,10 +38,8 @@ Bob,25,LA`
   const headers = rows[0].split(',');
   const dataRows = rows.slice(1);
   
-  console.log(`Headers: ${headers.join(', ')}`);
-  console.log(`Data rows: ${dataRows.length}`);
-  
-  return `Parsed ${dataRows.length} rows`;
+  return `Headers: ${headers.join(', ')}
+Data rows: ${dataRows.length}`;
 }
 
 /run @parseCSV(@csvFile)
