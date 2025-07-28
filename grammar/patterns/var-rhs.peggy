@@ -4,6 +4,7 @@
 
 VarRHSContent "var assignment value"
   = ExpressionWithOperator      // Try expressions FIRST but only if operators present
+  / WhenExpression              // when: [...] expressions for conditional values
   / ForeachCommandExpression    // foreach @command(@arrays)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
@@ -282,4 +283,42 @@ CodeChar
     }
   / !"}" char:. {
       return char;
+    }
+
+// WHEN EXPRESSION - Value-returning when expressions for variable assignments
+// Used by: VarRHSContent
+// Purpose: Allow when: [...] expressions that return values based on first matching condition
+
+WhenExpression "when expression"
+  = "when" _ ":" _ "[" _ conditions:WhenConditionList _ "]" tail:TailModifiers? {
+      helpers.debug('WhenExpression matched', { 
+        conditionCount: conditions.length,
+        hasTailModifiers: !!tail
+      });
+      
+      return helpers.createWhenExpression(conditions, tail, location());
+    }
+  // Error recovery patterns
+  / "when" _ ":" _ "[" _ &{
+      return helpers.isUnclosedArray(input, peg$currPos);
+    } {
+      helpers.mlldError(
+        `Unclosed array in when expression. Expected ']' to close the condition list.`,
+        "]",
+        location()
+      );
+    }
+  / "when" _ ":" _ {
+      helpers.mlldError(
+        `Missing condition list in when expression. Expected: when: [condition => value, ...]`,
+        "[",
+        location()
+      );
+    }
+  / "when" _ &{ return !input.substring(peg$currPos).startsWith(':'); } {
+      helpers.mlldError(
+        `Missing ':' in when expression. Expected: when: [...]`,
+        ":",
+        location()
+      );
     }

@@ -24,6 +24,7 @@ export const NodeType = {
   BinaryExpression: 'BinaryExpression',
   TernaryExpression: 'TernaryExpression',
   UnaryExpression: 'UnaryExpression',
+  WhenExpression: 'WhenExpression',
 } as const;
 export type NodeTypeKey = keyof typeof NodeType;
 
@@ -997,5 +998,22 @@ export const helpers = {
       (n.content && n.content.includes('\n')) ||
       (n.raw && n.raw.includes('\n'))
     );
+  },
+
+  /**
+   * Creates a WhenExpression node for RHS when expressions
+   */
+  createWhenExpression(conditions: any[], withClause: any, location: any) {
+    return this.createNode(NodeType.WhenExpression, {
+      conditions: conditions,
+      withClause: withClause || null,
+      meta: {
+        conditionCount: conditions.length,
+        isValueReturning: true,
+        evaluationType: 'expression',
+        hasTailModifiers: !!withClause
+      },
+      location
+    });
   }
 };

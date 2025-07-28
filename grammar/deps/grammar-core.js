@@ -23,6 +23,7 @@ export const NodeType = {
     BinaryExpression: 'BinaryExpression',
     TernaryExpression: 'TernaryExpression',
     UnaryExpression: 'UnaryExpression',
+    WhenExpression: 'WhenExpression',
 };
 export const DirectiveKind = {
     run: 'run',
@@ -913,5 +914,21 @@ export const helpers = {
         return nodes.some((n) => n.type === 'Newline' ||
             (n.content && n.content.includes('\n')) ||
             (n.raw && n.raw.includes('\n')));
+    },
+    /**
+     * Creates a WhenExpression node for RHS when expressions
+     */
+    createWhenExpression(conditions, withClause, location) {
+        return this.createNode(NodeType.WhenExpression, {
+            conditions: conditions,
+            withClause: withClause || null,
+            meta: {
+                conditionCount: conditions.length,
+                isValueReturning: true,
+                evaluationType: 'expression',
+                hasTailModifiers: !!withClause
+            },
+            location
+        });
     }
 };
