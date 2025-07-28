@@ -65,6 +65,33 @@ async function readSource() {
   });
 }
 
+// ---------- shell escaping detection ----------
+function detectShellEscapingIssues(source, error) {
+  // Check for common shell-problematic characters
+  const problematicChars = ['[', ']', '{', '}', '(', ')', '|', '&', ';', '<', '>', '`', '$', '"', "'", '\n', '\r'];
+  const hasProblematicChars = problematicChars.some(char => source.includes(char));
+  
+  // Check if error is about unclosed brackets/arrays/objects
+  const unclosedPatterns = [
+    'Unclosed array',
+    'Unclosed object',
+    'Expected \']\'',
+    'Expected \'}\'',
+    'Read-only file system',
+    '/show:',
+    '/var:',
+    '/exe:',
+    'command not found',
+    'Missing content in /show directive'
+  ];
+  
+  const isLikelyShellIssue = unclosedPatterns.some(pattern => 
+    error.message?.includes(pattern) || error.toString().includes(pattern)
+  );
+  
+  return hasProblematicChars && isLikelyShellIssue;
+}
+
 // ---------- main ----------
 (async () => {
   try {
@@ -79,7 +106,23 @@ async function readSource() {
     const ast = parse(source);
     console.dir(ast, { depth: null, colors: true });
   } catch (err) {
-    console.error('❌  Parse failed:', err);
+    // Check if this might be a shell escaping issue
+    if (snippetParts.length > 0 && detectShellEscapingIssues(snippetParts.join(' '), err)) {
+      console.error('❌  Parse failed: Likely shell escaping issue detected.\n');
+      console.error('The command line may have trouble with special characters like brackets, quotes, or newlines.');
+      console.error('\nTry one of these alternatives:');
+      console.error('1. Write your mlld code to a file and pass the filename:');
+      console.error('   echo \'your mlld code\' > temp.mld && npm run ast -- temp.mld\n');
+      console.error('2. Use stdin instead:');
+      console.error('   echo \'your mlld code\' | npm run ast\n');
+      console.error('3. For multi-line code, use a heredoc:');
+      console.error('   npm run ast << \'EOF\'');
+      console.error('   your mlld code here');
+      console.error('   EOF\n');
+      console.error('Original error:', err.message);
+    } else {
+      console.error('❌  Parse failed:', err);
+    }
     process.exitCode = 1;
   }
 })();
