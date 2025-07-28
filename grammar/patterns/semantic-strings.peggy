@@ -30,6 +30,9 @@ ExpressionString "Expression Context String"
       if (parts.length === 1 && parts[0].type === 'Text') {
         return helpers.createNode('Literal', { value: parts[0].content, valueType: 'string', location: location() });
       }
-      // Return expression node for interpolated content
-      return { type: 'InterpolatedString', parts, location: location() };
+      // Return the same structure as TemplateStyleInterpolation for consistency
+      return {
+        content: parts,
+        wrapperType: 'doubleQuote'
+      };
     }

@@ -16,6 +16,12 @@ SlashVar "var directive"
       // Handle template content (backtick, [[...]], quotes)
       if (value && value.content && value.wrapperType) {
         processedValue = value.content; // value.content is already an array of nodes
+        
+        // Ensure we never have empty arrays - create empty text node if needed
+        if (processedValue.length === 0) {
+          processedValue = [helpers.createNode(NodeType.Text, { content: '', location: location() })];
+        }
+        
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
         

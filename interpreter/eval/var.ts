@@ -775,7 +775,7 @@ export async function evaluateVar(
     
     if (directive.meta?.wrapperType === 'singleQuote') {
       variable = createSimpleTextVariable(identifier, strValue, source, metadata);
-    } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick' || directive.meta?.wrapperType === 'doubleColon' || directive.meta?.wrapperType === 'tripleColon') {
+    } else if (directive.meta?.isTemplateContent || directive.meta?.wrapperType === 'backtick' || directive.meta?.wrapperType === 'doubleQuote' || directive.meta?.wrapperType === 'doubleColon' || directive.meta?.wrapperType === 'tripleColon') {
       // Template variable
       let templateType: 'backtick' | 'doubleColon' | 'tripleColon' = 'backtick';
       if (directive.meta?.wrapperType === 'doubleColon') {
