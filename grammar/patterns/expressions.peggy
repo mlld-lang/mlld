@@ -52,26 +52,9 @@ UnaryExpression
       });
     }
 
-// Atomic expressions - use basic patterns that are definitely available
+// Atomic expressions - use unified patterns for proper variable/exec support
 AtomicExpression
-  = "@" id:BaseIdentifier &{ 
-      // Simple variable reference check - avoid complex patterns for now
-      return !input.charAt(peg$currPos) || input.charAt(peg$currPos) !== '(';
-    } {
-      // Create simple variable reference
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id,
-        location: location()
-      });
-    }
-  / "@" id:BaseIdentifier "(" _ ")" {
-      // Simple function call without arguments
-      return helpers.createNode('ExecInvocation', {
-        name: id,
-        arguments: [],
-        location: location()
-      });
-    }
+  = UnifiedReferenceNoTail  // Handles @var, @var.field, @func(), @obj.method()
   / ExpressionString  // ExpressionString already returns a Literal node
   / value:NumberLiteral {
       // Wrap number literal in a Literal node

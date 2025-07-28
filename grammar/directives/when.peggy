@@ -358,8 +358,6 @@ WhenSimpleCondition
       // Wrap in array for consistency with existing code
       return [expr];
     }
-  / NegatedSimpleCondition
-  / NonNegatedSimpleCondition
 
 // Negated simple condition with ! prefix
 NegatedSimpleCondition
@@ -373,12 +371,12 @@ NegatedSimpleCondition
 
 // Non-negated simple conditions
 NonNegatedSimpleCondition
-  = varRef:VariableNoTail {
-      return [varRef];
-    }
-  / invocation:UnifiedReferenceWithTail {
+  = invocation:UnifiedReferenceWithTail {
       // Unified reference (exec invocation or variable) with tail modifiers
       return [invocation];
+    }
+  / varRef:VariableNoTail {
+      return [varRef];
     }
   / Variable {
       // Other variable forms (special vars, interpolation)
@@ -427,12 +425,12 @@ NegatedCondition
 
 // Non-negated conditions (existing patterns)
 NonNegatedCondition
-  = varRef:VariableNoTail {
-      return [varRef];
-    }
-  / invocation:UnifiedReferenceWithTail {
+  = invocation:UnifiedReferenceWithTail {
       // Unified reference (exec invocation or variable) with tail modifiers
       return [invocation];
+    }
+  / varRef:VariableNoTail {
+      return [varRef];
     }
   / Variable {
       // Other variable forms (special vars, interpolation)
