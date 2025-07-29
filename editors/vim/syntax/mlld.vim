@@ -1,7 +1,7 @@
 " Vim syntax file for Mlld
 " Language: Mlld
 " Maintainer: Auto-generated
-" Latest Revision: 2025-07-29T05:57:27.525Z
+" Latest Revision: 2025-07-29T13:56:39.848Z
 
 if exists("b:current_syntax")
   finish
@@ -11,10 +11,14 @@ endif
 runtime! syntax/markdown.vim
 
 " Define mlld-specific patterns
+" Set syntax sync to help with recovery after code blocks
+syn sync fromstart
+syn sync maxlines=50
+
 " Comments
 syn match mlldComment "\(>>\|<<\).*$"
 
-" Directives - must be at start of line
+" Directives - must be at start of line (highest priority)
 syn match mlldDirective "^/\(var\|show\|run\|exe\|path\|import\|when\|output\)\>"
 
 " Operators (high priority)
@@ -42,29 +46,40 @@ syn match mlldReservedVar "@\."
 " Regular variables (lower priority than directives and reserved)
 syn match mlldVariable "@\w\+"
 
-" Triple-colon template blocks
-syn region mlldTripleTemplate start=":::" end=":::" contains=mlldTemplateVar
+" Triple-colon template blocks (with {{var}} interpolation)
+syn region mlldTripleTemplate start=":::" end=":::" contains=mlldTemplateVar,mlldXmlTag
+syn match mlldTemplateVar "{{[^}]*}}" contained
+syn match mlldXmlTag "<[^>]*>" contained
 
-" Template blocks (double-colon syntax)
-syn region mlldTemplate start="::" end="::" contains=mlldTemplateVar
-syn region mlldTemplateVar start="{{" end="}}" contained
+" Template blocks (double-colon syntax with @var interpolation)
+syn region mlldTemplate start="::" end="::" contains=mlldVariable,mlldReservedVar,mlldAlligator
 
-" Backtick templates
-syn region mlldBacktickTemplate start="`" end="`" contains=mlldVariable,mlldReservedVar
+" Backtick templates (with @var interpolation)
+syn region mlldBacktickTemplate start="`" end="`" contains=mlldVariable,mlldReservedVar,mlldAlligator
 
-" Alligator syntax (file loading)
-syn region mlldAlligator start="<" end=">" contains=mlldPath,mlldURL,mlldVariable,mlldReservedVar
+" Double quotes with interpolation
+syn region mlldStringInterpolated start='"' end='"' contains=mlldVariable,mlldReservedVar,mlldAlligator
 
-" Language-specific code blocks (must come before generic command blocks)
+" Single quotes - no interpolation
+syn region mlldStringLiteral start="'" end="'"
+
+" Alligator syntax (file loading) - must contain . / * or @
+syn match mlldAlligator "<[^>]*[./*@][^>]*>"
+" Alligator with section
+syn match mlldAlligatorSection "<\([^>#]\+\)\(\s*#\s*\)\([^>]\+\)>" contains=mlldSectionMarker
+syn match mlldSectionMarker "#" contained
+
+" Language-specific code blocks (NO mlld interpolation)
+" Use fold to ensure blocks are self-contained
 " JavaScript/Node blocks
-syn region mlldJSBlock start="\<\(js\|javascript\|node\)\s*{" end="}" contains=@javascript keepend
+syn region mlldJSBlock start="\<\(js\|javascript\|node\)\s*{" end="}" contains=@javascript fold keepend
 " Python blocks
-syn region mlldPythonBlock start="\<\(python\|py\)\s*{" end="}" contains=@python keepend
+syn region mlldPythonBlock start="\<\(python\|py\)\s*{" end="}" contains=@python fold keepend
 " Shell/Bash blocks
-syn region mlldShellBlock start="\<\(bash\|sh\)\s*{" end="}" contains=@shell keepend
+syn region mlldShellBlock start="\<\(bash\|sh\)\s*{" end="}" contains=@shell fold keepend
 
-" Generic command blocks (braces) - fallback for unmatched languages
-syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReservedVar,mlldLanguageKeyword
+" Generic command blocks (braces) WITH interpolation
+syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReservedVar,mlldAlligator,mlldLanguageKeyword
 
 " Language keywords
 syn match mlldLanguageKeyword "\<\(js\|javascript\|node\|python\|py\|bash\|sh\)\>"
@@ -74,9 +89,6 @@ syn region mlldPath start="\[" end="\]" contains=mlldURL,mlldVariable,mlldReserv
 
 " URLs
 syn match mlldURL "https\?://[^\]>]*" contained
-
-" Strings
-syn region mlldString start='"' end='"'
 
 " Keywords
 syn keyword mlldKeyword from as foreach with to
@@ -93,6 +105,7 @@ syn keyword mlldNull null
 " Define highlighting
 hi def link mlldComment Comment
 hi def link mlldDirective Keyword
+hi def link mlldDirectiveReset Keyword
 hi def link mlldLogicalOp Operator
 hi def link mlldComparisonOp Operator
 hi def link mlldTernaryOp Operator
@@ -106,16 +119,21 @@ hi def link mlldVariable Identifier
 hi def link mlldTripleTemplate String
 hi def link mlldTemplate String
 hi def link mlldTemplateVar Special
+hi def link mlldXmlTag Tag
 hi def link mlldBacktickTemplate String
-hi def link mlldAlligator String
+hi def link mlldStringInterpolated String
+hi def link mlldStringLiteral String
+hi def link mlldAlligator Special
+hi def link mlldAlligatorSection Special
+hi def link mlldSectionMarker Delimiter
 hi def link mlldCommand String
+hi def link mlldCodeDelimiter Delimiter
 hi def link mlldJSBlock Special
 hi def link mlldPythonBlock Special
 hi def link mlldShellBlock Special
 hi def link mlldLanguageKeyword Type
 hi def link mlldPath String
 hi def link mlldURL Underlined
-hi def link mlldString String
 hi def link mlldKeyword Operator
 hi def link mlldNumber Number
 hi def link mlldBoolean Boolean

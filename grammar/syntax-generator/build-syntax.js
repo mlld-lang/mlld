@@ -26,7 +26,10 @@ class MlldSyntaxGenerator {
       templateVar: '\\{\\{[^}]+\\}\\}',
       backtickTemplate: '`[^`]*`',
       pathBrackets: '\\[[^\\]]+\\]',
-      alligatorExpression: '<[^>]+>',  // Alligator file loading syntax
+      // Separate patterns for alligator vs XML
+      alligatorExpression: '<[^>]*[\\.\\/\\*@][^>]*>',  // Must contain . / * or @
+      alligatorWithSection: '<([^>#]+)(\\s*#\\s*)([^>]+)>',  // <file.md # Section>
+      xmlTag: '</?\\w+>',  // Simple XML tags
       commandBraces: '\\{[^}]+\\}',  // Command syntax with braces
       languageKeyword: '\\b(javascript|js|node|nodejs|python|py|bash|sh)\\b',
       string: '"[^"]*"',
@@ -133,6 +136,11 @@ Prism.languages.mlld = {
           'variable': /[^{}]+/
         }
       },
+      // XML tags in triple-colon templates
+      'xml-tag': {
+        pattern: /<\\/?[^>]+>/,
+        alias: 'tag'
+      },
       'punctuation': /:::/
     }
   },
@@ -140,15 +148,71 @@ Prism.languages.mlld = {
     pattern: /${this.patterns.templateBlock}/,
     greedy: true,
     inside: {
-      'template-variable': {
-        pattern: /${this.patterns.templateVar}/,
+      // Double-colon templates now use @var, not {{var}}
+      'reserved-variable': {
+        pattern: /${this.patterns.reservedVariable}/,
+        alias: 'builtin'
+      },
+      'variable': {
+        pattern: /${this.patterns.variable}/
+      },
+      'alligator': {
+        pattern: /${this.patterns.alligatorExpression}/,
         inside: {
-          'punctuation': /\\{\\{|\\}\\}/,
-          'variable': /[^{}]+/
+          'punctuation': /<|>/,
+          'file-path': /[^<>]+/
         }
       },
       'punctuation': /::/
     }
+  },
+  'backtick-template': {
+    pattern: /${this.patterns.backtickTemplate}/,
+    greedy: true,
+    inside: {
+      'reserved-variable': {
+        pattern: /${this.patterns.reservedVariable}/,
+        alias: 'builtin'
+      },
+      'variable': {
+        pattern: /${this.patterns.variable}/
+      },
+      'alligator': {
+        pattern: /${this.patterns.alligatorExpression}/,
+        inside: {
+          'punctuation': /<|>/,
+          'file-path': /[^<>]+/
+        }
+      },
+      'punctuation': /\`/
+    }
+  },
+  // Double quotes with interpolation
+  'string-interpolated': {
+    pattern: /${this.patterns.string}/,
+    greedy: true,
+    inside: {
+      'reserved-variable': {
+        pattern: /${this.patterns.reservedVariable}/,
+        alias: 'builtin'
+      },
+      'variable': {
+        pattern: /${this.patterns.variable}/
+      },
+      'alligator': {
+        pattern: /${this.patterns.alligatorExpression}/,
+        inside: {
+          'punctuation': /<|>/,
+          'file-path': /[^<>]+/
+        }
+      },
+      'punctuation': /"/
+    }
+  },
+  // Single quotes - no interpolation
+  'string-literal': {
+    pattern: /${this.patterns.singleQuoteString}/,
+    greedy: true
   },
   'alligator': {
     pattern: /${this.patterns.alligatorExpression}/,
@@ -171,10 +235,6 @@ Prism.languages.mlld = {
       },
       'punctuation': /\\[|\\]/
     }
-  },
-  'string': {
-    pattern: /${this.patterns.string}/,
-    greedy: true
   },
   'reserved-variable': {
     pattern: /${this.patterns.reservedVariable}/,
@@ -371,6 +431,7 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         },
         patterns: [
           {
+            // {{var}} interpolation - ONLY in triple-colon
             name: 'variable.template.mlld',
             begin: '\\{\\{',
             end: '\\}\\}',
@@ -386,11 +447,16 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
                 match: '[^}]+'
               }
             ]
+          },
+          {
+            // XML tags in triple-colon templates
+            name: 'entity.name.tag.xml.mlld',
+            match: '</?[^>]+>'
           }
         ]
       },
       {
-        // Double-colon template syntax
+        // Double-colon template syntax (now with @var interpolation)
         name: 'string.template.mlld',
         begin: '::',
         end: '::',
@@ -402,19 +468,28 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         },
         patterns: [
           {
-            name: 'variable.template.mlld',
-            begin: '\\{\\{',
-            end: '\\}\\}',
+            name: 'variable.language.reserved.mlld',
+            match: this.patterns.reservedVariable
+          },
+          {
+            name: 'variable.other.mlld',
+            match: this.patterns.variable
+          },
+          {
+            // Alligator syntax in double-colon templates
+            name: 'string.interpolated.alligator.mlld',
+            begin: '<',
+            end: '>',
             beginCaptures: {
-              0: { name: 'punctuation.definition.template.variable.begin.mlld' }
+              0: { name: 'punctuation.definition.alligator.begin.mlld' }
             },
             endCaptures: {
-              0: { name: 'punctuation.definition.template.variable.end.mlld' }
+              0: { name: 'punctuation.definition.alligator.end.mlld' }
             },
             patterns: [
               {
-                name: 'variable.other.interpolation.mlld',
-                match: '[^}]+'
+                name: 'string.path.mlld',
+                match: '[^>]+'
               }
             ]
           }
@@ -446,34 +521,23 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         ]
       },
       {
-        // Alligator syntax for file loading
+        // Alligator syntax with section marker
+        name: 'string.interpolated.alligator.section.mlld',
+        match: '<([^>#]+)(\\s*#\\s*)([^>]+)>',
+        captures: {
+          0: { name: 'punctuation.definition.alligator.mlld' },
+          1: { name: 'string.path.mlld' },
+          2: { name: 'punctuation.separator.section.mlld' },
+          3: { name: 'entity.name.section.mlld' }
+        }
+      },
+      {
+        // Regular alligator syntax for file loading
         name: 'string.interpolated.alligator.mlld',
-        begin: '<',
-        end: '>',
-        beginCaptures: {
-          0: { name: 'punctuation.definition.alligator.begin.mlld' }
-        },
-        endCaptures: {
-          0: { name: 'punctuation.definition.alligator.end.mlld' }
-        },
-        patterns: [
-          {
-            name: 'markup.underline.link.mlld',
-            match: 'https?://[^>]+'
-          },
-          {
-            name: 'variable.language.reserved.mlld',
-            match: this.patterns.reservedVariable
-          },
-          {
-            name: 'variable.other.mlld',
-            match: this.patterns.variable
-          },
-          {
-            name: 'string.path.mlld',
-            match: '[^>]+'
-          }
-        ]
+        match: this.patterns.alligatorExpression,
+        captures: {
+          0: { name: 'meta.alligator.mlld' }
+        }
       },
       {
         // Import braces
@@ -520,12 +584,17 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
           {
             name: 'variable.other.mlld',
             match: this.patterns.variable
+          },
+          {
+            // Alligator syntax in backticks
+            name: 'string.interpolated.alligator.mlld',
+            match: this.patterns.alligatorExpression
           }
         ]
       },
       // Language-specific code blocks must come before generic command braces
       {
-        // JavaScript/Node code blocks
+        // JavaScript/Node code blocks - NO mlld interpolation
         name: 'meta.embedded.block.javascript.mlld',
         begin: '\\b(js|javascript|node)\\s*\\{',
         end: '\\}',
@@ -542,7 +611,7 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         ]
       },
       {
-        // Python code blocks
+        // Python code blocks - NO mlld interpolation
         name: 'meta.embedded.block.python.mlld',
         begin: '\\b(python|py)\\s*\\{',
         end: '\\}',
@@ -559,7 +628,7 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         ]
       },
       {
-        // Shell/Bash code blocks
+        // Shell/Bash code blocks - NO mlld interpolation
         name: 'meta.embedded.block.shell.mlld',
         begin: '\\b(bash|sh)\\s*\\{',
         end: '\\}',
@@ -576,9 +645,9 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         ]
       },
       {
-        // Generic command braces for /run {command} syntax (fallback)
+        // Generic command braces for /run {command} syntax WITH interpolation
         name: 'meta.command.braces.mlld',
-        begin: '\\{',
+        begin: '(?<!\\b(js|javascript|node|python|py|bash|sh)\\s*)\\{',
         end: '\\}',
         beginCaptures: {
           0: { name: 'punctuation.definition.command.begin.mlld' }
@@ -599,14 +668,43 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
           {
             name: 'variable.other.mlld',
             match: this.patterns.variable
+          },
+          {
+            // Alligator syntax in commands
+            name: 'string.interpolated.alligator.mlld',
+            match: this.patterns.alligatorExpression
           }
         ]
       },
       {
-        name: 'string.quoted.double.mlld',
-        match: this.patterns.string
+        // Double quotes WITH interpolation
+        name: 'string.quoted.double.interpolated.mlld',
+        begin: '"',
+        end: '"',
+        beginCaptures: {
+          0: { name: 'punctuation.definition.string.begin.mlld' }
+        },
+        endCaptures: {
+          0: { name: 'punctuation.definition.string.end.mlld' }
+        },
+        patterns: [
+          {
+            name: 'variable.language.reserved.mlld',
+            match: this.patterns.reservedVariable
+          },
+          {
+            name: 'variable.other.mlld',
+            match: this.patterns.variable
+          },
+          {
+            // Alligator syntax in double quotes
+            name: 'string.interpolated.alligator.mlld',
+            match: this.patterns.alligatorExpression
+          }
+        ]
       },
       {
+        // Single quotes - NO interpolation
         name: 'string.quoted.single.mlld',
         match: this.patterns.singleQuoteString
       },
@@ -667,10 +765,14 @@ endif
 runtime! syntax/markdown.vim
 
 " Define mlld-specific patterns
+" Set syntax sync to help with recovery after code blocks
+syn sync fromstart
+syn sync maxlines=50
+
 " Comments
 syn match mlldComment "\\(>>\\|<<\\).*$"
 
-" Directives - must be at start of line
+" Directives - must be at start of line (highest priority)
 syn match mlldDirective "^/\\(${this.directives.join('\\|')}\\)\\>"
 
 " Operators (high priority)
@@ -698,29 +800,40 @@ syn match mlldReservedVar "@\\."
 " Regular variables (lower priority than directives and reserved)
 syn match mlldVariable "@\\w\\+"
 
-" Triple-colon template blocks
-syn region mlldTripleTemplate start=":::" end=":::" contains=mlldTemplateVar
+" Triple-colon template blocks (with {{var}} interpolation)
+syn region mlldTripleTemplate start=":::" end=":::" contains=mlldTemplateVar,mlldXmlTag
+syn match mlldTemplateVar "{{[^}]*}}" contained
+syn match mlldXmlTag "<[^>]*>" contained
 
-" Template blocks (double-colon syntax)
-syn region mlldTemplate start="::" end="::" contains=mlldTemplateVar
-syn region mlldTemplateVar start="{{" end="}}" contained
+" Template blocks (double-colon syntax with @var interpolation)
+syn region mlldTemplate start="::" end="::" contains=mlldVariable,mlldReservedVar,mlldAlligator
 
-" Backtick templates
-syn region mlldBacktickTemplate start="\`" end="\`" contains=mlldVariable,mlldReservedVar
+" Backtick templates (with @var interpolation)
+syn region mlldBacktickTemplate start="\`" end="\`" contains=mlldVariable,mlldReservedVar,mlldAlligator
 
-" Alligator syntax (file loading)
-syn region mlldAlligator start="<" end=">" contains=mlldPath,mlldURL,mlldVariable,mlldReservedVar
+" Double quotes with interpolation
+syn region mlldStringInterpolated start='"' end='"' contains=mlldVariable,mlldReservedVar,mlldAlligator
 
-" Language-specific code blocks (must come before generic command blocks)
+" Single quotes - no interpolation
+syn region mlldStringLiteral start="'" end="'"
+
+" Alligator syntax (file loading) - must contain . / * or @
+syn match mlldAlligator "<[^>]*[./*@][^>]*>"
+" Alligator with section
+syn match mlldAlligatorSection "<\\([^>#]\\+\\)\\(\\s*#\\s*\\)\\([^>]\\+\\)>" contains=mlldSectionMarker
+syn match mlldSectionMarker "#" contained
+
+" Language-specific code blocks (NO mlld interpolation)
+" Use fold to ensure blocks are self-contained
 " JavaScript/Node blocks
-syn region mlldJSBlock start="\\<\\(js\\|javascript\\|node\\)\\s*{" end="}" contains=@javascript keepend
+syn region mlldJSBlock start="\\<\\(js\\|javascript\\|node\\)\\s*{" end="}" contains=@javascript fold keepend
 " Python blocks
-syn region mlldPythonBlock start="\\<\\(python\\|py\\)\\s*{" end="}" contains=@python keepend
+syn region mlldPythonBlock start="\\<\\(python\\|py\\)\\s*{" end="}" contains=@python fold keepend
 " Shell/Bash blocks
-syn region mlldShellBlock start="\\<\\(bash\\|sh\\)\\s*{" end="}" contains=@shell keepend
+syn region mlldShellBlock start="\\<\\(bash\\|sh\\)\\s*{" end="}" contains=@shell fold keepend
 
-" Generic command blocks (braces) - fallback for unmatched languages
-syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReservedVar,mlldLanguageKeyword
+" Generic command blocks (braces) WITH interpolation
+syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReservedVar,mlldAlligator,mlldLanguageKeyword
 
 " Language keywords
 syn match mlldLanguageKeyword "\\<\\(js\\|javascript\\|node\\|python\\|py\\|bash\\|sh\\)\\>"
@@ -730,9 +843,6 @@ syn region mlldPath start="\\[" end="\\]" contains=mlldURL,mlldVariable,mlldRese
 
 " URLs
 syn match mlldURL "https\\?://[^\\]>]*" contained
-
-" Strings
-syn region mlldString start='"' end='"'
 
 " Keywords
 syn keyword mlldKeyword from as foreach with to
@@ -749,6 +859,7 @@ syn keyword mlldNull null
 " Define highlighting
 hi def link mlldComment Comment
 hi def link mlldDirective Keyword
+hi def link mlldDirectiveReset Keyword
 hi def link mlldLogicalOp Operator
 hi def link mlldComparisonOp Operator
 hi def link mlldTernaryOp Operator
@@ -762,16 +873,21 @@ hi def link mlldVariable Identifier
 hi def link mlldTripleTemplate String
 hi def link mlldTemplate String
 hi def link mlldTemplateVar Special
+hi def link mlldXmlTag Tag
 hi def link mlldBacktickTemplate String
-hi def link mlldAlligator String
+hi def link mlldStringInterpolated String
+hi def link mlldStringLiteral String
+hi def link mlldAlligator Special
+hi def link mlldAlligatorSection Special
+hi def link mlldSectionMarker Delimiter
 hi def link mlldCommand String
+hi def link mlldCodeDelimiter Delimiter
 hi def link mlldJSBlock Special
 hi def link mlldPythonBlock Special
 hi def link mlldShellBlock Special
 hi def link mlldLanguageKeyword Type
 hi def link mlldPath String
 hi def link mlldURL Underlined
-hi def link mlldString String
 hi def link mlldKeyword Operator
 hi def link mlldNumber Number
 hi def link mlldBoolean Boolean
@@ -794,9 +910,13 @@ if exists("b:mlld_after_loaded")
 endif
 let b:mlld_after_loaded = 1
 
+" Set syntax sync for markdown files
+syn sync fromstart
+syn sync maxlines=100
+
 " Define mlld-run code block region first (highest priority)
 syn region mlldRunCodeBlock start="^\\s*\`\`\`mlld-run\\s*$" end="^\\s*\`\`\`\\s*$" contains=mlldRunContent
-syn region mlldRunContent start="." end="\\ze^\\s*\`\`\`\\s*$" contained contains=mlldComment,mlldDirective,mlldReserved,mlldVariable,mlldString,mlldTemplate,mlldTemplateVar,mlldCommand,mlldLogicalOp,mlldComparisonOp,mlldTernaryOp,mlldArrowOp,mlldWhenKeyword,mlldAlligator
+syn region mlldRunContent start="." end="\\ze^\\s*\`\`\`\\s*$" contained contains=mlldComment,mlldDirective,mlldReserved,mlldVariable,mlldStringInterpolated,mlldStringLiteral,mlldTemplate,mlldTripleTemplate,mlldTemplateVar,mlldCommand,mlldLogicalOp,mlldComparisonOp,mlldTernaryOp,mlldArrowOp,mlldWhenKeyword,mlldAlligator,mlldBacktickTemplate,mlldJSBlock,mlldPythonBlock,mlldShellBlock
 
 " Define our syntax patterns directly
 syn match mlldComment "\\(>>\\|<<\\).*$"
@@ -809,13 +929,21 @@ syn match mlldWhenKeyword "when\\s*:"
 syn match mlldReserved "@\\(INPUT\\|TIME\\|PROJECTPATH\\|STDIN\\|input\\|time\\|projectpath\\|stdin\\|now\\|NOW\\|base\\)\\>"
 syn match mlldReserved "@\\."
 syn match mlldVariable "@\\w\\+"
-syn region mlldString start='"' end='"'
+syn region mlldStringInterpolated start='"' end='"' contains=mlldVariable,mlldReserved,mlldAlligator
+syn region mlldStringLiteral start="'" end="'"
 syn region mlldTripleTemplate start=":::" end=":::" contains=mlldTemplateVar
-syn region mlldTemplate start="::" end="::" contains=mlldTemplateVar
+syn region mlldTemplate start="::" end="::" contains=mlldVariable,mlldReserved,mlldAlligator
 syn match mlldTemplateVar "{{[^}]*}}" contained
-syn region mlldBacktickTemplate start="\`" end="\`" contains=mlldVariable,mlldReserved
-syn region mlldAlligator start="<" end=">" contains=mlldVariable,mlldReserved
-syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReserved,mlldLanguageKeyword
+syn region mlldBacktickTemplate start="\`" end="\`" contains=mlldVariable,mlldReserved,mlldAlligator
+syn match mlldAlligator "<[^>]*[./*@][^>]*>"
+
+" Language-specific blocks
+syn region mlldJSBlock start="\\<\\(js\\|javascript\\|node\\)\\s*{" end="}" contains=@javascript fold keepend
+syn region mlldPythonBlock start="\\<\\(python\\|py\\)\\s*{" end="}" contains=@python fold keepend
+syn region mlldShellBlock start="\\<\\(bash\\|sh\\)\\s*{" end="}" contains=@shell fold keepend
+
+" Generic command must come after language blocks
+syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReserved,mlldAlligator,mlldLanguageKeyword
 syn match mlldLanguageKeyword "\\<\\(js\\|sh\\|node\\|python\\)\\>"
 
 " Force our colors
@@ -828,7 +956,8 @@ hi mlldArrowOp ctermfg=214 guifg=#ffaf00
 hi mlldWhenKeyword ctermfg=214 cterm=bold guifg=#ffaf00 gui=bold
 hi mlldReserved ctermfg=170 guifg=#d75fd7
 hi mlldVariable ctermfg=117 guifg=#87d7ff
-hi mlldString ctermfg=150 guifg=#afd787
+hi mlldStringInterpolated ctermfg=150 guifg=#afd787
+hi mlldStringLiteral ctermfg=150 guifg=#afd787
 hi mlldTripleTemplate ctermfg=150 guifg=#afd787
 hi mlldTemplate ctermfg=150 guifg=#afd787
 hi mlldTemplateVar ctermfg=214 guifg=#ffaf00

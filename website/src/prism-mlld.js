@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2025-07-29T05:57:27.526Z
+// Generated from grammar at 2025-07-29T13:56:39.850Z
 
 const Prism = require('prismjs');
 
@@ -43,6 +43,11 @@ Prism.languages.mlld = {
           'variable': /[^{}]+/
         }
       },
+      // XML tags in triple-colon templates
+      'xml-tag': {
+        pattern: /<\/?[^>]+>/,
+        alias: 'tag'
+      },
       'punctuation': /:::/
     }
   },
@@ -50,18 +55,74 @@ Prism.languages.mlld = {
     pattern: /::[^:]+::/,
     greedy: true,
     inside: {
-      'template-variable': {
-        pattern: /\{\{[^}]+\}\}/,
+      // Double-colon templates now use @var, not {{var}}
+      'reserved-variable': {
+        pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\b/,
+        alias: 'builtin'
+      },
+      'variable': {
+        pattern: /@\w+/
+      },
+      'alligator': {
+        pattern: /<[^>]*[\.\/\*@][^>]*>/,
         inside: {
-          'punctuation': /\{\{|\}\}/,
-          'variable': /[^{}]+/
+          'punctuation': /<|>/,
+          'file-path': /[^<>]+/
         }
       },
       'punctuation': /::/
     }
   },
+  'backtick-template': {
+    pattern: /`[^`]*`/,
+    greedy: true,
+    inside: {
+      'reserved-variable': {
+        pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\b/,
+        alias: 'builtin'
+      },
+      'variable': {
+        pattern: /@\w+/
+      },
+      'alligator': {
+        pattern: /<[^>]*[\.\/\*@][^>]*>/,
+        inside: {
+          'punctuation': /<|>/,
+          'file-path': /[^<>]+/
+        }
+      },
+      'punctuation': /`/
+    }
+  },
+  // Double quotes with interpolation
+  'string-interpolated': {
+    pattern: /"[^"]*"/,
+    greedy: true,
+    inside: {
+      'reserved-variable': {
+        pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\b/,
+        alias: 'builtin'
+      },
+      'variable': {
+        pattern: /@\w+/
+      },
+      'alligator': {
+        pattern: /<[^>]*[\.\/\*@][^>]*>/,
+        inside: {
+          'punctuation': /<|>/,
+          'file-path': /[^<>]+/
+        }
+      },
+      'punctuation': /"/
+    }
+  },
+  // Single quotes - no interpolation
+  'string-literal': {
+    pattern: /'[^']*'/,
+    greedy: true
+  },
   'alligator': {
-    pattern: /<[^>]+>/,
+    pattern: /<[^>]*[\.\/\*@][^>]*>/,
     greedy: true,
     inside: {
       'url': {
@@ -81,10 +142,6 @@ Prism.languages.mlld = {
       },
       'punctuation': /\[|\]/
     }
-  },
-  'string': {
-    pattern: /"[^"]*"/,
-    greedy: true
   },
   'reserved-variable': {
     pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\b/,

@@ -102,6 +102,10 @@
                       "match": "[^}]+"
                     }
                   ]
+                },
+                {
+                  "name": "entity.name.tag.xml.mlld",
+                  "match": "</?[^>]+>"
                 }
               ]
             },
@@ -121,23 +125,31 @@
               },
               "patterns": [
                 {
-                  "name": "variable.template.mlld",
-                  "begin": "\\{\\{",
-                  "end": "\\}\\}",
+                  "name": "variable.language.reserved.mlld",
+                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+                },
+                {
+                  "name": "variable.other.mlld",
+                  "match": "@\\w+"
+                },
+                {
+                  "name": "string.interpolated.alligator.mlld",
+                  "begin": "<",
+                  "end": ">",
                   "beginCaptures": {
                     "0": {
-                      "name": "punctuation.definition.template.variable.begin.mlld"
+                      "name": "punctuation.definition.alligator.begin.mlld"
                     }
                   },
                   "endCaptures": {
                     "0": {
-                      "name": "punctuation.definition.template.variable.end.mlld"
+                      "name": "punctuation.definition.alligator.end.mlld"
                     }
                   },
                   "patterns": [
                     {
-                      "name": "variable.other.interpolation.mlld",
-                      "match": "[^}]+"
+                      "name": "string.path.mlld",
+                      "match": "[^>]+"
                     }
                   ]
                 }
@@ -173,37 +185,31 @@
               ]
             },
             {
+              "name": "string.interpolated.alligator.section.mlld",
+              "match": "<([^>#]+)(\\s*#\\s*)([^>]+)>",
+              "captures": {
+                "0": {
+                  "name": "punctuation.definition.alligator.mlld"
+                },
+                "1": {
+                  "name": "string.path.mlld"
+                },
+                "2": {
+                  "name": "punctuation.separator.section.mlld"
+                },
+                "3": {
+                  "name": "entity.name.section.mlld"
+                }
+              }
+            },
+            {
               "name": "string.interpolated.alligator.mlld",
-              "begin": "<",
-              "end": ">",
-              "beginCaptures": {
+              "match": "<[^>]*[\\.\\/\\*@][^>]*>",
+              "captures": {
                 "0": {
-                  "name": "punctuation.definition.alligator.begin.mlld"
+                  "name": "meta.alligator.mlld"
                 }
-              },
-              "endCaptures": {
-                "0": {
-                  "name": "punctuation.definition.alligator.end.mlld"
-                }
-              },
-              "patterns": [
-                {
-                  "name": "markup.underline.link.mlld",
-                  "match": "https?://[^>]+"
-                },
-                {
-                  "name": "variable.language.reserved.mlld",
-                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
-                },
-                {
-                  "name": "variable.other.mlld",
-                  "match": "@\\w+"
-                },
-                {
-                  "name": "string.path.mlld",
-                  "match": "[^>]+"
-                }
-              ]
+              }
             },
             {
               "name": "meta.import.mlld",
@@ -256,6 +262,10 @@
                 {
                   "name": "variable.other.mlld",
                   "match": "@\\w+"
+                },
+                {
+                  "name": "string.interpolated.alligator.mlld",
+                  "match": "<[^>]*[\\.\\/\\*@][^>]*>"
                 }
               ]
             },
@@ -333,7 +343,7 @@
             },
             {
               "name": "meta.command.braces.mlld",
-              "begin": "\\{",
+              "begin": "(?<!\\b(js|javascript|node|python|py|bash|sh)\\s*)\\{",
               "end": "\\}",
               "beginCaptures": {
                 "0": {
@@ -358,12 +368,41 @@
                 {
                   "name": "variable.other.mlld",
                   "match": "@\\w+"
+                },
+                {
+                  "name": "string.interpolated.alligator.mlld",
+                  "match": "<[^>]*[\\.\\/\\*@][^>]*>"
                 }
               ]
             },
             {
-              "name": "string.quoted.double.mlld",
-              "match": "\"[^\"]*\""
+              "name": "string.quoted.double.interpolated.mlld",
+              "begin": "\"",
+              "end": "\"",
+              "beginCaptures": {
+                "0": {
+                  "name": "punctuation.definition.string.begin.mlld"
+                }
+              },
+              "endCaptures": {
+                "0": {
+                  "name": "punctuation.definition.string.end.mlld"
+                }
+              },
+              "patterns": [
+                {
+                  "name": "variable.language.reserved.mlld",
+                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+                },
+                {
+                  "name": "variable.other.mlld",
+                  "match": "@\\w+"
+                },
+                {
+                  "name": "string.interpolated.alligator.mlld",
+                  "match": "<[^>]*[\\.\\/\\*@][^>]*>"
+                }
+              ]
             },
             {
               "name": "string.quoted.single.mlld",
@@ -494,6 +533,10 @@
                   "match": "[^}]+"
                 }
               ]
+            },
+            {
+              "name": "entity.name.tag.xml.mlld",
+              "match": "</?[^>]+>"
             }
           ]
         },
@@ -513,23 +556,31 @@
           },
           "patterns": [
             {
-              "name": "variable.template.mlld",
-              "begin": "\\{\\{",
-              "end": "\\}\\}",
+              "name": "variable.language.reserved.mlld",
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+            },
+            {
+              "name": "variable.other.mlld",
+              "match": "@\\w+"
+            },
+            {
+              "name": "string.interpolated.alligator.mlld",
+              "begin": "<",
+              "end": ">",
               "beginCaptures": {
                 "0": {
-                  "name": "punctuation.definition.template.variable.begin.mlld"
+                  "name": "punctuation.definition.alligator.begin.mlld"
                 }
               },
               "endCaptures": {
                 "0": {
-                  "name": "punctuation.definition.template.variable.end.mlld"
+                  "name": "punctuation.definition.alligator.end.mlld"
                 }
               },
               "patterns": [
                 {
-                  "name": "variable.other.interpolation.mlld",
-                  "match": "[^}]+"
+                  "name": "string.path.mlld",
+                  "match": "[^>]+"
                 }
               ]
             }
@@ -565,37 +616,31 @@
           ]
         },
         {
+          "name": "string.interpolated.alligator.section.mlld",
+          "match": "<([^>#]+)(\\s*#\\s*)([^>]+)>",
+          "captures": {
+            "0": {
+              "name": "punctuation.definition.alligator.mlld"
+            },
+            "1": {
+              "name": "string.path.mlld"
+            },
+            "2": {
+              "name": "punctuation.separator.section.mlld"
+            },
+            "3": {
+              "name": "entity.name.section.mlld"
+            }
+          }
+        },
+        {
           "name": "string.interpolated.alligator.mlld",
-          "begin": "<",
-          "end": ">",
-          "beginCaptures": {
+          "match": "<[^>]*[\\.\\/\\*@][^>]*>",
+          "captures": {
             "0": {
-              "name": "punctuation.definition.alligator.begin.mlld"
+              "name": "meta.alligator.mlld"
             }
-          },
-          "endCaptures": {
-            "0": {
-              "name": "punctuation.definition.alligator.end.mlld"
-            }
-          },
-          "patterns": [
-            {
-              "name": "markup.underline.link.mlld",
-              "match": "https?://[^>]+"
-            },
-            {
-              "name": "variable.language.reserved.mlld",
-              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
-            },
-            {
-              "name": "variable.other.mlld",
-              "match": "@\\w+"
-            },
-            {
-              "name": "string.path.mlld",
-              "match": "[^>]+"
-            }
-          ]
+          }
         },
         {
           "name": "meta.import.mlld",
@@ -648,6 +693,10 @@
             {
               "name": "variable.other.mlld",
               "match": "@\\w+"
+            },
+            {
+              "name": "string.interpolated.alligator.mlld",
+              "match": "<[^>]*[\\.\\/\\*@][^>]*>"
             }
           ]
         },
@@ -725,7 +774,7 @@
         },
         {
           "name": "meta.command.braces.mlld",
-          "begin": "\\{",
+          "begin": "(?<!\\b(js|javascript|node|python|py|bash|sh)\\s*)\\{",
           "end": "\\}",
           "beginCaptures": {
             "0": {
@@ -750,12 +799,41 @@
             {
               "name": "variable.other.mlld",
               "match": "@\\w+"
+            },
+            {
+              "name": "string.interpolated.alligator.mlld",
+              "match": "<[^>]*[\\.\\/\\*@][^>]*>"
             }
           ]
         },
         {
-          "name": "string.quoted.double.mlld",
-          "match": "\"[^\"]*\""
+          "name": "string.quoted.double.interpolated.mlld",
+          "begin": "\"",
+          "end": "\"",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.mlld"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.mlld"
+            }
+          },
+          "patterns": [
+            {
+              "name": "variable.language.reserved.mlld",
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+            },
+            {
+              "name": "variable.other.mlld",
+              "match": "@\\w+"
+            },
+            {
+              "name": "string.interpolated.alligator.mlld",
+              "match": "<[^>]*[\\.\\/\\*@][^>]*>"
+            }
+          ]
         },
         {
           "name": "string.quoted.single.mlld",

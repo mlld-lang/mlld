@@ -1,0 +1,194 @@
+# Comprehensive mlld Syntax Test File
+
+This file tests all syntax highlighting features including the new operators and expressions.
+
+## Comments
+>> This is a comment
+<< This is also a comment
+
+## Directives
+/var @name = "John"
+/show @name
+/run {echo "Hello"}
+/exe @greet(name) = `Hello @name!`
+/path @docs = [~/Documents]
+/import { helper } from [./utils.mld]
+/when @condition => /show "Success"
+/output @result to "file.txt"
+
+## Operators and Expressions
+
+### Logical Operators
+/var @result = @a && @b || !@c
+/var @complex = (@x || @y) && !@z
+/var @negation = !@isActive
+
+### Comparison Operators
+/var @isEqual = @x == @y
+/var @notEqual = @a != @b
+/var @greater = @count > 100
+/var @less = @value < 50
+/var @greaterOrEqual = @score >= 80
+/var @lessOrEqual = @price <= 99.99
+
+### Ternary Operator
+/var @message = @isLoggedIn ? "Welcome back!" : "Please log in"
+/var @status = @count > 0 ? @active : @inactive
+
+### Complex Expressions
+/var @result = (@a && @b) || (@c == @d && @e != @f)
+/var @calc = @x > 5 && @y < 10 ? @positive : @negative
+
+## When Expressions
+
+### Value-returning When
+/var @greeting = when: [
+  @time < 12 => "Good morning"
+  @time < 18 => "Good afternoon"
+  true => "Good evening"
+]
+
+### Exe with When Expression
+/exe @processData(type, data) = when: [
+  @type == "json" => @jsonProcessor(@data)
+  @type == "xml" => @xmlProcessor(@data)
+  true => @genericProcessor(@data)
+]
+
+### When with Tail Modifiers
+/var @result = when: [
+  @lang == "es" => "Hola"
+  @lang == "fr" => "Bonjour"
+  true => "Hello"
+] | @uppercase
+
+## Implicit When Actions
+
+### Without directive prefixes
+/when @production => @config = "prod.json"
+/when @development => @setupDev()
+/when @test => @validate() = @runTests()
+
+### Mixed implicit/explicit in blocks
+/when @multi => [
+  @x = "implicit assignment"
+  @process()
+  /var @y = "explicit assignment"
+  @transform() = @applyFilter(@data)
+]
+
+## Alligator Syntax (File Loading)
+
+### Basic file loading
+/var @content = <README.md>
+/var @data = <config.json>
+/show <license.txt>
+
+### Glob patterns
+/var @scripts = <**/*.js>
+/var @docs = <docs/*.md>
+
+### With field access
+/var @version = <package.json>.version
+/var @author = <package.json>.author.name
+
+### With pipes
+/var @formatted = <data.json>|@json|@xml
+/var @upper = <greeting.txt>|@uppercase
+
+### URLs
+/var @page = <https://example.com/api>
+/show <https://raw.githubusercontent.com/user/repo/main/file.md>
+
+## Triple-Colon Templates
+/var @codeDoc = :::The `getData()` function returns {{result}} objects:::
+/var @example = :::Use `npm install` to install {{package}}:::
+
+## Double-Colon Templates
+/var @message = ::Welcome @user.name to @app.name::
+/var @template = ::Processing @count items at @time::
+
+## String Interpolation
+
+### In double quotes
+/var @msg = "Hello @name from <greeting.txt>"
+/var @path = "Loading <config.json> with @options"
+
+### In backticks
+/var @info = `User @user has @count items`
+/var @mixed = `File <data.json> contains @records.length records`
+
+## Pipes and Transformations
+
+### Basic pipes
+/var @upper = @text | @uppercase
+/var @json = @data | @json | @pretty
+
+### Condensed pipes (no spaces)
+/var @chain = @input|@trim|@lowercase|@slug
+
+### File pipes
+/var @processed = <raw.txt>|@clean|@format
+
+## Reserved Variables
+/var @timestamp = @now
+/var @debug_info = @debug
+/var @input_data = @input
+/var @project = @base
+/var @projectShort = @.
+
+## Primitives
+/var @count = 42
+/var @price = 19.99
+/var @active = true
+/var @disabled = false
+/var @empty = null
+
+## Arrays and Objects
+/var @list = [1, 2, 3, "four", true, null]
+/var @config = {
+  name: "mlld",
+  version: "2.0.0",
+  features: ["operators", "expressions", "when"],
+  active: true
+}
+
+## Code Blocks
+/run js {
+  console.log("JavaScript code");
+  return @x * 2;
+}
+
+/run python {
+  print(f"Python code with {variable}")
+  return result
+}
+
+## Field Access
+/var @userName = @user.name
+/var @firstItem = @items.0
+/var @nested = @config.database.connection.host
+
+## Function Calls
+/run @processFile(<data.txt>)
+/var @result = @transform(@input, @options)
+/exe @pipeline() = @step1() | @step2() | @step3()
+
+## Mixed Complex Example
+/when @env == "production" && @users > 1000 => [
+  @mode = "scaled"
+  @config = when: [
+    @region == "us" => <config-us.json>
+    @region == "eu" => <config-eu.json>  
+    true => <config-default.json>
+  ] | @json
+  @notify(@admin.email, :::High traffic detected: {{users}} users:::)
+]
+
+## Arrow Functions in When
+/when @data => @process(@data)
+/when @error => /show "Error: @error.message"
+/when @success => @result = @success.data | @format
+
+---
+End of syntax test file.
