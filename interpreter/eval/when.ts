@@ -575,7 +575,7 @@ async function evaluateAnyMatch(
 /**
  * Evaluates a condition expression to a boolean value
  */
-async function evaluateCondition(
+export async function evaluateCondition(
   condition: BaseMlldNode[],
   env: Environment,
   variableName?: string

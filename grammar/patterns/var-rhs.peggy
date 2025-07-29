@@ -290,7 +290,7 @@ CodeChar
 // Purpose: Allow when: [...] expressions that return values based on first matching condition
 
 WhenExpression "when expression"
-  = "when" _ ":" _ "[" _ conditions:WhenConditionList _ "]" tail:TailModifiers? {
+  = "when" _ ":" _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
       helpers.debug('WhenExpression matched', { 
         conditionCount: conditions.length,
         hasTailModifiers: !!tail
@@ -322,3 +322,19 @@ WhenExpression "when expression"
         location()
       );
     }
+
+// Value-oriented condition list for when expressions
+WhenExpressionConditionList
+  = first:WhenExpressionConditionPair rest:(_ pair:WhenExpressionConditionPair { return pair; })* {
+      return [first, ...rest];
+    }
+
+// Single condition => value pair for expressions
+WhenExpressionConditionPair
+  = condition:WhenConditionExpression _ "=>" _ action:WhenExpressionAction {
+      return { condition, action: [action] };
+    }
+
+// Actions in when expressions are values, not directives
+WhenExpressionAction
+  = VarRHSContent

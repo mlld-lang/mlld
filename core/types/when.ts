@@ -96,3 +96,33 @@ export function isWhenMatchNode(node: DirectiveNode): node is WhenMatchNode {
 export function isWhenNode(node: DirectiveNode): node is WhenNode {
   return node.kind === 'when';
 }
+
+/**
+ * Tail modifiers that can be applied to when expression results
+ */
+export interface TailModifiers {
+  pipes?: BaseMlldNode[];
+}
+
+/**
+ * When expression for value-returning contexts
+ * Used in /var and /exe RHS: when: [condition => value, ...]
+ */
+export interface WhenExpressionNode extends BaseMlldNode {
+  type: 'WhenExpression';
+  conditions: WhenConditionPair[];
+  withClause?: TailModifiers;
+  meta: {
+    conditionCount: number;
+    isValueReturning: true;
+    evaluationType: 'expression';
+    hasTailModifiers: boolean;
+  };
+}
+
+/**
+ * Type guard for when expressions
+ */
+export function isWhenExpression(node: BaseMlldNode): node is WhenExpressionNode {
+  return node.type === 'WhenExpression';
+}

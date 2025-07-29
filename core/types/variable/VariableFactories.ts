@@ -22,7 +22,9 @@ import {
   ExecutableVariable,
   PipelineInputVariable,
   PrimitiveVariable,
-  PipelineInput
+  PipelineInput,
+  WhenExpressionVariable,
+  Variable
 } from './VariableTypes';
 
 // =========================================================================
@@ -222,6 +224,18 @@ export function createPrimitiveVariable(
   metadata?: VariableMetadata
 ): PrimitiveVariable {
   return VariableFactory.createPrimitive(name, value, source, metadata);
+}
+
+/**
+ * Create a WhenExpressionVariable
+ */
+export function createWhenExpressionVariable(
+  name: string,
+  definition: any, // WhenExpressionNode - using any to avoid circular dependency
+  source: VariableSource,
+  metadata?: VariableMetadata
+): WhenExpressionVariable {
+  return VariableFactory.createWhenExpression(name, definition, source, metadata);
 }
 
 // =========================================================================
@@ -596,6 +610,35 @@ export class VariableFactory {
       createdAt: Date.now(),
       modifiedAt: Date.now(),
       metadata
+    };
+  }
+
+  /**
+   * Create a WhenExpressionVariable
+   */
+  static createWhenExpression(
+    name: string,
+    definition: any, // WhenExpressionNode - using any to avoid circular dependency
+    source: VariableSource,
+    metadata?: VariableMetadata
+  ): WhenExpressionVariable {
+    const fullMetadata: VariableMetadata & WhenExpressionVariable['metadata'] = {
+      ...metadata,
+      isEvaluated: false,
+      conditionCount: definition.conditions?.length || 0,
+      hasParameters: false,
+      parameterNames: []
+    };
+
+    return {
+      type: 'when-expression',
+      name,
+      value: null, // Will be populated on first evaluation
+      definition,
+      source,
+      createdAt: Date.now(),
+      modifiedAt: Date.now(),
+      metadata: fullMetadata
     };
   }
 

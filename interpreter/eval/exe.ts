@@ -389,6 +389,43 @@ export async function evaluateExe(
       sourceDirective: 'exec'
     } satisfies SectionExecutable;
     
+  } else if (directive.subtype === 'exeWhen') {
+    // Handle when expression executable: @exe name(params) = when: [...]
+    const contentNodes = directive.values?.content;
+    if (!contentNodes || !Array.isArray(contentNodes) || contentNodes.length === 0) {
+      throw new Error('Exec when directive missing when expression');
+    }
+    
+    const whenExprNode = contentNodes[0];
+    if (!whenExprNode || whenExprNode.type !== 'WhenExpression') {
+      throw new Error('Exec when directive content must be a WhenExpression');
+    }
+    
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    
+    // Check for parameter conflicts
+    checkParameterConflicts(paramNames, identifier, directive.location, env);
+    
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('Creating exe when expression:', { 
+        identifier,
+        paramNames,
+        conditionCount: whenExprNode.conditions?.length
+      });
+    }
+    
+    // Create a special executable that evaluates the when expression
+    // We'll treat this as a code executable with special handling
+    executableDef = {
+      type: 'code',
+      codeTemplate: contentNodes, // Store the WhenExpression node
+      language: 'mlld-when', // Special language marker
+      paramNames,
+      sourceDirective: 'exec'
+    } satisfies CodeExecutable;
+    
   } else {
     throw new Error(`Unsupported exec subtype: ${directive.subtype}`);
   }

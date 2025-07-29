@@ -502,6 +502,13 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     return { value: node.value, env };
   }
   
+  // Handle when expressions
+  if (node.type === 'WhenExpression') {
+    const { evaluateWhenExpression } = await import('../eval/when-expression');
+    return evaluateWhenExpression(node as any, env, context);
+  }
+  
+  
   // If we get here, it's an unknown node type
   throw new Error(`Unknown node type: ${node.type}`);
 }

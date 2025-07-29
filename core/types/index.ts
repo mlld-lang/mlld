@@ -53,6 +53,9 @@ import {
   UnaryExpression
 } from './nodes';
 
+// Import WhenExpressionNode
+import { WhenExpressionNode } from './when';
+
 /**
  * Unified AST node type - MlldNode
  * 
@@ -79,7 +82,8 @@ export type MlldNode =
   | FileReferenceNode
   | BinaryExpression
   | TernaryExpression
-  | UnaryExpression;
+  | UnaryExpression
+  | WhenExpressionNode;
 
 // =========================================================================
 // VARIABLE TYPES

@@ -21,6 +21,8 @@ export { MlldDependencyError } from './MlldDependencyError';
 export { MlldConditionError } from './MlldConditionError';
 export { ResolverError, ResolverErrorCode } from './ResolverError';
 export type { ResolverErrorDetails } from './ResolverError';
+export { MlldWhenExpressionError } from './MlldWhenExpressionError';
+export type { WhenExpressionErrorDetails } from './MlldWhenExpressionError';
 
 // Export error message collections
 export * from './messages/index'; 

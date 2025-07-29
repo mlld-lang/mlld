@@ -644,29 +644,42 @@ export async function evaluateExecInvocation(
   }
   // Handle code executables
   else if (isCodeExecutable(definition)) {
-    // For bash/sh, don't interpolate the code template - bash handles its own variable substitution
-    let code: string;
-    if (definition.language === 'bash' || definition.language === 'sh') {
-      // For bash/sh, just extract the raw code without interpolation
-      if (Array.isArray(definition.codeTemplate)) {
-        // If it's an array of nodes, concatenate their content
-        code = definition.codeTemplate.map(node => {
-          if (typeof node === 'string') return node;
-          if (node && typeof node === 'object' && 'content' in node) return node.content || '';
-          return '';
-        }).join('');
-      } else if (typeof definition.codeTemplate === 'string') {
-        code = definition.codeTemplate;
-      } else {
-        code = '';
+    // Special handling for mlld-when expressions
+    if (definition.language === 'mlld-when') {
+      // The codeTemplate contains the WhenExpression node
+      const whenExprNode = definition.codeTemplate[0];
+      if (!whenExprNode || whenExprNode.type !== 'WhenExpression') {
+        throw new MlldInterpreterError('mlld-when executable missing WhenExpression node');
       }
+      
+      // Evaluate the when expression with the parameter environment
+      const { evaluateWhenExpression } = await import('./when-expression');
+      const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
+      result = whenResult.value;
     } else {
-      // For other languages (JS, Python), interpolate as before
-      code = await interpolate(definition.codeTemplate, execEnv);
-    }
-    
-    // Import ASTEvaluator for normalizing array values
-    const { ASTEvaluator } = await import('../core/ast-evaluator');
+      // For bash/sh, don't interpolate the code template - bash handles its own variable substitution
+      let code: string;
+      if (definition.language === 'bash' || definition.language === 'sh') {
+        // For bash/sh, just extract the raw code without interpolation
+        if (Array.isArray(definition.codeTemplate)) {
+          // If it's an array of nodes, concatenate their content
+          code = definition.codeTemplate.map(node => {
+            if (typeof node === 'string') return node;
+            if (node && typeof node === 'object' && 'content' in node) return node.content || '';
+            return '';
+          }).join('');
+        } else if (typeof definition.codeTemplate === 'string') {
+          code = definition.codeTemplate;
+        } else {
+          code = '';
+        }
+      } else {
+        // For other languages (JS, Python), interpolate as before
+        code = await interpolate(definition.codeTemplate, execEnv);
+      }
+      
+      // Import ASTEvaluator for normalizing array values
+      const { ASTEvaluator } = await import('../core/ast-evaluator');
     
     // Build params object for code execution
     const codeParams: Record<string, any> = {};
@@ -813,6 +826,7 @@ export async function evaluateExecInvocation(
       }
     } else {
       result = codeResult;
+    }
     }
   }
   // Handle command reference executables

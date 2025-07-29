@@ -167,6 +167,18 @@ export async function evaluateShow(
     } else if (isPrimitive(variable)) {
       // Primitive variables (numbers, booleans, null)
       value = variable.value;
+    } else if (variable.type === 'when-expression') {
+      // Lazy when-expression evaluation - ALWAYS re-evaluate to pick up current variable state
+      const whenExprNode = variable.definition;
+      if (!whenExprNode) {
+        throw new Error(`When-expression variable ${variable.name} has no definition`);
+      }
+      
+      // Always evaluate the when expression to get current state
+      // This allows when expressions to react to variable changes
+      const { evaluateWhenExpression } = await import('./when-expression');
+      const result = await evaluateWhenExpression(whenExprNode, env);
+      value = result.value;
     } else {
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
     }

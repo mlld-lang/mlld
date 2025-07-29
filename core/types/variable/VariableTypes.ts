@@ -91,7 +91,8 @@ export type VariableTypeDiscriminator =
   | 'imported'
   | 'executable'
   | 'pipeline-input'
-  | 'primitive';
+  | 'primitive'
+  | 'when-expression';
 
 // =========================================================================
 // TEXT VARIABLE TYPES
@@ -296,6 +297,24 @@ export interface PipelineInput {
   toString(): string;
 }
 
+/**
+ * When expression variable for lazy evaluation
+ */
+export interface WhenExpressionVariable extends BaseVariable {
+  type: 'when-expression';
+  value: unknown; // Cached result after evaluation
+  definition: any; // WhenExpressionNode - using any to avoid circular dependency
+  metadata: VariableMetadata & {
+    isEvaluated: boolean;
+    evaluatedAt?: Date;
+    conditionCount: number;
+    hasParameters?: boolean;
+    parameterNames?: string[];
+    // Store parameter bindings if from /exe
+    parameterBindings?: Map<string, Variable>;
+  };
+}
+
 // =========================================================================
 // DISCRIMINATED UNION
 // =========================================================================
@@ -317,7 +336,8 @@ export type Variable =
   | ImportedVariable
   | ExecutableVariable
   | PipelineInputVariable
-  | PrimitiveVariable;
+  | PrimitiveVariable
+  | WhenExpressionVariable;
 
 // =========================================================================
 // COMPOSITE TYPE ALIASES
