@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0-rc29]
 
+This release allows mlld to function as a logical router
+
 ### Added
 - **Logical and Comparison Operators in Expressions**
   - New operators for `/var` assignments and `/when` conditions: `&&`, `||`, `==`, `!=`, `!`, `?`, `:`
@@ -18,6 +20,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Full expression support in when conditions: `/when @tokens > 1000 && @mode == "production" => /show "High usage detected"`
   - Short-circuit evaluation: `&&` and `||` operators properly short-circuit for performance
   - Type coercion following mlld semantics: `"true" == true` → true, `null == undefined` → true
+  - Comparison operators: `<`, `>`, `<=`, `>=` for numeric comparisons
+
+- **Implicit When Actions**
+  - Simplified syntax within `/when` blocks - directive prefix is now optional
+  - Variable assignments: `/when @prod => @config = "production"` (no `/var` needed)
+  - Function calls: `/when @ready => @setupDatabase()` (no `/run` needed)
+  - Exec assignments: `/when @processing => @transform() = @processData(@input)` (no `/exe` needed)
+  - Mixed implicit/explicit actions in blocks: `/when @cond => [@x = "value", /var @y = "other"]`
+
+- **RHS When Expressions (Value-Returning)**
+  - When expressions as values in `/var` assignments: `/var @greeting = when: [@time < 12 => "Good morning", @time < 18 => "Good afternoon", true => "Good evening"]`
+  - When expressions in `/exe` definitions: `/exe @processData(type, data) = when: [@type == "json" => @jsonProcessor(@data), @type == "xml" => @xmlProcessor(@data), true => @genericProcessor(@data)]`
+  - First-match semantics - returns the first matching condition's value
+  - Returns `null` when no conditions match
+  - Lazy evaluation in variables - re-evaluates on each access
+  - Pipeline support: `/var @result = when: [...] | @uppercase`
 
 - **Enhanced String Interpolation**
   - Fixed file reference interpolation in double-quoted strings: `"Content from <file.md> here"`
@@ -35,11 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Example: `js { console.log("output") }` shows "output" on stdout AND stores "output" as the result
 
 ### Fixed
-- **Expression Evaluation in Variable Assignments**
-  - BinaryExpression nodes are now properly evaluated when used in `/var` assignments
-  - Fixed boolean literal handling in expression contexts
-  - Proper primitive variable creation for boolean and numeric expression results
-  
 - **Grammar and Parser Improvements**
   - Fixed CommandReference type mismatches between grammar output and TypeScript expectations
   - Added translation layer in evaluators to handle both legacy and new AST formats
@@ -58,11 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ImportResolver was not receiving PathContext when Environment.setEphemeralMode() recreated it
   - Ephemeral mode now properly passes PathContext to ImportResolver constructor
   - Enables relative imports to work correctly in ephemeral/CI environments
-
-- **Parser order for /when directive colon syntax**
-  - Fixed parse error for `/when @variable: [...]` pattern incorrectly expecting `=>`
-  - Reordered grammar rules so WhenMatchForm is tried before error recovery rules
-  - The colon syntax for match form now parses correctly: `/when @status: ["active" => /show "Active"]`
 
 - **Double-colon syntax (`::...::`) now properly handles colons in content**
   - Fixed parser incorrectly terminating on single colons (`:`) inside double-colon templates
