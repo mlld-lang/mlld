@@ -1,6 +1,66 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { parse } from '@grammar/parser';
 import { HIGHLIGHTING_RULES, shouldInterpolate, isXMLTag } from '@core/highlighting/rules';
+
+// Mock the vscode-languageserver modules
+vi.mock('vscode-languageserver/node', () => ({
+  SemanticTokensBuilder: vi.fn().mockImplementation(() => {
+    const tokens: number[] = [];
+    let lastLine = 0;
+    let lastChar = 0;
+    
+    return {
+      push: (line: number, char: number, length: number, tokenType: number, modifiers: number) => {
+        // Delta encoding as per LSP spec
+        tokens.push(line - lastLine);
+        tokens.push(line === lastLine ? char - lastChar : char);
+        tokens.push(length);
+        tokens.push(tokenType);
+        tokens.push(modifiers);
+        
+        lastLine = line;
+        lastChar = char;
+      },
+      build: () => ({ data: tokens })
+    };
+  })
+}));
+
+vi.mock('vscode-languageserver-textdocument', () => ({
+  TextDocument: {
+    create: (uri: string, languageId: string, version: number, content: string) => ({
+      uri,
+      languageId,
+      version,
+      getText: (range?: any) => {
+        if (!range) return content;
+        // Extract text based on range
+        const lines = content.split('\n');
+        if (range.start.line === range.end.line) {
+          // Single line range
+          return lines[range.start.line].substring(range.start.character, range.end.character);
+        } else {
+          // Multi-line range (simplified for testing)
+          let result = lines[range.start.line].substring(range.start.character);
+          for (let i = range.start.line + 1; i < range.end.line; i++) {
+            result += '\n' + lines[i];
+          }
+          if (range.end.line < lines.length) {
+            result += '\n' + lines[range.end.line].substring(0, range.end.character);
+          }
+          return result;
+        }
+      },
+      offsetAt: (position: any) => 0,
+      positionAt: (offset: number) => ({ line: 0, character: offset })
+    })
+  }
+}));
+
+// Import after mocks are set up
+import { ASTSemanticVisitor } from '@services/lsp/ASTSemanticVisitor';
+import { SemanticTokensBuilder } from 'vscode-languageserver/node';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 
 // Token types and modifiers from the LSP
 const TOKEN_TYPES = [
@@ -43,10 +103,11 @@ interface SemanticToken {
   modifiers: string[];
 }
 
-function parseSemanticTokens(data: number[]): SemanticToken[] {
+function parseSemanticTokens(data: number[], sourceText?: string): SemanticToken[] {
   const tokens: SemanticToken[] = [];
   let line = 0;
   let char = 0;
+  const lines = sourceText?.split('\n') || [];
   
   for (let i = 0; i < data.length; i += 5) {
     const deltaLine = data[i];
@@ -71,13 +132,20 @@ function parseSemanticTokens(data: number[]): SemanticToken[] {
       }
     }
     
-    tokens.push({
+    const token: SemanticToken = {
       line,
       char,
       length,
       tokenType: TOKEN_TYPES[tokenTypeIndex] || 'unknown',
       modifiers
-    });
+    };
+    
+    // Add text for debugging if source is provided
+    if (lines[line]) {
+      (token as any).text = lines[line].substring(char, char + length);
+    }
+    
+    tokens.push(token);
   }
   
   return tokens;
@@ -96,7 +164,7 @@ async function getSemanticTokens(code: string): Promise<SemanticToken[]> {
   visitor.visitAST(parseResult.ast);
   
   const result = builder.build();
-  return parseSemanticTokens(result.data);
+  return parseSemanticTokens(result.data, code);
 }
 
 describe('Semantic Tokens', () => {

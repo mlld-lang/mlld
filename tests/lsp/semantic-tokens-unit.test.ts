@@ -33,8 +33,22 @@ vi.mock('vscode-languageserver-textdocument', () => ({
       version,
       getText: (range?: any) => {
         if (!range) return content;
-        // Simple implementation for testing
-        return content;
+        // Extract text based on range
+        const lines = content.split('\n');
+        if (range.start.line === range.end.line) {
+          // Single line range
+          return lines[range.start.line].substring(range.start.character, range.end.character);
+        } else {
+          // Multi-line range (simplified for testing)
+          let result = lines[range.start.line].substring(range.start.character);
+          for (let i = range.start.line + 1; i < range.end.line; i++) {
+            result += '\n' + lines[i];
+          }
+          if (range.end.line < lines.length) {
+            result += '\n' + lines[range.end.line].substring(0, range.end.character);
+          }
+          return result;
+        }
       },
       offsetAt: (position: any) => 0,
       positionAt: (offset: number) => ({ line: 0, character: offset })
@@ -205,7 +219,7 @@ describe('Semantic Tokens - Unit Tests', () => {
     it('highlights multiple directives', async () => {
       const code = `/var @x = 1
 /show @x
-/exe @cmd = run "ls"`;
+/exe @cmd = run {ls}`;
       const tokens = await getSemanticTokens(code);
       
       const directives = tokens.filter(t => t.tokenType === 'directive');

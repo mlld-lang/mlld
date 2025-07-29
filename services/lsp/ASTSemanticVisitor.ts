@@ -201,17 +201,29 @@ export class ASTSemanticVisitor {
       modifiers: []
     });
     
+    // Special handling for when directives
+    if (node.kind === 'when') {
+      this.visitWhenDirective(node);
+      return;
+    }
+    
     // Handle variable declarations
     if ((node.kind === 'var' || node.kind === 'exe' || node.kind === 'path') && 
         node.values?.identifier) {
       const identifierNodes = node.values.identifier;
       if (Array.isArray(identifierNodes) && identifierNodes.length > 0) {
         const firstIdentifier = identifierNodes[0];
-        if (firstIdentifier.location) {
+        const identifierName = firstIdentifier.identifier || '';
+        
+        if (identifierName) {
+          // Calculate the actual position of the identifier
+          // It should be after "/var @" which is directive length + 2
+          const identifierStart = node.location.start.column + node.kind.length + 2; // +1 for /, +1 for space, @ is part of identifier display
+          
           this.addToken({
-            line: firstIdentifier.location.start.line - 1,
-            char: firstIdentifier.location.start.column - 1,
-            length: this.extractText([firstIdentifier]).length,
+            line: node.location.start.line - 1,
+            char: identifierStart - 1,
+            length: identifierName.length + 1, // +1 for @
             tokenType: 'variable',
             modifiers: ['declaration']
           });
@@ -228,6 +240,12 @@ export class ASTSemanticVisitor {
   visitDirectiveValues(directive: any): void {
     const values = directive.values;
     
+    // Special handling for /run directives
+    if (directive.kind === 'run') {
+      this.visitRunDirective(directive);
+      return;
+    }
+    
     // Handle based on the directive kind and meta info
     if (directive.meta?.wrapperType) {
       // This is a template-like value
@@ -239,12 +257,65 @@ export class ASTSemanticVisitor {
     } else if (values.value && Array.isArray(values.value)) {
       // Visit the value array content
       for (const node of values.value) {
-        this.visitNode(node);
+        if (typeof node === 'object' && node !== null) {
+          this.visitNode(node);
+        } else if (directive.location) {
+          // Handle primitive values (numbers, booleans, null)
+          this.handlePrimitiveValue(node, directive);
+        }
       }
+    } else if (values.value !== undefined && directive.location) {
+      // Single primitive value
+      this.handlePrimitiveValue(values.value, directive);
     }
     
     // Visit other child nodes
     this.visitChildren(values);
+  }
+  
+  visitRunDirective(directive: any): void {
+    const values = directive.values;
+    
+    // Check for language-specific run commands
+    if (values?.lang) {
+      // Highlight the language identifier
+      const langText = this.extractText(Array.isArray(values.lang) ? values.lang : [values.lang]);
+      if (langText && directive.location) {
+        // Calculate position after "/run "
+        const langStart = directive.location.start.column + 4; // "/run" + space
+        
+        this.addToken({
+          line: directive.location.start.line - 1,
+          char: langStart,
+          length: langText.length,
+          tokenType: 'embedded',
+          modifiers: []
+        });
+      }
+      
+      // Mark code content for embedded highlighting
+      if (values.code && Array.isArray(values.code)) {
+        for (const codeNode of values.code) {
+          if (codeNode.location && codeNode.content) {
+            // Find the actual code content (between braces)
+            const codeContent = codeNode.content;
+            const codeStart = codeNode.location.start.column + langText.length + 2; // After "python {"
+            
+            this.addToken({
+              line: codeNode.location.start.line - 1,
+              char: codeStart,
+              length: codeContent.length,
+              tokenType: 'embeddedCode',
+              modifiers: [],
+              data: { language: langText }
+            });
+          }
+        }
+      }
+    } else {
+      // Regular command - visit normally
+      this.visitChildren(values);
+    }
   }
   
   visitTemplateValue(directive: any): void {
@@ -255,28 +326,54 @@ export class ASTSemanticVisitor {
     let templateType: 'backtick' | 'doubleColon' | 'tripleColon' | 'doubleQuote' | 'singleQuote' | null = null;
     let variableStyle: '@var' | '{{var}}' = '@var';
     let interpolationAllowed = true;
+    let delimiterLength = 1;
     
     switch (wrapperType) {
       case 'backtick':
         templateType = 'backtick';
+        delimiterLength = 1;
         break;
       case 'doubleColon':
         templateType = 'doubleColon';
+        delimiterLength = 2;
         break;
       case 'tripleColon':
         templateType = 'tripleColon';
         variableStyle = '{{var}}';
+        delimiterLength = 3;
         break;
       case 'doubleQuote':
         templateType = 'doubleQuote';
+        delimiterLength = 1;
         break;
       case 'singleQuote':
         templateType = 'singleQuote';
         interpolationAllowed = false;
+        delimiterLength = 1;
         break;
     }
     
-    if (templateType) {
+    if (templateType && values.length > 0) {
+      // Calculate delimiter positions based on content
+      const firstValue = values[0];
+      const lastValue = values[values.length - 1];
+      
+      if (firstValue.location) {
+        // Opening delimiter should be just before the first content
+        const openDelimiterStart = firstValue.location.start.column - delimiterLength - 1;
+        
+        // Add opening delimiter token for templates (not quotes)
+        if (templateType === 'backtick' || templateType === 'doubleColon' || templateType === 'tripleColon') {
+          this.addToken({
+            line: firstValue.location.start.line - 1,
+            char: openDelimiterStart,
+            length: delimiterLength,
+            tokenType: 'template',
+            modifiers: []
+          });
+        }
+      }
+      
       // Process template content with proper context
       this.pushContext({
         templateType: templateType as any,
@@ -291,6 +388,19 @@ export class ASTSemanticVisitor {
       }
       
       this.popContext();
+      
+      // Add closing delimiter token
+      if (lastValue.location && (templateType === 'backtick' || templateType === 'doubleColon' || templateType === 'tripleColon')) {
+        const closeDelimiterStart = lastValue.location.end.column;
+        
+        this.addToken({
+          line: lastValue.location.end.line - 1,
+          char: closeDelimiterStart,
+          length: delimiterLength,
+          tokenType: 'template',
+          modifiers: []
+        });
+      }
     }
   }
   
@@ -408,46 +518,69 @@ export class ASTSemanticVisitor {
     if (!node.location) return;
     
     const ctx = this.currentContext;
-    const text = node.content || this.extractText([node]);
+    const identifier = node.identifier || '';
+    const valueType = node.valueType;
     
-    // Check if we're in an interpolation context
-    if (ctx.interpolationAllowed) {
-      if (ctx.variableStyle === '@var' && text.startsWith('@')) {
+    // For variable declarations in directives, we've already handled them
+    if (valueType === 'identifier') {
+      return; // Already processed in visitDirective
+    }
+    
+    // Get the actual text from the document to ensure we have the right syntax
+    const actualText = this.document.getText({
+      start: { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+      end: { line: node.location.end.line - 1, character: node.location.end.column }
+    });
+    
+    // Check if we're in an interpolation context (templates, etc)
+    if (ctx.interpolationAllowed && ctx.templateType) {
+      // In triple-colon templates, varIdentifier actually represents {{var}} syntax
+      if (ctx.templateType === 'tripleColon' && valueType === 'varIdentifier') {
+        // The parser optimizes {{var}} to varIdentifier in triple-colon context
         this.addToken({
           line: node.location.start.line - 1,
           char: node.location.start.column - 1,
-          length: text.length,
+          length: actualText.length,
           tokenType: 'interpolation',
           modifiers: []
         });
-      } else if (ctx.variableStyle === '{{var}}' && 
-                 text.startsWith('{{') && text.endsWith('}}')) {
+      } else if (ctx.variableStyle === '@var' && valueType === 'varIdentifier') {
         this.addToken({
           line: node.location.start.line - 1,
           char: node.location.start.column - 1,
-          length: text.length,
+          length: actualText.length,
           tokenType: 'interpolation',
           modifiers: []
         });
-      } else {
+      } else if (ctx.variableStyle === '{{var}}' && valueType === 'varInterpolation') {
+        this.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column - 1,
+          length: actualText.length,
+          tokenType: 'interpolation',
+          modifiers: []
+        });
+      } else if (actualText.startsWith('@')) {
         // Wrong style for context - mark as invalid
         this.addToken({
           line: node.location.start.line - 1,
           char: node.location.start.column - 1,
-          length: text.length,
+          length: actualText.length,
           tokenType: 'variable',
           modifiers: ['invalid']
         });
       }
     } else {
-      // Not in interpolation context - regular variable reference
-      this.addToken({
-        line: node.location.start.line - 1,
-        char: node.location.start.column - 1,
-        length: text.length,
-        tokenType: 'variableRef',
-        modifiers: ['reference']
-      });
+      // Not in template/interpolation context - regular variable reference
+      if (valueType === 'varIdentifier' || valueType === 'varInterpolation') {
+        this.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column - 1,
+          length: actualText.length,
+          tokenType: 'variableRef',
+          modifiers: ['reference']
+        });
+      }
     }
   }
   
@@ -539,13 +672,23 @@ export class ASTSemanticVisitor {
   visitOperator(node: any): void {
     if (!node.location || !node.operator) return;
     
-    this.addToken({
-      line: node.location.start.line - 1,
-      char: node.location.start.column - 1,
-      length: node.operator.length,
-      tokenType: 'operator',
-      modifiers: []
-    });
+    // Handle operator array format ['>', undefined] or string format
+    const operatorText = Array.isArray(node.operator) ? node.operator[0] : node.operator;
+    
+    if (operatorText) {
+      // Calculate operator position - it should be between left and right operands
+      if (node.left && node.right) {
+        const operatorStart = node.left.location.end.column;
+        
+        this.addToken({
+          line: node.location.start.line - 1,
+          char: operatorStart,
+          length: operatorText.length,
+          tokenType: 'operator',
+          modifiers: []
+        });
+      }
+    }
     
     // Visit operands
     if (node.left) this.visitNode(node.left);
@@ -556,7 +699,9 @@ export class ASTSemanticVisitor {
     if (!node.location) return;
     
     const value = node.value;
+    const valueType = node.valueType;
     let tokenType = 'string';
+    let modifiers: string[] = [];
     
     if (typeof value === 'number') {
       tokenType = 'number';
@@ -564,14 +709,24 @@ export class ASTSemanticVisitor {
       tokenType = 'boolean';
     } else if (value === null) {
       tokenType = 'null';
+    } else if (valueType === 'string') {
+      // String literals - check the source to see if single quoted
+      const text = this.document.getText({
+        start: { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+        end: { line: node.location.end.line - 1, character: node.location.end.column }
+      });
+      
+      if (text.startsWith("'") && text.endsWith("'")) {
+        modifiers.push('literal');
+      }
     }
     
     this.addToken({
       line: node.location.start.line - 1,
       char: node.location.start.column - 1,
-      length: String(value).length,
+      length: node.location.end.column - node.location.start.column,
       tokenType,
-      modifiers: []
+      modifiers
     });
   }
   
@@ -639,6 +794,57 @@ export class ASTSemanticVisitor {
     
     // Visit conditions and actions
     this.visitChildren(node);
+  }
+  
+  visitWhenDirective(node: any): void {
+    // For when directives, we need to process condition and action
+    if (node.values) {
+      // Visit condition (which may contain operators)
+      if (node.values.condition) {
+        if (Array.isArray(node.values.condition)) {
+          for (const cond of node.values.condition) {
+            this.visitNode(cond);
+          }
+        } else {
+          this.visitNode(node.values.condition);
+        }
+      }
+      
+      // Handle the => arrow operator
+      // It's typically between condition and action
+      if (node.values.condition && node.values.action) {
+        const conditionEnd = Array.isArray(node.values.condition) 
+          ? node.values.condition[node.values.condition.length - 1].location?.end 
+          : node.values.condition.location?.end;
+        const actionStart = Array.isArray(node.values.action)
+          ? node.values.action[0].location?.start
+          : node.values.action.location?.start;
+          
+        if (conditionEnd && actionStart) {
+          // Find the arrow position (between condition end and action start)
+          const arrowChar = conditionEnd.column + 1; // Space after condition
+          
+          this.addToken({
+            line: conditionEnd.line - 1,
+            char: arrowChar - 1,
+            length: 2, // =>
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
+      }
+      
+      // Visit action
+      if (node.values.action) {
+        if (Array.isArray(node.values.action)) {
+          for (const action of node.values.action) {
+            this.visitNode(action);
+          }
+        } else {
+          this.visitNode(node.values.action);
+        }
+      }
+    }
   }
   
   visitExecInvocation(node: any): void {
@@ -837,5 +1043,50 @@ export class ASTSemanticVisitor {
       }
     }
     return text.trim();
+  }
+  
+  private handlePrimitiveValue(value: any, directive: any): void {
+    // Calculate position after the = sign
+    const source = this.document.getText();
+    const directiveText = source.substring(directive.location.start.offset, directive.location.end.offset);
+    const equalIndex = directiveText.indexOf('=');
+    
+    if (equalIndex === -1) return;
+    
+    // Find the actual value position after the equals sign
+    const afterEqual = directiveText.substring(equalIndex + 1).trimStart();
+    const valueStart = directive.location.start.column + equalIndex + 1 + (directiveText.length - equalIndex - 1 - afterEqual.length);
+    
+    let tokenType = 'string';
+    let modifiers: string[] = [];
+    let tokenLength = 0;
+    
+    if (typeof value === 'number') {
+      tokenType = 'number';
+      tokenLength = String(value).length;
+    } else if (typeof value === 'boolean') {
+      tokenType = 'boolean';
+      tokenLength = String(value).length;
+    } else if (value === null) {
+      tokenType = 'null';
+      tokenLength = 4; // 'null'
+    } else if (typeof value === 'string') {
+      // For strings, we need to include the quotes in the token
+      const quotedLength = afterEqual.indexOf(afterEqual[0], 1) + 1;
+      tokenLength = quotedLength;
+      
+      // Check if it's single-quoted
+      if (afterEqual.startsWith("'")) {
+        modifiers.push('literal');
+      }
+    }
+    
+    this.addToken({
+      line: directive.location.start.line - 1,
+      char: valueStart - 1,
+      length: tokenLength,
+      tokenType,
+      modifiers
+    });
   }
 }
