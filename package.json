@@ -163,6 +163,7 @@
     "vscode-languageserver-types": "^3.17.5"
   },
   "optionalDependencies": {
-    "keytar": "^7.9.0"
+    "keytar": "^7.9.0",
+    "vscode-languageserver": "^9.0.1"
   }
 }

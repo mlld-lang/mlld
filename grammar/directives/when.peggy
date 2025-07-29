@@ -268,7 +268,7 @@ WhenBlockForm
       if (variable) {
         values.variable = [helpers.createVariableReferenceNode('identifier', {
           identifier: variable
-        })];
+        }, location())];
       }
       
       if (action) {
@@ -600,7 +600,7 @@ WhenActionDirective
     }
   / "/"? "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
       // Support full range of var assignments in when actions
-      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
       
       // Process the value based on its structure (simplified from var.peggy)
       let processedValue;
@@ -799,7 +799,7 @@ WhenOutputSource
       return {
         type: 'variable',
         subtype: 'outputVariable',
-        values: [helpers.createVariableReferenceNode('identifier', { identifier: id })],
+        values: [helpers.createVariableReferenceNode('identifier', { identifier: id }, location())],
         raw: '@' + id
       };
     }
@@ -854,7 +854,7 @@ WhenImplicitAction
 WhenImplicitVarAssignment
   = "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
       // Create the same structure as explicit /var but with implicit flag
-      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
       
       // Process the value using the same logic as explicit /var directive
       let processedValue;

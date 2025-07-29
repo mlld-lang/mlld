@@ -20,13 +20,17 @@ export async function languageServerCommand(): Promise<void> {
     
     if (!lspModule) {
       console.error('Error: Language server dependencies not installed.');
-      console.error('Please run: npm install --save-dev vscode-languageserver');
+      console.error('\nTo fix this, try one of the following:');
+      console.error('1. Reinstall mlld: npm install -g mlld');
+      console.error('2. Install locally: npm install mlld');
+      console.error('3. Install the dependency directly: npm install vscode-languageserver');
       console.error('\nThe mlld language server provides intelligent features like:');
       console.error('- Syntax validation and error reporting');
       console.error('- Autocomplete for directives, variables, and file paths');
       console.error('- Hover information for variables');
       console.error('- Go-to-definition for variables');
       console.error('- Import resolution and multi-file analysis');
+      console.error('- Semantic syntax highlighting');
       process.exit(1);
     }
 

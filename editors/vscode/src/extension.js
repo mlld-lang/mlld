@@ -73,9 +73,10 @@ function startLanguageServer(context) {
   client.start().catch(error => {
     vscode.window.showErrorMessage(
       `Failed to start mlld language server: ${error.message}\n\n` +
-      `Make sure mlld is installed and the 'vscode-languageserver' package is installed:\n` +
-      `npm install -g mlld\n` +
-      `npm install --save-dev vscode-languageserver`
+      `Make sure mlld is installed:\n` +
+      `npm install -g mlld\n\n` +
+      `If the error persists, the language server dependency may be missing.\n` +
+      `Try reinstalling mlld or check the Output panel for details.`
     );
   });
 }

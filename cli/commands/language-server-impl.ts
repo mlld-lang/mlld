@@ -24,7 +24,11 @@ import {
   Diagnostic,
   DiagnosticSeverity,
   Range,
-  Position
+  Position,
+  SemanticTokens,
+  SemanticTokensBuilder,
+  SemanticTokensParams,
+  SemanticTokensRangeParams
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { parse } from '@grammar/parser';
@@ -34,6 +38,40 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { logger } from '@core/utils/logger';
 import type { MlldLanguageServerConfig, VariableInfo, DocumentAnalysis } from './language-server';
+import { ASTSemanticVisitor } from '@services/lsp/ASTSemanticVisitor';
+
+// Semantic token types for mlld syntax
+const TOKEN_TYPES = [
+  'directive',        // /var, /show, /exe, etc.
+  'variable',         // @varname declarations
+  'variableRef',      // @varname references
+  'interpolation',    // @var inside templates
+  'template',         // template delimiters (`, ::, :::)
+  'templateContent',  // content inside templates
+  'operator',         // &&, ||, ==, !=, etc.
+  'keyword',          // run, js, sh, when, etc.
+  'embedded',         // language identifier (js, python, bash)
+  'embeddedCode',     // code inside embedded blocks
+  'alligator',        // <file.md> syntax
+  'xmlTag',           // <tag> in triple-colon contexts
+  'section',          // # Section in alligator syntax
+  'parameter',        // function parameters
+  'comment',          // >> and << comments
+  'string',           // string literals
+  'number',           // numeric literals
+  'boolean',          // true/false
+  'null'              // null values
+];
+
+const TOKEN_MODIFIERS = [
+  'declaration',      // variable declarations
+  'reference',        // variable references
+  'readonly',         // imported variables
+  'interpolated',     // interpolated content
+  'literal',          // literal strings (single quotes)
+  'invalid',          // invalid syntax
+  'deprecated'        // deprecated syntax
+];
 
 export async function startLanguageServer(): Promise<void> {
   // Create a connection for the server
@@ -85,7 +123,15 @@ export async function startLanguageServer(): Promise<void> {
           triggerCharacters: ['@', '{', '[', ' ', '"']
         },
         hoverProvider: true,
-        definitionProvider: true
+        definitionProvider: true,
+        semanticTokensProvider: {
+          legend: {
+            tokenTypes: TOKEN_TYPES,
+            tokenModifiers: TOKEN_MODIFIERS
+          },
+          full: true,
+          range: false // Start with full document only
+        }
       }
     };
 
@@ -842,6 +888,32 @@ export async function startLanguageServer(): Promise<void> {
     if (start === end) return null;
     
     return { start, end };
+  }
+
+  // Semantic Tokens Provider
+  connection.languages.semanticTokens.on(async (params: SemanticTokensParams): Promise<SemanticTokens> => {
+    const document = documents.get(params.textDocument.uri);
+    if (!document) {
+      return { data: [] };
+    }
+
+    const analysis = await analyzeDocument(document);
+    const builder = new SemanticTokensBuilder();
+    
+    // Process the AST to generate semantic tokens
+    processASTForSemanticTokens(analysis.ast, document, builder);
+    
+    return builder.build();
+  });
+
+  function processASTForSemanticTokens(
+    ast: any[],
+    document: TextDocument,
+    builder: SemanticTokensBuilder
+  ): void {
+    // Use the AST visitor for comprehensive semantic token generation
+    const visitor = new ASTSemanticVisitor(document, builder, TOKEN_TYPES, TOKEN_MODIFIERS);
+    visitor.visitAST(ast);
   }
 
   // Make the connection listen on the input/output streams

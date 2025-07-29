@@ -84,6 +84,11 @@
           "type": "array",
           "default": [],
           "description": "Additional paths for import resolution"
+        },
+        "mlld.enableSemanticTokens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable semantic syntax highlighting (requires language server)"
         }
       }
     },

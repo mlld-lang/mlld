@@ -7,7 +7,7 @@ SlashVar "var directive"
       helpers.debug('AtVar matched', { id, value, tail });
       
       // Create variable reference node for identifier
-      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
       
       // Process the value based on its structure
       let processedValue;

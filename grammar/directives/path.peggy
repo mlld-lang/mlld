@@ -24,7 +24,7 @@ SlashPath
       helpers.debug('SlashPath matched double quoted string with interpolation', { id, content, ttl, tail });
       
       // Create variable reference node for identifier
-      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
       
       // Check if content has variables
       const hasVariables = content.some(part => 
@@ -64,7 +64,7 @@ SlashPath
       helpers.debug('SlashPath matched single quoted string (literal)', { id, content, ttl, tail });
       
       // Create variable reference node for identifier
-      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
       
       // Create path parts - literal content
       const pathParts = [helpers.createNode(NodeType.Text, { content, location: location() })];
@@ -109,7 +109,7 @@ SlashPath
       }
       
       // Create variable reference node for identifier
-      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id });
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
       
       // We need to also process the path parts if they contain special variables
       const processedPathParts = [...(path.values.path || path.values.parts || [])];

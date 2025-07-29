@@ -198,11 +198,17 @@ export const helpers = {
         return false;
     },
     createNode(type, props) {
+        // Add development-time validation for missing locations
+        if (!props.location && process.env.DEBUG_MLLD_GRAMMAR) {
+            console.warn(`WARNING: Creating ${type} node without location data`);
+            if (process.env.DEBUG_MLLD_GRAMMAR_TRACE) {
+                console.trace();
+            }
+        }
         return Object.freeze({
             type,
             nodeId: randomUUID(),
-            location: props.location ?? { start: { offset: 0, line: 1, column: 1 },
-                end: { offset: 0, line: 1, column: 1 } },
+            location: props.location, // No fallback - let it be undefined if not provided
             ...props,
         });
     },
@@ -222,8 +228,11 @@ export const helpers = {
             location: locationData
         });
     },
-    createVariableReferenceNode(valueType, data) {
-        return this.createNode(NodeType.VariableReference, { valueType, ...data });
+    createVariableReferenceNode(valueType, data, location) {
+        if (!location) {
+            throw new Error(`Location is required for createVariableReferenceNode (valueType: ${valueType}, identifier: ${data.identifier || 'unknown'})`);
+        }
+        return this.createNode(NodeType.VariableReference, { valueType, ...data, location });
     },
     normalizePathVar(id) {
         return id;
@@ -466,33 +475,76 @@ export const helpers = {
     /**
      * Parse command content that may contain variables and text segments
      * This is used by the CommandBracketContent rule to handle @var interpolation
+     *
+     * @param content - The content to parse
+     * @param baseLocation - The location of the content in the source
      */
-    parseCommandContent(content) {
+    parseCommandContent(content, baseLocation) {
         const parts = [];
         let i = 0;
         let currentText = '';
+        let textStartOffset = 0;
+        // If no base location provided, we can't calculate proper locations
+        if (!baseLocation) {
+            console.warn('parseCommandContent called without baseLocation');
+            // Fallback behavior for backward compatibility
+            return this.parseCommandContentLegacy(content);
+        }
+        // Calculate position tracking based on baseLocation
+        let currentOffset = baseLocation.start.offset;
+        let currentLine = baseLocation.start.line;
+        let currentColumn = baseLocation.start.column;
         while (i < content.length) {
             // Check for variable reference
             if (content[i] === '@' && i + 1 < content.length) {
                 // Save any accumulated text
                 if (currentText) {
+                    const textEndOffset = currentOffset;
+                    const textEndLine = currentLine;
+                    const textEndColumn = currentColumn;
                     parts.push(this.createNode(NodeType.Text, {
                         content: currentText,
-                        location: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } }
+                        location: {
+                            start: {
+                                offset: baseLocation.start.offset + textStartOffset,
+                                line: baseLocation.start.line,
+                                column: baseLocation.start.column + textStartOffset
+                            },
+                            end: {
+                                offset: textEndOffset,
+                                line: textEndLine,
+                                column: textEndColumn
+                            }
+                        }
                     }));
                     currentText = '';
                 }
+                // Mark start of variable
+                const varStartOffset = currentOffset;
+                const varStartLine = currentLine;
+                const varStartColumn = currentColumn;
                 // Extract variable name
                 i++; // Skip @
+                currentOffset++;
+                currentColumn++;
                 let varName = '';
                 while (i < content.length && /[a-zA-Z0-9_]/.test(content[i])) {
                     varName += content[i];
                     i++;
+                    currentOffset++;
+                    currentColumn++;
                 }
                 if (varName) {
+                    const varEndOffset = currentOffset;
+                    const varEndLine = currentLine;
+                    const varEndColumn = currentColumn;
                     parts.push(this.createVariableReferenceNode('varIdentifier', {
                         identifier: varName
+                    }, {
+                        start: { offset: varStartOffset, line: varStartLine, column: varStartColumn },
+                        end: { offset: varEndOffset, line: varEndLine, column: varEndColumn }
                     }));
+                    textStartOffset = i; // Next text starts here
                 }
                 else {
                     // Not a valid variable, treat @ as literal text
@@ -501,7 +553,19 @@ export const helpers = {
             }
             else {
                 // Regular character
+                if (currentText === '') {
+                    textStartOffset = i;
+                }
                 currentText += content[i];
+                // Update position tracking
+                if (content[i] === '\n') {
+                    currentLine++;
+                    currentColumn = 1;
+                }
+                else {
+                    currentColumn++;
+                }
+                currentOffset++;
                 i++;
             }
         }
@@ -509,7 +573,62 @@ export const helpers = {
         if (currentText) {
             parts.push(this.createNode(NodeType.Text, {
                 content: currentText,
-                location: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } }
+                location: {
+                    start: {
+                        offset: baseLocation.start.offset + textStartOffset,
+                        line: baseLocation.start.line,
+                        column: baseLocation.start.column + textStartOffset
+                    },
+                    end: {
+                        offset: currentOffset,
+                        line: currentLine,
+                        column: currentColumn
+                    }
+                }
+            }));
+        }
+        return parts;
+    },
+    /**
+     * Legacy version of parseCommandContent for backward compatibility
+     * Creates nodes without proper location data
+     */
+    parseCommandContentLegacy(content) {
+        const parts = [];
+        let i = 0;
+        let currentText = '';
+        while (i < content.length) {
+            if (content[i] === '@' && i + 1 < content.length) {
+                if (currentText) {
+                    parts.push(this.createNode(NodeType.Text, {
+                        content: currentText
+                    }));
+                    currentText = '';
+                }
+                i++; // Skip @
+                let varName = '';
+                while (i < content.length && /[a-zA-Z0-9_]/.test(content[i])) {
+                    varName += content[i];
+                    i++;
+                }
+                if (varName) {
+                    // Can't create variable reference without location, so create a text node
+                    parts.push(this.createNode(NodeType.Text, {
+                        content: '@' + varName
+                    }));
+                }
+                else {
+                    currentText += '@';
+                }
+            }
+            else {
+                currentText += content[i];
+                i++;
+            }
+        }
+        if (currentText) {
+            parts.push(this.createNode(NodeType.Text, {
+                content: currentText
             }));
         }
         return parts;

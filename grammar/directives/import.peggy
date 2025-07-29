@@ -205,12 +205,12 @@ SlashImportFull
           if (typeof item === 'string') {
             return helpers.createVariableReferenceNode('import', { 
               identifier: item
-            });
+            }, location());
           } else {
             return helpers.createVariableReferenceNode('import', { 
               identifier: item.original,
               alias: item.alias
-            });
+            }, location());
           }
         }),
         path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle file, module, and URL paths
