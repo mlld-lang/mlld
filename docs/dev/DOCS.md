@@ -14,7 +14,7 @@ Use this guide to writing both developer-facing and user-facing docs for mlld
 
 - Dev-facing docs in ALL CAPS. User-facing docs in lowercase (except README.md files which are always capitalized)
 - Use unix `man` pages voice.
-- In user-facing docs, show, don't tell: focus on examples. In dev-facing docs, skip examples: they're just hidden code to maintain.
+- In user-facing docs: show, don't tell: focus on examples. In dev-facing docs, skip examples: they're just hidden code to maintain.
 - Be terse and extremely pragmatic about what is included based on what will be useful and relevant for the specific audience. 
 - Simple pointers are much better than exhaustive explanations. 
 - Respect others' context windows and cognitive load. Add nothing that isn't *critical* or fundamental. No empty-value bulleted lists.
@@ -24,9 +24,9 @@ Use this guide to writing both developer-facing and user-facing docs for mlld
 
 ## Details
 
-### Template
+### Template for dev-facing docs
 
-The more closely we adhere to this structure the more useful mlld will be able to be in assembling context programmatically. Frontmatter is not used in user-facing docs.
+The more closely we adhere to this structure the more useful mlld will be able to be in assembling context programmatically. 
 
 ```md
 ---
@@ -64,3 +64,11 @@ One paragraph or ~5 bullets max. What is this and when do I care? If it's user-f
 Key algorithms, critical dependencies, debugging approach.
 
 ```
+
+## Template for user-facing docs
+
+No template. 
+
+Frontmatter is not used in user-facing docs. 
+
+User-facing docs should have a ## tldr and the rest of the doc should be an inverted pyramid organized by ipmortance.
