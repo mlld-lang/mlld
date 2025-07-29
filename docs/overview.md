@@ -10,6 +10,7 @@ mlld is built around several key principles:
 - Provide clear context and specific instructions to LLMs
 - Support text-based workflows and transformations
 - Enable structured processing through pipelines
+- Route data and actions based on logical conditions
 - Keep the core language simple while allowing extension through modules
 
 ## Why mlld?
@@ -82,7 +83,7 @@ This is crucial - most directives just set up state. Only `/show` and `/run` act
 
 ### 4. Complexity Lives in Modules
 
-mlld deliberately lacks traditional programming constructs (loops, error handling, complex logic). Instead, modules provide these capabilities:
+When you need loops, error handling, or complex algorithms, modules provide these capabilities:
 
 ```mlld
 # Instead of language features, use modules:
@@ -95,6 +96,32 @@ mlld deliberately lacks traditional programming constructs (loops, error handlin
 ```
 
 This separation keeps mlld scripts clean and focused on orchestration while modules handle implementation details.
+
+### 5. Logical Routing with Operators
+
+mlld can route data and actions based on conditions using built-in operators:
+
+```mlld
+# Use operators in expressions
+/var @canProcess = @status == "ready" && !@isLocked
+/var @priority = @severity > 8 ? "high" : "normal"
+
+# Route actions based on conditions
+/when @request first: [
+  @method == "GET" && @path == "/api/users" => @listUsers()
+  @method == "POST" && @path == "/api/users" => @createUser()
+  @method == "DELETE" => @deleteResource()
+]
+
+# Conditional value assignment
+/var @config = when: [
+  @env == "prod" => @prodSettings
+  @env == "staging" => @stagingSettings
+  true => @devSettings
+]
+```
+
+This allows mlld to function as a logical router, making decisions based on runtime conditions without programming constructs.
 
 ## Modular Prompt Engineering
 

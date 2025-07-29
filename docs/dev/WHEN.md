@@ -43,6 +43,30 @@ The /when directive produces two types of AST nodes:
    }
    ```
 
+3. **WhenExpression**: For value-returning when expressions
+   ```typescript
+   {
+     kind: 'whenExpression',
+     subtype: 'whenExpression',
+     values: {
+       conditions: WhenConditionPair[]  // Array of condition-expression pairs
+     },
+     meta: {
+       isValueReturning: true,          // Distinguishes from directive /when
+       withClause?: any                 // Optional pipeline modifiers
+     }
+   }
+   ```
+
+   Used in `/var` and `/exe` assignments:
+   ```mlld
+   /var @greeting = when: [
+     @time < 12 => "Good morning"
+     @time < 18 => "Good afternoon"
+     true => "Good evening"
+   ]
+   ```
+
 ## Grammar Implementation
 
 ### Parser Rules (`grammar/directives/when.peggy`)
@@ -52,18 +76,27 @@ The grammar defines several key rules:
 1. **SlashWhen**: Main entry point, delegates to simple or block form
 2. **WhenSimpleForm**: Parses `/when <condition> => <action>`
 3. **WhenBlockForm**: Parses `/when <var> <modifier>: [...] => <action>`
-4. **WhenConditionExpression**: Accepts only:
+4. **WhenConditionExpression**: Now accepts:
+   - Expressions with operators (`@score > 90`, `@role == "admin"`)
    - CommandReference (`@command()` or `@command`)
    - VariableReference (`@variable`)
+   - BinaryExpression (`@a && @b`, `@x || @y`)
+   - UnaryExpression (`!@condition`)
+   - TernaryExpression (in actions, not conditions)
    - Note: Direct `/run` is NOT supported by design
 
-### Key Design Decision: No Direct /run
+5. **WhenExpression**: For value-returning when expressions in RHS
+   - Used in `VarRHSContent` and `ExeRHSContent`
+   - Returns first matching value
+   - Returns null if no match
 
-The grammar intentionally restricts conditions to predefined commands. This ensures:
-- Conditions are named and reusable
-- Better testability
-- Clearer intent in scripts
-- Consistent with mlld's declarative philosophy
+### Operator Support
+
+The grammar now supports full expression evaluation in conditions:
+- Comparison: `==`, `!=`, `>`, `<`, `>=`, `<=`
+- Logical: `&&`, `||`, `!`
+- Grouping: `()`
+- Short-circuit evaluation for performance
 
 ## Interpreter Implementation
 
@@ -121,27 +154,24 @@ The `evaluateCondition()` function:
 
 ### Truthiness Model
 
-The `isTruthy()` function implements mlld's truthiness:
+The `isTruthy()` function implements mlld's truthiness (different from JavaScript):
 
 ```typescript
 function isTruthy(value: any): boolean {
-  // Falsy: null, undefined
+  // Falsy values:
+  if (value === false) return false;
   if (value === null || value === undefined) return false;
+  if (value === '') return false;
+  if (value === 0) return false;
+  if (Array.isArray(value) && value.length === 0) return false;  // Empty arrays are falsy!
+  if (typeof value === 'object' && Object.keys(value).length === 0) return false; // Empty objects are falsy!
   
-  // String truthiness
-  if (typeof value === 'string') {
-    if (value === '') return false;                    // Empty
-    if (value.toLowerCase() === 'false') return false; // "false"
-    if (value === '0') return false;                   // "0"
-    return true;                                        // All others
-  }
-  
-  // Number: 0 and NaN are false
-  // Array: empty is false
-  // Object: empty is false
-  // Default: true
+  // Everything else is truthy
+  return true;
 }
 ```
+
+Note: mlld's truthiness differs from JavaScript - empty arrays and objects are falsy in mlld.
 
 ## Command Execution Integration
 
@@ -223,13 +253,30 @@ The @when evaluator creates child environments for block evaluation:
 4. **when-block-any**: Combined condition checking
 5. **when-variable-binding**: Variable capture from conditions
 
-## Future Enhancements
+## WhenExpression Implementation
 
-1. **Direct @run Support**: Could be added by updating grammar
-2. **Parallel Evaluation**: For 'all' and 'any' modifiers
-3. **Condition Caching**: Avoid re-executing identical conditions
-4. **Boolean Operators**: AND/OR/NOT in condition expressions
-5. **Else Clause**: Default action when no conditions match
+### Evaluation Flow (`interpreter/eval/when-expression.ts`)
+
+WhenExpression nodes are evaluated differently from directive /when:
+
+1. **First-match semantics**: Returns value of first matching condition
+2. **Null on no match**: Returns null if no conditions are true
+3. **Lazy evaluation**: For `/var`, creates a special variable type that re-evaluates on access
+4. **Pipeline support**: Can have tail modifiers like `| @transform`
+
+```typescript
+// Example evaluation
+/var @greeting = when: [
+  @time < 12 => "Good morning"      // If true, returns "Good morning"
+  @time < 18 => "Good afternoon"    // Only evaluated if first is false
+  true => "Good evening"            // Default case
+]
+```
+
+### Integration with /var and /exe
+
+- `/var`: Creates a `WhenExpressionVariable` that re-evaluates on each access
+- `/exe`: Evaluates immediately and stores the result
 
 ## Integration Points
 

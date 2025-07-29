@@ -17,20 +17,44 @@ class MlldSyntaxGenerator {
     this.patterns = {
       directive: `/(${this.directives.join('|')})\\b`,
       variable: '@\\w+',
-      reservedVariable: '@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\\b',
+      reservedVariable: '@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b',
       projectPathShort: '@\\.',
       negationOperator: '!@',
       fieldAccess: '\\.(\\w+|\\d+)',
-      templateBlock: '::[^:]+::',  // New double-colon template syntax
+      templateBlock: '::[^:]+::',  // Double-colon template syntax
+      tripleColonTemplate: ':::[^:]+:::',  // Triple-colon template syntax
       templateVar: '\\{\\{[^}]+\\}\\}',
       backtickTemplate: '`[^`]*`',
       pathBrackets: '\\[[^\\]]+\\]',
-      commandBraces: '\\{[^}]+\\}',  // New command syntax with braces
+      alligatorExpression: '<[^>]+>',  // Alligator file loading syntax
+      commandBraces: '\\{[^}]+\\}',  // Command syntax with braces
       languageKeyword: '\\b(javascript|js|node|nodejs|python|py|bash|sh)\\b',
       string: '"[^"]*"',
       singleQuoteString: "'[^']*'",
       comment: '(>>|<<).*$',
+      // Logical operators
+      logicalAnd: '&&',
+      logicalOr: '\\|\\|',
+      logicalNot: '!(?=@|\\s|\\()',
+      // Comparison operators
+      comparisonOps: '(==|!=|<=|>=|<|>)',
+      // Ternary operators
+      ternaryQuestion: '\\?',
+      ternaryColon: ':',
+      // When expression syntax
+      whenKeyword: 'when\\s*:',
+      whenArrow: '=>',
+      // Enhanced operators list
       operators: '\\b(from|as|foreach|with|to)\\b',
+      // Pipe operator
+      pipeOperator: '\\|',
+      // Assignment operator
+      assignmentOperator: '=',
+      // Implicit assignment (for when blocks)
+      implicitAssignment: '@\\w+\\s*=(?!=)',
+      // Condensed pipes
+      condensedPipe: '@\\w+(\\|@\\w+)+',
+      filePipe: '<[^>]+>(\\|@\\w+)+',
       codeBlockDelimiter: '```\\w*',
       number: '\\b\\d+(\\.\\d+)?\\b',
       boolean: '\\b(true|false)\\b',
@@ -78,6 +102,40 @@ Prism.languages.mlld = {
     pattern: /${this.patterns.directive}/,
     alias: 'keyword'
   },
+  'when-keyword': {
+    pattern: /${this.patterns.whenKeyword}/,
+    alias: 'keyword'
+  },
+  'logical-operator': {
+    pattern: /${this.patterns.logicalAnd}|${this.patterns.logicalOr}|${this.patterns.logicalNot}/,
+    alias: 'operator'
+  },
+  'comparison-operator': {
+    pattern: /${this.patterns.comparisonOps}/,
+    alias: 'operator'
+  },
+  'arrow-operator': {
+    pattern: /${this.patterns.whenArrow}/,
+    alias: 'operator'
+  },
+  'ternary-operator': {
+    pattern: /[?:]/,
+    alias: 'operator'
+  },
+  'triple-template-block': {
+    pattern: /${this.patterns.tripleColonTemplate}/,
+    greedy: true,
+    inside: {
+      'template-variable': {
+        pattern: /${this.patterns.templateVar}/,
+        inside: {
+          'punctuation': /\\{\\{|\\}\\}/,
+          'variable': /[^{}]+/
+        }
+      },
+      'punctuation': /:::/
+    }
+  },
   'template-block': {
     pattern: /${this.patterns.templateBlock}/,
     greedy: true,
@@ -89,7 +147,18 @@ Prism.languages.mlld = {
           'variable': /[^{}]+/
         }
       },
-      'punctuation': /\\[\\[|\\]\\]/
+      'punctuation': /::/
+    }
+  },
+  'alligator': {
+    pattern: /${this.patterns.alligatorExpression}/,
+    greedy: true,
+    inside: {
+      'url': {
+        pattern: /https?:\\/\\/[^>]+/,
+        alias: 'string'
+      },
+      'punctuation': /<|>/
     }
   },
   'path': {
@@ -120,6 +189,14 @@ Prism.languages.mlld = {
     alias: 'property'
   },
   'operator': /${this.patterns.operators}/,
+  'pipe-operator': {
+    pattern: /${this.patterns.pipeOperator}/,
+    alias: 'operator'
+  },
+  'assignment-operator': {
+    pattern: /${this.patterns.assignmentOperator}/,
+    alias: 'operator'
+  },
   'number': /${this.patterns.number}/,
   'boolean': /${this.patterns.boolean}/,
   'null': /${this.patterns.null}/,
@@ -243,6 +320,31 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
       // Note: We don't include directive pattern here because it's handled
       // separately in the begin pattern of generateTextMate()
       {
+        // When keyword (when:) - must come before colon operator
+        name: 'keyword.control.when.mlld',
+        match: this.patterns.whenKeyword
+      },
+      {
+        // Logical operators (high priority)
+        name: 'keyword.operator.logical.mlld',
+        match: `${this.patterns.logicalAnd}|${this.patterns.logicalOr}|${this.patterns.logicalNot}`
+      },
+      {
+        // Comparison operators
+        name: 'keyword.operator.comparison.mlld',
+        match: this.patterns.comparisonOps
+      },
+      {
+        // Arrow operator
+        name: 'keyword.operator.arrow.mlld',
+        match: this.patterns.whenArrow
+      },
+      {
+        // Ternary operators
+        name: 'keyword.operator.ternary.mlld',
+        match: '[?:]'
+      },
+      {
         // Reserved variables before regular variables
         name: 'variable.language.reserved.mlld',
         match: this.patterns.reservedVariable
@@ -255,6 +357,37 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
       {
         name: 'keyword.other.language.mlld',
         match: this.patterns.languageKeyword
+      },
+      {
+        // Triple-colon template syntax
+        name: 'string.template.triple.mlld',
+        begin: ':::',
+        end: ':::',
+        beginCaptures: {
+          0: { name: 'punctuation.definition.template.triple.begin.mlld' }
+        },
+        endCaptures: {
+          0: { name: 'punctuation.definition.template.triple.end.mlld' }
+        },
+        patterns: [
+          {
+            name: 'variable.template.mlld',
+            begin: '\\{\\{',
+            end: '\\}\\}',
+            beginCaptures: {
+              0: { name: 'punctuation.definition.template.variable.begin.mlld' }
+            },
+            endCaptures: {
+              0: { name: 'punctuation.definition.template.variable.end.mlld' }
+            },
+            patterns: [
+              {
+                name: 'variable.other.interpolation.mlld',
+                match: '[^}]+'
+              }
+            ]
+          }
+        ]
       },
       {
         // Double-colon template syntax
@@ -313,6 +446,36 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         ]
       },
       {
+        // Alligator syntax for file loading
+        name: 'string.interpolated.alligator.mlld',
+        begin: '<',
+        end: '>',
+        beginCaptures: {
+          0: { name: 'punctuation.definition.alligator.begin.mlld' }
+        },
+        endCaptures: {
+          0: { name: 'punctuation.definition.alligator.end.mlld' }
+        },
+        patterns: [
+          {
+            name: 'markup.underline.link.mlld',
+            match: 'https?://[^>]+'
+          },
+          {
+            name: 'variable.language.reserved.mlld',
+            match: this.patterns.reservedVariable
+          },
+          {
+            name: 'variable.other.mlld',
+            match: this.patterns.variable
+          },
+          {
+            name: 'string.path.mlld',
+            match: '[^>]+'
+          }
+        ]
+      },
+      {
         // Import braces
         name: 'meta.import.mlld',
         begin: '\\{',
@@ -360,8 +523,60 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
           }
         ]
       },
+      // Language-specific code blocks must come before generic command braces
       {
-        // Command braces for /run {command} syntax
+        // JavaScript/Node code blocks
+        name: 'meta.embedded.block.javascript.mlld',
+        begin: '\\b(js|javascript|node)\\s*\\{',
+        end: '\\}',
+        beginCaptures: {
+          1: { name: 'keyword.other.language.mlld' },
+          0: { name: 'punctuation.section.embedded.begin.mlld' }
+        },
+        endCaptures: {
+          0: { name: 'punctuation.section.embedded.end.mlld' }
+        },
+        contentName: 'source.js.embedded.mlld',
+        patterns: [
+          { include: 'source.js' }
+        ]
+      },
+      {
+        // Python code blocks
+        name: 'meta.embedded.block.python.mlld',
+        begin: '\\b(python|py)\\s*\\{',
+        end: '\\}',
+        beginCaptures: {
+          1: { name: 'keyword.other.language.mlld' },
+          0: { name: 'punctuation.section.embedded.begin.mlld' }
+        },
+        endCaptures: {
+          0: { name: 'punctuation.section.embedded.end.mlld' }
+        },
+        contentName: 'source.python.embedded.mlld',
+        patterns: [
+          { include: 'source.python' }
+        ]
+      },
+      {
+        // Shell/Bash code blocks
+        name: 'meta.embedded.block.shell.mlld',
+        begin: '\\b(bash|sh)\\s*\\{',
+        end: '\\}',
+        beginCaptures: {
+          1: { name: 'keyword.other.language.mlld' },
+          0: { name: 'punctuation.section.embedded.begin.mlld' }
+        },
+        endCaptures: {
+          0: { name: 'punctuation.section.embedded.end.mlld' }
+        },
+        contentName: 'source.shell.embedded.mlld',
+        patterns: [
+          { include: 'source.shell' }
+        ]
+      },
+      {
+        // Generic command braces for /run {command} syntax (fallback)
         name: 'meta.command.braces.mlld',
         begin: '\\{',
         end: '\\}',
@@ -409,9 +624,14 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         match: this.patterns.operators
       },
       {
+        // Pipe operator
+        name: 'keyword.operator.pipe.mlld',
+        match: this.patterns.pipeOperator
+      },
+      {
         // Assignment operator (higher priority)
         name: 'keyword.operator.assignment.mlld',
-        match: '='
+        match: this.patterns.assignmentOperator
       },
       {
         name: 'constant.numeric.mlld',
@@ -453,12 +673,33 @@ syn match mlldComment "\\(>>\\|<<\\).*$"
 " Directives - must be at start of line
 syn match mlldDirective "^/\\(${this.directives.join('\\|')}\\)\\>"
 
+" Operators (high priority)
+" Logical operators
+syn match mlldLogicalOp "&&\\|||\\|!"
+" Comparison operators
+syn match mlldComparisonOp "==\\|!=\\|<=\\|>=\\|<\\|>"
+" Ternary operators
+syn match mlldTernaryOp "[?:]"
+" Arrow operator
+syn match mlldArrowOp "=>"
+" Pipe operator
+syn match mlldPipeOp "|"
+" Assignment operator
+syn match mlldAssignOp "="
+
+" When expressions
+syn match mlldWhenKeyword "when\\s*:" contains=mlldWhenColon
+syn match mlldWhenColon ":" contained
+
 " Reserved variables
-syn match mlldReservedVar "@\\(INPUT\\|TIME\\|PROJECTPATH\\|STDIN\\|input\\|time\\|projectpath\\|stdin\\)\\>"
+syn match mlldReservedVar "@\\(INPUT\\|TIME\\|PROJECTPATH\\|STDIN\\|input\\|time\\|projectpath\\|stdin\\|now\\|NOW\\|base\\)\\>"
 syn match mlldReservedVar "@\\."
 
 " Regular variables (lower priority than directives and reserved)
 syn match mlldVariable "@\\w\\+"
+
+" Triple-colon template blocks
+syn region mlldTripleTemplate start=":::" end=":::" contains=mlldTemplateVar
 
 " Template blocks (double-colon syntax)
 syn region mlldTemplate start="::" end="::" contains=mlldTemplateVar
@@ -467,17 +708,28 @@ syn region mlldTemplateVar start="{{" end="}}" contained
 " Backtick templates
 syn region mlldBacktickTemplate start="\`" end="\`" contains=mlldVariable,mlldReservedVar
 
-" Command blocks (braces)
+" Alligator syntax (file loading)
+syn region mlldAlligator start="<" end=">" contains=mlldPath,mlldURL,mlldVariable,mlldReservedVar
+
+" Language-specific code blocks (must come before generic command blocks)
+" JavaScript/Node blocks
+syn region mlldJSBlock start="\\<\\(js\\|javascript\\|node\\)\\s*{" end="}" contains=@javascript keepend
+" Python blocks
+syn region mlldPythonBlock start="\\<\\(python\\|py\\)\\s*{" end="}" contains=@python keepend
+" Shell/Bash blocks
+syn region mlldShellBlock start="\\<\\(bash\\|sh\\)\\s*{" end="}" contains=@shell keepend
+
+" Generic command blocks (braces) - fallback for unmatched languages
 syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReservedVar,mlldLanguageKeyword
 
 " Language keywords
-syn match mlldLanguageKeyword "\\<\\(js\\|sh\\|node\\|python\\)\\>"
+syn match mlldLanguageKeyword "\\<\\(js\\|javascript\\|node\\|python\\|py\\|bash\\|sh\\)\\>"
 
 " Paths
 syn region mlldPath start="\\[" end="\\]" contains=mlldURL,mlldVariable,mlldReservedVar
 
 " URLs
-syn match mlldURL "https\\?://[^\\]]*" contained
+syn match mlldURL "https\\?://[^\\]>]*" contained
 
 " Strings
 syn region mlldString start='"' end='"'
@@ -497,12 +749,25 @@ syn keyword mlldNull null
 " Define highlighting
 hi def link mlldComment Comment
 hi def link mlldDirective Keyword
+hi def link mlldLogicalOp Operator
+hi def link mlldComparisonOp Operator
+hi def link mlldTernaryOp Operator
+hi def link mlldArrowOp Operator
+hi def link mlldPipeOp Operator
+hi def link mlldAssignOp Operator
+hi def link mlldWhenKeyword Keyword
+hi def link mlldWhenColon Keyword
 hi def link mlldReservedVar Constant
 hi def link mlldVariable Identifier
+hi def link mlldTripleTemplate String
 hi def link mlldTemplate String
 hi def link mlldTemplateVar Special
 hi def link mlldBacktickTemplate String
+hi def link mlldAlligator String
 hi def link mlldCommand String
+hi def link mlldJSBlock Special
+hi def link mlldPythonBlock Special
+hi def link mlldShellBlock Special
 hi def link mlldLanguageKeyword Type
 hi def link mlldPath String
 hi def link mlldURL Underlined
@@ -531,30 +796,44 @@ let b:mlld_after_loaded = 1
 
 " Define mlld-run code block region first (highest priority)
 syn region mlldRunCodeBlock start="^\\s*\`\`\`mlld-run\\s*$" end="^\\s*\`\`\`\\s*$" contains=mlldRunContent
-syn region mlldRunContent start="." end="\\ze^\\s*\`\`\`\\s*$" contained contains=mlldComment,mlldDirective,mlldReserved,mlldVariable,mlldString,mlldTemplate,mlldTemplateVar,mlldCommand
+syn region mlldRunContent start="." end="\\ze^\\s*\`\`\`\\s*$" contained contains=mlldComment,mlldDirective,mlldReserved,mlldVariable,mlldString,mlldTemplate,mlldTemplateVar,mlldCommand,mlldLogicalOp,mlldComparisonOp,mlldTernaryOp,mlldArrowOp,mlldWhenKeyword,mlldAlligator
 
 " Define our syntax patterns directly
 syn match mlldComment "\\(>>\\|<<\\).*$"
 syn match mlldDirective "^/\\(${this.directives.join('\\|')}\\)\\>"
-syn match mlldReserved "@\\(INPUT\\|TIME\\|PROJECTPATH\\|STDIN\\|input\\|time\\|projectpath\\|stdin\\)\\>"
+syn match mlldLogicalOp "&&\\|||\\|!"
+syn match mlldComparisonOp "==\\|!=\\|<=\\|>=\\|<\\|>"
+syn match mlldTernaryOp "[?:]"
+syn match mlldArrowOp "=>"
+syn match mlldWhenKeyword "when\\s*:"
+syn match mlldReserved "@\\(INPUT\\|TIME\\|PROJECTPATH\\|STDIN\\|input\\|time\\|projectpath\\|stdin\\|now\\|NOW\\|base\\)\\>"
 syn match mlldReserved "@\\."
 syn match mlldVariable "@\\w\\+"
 syn region mlldString start='"' end='"'
+syn region mlldTripleTemplate start=":::" end=":::" contains=mlldTemplateVar
 syn region mlldTemplate start="::" end="::" contains=mlldTemplateVar
 syn match mlldTemplateVar "{{[^}]*}}" contained
 syn region mlldBacktickTemplate start="\`" end="\`" contains=mlldVariable,mlldReserved
+syn region mlldAlligator start="<" end=">" contains=mlldVariable,mlldReserved
 syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReserved,mlldLanguageKeyword
 syn match mlldLanguageKeyword "\\<\\(js\\|sh\\|node\\|python\\)\\>"
 
 " Force our colors
 hi mlldComment ctermfg=242 guifg=#6c6c6c
 hi mlldDirective ctermfg=214 cterm=bold guifg=#ffaf00 gui=bold
+hi mlldLogicalOp ctermfg=206 guifg=#ff5faf
+hi mlldComparisonOp ctermfg=206 guifg=#ff5faf
+hi mlldTernaryOp ctermfg=206 guifg=#ff5faf
+hi mlldArrowOp ctermfg=214 guifg=#ffaf00
+hi mlldWhenKeyword ctermfg=214 cterm=bold guifg=#ffaf00 gui=bold
 hi mlldReserved ctermfg=170 guifg=#d75fd7
 hi mlldVariable ctermfg=117 guifg=#87d7ff
 hi mlldString ctermfg=150 guifg=#afd787
+hi mlldTripleTemplate ctermfg=150 guifg=#afd787
 hi mlldTemplate ctermfg=150 guifg=#afd787
 hi mlldTemplateVar ctermfg=214 guifg=#ffaf00
 hi mlldBacktickTemplate ctermfg=150 guifg=#afd787
+hi mlldAlligator ctermfg=229 guifg=#ffffaf
 hi mlldCommand ctermfg=150 guifg=#afd787
 hi mlldLanguageKeyword ctermfg=204 guifg=#ff5f87
 hi mlldRunCodeBlock ctermfg=242 guifg=#6c6c6c

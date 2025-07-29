@@ -325,10 +325,3 @@ For deeper dependency analysis:
 4. **Security**: Can audit what modules use
 5. **Discovery**: Can search by pure-mlld vs runtime-dependent
 
-## Future Enhancements
-
-1. **Dependency resolution**: Auto-install npm/pip packages
-2. **Virtual environments**: Isolate module dependencies
-3. **Compatibility matrix**: Test across runtime versions
-4. **Pure mlld alternatives**: Suggest pure alternatives when available
-5. **Web compatibility**: Flag modules that work in browser

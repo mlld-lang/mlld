@@ -1643,10 +1643,6 @@ See [Pipeline Format Feature](pipeline.md#pipeline-format-feature) for complete 
    )}
    ```
 
-## Future Considerations
-
-The module system may be extended with additional features based on community needs and feedback. Potential areas for enhancement include improved search capabilities, update management, and better integration with development tools.
-
 ### Contributing
 
 The mlld module system is open source. Contribute by:

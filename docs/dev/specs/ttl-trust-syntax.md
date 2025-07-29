@@ -172,10 +172,3 @@ All syntactic sugar is normalized to `with` clause in the AST:
 3. **Command Trust**: Extra validation for destructive commands
 4. **URL Trust**: Validate against allowed/blocked domain lists
 
-## Future Extensions
-
-The tail syntax pattern allows easy addition of new modifiers:
-- `timeout` - Execution timeout
-- `retry` - Retry policy
-- `cache` - Custom cache behavior
-- `log` - Logging level

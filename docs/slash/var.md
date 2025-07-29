@@ -129,6 +129,75 @@ Data structures can reference and execute executable variables:
 /var @empty = null                  # Null
 ```
 
+### Expressions and Operators
+
+Variables can be assigned the result of expressions using logical and comparison operators:
+
+```mlld
+# Comparison operators
+/var @isEqual = @x == @y            # Equality (mlld coercion rules)
+/var @notEqual = @a != @b           # Inequality
+/var @isGreater = @score > 90       # Greater than
+/var @isLessOrEqual = @age <= 18    # Less than or equal
+
+# Logical operators
+/var @canAccess = @isAdmin && @isActive     # AND (short-circuits)
+/var @hasPermission = @isOwner || @isMod    # OR (short-circuits)
+/var @isLocked = !@isOpen                   # NOT
+
+# Ternary conditional
+/var @status = @score > 90 ? "excellent" : "good"
+
+# Parentheses for precedence
+/var @complex = (@a || @b) && (@c != @d)
+```
+
+#### Truthiness and Type Coercion
+
+mlld follows these rules for truthiness:
+- **Falsy**: `false`, `null`, `undefined`, `""`, `0`, `[]`, `{}`
+- **Truthy**: Everything else
+- **Note**: Empty arrays and objects are falsy (unlike JavaScript!)
+
+Equality comparisons use mlld-specific coercion:
+- `"true" == true` → true
+- `"false" == false` → true
+- `null == undefined` → true
+- Numbers compared numerically: `"5" == 5` → true
+
+### When Expressions (Value-Returning)
+
+Use `when:` to create conditional values that return the first matching result:
+
+```mlld
+# Basic when expression
+/var @greeting = when: [
+  @time < 12 => "Good morning"
+  @time < 18 => "Good afternoon"
+  true => "Good evening"
+]
+
+# With operators in conditions
+/var @access = when: [
+  @role == "admin" && @active => "full"
+  @role == "user" && @verified => "limited"
+  true => "none"
+]
+
+# With tail modifiers (pipelines)
+/var @message = when: [
+  @lang == "es" => "Hola"
+  @lang == "fr" => "Bonjour"
+  true => "Hello"
+] | @uppercase
+```
+
+Features:
+- Returns the value of the first matching condition
+- Returns `null` if no conditions match
+- Re-evaluates on each access (lazy evaluation)
+- Supports pipeline modifiers on the result
+
 ### Command Results
 
 ```mlld
@@ -188,6 +257,8 @@ Different template styles support different interpolation syntax:
 - Text variables: `"Hello, @name!"`
 - Field access: `"User: @user.name"`
 - Array access: `"Score: @scores.0"`
+- File references: `"Content: <README.md>"`
+- File with field access: `"Version: <package.json>.version"`
 
 ### Double-Colon Templates ({{}} interpolation)
 - Text variables: `:::Hello, {{name}}!:::`

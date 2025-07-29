@@ -806,23 +806,6 @@ tests/cases/valid/
 3. **Error Scenarios**: Validate error messages and context
 4. **Performance Tests**: Check limits and optimizations
 
-## Future Enhancements
-
-### Planned Features
-
-1. **Parallel Execution**: Multi-threaded foreach and pipelines
-2. **Streaming Support**: Process large data without loading
-3. **Advanced Conditionals**: Boolean operators in @when
-4. **Pipeline Composition**: Reusable pipeline definitions
-
-### Extension Points
-
-Each feature provides clear extension points:
-
-- **foreach**: Custom iterator types, streaming support
-- **@when**: New condition types, else clauses
-- **with**: Additional clause types, custom validators
-
 ## Implementation Checklist
 
 When implementing new pipeline features:

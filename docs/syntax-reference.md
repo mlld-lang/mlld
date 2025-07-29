@@ -5,7 +5,7 @@ title: "Syntax Reference"
 
 # Syntax Reference
 
-This document provides a comprehensive reference for the mlld syntax.
+This document provides a reference for the mlld syntax.
 
 ## Core Tokens
 
@@ -52,7 +52,40 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 ,       List separator
 ()      Command parameter list
 :       Schema reference operator (optional)
+|       Pipeline operator
 ```
+
+### Operators
+
+```
+# Comparison Operators
+==      Equality (with mlld type coercion)
+!=      Inequality
+>       Greater than
+<       Less than
+>=      Greater than or equal
+<=      Less than or equal
+
+# Logical Operators
+&&      Logical AND (short-circuits)
+||      Logical OR (short-circuits)
+!       Logical NOT (unary)
+
+# Conditional Operator
+? :     Ternary conditional (test ? true_value : false_value)
+
+# Grouping
+()      Parentheses for explicit precedence
+```
+
+#### Operator Precedence (highest to lowest)
+1. `()` - Parentheses
+2. `!` - Logical NOT
+3. `>`, `<`, `>=`, `<=` - Comparison
+4. `==`, `!=` - Equality
+5. `&&` - Logical AND
+6. `||` - Logical OR
+7. `? :` - Ternary conditional
 
 ### String Values
 
@@ -124,7 +157,7 @@ def hello():
 
 ## Directive Patterns
 
-### /add
+### /show
 
 ```mlld
 /show <path>
@@ -135,6 +168,25 @@ def hello():
 /show @variable                          # Add variable content
 /show "Literal text"                    # Add literal text
 /show :::Template with {{var}}:::          # Add template
+```
+
+### /when
+
+```mlld
+# Simple form with operators
+/when @score > 90 => /show "Excellent!"
+/when @isAdmin && @isActive => /show "Admin panel"
+/when !@isLocked => /show "Available"
+
+# Block forms
+/when @var first: [...]      # Stop at first match
+/when @var all: [...]        # Check all conditions  
+/when @var any: [...] => ... # Execute if any match
+
+# Implicit actions (directive prefix optional)
+/when @env == "prod" => @config = "production.json"     # Implicit /var
+/when @task == "build" => @compile()                    # Implicit /run
+/when @needsInit => @setup() = @initialize()            # Implicit /exe
 ```
 
 ### /run
@@ -171,7 +223,7 @@ def hello():
 /exe @js = { formatDate, parseJSON }               # Shadow environment
 ```
 
-### /text
+### /var
 
 ```mlld
 /var @name = "value"                    # Simple text
@@ -179,6 +231,18 @@ def hello():
 /var @template = `Welcome @user!`       # Backtick template
 /var @content = :::Hello {{name}}!:::     # Double-bracket template
 /var @result = /run "date"              # From command output
+
+# With expressions
+/var @isValid = @score > 80 && @completed      # Logical expression
+/var @status = @isPro ? "premium" : "basic"    # Ternary
+/var @hasAccess = !@isBlocked                  # Negation
+
+# With when expressions (value-returning)
+/var @message = when: [
+  @lang == "es" => "Hola"
+  @lang == "fr" => "Bonjour"
+  true => "Hello"
+]
 ```
 
 ### /path

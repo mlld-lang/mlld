@@ -419,19 +419,3 @@ private-repo/
 - Documentation updates
 - Example repositories
 
-## Future Enhancements
-
-### 1. Module Discovery
-- `mlld ls --private` to list private modules
-- Search within private repositories
-- Module dependency resolution
-
-### 2. Advanced Features
-- Module versioning in private repos
-- Automated changelog generation
-- CI/CD integration for validation
-
-### 3. Organization Support
-- Shared private module repositories
-- Team-based access control
-- Module approval workflows

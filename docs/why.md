@@ -146,9 +146,31 @@ Lock files ensure reproducibility:
 
 Your AI workflow from six months ago runs identically today. Version control for prompt engineering becomes reality.
 
-## Not a Programming Language
+## Logical Routing
 
-mlld deliberately lacks loops, conditionals, and complex logic. This isn't a limitation - it's the point. When you need algorithms, use modules:
+mlld provides conditional logic through operators and routing:
+
+```mlld
+# Route based on conditions
+/when @env == "production" && @testsPass => @deploy()
+/when @userType == "premium" || @trial => @enableFeatures()
+
+# Dynamic value selection
+/var @config = when: [
+  @region == "EU" => @gdprConfig
+  @region == "US" => @ccpaConfig
+  true => @defaultConfig
+]
+
+# Process different data types
+/exe @processRequest(type, data) = when: [
+  @type == "json" => @parseJson(@data)
+  @type == "xml" => @parseXml(@data)
+  @type == "csv" => @parseCsv(@data)
+]
+```
+
+This allows mlld to function as a logical router - making decisions and routing data based on runtime conditions. Combined with modules for complex algorithms:
 
 ```mlld
 /import { validateSchema, retry, parallel } from @mlld/core
@@ -157,7 +179,7 @@ mlld deliberately lacks loops, conditionals, and complex logic. This isn't a lim
 /var @validated = @validateSchema(@results, @schema)
 ```
 
-Your `.mld` files stay focused on orchestration. Implementation complexity lives in testable, reusable modules.
+Your `.mld` files stay focused on orchestration and routing. Implementation complexity lives in testable, reusable modules.
 
 ## Real-World Impact
 

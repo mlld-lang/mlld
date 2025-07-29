@@ -2,7 +2,7 @@
 
 mlld is a modular prompt scripting language, bringing software engineering to LLM workflows: modularity, versioning, and reproducibility.
 
-I still consider it 'early', but this isn't a slapped together idea. I've been working on it nearly every single day for 6 months straight. It has tools for writing tests and a public/private module system.
+I still consider it 'early', but this isn't a slapped together idea. I've been working on it nearly every single day for 7 months straight. It has tools for writing tests and a public/private module system.
 
 [Give this to your LLM](https://mlld.ai/llms.txt)
 
@@ -61,6 +61,7 @@ npm install -g mlld
 
 **Context engineering** - Compose prompts from multiple sources instead of mega-prompts or lots of legwork 
 **Pipelines** - Chain LLM calls with `|` for iterative refinement  
+**Logical routing** - Use operators and conditions to route data and actions dynamically
 **Modules** - Share and reuse workflows like npm packages 
 **Reproducible** - Lock files ensure workflows run identically over time
 **CI-ready** - `mlldx` runs without filesystem persistence for serverless/containers
@@ -137,40 +138,61 @@ mlld init my-module.mld.md       # Create module
 mlld publish my-module.mld.md    # Publish to registry
 ```
 
-## Conditional actions with `/when`
+## Conditional Logic and Routing
 
-mlld's `/when` allows firing actions based on booleans. Combining this with modules makes this even more useful.
+mlld provides conditional logic with operators and routing capabilities.
+
+### Operators in Expressions
 
 ```mlld
-/var @hasReadme = run {test -f README.md && echo "true" || echo ""}
-/var @hasLicense = run {test -f LICENSE && echo "true" || echo ""}
-/var @hasTests = run {test -d tests -o -d test && echo "true" || echo ""}
-/var @hasSecurity = run {test -f SECURITY.md && echo "true" || echo ""}
-/var @hasCI = run {test -f .github/workflows/ci.yml && echo "true" || echo ""}
+# Comparison and logical operators
+/var @canDeploy = @isProd && @testsPass && !@hasErrors
+/var @userLevel = @score > 90 ? "expert" : "beginner"
 
-/when @projectQuality: [
-  @hasReadme  => /show `✓ Documentation present`
-  @hasLicense => /show `✓ License included`
-  @hasTests   => /show `✓ Test suite found`
-  @hasCI      => /show `✓ CI/CD configured`
+# Use in conditions
+/when @branch == "main" && @ci == "passing" => @deploy()
+/when @user.role != "admin" => /show "Access denied"
+```
+
+### Logical Routing with `/when`
+
+Route actions based on complex conditions:
+
+```mlld
+# Route requests based on method and path
+/when @request first: [
+  @method == "GET" && @path == "/users" => @listUsers()
+  @method == "POST" && @path == "/users" => @createUser()
+  @method == "DELETE" => @deleteResource()
+]
+
+# Process features conditionally (implicit actions)
+/when @features: [
+  @hasAuth => @authModule = "enabled"      # Implicit /var
+  @hasChat => @loadChat()                  # Implicit /run
+  @hasVideo => /import { video } from @company/video
 ]
 ```
 
-You can also use `/when` with `any`, `all`, or `first` (classic switch)
+### Value-Returning When Expressions
 
-Read more about [/when](docs/slash/when.md)
-
-## Not a Programming Language
-
-mlld is minimal. That's intentional. Complex logic lives in modules:
+Use `when:` to create conditional values:
 
 ```mlld
-/import { retry, parallel, validate } from @mlld/core
+/var @greeting = when: [
+  @time < 12 => "Good morning"
+  @time < 18 => "Good afternoon"
+  true => "Good evening"
+]
 
-/var @results = @parallel(@tasks, {"concurrency": 5})
+/exe @processData(type, data) = when: [
+  @type == "json" => @jsonHandler(@data)
+  @type == "xml" => @xmlHandler(@data)
+  true => @genericHandler(@data)
+]
 ```
 
-Your `.mld` files stay readable. Modules handle complexity.
+Read more about [/when](docs/slash/when.md)
 
 ## Examples
 

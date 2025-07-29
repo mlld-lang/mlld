@@ -5,7 +5,7 @@ title: "Variables"
 
 # Variables
 
-mlld has three distinct types of variables, each with its own syntax and usage patterns.
+mlld uses variables to store and manipulate data. All variables support different features based on their content type.
 
 ## Variable Types
 
@@ -35,18 +35,21 @@ Example:
 
 ### Text Variables
 
-Text variables store unstructured text:
+Text variables store strings and support operators:
 
 ```mlld
-/var @greeting = "Hello"          # Define with @ prefix
-@greeting                          # Reference in directives
-"Message: @greeting"               # Reference in double quotes
-`Welcome: @greeting`               # Reference in backticks
-::Text: {{greeting}}::             # Reference in double-bracket templates
+/var @greeting = "Hello"          # Simple string
+/var @name = "World"              # Another string
+/var @message = `@greeting, @name!`  # Template interpolation
+
+# Using operators
+/var @isLong = @message.length > 10       # Boolean result
+/var @status = @isLong ? "verbose" : "brief"  # Ternary operator
+/var @combined = @greeting && @name       # Logical operators
 ```
 
-- Defined with `/text` directive with `@` prefix
-- No field access (text is atomic)
+- Defined with `/var` directive with `@` prefix
+- Support operators and expressions
 - In directives and double quotes: use `@variable`
 - In backtick templates: use `@variable`
 - In double colon templates `::...::`: use `@variable`
@@ -73,7 +76,7 @@ Data variables store structured data:
 {{user.name}}                      # Field access in templates
 ```
 
-- Defined with `/data` directive with `@` prefix
+- Defined with `/var` directive with `@` prefix
 - Support field access with dot notation
 - In directives and double quotes: use `@variable.field`
 - In backtick and double colon templates: use `@variable.field`
@@ -98,6 +101,38 @@ When working with arrays, use dot notation to access array elements by index:
 ```
 
 Note: Only dot notation is supported for array access. Bracket notation (`items[0]`) is not supported.
+
+## Expressions and Operators
+
+Variables can be used in expressions with operators:
+
+### Comparison Operators
+```mlld
+/var @age = 25
+/var @canVote = @age >= 18              # true
+/var @isEqual = @name == "Alice"        # Equality check
+/var @notEqual = @status != "inactive"  # Inequality
+```
+
+### Logical Operators
+```mlld
+/var @hasAccess = @isAdmin || @isModerator     # OR
+/var @canEdit = @isLoggedIn && @hasPermission  # AND
+/var @isPublic = !@isPrivate                   # NOT
+```
+
+### Ternary Operator
+```mlld
+/var @greeting = @hour < 12 ? "Good morning" : "Good afternoon"
+/var @access = @role == "admin" ? "full" : "limited"
+```
+
+### Operator Precedence
+Use parentheses to control evaluation order:
+```mlld
+/var @result = (@a || @b) && @c        # Explicit grouping
+/var @check = @x > 5 && @y < 10 || @z # Evaluated as ((@x > 5) && (@y < 10)) || @z
+```
 
 ## Variable Type Conversion
 
@@ -207,11 +242,12 @@ When referencing an entire object:
 Variable references are context-specific:
 
 ### @ Interpolation contexts:
-- In directives: `/add @variable`
+- In directives: `/show @variable`
 - In double quotes: `"Hello @name"`
 - In backtick templates: `` `Welcome @user` ``
 - In command braces: `/run {echo "@message"}`
-- In object values: `/data @config = { "user": @name }`
+- In object values: `/var @config = { "user": @name }`
+- File references: `"Content: <README.md>"`
 
 ### {{}} Interpolation contexts:
 - In triple colon templates: `:::Hello {{name}}!:::`

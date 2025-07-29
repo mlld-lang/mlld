@@ -1,7 +1,7 @@
 /import {roles, tasks} from @company/prompts
 
-/var @arch = [README.md # Architecture]
-/var @standards = [README.md # Code Standards]
+/var @arch = <README.md # Architecture>
+/var @standards = <README.md # Code Standards>
 /var @diff = run {git diff | cat}
 
 /var @prompt = `

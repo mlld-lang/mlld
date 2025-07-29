@@ -209,15 +209,3 @@ Check that:
 2. Check for circular imports
 3. Ensure reasonable file sizes
 
-## Future Enhancements
-
-- [ ] Semantic highlighting using AST
-- [ ] Code formatting
-- [ ] Rename refactoring
-- [ ] Code actions (quick fixes)
-- [ ] Workspace symbols
-- [ ] Document symbols
-- [ ] Code lens (inline variable values)
-- [ ] Signature help for exec commands
-- [ ] Import path completion
-- [ ] Section header completion for markdown files

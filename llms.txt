@@ -8,9 +8,9 @@ mlld is a modular prompt scripting language for dynamically assemble context and
 - 📋 A workflow orchestrator (like Make + npm for the AI era)
 - 🎭 A conductor's baton (you conduct, tools play)
 - 📝 Executable documentation (reads like a guide, runs like a script)
+- 🚦 A logical router (route data and actions based on conditions)
 
 ### mlld ISN'T:
-- ❌ A programming language (no loops, no recursion, no algorithms)
 - ❌ A template engine (it's not Jinja or Handlebars)
 - ❌ A shell script replacement (it orchestrates shells, doesn't replace them)
 
@@ -139,9 +139,9 @@ This design keeps documents readable as regular Markdown while enabling programm
 
 ### 8.1 File Reference Interpolation
 
-**MAJOR FEATURE**: File references can now be interpolated directly in strings and templates!
+**Note**: File references can now be interpolated directly in strings and templates.
 
-**Smart Detection**: Only `<...>` containing `.`, `/`, `*`, or `@` are treated as file references. This means XML tags like `<thinking>` or `<answer>` work normally.
+**Detection**: Only `<...>` containing `.`, `/`, `*`, or `@` are treated as file references. This means XML tags like `<thinking>` or `<answer>` work normally.
 
 ```mlld
 >> Basic interpolation in templates:
@@ -220,7 +220,7 @@ Without angle brackets, `@base/file` would be treated as trying to import from a
 
 ### 9.1 'As' Template Syntax for Globs
 
-**Power Feature**: Process multiple files with templates using `as`:
+Process multiple files with templates using `as`:
 
 ```mlld
 >> The <> placeholder represents the current file:
@@ -240,9 +240,9 @@ Path: <>.relative
 >> Note: <> only works in 'as' templates, not elsewhere
 ```
 
-### 10. Conditional Logic with /when
+### 10. Conditional Logic with /when and Operators
 
-/when is mlld's decision-making directive. It's NOT an if-statement - it's a routing table.
+/when is mlld's decision-making directive with operator support. It's a routing table with expression evaluation.
 
 **Quick Reference:**
 - **`/when @var: [...]`** - Evaluates ALL conditions independently, fires action for each true condition
@@ -251,50 +251,39 @@ Path: <>.relative
 - **`/when @var any: [...] => action`** - Executes action if ANY condition is true
 
 ```mlld
->> Simple routing: condition => action
-/when @isProduction => /import { * } from "./prod-config.mld"
+>> Simple routing with operators
+/when @score > 90 => /show `Excellent!`
+/when @isAdmin && @isActive => /show `Admin panel`
+/when !@isLocked => /show `Resource available`
 
->> Switch-style branching with first: (stops at first match)
-/when @hasLicense first: [
-  true  => /show `✅ License verified`
-  false => /show `❌ No license found`
+>> Complex expressions with parentheses
+/when (@role == "admin" || @role == "mod") && @active => /show `Privileged user`
+
+>> Switch-style with operator conditions
+/when @request first: [
+  @method == "GET" && @path == "/users" => /show `List users`
+  @method == "POST" && @path == "/users" => /show `Create user`
+  @method == "DELETE" => /show `Delete resource`
 ]
 
->> Bare form: ALL matching conditions execute (powerful feature!)
-/when @status: [
-  @hasTests     => /show `✓ Tests present`
-  @hasDocuments => /show `✓ Docs present`
-  @hasExamples  => /show `✓ Examples present`
+>> Implicit actions (cleaner syntax)
+/when @env == "production" => @config = "prod.json"      # Implicit /var
+/when @needsSetup => @initialize()                       # Implicit /run
+/when @task == "build" => @output = @compile(@source)   # Implicit /exe
+
+>> Value-returning when expressions in /var
+/var @greeting = when: [
+  @time < 12 => "Good morning"
+  @time < 18 => "Good afternoon"
+  true => "Good evening"
 ]
 
->> First-match-wins routing
-/when first: [
-  @isWeekend      => /show `🏖️ Out of office`
-  @isPastDeadline => /show `⏰ Working overtime`
-  true            => /show `💼 Regular hours`
+>> Bare form: ALL matching conditions execute
+/when @features: [
+  @hasAuth => @enableLogin()            # Implicit /run
+  @hasChat => @chatModule = "enabled"   # Implicit /var
+  @hasVideo => /import { video } from @company/video  # Explicit
 ]
-
->> ALL conditions must be true (single action)
-/when all: [
-  @hasTests
-  @hasDocuments
-  @hasExamples
-] => /show `✅ All quality checks passed!`
-
->> ANY condition is true (single action)
-/when any: [
-  @isEmergency
-  @isUrgent
-  @isPriority
-] => /run {send-alert "@message"}
-```
-
-Important: /when doesn't support inline comparisons. Create helper functions:
-```mlld
->> ❌ WRONG: /when @score > 90 => ...
->> ✅ RIGHT: 
-/exe @isHighScore(score) = js {(@score > 90 ? "true" : "")}
-/when @isHighScore(@score) => /show `🏆 High score!`
 ```
 
 ### 11. Iteration with foreach
@@ -311,6 +300,11 @@ Important: /when doesn't support inline comparisons. Create helper functions:
 >> Simple variable assignment
 /var @author = "Alice"
 /var @greeting = "Hello, world!"
+
+>> Using operators in variables
+/var @isValid = @score > 80 && @submitted
+/var @status = @isPro ? "premium" : "basic"
+/var @canEdit = @isOwner || (@role == "editor" && !@isLocked)
 
 >> Comments go at start or end of lines only
 >> Output content
@@ -758,7 +752,7 @@ When you need utility functions, create them with /exe instead of trying to work
 
 ### Shadow Environments: Making JavaScript Functions Available to Each Other
 
-Shadow environments are a powerful feature that lets JavaScript functions and variables defined in `/exe` blocks become available inside other `js {}` blocks. This solves the common need for utility functions to work together.
+Shadow environments let JavaScript functions and variables defined in `/exe` blocks become available inside other `js {}` blocks. This solves the common need for utility functions to work together.
 
 **Key Concepts:**
 - Each language (`js` and `node`) has its own separate shadow environment
@@ -785,7 +779,7 @@ Shadow environments are a powerful feature that lets JavaScript functions and va
 }
 ```
 
-**Advanced Pattern - Functions Calling Each Other:**
+**Pattern - Functions Calling Each Other:**
 ```mlld
 >> Define interdependent functions
 /exe @formatName(first, last) = js { return `${first} ${last}`; }
@@ -1520,7 +1514,7 @@ Understanding where different variable syntaxes work is crucial:
 
 ## Remember
 
-mlld empowers everyone to create versionable, collaborative "pipelines of thought." It achieves this by being an orchestration language that looks and reads like a document, not by being a template system or programming language.
+mlld empowers everyone to create versionable, collaborative "pipelines of thought." It achieves this by being an orchestration language that looks and reads like a document.
 
 When writing mlld:
 - Think in terms of discrete processing steps, not text interpolation
@@ -1528,7 +1522,7 @@ When writing mlld:
 - Use helpers and modules for complexity
 - Keep your .mld files simple and readable
 
-The power comes from composition: simple directives in your files, powerful capabilities in your modules.
+The value comes from composition: simple directives in your files, complex capabilities in your modules.
 
 ## Summary of New Syntax
 

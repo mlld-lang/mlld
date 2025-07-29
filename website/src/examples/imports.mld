@@ -1,4 +1,4 @@
-/var @docs = [README.md]
+/var @docs = <README.md>
               
 /var @role = {
     "architect": "You are a software architect.",
@@ -14,7 +14,7 @@
     "roadmap": "Create a roadmap based on highest priority"
 }
 
->> command creation examples
-/exe @codecat(dir) = run {find @dir -type f -name "*.mld" | head -5}
+>> command creation
+/exe @listfiles(dir,ext) = run {find @dir -type f -name "*.@ext" | head -5}
 
 /exe @ask(context, role, task) = run {llm --context @context --instructions @task --system @role}

@@ -1,7 +1,7 @@
 /import "imports.mld"
 
 /path @services = "./src/services"
-/var @code = @codecat(@services)
+/var @code = @listfiles(@services,"ts")
 
 /var @context = `
   Read our docs: @imports.docs

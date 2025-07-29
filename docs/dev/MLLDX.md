@@ -266,21 +266,6 @@ MLLD_DEBUG=true mlldx script.mld
 - `--verbose`: Show detailed execution info
 - `MLLD_DEBUG=true`: Environment variable for debugging
 
-## Future Enhancements
-
-### Potential Improvements
-
-1. **Memory Limits**: Add configurable memory limits for cache
-2. **TTL Support**: Expire cached modules after time period
-3. **Partial Persistence**: Optional /tmp usage for large modules
-4. **Metrics**: Track cache hits/misses and performance
-
-### Experimental Features
-
-- **Distributed Cache**: Redis/Memcached backend for shared ephemeral cache
-- **Pre-warmed Cache**: Bundle common modules in container images
-- **Streaming Mode**: Process large files without full memory load
-
 ## Implementation Checklist
 
 When modifying mlldx:

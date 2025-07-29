@@ -4,7 +4,7 @@ The `/when` directive provides conditional execution in mlld. It evaluates condi
 
 ## Overview
 
-The `/when` directive offers flexible conditional logic with multiple evaluation strategies. Conditions can be variables, command executions, or any expression that produces a truthy/falsy value.
+The `/when` directive provides conditional logic with multiple evaluation strategies. Conditions can be variables, command executions, or any expression that produces a truthy/falsy value.
 
 ## Syntax Forms
 
@@ -19,13 +19,24 @@ The `/when` directive offers flexible conditional logic with multiple evaluation
 The simplest form evaluates a single condition and executes an action if true:
 
 ```mlld
-/when @condition => /add "This appears if condition is truthy"
+/when @condition => /show "This appears if condition is truthy"
 ```
 
-Example:
+Conditions can use operators for complex logic:
 ```mlld
-/var @is_production = "true"
-/when @is_production => /add "⚠️  Running in production mode!"
+# Using comparison operators
+/when @score > 90 => /show "Excellent!"
+/when @user.role == "admin" => /show "Admin access granted"
+
+# Using logical operators
+/when @isActive && @hasPermission => /show "Access allowed"
+/when @isDev || @isStaging => /show "Non-production environment"
+
+# Using negation
+/when !@isLocked => /show "Resource available"
+
+# Complex expressions with parentheses
+/when (@role == "admin" || @role == "mod") && @active => /show "Privileged user"
 ```
 
 ### 2. Block Form with Modifiers
@@ -48,12 +59,37 @@ Example:
 ```mlld
 /var @env = "production"
 /when @env first: [
-  "development" => /add "Dev mode"
-  "production" => /add "Prod mode"  
-  "test" => /add "Test mode"
-  _ => /add "Unknown mode"
+  "development" => /show "Dev mode"
+  "production" => /show "Prod mode"  
+  "test" => /show "Test mode"
+  _ => /show "Unknown mode"
 ]
 # Output: Prod mode
+```
+
+#### Implicit Actions (Directive Prefix Optional)
+
+Within `/when` blocks, you can omit directive prefixes for cleaner syntax:
+
+```mlld
+# Explicit form (traditional)
+/when @env first: [
+  "dev" => /var @config = "development.json"
+  "prod" => /var @config = "production.json"
+]
+
+# Implicit form (cleaner)
+/when @env first: [
+  "dev" => @config = "development.json"      # Implicit /var
+  "prod" => @config = "production.json"     # Implicit /var
+]
+
+# Works with all action types
+/when @task first: [
+  "build" => @compile()                      # Implicit /run
+  "test" => @runTests()                      # Implicit /run  
+  "deploy" => @deploy() = @buildAndPush()    # Implicit /exe
+]
 ```
 
 #### `any:` - Execute if ANY Condition Matches
@@ -65,7 +101,7 @@ Checks if any condition is true, then executes a single block action:
   @condition1
   @condition2
   @condition3
-] => /add "At least one condition matched"
+] => /show "At least one condition matched"
 ```
 
 Example:
@@ -78,7 +114,7 @@ Example:
   @is_admin
   @is_moderator
   @is_verified
-] => /add "User has elevated privileges"
+] => /show "User has elevated privileges"
 # Output: User has elevated privileges
 ```
 
@@ -95,7 +131,7 @@ Executes the block action only if ALL conditions are true:
   @condition1
   @condition2
   @condition3
-] => /add "All conditions are true"
+] => /show "All conditions are true"
 ```
 
 Example:
@@ -108,7 +144,7 @@ Example:
   @has_license
   @is_active  
   @is_paid
-] => /add "Full access granted"
+] => /show "Full access granted"
 # Output: Full access granted
 ```
 
@@ -118,9 +154,9 @@ Executes individual actions for each true condition (no ALL requirement):
 
 ```mlld
 /when @variable all: [
-  @condition1 => /add "Action 1"
-  @condition2 => /add "Action 2"
-  @condition3 => /add "Action 3"
+  @condition1 => /show "Action 1"
+  @condition2 => /show "Action 2"
+  @condition3 => /show "Action 3"
 ]
 ```
 
@@ -131,13 +167,24 @@ Example:
 /var @feature_screen = "true"
 
 /when @features all: [
-  @feature_chat => /add "Chat is enabled"
-  @feature_video => /add "Video is enabled"
-  @feature_screen => /add "Screen sharing is enabled"
+  @feature_chat => /show "Chat is enabled"
+  @feature_video => /show "Video is enabled"
+  @feature_screen => /show "Screen sharing is enabled"
 ]
 # Output:
 # Chat is enabled
 # Screen sharing is enabled
+```
+
+##### Implicit Actions in Blocks
+
+```mlld
+# Mixed implicit and explicit actions
+/when @mode all: [
+  @debug => @logLevel = "debug"              # Implicit /var
+  @verbose => /show "Verbose mode"           # Explicit /show
+  @trace => @enableTrace()                   # Implicit /run
+]
 ```
 
 ### 3. Bare Form (No Modifier) 
@@ -273,44 +320,73 @@ The optional variable in block form captures the condition value:
 ]
 ```
 
+## Using Operators in Conditions
+
+Conditions can use the full range of mlld operators:
+
+### Comparison Operators
+```mlld
+/when @score > 90 => /show "A grade"
+/when @age >= 18 => /show "Adult"
+/when @status == "active" => /show "Account is active"
+/when @result != null => /show "Has result"
+```
+
+### Logical Operators
+```mlld
+# AND operator (short-circuits)
+/when @isLoggedIn && @hasSubscription => /show "Premium content"
+
+# OR operator (short-circuits)  
+/when @isOwner || @isAdmin => /show "Can edit"
+
+# NOT operator
+/when !@isExpired => /show "Still valid"
+
+# Complex expressions
+/when (@score > 80 && @completed) || @isExempt => /show "Passed"
+```
+
+### In Block Forms
+```mlld
+/when @request first: [
+  @method == "GET" && @path == "/users" => /show "List users"
+  @method == "POST" && @path == "/users" => /show "Create user"
+  @method == "DELETE" && @path != "/users" => /show "Delete specific resource"
+]
+```
+
 ## Truthiness Rules
 
 Values are considered truthy/falsy as follows:
 
 **Falsy values:**
 - `""` (empty string)
-- `"false"` (string literal "false", case-insensitive)
-- `"0"` (string literal "0")
 - `false` (boolean false)
 - `null` or `undefined`
 - `0` (number zero)
+- `[]` (empty array - unlike JavaScript!)
+- `{}` (empty object - unlike JavaScript!)
 
 **Truthy values:**
-- `"true"` (string literal)
+- Any non-empty string
 - `true` (boolean true)
-- Any non-empty string (except `"false"` and `"0"`)
 - Any non-zero number
-- Arrays (empty or with elements)
-- Objects (empty or with properties)
-- Command execution results that return non-empty strings
+- Non-empty arrays
+- Non-empty objects
 
-**Important Notes:**
-- String values `"false"` and `"0"` are **falsy** (special cases)
-- In switch statements (`@when @var: [...]`), values are compared for equality, not truthiness
-- Empty arrays and objects are currently truthy (may change in future versions)
+**mlld Type Coercion:**
+- `"true" == true` → true
+- `"false" == false` → true
+- `null == undefined` → true
+- Numbers compared numerically: `"5" == 5` → true
 
-### Negation with `!`
+### Ternary Operator in Actions
 
-The `!` operator negates the truthiness of a value:
+While conditions use standard operators, actions can use the ternary operator:
 
 ```mlld
-/var @hasFeature = ""
-/when !@hasFeature => /add "Feature is disabled"
-# Output: Feature is disabled (empty string is falsy, !falsy is truthy)
-
-/var @isDisabled = "false"  
-/when !@isDisabled => /add "Not disabled"
-# No output (string "false" is falsy, !falsy is truthy)
+/when @user.type == "premium" => /var @message = @isWeekend ? "Enjoy your weekend!" : "Have a productive day!"
 ```
 
 ## Common Patterns

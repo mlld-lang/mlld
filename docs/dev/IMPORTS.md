@@ -542,10 +542,3 @@ const result = await evaluate(ast, childEnv);
 3. **Shadow Environment Capture**: Only captured when needed
 4. **Field Access**: Direct object traversal, no string parsing
 
-### Future Enhancements
-
-1. **Lazy Module Loading**: Defer evaluation until variable access
-2. **Partial Imports**: Tree-shaking for large modules
-3. **Import Maps**: Configuration for module aliasing
-4. **Async Module Initialization**: Support for async module setup
-5. **Better Circular Dependency Support**: Allow legitimate patterns

@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2025-07-08T16:43:02.841Z
+// Generated from grammar at 2025-07-29T05:57:27.526Z
 
 const Prism = require('prismjs');
 
@@ -9,8 +9,42 @@ Prism.languages.mlld = {
     greedy: true
   },
   'directive': {
-    pattern: /\/(var|show|run|exe|path|import|when|output)\b/,
+    pattern: //(var|show|run|exe|path|import|when|output)\b/,
     alias: 'keyword'
+  },
+  'when-keyword': {
+    pattern: /when\s*:/,
+    alias: 'keyword'
+  },
+  'logical-operator': {
+    pattern: /&&|\|\||!(?=@|\s|\()/,
+    alias: 'operator'
+  },
+  'comparison-operator': {
+    pattern: /(==|!=|<=|>=|<|>)/,
+    alias: 'operator'
+  },
+  'arrow-operator': {
+    pattern: /=>/,
+    alias: 'operator'
+  },
+  'ternary-operator': {
+    pattern: /[?:]/,
+    alias: 'operator'
+  },
+  'triple-template-block': {
+    pattern: /:::[^:]+:::/,
+    greedy: true,
+    inside: {
+      'template-variable': {
+        pattern: /\{\{[^}]+\}\}/,
+        inside: {
+          'punctuation': /\{\{|\}\}/,
+          'variable': /[^{}]+/
+        }
+      },
+      'punctuation': /:::/
+    }
   },
   'template-block': {
     pattern: /::[^:]+::/,
@@ -23,7 +57,18 @@ Prism.languages.mlld = {
           'variable': /[^{}]+/
         }
       },
-      'punctuation': /\[\[|\]\]/
+      'punctuation': /::/
+    }
+  },
+  'alligator': {
+    pattern: /<[^>]+>/,
+    greedy: true,
+    inside: {
+      'url': {
+        pattern: /https?:\/\/[^>]+/,
+        alias: 'string'
+      },
+      'punctuation': /<|>/
     }
   },
   'path': {
@@ -42,7 +87,7 @@ Prism.languages.mlld = {
     greedy: true
   },
   'reserved-variable': {
-    pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin)\b/,
+    pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\b/,
     alias: 'builtin'
   },
   'variable': {
@@ -54,6 +99,14 @@ Prism.languages.mlld = {
     alias: 'property'
   },
   'operator': /\b(from|as|foreach|with|to)\b/,
+  'pipe-operator': {
+    pattern: /\|/,
+    alias: 'operator'
+  },
+  'assignment-operator': {
+    pattern: /=/,
+    alias: 'operator'
+  },
   'number': /\b\d+(\.\d+)?\b/,
   'boolean': /\b(true|false)\b/,
   'null': /\bnull\b/,

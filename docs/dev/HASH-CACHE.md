@@ -330,22 +330,6 @@ throw new Error(
 - Permission errors bubble up with context
 - Disk full errors are reported clearly
 
-## Future Enhancements
-
-### Planned Features
-
-1. **Cache Eviction**: Remove least-recently-used modules when cache exceeds size limit
-2. **Compression**: Store content compressed to save disk space
-3. **Parallel Operations**: Batch cache operations for better performance
-4. **Cache Warming**: Pre-fetch popular modules
-5. **Integrity Repair**: Attempt to re-fetch corrupted modules
-
-### Considered But Deferred
-
-1. **Alternative Hash Algorithms**: SHA-256 is sufficient for now
-2. **Shared Network Cache**: Security concerns outweigh benefits
-3. **In-Memory Cache**: Node process lifetime too short to benefit
-4. **Cache Encryption**: Users can use filesystem encryption
 
 ## Testing
 

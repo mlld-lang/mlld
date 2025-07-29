@@ -179,12 +179,6 @@ See [LANGUAGE-SERVER.md](./LANGUAGE-SERVER.md) for detailed documentation on:
 - Available features
 - Configuration options
 
-## Future Improvements
-
-1. **Semantic Highlighting** - Use AST for context-aware highlighting
-2. **Enhanced Language Server** - Additional features like formatting, refactoring
-3. **Theme Generator** - Consistent themes across all editors
-4. **Live Preview** - Real-time highlighting in web playground
 
 ## Contributing
 

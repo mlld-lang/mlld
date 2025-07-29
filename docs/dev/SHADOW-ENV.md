@@ -322,9 +322,6 @@ Shadow functions can call each other within the same environment:
 - **Isolation**: Separate context per mlld file
 - **Risk**: Mitigated by VM boundaries
 
-## Future Considerations
-
-The shadow environment architecture is designed to be extensible to other languages. The pattern of using language-specific isolation mechanisms (like Node's VM module) could be applied to Python, shell scripts, and other runtimes.
 
 ## Shadow Environment Imports and Lexical Scoping
 

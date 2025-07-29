@@ -22,7 +22,8 @@ mlld works by processing only lines that begin with directives (like `/text`, `/
 
 ```mlld
 /var @name = "World"
-/path @docs = "$./docs"
+/var @hour = 14
+/var @greeting = @hour < 12 ? "Good morning" : "Good afternoon"
 
 This line will be interpreted as plain text.
 
@@ -30,21 +31,22 @@ This line will be interpreted as plain text.
 This will remain a codefence.
 ```
 
-/show ::
-    Hello, {{name}}!
-::
+/show `@greeting, @name!`
 
-/show [@docs/example.md]
+/when @hour >= 9 && @hour < 17 => /show "Office hours - support available"
+
+/show <@./docs/example.md>
 
 /run "echo Current time: $(date)"
 ```
 
 This example:
-1. Defines a text variable `name` with the value "World"
-2. Defines a path variable `docs` pointing to the project's docs folder
-3. Uses the text variable in a template string and embeds it in the output
-4. Embeds content from an external file
-5. Runs a shell command and includes its output
+1. Defines variables including one using the ternary operator
+2. Shows how plain text is preserved as-is
+3. Uses template interpolation to display a greeting
+4. Uses operators in a conditional to show office hours
+5. Includes content from an external file
+6. Runs a shell command and includes its output
 
 ## Next Steps
 
