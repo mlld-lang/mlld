@@ -42,6 +42,28 @@ export async function evaluateWhenExpression(
     return { value: null, env };
   }
   
+  // Check all actions for code blocks upfront
+  for (let i = 0; i < node.conditions.length; i++) {
+    const pair = node.conditions[i];
+    if (pair.action && pair.action.length > 0) {
+      const hasCodeExecution = pair.action.some(actionNode => {
+        if (typeof actionNode === 'object' && actionNode !== null && 'type' in actionNode) {
+          return actionNode.type === 'code' || actionNode.type === 'command' || 
+                 (actionNode.type === 'nestedDirective' && actionNode.directive === 'run');
+        }
+        return false;
+      });
+      
+      if (hasCodeExecution) {
+        throw new MlldWhenExpressionError(
+          'Code blocks are not supported in when expressions. Define your logic in a separate /exe function and call it instead.',
+          node.location,
+          { conditionIndex: i, phase: 'action', type: 'code-block-not-supported' }
+        );
+      }
+    }
+  }
+  
   // Evaluate conditions in order (first-match semantics)
   for (let i = 0; i < node.conditions.length; i++) {
     const pair = node.conditions[i];
