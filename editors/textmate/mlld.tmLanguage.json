@@ -11,6 +11,89 @@
       "match": "^\\s*(>>|<<).*$"
     },
     {
+      "name": "variable.language.reserved.mlld",
+      "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+    },
+    {
+      "name": "variable.other.mlld",
+      "match": "@\\w+"
+    },
+    {
+      "name": "string.template.triple.mlld",
+      "begin": ":::",
+      "end": ":::",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.template.triple.begin.mlld"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.template.triple.end.mlld"
+        }
+      },
+      "patterns": [
+        {
+          "name": "variable.template.mlld",
+          "begin": "\\{\\{",
+          "end": "\\}\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.template.variable.begin.mlld"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.template.variable.end.mlld"
+            }
+          },
+          "patterns": [
+            {
+              "name": "variable.other.interpolation.mlld",
+              "match": "[^}]+"
+            }
+          ]
+        },
+        {
+          "name": "entity.name.tag.xml.mlld",
+          "match": "</?[^>]+>"
+        }
+      ]
+    },
+    {
+      "name": "string.template.mlld",
+      "begin": "::",
+      "end": "::",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.template.begin.mlld"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.template.end.mlld"
+        }
+      },
+      "patterns": [
+        {
+          "name": "variable.language.reserved.mlld",
+          "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+        },
+        {
+          "name": "variable.other.mlld",
+          "match": "@\\w+"
+        },
+        {
+          "name": "string.interpolated.alligator.mlld",
+          "match": "<[^>]*[\\.\\/\\*@][^>]*>"
+        }
+      ]
+    },
+    {
+      "name": "string.interpolated.alligator.mlld",
+      "match": "<[^>]*[\\.\\/\\*@][^>]*>"
+    },
+    {
       "name": "meta.embedded.mlld",
       "begin": "^(?=/(var|show|run|exe|path|import|when|output)\\b)",
       "end": "$",

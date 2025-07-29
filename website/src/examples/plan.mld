@@ -12,12 +12,12 @@
 /var @ux_review   = @imports.ask(@context, @imports.role.ux, @imports.task.uxrev)
 /var @sec_review  = @imports.ask(@context, @imports.role.security, @imports.task.secrev)
 
-/var @pm_review = `
+/var @pm_review = ::
   Here's the team's input on our priorities:
   - Architect review: @arch_review
   - UX review: @ux_review
   - Security review: @sec_review
   Your task: @imports.task.roadmap
-`
+::
 
 /run @imports.ask(@context, @imports.role.pm, @pm_review)

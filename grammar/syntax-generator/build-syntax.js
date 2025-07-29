@@ -285,6 +285,78 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
           name: 'comment.line.mlld',
           match: '^\\s*(>>|<<).*$'
         },
+        // Global patterns that should be recognized everywhere
+        {
+          name: 'variable.language.reserved.mlld',
+          match: this.patterns.reservedVariable
+        },
+        {
+          name: 'variable.other.mlld',
+          match: this.patterns.variable
+        },
+        {
+          name: 'string.template.triple.mlld',
+          begin: ':::',
+          end: ':::',
+          beginCaptures: {
+            0: { name: 'punctuation.definition.template.triple.begin.mlld' }
+          },
+          endCaptures: {
+            0: { name: 'punctuation.definition.template.triple.end.mlld' }
+          },
+          patterns: [
+            {
+              name: 'variable.template.mlld',
+              begin: '\\{\\{',
+              end: '\\}\\}',
+              beginCaptures: {
+                0: { name: 'punctuation.definition.template.variable.begin.mlld' }
+              },
+              endCaptures: {
+                0: { name: 'punctuation.definition.template.variable.end.mlld' }
+              },
+              patterns: [
+                {
+                  name: 'variable.other.interpolation.mlld',
+                  match: '[^}]+'
+                }
+              ]
+            },
+            {
+              name: 'entity.name.tag.xml.mlld',
+              match: '</?[^>]+>'
+            }
+          ]
+        },
+        {
+          name: 'string.template.mlld',
+          begin: '::',
+          end: '::',
+          beginCaptures: {
+            0: { name: 'punctuation.definition.template.begin.mlld' }
+          },
+          endCaptures: {
+            0: { name: 'punctuation.definition.template.end.mlld' }
+          },
+          patterns: [
+            {
+              name: 'variable.language.reserved.mlld',
+              match: this.patterns.reservedVariable
+            },
+            {
+              name: 'variable.other.mlld',
+              match: this.patterns.variable
+            },
+            {
+              name: 'string.interpolated.alligator.mlld',
+              match: this.patterns.alligatorExpression
+            }
+          ]
+        },
+        {
+          name: 'string.interpolated.alligator.mlld',
+          match: this.patterns.alligatorExpression
+        },
         // Match lines that start with valid mlld directives
         {
           name: 'meta.embedded.mlld',
@@ -764,15 +836,14 @@ endif
 " Include Markdown syntax as base
 runtime! syntax/markdown.vim
 
-" Define mlld-specific patterns
-" Set syntax sync to help with recovery after code blocks
-syn sync fromstart
-syn sync maxlines=50
+" Syntax synchronization
+syn sync minlines=10
 
+" Define mlld-specific patterns
 " Comments
 syn match mlldComment "\\(>>\\|<<\\).*$"
 
-" Directives - must be at start of line (highest priority)
+" Directives - must be at start of line
 syn match mlldDirective "^/\\(${this.directives.join('\\|')}\\)\\>"
 
 " Operators (high priority)
@@ -824,15 +895,14 @@ syn match mlldAlligatorSection "<\\([^>#]\\+\\)\\(\\s*#\\s*\\)\\([^>]\\+\\)>" co
 syn match mlldSectionMarker "#" contained
 
 " Language-specific code blocks (NO mlld interpolation)
-" Use fold to ensure blocks are self-contained
 " JavaScript/Node blocks
-syn region mlldJSBlock start="\\<\\(js\\|javascript\\|node\\)\\s*{" end="}" contains=@javascript fold keepend
+syn region mlldJSBlock start="\\<\\(js\\|javascript\\|node\\)\\s*{" matchgroup=mlldCodeDelimiter end="}" contains=@javascript fold keepend
 " Python blocks
-syn region mlldPythonBlock start="\\<\\(python\\|py\\)\\s*{" end="}" contains=@python fold keepend
+syn region mlldPythonBlock start="\\<\\(python\\|py\\)\\s*{" matchgroup=mlldCodeDelimiter end="}" contains=@python fold keepend
 " Shell/Bash blocks
-syn region mlldShellBlock start="\\<\\(bash\\|sh\\)\\s*{" end="}" contains=@shell fold keepend
+syn region mlldShellBlock start="\\<\\(bash\\|sh\\)\\s*{" matchgroup=mlldCodeDelimiter end="}" contains=@shell fold keepend
 
-" Generic command blocks (braces) WITH interpolation
+" Generic command blocks (braces) WITH interpolation - must come after language blocks
 syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReservedVar,mlldAlligator,mlldLanguageKeyword
 
 " Language keywords
@@ -859,7 +929,6 @@ syn keyword mlldNull null
 " Define highlighting
 hi def link mlldComment Comment
 hi def link mlldDirective Keyword
-hi def link mlldDirectiveReset Keyword
 hi def link mlldLogicalOp Operator
 hi def link mlldComparisonOp Operator
 hi def link mlldTernaryOp Operator
@@ -910,13 +979,9 @@ if exists("b:mlld_after_loaded")
 endif
 let b:mlld_after_loaded = 1
 
-" Set syntax sync for markdown files
-syn sync fromstart
-syn sync maxlines=100
-
 " Define mlld-run code block region first (highest priority)
 syn region mlldRunCodeBlock start="^\\s*\`\`\`mlld-run\\s*$" end="^\\s*\`\`\`\\s*$" contains=mlldRunContent
-syn region mlldRunContent start="." end="\\ze^\\s*\`\`\`\\s*$" contained contains=mlldComment,mlldDirective,mlldReserved,mlldVariable,mlldStringInterpolated,mlldStringLiteral,mlldTemplate,mlldTripleTemplate,mlldTemplateVar,mlldCommand,mlldLogicalOp,mlldComparisonOp,mlldTernaryOp,mlldArrowOp,mlldWhenKeyword,mlldAlligator,mlldBacktickTemplate,mlldJSBlock,mlldPythonBlock,mlldShellBlock
+syn region mlldRunContent start="." end="\\ze^\\s*\`\`\`\\s*$" contained contains=mlldComment,mlldDirective,mlldReserved,mlldVariable,mlldStringInterpolated,mlldStringLiteral,mlldTemplate,mlldTripleTemplate,mlldTemplateVar,mlldCommand,mlldLogicalOp,mlldComparisonOp,mlldTernaryOp,mlldArrowOp,mlldWhenKeyword,mlldAlligator,mlldBacktickTemplate
 
 " Define our syntax patterns directly
 syn match mlldComment "\\(>>\\|<<\\).*$"
@@ -942,7 +1007,10 @@ syn region mlldJSBlock start="\\<\\(js\\|javascript\\|node\\)\\s*{" end="}" cont
 syn region mlldPythonBlock start="\\<\\(python\\|py\\)\\s*{" end="}" contains=@python fold keepend
 syn region mlldShellBlock start="\\<\\(bash\\|sh\\)\\s*{" end="}" contains=@shell fold keepend
 
-" Generic command must come after language blocks
+" Syntax synchronization to help reset after language blocks
+syn sync minlines=10
+
+" Generic command
 syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReserved,mlldAlligator,mlldLanguageKeyword
 syn match mlldLanguageKeyword "\\<\\(js\\|sh\\|node\\|python\\)\\>"
 
@@ -964,6 +1032,9 @@ hi mlldTemplateVar ctermfg=214 guifg=#ffaf00
 hi mlldBacktickTemplate ctermfg=150 guifg=#afd787
 hi mlldAlligator ctermfg=229 guifg=#ffffaf
 hi mlldCommand ctermfg=150 guifg=#afd787
+hi mlldJSBlock ctermfg=214 guifg=#ffaf00
+hi mlldPythonBlock ctermfg=214 guifg=#ffaf00
+hi mlldShellBlock ctermfg=214 guifg=#ffaf00
 hi mlldLanguageKeyword ctermfg=204 guifg=#ff5f87
 hi mlldRunCodeBlock ctermfg=242 guifg=#6c6c6c
 hi mlldRunContent ctermfg=255 guifg=#ffffff`;

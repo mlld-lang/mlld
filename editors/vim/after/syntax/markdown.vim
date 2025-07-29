@@ -7,13 +7,9 @@ if exists("b:mlld_after_loaded")
 endif
 let b:mlld_after_loaded = 1
 
-" Set syntax sync for markdown files
-syn sync fromstart
-syn sync maxlines=100
-
 " Define mlld-run code block region first (highest priority)
 syn region mlldRunCodeBlock start="^\s*```mlld-run\s*$" end="^\s*```\s*$" contains=mlldRunContent
-syn region mlldRunContent start="." end="\ze^\s*```\s*$" contained contains=mlldComment,mlldDirective,mlldReserved,mlldVariable,mlldStringInterpolated,mlldStringLiteral,mlldTemplate,mlldTripleTemplate,mlldTemplateVar,mlldCommand,mlldLogicalOp,mlldComparisonOp,mlldTernaryOp,mlldArrowOp,mlldWhenKeyword,mlldAlligator,mlldBacktickTemplate,mlldJSBlock,mlldPythonBlock,mlldShellBlock
+syn region mlldRunContent start="." end="\ze^\s*```\s*$" contained contains=mlldComment,mlldDirective,mlldReserved,mlldVariable,mlldStringInterpolated,mlldStringLiteral,mlldTemplate,mlldTripleTemplate,mlldTemplateVar,mlldCommand,mlldLogicalOp,mlldComparisonOp,mlldTernaryOp,mlldArrowOp,mlldWhenKeyword,mlldAlligator,mlldBacktickTemplate
 
 " Define our syntax patterns directly
 syn match mlldComment "\(>>\|<<\).*$"
@@ -39,7 +35,10 @@ syn region mlldJSBlock start="\<\(js\|javascript\|node\)\s*{" end="}" contains=@
 syn region mlldPythonBlock start="\<\(python\|py\)\s*{" end="}" contains=@python fold keepend
 syn region mlldShellBlock start="\<\(bash\|sh\)\s*{" end="}" contains=@shell fold keepend
 
-" Generic command must come after language blocks
+" Syntax synchronization to help reset after language blocks
+syn sync minlines=10
+
+" Generic command
 syn region mlldCommand start="{" end="}" contains=mlldVariable,mlldReserved,mlldAlligator,mlldLanguageKeyword
 syn match mlldLanguageKeyword "\<\(js\|sh\|node\|python\)\>"
 
@@ -61,6 +60,9 @@ hi mlldTemplateVar ctermfg=214 guifg=#ffaf00
 hi mlldBacktickTemplate ctermfg=150 guifg=#afd787
 hi mlldAlligator ctermfg=229 guifg=#ffffaf
 hi mlldCommand ctermfg=150 guifg=#afd787
+hi mlldJSBlock ctermfg=214 guifg=#ffaf00
+hi mlldPythonBlock ctermfg=214 guifg=#ffaf00
+hi mlldShellBlock ctermfg=214 guifg=#ffaf00
 hi mlldLanguageKeyword ctermfg=204 guifg=#ff5f87
 hi mlldRunCodeBlock ctermfg=242 guifg=#6c6c6c
 hi mlldRunContent ctermfg=255 guifg=#ffffff
