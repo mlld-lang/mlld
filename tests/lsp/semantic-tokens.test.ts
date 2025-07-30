@@ -82,7 +82,8 @@ const TOKEN_TYPES = [
   'string',
   'number',
   'boolean',
-  'null'
+  'null',
+  'property'
 ];
 
 const TOKEN_MODIFIERS = [
@@ -308,6 +309,24 @@ describe('Semantic Tokens', () => {
       const embeddedCode = tokens.find(t => t.tokenType === 'embeddedCode');
       expect(embeddedCode).toBeDefined();
     });
+
+    it('handles commands with embedded code blocks', async () => {
+      const code = `/run js {
+  const result = \`prefix\${value}\`;
+  console.log(result);
+}`; // mlld doesn't interpolate in embedded code
+      const tokens = await getSemanticTokens(code);
+      
+      // Check language identifier
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: 'js',
+        tokenType: 'embedded'
+      }));
+      
+      // The code block should be marked as embedded
+      const embeddedCode = tokens.filter(t => t.tokenType === 'embeddedCode');
+      expect(embeddedCode.length).toBeGreaterThan(0);
+    });
   });
   
   describe('Operators', () => {
@@ -330,6 +349,15 @@ describe('Semantic Tokens', () => {
       const operators = tokens.filter(t => t.tokenType === 'operator');
       const gtOp = operators.find(t => t.length === 1);
       expect(gtOp).toBeDefined();
+    });
+
+    it('highlights pattern matching arrow operator', async () => {
+      const code = `/when @status => /show "Processing"`; // mlld doesn't support block form yet
+      const tokens = await getSemanticTokens(code);
+      
+      // Check for arrow operator
+      const operators = tokens.filter(t => t.tokenType === 'operator');
+      expect(operators.some(o => o.text === '=>')).toBe(true);
     });
   });
   
@@ -424,6 +452,163 @@ describe('Semantic Tokens', () => {
       // Should have string literals
       const strings = tokens.filter(t => t.tokenType === 'string');
       expect(strings.length).toBeGreaterThan(0);
+    });
+
+    it('handles templates within objects', async () => {
+      const code = '/var @config = {"message": `Hello @name!`, "count": @total}';
+      const tokens = await getSemanticTokens(code);
+      
+      // Check template delimiters
+      const templates = tokens.filter(t => t.tokenType === 'template');
+      expect(templates).toHaveLength(2); // Opening and closing backticks
+      
+      // Check interpolation inside template
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@name',
+        tokenType: 'interpolation'
+      }));
+      
+      // Check variable reference outside template
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@total',
+        tokenType: 'variableRef'
+      }));
+    });
+  });
+
+  describe('Command Content Interpolation', () => {
+    it('handles shell commands with @var interpolation', async () => {
+      const code = '/run {echo "@name"}';
+      const tokens = await getSemanticTokens(code);
+      
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '/run',
+        tokenType: 'directive'
+      }));
+      
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@name',
+        tokenType: 'interpolation'
+      }));
+    });
+    
+    it('handles complex shell commands with multiple interpolations', async () => {
+      const code = '/run {cp "@source" "@dest"}'; // mlld doesn't support && in commands
+      const tokens = await getSemanticTokens(code);
+      
+      const interpolations = tokens.filter(t => t.tokenType === 'interpolation');
+      expect(interpolations).toHaveLength(2);
+      expect(interpolations.map(t => t.text)).toEqual(['@source', '@dest']);
+    });
+  });
+
+  describe('Structured Data', () => {
+    it('highlights JSON objects', async () => {
+      const code = '/var @config = {"name": "test", "value": 42}';
+      const tokens = await getSemanticTokens(code);
+      
+      // Check braces
+      const braces = tokens.filter(t => t.tokenType === 'operator' && (t.text === '{' || t.text === '}'));
+      expect(braces).toHaveLength(2);
+      
+      // Note: Property keys and primitive values are not AST nodes
+      // The mlld AST only preserves mlld constructs as nodes
+    });
+    
+    it('highlights arrays', async () => {
+      const code = '/var @items = [1, 2, 3]';
+      const tokens = await getSemanticTokens(code);
+      
+      // Check brackets
+      const brackets = tokens.filter(t => t.tokenType === 'operator' && (t.text === '[' || t.text === ']'));
+      expect(brackets).toHaveLength(2);
+      
+      // Note: Primitive values (numbers) are not AST nodes
+      // Only mlld constructs get location data
+    });
+    
+    it('highlights arrays with mlld constructs', async () => {
+      const code = '/var @items = [<file.md>, @exec(@cmd), @var]';
+      const tokens = await getSemanticTokens(code);
+      
+      // Check brackets
+      const brackets = tokens.filter(t => t.tokenType === 'operator' && (t.text === '[' || t.text === ']'));
+      expect(brackets).toHaveLength(2);
+      
+      // mlld constructs DO get highlighted
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '<file.md>',
+        tokenType: 'alligator'
+      }));
+      
+      // @exec(@cmd) is parsed as ExecInvocation
+      const execToken = tokens.find(t => t.text?.includes('exec'));
+      expect(execToken).toBeDefined();
+      
+      expect(tokens).toContainEqual(expect.objectContaining({
+        text: '@var',
+        tokenType: 'variableRef'
+      }));
+    });
+    
+    it('highlights field access with dot notation', async () => {
+      const code = '/show @user.profile.name';
+      const tokens = await getSemanticTokens(code);
+      
+      // Check variable reference base
+      const varRef = tokens.find(t => t.tokenType === 'variableRef' && t.text === '@user');
+      expect(varRef).toBeDefined();
+      
+      // Check dots as operators  
+      const dots = tokens.filter(t => t.tokenType === 'operator' && t.text === '.');
+      expect(dots).toHaveLength(2);
+      
+      // Check properties
+      const properties = tokens.filter(t => t.tokenType === 'property');
+      expect(properties).toHaveLength(2); // profile and name
+      expect(properties[0].text).toBe('profile');
+      expect(properties[1].text).toBe('name');
+    });
+    
+    it('highlights array indexing', async () => {
+      const code = '/show @items[0]';
+      const tokens = await getSemanticTokens(code);
+      
+      const varRef = tokens.find(t => t.tokenType === 'variableRef');
+      expect(varRef).toBeDefined();
+      expect(varRef?.text).toBe('@items');
+      
+      const numbers = tokens.filter(t => t.tokenType === 'number');
+      expect(numbers).toHaveLength(1);
+      expect(numbers[0].text).toBe('0');
+    });
+  });
+
+  describe('Error Recovery', () => {
+    it('handles partial AST gracefully', async () => {
+      const code = '/var @incomplete ='; // Incomplete directive
+      
+      // Parse error should throw
+      await expect(getSemanticTokens(code)).rejects.toThrow('Parse error');
+    });
+    
+    it('handles syntax errors without crashing', async () => {
+      const code = '/var @test = {{invalid}}'; // Wrong template syntax
+      
+      // This might throw or might produce partial tokens depending on parser
+      try {
+        const tokens = await getSemanticTokens(code);
+        // If it doesn't throw, should still provide some tokens
+        expect(tokens.length).toBeGreaterThan(0);
+        expect(tokens).toContainEqual(expect.objectContaining({
+          text: '/var',
+          tokenType: 'directive'
+        }));
+      } catch (e) {
+        // Parse error is also acceptable
+        expect(e).toBeInstanceOf(Error);
+        expect(e.message).toContain('Parse error');
+      }
     });
   });
 });
