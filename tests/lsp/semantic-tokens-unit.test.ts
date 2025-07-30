@@ -379,7 +379,7 @@ describe('Semantic Tokens - Unit Tests', () => {
       expect(firstNameToken?.modifiers).toContain('declaration');
       
       // Second @name should be reference
-      const secondNameToken = tokens.find(t => t.text === '@name' && t.line === 1);
+      const secondNameToken = tokens.find(t => t.text === 'name' && t.line === 1);
       expect(secondNameToken?.tokenType).toBe('variableRef');
       expect(secondNameToken?.modifiers).toContain('reference');
     });
@@ -396,6 +396,13 @@ describe('Semantic Tokens - Unit Tests', () => {
       // Should have 3 directives
       const directives = tokens.filter(t => t.tokenType === 'directive');
       expect(directives).toHaveLength(3);
+      
+      // Debug output
+      console.log('Nested context tokens:', tokens.map(t => ({
+        text: (t as any).text,
+        type: t.tokenType,
+        pos: `${t.line}:${t.char}`
+      })));
       
       // Should have parameter in exe
       const params = tokens.filter(t => t.tokenType === 'parameter');

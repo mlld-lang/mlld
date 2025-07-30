@@ -12,6 +12,45 @@ vi.mock('tinyglobby', () => ({
   glob: vi.fn()
 }));
 
+// Define skip tests outside describe block for export
+export const skipTests: Record<string, string> = {
+  'modules-hash': 'Newline handling issue - hash validation is implemented',
+  'security-ttl-durations': 'Issue #99: TTL/trust security features not implemented',
+  'output-quoted-path': 'Issue #312: Test infrastructure needed for new output syntax variations',
+  'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
+  'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
+  'alligator-glob-pattern': 'Glob patterns require real filesystem - tinyglobby is well-tested',
+  'alligator-glob-rename': 'Glob patterns require real filesystem - tinyglobby is well-tested',
+  'alligator-glob-concat': 'Glob patterns require real filesystem - tinyglobby is well-tested',
+  'file-reference-glob': 'Glob patterns require real filesystem - tinyglobby mock issues',
+  'alligator-url-markdown-conversion': 'Issue #315: Getter properties (text, md, html) not accessible in mlld',
+  'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
+  'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
+  'text-url-section': 'Issue #82: URL section support not implemented',
+  'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
+  'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
+  'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
+  'output-exec-invocation': 'Exec invocation in @output not yet supported - future enhancement',
+  'output-run-exec-reference': 'Exec invocation in @output not yet supported - future enhancement',
+  'import-namespace': 'Requires real registry/resolver infrastructure for testing',
+  'modules-namespace-import': 'Requires real registry/resolver infrastructure for testing',
+  'when-variable-binding': 'Issue #263: Variable binding in when actions',
+  'modules-mixed': 'Mixes unimplemented security syntax with modules',
+  'modules-auto-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
+  'modules-explicit-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
+  'modules-metadata': 'Issue #264: Namespace imports ({ * as name }) not implemented',
+  'data-assignment-pipeline': 'Needs investigation - newline normalization issue',
+  'pipeline-array-data': 'Needs investigation - whitespace in output',
+  'run-run-code-bracket-nesting': 'Python/sh not supported yet - only JS/Node/Bash',
+  // Module import tests that need published modules
+  'data-object-strings-array-functions': 'Issue #254: Registry tests need isolation - @mlld/array not published yet',
+  // Bracket notation tests - skipped until grammar issue resolved
+  'bracket-notation-comprehensive': 'Issue #306: Bracket notation field access lost in grammar parsing pipeline',
+  // Tests that require @time module
+  'now-lowercase-basic': 'Requires @time module to be installed',
+  'now-enhanced-formats': 'Requires @time module to be installed',
+};
+
 describe('Mlld Interpreter - Fixture Tests', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
@@ -211,44 +250,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     fixtureFiles : 
     fixtureFiles.filter(f => !f.includes('/examples/'));
   
-  // Define skip tests up front to use in categorization
-  const skipTests: Record<string, string> = {
-    'modules-hash': 'Newline handling issue - hash validation is implemented',
-    'security-ttl-durations': 'Issue #99: TTL/trust security features not implemented',
-    'output-quoted-path': 'Issue #312: Test infrastructure needed for new output syntax variations',
-    'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
-    'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
-    'alligator-glob-pattern': 'Glob patterns require real filesystem - tinyglobby is well-tested',
-    'alligator-glob-rename': 'Glob patterns require real filesystem - tinyglobby is well-tested',
-    'alligator-glob-concat': 'Glob patterns require real filesystem - tinyglobby is well-tested',
-    'file-reference-glob': 'Glob patterns require real filesystem - tinyglobby mock issues',
-    'alligator-url-markdown-conversion': 'Issue #315: Getter properties (text, md, html) not accessible in mlld',
-    'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
-    'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
-    'text-url-section': 'Issue #82: URL section support not implemented',
-    'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
-    'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
-    'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
-    'output-exec-invocation': 'Exec invocation in @output not yet supported - future enhancement',
-    'output-run-exec-reference': 'Exec invocation in @output not yet supported - future enhancement',
-    'import-namespace': 'Requires real registry/resolver infrastructure for testing',
-    'modules-namespace-import': 'Requires real registry/resolver infrastructure for testing',
-    'when-variable-binding': 'Issue #263: Variable binding in when actions',
-    'modules-mixed': 'Mixes unimplemented security syntax with modules',
-    'modules-auto-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
-    'modules-explicit-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
-    'modules-metadata': 'Issue #264: Namespace imports ({ * as name }) not implemented',
-    'data-assignment-pipeline': 'Needs investigation - newline normalization issue',
-    'pipeline-array-data': 'Needs investigation - whitespace in output',
-    'run-run-code-bracket-nesting': 'Python/sh not supported yet - only JS/Node/Bash',
-    // Module import tests that need published modules
-    'data-object-strings-array-functions': 'Issue #254: Registry tests need isolation - @mlld/array not published yet',
-    // Bracket notation tests - skipped until grammar issue resolved
-    'bracket-notation-comprehensive': 'Issue #306: Bracket notation field access lost in grammar parsing pipeline',
-    // Tests that require @time module
-    'now-lowercase-basic': 'Requires @time module to be installed',
-    'now-enhanced-formats': 'Requires @time module to be installed',
-  };
+  // Skip tests already defined at module level
 
   // Separate fixtures into categories for better reporting
   const invalidFixtures: Array<{ file: string; fixture: any; issue: string }> = [];

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync } from 'fs';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -28,13 +28,17 @@ if (!existsSync(join(projectRoot, parserFile))) {
 }
 
 // Now run the AST command with any arguments passed
-const args = process.argv.slice(2).join(' ');
+const args = process.argv.slice(2);
 try {
-  execSync(`node ./scripts/ast-output.js ${args}`, { 
+  // Use spawnSync to avoid shell interpretation of special characters
+  const result = spawnSync('node', ['./scripts/ast-output.js', ...args], { 
     stdio: 'inherit',
-    cwd: projectRoot,
-    shell: true
+    cwd: projectRoot
   });
+  
+  if (result.status !== 0) {
+    process.exit(result.status || 1);
+  }
 } catch (error) {
   process.exit(1);
 }

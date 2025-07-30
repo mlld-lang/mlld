@@ -267,7 +267,7 @@ describe('Semantic Tokens', () => {
     });
     
     it('should highlight file references with sections', async () => {
-      const code = '/var @intro = `<docs.md # Introduction>`';
+      const code = '/var @intro = <docs.md # Introduction>';
       const tokens = await getSemanticTokens(code);
       
       const alligator = tokens.find(t => t.tokenType === 'alligator');

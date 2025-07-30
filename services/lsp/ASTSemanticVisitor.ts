@@ -100,6 +100,10 @@ export class ASTSemanticVisitor {
         this.visitFileReference(node);
         break;
         
+      case 'load-content':
+        this.visitLoadContent(node);
+        break;
+        
       case 'BinaryExpression':
       case 'UnaryExpression':
         this.visitOperator(node);
@@ -250,6 +254,15 @@ export class ASTSemanticVisitor {
     if (directive.meta?.wrapperType) {
       // This is a template-like value
       this.visitTemplateValue(directive);
+    } else if (values.variable) {
+      // Handle /show @var directives
+      if (Array.isArray(values.variable)) {
+        for (const varRef of values.variable) {
+          this.visitNode(varRef);
+        }
+      } else {
+        this.visitNode(values.variable);
+      }
     } else if (values.command) {
       this.visitCommand(values.command);
     } else if (values.expression) {
@@ -529,7 +542,7 @@ export class ASTSemanticVisitor {
     // Get the actual text from the document to ensure we have the right syntax
     const actualText = this.document.getText({
       start: { line: node.location.start.line - 1, character: node.location.start.column - 1 },
-      end: { line: node.location.end.line - 1, character: node.location.end.column }
+      end: { line: node.location.end.line - 1, character: node.location.end.column - 1 }
     });
     
     // Check if we're in an interpolation context (templates, etc)
@@ -584,6 +597,35 @@ export class ASTSemanticVisitor {
     }
   }
   
+  visitLoadContent(node: any): void {
+    if (!node.location) return;
+    
+    const ctx = this.currentContext;
+    
+    // Add token for the entire file reference
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: node.location.end.column - node.location.start.column,
+      tokenType: 'alligator',
+      modifiers: []
+    });
+    
+    // If it has a section, add a separate token for that
+    if (node.options?.section?.identifier) {
+      const sectionNode = node.options.section.identifier;
+      if (sectionNode.location) {
+        this.addToken({
+          line: sectionNode.location.start.line - 1,
+          char: sectionNode.location.start.column - 1,
+          length: sectionNode.location.end.column - sectionNode.location.start.column,
+          tokenType: 'section',
+          modifiers: []
+        });
+      }
+    }
+  }
+  
   visitFileReference(node: any): void {
     if (!node.location) return;
     
@@ -599,8 +641,8 @@ export class ASTSemanticVisitor {
         tokenType: 'xmlTag',
         modifiers: []
       });
-    } else if (ctx.interpolationAllowed && ctx.variableStyle === '@var') {
-      // File reference with alligator syntax
+    } else {
+      // File reference with alligator syntax (in any other context)
       this.addToken({
         line: node.location.start.line - 1,
         char: node.location.start.column - 1,
@@ -676,8 +718,23 @@ export class ASTSemanticVisitor {
     const operatorText = Array.isArray(node.operator) ? node.operator[0] : node.operator;
     
     if (operatorText) {
-      // Calculate operator position - it should be between left and right operands
-      if (node.left && node.right) {
+      // Handle UnaryExpression (e.g., !@var)
+      if (node.type === 'UnaryExpression' && node.operand) {
+        // For unary operators, the operator is at the start
+        this.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column - 1,
+          length: operatorText.length,
+          tokenType: 'operator',
+          modifiers: []
+        });
+        
+        // Visit the operand
+        this.visitNode(node.operand);
+      }
+      // Handle BinaryExpression (e.g., @a && @b)
+      else if (node.left && node.right) {
+        // Calculate operator position - it should be between left and right operands
         const operatorStart = node.left.location.end.column;
         
         this.addToken({
@@ -687,12 +744,12 @@ export class ASTSemanticVisitor {
           tokenType: 'operator',
           modifiers: []
         });
+        
+        // Visit operands
+        this.visitNode(node.left);
+        this.visitNode(node.right);
       }
     }
-    
-    // Visit operands
-    if (node.left) this.visitNode(node.left);
-    if (node.right) this.visitNode(node.right);
   }
   
   visitLiteral(node: any): void {

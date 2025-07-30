@@ -68,10 +68,10 @@ async function readSource() {
 // ---------- shell escaping detection ----------
 function detectShellEscapingIssues(source, error) {
   // Check for common shell-problematic characters
-  const problematicChars = ['[', ']', '{', '}', '(', ')', '|', '&', ';', '<', '>', '`', '$', '"', "'", '\n', '\r'];
+  const problematicChars = ['!', '[', ']', '{', '}', '(', ')', '|', '&', ';', '<', '>', '`', '$', '"', "'", '\n', '\r'];
   const hasProblematicChars = problematicChars.some(char => source.includes(char));
   
-  // Check if error is about unclosed brackets/arrays/objects
+  // Check if error is about unclosed brackets/arrays/objects or syntax errors that might be shell-related
   const unclosedPatterns = [
     'Unclosed array',
     'Unclosed object',
@@ -82,12 +82,33 @@ function detectShellEscapingIssues(source, error) {
     '/var:',
     '/exe:',
     'command not found',
-    'Missing content in /show directive'
+    'Missing content in /show directive',
+    'Expected end of input',
+    'Expected "=>"',
+    'but "!" found',
+    'syntax error near unexpected token',
+    'Missing value in /var directive',
+    'No such file or directory'
   ];
   
   const isLikelyShellIssue = unclosedPatterns.some(pattern => 
     error.message?.includes(pattern) || error.toString().includes(pattern)
   );
+  
+  // Also check for specific negation operator issues
+  if (source.includes('!') && (error.message?.includes('but "!" found') || error.message?.includes('Expected'))) {
+    return true;
+  }
+  
+  // Check for backtick command substitution issues
+  if (source.includes('`') && (error.message?.includes('command not found') || error.message?.includes('No such file') || error.message?.includes('Missing value'))) {
+    return true;
+  }
+  
+  // Check for shell syntax errors from parentheses
+  if (source.includes('(') && error.toString().includes('syntax error near unexpected token')) {
+    return true;
+  }
   
   return hasProblematicChars && isLikelyShellIssue;
 }

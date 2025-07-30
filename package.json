@@ -59,6 +59,7 @@
     "test:coverage": "vitest run --coverage",
     "test:examples": "INCLUDE_EXAMPLES=true vitest run interpreter/interpreter.fixture.test.ts",
     "test:ast": "npx vitest run core/ast",
+    "parseperf": "vitest run tests/ast-cli-validation.test.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "lint:ast": "eslint interpreter/**/*.ts core/**/*.ts api/**/*.ts",
