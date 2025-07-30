@@ -1,114 +1,127 @@
 ---
-updated: 2025-07-29
-tags: #editors, #syntax, #tooling
-related-docs: docs/dev/LANGUAGE-SERVER.md
-related-code: grammar/syntax-generator/build-syntax.js
+updated: 2025-07-30
+tags: #editors, #syntax, #lsp, #semantic-tokens
+related-docs: docs/dev/LANGUAGE-SERVER.md, editors/HIGHLIGHTING.md
+related-code: grammar/syntax-generator/build-syntax.js, services/lsp/ASTSemanticVisitor.ts
+related-types: services/lsp/ASTSemanticVisitor { TokenInfo, VisitorContext }
 ---
 
 # mlld Editor Support
 
 ## tldr
 
-Editor extensions for mlld. Syntax highlighting auto-generated from grammar. Install with `npm run install:editors` or individually per editor.
+mlld provides two levels of editor support: basic TextMate grammars for regex-based highlighting and a full Language Server Protocol implementation with semantic tokens. For the best experience, use VSCode or Neovim with LSP enabled.
 
 ```mld
->> mlld with proper syntax highlighting
-/var @result = @a && @b || !@c
-/var @greeting = when: [
-  @time < 12 => "Morning"
-  true => "Evening"
-]
-/run js {
-  // JavaScript highlighting in code blocks
-  console.log("Hello, @name!");
-}
+>> mlld with semantic highlighting knows context
+/var @msg = `Hello @name!`     >> @name highlighted as interpolation
+/var @ref = @name               >> @name highlighted as variable reference
+/var @data = {"user": @name}    >> @name highlighted as variable reference
+/run {echo "@name"}             >> @name highlighted as interpolation
 ```
 
 ## Principles
 
-- Single source of truth - All syntax derived from Peggy grammar
-- Zero manual editing - Generated files overwritten on build
-- Language embedding - Code blocks use native language highlighting
-- Consistent tokens - Same highlighting across VSCode, Vim, and web
+- LSP is the primary solution - Semantic tokens provide context-aware highlighting
+- TextMate grammars are "good enough" - Basic highlighting for non-LSP editors
+- Parser is the source of truth - LSP uses the real AST, not regex patterns
+- Pragmatic over perfect - Ship working features, iterate on edge cases
 
 ## Details
 
-### Syntax Generation
+### Language Server Protocol (LSP)
 
+The mlld LSP provides intelligent features through semantic tokens:
+
+**Semantic Token Types**:
+- `directive` - /var, /show, /run, etc.
+- `variable` - Variable declarations with @
+- `variableRef` - Variable references
+- `interpolation` - Variables in templates/commands
+- `template` - Template delimiters (backticks, ::, :::)
+- `operator` - Logical, comparison, ternary operators
+- `embedded` - Language identifiers (js, python, etc.)
+- `embeddedCode` - Code regions for syntax injection
+- `alligator` - File references <file.md>
+- `property` - Object property access
+
+**Context Awareness**:
+- Different highlighting for @var in templates vs directives
+- Triple-colon templates use {{var}}, others use @var
+- Single quotes never interpolate
+- Commands allow @var interpolation
+
+**Starting the LSP**:
 ```bash
-# Force regenerate all syntax files
-FORCE_SYNTAX_BUILD=true npm run build:syntax
-
-# Normal build includes syntax generation
-npm run build:grammar
+mlld language-server    # or mlld lsp
 ```
 
-Generator extracts from grammar:
-- Directives from `ReservedDirective` rule
-- Operators, keywords, and patterns from token definitions
-- Embedded language blocks (js/python/bash)
+**Editor Configuration**:
+- VSCode: Automatic with extension
+- Neovim: Configure built-in LSP client
+- Vim: Use coc.nvim or vim-lsp
 
-### Supported Syntax
+### TextMate Grammars
 
-**New in rc29-rc30**:
-- Logical operators: `&&`, `||`, `!`
-- Comparison: `==`, `!=`, `<`, `>`, `<=`, `>=`
-- Ternary: `? :`
-- When expressions: `when: [...] =>`
-- Alligator syntax: `<file.md>`
-- Triple colons: `:::...:::`
-- Embedded languages: `js {...}`, `python {...}`, `bash {...}`
+Basic syntax highlighting for editors without LSP support:
 
-### File Structure
-
+**Generation**:
+```bash
+npm run build:syntax              # Normal build
+FORCE_SYNTAX_BUILD=true npm run build:syntax  # Force regenerate
 ```
-editors/
-├── vscode/syntaxes/      # TextMate grammars
-├── vim/syntax/           # Vim syntax files
-└── textmate/             # Generic TextMate bundle
 
-grammar/
-├── syntax-generator/
-│   └── build-syntax.js   # Generator script
-└── generated/            # Output files
-```
+**Coverage**:
+- Directives and keywords
+- Basic variable highlighting (no context)
+- Comment syntax
+- String literals
+
+**Limitations**:
+- Can't distinguish interpolation contexts
+- No semantic understanding
+- May highlight invalid syntax
 
 ### Installation
 
-**VSCode/Cursor**:
+**VSCode/Cursor** (Best Experience):
 ```bash
-npm run install:vscode  # or install:cursor
-# OR: Install from marketplace / VSIX
+npm run install:vscode
+# Extension provides LSP + TextMate fallback
 ```
 
-**Vim/Neovim**:
+**Neovim** (LSP Support):
+```lua
+-- In init.lua
+require'lspconfig'.mlld_ls.setup{
+  cmd = {"mlld", "language-server"},
+  filetypes = {"mld", "mlld"}
+}
+```
+
+**Vim** (Basic Highlighting):
 ```bash
 npm run install:vim
-# OR: Manual copy to ~/.vim/
-```
-
-**All editors**:
-```bash
-npm run install:editors
+# Or use coc.nvim for LSP support
 ```
 
 ## Gotchas
 
-- NEVER edit files in `syntaxes/` or `syntax/` - regenerated on build
-- Language embedding requires base language support (JS/Python/Bash)
-- VSCode needs reload after extension changes
-- Vim needs `:syntax on` and may need `:set ft=mlld`
+- TextMate grammars CANNOT handle context-sensitive syntax correctly
+- Embedded language blocks marked as regions, actual highlighting by editor
+- Parser location quirks documented in ASTSemanticVisitor.ts
+- Primitive values in objects/arrays lack individual highlighting
+- Template delimiters in object values skipped to avoid position guessing
 
 ## Debugging
 
-**Syntax not working**:
-1. Check file extension is `.mld` or `.mlld`
-2. Verify syntax files were generated: `ls editors/vscode/syntaxes/`
-3. Force rebuild: `FORCE_SYNTAX_BUILD=true npm run build:syntax`
-4. Reload editor/window
+**LSP Issues**:
+- Check language server running: `ps aux | grep mlld`
+- Enable debug: `DEBUG=mlld:lsp mlld lsp`
+- Verify semantic tokens in editor developer tools
 
-**Adding new syntax**:
-1. Update grammar in `grammar/patterns/` or `grammar/directives/`
-2. Add to `ReservedDirective` if new directive
-3. Update patterns in `build-syntax.js`
-4. Rebuild and test
+**Highlighting Issues**:
+- For best results, use editor with LSP support
+- TextMate highlighting is basic by design
+- Check file extension (.mld or .mlld)
+- Reload editor after changes

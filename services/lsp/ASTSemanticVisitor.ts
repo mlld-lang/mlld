@@ -35,6 +35,7 @@ export class ASTSemanticVisitor {
   private contextStack: VisitorContext[] = [{}];
   private tokenTypes: string[];
   private tokenModifiers: string[];
+  private textCache = new Map<string, string>();
   
   constructor(
     private document: TextDocument,
@@ -78,7 +79,20 @@ export class ASTSemanticVisitor {
     return false;
   }
   
+  private getCachedText(start: Position, end: Position): string {
+    // String key is simple and readable; could optimize with numeric key for performance
+    // e.g., const key = (start.line << 16) | start.character; // for single-line ranges
+    const key = `${start.line}:${start.character}-${end.line}:${end.character}`;
+    if (!this.textCache.has(key)) {
+      this.textCache.set(key, this.document.getText({ start, end }));
+    }
+    return this.textCache.get(key)!;
+  }
+  
   visitAST(ast: any[]): void {
+    // Clear cache at start to prevent unbounded growth for large documents
+    this.textCache.clear();
+    
     for (const node of ast) {
       this.visitNode(node);
     }
@@ -578,10 +592,10 @@ export class ASTSemanticVisitor {
   visitStringLiteral(node: any): void {
     if (!node.location) return;
     
-    const text = this.document.getText({
-      start: { line: node.location.start.line - 1, character: node.location.start.column - 1 },
-      end: { line: node.location.end.line - 1, character: node.location.end.column }
-    });
+    const text = this.getCachedText(
+      { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+      { line: node.location.end.line - 1, character: node.location.end.column }
+    );
     
     // Check if it's a single-quoted string (literal)
     const isSingleQuoted = text.startsWith("'") && text.endsWith("'");
@@ -675,14 +689,16 @@ export class ASTSemanticVisitor {
       // Not in template/interpolation context - regular variable reference
       if (valueType === 'varIdentifier' || valueType === 'varInterpolation') {
         // Highlight the base variable
-        const actualText = this.document.getText({
-          start: { line: node.location.start.line - 1, character: node.location.start.column - 1 },
-          end: { line: node.location.start.line - 1, character: node.location.start.column - 1 + baseLength }
-        });
+        const actualText = this.getCachedText(
+          { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+          { line: node.location.start.line - 1, character: node.location.start.column - 1 + baseLength }
+        );
         
-        // Check if AST location includes the '@' or not
-        // For field access variables, it seems to not include it
-        // For standalone variables, it might include it
+        // AST Location Quirk: The parser has inconsistent behavior with @ symbol inclusion
+        // - Standalone variables: Location includes the @ symbol
+        // - Field access variables: Location does NOT include the @ symbol
+        // This is a known parser issue that should ideally be fixed in the grammar
+        // TODO: Fix this in the parser for consistent AST locations
         const needsAtAdjustment = node.fields && node.fields.length > 0;
         const charPos = node.location.start.column - 1 - (needsAtAdjustment ? 1 : 0);
         
@@ -940,10 +956,10 @@ export class ASTSemanticVisitor {
       tokenType = 'null';
     } else if (valueType === 'string') {
       // String literals - check the source to see if single quoted
-      const text = this.document.getText({
-        start: { line: node.location.start.line - 1, character: node.location.start.column - 1 },
-        end: { line: node.location.end.line - 1, character: node.location.end.column }
-      });
+      const text = this.getCachedText(
+        { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+        { line: node.location.end.line - 1, character: node.location.end.column }
+      );
       
       if (text.startsWith("'") && text.endsWith("'")) {
         modifiers.push('literal');
@@ -1152,27 +1168,21 @@ export class ASTSemanticVisitor {
     if (!node.location) return;
     
     // ExecInvocation nodes now have their own location
-    // Extract the full text to tokenize properly
-    const text = this.document.getText({
-      start: { line: node.location.start.line - 1, character: node.location.start.column - 1 },
-      end: { line: node.location.end.line - 1, character: node.location.end.column - 1 }
-    });
-    
     // For @exec(@cmd), we want to highlight the function name part
     if (node.commandRef && node.commandRef.name) {
       const name = node.commandRef.name;
       
-      // Find where the function name starts (after @)
-      const atIndex = text.indexOf('@');
-      if (atIndex !== -1) {
-        this.addToken({
-          line: node.location.start.line - 1,
-          char: node.location.start.column - 1 + atIndex,
-          length: name.length + 1, // +1 for @
-          tokenType: 'variableRef',
-          modifiers: ['reference']
-        });
-      }
+      // ExecInvocation always starts with @ for the function name
+      // The @ is always at the start of the ExecInvocation location
+      const charPos = node.location.start.column - 1;
+      
+      this.addToken({
+        line: node.location.start.line - 1,
+        char: charPos,
+        length: name.length + 1, // +1 for @
+        tokenType: 'variableRef',
+        modifiers: ['reference']
+      });
       
       // Visit arguments if any
       if (node.commandRef.args && Array.isArray(node.commandRef.args)) {
@@ -1470,10 +1480,10 @@ export class ASTSemanticVisitor {
   visitObjectExpression(node: any): void {
     if (!node.location) return;
     
-    const text = this.document.getText({
-      start: { line: node.location.start.line - 1, character: node.location.start.column - 1 },
-      end: { line: node.location.end.line - 1, character: node.location.end.column - 1 }
-    });
+    const text = this.getCachedText(
+      { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+      { line: node.location.end.line - 1, character: node.location.end.column - 1 }
+    );
     
     // Highlight opening brace
     this.addToken({
@@ -1496,40 +1506,16 @@ export class ASTSemanticVisitor {
       for (const [key, value] of Object.entries(node.properties)) {
         if (typeof value === 'object' && value !== null && value.type) {
           // This is an AST node (mlld construct)
+          // Objects and arrays don't create interpolation contexts
+          // @varRef in object values is a regular reference, not interpolation
           this.visitNode(value);
         } else if (typeof value === 'object' && value !== null && value.content) {
           // This might be a wrapped string literal or template
           if (value.wrapperType) {
-            // This is a template value - we need to add template delimiters
-            // Find the position of this property value in the object text
-            // For now, we'll handle backtick templates
-            if (value.wrapperType === 'backtick' && Array.isArray(value.content) && value.content.length > 0) {
-              // Get the first content node to estimate position
-              const firstContent = value.content[0];
-              if (firstContent.location) {
-                // Add opening backtick
-                this.addToken({
-                  line: firstContent.location.start.line - 1,
-                  char: firstContent.location.start.column - 2, // -1 for 0-based, -1 for backtick
-                  length: 1,
-                  tokenType: 'template',
-                  modifiers: []
-                });
-              }
-              
-              // Get the last content node for closing position
-              const lastContent = value.content[value.content.length - 1];
-              if (lastContent.location) {
-                // Add closing backtick
-                this.addToken({
-                  line: lastContent.location.end.line - 1,
-                  char: lastContent.location.end.column - 1, // Position after last content
-                  length: 1,
-                  tokenType: 'template',
-                  modifiers: []
-                });
-              }
-            }
+            // This is a template value with content nodes
+            // NOTE: We don't have exact delimiter positions in object values
+            // The AST only provides content node locations, not delimiter locations
+            // Skip delimiter tokenization to avoid incorrect position guessing
             
             // Process template content with proper context
             this.pushContext({
@@ -1572,10 +1558,10 @@ export class ASTSemanticVisitor {
   visitArrayExpression(node: any): void {
     if (!node.location) return;
     
-    const text = this.document.getText({
-      start: { line: node.location.start.line - 1, character: node.location.start.column - 1 },
-      end: { line: node.location.end.line - 1, character: node.location.end.column - 1 }
-    });
+    const text = this.getCachedText(
+      { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+      { line: node.location.end.line - 1, character: node.location.end.column - 1 }
+    );
     
     // Highlight opening bracket
     this.addToken({

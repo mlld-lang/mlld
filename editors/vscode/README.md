@@ -52,12 +52,19 @@ Use mlld to create a daily standup update based on your recent activity:
 
 ### Syntax Highlighting
 
+Advanced semantic highlighting powered by the Language Server Protocol:
+
+- **Context-aware highlighting**: Variables highlighted differently based on usage (declaration vs reference vs interpolation)
 - **Directives**: `/var`, `/show`, `/run`, `/exe`, `/import`, `/when`, `/output`, `/path`
-- **Variables**: `@variableName` with field access (`@user.name`)
+- **Variables**: `@variableName` with field access (`@user.name`) and array indexing (`@items[0]`)
 - **Operators**: `&&`, `||`, `==`, `!=`, `!`, `?:`, `>`, `<`, `>=`, `<=`
-- **Templates**: Backticks (`` `text @var` ``), double colons (`::text @var::`), triple colons (`:::text {{var}}:::`)
+- **Templates**: 
+  - Backticks (`` `text @var` ``) - @var interpolation
+  - Double colons (`::text @var::`) - @var interpolation
+  - Triple colons (`:::text {{var}}:::`) - {{var}} interpolation
+- **File references**: `<file.md>` with alligator syntax highlighting
 - **Comments**: `>> Comment text`
-- **Embedded code**: JavaScript, Python, Shell with proper syntax highlighting
+- **Embedded code**: JavaScript, Python, Shell with proper syntax highlighting and region marking
 
 ### Intelligent Language Server
 
@@ -233,6 +240,14 @@ The extension automatically updates syntax definitions from the mlld grammar. If
 - [Report Issues](https://github.com/mlld-lang/mlld/issues)
 
 ## Release Notes
+
+### 0.5.0
+- Semantic tokens support for context-aware highlighting
+- Different highlighting for variable declarations, references, and interpolations
+- Template-specific interpolation rules
+- Field access and array indexing highlighting
+- Embedded language region marking
+- Performance optimizations with caching
 
 ### 0.4.0
 - Added operator support (&&, ||, ==, !=, !, ?:, comparisons)

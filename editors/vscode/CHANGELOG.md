@@ -2,6 +2,26 @@
 
 All notable changes to the "mlld-vscode" extension will be documented in this file.
 
+## [0.5.0] - 2025-01-30
+
+### Added
+- **Semantic Tokens Support**: Full semantic highlighting via Language Server Protocol
+  - Context-aware variable highlighting (declarations vs references vs interpolations)
+  - Template-specific interpolation rules (backtick/double-colon use @var, triple-colon uses {{var}})
+  - Command content interpolation with @variable support
+  - Field access and array indexing highlighting (@user.profile.name, @items[0])
+  - Operator tokens for logical (&&, ||, !), comparison (==, !=, <, >), and ternary (? :)
+  - Embedded language region marking for proper syntax injection
+  - Alligator syntax highlighting for file references (<file.md>)
+  - Property access highlighting in objects
+- Performance optimizations with text caching in semantic tokens provider
+- Better error recovery for partial ASTs
+
+### Changed
+- Language server now provides semantic tokens for enhanced highlighting
+- Improved context tracking for different template types
+- Better handling of mlld constructs within arrays and objects
+
 ## [0.4.0] - 2025-01-08
 
 ### Changed

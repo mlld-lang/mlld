@@ -352,7 +352,7 @@ describe('Semantic Tokens', () => {
     });
 
     it('highlights pattern matching arrow operator', async () => {
-      const code = `/when @status => /show "Processing"`; // mlld doesn't support block form yet
+      const code = `/when @status => /show "Processing"`;
       const tokens = await getSemanticTokens(code);
       
       // Check for arrow operator
@@ -458,9 +458,8 @@ describe('Semantic Tokens', () => {
       const code = '/var @config = {"message": `Hello @name!`, "count": @total}';
       const tokens = await getSemanticTokens(code);
       
-      // Check template delimiters
-      const templates = tokens.filter(t => t.tokenType === 'template');
-      expect(templates).toHaveLength(2); // Opening and closing backticks
+      // NOTE: Template delimiters in object values don't have exact positions in AST
+      // so we don't tokenize them (avoiding position guessing per architect feedback)
       
       // Check interpolation inside template
       expect(tokens).toContainEqual(expect.objectContaining({

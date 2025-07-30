@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enhanced error display with source context**: Errors now show the exact source location with surrounding context and a visual pointer
   - Compiler-style error messages with line numbers and caret indicators pointing to the precise error location
 
+- **LSP Semantic Tokens Support**: Full semantic highlighting via Language Server Protocol
+  - Context-aware highlighting for all template types (backtick, double-colon, triple-colon)
+  - Proper interpolation detection based on template context (@var vs {{var}})
+  - Command content interpolation with @variable support
+  - Field access and array indexing highlighting (@user.profile.name, @items[0])
+  - Embedded language region marking for editor syntax injection
+  - Mixed array/object support - highlights mlld constructs within data structures
+  - Operator highlighting for logical (&&, ||, !), comparison (==, !=, <, >), and ternary (? :)
+  - Error recovery and graceful handling of partial ASTs
+  - Performance optimizations with text caching
+  - Available in VSCode and any LSP-compatible editor (Neovim, etc.)
+
 ## [2.0.0-rc30]
 
 This release allows mlld to function as a logical router
