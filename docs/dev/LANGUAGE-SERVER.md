@@ -10,6 +10,7 @@ The language server implements the Language Server Protocol (LSP) to provide:
 - Hover information
 - Go-to-definition
 - Multi-file analysis
+- Semantic syntax highlighting
 
 ## Installation
 
@@ -44,16 +45,15 @@ mlld lsp
 The server provides context-aware completions for:
 
 #### Directives
-After typing `@`, suggests available directives:
-- `@text` - Define text variables
-- `@data` - Define structured data
-- `@path` - Define file paths
-- `@run` - Execute commands
-- `@exec` - Define reusable commands
-- `@add` - Add content to output
-- `@import` - Import from files/modules
-- `@when` - Conditional execution
-- `@url` - Define URLs
+After typing `/`, suggests available directives:
+- `/var` - Define variables (replaces /text, /data)
+- `/show` - Display content (replaces /add)
+- `/path` - Define file paths
+- `/run` - Execute commands
+- `/exe` - Define reusable commands (replaces /exec)
+- `/import` - Import from files/modules
+- `/when` - Conditional execution
+- `/output` - Define output target
 
 #### Variables
 - After `@` - suggests defined variables with `@` prefix
@@ -87,36 +87,81 @@ The server tracks:
 - Variable definitions across files
 - Export declarations
 
+### 6. Semantic Tokens (Syntax Highlighting)
+
+The language server provides semantic tokens for accurate syntax highlighting that understands context:
+
+#### Highlighted Elements
+- **Directives** - `/var`, `/show`, `/run`, etc.
+- **Variables** - Declaration vs reference distinction
+- **Templates** - Different template types with proper interpolation rules:
+  - Backtick templates with `@var` interpolation
+  - Double-colon templates `::...::` with `@var` interpolation
+  - Triple-colon templates `:::...:::` with `{{var}}` interpolation
+  - Single quotes as literal strings (no interpolation)
+- **Operators** - Logical (`&&`, `||`, `!`), comparison (`==`, `>`, etc.), ternary (`?:`)
+- **File References** - Alligator syntax `<file.md>` (except in triple-colon where it's XML)
+- **Embedded Languages** - Regions marked for `js`, `python`, `sh` code blocks
+- **Comments** - Both `>>` and `<<` comment styles
+- **Data Structures** - Arrays and objects with mlld constructs properly highlighted
+- **Field Access** - Dot notation (`@user.name`) and array indexing (`@items[0]`)
+
+#### Context-Aware Highlighting
+The semantic tokens understand mlld's complex interpolation rules:
+- `@var` in templates is highlighted as interpolation
+- `@var` outside templates is highlighted as variable reference
+- Single quotes never interpolate
+- Command contexts (`/run {echo "@name"}`) support interpolation
+- Objects and arrays preserve mlld constructs as full AST nodes
+
 ## Editor Integration
 
 ### VSCode
 
-The mlld VSCode extension (in `editors/vscode`) can be configured to use the language server:
+The mlld VSCode extension automatically uses the language server when installed. Semantic highlighting provides superior syntax highlighting compared to the TextMate grammar, with full context awareness.
 
-```json
-{
-  "mlld.languageServer.enable": true,
-  "mlld.languageServer.path": "mlld",
-  "mlld.languageServer.arguments": ["language-server"]
-}
-```
+To ensure you're using the language server:
+1. Install the mlld VSCode extension
+2. The extension will automatically start the language server
+3. Semantic tokens will provide accurate, context-aware highlighting
 
 ### Neovim
 
 Configure the built-in LSP client in your Neovim config:
 
 ```lua
-require'lspconfig'.mlld_ls.setup{
-  cmd = {"mlld", "language-server"},
-  filetypes = {"mlld", "mld"},
-  root_dir = require'lspconfig'.util.root_pattern("mlld.config.json", ".git"),
-  settings = {
-    mlldLanguageServer = {
-      maxNumberOfProblems = 100,
-      enableAutocomplete = true
+-- Define the mlld language server config
+local lspconfig = require('lspconfig')
+local configs = require('lspconfig.configs')
+
+if not configs.mlld_ls then
+  configs.mlld_ls = {
+    default_config = {
+      cmd = {'mlld', 'language-server'},
+      filetypes = {'mld', 'mlld'},
+      root_dir = lspconfig.util.root_pattern('mlld.lock.json', '.git'),
+      settings = {
+        mlldLanguageServer = {
+          maxNumberOfProblems = 100,
+          enableAutocomplete = true
+        }
+      }
     }
   }
-}
+end
+
+-- Enable the server
+lspconfig.mlld_ls.setup{}
+
+-- Enable semantic tokens for highlighting (Neovim 0.9+)
+vim.api.nvim_create_autocmd('LspAttach', {
+  callback = function(args)
+    local client = vim.lsp.get_client_by_id(args.data.client_id)
+    if client.name == 'mlld_ls' and client.server_capabilities.semanticTokensProvider then
+      vim.lsp.semantic_tokens.start(args.buf, args.data.client_id)
+    end
+  end,
+})
 ```
 
 ### Other Editors
@@ -146,27 +191,44 @@ The server maintains:
 - Open document tracking
 - Incremental document synchronization
 - Parse result caching
+- Semantic token generation
 
 ### Analysis Pipeline
 
 1. **Parse** - Use mlld grammar to parse documents
 2. **Analyze** - Extract variables, imports, exports
-3. **Cache** - Store analysis results for performance
-4. **Update** - Send diagnostics and update completions
+3. **Generate Tokens** - Create semantic tokens using AST visitor pattern
+4. **Cache** - Store analysis results and text extracts for performance
+5. **Update** - Send diagnostics, completions, and semantic tokens
 
 ### Performance
 
 - Incremental parsing on document changes
 - Cached analysis results
+- Text extraction caching for semantic tokens
 - Debounced validation
 - Lazy import resolution
+
+### Semantic Token Architecture
+
+The semantic token implementation uses:
+- **AST Visitor Pattern** - `ASTSemanticVisitor` traverses the parsed AST
+- **Context Stack** - Tracks template types, interpolation rules, and language contexts
+- **Shared Highlighting Rules** - Common rules between LSP and TextMate grammars
+- **Full AST Preservation** - mlld constructs in arrays/objects retain location information
 
 ## Development
 
 ### Running Tests
 
 ```bash
+# Test language server functionality
 npm test cli/commands/language-server.test.ts
+
+# Test semantic tokens implementation
+npm test tests/lsp/semantic-tokens.test.ts
+npm test tests/lsp/semantic-tokens-unit.test.ts
+npm test tests/lsp/highlighting-rules.test.ts
 ```
 
 ### Debugging
@@ -180,8 +242,18 @@ DEBUG=mlld:lsp mlld language-server
 
 1. Update type definitions in `language-server.ts`
 2. Implement handlers in `language-server-impl.ts`
-3. Add tests for new capabilities
-4. Update this documentation
+3. For semantic tokens:
+   - Update `ASTSemanticVisitor` in `services/lsp/`
+   - Add new token types/modifiers as needed
+   - Update shared highlighting rules in `core/highlighting/rules.ts`
+4. Add tests for new capabilities
+5. Update this documentation
+
+### Known Issues
+
+- **Parser Location Quirk**: The AST has inconsistent @ symbol inclusion for variable references with field access. This is handled with a workaround in the semantic visitor but should be fixed in the parser.
+- **Object Property Locations**: Plain JavaScript values in objects/arrays don't have location information, only mlld constructs do.
+- **Template Delimiters in Objects**: Exact delimiter positions aren't available for templates inside object values, so these aren't tokenized to avoid guessing.
 
 ## Troubleshooting
 
