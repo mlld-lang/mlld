@@ -397,13 +397,6 @@ describe('Semantic Tokens - Unit Tests', () => {
       const directives = tokens.filter(t => t.tokenType === 'directive');
       expect(directives).toHaveLength(3);
       
-      // Debug output
-      console.log('Nested context tokens:', tokens.map(t => ({
-        text: (t as any).text,
-        type: t.tokenType,
-        pos: `${t.line}:${t.char}`
-      })));
-      
       // Should have parameter in exe
       const params = tokens.filter(t => t.tokenType === 'parameter');
       expect(params.length).toBeGreaterThan(0);

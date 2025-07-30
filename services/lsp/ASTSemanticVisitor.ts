@@ -233,6 +233,13 @@ export class ASTSemanticVisitor {
           });
         }
       }
+      
+      // For /exe directives, also visit parameters
+      if (node.kind === 'exe' && node.values?.params) {
+        for (const param of node.values.params) {
+          this.visitNode(param);
+        }
+      }
     }
     
     // Process directive values with appropriate context
@@ -251,8 +258,21 @@ export class ASTSemanticVisitor {
     }
     
     // Handle based on the directive kind and meta info
-    if (directive.meta?.wrapperType) {
-      // This is a template-like value
+    if (directive.kind === 'exe' && values.template) {
+      // Handle /exe template content specially
+      this.pushContext({
+        templateType: 'backtick',
+        interpolationAllowed: true,
+        variableStyle: '@var'
+      });
+      
+      for (const node of values.template) {
+        this.visitNode(node);
+      }
+      
+      this.popContext();
+    } else if (directive.meta?.wrapperType) {
+      // This is a template-like value (for other directives)
       this.visitTemplateValue(directive);
     } else if (values.variable) {
       // Handle /show @var directives

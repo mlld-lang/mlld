@@ -17,7 +17,7 @@ export default defineConfig({
     },
     globals: true,
     include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**', '**/mlld-ast/**', '**/lib/**'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**', '**/mlld-ast/**', '**/lib/**', '**/tests/ast-perf.test.ts'],
     coverage: {
       reporter: ['text', 'json', 'html'],
       exclude: ['**/node_modules/**', '**/dist/**', '**/build/**']
