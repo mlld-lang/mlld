@@ -59,6 +59,7 @@
     "test:coverage": "vitest run --coverage",
     "test:examples": "INCLUDE_EXAMPLES=true vitest run interpreter/interpreter.fixture.test.ts",
     "test:ast": "npx vitest run core/ast",
+    "test:mlldx": "vitest run tests/ephemeral-mode.test.ts --config vitest.config.mlldx.mts",
     "parseperf": "vitest run tests/ast-perf.test.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

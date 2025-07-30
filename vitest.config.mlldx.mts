@@ -16,22 +16,11 @@ export default defineConfig({
       NODE_ENV: 'production'
     },
     globals: true,
-    include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    exclude: ['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**', '**/mlld-ast/**', '**/lib/**', '**/tests/ast-perf.test.ts', '**/tests/ephemeral-mode.test.ts'],
+    include: ['**/tests/ephemeral-mode.test.ts'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**'],
     coverage: {
       reporter: ['text', 'json', 'html'],
       exclude: ['**/node_modules/**', '**/dist/**', '**/build/**']
     }
-  },
-  /* // COMMENT OUT build section
-  build: {
-    target: 'esnext',
-    rollupOptions: {
-      external: ['peggy'],
-      output: {
-        format: 'esm'
-      }
-    }
   }
-  */
-}); 
+});
