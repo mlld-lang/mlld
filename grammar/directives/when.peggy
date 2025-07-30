@@ -1018,11 +1018,7 @@ WhenImplicitFunctionCall
         isCommandReference: true
       };
       
-      const invocation = {
-        type: 'ExecInvocation',
-        commandRef: ref,
-        withClause: tail || null
-      };
+      const invocation = helpers.createExecInvocation(ref, tail || null, location());
       
       return [helpers.createNode(NodeType.Directive, {
         kind: 'run',

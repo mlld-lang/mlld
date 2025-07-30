@@ -403,6 +403,7 @@ describe('Semantic Tokens', () => {
       );
       expect(varDecl).toBeDefined();
       
+      
       const varRef = tokens.find(t => 
         t.tokenType === 'variableRef' && t.modifiers.includes('reference')
       );

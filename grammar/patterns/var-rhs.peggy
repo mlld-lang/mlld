@@ -129,11 +129,7 @@ FieldAccessExecPattern "field access exec invocation"
         objectReference: objectRef
       };
       
-      return {
-        type: 'ExecInvocation',
-        commandRef: ref,
-        withClause: tail || null
-      };
+      return helpers.createExecInvocation(ref, tail || null, location());
     }
 
 // EXEC INVOCATION PATTERN - Matches @func() specifically
@@ -147,11 +143,7 @@ ExecInvocationPattern "exec invocation pattern"
         isCommandReference: true
       };
       
-      return {
-        type: 'ExecInvocation',
-        commandRef: ref,
-        withClause: tail || null
-      };
+      return helpers.createExecInvocation(ref, tail || null, location());
     }
 
 // Note: BracketAmbiguous removed - use ArrayLiteral for arrays, AlligatorExpression for file loading

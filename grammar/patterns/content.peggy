@@ -158,16 +158,14 @@ BacktickExecInvocation
       helpers.debug('BacktickExecInvocation matched', { name, args });
       
       // Create an exec invocation node
-      return {
-        type: 'ExecInvocation',
-        commandRef: {
-          name,
-          identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
-          args: args || [],
-          isCommandReference: true
-        },
-        withClause: null
+      const commandRef = {
+        name,
+        identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
+        args: args || [],
+        isCommandReference: true
       };
+      
+      return helpers.createExecInvocation(commandRef, null, location());
     }
 
 // Text inside backticks (excluding @ and < for interpolation)

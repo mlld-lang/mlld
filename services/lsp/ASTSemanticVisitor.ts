@@ -965,21 +965,29 @@ export class ASTSemanticVisitor {
   visitExecInvocation(node: any): void {
     if (!node.location) return;
     
-    // Highlight the function reference
-    if (node.nameLocation) {
-      this.addToken({
-        line: node.nameLocation.start.line - 1,
-        char: node.nameLocation.start.column - 1,
-        length: node.name?.length || 0,
-        tokenType: 'variableRef',
-        modifiers: ['reference']
-      });
-    }
-    
-    // Visit parameters
-    if (node.parameters) {
-      for (const param of node.parameters) {
-        this.visitNode(param);
+    // Based on AST, ExecInvocation has commandRef with identifier array
+    if (node.commandRef && node.commandRef.identifier && node.commandRef.identifier[0]) {
+      const identifierNode = node.commandRef.identifier[0];
+      const name = node.commandRef.name;
+      
+      if (identifierNode.location && name) {
+        // The @ is one character before the identifier location
+        const atPosition = identifierNode.location.start.column - 2; // -1 for 0-index, -1 for @
+        
+        this.addToken({
+          line: identifierNode.location.start.line - 1,
+          char: atPosition,
+          length: name.length + 1, // +1 for @
+          tokenType: 'variableRef',
+          modifiers: ['reference']
+        });
+      }
+      
+      // Visit arguments if any
+      if (node.commandRef.args && Array.isArray(node.commandRef.args)) {
+        for (const arg of node.commandRef.args) {
+          this.visitNode(arg);
+        }
       }
     }
   }

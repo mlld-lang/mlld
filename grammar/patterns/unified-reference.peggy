@@ -58,11 +58,7 @@ FieldAccessExec "field access exec invocation"
         objectReference: objectRef
       };
       
-      return {
-        type: 'ExecInvocation',
-        commandRef: ref,
-        withClause: tail || null
-      };
+      return helpers.createExecInvocation(ref, tail || null, location());
     }
 
 FieldAccessExecNoTail "field access exec invocation without tail"
@@ -118,11 +114,7 @@ SimpleExec "simple exec invocation"
         isCommandReference: true
       };
       
-      return {
-        type: 'ExecInvocation',
-        commandRef: ref,
-        withClause: tail || null
-      };
+      return helpers.createExecInvocation(ref, tail || null, location());
     }
 
 SimpleExecNoTail "simple exec invocation without tail"
