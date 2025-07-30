@@ -414,10 +414,10 @@ describe('Semantic Tokens - Unit Tests', () => {
       
       const tokens = await getSemanticTokens(code);
       
-      // Should have 'when' keyword
+      // Should have /when directive
       expectToken(tokens, {
-        text: 'when',
-        tokenType: 'keyword'
+        text: '/when',
+        tokenType: 'directive'
       });
       
       // Should have strings

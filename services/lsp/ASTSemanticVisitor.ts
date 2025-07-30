@@ -876,8 +876,47 @@ export class ASTSemanticVisitor {
   visitWhenDirective(node: any): void {
     // For when directives, we need to process condition and action
     if (node.values) {
-      // Visit condition (which may contain operators)
-      if (node.values.condition) {
+      // Handle block form (e.g., /when @var first: [...])
+      if (node.values.conditions && Array.isArray(node.values.conditions)) {
+        // Visit the variable being tested
+        if (node.values.variable) {
+          if (Array.isArray(node.values.variable)) {
+            for (const v of node.values.variable) {
+              this.visitNode(v);
+            }
+          } else {
+            this.visitNode(node.values.variable);
+          }
+        }
+        
+        // Visit each condition/action pair
+        for (const pair of node.values.conditions) {
+          // Visit condition
+          if (pair.condition) {
+            if (Array.isArray(pair.condition)) {
+              for (const cond of pair.condition) {
+                this.visitNode(cond);
+              }
+            } else {
+              this.visitNode(pair.condition);
+            }
+          }
+          
+          // Visit action
+          if (pair.action) {
+            if (Array.isArray(pair.action)) {
+              for (const action of pair.action) {
+                this.visitNode(action);
+              }
+            } else {
+              this.visitNode(pair.action);
+            }
+          }
+        }
+      }
+      // Handle simple form (e.g., /when @condition => action)
+      else if (node.values.condition) {
+        // Visit condition (which may contain operators)
         if (Array.isArray(node.values.condition)) {
           for (const cond of node.values.condition) {
             this.visitNode(cond);
@@ -885,40 +924,39 @@ export class ASTSemanticVisitor {
         } else {
           this.visitNode(node.values.condition);
         }
-      }
-      
-      // Handle the => arrow operator
-      // It's typically between condition and action
-      if (node.values.condition && node.values.action) {
-        const conditionEnd = Array.isArray(node.values.condition) 
-          ? node.values.condition[node.values.condition.length - 1].location?.end 
-          : node.values.condition.location?.end;
-        const actionStart = Array.isArray(node.values.action)
-          ? node.values.action[0].location?.start
-          : node.values.action.location?.start;
-          
-        if (conditionEnd && actionStart) {
-          // Find the arrow position (between condition end and action start)
-          const arrowChar = conditionEnd.column + 1; // Space after condition
-          
-          this.addToken({
-            line: conditionEnd.line - 1,
-            char: arrowChar - 1,
-            length: 2, // =>
-            tokenType: 'operator',
-            modifiers: []
-          });
-        }
-      }
-      
-      // Visit action
-      if (node.values.action) {
-        if (Array.isArray(node.values.action)) {
-          for (const action of node.values.action) {
-            this.visitNode(action);
+        
+        // Handle the => arrow operator
+        if (node.values.action) {
+          const conditionEnd = Array.isArray(node.values.condition) 
+            ? node.values.condition[node.values.condition.length - 1].location?.end 
+            : node.values.condition.location?.end;
+          const actionStart = Array.isArray(node.values.action)
+            ? node.values.action[0].location?.start
+            : node.values.action.location?.start;
+            
+          if (conditionEnd && actionStart) {
+            // Find the arrow position (between condition end and action start)
+            const arrowChar = conditionEnd.column + 1; // Space after condition
+            
+            this.addToken({
+              line: conditionEnd.line - 1,
+              char: arrowChar - 1,
+              length: 2, // =>
+              tokenType: 'operator',
+              modifiers: []
+            });
           }
-        } else {
-          this.visitNode(node.values.action);
+        }
+        
+        // Visit action
+        if (node.values.action) {
+          if (Array.isArray(node.values.action)) {
+            for (const action of node.values.action) {
+              this.visitNode(action);
+            }
+          } else {
+            this.visitNode(node.values.action);
+          }
         }
       }
     }
