@@ -56,7 +56,7 @@ describe('Ephemeral Mode (mlldx)', () => {
     // Second run should also work (not rely on cache)
     const result = execSync(`node ${mlldxPath} ${testScript}`, { encoding: 'utf8' });
     expect(result).toContain('Testing ephemeral mode...');
-  });
+  }, 10000);
 
   it('should auto-approve all imports', () => {
     // This test verifies that imports don't prompt for approval

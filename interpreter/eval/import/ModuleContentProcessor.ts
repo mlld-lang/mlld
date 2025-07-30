@@ -42,6 +42,9 @@ export class ModuleContentProcessor {
       // Read content from source
       const content = await this.readContentFromSource(resolvedPath, isURL);
 
+      // Cache the source content for error reporting
+      this.env.cacheSource(resolvedPath, content);
+
       // Validate security (including hash validation, but NOT circular imports since we're tracking now)
       await this.securityValidator.validateContentSecurity(resolution, content);
 
@@ -78,6 +81,9 @@ export class ModuleContentProcessor {
         console.log(`[ModuleContentProcessor] Content length: ${content.length}`);
         console.log(`[ModuleContentProcessor] Content preview: ${content.substring(0, 200)}`);
       }
+
+      // Cache the source content for error reporting
+      this.env.cacheSource(ref, content);
 
       // Parse content based on type
       const parseResult = await this.parseContentByType(content, ref, directive);

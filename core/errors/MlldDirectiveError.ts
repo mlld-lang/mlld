@@ -1,4 +1,5 @@
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
+import type { Environment } from '@interpreter/env/Environment';
 
 export interface DirectiveLocation {
   line: number;
@@ -12,6 +13,7 @@ export interface MlldDirectiveErrorOptions {
   cause?: Error;
   severity?: ErrorSeverity;
   context?: any;
+  env?: Environment;
 }
 
 export class MlldDirectiveError extends MlldError {
@@ -40,7 +42,9 @@ export class MlldDirectiveError extends MlldError {
         location: options.location 
       },
       // Pass location as sourceLocation
-      sourceLocation: options.location 
+      sourceLocation: options.location,
+      // Pass environment for source access
+      env: options.env
     });
     
     this.name = 'MlldDirectiveError';

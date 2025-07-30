@@ -109,6 +109,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Development mode flag
   private devMode: boolean = false;
   
+  // Source cache for error reporting
+  private sourceCache: Map<string, string> = new Map();
+  
   // File interpolation circular detection
   private interpolationStack: Set<string> = new Set();
   private enableFileInterpolation: boolean = true;
@@ -1663,6 +1666,36 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    */
   isTraceEnabled(): boolean {
     return this.traceEnabled;
+  }
+  
+  // --- Source Cache Methods ---
+  
+  /**
+   * Cache source content for error reporting
+   * @param filePath The file path to cache
+   * @param content The source content
+   */
+  cacheSource(filePath: string, content: string): void {
+    // Only cache in root environment to avoid duplication
+    if (this.parent) {
+      this.parent.cacheSource(filePath, content);
+    } else {
+      this.sourceCache.set(filePath, content);
+    }
+  }
+  
+  /**
+   * Retrieve cached source content for error reporting
+   * @param filePath The file path to retrieve
+   * @returns The cached source content or undefined
+   */
+  getSource(filePath: string): string | undefined {
+    // Check this environment first, then parent
+    const source = this.sourceCache.get(filePath);
+    if (source !== undefined) {
+      return source;
+    }
+    return this.parent?.getSource(filePath);
   }
   
   // --- ImportResolverContext Implementation ---

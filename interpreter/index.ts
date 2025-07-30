@@ -260,6 +260,13 @@ export async function interpret(
     await env.setEphemeralMode(options.ephemeral);
   }
   
+  // Cache the source content for error reporting
+  if (options.filePath) {
+    env.cacheSource(options.filePath, source);
+  } else {
+    env.cacheSource('<stdin>', source);
+  }
+  
   // Evaluate the AST
   await evaluate(ast, env);
   

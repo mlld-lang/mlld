@@ -1,5 +1,6 @@
 import { MlldError, ErrorSeverity } from './MlldError';
 import type { SourceLocation } from '@core/types';
+import type { Environment } from '@interpreter/env/Environment';
 
 export interface CommandExecutionDetails {
   command: string;
@@ -15,13 +16,15 @@ export class MlldCommandExecutionError extends MlldError {
   constructor(
     message: string,
     sourceLocation?: SourceLocation,
-    details?: CommandExecutionDetails
+    details?: CommandExecutionDetails,
+    env?: Environment
   ) {
     super(message, {
       code: 'COMMAND_EXECUTION_FAILED',
       severity: ErrorSeverity.Recoverable,
       sourceLocation,
-      details
+      details,
+      env
     });
   }
 
@@ -38,6 +41,7 @@ export class MlldCommandExecutionError extends MlldError {
       stderr?: string;
       workingDirectory: string;
       directiveType?: string;
+      env?: Environment;
     }
   ): MlldCommandExecutionError {
     const message = `Command execution failed: ${command}`;
@@ -50,6 +54,6 @@ export class MlldCommandExecutionError extends MlldError {
       stderr: additionalContext?.stderr,
       workingDirectory: additionalContext?.workingDirectory || process.cwd(),
       directiveType: additionalContext?.directiveType || 'run'
-    });
+    }, additionalContext?.env);
   }
 }
