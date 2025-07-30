@@ -21,6 +21,7 @@ website/_site/
 
 # Generated files
 core/version.ts
+core/errors/patterns/parse-errors.generated.js
 
 # IDE-generated JavaScript files in core/types
 core/types/*.js

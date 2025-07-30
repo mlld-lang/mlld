@@ -1,0 +1,1 @@
+/exe @api.users.list() = {echo "user1, user2, user3"}

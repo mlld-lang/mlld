@@ -508,10 +508,16 @@ async function processExampleDirectory(dirPath, category, name, directive = null
           expectedContent = await fs.readFile(path.join(dirPath, expectedFile), 'utf-8');
         }
       }
-    } else if (category === 'exceptions') {
-      // Look for error.md
-      if (files.includes('error.md')) {
-        errorContent = await fs.readFile(path.join(dirPath, 'error.md'), 'utf-8');
+    } else if (category === 'exceptions' || category === 'invalid') {
+      // For invalid tests, we'll generate the error by running the pattern
+      if (category === 'invalid') {
+        // We'll handle this after parsing when we have the parseError
+        errorContent = null; // Will be set later if we have a parse error
+      } else {
+        // For exceptions, still look locally
+        if (files.includes('error.md')) {
+          errorContent = await fs.readFile(path.join(dirPath, 'error.md'), 'utf-8');
+        }
       }
     } else if (category === 'warnings') {
       // Look for warning.md
@@ -544,6 +550,23 @@ async function processExampleDirectory(dirPath, category, name, directive = null
           message: error.message,
           location: error.location || null
         };
+        
+        // For invalid category, use error.md as the expected error
+        if (category === 'invalid') {
+          const errorMdPath = path.join(PROJECT_ROOT, 'errors', 'parse', name, 'error.md');
+          try {
+            errorContent = await fs.readFile(errorMdPath, 'utf-8');
+          } catch (readErr) {
+            // Try local error.md for tests without patterns
+            const localErrorPath = path.join(dirPath, 'error.md');
+            try {
+              errorContent = await fs.readFile(localErrorPath, 'utf-8');
+              console.warn(`  ⚠️  Using local error.md for ${name} - should have pattern in errors/parse/${name}/`);
+            } catch (localErr) {
+              console.warn(`  ⚠️  No error.md found for ${name}`);
+            }
+          }
+        }
       }
       
       // Note: Actual output generation will be handled by separate post-build script

@@ -55,6 +55,37 @@ describe('Mlld Interpreter - Fixture Tests', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
   
+  // Pattern matching for error messages with ${VARIABLE} placeholders
+  function matchErrorPattern(actualError: string, expectedPattern: string): { 
+    matches: boolean; 
+    variables?: Record<string, string>;
+    regex?: RegExp;
+  } {
+    const varNames: string[] = [];
+    
+    // Escape special regex chars except for ${VAR} patterns
+    let regexPattern = expectedPattern
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape everything
+      .replace(/\\\$\\\{(\w+)\\\}/g, (match, varName) => {
+        varNames.push(varName);
+        return '(.+?)'; // Non-greedy capture
+      });
+    
+    const regex = new RegExp('^' + regexPattern + '$');
+    const match = actualError.match(regex);
+    
+    if (!match) {
+      return { matches: false, regex };
+    }
+    
+    const variables: Record<string, string> = {};
+    varNames.forEach((name, i) => {
+      variables[name] = match[i + 1];
+    });
+    
+    return { matches: true, variables, regex };
+  }
+  
   beforeEach(() => {
     fileSystem = new MemoryFileSystem();
     pathService = new PathService();
@@ -800,6 +831,52 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           } catch (error) {
             caughtError = error;
             expect(error).toBeDefined();
+            
+            // Compare actual error message to expected pattern
+            if (fixture.expectedError && error.message) {
+              const actualMessage = error.message.trim();
+              const expectedPattern = fixture.expectedError.trim();
+              
+              // Try pattern matching first
+              const result = matchErrorPattern(actualMessage, expectedPattern);
+              
+              if (!result.matches) {
+                // Fall back to substring matching for backward compatibility
+                if (!actualMessage.includes(expectedPattern)) {
+                  // Find the test case directory for this fixture
+                  const testCaseDir = fixtureFile.replace('.generated-fixture.json', '');
+                  const testCasePath = path.join(__dirname, '../tests/cases', testCaseDir);
+                  
+                  // Check if there's a corresponding error pattern
+                  const errorPatternPath = testCaseDir.includes('invalid/') 
+                    ? path.join(__dirname, '../errors/parse', path.basename(testCaseDir))
+                    : null;
+                  
+                  throw new Error(
+                    `Error pattern mismatch for ${fixture.name}:\n\n` +
+                    `EXPECTED PATTERN:\n${expectedPattern}\n\n` +
+                    `ACTUAL MESSAGE:\n${actualMessage}\n\n` +
+                    (result.regex ? `GENERATED REGEX:\n${result.regex}\n\n` : '') +
+                    `TEST CASE LOCATION:\n${testCasePath}\n` +
+                    `  - example.md: The mlld code that triggers this error\n` +
+                    `  - error.md: The expected error pattern\n\n` +
+                    (errorPatternPath ? 
+                      `ERROR PATTERN LOCATION:\n${errorPatternPath}\n` +
+                      `  - pattern.ts: The error enhancement pattern\n` +
+                      `  - example.md: Pattern documentation\n\n` : '') +
+                    `TO FIX:\n` +
+                    `1. Update error.md with the correct pattern using ${VAR} syntax\n` +
+                    `2. Ensure pattern.ts captures the right values\n` +
+                    `3. Run 'npm run build:fixtures' to regenerate`
+                  );
+                }
+              } else if (result.variables && Object.keys(result.variables).length > 0) {
+                // Log extracted variables for debugging (only in verbose mode)
+                if (process.env.VERBOSE_TESTS) {
+                  console.log(`✓ Pattern matched for ${fixture.name} with variables:`, result.variables);
+                }
+              }
+            }
           }
           
           // Test error formatting if we have expected error content

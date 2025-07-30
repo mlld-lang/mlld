@@ -1,361 +1,218 @@
-# Mlld Error System
+---
+updated: 2025-01-30
+tags: #errors, #dx, #patterns, #testing
+related-docs: docs/dev/TESTS.md, docs/dev/ERROR-HANDLING-ANALYSIS.md
+related-code: core/errors/*.ts, errors/parse/*/pattern.js, interpreter/index.ts, interpreter/interpreter.fixture.test.ts
+related-types: core/errors { MlldError, ErrorSeverity, BaseErrorDetails }
+---
 
-This document explains how the error handling system works in mlld, including error classes, test integration, and implementation patterns.
+# Error System
 
-## Overview
+## tldr
 
-Mlld's error system is designed to provide **clear, actionable error messages** with full context information while supporting both **strict** and **lenient** evaluation modes. All errors inherit from a base `MlldError` class and include location information, severity levels, and structured context.
+mlld has a compiled error pattern system that transforms Peggy parse errors into user-friendly messages. Patterns are pure functions that extract variables, templates use `${VARIABLE}` placeholders, and everything compiles into a single generated file at build time. Add new patterns by creating `pattern.js` and `error.md` files - the build process handles the rest.
 
-## Error Architecture
+## How It Works
 
-### Error Class Hierarchy
+### 1. Files Created
+
+- **`tests/cases/invalid/*/example.md`** - Input files that trigger parse errors
+- **`errors/parse/*/pattern.js`** - Pure functions that match errors and extract variables (no imports!)
+- **`errors/parse/*/error.md`** - Templates with `${VARIABLE}` placeholders for error messages
+
+### 2. Build Process
+
+The build script (`scripts/build-parse-errors.js`) compiles patterns:
+- Reads all `errors/parse/*/pattern.js` and matching `error.md` files
+- Generates `core/errors/patterns/parse-errors.generated.js` with:
+  - All patterns compiled into a single array
+  - Template interpolation logic
+  - Error enhancement function
+- No runtime imports or file I/O needed
+
+### 3. Test Fixtures
+
+The fixture generator (`scripts/build-fixtures.mjs`):
+- Reads `errors/parse/*/error.md` as the expected error template
+- Stores template in fixture for test validation
+- Does NOT run patterns during fixture generation (templates are the source of truth)
+
+### 4. Runtime & Testing
+
+- **Runtime**: Parse errors are enhanced using compiled patterns, variables interpolated into templates
+- **Testing**: Tests validate that enhanced errors match the template patterns
+
+## Principles
+
+- Error messages are part of the specification (tested like features)
+- Patterns are pure functions with no dependencies
+- Templates define the user-facing messages
+- Everything compiles at build time for performance
+- Convention-over-configuration for auto-registration
+- Add patterns on-demand based on user feedback (YAGNI approach)
+
+## Architecture
 
 ```
-MlldError (base)
-├── MlldParseError - Syntax/grammar errors during parsing
-├── MlldInterpreterError - Runtime errors during interpretation
-├── MlldDirectiveError - Directive-specific validation errors
-├── MlldResolutionError - Variable/reference resolution failures
-├── MlldImportError - Import-related errors
-├── MlldFileSystemError - File system access errors
-├── MlldFileNotFoundError - Specific file not found errors
-├── MlldOutputError - Output generation errors
-├── DataEvaluationError - Data directive evaluation errors
-├── FieldAccessError - Object field access errors
-├── VariableResolutionError - Variable lookup failures
-└── PathValidationError - Path validation errors
+Build Time:
+errors/parse/*/{pattern.js, error.md} → build-parse-errors.js → parse-errors.generated.js
+
+Runtime:
+Parse Error → Enhanced Error (using compiled patterns) → User
+
+Test Time:
+example.md → Parse Error → Enhanced Error → Match against error.md template
 ```
 
-### Error Severity Levels
+### System Components
 
-All errors have a severity level that determines how they're handled:
+1. **Core Error Classes** (`core/errors/`)
+   - Hierarchical error types extending MlldError
+   - Location tracking, severity levels, structured details
+   - Used throughout interpreter for runtime errors
 
-```typescript
-enum ErrorSeverity {
-  Recoverable = 'recoverable', // Can continue in lenient mode
-  Fatal = 'fatal',            // Always stops execution
-  Info = 'info',              // Informational messages
-  Warning = 'warning'         // Non-blocking warnings
-}
+2. **Pattern Files** (`errors/parse/*/pattern.js`)
+   - Pure functions (no imports!)
+   - `test(error, ctx)` - Returns true if pattern matches
+   - `enhance(error, ctx)` - Returns variables for template interpolation
+
+3. **Template Files** (`errors/parse/*/error.md`)
+   - User-facing error messages
+   - Use `${VARIABLE}` placeholders
+   - Single source of truth for error text
+
+4. **Generated File** (`core/errors/patterns/parse-errors.generated.js`)
+   - Contains all compiled patterns
+   - Includes template interpolation logic
+   - Exports single `enhanceParseError` function
+   - Regenerated on each build
+
+## Creating Error Patterns
+
+### 1. Create pattern directory
+```
+errors/parse/my-error/
+├── pattern.js    # Pure function for error detection
+├── error.md      # Template with ${VARIABLES}
+└── example.md    # Documentation example
 ```
 
-### Base Error Structure
-
-```typescript
-class MlldError extends Error {
-  code: string;              // Unique error identifier
-  severity: ErrorSeverity;   // How critical the error is
-  details?: BaseErrorDetails; // Additional context
-  sourceLocation?: ErrorSourceLocation; // File/line/column info
+### 2. Write pattern.js (pure function, no imports!)
+```javascript
+export const pattern = {
+  name: 'my-error',
   
-  canBeWarning(): boolean;   // True for Recoverable/Warning severity
-}
-```
-
-## Error Test Integration
-
-### Test Directory Structure
-
-Error tests use a **markdown-based test system** where error conditions are tested using the same fixture infrastructure as successful cases:
-
-```
-tests/cases/
-├── invalid/          # Syntax errors (parser failures)
-│   ├── text/
-│   │   ├── missing-bracket/
-│   │   │   ├── example.md      # Invalid mlld syntax
-│   │   │   └── error.md        # Expected error message
-│   ├── data/
-│   ├── directives/
-│   └── ...
-├── exceptions/       # Runtime errors (interpreter failures)
-│   ├── variables/
-│   ├── imports/
-│   ├── files/
-│   └── ...
-├── warnings/         # Non-fatal issues
-│   ├── performance/
-│   ├── deprecated/
-│   └── ...
-└── [other valid test cases]
-```
-
-### Error Test Pattern
-
-**Two-file pattern:**
-- `example.md` - Contains invalid mlld syntax that should trigger an error
-- `error.md` - Contains the exact expected error message
-
-**Example:**
-
-`tests/cases/invalid/text/missing-bracket/example.md`:
-```markdown
-@text greeting = ::Hello, {{name}}
-```
-
-`tests/cases/invalid/text/missing-bracket/error.md`:
-```
-Expected closing template delimiter "::" after template content.
-```
-
-### Test Execution Flow
-
-1. **Fixture Generation**: `tests/utils/ast-fixtures.js` scans for `error.md` files
-2. **Fixture Creation**: Generates test fixtures with `expectedError` field
-3. **Test Execution**: `interpreter.fixture.test.ts` catches errors and validates messages
-4. **Assertion**: `expect(error.message).toContain(fixture.expectedError)`
-
-### Current Implementation
-
-The test runner already supports error testing:
-
-```typescript
-// In interpreter.fixture.test.ts
-try {
-  const result = await interpret(fixture.input, options);
-  expect(normalizedResult).toBe(normalizedExpected);
-} catch (error) {
-  if (fixture.expectedError) {
-    expect(error.message).toContain(fixture.expectedError);
-  } else {
-    throw error; // Unexpected error
+  test(error, ctx) {
+    // Return true if this pattern matches
+    return error.found === '@' && ctx.line.includes('confusing');
+  },
+  
+  enhance(error, ctx) {
+    // Extract variables for template interpolation
+    const varName = ctx.line.match(/@(\w+)/)?.[1] || 'unknown';
+    
+    // Return object with template variables
+    return {
+      varName: varName
+    };
   }
-}
+};
 ```
 
-## Error Categories
-
-### 1. Parse Errors (`invalid/`)
-
-**When**: Grammar/syntax errors during AST generation
-**Examples**:
-- Missing closing brackets: `@text foo = ::bar`
-- Invalid directive syntax: `@unknown directive`
-- Malformed data structures: `@data x = [1, 2,`
-
-**Location**: `tests/cases/invalid/[directive-type]/[error-case]/`
-
-### 2. Runtime Errors (`exceptions/`)
-
-**When**: Interpreter errors during evaluation
-**Examples**:
-- Undefined variables: `@add {{missing}}`
-- File not found: `@add [missing.md]`
-- Import failures: `@import { var } from "missing.mld"`
-- Circular references: `@text a = {{b}}`, `@text b = {{a}}`
-
-**Location**: `tests/cases/exceptions/[category]/[error-case]/`
-
-### 3. Warnings (`warnings/`)
-
-**When**: Valid syntax but potentially unintended behavior
-**Examples**:
-- Inline variables in plain text: `Hello @name` (won't interpolate)
-- Performance issues: Large file operations
-- Deprecated syntax patterns
-
-**Location**: `tests/cases/warnings/[category]/[warning-case]/`
-
-## Error Message Standards
-
-### Format Template
-
+### 3. Write error.md template
 ```
-ErrorType: Brief description
-
-[Location context if available]
-  line | code causing error
-         ^^^^^ error indicator
-
-[Additional context]
-[Suggestions/workarounds]
+Variables must start with @. Found invalid syntax for '${varName}'
 ```
 
-### Example Messages
-
-**Parse Error:**
+### 4. Create test case
 ```
-MlldParseError: Expected closing template delimiter "::" after template content.
-
-  5 | @text greeting = ::Hello, {{name}}
-                                       ^
+tests/cases/invalid/my-error/
+└── example.md    # Code that triggers the error
 ```
 
-**Runtime Error:**
-```
-VariableResolutionError: Variable 'missing' is not defined
-
-  3 | @text output = :::Hello, {{missing}}:::
-                              ^^^^^^^^^
-
-Available variables: name, title, date
+### 5. Build and test
+```bash
+npm run build:errors    # Compiles patterns into generated file
+npm run build:fixtures  # Updates test fixtures
+npm test                # Validates everything works
 ```
 
-**Import Chain Error:**
-```
-MlldImportError: File not found: './config.mld'
+## Build Process Details
 
-  2 | @import { settings } from "./config.mld"
-                               ^^^^^^^^^^^^^^^
+The build process is triggered by `npm run build:errors` which:
 
-Import chain:
-  main.mld:2:1
-    └─ config.mld (not found)
-```
+1. **Scans** `errors/parse/*/` directories for pattern.js and error.md pairs
+2. **Parses** pattern.js files to extract the pattern object
+3. **Reads** error.md templates
+4. **Generates** `core/errors/patterns/parse-errors.generated.js` containing:
+   - All patterns in a single array
+   - Template strings with proper escaping
+   - `interpolateTemplate()` function for variable substitution
+   - `enhanceParseError()` function that applies patterns
+   - Fallback logic for unmatched errors
 
-## Implementation Patterns
-
-### Creating Errors
-
-Always use specific error classes with full context:
-
-```typescript
-// ❌ Generic error
-throw new Error('Variable not found: ' + name);
-
-// ✅ Specific error with context
-throw new VariableResolutionError(
-  `Variable '${name}' is not defined`,
+The generated file structure:
+```javascript
+// Auto-generated header with metadata
+const patterns = [
   {
-    code: 'VARIABLE_NOT_FOUND',
-    severity: ErrorSeverity.Recoverable,
-    details: {
-      variableName: name,
-      availableVariables: env.getVariableNames(),
-      suggestion: findSimilarVariable(name, env)
-    },
-    sourceLocation: {
-      filePath: context.file,
-      line: node.location?.start.line,
-      column: node.location?.start.column
-    }
-  }
-);
+    name: 'pattern-name',
+    template: `Error template with \${variables}`,
+    test(error, ctx) { /* test logic */ },
+    enhance(error, ctx) { /* returns variables */ }
+  },
+  // ... more patterns
+];
+
+function interpolateTemplate(template, variables) { /* ... */ }
+function enhanceParseError(error, source, filePath) { /* ... */ }
 ```
 
-### Error Recovery
+## Key Implementation Details
 
-Support both strict and lenient modes:
+### Pattern Context
 
-```typescript
-try {
-  return await evaluateVariable(name, env);
-} catch (error) {
-  if (error instanceof MlldError && error.canBeWarning()) {
-    if (options.strict) {
-      throw error; // Fail fast in strict mode
-    } else {
-      // Recover in lenient mode
-      env.addWarning(error);
-      return `{{${name}}}`; // Preserve original for debugging
-    }
-  }
-  throw error; // Re-throw fatal errors
-}
-```
+Each pattern receives:
+- `error` - The Peggy parse error object with:
+  - `message` - Original error message
+  - `expected` - Array of expected tokens
+  - `found` - What was actually found
+  - `location` - Position information
+- `ctx` - Context object with:
+  - `line` - The line where error occurred
+  - `lines` - All lines in the source
+  - `lineNumber` - Line number (1-based)
+  - `source` - Full source text
 
-### CLI Error Handling
+### Variable Naming Convention
 
-The CLI is configured to catch and display errors appropriately:
+Template variables should be UPPERCASE to stand out:
+- `${DIRECTIVE}` - The directive name
+- `${VARNAME}` - Variable name
+- `${COMMAND}` - Command text
 
-```typescript
-// In cli/index.ts
-try {
-  const result = await interpret(content, options);
-  await writeOutput(result);
-} catch (error) {
-  if (error instanceof MlldError) {
-    console.error(formatError(error));
-    process.exit(1);
-  }
-  throw error; // Re-throw unexpected errors
-}
-```
+### Pattern Matching Tips
 
-## Adding New Error Tests
+- Test the most specific conditions first
+- Use `error.found` to check what token triggered the error
+- Use `ctx.line` to examine the full line context
+- Return early from `test()` for performance
 
-### 1. Create Test Case
+## System Files
 
-Create directory structure:
-```
-tests/cases/[category]/[error-name]/
-├── example.md    # Invalid syntax
-└── error.md      # Expected error message
-```
+- `scripts/build-parse-errors.js` - Main build script that generates the compiled file
+- `scripts/build-fixtures.mjs` - Reads error.md templates for test fixtures
+- `core/errors/patterns/parse-errors.generated.js` - The compiled patterns (gitignored)
+- `core/errors/patterns/init.ts` - Thin wrapper that imports the generated file
+- `interpreter/index.ts` - Applies error enhancement during parsing
+- `interpreter/interpreter.fixture.test.ts` - Validates errors match templates
 
-### 2. Write Test Content
+## Gotchas
 
-`example.md` - Use invalid mlld syntax:
-```markdown
-@text broken = ::missing closing bracket
-```
-
-`error.md` - Write exact expected error:
-```
-Expected closing template delimiter "::" after template content.
-```
-
-### 3. Generate Fixture
-
-Run the fixture generator:
-```bash
-npm run build:fixtures
-```
-
-This will create `tests/fixtures/[test-name].fixture.json` with `expectedError` field.
-
-### 4. Run Test
-
-```bash
-npm test interpreter/interpreter.fixture.test.ts
-```
-
-The test will verify that the interpreter throws an error matching the expected message.
-
-## Testing Error Messages
-
-Error messages are **part of the specification** - they're tested as carefully as feature code to ensure consistency and helpfulness.
-
-### Best Practices
-
-1. **Be specific**: Error messages should clearly identify the problem
-2. **Include location**: Show exactly where the error occurred
-3. **Provide context**: Show available alternatives when relevant
-4. **Suggest fixes**: Include actionable suggestions when possible
-5. **Test thoroughly**: Every error path should have a test case
-
-### Message Guidelines
-
-- Start with error type: `VariableResolutionError: ...`
-- Use present tense: "Variable 'x' is not defined" not "Variable 'x' was not defined"
-- Include relevant context: available variables, valid options, etc.
-- Keep technical details accessible to end users
-- Provide suggestions when the fix is obvious
-
-## Current Status
-
-### ✅ Implemented
-- Error class hierarchy with severity levels
-- Location tracking in errors  
-- Basic test infrastructure for error cases
-- CLI error handling foundation
-
-### 🚧 In Progress
-- Error test case expansion (as identified in Issues #56-72)
-- Comprehensive error message testing
-- Import chain context in error messages
-- Training wheels warnings system
-
-### 📋 Planned
-- Pretty error formatting with code context
-- Error suggestion system (typo detection)
-- Structured error output (JSON/SARIF)
-- IDE integration support
-
-## Related Files
-
-- **Error Classes**: `core/errors/*.ts`
-- **Error Messages**: `core/errors/messages/*.ts`
-- **Test Infrastructure**: `tests/utils/ast-fixtures.js`, `interpreter/interpreter.fixture.test.ts`
-- **CLI Integration**: `cli/index.ts`
-- **Error Test Cases**: `tests/cases/invalid/`, `tests/cases/exceptions/`, `tests/cases/warnings/`
+- Pattern files must be pure functions (no imports!)
+- Pattern names must match directory names
+- Templates in error.md are the single source of truth
+- Variables returned by `enhance()` must match template placeholders
+- The generated file is overwritten on each build
+- Parse errors occur before AST creation - work with raw text
+- Test runner uses non-greedy regex for template matching

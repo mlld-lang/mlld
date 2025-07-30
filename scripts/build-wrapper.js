@@ -41,7 +41,7 @@ if (missingFiles.length > 0) {
 // Now run the main build
 console.log('🚀 Running main build...\n');
 try {
-  execSync('npm run build:version && npm run build:grammar && tsup && npm run build:python', { 
+  execSync('npm run build:direct', { 
     stdio: 'inherit',
     cwd: projectRoot,
     shell: true

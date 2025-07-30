@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enhanced error display with source context**: Errors now show the exact source location with surrounding context and a visual pointer
   - Compiler-style error messages with line numbers and caret indicators pointing to the precise error location
 
+- **Improved Error Pattern System**: Complete refactor of parse error enhancement for better performance and maintainability
+  - Patterns are now pure functions that extract variables (no imports allowed)
+  - Templates use `${VARIABLE}` placeholders for dynamic error messages
+  - Build-time compilation: All patterns compile into single `parse-errors.generated.js` file
+  - Convention-over-configuration pair of `pattern.js`, `error.md`, and `example.md` 
+  - Build integration: `npm run build:errors` compiles all patterns
+
 - **LSP Semantic Tokens Support**: Full semantic highlighting via Language Server Protocol
   - Context-aware highlighting for all template types (backtick, double-colon, triple-colon)
   - Proper interpolation detection based on template context (@var vs {{var}})
