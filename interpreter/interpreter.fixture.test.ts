@@ -26,8 +26,8 @@ export const skipTests: Record<string, string> = {
   'alligator-url-markdown-conversion': 'Issue #315: Getter properties (text, md, html) not accessible in mlld',
   'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
   'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
-  'text-url-section': 'Issue #82: URL section support not implemented',
-  'exec-exec-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
+  'var-text-url-section': 'Issue #82: URL section support not implemented',
+  'exe-exe-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
   'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
   'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
   'output-exec-invocation': 'Exec invocation in @output not yet supported - future enhancement',
@@ -39,11 +39,11 @@ export const skipTests: Record<string, string> = {
   'modules-auto-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
   'modules-explicit-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
   'modules-metadata': 'Issue #264: Namespace imports ({ * as name }) not implemented',
-  'data-assignment-pipeline': 'Needs investigation - newline normalization issue',
+  'var-assignment-pipeline': 'Needs investigation - newline normalization issue',
   'pipeline-array-data': 'Needs investigation - whitespace in output',
   'run-run-code-bracket-nesting': 'Python/sh not supported yet - only JS/Node/Bash',
   // Module import tests that need published modules
-  'data-object-strings-array-functions': 'Issue #254: Registry tests need isolation - @mlld/array not published yet',
+  'var-data-object-strings-array-functions': 'Issue #254: Registry tests need isolation - @mlld/array not published yet',
   // Bracket notation tests - skipped until grammar issue resolved
   'bracket-notation-comprehensive': 'Issue #306: Bracket notation field access lost in grammar parsing pipeline',
   // Tests that require @time module
@@ -128,18 +128,18 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     
     // Map fixture names to example directory paths
     const exampleDirMappings: Record<string, string> = {
-      'text-assignment-add': 'text/assignment-add',
-      'text-assignment-add-section-bracket': 'text/assignment-add',
-      'text-assignment-add-section-bracket-rename': 'text/assignment-add',
-      'text-assignment-path': 'text/assignment-path',
-      'text-assignment-run': 'text/assignment-run',
-      'text-path': 'text/path',
-      'text-path-section-bracket': 'text/path',
-      'text-path-section-bracket-rename': 'text/path',
-      'add-path': 'add/path',
-      'add-path-section': 'add/path',
-      'add-section': 'add/section',
-      'add-section-rename': 'add/section',
+      'var-text-assignment-add': 'var/text-assignment-add',
+      'var-text-assignment-add-section-bracket': 'var/text-assignment-add',
+      'var-text-assignment-add-section-bracket-rename': 'var/text-assignment-add',
+      'var-text-assignment-path': 'var/text-assignment-path',
+      'var-text-assignment-run': 'var/text-assignment-run',
+      'var-path': 'var/path',
+      'var-path-section-bracket': 'var/path',
+      'var-path-section-bracket-rename': 'var/path',
+      'show-path': 'show/add/path',
+      'show-path-section': 'show/add/path',
+      'show-section': 'show/add/section',
+      'show-section-rename': 'show/add/section',
       'import-all': 'import/all',
       'import-all-variable': 'import/all',
       'import-alias': 'import/alias',
@@ -153,24 +153,19 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'modules-explicit-export': 'modules/explicit-export',
       'modules-auto-export': 'modules/auto-export',
       'modules-metadata': 'modules/metadata',
-      'text-foreach-section-literal': 'text/foreach-section-literal',
-      'text-foreach-section-variable': 'text/foreach-section-variable',
-      'text-foreach-section-backtick': 'text/foreach-section-backtick',
-      'text-foreach-section-path-expression': 'text/foreach-section-path-expression',
-      'exec-invocation-module': 'exec-invocation-module',
-      'exec-sh-module': 'exec-sh-module',
+      'var-foreach-text-template': 'var/foreach-text-template',
+      'exe-invocation-module': 'exe-invocation-module',
+      'exe-sh-module': 'exe-sh-module',
       'env-vars-allowed': 'input/env-vars-allowed',
       'import-namespace-json': 'import/namespace-json',
       'import-namespace-nested': 'import/namespace-nested',
-      'exec-shadow-env-import': 'exec-shadow-env-import',
+      'exe-shadow-env-import': 'exe-shadow-env-import',
       'import-namespace-shorthand': 'import/namespace-shorthand',
       'import-namespace-special-chars': 'import/namespace-special-chars',
       'import-stdin-shorthand': 'import/stdin',
-      'data-array-path-disambiguation': 'data/array-path-disambiguation',
-      'data-object-literals-in-arrays': 'data/object-literals-in-arrays',
-      'data-array-valid-patterns': 'data/array-valid-patterns',
-      'add-foreach-section-literal': 'add/foreach-section-literal',
-      'add-foreach-section-modules': 'add/foreach-section-modules',
+      'var-data-array-path-disambiguation': 'var/data-array-path-disambiguation',
+      'var-data-object-literals-in-arrays': 'var/data-object-literals-in-arrays',
+      'var-data-array-valid-patterns': 'var/data-array-valid-patterns',
       // Alligator syntax tests
       'alligator-glob-pattern': 'alligator/glob-pattern',
       'alligator-metadata-file': 'alligator/metadata-file',
@@ -463,7 +458,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           await fileSystem.writeFile('/config.mld', '/var @greeting = "Hello, world!"\n/var @count = "42"\n/var @author = "Mlld Test Suite"');
           await fileSystem.writeFile('/utils.mld', '/var @greeting = "Hello, world!"\n/var @count = "42"\n/var @version = "1.0.0"\n/path @docs = "./docs"');
         }
-      } else if (fixture.name === 'data-directive') {
+      } else if (fixture.name === 'var-data-directive') {
         // This fixture seems to be missing context - create the expected variable
         // TODO: This fixture may be incorrectly named or incomplete
         const env = (fileSystem as any).environment || {};
@@ -474,7 +469,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           hasInterpolation: false,
           isMultiLine: false
         });
-      } else if (fixture.name === 'data-array-path-disambiguation' || fixture.name === 'data-object-literals-in-arrays') {
+      } else if (fixture.name === 'var-data-array-path-disambiguation' || fixture.name === 'var-data-object-literals-in-arrays') {
         // Mock /etc/hosts for tests that reference it
         await fileSystem.mkdir('/etc');
         await fileSystem.writeFile('/etc/hosts', '##\n# Host Database\n#\n# localhost is used to configure the loopback interface\n# when the system is booting.  Do not change this entry.\n##\n127.0.0.1\tlocalhost\n255.255.255.255\tbroadcasthost\n::1             localhost');
@@ -660,7 +655,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         }
         
         // Enable URL support for URL tests and module resolution
-        const urlConfig = (fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed' || fixture.name === 'modules-stdlib-basic') ? {
+        const urlConfig = (fixture.name === 'var-text-url' || fixture.name === 'var-text-url-section' || fixture.name === 'show-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed' || fixture.name === 'modules-stdlib-basic') ? {
           enabled: true,
           allowedProtocols: ['https'],
           allowedDomains: [],
@@ -676,7 +671,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         } : undefined;
         
         // Set up fetch mock for URL tests (but not for modules-stdlib-basic which has its own mock)
-        if ((fixture.name === 'text-url' || fixture.name === 'text-url-section' || fixture.name === 'add-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed' || fixture.name.includes('alligator') && fixture.name.includes('url')) && fixture.name !== 'modules-stdlib-basic') {
+        if ((fixture.name === 'var-text-url' || fixture.name === 'var-text-url-section' || fixture.name === 'show-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed' || fixture.name.includes('alligator') && fixture.name.includes('url')) && fixture.name !== 'modules-stdlib-basic') {
           global.fetch = async (url: string) => {
             if (url === 'https://raw.githubusercontent.com/example/repo/main/README.md') {
               return {
