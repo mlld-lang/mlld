@@ -62,6 +62,22 @@ export class DirectiveVisitor extends BaseVisitor {
           tokenType: 'variable',
           modifiers: ['declaration']
         });
+        
+        // Add = operator token if there's a value
+        if (node.values.value !== undefined || node.values.template !== undefined || 
+            node.values.command !== undefined || node.values.code !== undefined ||
+            node.meta?.wrapperType !== undefined) {
+          // Calculate position after variable name (including @)
+          const equalPosition = identifierStart + identifierName.length + 1;
+          
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: equalPosition,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
       }
     }
   }
@@ -206,6 +222,23 @@ export class DirectiveVisitor extends BaseVisitor {
         interpolationAllowed = false;
         delimiterLength = 1;
         break;
+      case 'doubleQuote':
+        // For double quotes, tokenize as a string literal
+        if (values.length > 0 && values[0].location) {
+          const startOffset = values[0].location.start.offset - 1; // Include opening quote
+          const endOffset = values[values.length - 1].location.end.offset + 1; // Include closing quote
+          const source = this.document.getText();
+          const stringContent = source.substring(startOffset, endOffset);
+          
+          this.tokenBuilder.addToken({
+            line: directive.location.start.line - 1,
+            char: values[0].location.start.column - 2, // -1 for 0-based, -1 for quote
+            length: stringContent.length,
+            tokenType: 'string',
+            modifiers: []
+          });
+        }
+        return; // Don't process as template
     }
     
     if (templateType && values.length > 0) {
