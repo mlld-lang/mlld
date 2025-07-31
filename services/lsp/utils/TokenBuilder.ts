@@ -33,7 +33,7 @@ export class TokenBuilder {
       }
     }
     
-    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld')) {
+    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld') || this.document.uri.includes('test-syntax')) {
       const text = this.document.getText({
         start: { line: token.line, character: token.char },
         end: { line: token.line, character: token.char + token.length }

@@ -120,7 +120,7 @@ export class ASTSemanticVisitor {
     
     const actualContext = context || this.currentContext;
     
-    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld')) {
+    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld') || this.document.uri.includes('test-syntax')) {
       console.log(`[VISITOR] Node: ${node.type}`, {
         location: node.location ? `${node.location.start.line}:${node.location.start.column}` : 'none',
         content: node.content || node.identifier || node.value || '?'

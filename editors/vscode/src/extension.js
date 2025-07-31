@@ -69,7 +69,7 @@ function startLanguageServer(context) {
       augmentsSyntaxTokens: false, // Don't merge with TextMate tokens
       multilineTokenSupport: true,
       overlappingTokenSupport: false,
-      tokenTypes: ['directive', 'variable', 'variableRef', 'interpolation', 'template', 'templateContent', 'operator', 'keyword', 'embedded', 'embeddedCode', 'alligator', 'xmlTag', 'section', 'parameter', 'comment', 'string', 'number', 'boolean', 'null'],
+      tokenTypes: ['directive', 'variable', 'variableRef', 'interpolation', 'template', 'templateContent', 'operator', 'keyword', 'embedded', 'embeddedCode', 'alligator', 'xmlTag', 'section', 'parameter', 'comment', 'string', 'number', 'boolean', 'null', 'property'],
       tokenModifiers: ['declaration', 'reference', 'readonly', 'interpolated', 'literal', 'invalid', 'deprecated']
     },
     middleware: {
@@ -108,12 +108,8 @@ function startLanguageServer(context) {
     console.log('[EXTENSION] Server capabilities:', capabilities);
     console.log('[EXTENSION] Semantic tokens provider:', capabilities?.semanticTokensProvider);
     
-    // Force refresh semantic tokens for active editor
-    const activeEditor = vscode.window.activeTextEditor;
-    if (activeEditor && activeEditor.document.languageId === 'mlld') {
-      console.log('[EXTENSION] Requesting semantic tokens refresh for active document');
-      vscode.commands.executeCommand('vscode.provideDocumentSemanticTokens', activeEditor.document.uri);
-    }
+    // VSCode will automatically request semantic tokens when needed
+    // No need to force refresh - this was causing duplicate requests
   }).catch(error => {
     console.error('Failed to start mlld language server:', error);
     vscode.window.showErrorMessage(

@@ -60,7 +60,8 @@ const TOKEN_TYPES = [
   'string',           // string literals
   'number',           // numeric literals
   'boolean',          // true/false
-  'null'              // null values
+  'null',             // null values
+  'property'          // property access (field names after dots)
 ];
 
 const TOKEN_MODIFIERS = [

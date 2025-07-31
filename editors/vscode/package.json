@@ -131,7 +131,8 @@
           "string": ["string.quoted.mlld"],
           "number": ["constant.numeric.mlld"],
           "boolean": ["constant.language.boolean.mlld"],
-          "null": ["constant.language.null.mlld"]
+          "null": ["constant.language.null.mlld"],
+          "property": ["variable.other.property.mlld"]
         }
       }
     ]

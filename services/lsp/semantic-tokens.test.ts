@@ -152,7 +152,7 @@ function parseSemanticTokens(data: number[], sourceText?: string): SemanticToken
   return tokens;
 }
 
-async function getSemanticTokens(code: string): Promise<SemanticToken[]> {
+export async function getSemanticTokens(code: string): Promise<SemanticToken[]> {
   const document = TextDocument.create('test://test.mld', 'mlld', 1, code);
   const parseResult = await parse(code);
   
