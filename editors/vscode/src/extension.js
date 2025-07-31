@@ -133,7 +133,7 @@ function startLanguageServer(context) {
       augmentsSyntaxTokens: true, // Augment TextMate tokens with semantic tokens
       multilineTokenSupport: true,
       overlappingTokenSupport: false,
-      tokenTypes: ['keyword', 'variable', 'string', 'operator', 'label', 'type', 'parameter', 'comment', 'number', 'property'],
+      tokenTypes: ['keyword', 'variable', 'string', 'operator', 'label', 'type', 'parameter', 'comment', 'number', 'property', 'interface', 'typeParameter', 'namespace'],
       tokenModifiers: ['declaration', 'reference', 'readonly', 'interpolated', 'literal', 'invalid', 'deprecated']
     },
     middleware: {

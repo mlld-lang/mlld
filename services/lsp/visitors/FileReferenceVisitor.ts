@@ -112,7 +112,7 @@ export class FileReferenceVisitor extends BaseVisitor {
             line: node.location.start.line - 1,
             char: nodeStartChar + 1,
             length: filenameLength,
-            tokenType: 'alligator',
+            tokenType: 'typeParameter',  // Use typeParameter for filenames with sections
             modifiers: []
           });
         }

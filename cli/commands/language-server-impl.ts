@@ -52,7 +52,10 @@ const TOKEN_TYPES = [
   'parameter',        // Function parameters
   'comment',          // Comments
   'number',           // Numbers
-  'property'          // Object properties
+  'property',         // Object properties
+  'interface',        // Interfaces (file references)
+  'typeParameter',    // Type parameters (file paths in sections)
+  'namespace'         // Namespaces (section names)
 ];
 
 // Map mlld-specific token names to standard types
@@ -66,11 +69,11 @@ const TOKEN_TYPE_MAP: Record<string, string> = {
   'templateContent': 'string',     // Template content
   'embedded': 'label',             // Language labels (js, python)
   'embeddedCode': 'string',        // Embedded code content
-  'alligator': 'string',           // File paths in <>
-  'alligatorOpen': 'operator',     // < bracket
-  'alligatorClose': 'operator',    // > bracket
+  'alligator': 'interface',        // File paths in <>
+  'alligatorOpen': 'interface',    // < bracket
+  'alligatorClose': 'interface',   // > bracket
   'xmlTag': 'type',                // XML tags
-  'section': 'label',              // Section names
+  'section': 'namespace',          // Section names
   'boolean': 'keyword',            // true/false
   'null': 'keyword',               // null
   // Standard types (pass through)
@@ -968,6 +971,7 @@ export async function startLanguageServer(): Promise<void> {
     const builder = new SemanticTokensBuilder();
     
     connection.console.log(`[SEMANTIC] Processing AST with ${analysis.ast.length} nodes, ${analysis.errors.length} errors`);
+    connection.console.log(`[SEMANTIC] Using TOKEN_TYPES: ${TOKEN_TYPES.join(', ')}`);
     logger.debug('Processing semantic tokens', { 
       uri: params.textDocument.uri,
       astLength: analysis.ast.length,

@@ -65,6 +65,11 @@ export class ExpressionVisitor extends BaseVisitor {
           const operatorLine = node.left.location.end.line - 1;
           const operatorChar = node.left.location.end.column - 1 + operatorIndex;
           
+          // Debug logging
+          if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+            console.log(`[OPERATOR] Found ${operatorText} at line ${operatorLine}, char ${operatorChar}`);
+          }
+          
           this.tokenBuilder.addToken({
             line: operatorLine,
             char: operatorChar,
