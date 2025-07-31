@@ -182,6 +182,28 @@ export class ASTSemanticVisitor {
   }
   
   visitText(node: any, context: VisitorContext): void {
+    if (!node.location || !node.content) return;
+    
+    // In command context, check if this is a quoted string
+    if (context.inCommand && node.content.startsWith('"') && node.content.endsWith('"')) {
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
+        length: node.content.length,
+        tokenType: 'string',
+        modifiers: []
+      });
+    } else if (context.templateType) {
+      // In template context, add as template content
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
+        length: node.content.length,
+        tokenType: 'templateContent',
+        modifiers: []
+      });
+    }
+    
     if (context.interpolationAllowed) {
       this.visitChildren(node, context);
     }

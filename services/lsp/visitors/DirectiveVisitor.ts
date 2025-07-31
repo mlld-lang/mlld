@@ -35,8 +35,33 @@ export class DirectiveVisitor extends BaseVisitor {
       this.handleVariableDeclaration(node);
       
       if (node.kind === 'exe' && node.values?.params) {
+        // Add opening parenthesis
+        const firstParam = node.values.params[0];
+        if (firstParam && firstParam.location) {
+          this.tokenBuilder.addToken({
+            line: firstParam.location.start.line - 1,
+            char: firstParam.location.start.column - 2, // '(' is before param
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
+        
+        // Process parameters
         for (const param of node.values.params) {
           this.mainVisitor.visitNode(param, context);
+        }
+        
+        // Add closing parenthesis
+        const lastParam = node.values.params[node.values.params.length - 1];
+        if (lastParam && lastParam.location) {
+          this.tokenBuilder.addToken({
+            line: lastParam.location.end.line - 1,
+            char: lastParam.location.end.column,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
         }
       }
     }
@@ -160,25 +185,64 @@ export class DirectiveVisitor extends BaseVisitor {
         });
       }
       
-      if (values.code && Array.isArray(values.code)) {
+      // Add opening brace for language-specific code
+      if (values.code && Array.isArray(values.code) && values.code.length > 0) {
+        const firstCode = values.code[0];
+        if (firstCode.location) {
+          // Opening brace is 1 char before code starts
+          this.tokenBuilder.addToken({
+            line: firstCode.location.start.line - 1,
+            char: firstCode.location.start.column - 2,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
+        
+        // Add code content as embeddedCode
         for (const codeNode of values.code) {
           if (codeNode.location && codeNode.content) {
-            const codeContent = codeNode.content;
-            const codeStart = codeNode.location.start.column + langText.length + 2;
-            
             this.tokenBuilder.addToken({
               line: codeNode.location.start.line - 1,
-              char: codeStart,
-              length: codeContent.length,
+              char: codeNode.location.start.column - 1,
+              length: codeNode.content.length,
               tokenType: 'embeddedCode',
               modifiers: [],
               data: { language: langText }
             });
           }
         }
+        
+        // Add closing brace
+        const lastCode = values.code[values.code.length - 1];
+        if (lastCode.location) {
+          this.tokenBuilder.addToken({
+            line: lastCode.location.end.line - 1,
+            char: lastCode.location.end.column,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
       }
     } else {
-      if (values.command && Array.isArray(values.command)) {
+      // Regular command with braces
+      if (values.command && Array.isArray(values.command) && values.command.length > 0) {
+        const firstCommand = values.command[0];
+        const lastCommand = values.command[values.command.length - 1];
+        
+        // Add opening brace
+        if (firstCommand.location) {
+          this.tokenBuilder.addToken({
+            line: firstCommand.location.start.line - 1,
+            char: firstCommand.location.start.column - 2, // Brace is before command
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
+        
+        // Process command content
         const newContext = {
           ...context,
           inCommand: true,
@@ -186,8 +250,39 @@ export class DirectiveVisitor extends BaseVisitor {
           variableStyle: '@var' as const
         };
         
+        // Add the first command part as keyword if it's the command name
+        if (values.commandBases && values.commandBases.length > 0) {
+          const cmdBase = values.commandBases[0];
+          if (cmdBase.location) {
+            this.tokenBuilder.addToken({
+              line: cmdBase.location.start.line - 1,
+              char: cmdBase.location.start.column - 1,
+              length: cmdBase.command.length,
+              tokenType: 'keyword',
+              modifiers: []
+            });
+          }
+        }
+        
+        // Process remaining parts (skip the command name which we already handled)
+        let skipFirst = values.commandBases && values.commandBases.length > 0;
         for (const part of values.command) {
+          if (skipFirst && part.content === values.commandBases[0].command) {
+            skipFirst = false;
+            continue;
+          }
           this.mainVisitor.visitNode(part, newContext);
+        }
+        
+        // Add closing brace
+        if (lastCommand.location) {
+          this.tokenBuilder.addToken({
+            line: lastCommand.location.end.line - 1,
+            char: lastCommand.location.end.column - 1,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
         }
       } else {
         this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
