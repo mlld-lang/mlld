@@ -275,16 +275,53 @@ export async function startLanguageServer(): Promise<void> {
           message: error.message, 
           line: error.line, 
           column: error.column,
+          mlldErrorLocation: (error as any).mlldErrorLocation,
           textLength: text.length
         });
         
-        const diagnostic: Diagnostic = {
-          severity: DiagnosticSeverity.Error,
-          range: {
+        // Check if error has detailed mlldErrorLocation
+        const mlldError = error as any;
+        let range: Range;
+        
+        if (mlldError.mlldErrorLocation) {
+          // Use precise location from mlldErrorLocation
+          const loc = mlldError.mlldErrorLocation;
+          const startLine = (loc.start.line || 1) - 1;
+          const startChar = (loc.start.column || 1) - 1;
+          const endLine = (loc.end.line || 1) - 1;
+          let endChar = (loc.end.column || 1) - 1;
+          
+          // If error starts at beginning of line (column 0), 
+          // extend to end of line for better visibility
+          if (startChar === 0 && startLine === endLine) {
+            const lines = text.split('\n');
+            if (lines[startLine]) {
+              endChar = lines[startLine].length;
+            }
+          }
+          
+          range = {
+            start: { line: startLine, character: startChar },
+            end: { line: endLine, character: endChar }
+          };
+        } else {
+          // Fallback to basic line/column
+          range = {
             start: { line: (error.line || 1) - 1, character: (error.column || 1) - 1 },
             end: { line: (error.line || 1) - 1, character: (error.column || 1) }
-          },
-          message: error.message || 'Parse error',
+          };
+        }
+        
+        // Format error message for better readability in VSCode
+        let formattedMessage = error.message || 'Parse error';
+        
+        // Replace escaped newlines with actual newlines for better formatting
+        formattedMessage = formattedMessage.replace(/\\n/g, '\n');
+        
+        const diagnostic: Diagnostic = {
+          severity: DiagnosticSeverity.Error,
+          range,
+          message: formattedMessage,
           source: 'mlld'
         };
         errors.push(diagnostic);

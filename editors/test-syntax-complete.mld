@@ -18,6 +18,8 @@ This file tests all syntax highlighting features including the new operators and
 /when @condition => /show "Success"
 /output @result to "file.txt"
 
+/exe @file(a,b) = "echo 'hello world'"
+
 ## Operators and Expressions
 
 ### Logical Operators
@@ -187,7 +189,9 @@ This file tests all syntax highlighting features including the new operators and
 ## Function Calls
 /run @processFile(<data.txt>)
 /var @result = @transform(@input, @options)
-/exe @pipeline() = @step1() | @step2() | @step3()
+/exe @step1(var) = "echo 'hello @var'"
+/exe @step2(var) = "echo 'hello @var'"
+/exe @step3(var) = "echo 'hello @var'"
 
 ## Mixed Complex Example
 /when @env == "production" && @users > 1000 => [

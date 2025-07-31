@@ -1,0 +1,60 @@
+{
+  "scopeName": "markdown.mlld.codeblock",
+  "injectionSelector": "L:text.html.markdown",
+  "patterns": [
+    {
+      "include": "#mlld-code-block"
+    },
+    {
+      "include": "#mlld-run-code-block"
+    }
+  ],
+  "repository": {
+    "mlld-code-block": {
+      "begin": "(^|\\G)(\\s*)(```|~~~)\\s*(mlld)\\s*$",
+      "end": "(^|\\G)(\\2)(\\3)\\s*$",
+      "name": "meta.embedded.block.mlld",
+      "beginCaptures": {
+        "3": {
+          "name": "punctuation.definition.markdown"
+        },
+        "4": {
+          "name": "fenced_code.block.language.markdown"
+        }
+      },
+      "endCaptures": {
+        "2": {
+          "name": "punctuation.definition.markdown"
+        }
+      },
+      "patterns": [
+        {
+          "include": "source.mlld"
+        }
+      ]
+    },
+    "mlld-run-code-block": {
+      "begin": "(^|\\G)(\\s*)(```|~~~)\\s*(mlld-run)\\s*$",
+      "end": "(^|\\G)(\\2)(\\3)\\s*$",
+      "name": "meta.embedded.block.mlld",
+      "beginCaptures": {
+        "3": {
+          "name": "punctuation.definition.markdown"
+        },
+        "4": {
+          "name": "fenced_code.block.language.markdown"
+        }
+      },
+      "endCaptures": {
+        "2": {
+          "name": "punctuation.definition.markdown"
+        }
+      },
+      "patterns": [
+        {
+          "include": "source.mlld"
+        }
+      ]
+    }
+  }
+}

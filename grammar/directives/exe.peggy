@@ -199,11 +199,12 @@ SlashExe
     }
   // Error recovery: Generic catch-all
   / DirectiveContext "/exe" {
-      helpers.mlldError("Invalid /exe syntax. Examples:\\n" +
-            "  /exe @cmd(param) = {echo @param}\\n" +
-            "  /exe @greet(name) = `Hello @name!`\\n" +
-            "  /exe @calc(x) = js {return @x * 2}\\n" +
-            "  /exe @alias() = @otherCommand", "@", location());
+      helpers.mlldError("Invalid /exe syntax. Examples:\n" +
+            "  /exe @cmd(param) = {echo @param}\n" +
+            "  /exe @greet(name) = `Hello @name!`\n" +
+            "  /exe @calc(x) = js {return @x * 2}\n" +
+            "  /exe @alias() = @otherCommand\n" +
+            "  /exe @msg() = \"a string value\"", "@", location());
     }
 
 // -------------------------------------------------------------
