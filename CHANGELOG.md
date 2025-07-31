@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Performance optimizations with text caching
   - Available in VSCode and any LSP-compatible editor (Neovim, etc.)
 
+- **Enhanced LSP Error Reporting**: Precise error locations and improved error messages
+  - Errors now use exact start/end positions from parser's mlldErrorLocation data
+  - Full-line highlighting when errors occur at the beginning of a line
+  - Multi-line error messages display with proper formatting in VSCode
+  - Parser error messages can be edited directly in the grammar files
+  - Example error messages include all valid syntax patterns
+
 ## [2.0.0-rc30]
 
 This release allows mlld to function as a logical router

@@ -15,6 +15,10 @@ This file tests all syntax highlighting features including the new operators and
 /var @files = <**/*.md>
 /var @file = <somefile.md # Something Old> as "## Something New"
 /import { helper } from "./utils.mld"
+/import @mlld/github
+/import { func } from @mlld/githb 
+/import { func as other, x, y as something } from @mlld/github
+
 /when @condition => /show "Success"
 /output @result to "file.txt"
 

@@ -24,6 +24,14 @@ Use this guide to writing both developer-facing and user-facing docs for mlld
 
 ## Details
 
+### Structure
+
+- README.md - Main entrypoint from GitHub and npm
+- @llms.txt - Terse LLM explanation of mlld and current syntax
+- docs/ - User-facing website docs
+- docs/slash/ - Detailed guide to each mlld directive
+- docs/dev/ - Developer facing architectural docs
+
 ### Template for dev-facing docs
 
 The more closely we adhere to this structure the more useful mlld will be able to be in assembling context programmatically. 
