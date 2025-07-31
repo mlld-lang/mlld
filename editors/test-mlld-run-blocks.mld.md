@@ -1,6 +1,8 @@
 # Test mlld-run Code Block Syntax Highlighting
 
-This file tests the new `mlld-run` code block syntax highlighting feature for .mld.md executable documentation.
+This file tests `mlld-run` code block syntax highlighting for .mld.md executable documentation. 
+
+IMPORTANT: This file needs to be completely rewritten to support current mlld syntax
 
 ## Regular mlld Code Block (Documentation Only)
 

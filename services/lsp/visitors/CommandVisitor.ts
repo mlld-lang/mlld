@@ -93,16 +93,55 @@ export class CommandVisitor extends BaseVisitor {
       });
       
       if (node.commandRef.args && Array.isArray(node.commandRef.args)) {
+        // Add opening parenthesis
+        const openParenPos = charPos + name.length + 1;
+        this.tokenBuilder.addToken({
+          line: node.location.start.line - 1,
+          char: openParenPos,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+        
         const newContext = {
           ...context,
           inCommand: true,
           interpolationAllowed: true,
-          variableStyle: '@var' as const
+          variableStyle: '@var' as const,
+          inFunctionArgs: true
         };
         
         for (const arg of node.commandRef.args) {
-          this.mainVisitor.visitNode(arg, newContext);
+          // For Text nodes (string arguments), tokenize with quotes
+          if (arg.type === 'Text' && arg.location) {
+            // For string arguments in function invocations, we need to include the quotes
+            // The AST gives column 20 (1-based) for "World", which is actually the quote position
+            // We just need to convert to 0-based indexing
+            const quotedStart = arg.location.start.column - 1; // Convert 1-based to 0-based
+            const quotedLength = arg.content.length + 2; // Include both quotes
+            
+            this.tokenBuilder.addToken({
+              line: arg.location.start.line - 1,
+              char: quotedStart,
+              length: quotedLength,
+              tokenType: 'string',
+              modifiers: []
+            });
+          } else {
+            this.mainVisitor.visitNode(arg, newContext);
+          }
         }
+        
+        // Add closing parenthesis
+        // The ExecInvocation node ends right after the closing paren
+        // So the closing paren is at end.column - 1
+        this.tokenBuilder.addToken({
+          line: node.location.end.line - 1,
+          char: node.location.end.column - 2, // -1 for 0-based, -1 for the paren position
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
       }
     }
   }

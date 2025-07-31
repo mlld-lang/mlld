@@ -40,7 +40,7 @@ async function expectTokens(code: string, expected: TokenExpectation[]): Promise
     const report = [`Token Coverage Report for: ${code.substring(0, 50)}...`];
     
     // Debug: show actual tokens found
-    if (code.includes('docs.md #')) {
+    if (code.includes('@greet("World")') || code.includes('docs.md #')) {
       report.push('\nFOUND TOKENS:');
       tokens.forEach(token => {
         const tokenInfo = token as any;
@@ -308,6 +308,146 @@ describe('Semantic Tokens Coverage Tests', () => {
         { tokenType: 'alligatorOpen', text: '<' },
         { tokenType: 'alligator', text: 'https://api.example.com/data' },
         { tokenType: 'alligatorClose', text: '>' }
+      ]);
+    });
+    
+    it('tokenizes file references with field access', async () => {
+      const code = '/var @author = `<package.json>.author.name`';
+      await expectTokens(code, [
+        { tokenType: 'directive', text: '/var' },
+        { tokenType: 'variable', text: '@author', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'template', text: '`' },
+        { tokenType: 'alligatorOpen', text: '<' },
+        { tokenType: 'alligator', text: 'package.json' },
+        { tokenType: 'alligatorClose', text: '>' },
+        { tokenType: 'operator', text: '.' },
+        { tokenType: 'property', text: 'author' },
+        { tokenType: 'operator', text: '.' },
+        { tokenType: 'property', text: 'name' },
+        { tokenType: 'template', text: '`' }
+      ]);
+    });
+    
+    it('tokenizes file references with pipes', async () => {
+      const code = '/var @formatted = `<data.json>|@json|@xml`';
+      await expectTokens(code, [
+        { tokenType: 'directive', text: '/var' },
+        { tokenType: 'variable', text: '@formatted', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'template', text: '`' },
+        { tokenType: 'alligatorOpen', text: '<' },
+        { tokenType: 'alligator', text: 'data.json' },
+        { tokenType: 'alligatorClose', text: '>' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variableRef', text: '@json' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variableRef', text: '@xml' },
+        { tokenType: 'template', text: '`' }
+      ]);
+    });
+    
+    it('tokenizes file references in double quotes', async () => {
+      const code = '/var @item = "<file.md>"';
+      await expectTokens(code, [
+        { tokenType: 'directive', text: '/var' },
+        { tokenType: 'variable', text: '@item', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'string', text: '"' },
+        { tokenType: 'alligatorOpen', text: '<' },
+        { tokenType: 'alligator', text: 'file.md' },
+        { tokenType: 'alligatorClose', text: '>' },
+        { tokenType: 'string', text: '"' }
+      ]);
+    });
+    
+    it('tokenizes file references in double-colon templates', async () => {
+      const code = '/var @item = ::<file.md>::';
+      await expectTokens(code, [
+        { tokenType: 'directive', text: '/var' },
+        { tokenType: 'variable', text: '@item', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'template', text: '::' },
+        { tokenType: 'alligatorOpen', text: '<' },
+        { tokenType: 'alligator', text: 'file.md' },
+        { tokenType: 'alligatorClose', text: '>' },
+        { tokenType: 'template', text: '::' }
+      ]);
+    });
+    
+    it('does not tokenize file references in single quotes', async () => {
+      const code = '/var @item = \'<file.md>\'';
+      await expectTokens(code, [
+        { tokenType: 'directive', text: '/var' },
+        { tokenType: 'variable', text: '@item', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'string', text: '\'<file.md>\'', modifiers: ['literal'] }
+      ]);
+    });
+    
+    it('tokenizes file references in triple-colon templates', async () => {
+      const code = '/var @item = :::<file.md>:::';
+      await expectTokens(code, [
+        { tokenType: 'directive', text: '/var' },
+        { tokenType: 'variable', text: '@item', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'template', text: ':::' },
+        { tokenType: 'alligatorOpen', text: '<' },
+        { tokenType: 'alligator', text: 'file.md' },
+        { tokenType: 'alligatorClose', text: '>' },
+        { tokenType: 'template', text: ':::' }
+      ]);
+    });
+    
+    it('tokenizes file references with section and as template', async () => {
+      const code = '/var @file = <somefile.md # Something> as "## Something else"';
+      await expectTokens(code, [
+        { tokenType: 'directive', text: '/var' },
+        { tokenType: 'variable', text: '@file', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'alligatorOpen', text: '<' },
+        { tokenType: 'alligator', text: 'somefile.md' },
+        { tokenType: 'operator', text: '#' },
+        { tokenType: 'section', text: 'Something' },
+        { tokenType: 'alligatorClose', text: '>' },
+        { tokenType: 'keyword', text: 'as' },
+        { tokenType: 'string', text: '"' },
+        { tokenType: 'string', text: '## Something else' },
+        { tokenType: 'string', text: '"' }
+      ]);
+    });
+    
+    // TODO: Fix grammar to properly parse field access in direct assignments
+    // See issues/GRAMMAR-FILE-REFERENCE-FIELD-ACCESS.md
+    it.skip('tokenizes file references with field access in direct assignment', async () => {
+      const code = '/var @version = <package.json>.version';
+      await expectTokens(code, [
+        { tokenType: 'directive', text: '/var' },
+        { tokenType: 'variable', text: '@version', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'alligatorOpen', text: '<' },
+        { tokenType: 'alligator', text: 'package.json' },
+        { tokenType: 'alligatorClose', text: '>' },
+        { tokenType: 'operator', text: '.' },
+        { tokenType: 'property', text: 'version' }
+      ]);
+    });
+    
+    // TODO: Fix grammar to properly parse pipes in direct assignments
+    // See issues/GRAMMAR-FILE-REFERENCE-FIELD-ACCESS.md
+    it.skip('tokenizes file references with pipes in direct assignment', async () => {
+      const code = '/var @formatted = <data.json>|@json|@xml';
+      await expectTokens(code, [
+        { tokenType: 'directive', text: '/var' },
+        { tokenType: 'variable', text: '@formatted', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'alligatorOpen', text: '<' },
+        { tokenType: 'alligator', text: 'data.json' },
+        { tokenType: 'alligatorClose', text: '>' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variableRef', text: '@json' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variableRef', text: '@xml' }
       ]);
     });
   });

@@ -41,30 +41,48 @@ import type { MlldLanguageServerConfig, VariableInfo, DocumentAnalysis } from '.
 import { ASTSemanticVisitor } from '@services/lsp/ASTSemanticVisitor';
 
 // Semantic token types for mlld syntax
+// Standard VSCode semantic token types we use
 const TOKEN_TYPES = [
-  'directive',        // /var, /show, /exe, etc.
-  'variable',         // @varname declarations
-  'variableRef',      // @varname references
-  'interpolation',    // @var inside templates
-  'template',         // template delimiters (`, ::, :::)
-  'templateContent',  // content inside templates
-  'operator',         // &&, ||, ==, !=, etc.
-  'keyword',          // run, js, sh, when, etc.
-  'embedded',         // language identifier (js, python, bash)
-  'embeddedCode',     // code inside embedded blocks
-  'alligator',        // <file.md> syntax
-  'alligatorOpen',    // < in file references
-  'alligatorClose',   // > in file references
-  'xmlTag',           // <tag> in triple-colon contexts
-  'section',          // # Section in alligator syntax
-  'parameter',        // function parameters
-  'comment',          // >> and << comments
-  'string',           // string literals
-  'number',           // numeric literals
-  'boolean',          // true/false
-  'null',             // null values
-  'property'          // property access (field names after dots)
+  'keyword',          // Keywords and directives
+  'variable',         // Variables (declarations and references)
+  'string',           // Strings, templates, file paths
+  'operator',         // Operators and brackets
+  'label',            // Labels for sections and languages
+  'type',             // Types (used for XML tags)
+  'parameter',        // Function parameters
+  'comment',          // Comments
+  'number',           // Numbers
+  'property'          // Object properties
 ];
+
+// Map mlld-specific token names to standard types
+// This allows visitors to use descriptive names while outputting standard types
+const TOKEN_TYPE_MAP: Record<string, string> = {
+  // mlld-specific mappings
+  'directive': 'keyword',          // /var, /show, etc.
+  'variableRef': 'variable',       // @variable references
+  'interpolation': 'variable',     // @var in templates
+  'template': 'string',            // Template delimiters
+  'templateContent': 'string',     // Template content
+  'embedded': 'label',             // Language labels (js, python)
+  'embeddedCode': 'string',        // Embedded code content
+  'alligator': 'string',           // File paths in <>
+  'alligatorOpen': 'operator',     // < bracket
+  'alligatorClose': 'operator',    // > bracket
+  'xmlTag': 'type',                // XML tags
+  'section': 'label',              // Section names
+  'boolean': 'keyword',            // true/false
+  'null': 'keyword',               // null
+  // Standard types (pass through)
+  'keyword': 'keyword',
+  'variable': 'variable',
+  'string': 'string',
+  'operator': 'operator',
+  'parameter': 'parameter',
+  'comment': 'comment',
+  'number': 'number',
+  'property': 'property'
+};
 
 const TOKEN_MODIFIERS = [
   'declaration',      // variable declarations
@@ -976,7 +994,7 @@ export async function startLanguageServer(): Promise<void> {
     builder: SemanticTokensBuilder
   ): void {
     // Use the AST visitor for comprehensive semantic token generation
-    const visitor = new ASTSemanticVisitor(document, builder, TOKEN_TYPES, TOKEN_MODIFIERS);
+    const visitor = new ASTSemanticVisitor(document, builder, TOKEN_TYPES, TOKEN_MODIFIERS, TOKEN_TYPE_MAP);
     visitor.visitAST(ast);
   }
 

@@ -15,13 +15,17 @@ export class TokenBuilder {
     private builder: SemanticTokensBuilder,
     private tokenTypes: string[],
     private tokenModifiers: string[],
-    private document: TextDocument
+    private document: TextDocument,
+    private tokenTypeMap?: Record<string, string>
   ) {}
   
   addToken(token: TokenInfo): void {
-    const typeIndex = this.tokenTypes.indexOf(token.tokenType);
+    // Map custom token types to standard types if mapping provided
+    const mappedType = this.tokenTypeMap?.[token.tokenType] || token.tokenType;
+    
+    const typeIndex = this.tokenTypes.indexOf(mappedType);
     if (typeIndex === -1) {
-      console.warn(`Unknown token type: ${token.tokenType}`);
+      console.warn(`Unknown token type: ${token.tokenType} (mapped to: ${mappedType})`);
       return;
     }
     

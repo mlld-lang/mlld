@@ -30,10 +30,11 @@ export class ASTSemanticVisitor {
     private document: TextDocument,
     builder: SemanticTokensBuilder,
     tokenTypes: string[],
-    tokenModifiers: string[]
+    tokenModifiers: string[],
+    tokenTypeMap?: Record<string, string>
   ) {
     this.contextStack = new ContextStack();
-    this.tokenBuilder = new TokenBuilder(builder, tokenTypes, tokenModifiers, document);
+    this.tokenBuilder = new TokenBuilder(builder, tokenTypes, tokenModifiers, document, tokenTypeMap);
     this.visitors = new Map();
     
     this.initializeVisitors();
@@ -144,6 +145,9 @@ export class ASTSemanticVisitor {
         case 'Error':
           this.visitError(node);
           break;
+        case 'Parameter':
+          this.visitParameter(node, actualContext);
+          break;
         default:
           console.warn(`Unknown node type: ${node.type}`);
           this.visitChildren(node, actualContext);
@@ -184,15 +188,44 @@ export class ASTSemanticVisitor {
   visitText(node: any, context: VisitorContext): void {
     if (!node.location || !node.content) return;
     
-    // In command context, check if this is a quoted string
-    if (context.inCommand && node.content.startsWith('"') && node.content.endsWith('"')) {
-      this.tokenBuilder.addToken({
-        line: node.location.start.line - 1,
-        char: node.location.start.column - 1,
-        length: node.content.length,
-        tokenType: 'string',
-        modifiers: []
-      });
+    // In command context, check if this is a quoted string or a string argument
+    if (context.inCommand) {
+      if (node.content.startsWith('"') && node.content.endsWith('"')) {
+        // String already has quotes
+        this.tokenBuilder.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column - 1,
+          length: node.content.length,
+          tokenType: 'string',
+          modifiers: []
+        });
+      } else if (!node.content.includes(' ') && !node.content.startsWith('-')) {
+        // String argument without quotes in AST - likely a function argument
+        // Use the document text to get the actual source with quotes
+        const source = this.document?.getText() || '';
+        const lineStart = source.split('\n').slice(0, node.location.start.line - 1).join('\n').length + (node.location.start.line > 1 ? 1 : 0);
+        const charStart = lineStart + node.location.start.column - 1;
+        
+        // Check if there's a quote before the content
+        if (charStart > 0 && source[charStart - 1] === '"') {
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: node.location.start.column - 2, // Include opening quote
+            length: node.content.length + 2, // Include both quotes
+            tokenType: 'string',
+            modifiers: []
+          });
+        } else {
+          // Just tokenize the content as is
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: node.location.start.column - 1,
+            length: node.content.length,
+            tokenType: 'string',
+            modifiers: []
+          });
+        }
+      }
     } else if (context.templateType) {
       // In template context, add as template content or string
       const tokenType = context.templateType === 'string' ? 'string' : 'templateContent';
@@ -270,5 +303,17 @@ export class ASTSemanticVisitor {
     }
     
     return 'variable';
+  }
+  
+  visitParameter(node: any, context: VisitorContext): void {
+    if (!node.location || !node.name) return;
+    
+    this.tokenBuilder.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: node.name.length,
+      tokenType: 'parameter',
+      modifiers: []
+    });
   }
 }

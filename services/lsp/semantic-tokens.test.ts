@@ -286,15 +286,19 @@ describe('Semantic Tokens', () => {
       expect(section).toBeDefined();
     });
     
-    it('should treat <file.md> as XML in triple-colon templates', async () => {
+    it('should tokenize file references in triple-colon templates', async () => {
       const code = '/var @xml = :::<file.md>:::';
       const tokens = await getSemanticTokens(code);
       
-      const xmlTag = tokens.find(t => t.tokenType === 'xmlTag');
-      expect(xmlTag).toBeDefined();
-      
+      // AST treats file references consistently, even in triple-colon templates
       const alligator = tokens.find(t => t.tokenType === 'alligator');
-      expect(alligator).toBeUndefined();
+      expect(alligator).toBeDefined();
+      
+      const alligatorOpen = tokens.find(t => t.tokenType === 'alligatorOpen');
+      expect(alligatorOpen).toBeDefined();
+      
+      const alligatorClose = tokens.find(t => t.tokenType === 'alligatorClose');
+      expect(alligatorClose).toBeDefined();
     });
   });
   

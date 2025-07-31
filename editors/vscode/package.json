@@ -52,6 +52,14 @@
         "language": "mlld",
         "scopeName": "source.mlld",
         "path": "./syntaxes/mlld-minimal.tmLanguage.json"
+      },
+      {
+        "scopeName": "markdown.mlld.codeblock",
+        "path": "./syntaxes/mlld-markdown.tmLanguage.json",
+        "injectTo": ["text.html.markdown"],
+        "embeddedLanguages": {
+          "meta.embedded.block.mlld": "mlld"
+        }
       }
     ],
     "snippets": [
@@ -104,40 +112,9 @@
     ],
     "configurationDefaults": {
       "[mlld]": {
-        "editor.semanticHighlighting.enabled": true,
-        "editor.tokenColorCustomizations": {
-          "semanticHighlighting": true
-        }
+        "editor.semanticHighlighting.enabled": true
       }
-    },
-    "semanticTokenScopes": [
-      {
-        "scopes": {
-          "directive": ["keyword.control.directive.mlld"],
-          "variable": ["variable.other.mlld"],
-          "variableRef": ["variable.other.readwrite.mlld"],
-          "interpolation": ["variable.other.interpolation.mlld"],
-          "template": ["punctuation.definition.template.mlld"],
-          "templateContent": ["string.template.mlld"],
-          "operator": ["keyword.operator.mlld"],
-          "keyword": ["keyword.other.mlld"],
-          "embedded": ["support.type.embedded.mlld"],
-          "embeddedCode": ["meta.embedded.block.mlld"],
-          "alligator": ["markup.underline.link.mlld"],
-          "alligatorOpen": ["punctuation.definition.alligator.begin.mlld"],
-          "alligatorClose": ["punctuation.definition.alligator.end.mlld"],
-          "xmlTag": ["entity.name.tag.mlld"],
-          "section": ["entity.name.section.mlld"],
-          "parameter": ["variable.parameter.mlld"],
-          "comment": ["comment.line.mlld"],
-          "string": ["string.quoted.mlld"],
-          "number": ["constant.numeric.mlld"],
-          "boolean": ["constant.language.boolean.mlld"],
-          "null": ["constant.language.null.mlld"],
-          "property": ["variable.other.property.mlld"]
-        }
-      }
-    ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "echo 'No compilation needed for JavaScript'",

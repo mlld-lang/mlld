@@ -379,8 +379,8 @@ describe('Semantic Tokens - Unit Tests', () => {
       expect(firstNameToken?.modifiers).toContain('declaration');
       
       // Second @name should be reference
-      const secondNameToken = tokens.find(t => t.text === 'name' && t.line === 1);
-      expect(secondNameToken?.tokenType).toBe('variableRef');
+      const secondNameToken = tokens.find(t => t.text === '@name' && t.line === 1);
+      expect(secondNameToken?.tokenType).toBe('variableRef'); // In tests, no mapping is applied
       expect(secondNameToken?.modifiers).toContain('reference');
     });
   });

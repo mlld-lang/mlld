@@ -13,7 +13,7 @@ This file tests all syntax highlighting features including the new operators and
 /exe @greet(name) = `Hello @name!`
 /var @docs = <~/Documents>
 /var @files = <**/*.md>
-/var @file = <somefile.md # Something> as "## Something else"
+/var @file = <somefile.md # Something Old> as "## Something New"
 /import { helper } from "./utils.mld"
 /when @condition => /show "Success"
 /output @result to "file.txt"
@@ -72,11 +72,10 @@ This file tests all syntax highlighting features including the new operators and
 /when @test => @validate() = @runTests()
 
 ### Mixed implicit/explicit in blocks
-/when @multi => [
-  @x = "implicit assignment"
-  @process()
-  /var @y = "explicit assignment"
-  @transform() = @applyFilter(@data)
+/when: [
+  @x == "implicit assignment" => @process()
+  @y == "hello" => /var @y = "explicit assignment"
+  @z == "bye" => @transform() = @applyFilter(@data)
 ]
 
 ## Alligator Syntax (File Loading)
@@ -89,15 +88,27 @@ This file tests all syntax highlighting features including the new operators and
 ### Full section with reheading
 /var @file = <somefile.md # Something> as "## Something else"
 
+### Interpolation in quotes and templates
+/var @item = `<file.md>`
+/var @item = "<file.md>"
+/var @item = ::<file.md>::
+/var @item = :::<file.md>:::
+
+#### These should not be interpolated
+/var @item = '<file.md>'
+
+#### Bracketed content without path or glob operators (.,*,/) should show as xml rather than alligator:
+/var @item = `<file> and <file.md>`
+
 ### Glob patterns
 /var @scripts = <**/*.js>
 /var @docs = <docs/*.md>
 
-### With field access
+### With field access // TODO needs a grammar fix
 /var @version = <package.json>.version
 /var @author = <package.json>.author.name
 
-### With pipes
+### With pipes // TODO needs a grammar fix
 /var @formatted = <data.json>|@json|@xml
 /var @upper = <greeting.txt>|@uppercase
 

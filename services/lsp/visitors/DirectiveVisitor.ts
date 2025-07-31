@@ -17,14 +17,16 @@ export class DirectiveVisitor extends BaseVisitor {
   visitNode(node: any, context: VisitorContext): void {
     if (!node.location) return;
     
-    
-    this.tokenBuilder.addToken({
-      line: node.location.start.line - 1,
-      char: node.location.start.column - 1,
-      length: node.kind.length + 1,
-      tokenType: 'directive',
-      modifiers: []
-    });
+    // Only add directive token if not an implicit directive
+    if (!node.meta?.implicit) {
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
+        length: node.kind.length + 1,
+        tokenType: 'directive',
+        modifiers: []
+      });
+    }
     
     if (node.kind === 'when') {
       this.visitWhenDirective(node, context);
@@ -56,9 +58,11 @@ export class DirectiveVisitor extends BaseVisitor {
         // Add closing parenthesis
         const lastParam = node.values.params[node.values.params.length - 1];
         if (lastParam && lastParam.location) {
+          // The closing parenthesis is right after the last parameter
+          // AST positions are 1-based, we need 0-based
           this.tokenBuilder.addToken({
             line: lastParam.location.end.line - 1,
-            char: lastParam.location.end.column,
+            char: lastParam.location.end.column - 1, // Convert to 0-based
             length: 1,
             tokenType: 'operator',
             modifiers: []
@@ -79,7 +83,10 @@ export class DirectiveVisitor extends BaseVisitor {
       const identifierName = firstIdentifier.identifier || '';
       
       if (identifierName) {
-        const identifierStart = node.location.start.column + node.kind.length + 2;
+        // For implicit directives, the identifier starts at the beginning
+        const identifierStart = node.meta?.implicit 
+          ? node.location.start.column 
+          : node.location.start.column + node.kind.length + 2;
         
         this.tokenBuilder.addToken({
           line: node.location.start.line - 1,
@@ -94,7 +101,15 @@ export class DirectiveVisitor extends BaseVisitor {
             node.values.command !== undefined || node.values.code !== undefined ||
             node.meta?.wrapperType !== undefined) {
           // Calculate position after variable name (including @)
-          const equalPosition = identifierStart + identifierName.length + 1;
+          let equalPosition = identifierStart + identifierName.length + 1;
+          
+          // For /exe with params, = comes after the closing parenthesis
+          if (node.kind === 'exe' && node.values.params && node.values.params.length > 0) {
+            const lastParam = node.values.params[node.values.params.length - 1];
+            if (lastParam?.location) {
+              equalPosition = lastParam.location.end.column + 1; // After ')' 
+            }
+          }
           
           this.tokenBuilder.addToken({
             line: node.location.start.line - 1,
@@ -111,22 +126,21 @@ export class DirectiveVisitor extends BaseVisitor {
   private visitDirectiveValues(directive: any, context: VisitorContext): void {
     const values = directive.values;
     
+    // Handle /show directives with content field first
+    if (directive.kind === 'show' && values.content && directive.meta?.wrapperType) {
+      const tempDirective = { ...directive, values: { ...values, value: values.content } };
+      this.visitTemplateValue(tempDirective, context);
+      return;
+    }
+    
     if (directive.kind === 'run') {
       this.visitRunDirective(directive, context);
       return;
     }
     
     if (directive.kind === 'exe' && values.template) {
-      const newContext = {
-        ...context,
-        templateType: 'backtick' as const,
-        interpolationAllowed: true,
-        variableStyle: '@var' as const
-      };
-      
-      for (const node of values.template) {
-        this.mainVisitor.visitNode(node, newContext);
-      }
+      // Use visitTemplateValue to properly handle template delimiters
+      this.visitTemplateValue(directive, context);
     } else if (directive.meta?.wrapperType) {
       this.visitTemplateValue(directive, context);
     } else if (values.variable) {
@@ -155,6 +169,7 @@ export class DirectiveVisitor extends BaseVisitor {
     } else if (values.expression) {
       this.mainVisitor.visitNode(values.expression, context);
     } else if (values.value && Array.isArray(values.value)) {
+      // First handle the value array (e.g., load-content nodes)
       for (const node of values.value) {
         if (typeof node === 'object' && node !== null) {
           this.mainVisitor.visitNode(node, context);
@@ -162,18 +177,80 @@ export class DirectiveVisitor extends BaseVisitor {
           this.handlePrimitiveValue(node, directive);
         }
       }
+      
+      // Then handle withClause if present
+      if (values.withClause) {
+        this.visitWithClause(values.withClause, directive, context);
+      }
     } else if (values.value !== undefined && directive.location) {
       this.handlePrimitiveValue(values.value, directive);
-    } else if (values.content && directive.meta?.wrapperType) {
-      // Handle /show directives with content field
-      const tempDirective = { ...directive, values: { ...values, value: values.content } };
-      this.visitTemplateValue(tempDirective, context);
     } else if (values.loadContent) {
       // Handle file references with or without sections
       this.mainVisitor.visitNode(values.loadContent, context);
     }
     
+    // Handle withClause for directives that don't have values.value
+    if (values.withClause && !values.value) {
+      this.visitWithClause(values.withClause, directive, context);
+    }
+    
     this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
+  }
+  
+  private visitWithClause(withClause: any, directive: any, context: VisitorContext): void {
+    // Find the "as" keyword position
+    const source = this.document.getText();
+    const directiveText = source.substring(directive.location.start.offset, directive.location.end.offset);
+    const asIndex = directiveText.lastIndexOf(' as ');
+    
+    if (asIndex !== -1) {
+      // Token for "as" keyword
+      this.tokenBuilder.addToken({
+        line: directive.location.start.line - 1,
+        char: directive.location.start.column - 1 + asIndex + 1, // +1 to skip the space before "as"
+        length: 2,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+    
+    // Handle the template after "as"
+    if (withClause.asSection && Array.isArray(withClause.asSection)) {
+      // The template is wrapped in quotes, find them
+      const templateStartIndex = directiveText.lastIndexOf('"');
+      if (templateStartIndex !== -1) {
+        // Token for opening quote
+        this.tokenBuilder.addToken({
+          line: directive.location.start.line - 1,
+          char: directive.location.start.column - 1 + templateStartIndex,
+          length: 1,
+          tokenType: 'string',
+          modifiers: []
+        });
+        
+        // Token for template content
+        for (const node of withClause.asSection) {
+          if (node.type === 'Text' && node.location) {
+            this.tokenBuilder.addToken({
+              line: node.location.start.line - 1,
+              char: node.location.start.column - 1,
+              length: node.content.length,
+              tokenType: 'string',
+              modifiers: []
+            });
+          }
+        }
+        
+        // Token for closing quote
+        this.tokenBuilder.addToken({
+          line: directive.location.end.line - 1,
+          char: directive.location.end.column - 2,
+          length: 1,
+          tokenType: 'string',
+          modifiers: []
+        });
+      }
+    }
   }
   
   private visitRunDirective(directive: any, context: VisitorContext): void {
@@ -307,7 +384,8 @@ export class DirectiveVisitor extends BaseVisitor {
   
   private visitTemplateValue(directive: any, context: VisitorContext): void {
     const wrapperType = directive.meta?.wrapperType;
-    const values = directive.values?.value || [];
+    // For /exe directives, use template array instead of value
+    const values = directive.kind === 'exe' ? (directive.values?.template || []) : (directive.values?.value || []);
     
     let templateType: 'backtick' | 'doubleColon' | 'tripleColon' | null = null;
     let variableStyle: '@var' | '{{var}}' = '@var';
@@ -571,12 +649,19 @@ export class DirectiveVisitor extends BaseVisitor {
               this.mainVisitor.visitNode(action, context);
             }
             
-            // Find closing bracket
+            // Find closing bracket position
             const closeBracketIndex = directiveText.lastIndexOf(']');
             if (closeBracketIndex !== -1) {
+              // Calculate the actual line and column for the closing bracket
+              const linesBeforeBracket = directiveText.substring(0, closeBracketIndex).split('\n');
+              const bracketLine = node.location.start.line + linesBeforeBracket.length - 2;
+              const bracketColumn = linesBeforeBracket.length > 1 
+                ? linesBeforeBracket[linesBeforeBracket.length - 1].length
+                : node.location.start.column + closeBracketIndex - 1;
+              
               this.tokenBuilder.addToken({
-                line: node.location.start.line - 1,
-                char: node.location.start.column + closeBracketIndex - 1,
+                line: bracketLine,
+                char: bracketColumn,
                 length: 1,
                 tokenType: 'operator',
                 modifiers: []

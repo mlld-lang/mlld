@@ -10,8 +10,72 @@ const path = require('path');
 
 let client;
 
+function applyDefaultSemanticTokenColors() {
+  const config = vscode.workspace.getConfiguration();
+  const currentCustomizations = config.get('editor.tokenColorCustomizations') || {};
+  
+  // Default colors for mlld-specific semantic tokens
+  const mlldDefaults = {
+    // Alligator syntax (file references)
+    "alligator": "#4EC9B0",            // Cyan - the file path
+    "alligatorOpen": "#808080",        // Gray - < bracket
+    "alligatorClose": "#808080",       // Gray - > bracket
+    
+    // XML-like tags in triple-colon templates
+    "xmlTag": "#569CD6",               // Blue - tag names
+    
+    // Sections in file references
+    "section": "#DCDCAA",              // Yellow - section names
+    
+    // Function/exe parameters
+    "parameter": "#9CDCFE",            // Light blue - parameter names
+    
+    // Other mlld-specific tokens
+    "directive": "#C586C0",            // Purple - /var, /show, etc.
+    "variableRef": "#9CDCFE",          // Light blue - @variable references
+    "interpolation": "#CE9178",        // Orange - interpolated variables
+    "templateContent": "#CE9178",      // Orange - template content
+    "embedded": "#4EC9B0",             // Cyan - embedded language indicator
+    "embeddedCode": "#D4D4D4",         // Light gray - embedded code
+    
+    // Standard tokens that themes might not color in our context
+    "keyword": "#569CD6",              // Blue - as, first, all, any, etc.
+    "string": "#CE9178",               // Orange - string literals
+    "operator": "#D4D4D4",             // Light gray - =, >, <, etc.
+    "template": "#569CD6",             // Blue - template delimiters
+    "variable": "#9CDCFE",             // Light blue - variable declarations
+    "comment": "#6A9955",              // Green - comments
+    "number": "#B5CEA8",               // Light green - numbers
+    "boolean": "#569CD6",              // Blue - true/false
+    "null": "#569CD6",                 // Blue - null
+    "property": "#9CDCFE"              // Light blue - object properties
+  };
+  
+  // Merge with existing customizations
+  const semanticTokenColors = {
+    ...mlldDefaults,
+    ...(currentCustomizations.semanticHighlighting?.['[*]']?.semanticTokenColors || {})
+  };
+  
+  // Apply the colors
+  const newCustomizations = {
+    ...currentCustomizations,
+    "semanticHighlighting": true,
+    "[*]": {
+      ...currentCustomizations['[*]'],
+      "semanticTokenColors": semanticTokenColors
+    }
+  };
+  
+  // Update the configuration
+  config.update('editor.tokenColorCustomizations', newCustomizations, vscode.ConfigurationTarget.Global);
+}
+
 function activate(context) {
   console.log('mlld extension is now active!');
+
+  // Don't apply default colors - let the theme handle it
+  // applyDefaultSemanticTokenColors();
 
   // Command to manually switch .md files to mlld mode
   const switchToMLLDCommand = vscode.commands.registerCommand('mlld.switchToMLLD', () => {
@@ -64,12 +128,12 @@ function startLanguageServer(context) {
     initializationOptions: {
       // Can add custom initialization options here
     },
-    // Enable semantic tokens
+    // Enable semantic tokens using standard VSCode types
     semanticTokens: {
       augmentsSyntaxTokens: false, // Don't merge with TextMate tokens
       multilineTokenSupport: true,
       overlappingTokenSupport: false,
-      tokenTypes: ['directive', 'variable', 'variableRef', 'interpolation', 'template', 'templateContent', 'operator', 'keyword', 'embedded', 'embeddedCode', 'alligator', 'alligatorOpen', 'alligatorClose', 'xmlTag', 'section', 'parameter', 'comment', 'string', 'number', 'boolean', 'null', 'property'],
+      tokenTypes: ['keyword', 'variable', 'string', 'operator', 'label', 'type', 'parameter', 'comment', 'number', 'property'],
       tokenModifiers: ['declaration', 'reference', 'readonly', 'interpolated', 'literal', 'invalid', 'deprecated']
     },
     middleware: {
