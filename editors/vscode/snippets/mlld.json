@@ -2,21 +2,21 @@
   "Variable": {
     "prefix": "var",
     "body": [
-      "/var @${1:name} = \"${2:value}\""
+      "var @${1:name} = \"${2:value}\""
     ],
     "description": "Create a variable"
   },
   "Variable with Template": {
     "prefix": "vartemplate",
     "body": [
-      "/var @${1:name} = `${2:content with @${3:variable}}`"
+      "var @${1:name} = `${2:content with @${3:variable}}`"
     ],
     "description": "Create a variable with template interpolation"
   },
   "Data Object": {
     "prefix": "vardata",
     "body": [
-      "/var @${1:name} = {",
+      "var @${1:name} = {",
       "  \"${2:key}\": \"${3:value}\"",
       "}"
     ],
@@ -25,28 +25,28 @@
   "Array": {
     "prefix": "vararray",
     "body": [
-      "/var @${1:name} = [${2:\"item1\", \"item2\"}]"
+      "var @${1:name} = [${2:\"item1\", \"item2\"}]"
     ],
     "description": "Create an array"
   },
   "Path Variable": {
     "prefix": "varpath",
     "body": [
-      "/var @${1:name} = <${2:./path/to/file}>"
+      "var @${1:name} = <${2:./path/to/file}>"
     ],
     "description": "Load file contents into a variable"
   },
   "Run Command": {
     "prefix": "run",
     "body": [
-      "/run {${1:echo \"Hello World\"}}"
+      "run {${1:echo \"Hello World\"}}"
     ],
     "description": "Run a shell command (single line)"
   },
   "Shell Script": {
     "prefix": "sh",
     "body": [
-      "/sh {",
+      "sh {",
       "  ${1:echo \"Multi-line script\"}",
       "}"
     ],
@@ -55,7 +55,7 @@
   "Execute JavaScript": {
     "prefix": "exe",
     "body": [
-      "/exe @${1:name}(${2:param}) = js {",
+      "exe @${1:name}(${2:param}) = js {",
       "  ${3:// code}",
       "  return ${4:result};",
       "}"
@@ -65,52 +65,52 @@
   "Show Content": {
     "prefix": "show",
     "body": [
-      "/show `${1:Content to display}`"
+      "show `${1:Content to display}`"
     ],
     "description": "Display content"
   },
   "Show Variable": {
     "prefix": "showvar",
     "body": [
-      "/show @${1:variableName}"
+      "show @${1:variableName}"
     ],
     "description": "Display a variable's value"
   },
   "Import All": {
     "prefix": "import",
     "body": [
-      "/import * from \"${1:config.mld}\""
+      "import * from \"${1:config.mld}\""
     ],
     "description": "Import all variables from a file"
   },
   "Import Selected": {
     "prefix": "importselect",
     "body": [
-      "/import { @${1:var1}, @${2:var2} } from \"${3:config.mld}\""
+      "import { @${1:var1}, @${2:var2} } from \"${3:config.mld}\""
     ],
     "description": "Import specific variables from a file"
   },
   "Import Module": {
     "prefix": "importmodule",
     "body": [
-      "/import { ${1:function} } from @${2:company/module}"
+      "import { ${1:function} } from @${2:company/module}"
     ],
     "description": "Import from a module"
   },
   "When Condition": {
     "prefix": "when",
     "body": [
-      "/when @${1:condition} => ${2:/show `Action`}"
+      "when @${1:condition} => ${2:show `Action`}"
     ],
     "description": "Simple conditional"
   },
   "When First": {
     "prefix": "whenfirst",
     "body": [
-      "/when @${1:variable} first: [",
-      "  \"${2:value1}\" => ${3:/show `Case 1`}",
-      "  \"${4:value2}\" => ${5:/show `Case 2`}",
-      "  _ => ${6:/show `Default`}",
+      "when @${1:variable} first: [",
+      "  \"${2:value1}\" => ${3:show `Case 1`}",
+      "  \"${4:value2}\" => ${5:show `Case 2`}",
+      "  _ => ${6:show `Default`}",
       "]"
     ],
     "description": "Switch-style conditional (first match)"
@@ -118,14 +118,14 @@
   "Output to File": {
     "prefix": "output",
     "body": [
-      "/output @${1:content} to \"${2:output.txt}\""
+      "output @${1:content} to \"${2:output.txt}\""
     ],
     "description": "Output content to a file"
   },
   "Foreach": {
     "prefix": "foreach",
     "body": [
-      "/var @${1:results} = foreach @${2:function}(@${3:array})"
+      "var @${1:results} = foreach @${2:function}(@${3:array})"
     ],
     "description": "Apply function to each array element"
   },
