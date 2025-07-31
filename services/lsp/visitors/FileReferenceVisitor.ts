@@ -49,6 +49,7 @@ export class FileReferenceVisitor extends BaseVisitor {
     const text = TextExtractor.extract([node]);
     
     if (context.templateType === 'tripleColon') {
+      // In triple-colon context, treat as XML tag (single token)
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
         char: node.location.start.column - 1,
@@ -57,20 +58,83 @@ export class FileReferenceVisitor extends BaseVisitor {
         modifiers: []
       });
     } else {
+      // Tokenize as: <, filename, > (and possibly # section)
+      const nodeStartChar = node.location.start.column - 1;
+      
+      // Token for "<"
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
-        char: node.location.start.column - 1,
-        length: text.length,
-        tokenType: 'alligator',
+        char: nodeStartChar,
+        length: 1,
+        tokenType: 'alligatorOpen',
         modifiers: []
       });
       
-      if (node.section && node.sectionLocation) {
+      if (!node.section) {
+        // No section - just filename and >
+        const filenameLength = text.length - 2; // Exclude < and >
+        if (filenameLength > 0) {
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: nodeStartChar + 1,
+            length: filenameLength,
+            tokenType: 'alligator',
+            modifiers: []
+          });
+        }
+        
+        // Token for ">"
         this.tokenBuilder.addToken({
-          line: node.sectionLocation.start.line - 1,
-          char: node.sectionLocation.start.column - 1,
-          length: node.section.length,
-          tokenType: 'section',
+          line: node.location.start.line - 1,
+          char: nodeStartChar + text.length - 1,
+          length: 1,
+          tokenType: 'alligatorClose',
+          modifiers: []
+        });
+      } else {
+        // Has section - need to handle # and section name
+        const hashIndex = text.indexOf('#');
+        
+        // Token for filename (between < and #)
+        if (hashIndex > 1) {
+          const filenameLength = hashIndex - 1; // From after < to before #
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: nodeStartChar + 1,
+            length: filenameLength,
+            tokenType: 'alligator',
+            modifiers: []
+          });
+        }
+        
+        // Token for "#"
+        if (hashIndex !== -1) {
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: nodeStartChar + hashIndex,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
+        
+        // Token for section
+        if (node.sectionLocation) {
+          this.tokenBuilder.addToken({
+            line: node.sectionLocation.start.line - 1,
+            char: node.sectionLocation.start.column - 1,
+            length: node.section.length,
+            tokenType: 'section',
+            modifiers: []
+          });
+        }
+        
+        // Token for ">"
+        this.tokenBuilder.addToken({
+          line: node.location.start.line - 1,
+          char: nodeStartChar + text.length - 1,
+          length: 1,
+          tokenType: 'alligatorClose',
           modifiers: []
         });
       }
@@ -78,15 +142,83 @@ export class FileReferenceVisitor extends BaseVisitor {
   }
   
   private visitLoadContent(node: any, context: VisitorContext): void {
-    this.tokenBuilder.addToken({
-      line: node.location.start.line - 1,
-      char: node.location.start.column - 1,
-      length: node.location.end.column - node.location.start.column,
-      tokenType: 'alligator',
-      modifiers: []
-    });
+    const sourceText = this.document.getText();
+    const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const nodeStartChar = node.location.start.column - 1;
     
-    if (node.options?.section?.identifier) {
+    if (!node.options?.section?.identifier) {
+      // No section - tokenize as: <, filename, >
+      
+      // Token for "<"
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char: nodeStartChar,
+        length: 1,
+        tokenType: 'alligatorOpen',
+        modifiers: []
+      });
+      
+      // Token for filename (everything between < and >)
+      const filenameLength = nodeText.length - 2; // Exclude < and >
+      if (filenameLength > 0) {
+        this.tokenBuilder.addToken({
+          line: node.location.start.line - 1,
+          char: nodeStartChar + 1,
+          length: filenameLength,
+          tokenType: 'alligator',
+          modifiers: []
+        });
+      }
+      
+      // Token for ">"
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char: nodeStartChar + nodeText.length - 1,
+        length: 1,
+        tokenType: 'alligatorClose',
+        modifiers: []
+      });
+    } else {
+      // Has section - tokenize as: <, filename, #, section, >
+      
+      // Token for "<"
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char: nodeStartChar,
+        length: 1,
+        tokenType: 'alligatorOpen',
+        modifiers: []
+      });
+      
+      // Find the # position to know where filename ends
+      const hashIndex = nodeText.indexOf('#');
+      if (hashIndex === -1) return; // Shouldn't happen
+      
+      // Token for filename (from after < to before space before #)
+      const spaceBeforeHash = nodeText.lastIndexOf(' ', hashIndex - 1);
+      const filenameEnd = spaceBeforeHash > 0 ? spaceBeforeHash : hashIndex;
+      const filenameLength = filenameEnd - 1; // -1 for the initial <
+      
+      if (filenameLength > 0) {
+        this.tokenBuilder.addToken({
+          line: node.location.start.line - 1,
+          char: nodeStartChar + 1, // After <
+          length: filenameLength,
+          tokenType: 'alligator',
+          modifiers: []
+        });
+      }
+      
+      // Token for "#"
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char: nodeStartChar + hashIndex,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
+      
+      // Token for section
       const sectionNode = node.options.section.identifier;
       if (sectionNode.location) {
         this.tokenBuilder.addToken({
@@ -97,7 +229,35 @@ export class FileReferenceVisitor extends BaseVisitor {
           modifiers: []
         });
       }
+      
+      // Token for ">"
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char: nodeStartChar + nodeText.length - 1,
+        length: 1,
+        tokenType: 'alligatorClose',
+        modifiers: []
+      });
     }
+  }
+  
+  private getLineStartOffset(text: string, lineIndex: number): number {
+    if (lineIndex === 0) return 0;
+    
+    let offset = 0;
+    let currentLine = 0;
+    
+    for (let i = 0; i < text.length && currentLine < lineIndex; i++) {
+      if (text[i] === '\n') {
+        currentLine++;
+        if (currentLine === lineIndex) {
+          offset = i + 1;
+          break;
+        }
+      }
+    }
+    
+    return offset;
   }
   
   private visitComment(node: any): void {

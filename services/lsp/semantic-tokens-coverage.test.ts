@@ -39,6 +39,15 @@ async function expectTokens(code: string, expected: TokenExpectation[]): Promise
   if (missing.length > 0 || incorrect.length > 0) {
     const report = [`Token Coverage Report for: ${code.substring(0, 50)}...`];
     
+    // Debug: show actual tokens found
+    if (code.includes('docs.md #')) {
+      report.push('\nFOUND TOKENS:');
+      tokens.forEach(token => {
+        const tokenInfo = token as any;
+        report.push(`  - "${tokenInfo.text}" (type: ${tokenInfo.tokenType})`);
+      });
+    }
+    
     if (missing.length > 0) {
       report.push('\nMISSING TOKENS:');
       missing.forEach(m => {
@@ -272,7 +281,9 @@ describe('Semantic Tokens Coverage Tests', () => {
         { tokenType: 'directive', text: '/var' },
         { tokenType: 'variable', text: '@content', modifiers: ['declaration'] },
         { tokenType: 'operator', text: '=' },
-        { tokenType: 'alligator', text: '<README.md>' }
+        { tokenType: 'alligatorOpen', text: '<' },
+        { tokenType: 'alligator', text: 'README.md' },
+        { tokenType: 'alligatorClose', text: '>' }
       ]);
     });
     
@@ -280,9 +291,11 @@ describe('Semantic Tokens Coverage Tests', () => {
       const code = '/show <docs.md # Installation>';
       await expectTokens(code, [
         { tokenType: 'directive', text: '/show' },
-        { tokenType: 'alligator', text: '<docs.md>' },
+        { tokenType: 'alligatorOpen', text: '<' },
+        { tokenType: 'alligator', text: 'docs.md' },
         { tokenType: 'operator', text: '#' },
-        { tokenType: 'section', text: 'Installation' }
+        { tokenType: 'section', text: 'Installation' },
+        { tokenType: 'alligatorClose', text: '>' }
       ]);
     });
     
@@ -292,7 +305,9 @@ describe('Semantic Tokens Coverage Tests', () => {
         { tokenType: 'directive', text: '/var' },
         { tokenType: 'variable', text: '@data', modifiers: ['declaration'] },
         { tokenType: 'operator', text: '=' },
-        { tokenType: 'alligator', text: '<https://api.example.com/data>' }
+        { tokenType: 'alligatorOpen', text: '<' },
+        { tokenType: 'alligator', text: 'https://api.example.com/data' },
+        { tokenType: 'alligatorClose', text: '>' }
       ]);
     });
   });

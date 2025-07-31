@@ -11,8 +11,10 @@ This file tests all syntax highlighting features including the new operators and
 /show @name
 /run {echo "Hello"}
 /exe @greet(name) = `Hello @name!`
-/path @docs = [~/Documents]
-/import { helper } from [./utils.mld]
+/var @docs = <~/Documents>
+/var @files = <**/*.md>
+/var @file = <somefile.md # Something> as "## Something else"
+/import { helper } from "./utils.mld"
 /when @condition => /show "Success"
 /output @result to "file.txt"
 
@@ -84,6 +86,9 @@ This file tests all syntax highlighting features including the new operators and
 /var @data = <config.json>
 /show <license.txt>
 
+### Full section with reheading
+/var @file = <somefile.md # Something> as "## Something else"
+
 ### Glob patterns
 /var @scripts = <**/*.js>
 /var @docs = <docs/*.md>
@@ -135,7 +140,6 @@ This file tests all syntax highlighting features including the new operators and
 /var @debug_info = @debug
 /var @input_data = @input
 /var @project = @base
-/var @projectShort = @.
 
 ## Primitives
 /var @count = 42
@@ -145,7 +149,7 @@ This file tests all syntax highlighting features including the new operators and
 /var @empty = null
 
 ## Arrays and Objects
-/var @list = [1, 2, 3, "four", true, null]
+/var @list = [1, 2, 3, "four", true, null, <file.md>, @myvar, @myvar.field]
 /var @config = {
   name: "mlld",
   version: "2.0.0",

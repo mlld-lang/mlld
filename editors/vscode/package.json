@@ -124,6 +124,8 @@
           "embedded": ["support.type.embedded.mlld"],
           "embeddedCode": ["meta.embedded.block.mlld"],
           "alligator": ["markup.underline.link.mlld"],
+          "alligatorOpen": ["punctuation.definition.alligator.begin.mlld"],
+          "alligatorClose": ["punctuation.definition.alligator.end.mlld"],
           "xmlTag": ["entity.name.tag.mlld"],
           "section": ["entity.name.section.mlld"],
           "parameter": ["variable.parameter.mlld"],

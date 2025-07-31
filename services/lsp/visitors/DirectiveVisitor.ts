@@ -168,6 +168,9 @@ export class DirectiveVisitor extends BaseVisitor {
       // Handle /show directives with content field
       const tempDirective = { ...directive, values: { ...values, value: values.content } };
       this.visitTemplateValue(tempDirective, context);
+    } else if (values.loadContent) {
+      // Handle file references with or without sections
+      this.mainVisitor.visitNode(values.loadContent, context);
     }
     
     this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));

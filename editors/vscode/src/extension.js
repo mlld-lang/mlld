@@ -69,7 +69,7 @@ function startLanguageServer(context) {
       augmentsSyntaxTokens: false, // Don't merge with TextMate tokens
       multilineTokenSupport: true,
       overlappingTokenSupport: false,
-      tokenTypes: ['directive', 'variable', 'variableRef', 'interpolation', 'template', 'templateContent', 'operator', 'keyword', 'embedded', 'embeddedCode', 'alligator', 'xmlTag', 'section', 'parameter', 'comment', 'string', 'number', 'boolean', 'null', 'property'],
+      tokenTypes: ['directive', 'variable', 'variableRef', 'interpolation', 'template', 'templateContent', 'operator', 'keyword', 'embedded', 'embeddedCode', 'alligator', 'alligatorOpen', 'alligatorClose', 'xmlTag', 'section', 'parameter', 'comment', 'string', 'number', 'boolean', 'null', 'property'],
       tokenModifiers: ['declaration', 'reference', 'readonly', 'interpolated', 'literal', 'invalid', 'deprecated']
     },
     middleware: {

@@ -53,6 +53,8 @@ const TOKEN_TYPES = [
   'embedded',         // language identifier (js, python, bash)
   'embeddedCode',     // code inside embedded blocks
   'alligator',        // <file.md> syntax
+  'alligatorOpen',    // < in file references
+  'alligatorClose',   // > in file references
   'xmlTag',           // <tag> in triple-colon contexts
   'section',          // # Section in alligator syntax
   'parameter',        // function parameters
