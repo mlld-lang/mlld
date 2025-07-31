@@ -179,7 +179,7 @@ export class DirectiveVisitor extends BaseVisitor {
     if (values?.lang) {
       const langText = TextExtractor.extract(Array.isArray(values.lang) ? values.lang : [values.lang]);
       if (langText && directive.location) {
-        const langStart = directive.location.start.column + 4;
+        const langStart = directive.location.start.column + 4; // After "/run "
         
         this.tokenBuilder.addToken({
           line: directive.location.start.line - 1,
@@ -190,44 +190,51 @@ export class DirectiveVisitor extends BaseVisitor {
         });
       }
       
-      // Add opening brace for language-specific code
-      if (values.code && Array.isArray(values.code) && values.code.length > 0) {
-        const firstCode = values.code[0];
-        if (firstCode.location) {
-          // Opening brace is 1 char before code starts
+      // For language-specific code blocks, extract from source text
+      if (values.code && directive.location) {
+        const sourceText = this.document.getText();
+        const directiveText = sourceText.substring(
+          directive.location.start.offset,
+          directive.location.end.offset
+        );
+        
+        // Find the opening brace position
+        const braceIndex = directiveText.indexOf('{');
+        if (braceIndex !== -1) {
+          // Add opening brace token
           this.tokenBuilder.addToken({
-            line: firstCode.location.start.line - 1,
-            char: firstCode.location.start.column - 2,
+            line: directive.location.start.line - 1,
+            char: directive.location.start.column + braceIndex - 1,
             length: 1,
             tokenType: 'operator',
             modifiers: []
           });
-        }
-        
-        // Add code content as embeddedCode
-        for (const codeNode of values.code) {
-          if (codeNode.location && codeNode.content) {
+          
+          // Find closing brace position
+          const closeBraceIndex = directiveText.lastIndexOf('}');
+          if (closeBraceIndex !== -1 && closeBraceIndex > braceIndex) {
+            // Extract code content between braces (including spaces)
+            const codeContent = directiveText.substring(braceIndex + 1, closeBraceIndex);
+            
+            // Add embedded code token
             this.tokenBuilder.addToken({
-              line: codeNode.location.start.line - 1,
-              char: codeNode.location.start.column - 1,
-              length: codeNode.content.length,
+              line: directive.location.start.line - 1,
+              char: directive.location.start.column + braceIndex,
+              length: codeContent.length,
               tokenType: 'embeddedCode',
               modifiers: [],
               data: { language: langText }
             });
+            
+            // Add closing brace token
+            this.tokenBuilder.addToken({
+              line: directive.location.start.line - 1,
+              char: directive.location.start.column + closeBraceIndex - 1,
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
           }
-        }
-        
-        // Add closing brace
-        const lastCode = values.code[values.code.length - 1];
-        if (lastCode.location) {
-          this.tokenBuilder.addToken({
-            line: lastCode.location.end.line - 1,
-            char: lastCode.location.end.column,
-            length: 1,
-            tokenType: 'operator',
-            modifiers: []
-          });
         }
       }
     } else {
@@ -531,8 +538,46 @@ export class DirectiveVisitor extends BaseVisitor {
         
         if (node.values.action) {
           if (Array.isArray(node.values.action)) {
+            // Handle block delimiters for array actions
+            const sourceText = this.document.getText();
+            const directiveText = sourceText.substring(
+              node.location.start.offset,
+              node.location.end.offset
+            );
+            
+            // Find opening bracket
+            const arrowIndex = directiveText.indexOf('=>');
+            if (arrowIndex !== -1) {
+              const afterArrow = directiveText.substring(arrowIndex + 2);
+              const openBracketIndex = afterArrow.search(/\[/);
+              
+              if (openBracketIndex !== -1) {
+                // Add opening bracket token
+                this.tokenBuilder.addToken({
+                  line: node.location.start.line - 1,
+                  char: node.location.start.column + arrowIndex + 2 + openBracketIndex - 1,
+                  length: 1,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
+            }
+            
+            // Visit each action
             for (const action of node.values.action) {
               this.mainVisitor.visitNode(action, context);
+            }
+            
+            // Find closing bracket
+            const closeBracketIndex = directiveText.lastIndexOf(']');
+            if (closeBracketIndex !== -1) {
+              this.tokenBuilder.addToken({
+                line: node.location.start.line - 1,
+                char: node.location.start.column + closeBracketIndex - 1,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
             }
           } else {
             this.mainVisitor.visitNode(node.values.action, context);

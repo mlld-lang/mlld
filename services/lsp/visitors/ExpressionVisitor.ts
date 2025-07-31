@@ -68,26 +68,44 @@ export class ExpressionVisitor extends BaseVisitor {
   private visitTernaryExpression(node: any, context: VisitorContext): void {
     if (node.condition) this.mainVisitor.visitNode(node.condition, context);
     
-    if (node.questionLocation) {
-      this.tokenBuilder.addToken({
-        line: node.questionLocation.start.line - 1,
-        char: node.questionLocation.start.column - 1,
-        length: 1,
-        tokenType: 'operator',
-        modifiers: []
-      });
+    // Add '?' operator between condition and trueBranch
+    if (node.condition?.location && node.trueBranch?.location) {
+      const sourceText = this.document.getText();
+      const start = node.condition.location.end.offset;
+      const end = node.trueBranch.location.start.offset;
+      const between = sourceText.substring(start, end);
+      const questionIndex = between.indexOf('?');
+      
+      if (questionIndex !== -1) {
+        this.tokenBuilder.addToken({
+          line: node.condition.location.end.line - 1,
+          char: node.condition.location.end.column + questionIndex - 1,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+      }
     }
     
     if (node.trueBranch) this.mainVisitor.visitNode(node.trueBranch, context);
     
-    if (node.colonLocation) {
-      this.tokenBuilder.addToken({
-        line: node.colonLocation.start.line - 1,
-        char: node.colonLocation.start.column - 1,
-        length: 1,
-        tokenType: 'operator',
-        modifiers: []
-      });
+    // Add ':' operator between trueBranch and falseBranch
+    if (node.trueBranch?.location && node.falseBranch?.location) {
+      const sourceText = this.document.getText();
+      const start = node.trueBranch.location.end.offset;
+      const end = node.falseBranch.location.start.offset;
+      const between = sourceText.substring(start, end);
+      const colonIndex = between.indexOf(':');
+      
+      if (colonIndex !== -1) {
+        this.tokenBuilder.addToken({
+          line: node.trueBranch.location.end.line - 1,
+          char: node.trueBranch.location.end.column + colonIndex - 1,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+      }
     }
     
     if (node.falseBranch) this.mainVisitor.visitNode(node.falseBranch, context);
