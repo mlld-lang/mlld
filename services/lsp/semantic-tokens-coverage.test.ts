@@ -411,9 +411,9 @@ describe('Semantic Tokens Coverage Tests', () => {
         { tokenType: 'label', text: 'Something' },
         { tokenType: 'operator', text: '>' },
         { tokenType: 'keyword', text: 'as' },
-        { tokenType: 'string', text: '"' },
+        { tokenType: 'operator', text: '"' },
         { tokenType: 'string', text: '## Something else' },
-        { tokenType: 'string', text: '"' }
+        { tokenType: 'operator', text: '"' }
       ]);
     });
     

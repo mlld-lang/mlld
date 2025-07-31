@@ -216,21 +216,27 @@ export class DirectiveVisitor extends BaseVisitor {
     
     // Handle the template after "as"
     if (withClause.asSection && Array.isArray(withClause.asSection)) {
-      // The template is wrapped in quotes, find them
-      const templateStartIndex = directiveText.lastIndexOf('"');
-      if (templateStartIndex !== -1) {
+      // Find the opening quote position - it comes after "as "
+      const asKeywordEnd = asIndex + 4; // " as " is 4 characters
+      const afterAs = directiveText.substring(asKeywordEnd);
+      const openQuoteIndex = afterAs.indexOf('"');
+      
+      if (openQuoteIndex !== -1) {
+        const openQuotePosition = asKeywordEnd + openQuoteIndex;
+        
         // Token for opening quote
         this.tokenBuilder.addToken({
           line: directive.location.start.line - 1,
-          char: directive.location.start.column - 1 + templateStartIndex,
+          char: directive.location.start.column - 1 + openQuotePosition,
           length: 1,
-          tokenType: 'string',
+          tokenType: 'operator',
           modifiers: []
         });
         
-        // Token for template content
+        // Process nodes within the template
         for (const node of withClause.asSection) {
           if (node.type === 'Text' && node.location) {
+            // Token for text content as string
             this.tokenBuilder.addToken({
               line: node.location.start.line - 1,
               char: node.location.start.column - 1,
@@ -238,17 +244,24 @@ export class DirectiveVisitor extends BaseVisitor {
               tokenType: 'string',
               modifiers: []
             });
+          } else if (node.type === 'FileReference') {
+            // Let FileReferenceVisitor handle the FileReference tokens
+            this.mainVisitor.visitNode(node, context);
           }
         }
         
-        // Token for closing quote
-        this.tokenBuilder.addToken({
-          line: directive.location.end.line - 1,
-          char: directive.location.end.column - 2,
-          length: 1,
-          tokenType: 'string',
-          modifiers: []
-        });
+        // Find the closing quote position
+        const closingQuoteIndex = directiveText.lastIndexOf('"');
+        if (closingQuoteIndex !== -1 && closingQuoteIndex > openQuotePosition) {
+          // Token for closing quote
+          this.tokenBuilder.addToken({
+            line: directive.location.start.line - 1,
+            char: directive.location.start.column - 1 + closingQuoteIndex,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
       }
     }
   }

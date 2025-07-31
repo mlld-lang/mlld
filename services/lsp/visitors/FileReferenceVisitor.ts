@@ -48,6 +48,48 @@ export class FileReferenceVisitor extends BaseVisitor {
   private visitFileReference(node: any, context: VisitorContext): void {
     const text = TextExtractor.extract([node]);
     
+    // Check if this is a placeholder FileReference (<>)
+    if (node.source?.type === 'placeholder') {
+      // For placeholders, tokenize the entire <> as a single variable token
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
+        length: 2, // "<>"
+        tokenType: 'variable',
+        modifiers: []
+      });
+      
+      // Handle field access if present (e.g., <>.fm.title)
+      if (node.fields && node.fields.length > 0) {
+        const sourceText = this.document.getText();
+        let currentPos = 2; // Start after <>
+        
+        for (const field of node.fields) {
+          // Token for "."
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: node.location.start.column - 1 + currentPos,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+          
+          // Token for field name
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: node.location.start.column - 1 + currentPos + 1,
+            length: field.value.length,
+            tokenType: 'property',
+            modifiers: []
+          });
+          
+          currentPos += 1 + field.value.length; // Move past . and field name
+        }
+      }
+      
+      return;
+    }
+    
     // Always tokenize as: <, filename, > (and possibly # section)
     const nodeStartChar = node.location.start.column - 1;
     const sourceText = this.document.getText();

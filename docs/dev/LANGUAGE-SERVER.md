@@ -371,8 +371,13 @@ If syntax highlighting isn't showing correctly:
 
 3. **Use Token Inspector**:
    - Place cursor on a token
-   - Run: `Developer: Inspect Editor Tokens and Scopes`
+   - Run: `Developer: Inspect Editor Tokens and Scopes` 
    - Should show semantic token type
+   - This tool is invaluable for debugging - it shows:
+     - The exact semantic token type (or "Other" if no token)
+     - The color being applied by the theme
+     - TextMate scopes (if any)
+     - Whether semantic tokens are overriding syntax highlighting
 
 4. **Enable Debug Logging**:
    ```bash
