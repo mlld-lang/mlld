@@ -10,6 +10,7 @@ interface TokenExpectation {
 async function expectTokens(code: string, expected: TokenExpectation[]): Promise<void> {
   const tokens = await getSemanticTokens(code);
   
+  
   // Create a map of actual tokens by their text for easier comparison
   const actualTokensMap = new Map<string, any>();
   tokens.forEach(token => {

@@ -17,6 +17,7 @@ export class DirectiveVisitor extends BaseVisitor {
   visitNode(node: any, context: VisitorContext): void {
     if (!node.location) return;
     
+    
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
       char: node.location.start.column - 1,
@@ -163,6 +164,10 @@ export class DirectiveVisitor extends BaseVisitor {
       }
     } else if (values.value !== undefined && directive.location) {
       this.handlePrimitiveValue(values.value, directive);
+    } else if (values.content && directive.meta?.wrapperType) {
+      // Handle /show directives with content field
+      const tempDirective = { ...directive, values: { ...values, value: values.content } };
+      this.visitTemplateValue(tempDirective, context);
     }
     
     this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
@@ -318,22 +323,31 @@ export class DirectiveVisitor extends BaseVisitor {
         delimiterLength = 1;
         break;
       case 'doubleQuote':
-        // For double quotes, tokenize as a string literal
-        if (values.length > 0 && values[0].location) {
-          const startOffset = values[0].location.start.offset - 1; // Include opening quote
-          const endOffset = values[values.length - 1].location.end.offset + 1; // Include closing quote
-          const source = this.document.getText();
-          const stringContent = source.substring(startOffset, endOffset);
-          
-          this.tokenBuilder.addToken({
-            line: directive.location.start.line - 1,
-            char: values[0].location.start.column - 2, // -1 for 0-based, -1 for quote
-            length: stringContent.length,
-            tokenType: 'string',
-            modifiers: []
-          });
+        // Check if this is a simple string literal (no interpolation)
+        if (values.length === 1 && values[0].type === 'Text') {
+          // Simple string literal - tokenize as a single string
+          if (values[0].location) {
+            const startOffset = values[0].location.start.offset - 1; // Include opening quote
+            const endOffset = values[0].location.end.offset + 1; // Include closing quote
+            const source = this.document.getText();
+            const stringContent = source.substring(startOffset, endOffset);
+            
+            this.tokenBuilder.addToken({
+              line: directive.location.start.line - 1,
+              char: values[0].location.start.column - 2, // -1 for 0-based, -1 for quote
+              length: stringContent.length,
+              tokenType: 'string',
+              modifiers: []
+            });
+          }
+          return; // Don't process as template
         }
-        return; // Don't process as template
+        // Otherwise, it has interpolation
+        templateType = 'string';
+        interpolationAllowed = true;
+        variableStyle = '@var';
+        delimiterLength = 1;
+        break;
     }
     
     if (templateType && values.length > 0) {
@@ -343,12 +357,12 @@ export class DirectiveVisitor extends BaseVisitor {
       if (firstValue.location) {
         const openDelimiterStart = firstValue.location.start.column - delimiterLength - 1;
         
-        if (templateType === 'backtick' || templateType === 'doubleColon' || templateType === 'tripleColon') {
+        if (templateType === 'backtick' || templateType === 'doubleColon' || templateType === 'tripleColon' || templateType === 'string') {
           this.tokenBuilder.addToken({
             line: firstValue.location.start.line - 1,
             char: openDelimiterStart,
             length: delimiterLength,
-            tokenType: 'template',
+            tokenType: templateType === 'string' ? 'string' : 'template',
             modifiers: []
           });
         }
@@ -366,14 +380,14 @@ export class DirectiveVisitor extends BaseVisitor {
         this.mainVisitor.visitNode(node, newContext);
       }
       
-      if (lastValue.location && (templateType === 'backtick' || templateType === 'doubleColon' || templateType === 'tripleColon')) {
+      if (lastValue.location && (templateType === 'backtick' || templateType === 'doubleColon' || templateType === 'tripleColon' || templateType === 'string')) {
         const closeDelimiterStart = lastValue.location.end.column;
         
         this.tokenBuilder.addToken({
           line: lastValue.location.end.line - 1,
           char: closeDelimiterStart,
           length: delimiterLength,
-          tokenType: 'template',
+          tokenType: templateType === 'string' ? 'string' : 'template',
           modifiers: []
         });
       }

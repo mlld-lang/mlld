@@ -101,10 +101,13 @@ export class FileReferenceVisitor extends BaseVisitor {
   }
   
   private visitComment(node: any): void {
+    // Use the full location span to include the >> or << marker
+    const length = node.location.end.column - node.location.start.column;
+    
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
       char: node.location.start.column - 1,
-      length: node.content?.length || 0,
+      length: length,
       tokenType: 'comment',
       modifiers: []
     });

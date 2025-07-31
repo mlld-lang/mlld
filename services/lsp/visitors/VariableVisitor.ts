@@ -19,6 +19,9 @@ export class VariableVisitor extends BaseVisitor {
     const identifier = node.identifier || '';
     const valueType = node.valueType;
     
+    
+    // Skip only 'identifier' valueType (used in declarations)
+    // 'varIdentifier' should be processed (used in references)
     if (valueType === 'identifier') {
       return;
     }
@@ -83,8 +86,18 @@ export class VariableVisitor extends BaseVisitor {
     baseLength: number
   ): void {
     if (valueType === 'varIdentifier' || valueType === 'varInterpolation') {
-      const needsAtAdjustment = node.fields && node.fields.length > 0;
-      const charPos = node.location.start.column - 1 - (needsAtAdjustment ? 1 : 0);
+      // Check if the location already includes the @ symbol
+      // In /show directive context, the AST location doesn't include @
+      // In other contexts (assignments, expressions, objects), it does
+      const source = this.document.getText();
+      const charAtOffset = source.charAt(node.location.start.offset);
+      const includesAt = charAtOffset === '@';
+      
+      // If location doesn't start with @, we need to go back one position
+      const charPos = includesAt 
+        ? node.location.start.column - 1   // Already includes @, just convert to 0-based
+        : node.location.start.column - 2;  // Doesn't include @, go back one more
+      
       
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,

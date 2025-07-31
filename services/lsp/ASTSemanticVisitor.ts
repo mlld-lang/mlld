@@ -194,12 +194,13 @@ export class ASTSemanticVisitor {
         modifiers: []
       });
     } else if (context.templateType) {
-      // In template context, add as template content
+      // In template context, add as template content or string
+      const tokenType = context.templateType === 'string' ? 'string' : 'templateContent';
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
         char: node.location.start.column - 1,
         length: node.content.length,
-        tokenType: 'templateContent',
+        tokenType: tokenType,
         modifiers: []
       });
     }
