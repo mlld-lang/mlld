@@ -62,7 +62,7 @@ const TOKEN_TYPE_MAP: Record<string, string> = {
   'directive': 'keyword',          // /var, /show, etc.
   'variableRef': 'variable',       // @variable references
   'interpolation': 'variable',     // @var in templates
-  'template': 'string',            // Template delimiters
+  'template': 'operator',          // Template delimiters
   'templateContent': 'string',     // Template content
   'embedded': 'label',             // Language labels (js, python)
   'embeddedCode': 'string',        // Embedded code content

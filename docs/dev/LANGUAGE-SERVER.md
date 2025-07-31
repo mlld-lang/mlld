@@ -89,30 +89,92 @@ The server tracks:
 
 ### 6. Semantic Tokens (Syntax Highlighting)
 
-The language server provides semantic tokens for accurate syntax highlighting that understands context:
+The language server provides semantic tokens for accurate syntax highlighting that understands context. Unlike simple TextMate grammars, semantic tokens analyze the full AST to provide context-aware highlighting.
+
+#### How Semantic Highlighting Works
+
+1. **AST-Based Analysis**: The parser generates a complete AST with location information
+2. **Visitor Pattern**: `ASTSemanticVisitor` traverses the AST, generating tokens for each node
+3. **Context Tracking**: A context stack tracks template types, interpolation rules, and language modes
+4. **Token Generation**: Each AST node generates semantic tokens with precise positions
+5. **VSCode Integration**: Tokens are sent to VSCode which maps them to theme colors
+
+#### Token Type Mapping
+
+mlld uses VSCode's standard semantic token types for maximum theme compatibility:
+
+```typescript
+const TOKEN_TYPE_MAP = {
+  // mlld-specific → VSCode standard
+  'directive': 'keyword',          // /var, /show, etc.
+  'variableRef': 'variable',       // @variable references
+  'interpolation': 'variable',     // @var in templates
+  'template': 'operator',          // Template delimiters (::, :::, `)
+  'templateContent': 'string',     // Template content
+  'embedded': 'label',             // Language labels (js, python)
+  'embeddedCode': 'string',        // Embedded code content
+  'alligator': 'string',           // File paths in <>
+  'alligatorOpen': 'operator',     // < bracket
+  'alligatorClose': 'operator',    // > bracket
+  'xmlTag': 'type',                // XML tags in triple-colon
+  'section': 'label',              // Section names (#section)
+  'boolean': 'keyword',            // true/false
+  'null': 'keyword',               // null
+  // Standard types (pass through)
+  'keyword': 'keyword',
+  'variable': 'variable',
+  'string': 'string',
+  'operator': 'operator',
+  'parameter': 'parameter',
+  'comment': 'comment',
+  'number': 'number',
+  'property': 'property'
+}
+```
 
 #### Highlighted Elements
-- **Directives** - `/var`, `/show`, `/run`, etc.
-- **Variables** - Declaration vs reference distinction
+
+- **Directives** - `/var`, `/show`, `/run`, etc. → `keyword`
+- **Variables** - Declaration vs reference distinction → `variable`
 - **Templates** - Different template types with proper interpolation rules:
   - Backtick templates with `@var` interpolation
   - Double-colon templates `::...::` with `@var` interpolation
   - Triple-colon templates `:::...:::` with `{{var}}` interpolation
   - Single quotes as literal strings (no interpolation)
-- **Operators** - Logical (`&&`, `||`, `!`), comparison (`==`, `>`, etc.), ternary (`?:`)
+- **Operators** - All operators (`&&`, `||`, `!`, `==`, `>`, `=>`, `=`, etc.) → `operator`
+- **Template Delimiters** - Backticks, colons → `operator` (for visual distinction)
 - **File References** - Alligator syntax `<file.md>` (except in triple-colon where it's XML)
 - **Embedded Languages** - Regions marked for `js`, `python`, `sh` code blocks
-- **Comments** - Both `>>` and `<<` comment styles
+- **Comments** - Both `>>` and `<<` comment styles → `comment`
 - **Data Structures** - Arrays and objects with mlld constructs properly highlighted
 - **Field Access** - Dot notation (`@user.name`) and array indexing (`@items[0]`)
 
 #### Context-Aware Highlighting
+
 The semantic tokens understand mlld's complex interpolation rules:
 - `@var` in templates is highlighted as interpolation
 - `@var` outside templates is highlighted as variable reference
 - Single quotes never interpolate
 - Command contexts (`/run {echo "@name"}`) support interpolation
 - Objects and arrays preserve mlld constructs as full AST nodes
+
+#### Implementation Details
+
+The semantic token generation follows this flow:
+
+1. **Parse Document** → AST with full location information
+2. **Visit AST** → `ASTSemanticVisitor` processes each node type
+3. **Dispatch to Visitors** → Specialized visitors handle different node types:
+   - `DirectiveVisitor` - Handles directives and their specific syntax
+   - `ExpressionVisitor` - Handles operators, literals, and expressions
+   - `VariableVisitor` - Handles variable references and field access
+   - `FileReferenceVisitor` - Handles alligator syntax and comments
+4. **Generate Tokens** → Each visitor adds tokens with:
+   - Line and character position
+   - Length (calculated from AST locations)
+   - Token type (mapped to VSCode standard types)
+   - Modifiers (declaration, reference, etc.)
+5. **Send to Client** → VSCode receives tokens and applies theme colors
 
 ## Editor Integration
 
@@ -216,6 +278,17 @@ The semantic token implementation uses:
 - **Context Stack** - Tracks template types, interpolation rules, and language contexts
 - **Shared Highlighting Rules** - Common rules between LSP and TextMate grammars
 - **Full AST Preservation** - mlld constructs in arrays/objects retain location information
+- **Standard Token Types Only** - Maps mlld-specific types to VSCode's built-in semantic token types for maximum compatibility
+
+#### Key Design Decisions
+
+1. **No Custom Token Types**: We map all mlld concepts to VSCode's standard semantic token types. This ensures compatibility with all themes without requiring custom theme rules.
+
+2. **Operator-Based Template Delimiters**: Template delimiters (backticks, colons) are mapped to `operator` instead of `string` to make them visually distinct from content.
+
+3. **Offset-Based Length Calculation**: Token lengths must be calculated using `location.end.offset - location.start.offset`, not column positions, to handle multi-byte characters correctly.
+
+4. **Context-Aware Tokenization**: The visitor pattern allows tracking context (template type, language mode) to apply different rules in different situations.
 
 ## Development
 
@@ -280,4 +353,39 @@ Check that:
 1. Increase `maxNumberOfProblems` if needed
 2. Check for circular imports
 3. Ensure reasonable file sizes
+
+### Semantic Highlighting Not Working
+
+If syntax highlighting isn't showing correctly:
+
+1. **Check VSCode Settings**:
+   ```json
+   {
+     "editor.semanticHighlighting.enabled": true
+   }
+   ```
+
+2. **Verify Extension is Using LSP**:
+   - Open Output panel → "mlld Language Server"
+   - Should see: `[SEMANTIC] Processing AST` logs
+
+3. **Use Token Inspector**:
+   - Place cursor on a token
+   - Run: `Developer: Inspect Editor Tokens and Scopes`
+   - Should show semantic token type
+
+4. **Enable Debug Logging**:
+   ```bash
+   DEBUG_LSP=true code .
+   ```
+   Then check Developer Tools console for `[TOKEN]` logs
+
+5. **Test with Default Theme**:
+   - Some themes don't support all semantic token types
+   - Try "Dark+ (default dark)" which has full support
+
+6. **Common Issues**:
+   - **Operators not colored**: Check theme supports `operator` semantic token
+   - **Comments not colored**: Ensure proper length calculation (offset-based)
+   - **Templates look wrong**: Template delimiters map to `operator` for visibility
 

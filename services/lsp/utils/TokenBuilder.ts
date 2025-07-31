@@ -37,12 +37,19 @@ export class TokenBuilder {
       }
     }
     
-    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld') || this.document.uri.includes('test-syntax')) {
+    // Enhanced debug logging for specific tokens we're having issues with
+    const debugTokens = ['operator', 'template', 'comment', 'alligatorOpen', 'alligatorClose'];
+    const shouldDebug = process.env.DEBUG_LSP === 'true' || 
+                       this.document.uri.includes('fails.mld') || 
+                       this.document.uri.includes('test-syntax') ||
+                       debugTokens.includes(token.tokenType);
+    
+    if (shouldDebug) {
       const text = this.document.getText({
         start: { line: token.line, character: token.char },
         end: { line: token.line, character: token.char + token.length }
       });
-      console.log(`[TOKEN] ${token.tokenType} at ${token.line}:${token.char} len=${token.length} "${text}" mods=[${token.modifiers.join(',')}]`);
+      console.log(`[TOKEN] ${token.tokenType} -> ${mappedType} at ${token.line}:${token.char} len=${token.length} "${text}" mods=[${token.modifiers.join(',')}] typeIndex=${typeIndex}`);
     }
     
     this.builder.push(

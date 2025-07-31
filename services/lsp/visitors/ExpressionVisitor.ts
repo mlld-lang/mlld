@@ -49,17 +49,32 @@ export class ExpressionVisitor extends BaseVisitor {
         
         this.mainVisitor.visitNode(node.operand, context);
       } else if (node.left && node.right) {
-        const operatorStart = node.left.location.end.column;
-        
-        this.tokenBuilder.addToken({
-          line: node.location.start.line - 1,
-          char: operatorStart,
-          length: operatorText.length,
-          tokenType: 'operator',
-          modifiers: []
-        });
-        
+        // Visit left side first
         this.mainVisitor.visitNode(node.left, context);
+        
+        // Calculate operator position
+        // The operator is typically after a space following the left operand
+        const sourceText = this.document.getText();
+        const leftEnd = node.left.location.end.offset;
+        const rightStart = node.right.location.start.offset;
+        const between = sourceText.substring(leftEnd, rightStart);
+        const operatorIndex = between.indexOf(operatorText);
+        
+        if (operatorIndex !== -1) {
+          // Calculate the actual position of the operator
+          const operatorLine = node.left.location.end.line - 1;
+          const operatorChar = node.left.location.end.column - 1 + operatorIndex;
+          
+          this.tokenBuilder.addToken({
+            line: operatorLine,
+            char: operatorChar,
+            length: operatorText.length,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
+        
+        // Visit right side after
         this.mainVisitor.visitNode(node.right, context);
       }
     }

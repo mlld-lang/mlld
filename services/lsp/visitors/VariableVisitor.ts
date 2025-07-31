@@ -160,6 +160,44 @@ export class VariableVisitor extends BaseVisitor {
           }
         }
       }
+      
+      // Handle pipes if present
+      if (node.pipes && Array.isArray(node.pipes)) {
+        const sourceText = this.document.getText();
+        const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+        
+        let pipePos = nodeText.indexOf('|');
+        for (const pipe of node.pipes) {
+          if (pipePos !== -1) {
+            // Token for "|"
+            this.tokenBuilder.addToken({
+              line: node.location.start.line - 1,
+              char: node.location.start.column - 1 + pipePos,
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
+            
+            // Token for pipe transform name
+            if (pipe.transform) {
+              const transformStart = pipePos + 1;
+              const hasAt = pipe.hasAt !== false; // Default to true if not specified
+              const transformLength = pipe.transform.length + (hasAt ? 1 : 0);
+              
+              this.tokenBuilder.addToken({
+                line: node.location.start.line - 1,
+                char: node.location.start.column - 1 + transformStart,
+                length: transformLength,
+                tokenType: 'variableRef',
+                modifiers: ['reference']
+              });
+              
+              // Find next pipe
+              pipePos = nodeText.indexOf('|', transformStart + transformLength);
+            }
+          }
+        }
+      }
     }
   }
 }

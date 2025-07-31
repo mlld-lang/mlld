@@ -130,7 +130,7 @@ function startLanguageServer(context) {
     },
     // Enable semantic tokens using standard VSCode types
     semanticTokens: {
-      augmentsSyntaxTokens: false, // Don't merge with TextMate tokens
+      augmentsSyntaxTokens: true, // Augment TextMate tokens with semantic tokens
       multilineTokenSupport: true,
       overlappingTokenSupport: false,
       tokenTypes: ['keyword', 'variable', 'string', 'operator', 'label', 'type', 'parameter', 'comment', 'number', 'property'],

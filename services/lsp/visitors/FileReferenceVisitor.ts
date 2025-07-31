@@ -327,7 +327,7 @@ export class FileReferenceVisitor extends BaseVisitor {
   
   private visitComment(node: any): void {
     // Use the full location span to include the >> or << marker
-    const length = node.location.end.column - node.location.start.column;
+    const length = node.location.end.offset - node.location.start.offset;
     
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,

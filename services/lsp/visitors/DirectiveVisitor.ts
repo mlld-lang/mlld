@@ -536,6 +536,50 @@ export class DirectiveVisitor extends BaseVisitor {
           }
         }
         
+        // Handle expression in /when @var: pattern
+        if (node.values.expression) {
+          if (Array.isArray(node.values.expression)) {
+            for (const expr of node.values.expression) {
+              this.mainVisitor.visitNode(expr, context);
+            }
+          } else {
+            this.mainVisitor.visitNode(node.values.expression, context);
+          }
+          
+          // Add colon token after expression
+          const sourceText = this.document.getText();
+          const exprEnd = Array.isArray(node.values.expression) 
+            ? node.values.expression[node.values.expression.length - 1].location?.end
+            : node.values.expression.location?.end;
+            
+          if (exprEnd) {
+            const afterExpr = sourceText.substring(exprEnd.offset, exprEnd.offset + 5);
+            const colonIndex = afterExpr.indexOf(':');
+            if (colonIndex !== -1) {
+              this.tokenBuilder.addToken({
+                line: exprEnd.line - 1,
+                char: exprEnd.column - 1 + colonIndex,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+              
+              // Look for opening bracket after colon
+              const afterColon = afterExpr.substring(colonIndex + 1);
+              const openBracketIndex = afterColon.search(/\[/);
+              if (openBracketIndex !== -1) {
+                this.tokenBuilder.addToken({
+                  line: exprEnd.line - 1,
+                  char: exprEnd.column - 1 + colonIndex + 1 + openBracketIndex,
+                  length: 1,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
+            }
+          }
+        }
+        
         if (node.values.patternType && node.values.patternLocation) {
           this.tokenBuilder.addToken({
             line: node.values.patternLocation.start.line - 1,
@@ -544,6 +588,25 @@ export class DirectiveVisitor extends BaseVisitor {
             tokenType: 'keyword',
             modifiers: []
           });
+        }
+        
+        // Add closing bracket if there are conditions
+        if (node.values.conditions.length > 0 && node.location) {
+          const sourceText = this.document.getText();
+          const directiveText = sourceText.substring(
+            node.location.start.offset,
+            node.location.end.offset
+          );
+          const closeBracketIndex = directiveText.lastIndexOf(']');
+          if (closeBracketIndex !== -1) {
+            this.tokenBuilder.addToken({
+              line: node.location.start.line - 1,
+              char: node.location.start.column - 1 + closeBracketIndex,
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
+          }
         }
         
         for (const pair of node.values.conditions) {
@@ -605,15 +668,20 @@ export class DirectiveVisitor extends BaseVisitor {
             : node.values.action.location?.start;
             
           if (conditionEnd && actionStart) {
-            const arrowChar = conditionEnd.column + 1;
+            // Find the arrow operator between condition and action
+            const sourceText = this.document.getText();
+            const between = sourceText.substring(conditionEnd.offset, actionStart.offset);
+            const arrowIndex = between.indexOf('=>');
             
-            this.tokenBuilder.addToken({
-              line: conditionEnd.line - 1,
-              char: arrowChar - 1,
-              length: 2,
-              tokenType: 'operator',
-              modifiers: []
-            });
+            if (arrowIndex !== -1) {
+              this.tokenBuilder.addToken({
+                line: conditionEnd.line - 1,
+                char: conditionEnd.column - 1 + arrowIndex,
+                length: 2,
+                tokenType: 'operator',
+                modifiers: []
+              });
+            }
           }
         }
         
