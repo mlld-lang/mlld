@@ -2,7 +2,7 @@
   "name": "mlld-vscode",
   "displayName": "mlld",
   "description": "Language support for mlld - A modular prompt scripting language",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "publisher": "andyet",
   "repository": {
     "type": "git",
@@ -87,6 +87,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable semantic syntax highlighting (requires language server)"
+        },
+        "editor.semanticHighlighting.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable semantic highlighting for mlld files"
         }
       }
     },
@@ -95,6 +100,39 @@
         "command": "mlld.switchToMLLD",
         "title": "mlld: Switch to mlld Mode",
         "when": "resourceExtname == .md && editorLangId != mlld"
+      }
+    ],
+    "configurationDefaults": {
+      "[mlld]": {
+        "editor.semanticHighlighting.enabled": true,
+        "editor.tokenColorCustomizations": {
+          "semanticHighlighting": true
+        }
+      }
+    },
+    "semanticTokenScopes": [
+      {
+        "scopes": {
+          "directive": ["keyword.control.directive.mlld"],
+          "variable": ["variable.other.mlld"],
+          "variableRef": ["variable.other.readwrite.mlld"],
+          "interpolation": ["variable.other.interpolation.mlld"],
+          "template": ["punctuation.definition.template.mlld"],
+          "templateContent": ["string.template.mlld"],
+          "operator": ["keyword.operator.mlld"],
+          "keyword": ["keyword.other.mlld"],
+          "embedded": ["support.type.embedded.mlld"],
+          "embeddedCode": ["meta.embedded.block.mlld"],
+          "alligator": ["markup.underline.link.mlld"],
+          "xmlTag": ["entity.name.tag.mlld"],
+          "section": ["entity.name.section.mlld"],
+          "parameter": ["variable.parameter.mlld"],
+          "comment": ["comment.line.mlld"],
+          "string": ["string.quoted.mlld"],
+          "number": ["constant.numeric.mlld"],
+          "boolean": ["constant.language.boolean.mlld"],
+          "null": ["constant.language.null.mlld"]
+        }
       }
     ]
   },

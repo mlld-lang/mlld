@@ -1,0 +1,1706 @@
+/**
+ * AST Semantic Visitor for mlld Language Server
+ * 
+ * This visitor traverses the mlld AST and generates semantic tokens
+ * with proper context awareness for template types, interpolation rules,
+ * and embedded languages.
+ */
+
+import { SemanticTokensBuilder, Position } from 'vscode-languageserver/node';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+
+// Import node types from generated grammar
+import { NodeType } from '@grammar/generated/parser/grammar-core';
+import { HIGHLIGHTING_RULES, shouldInterpolate, isXMLTag } from '@core/highlighting/rules';
+
+export interface VisitorContext {
+  templateType?: 'backtick' | 'doubleColon' | 'tripleColon' | null;
+  inCommand?: boolean;
+  commandLanguage?: string;
+  interpolationAllowed?: boolean;
+  variableStyle?: '@var' | '{{var}}';
+  inSingleQuotes?: boolean;
+}
+
+export interface TokenInfo {
+  line: number;
+  char: number;
+  length: number;
+  tokenType: string;
+  modifiers: string[];
+  data?: any; // For additional metadata like language injection hints
+}
+
+export class ASTSemanticVisitor {
+  private contextStack: VisitorContext[] = [{}];
+  private tokenTypes: string[];
+  private tokenModifiers: string[];
+  private textCache = new Map<string, string>();
+  
+  constructor(
+    private document: TextDocument,
+    private builder: SemanticTokensBuilder,
+    tokenTypes: string[],
+    tokenModifiers: string[]
+  ) {
+    this.tokenTypes = tokenTypes;
+    this.tokenModifiers = tokenModifiers;
+  }
+  
+  get currentContext(): VisitorContext {
+    return this.contextStack[this.contextStack.length - 1];
+  }
+  
+  pushContext(context: Partial<VisitorContext>) {
+    this.contextStack.push({
+      ...this.currentContext,
+      ...context
+    });
+  }
+  
+  popContext() {
+    this.contextStack.pop();
+  }
+  
+  shouldSkipNode(node: any): boolean {
+    // Skip nodes without type
+    if (!node.type) return true;
+    
+    // Skip certain node types that don't need tokens
+    const skipTypes = ['Newline', 'Whitespace', 'EOF'];
+    if (skipTypes.includes(node.type)) return true;
+    
+    // Skip nodes with error flags
+    if (node.error || node.isError) return false; // Don't skip errors, handle them specially
+    
+    // Skip nodes that are metadata or internal
+    if (node.type.startsWith('_') || node.type.startsWith('$')) return true;
+    
+    return false;
+  }
+  
+  private getCachedText(start: Position, end: Position): string {
+    // String key is simple and readable; could optimize with numeric key for performance
+    // e.g., const key = (start.line << 16) | start.character; // for single-line ranges
+    const key = `${start.line}:${start.character}-${end.line}:${end.character}`;
+    if (!this.textCache.has(key)) {
+      this.textCache.set(key, this.document.getText({ start, end }));
+    }
+    return this.textCache.get(key)!;
+  }
+  
+  visitAST(ast: any[]): void {
+    // Clear cache at start to prevent unbounded growth for large documents
+    this.textCache.clear();
+    
+    // Debug logging
+    if (process.env.DEBUG_LSP) {
+      console.log('ASTSemanticVisitor: Processing AST with', ast.length, 'nodes');
+    }
+    
+    for (const node of ast) {
+      this.visitNode(node);
+    }
+  }
+  
+  visitNode(node: any): void {
+    if (!node || !node.type) return;
+    
+    // Skip nodes that should be ignored
+    if (this.shouldSkipNode(node)) return;
+    
+    // Debug logging
+    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld')) {
+      console.log(`[VISITOR] Node: ${node.type}`, {
+        location: node.location ? `${node.location.start.line}:${node.location.start.column}` : 'none',
+        content: node.content || node.identifier || node.value || '?'
+      });
+    }
+    
+    // Log missing locations only in debug mode
+    if (!node.location && node.type !== 'Text' && node.type !== 'Newline' && process.env.DEBUG_LSP) {
+      console.warn(`Node type ${node.type} missing location`);
+    }
+    
+    switch (node.type) {
+      case 'Directive':
+        this.visitDirective(node);
+        break;
+        
+      case 'VariableReference':
+        this.visitVariableReference(node);
+        break;
+        
+      case 'Comment':
+        this.visitComment(node);
+        break;
+        
+      case 'StringLiteral':
+        this.visitStringLiteral(node);
+        break;
+        
+      case 'CommandBase':
+      case 'command':
+        this.visitCommand(node);
+        break;
+        
+      case 'FileReference':
+        this.visitFileReference(node);
+        break;
+        
+      case 'load-content':
+        this.visitLoadContent(node);
+        break;
+        
+      case 'BinaryExpression':
+      case 'UnaryExpression':
+        this.visitOperator(node);
+        break;
+        
+      case 'TernaryExpression':
+        this.visitTernaryExpression(node);
+        break;
+        
+      case 'Literal':
+        this.visitLiteral(node);
+        break;
+        
+      case 'Text':
+        this.visitText(node);
+        break;
+        
+      case 'WhenExpression':
+        this.visitWhenExpression(node);
+        break;
+        
+      case 'ExecInvocation':
+        this.visitExecInvocation(node);
+        break;
+        
+      case 'CommandReference':
+        this.visitCommandReference(node);
+        break;
+        
+      case 'Parameter':
+        this.visitParameter(node);
+        break;
+        
+      case 'PathSeparator':
+        this.visitPathSeparator(node);
+        break;
+        
+      case 'DotSeparator':
+        this.visitDotSeparator(node);
+        break;
+        
+      case 'SectionMarker':
+        this.visitSectionMarker(node);
+        break;
+        
+      case 'Frontmatter':
+        this.visitFrontmatter(node);
+        break;
+        
+      case 'CodeFence':
+        this.visitCodeFence(node);
+        break;
+        
+      case 'MlldRunBlock':
+        this.visitMlldRunBlock(node);
+        break;
+        
+      case 'ObjectExpression':
+      case 'object':
+        this.visitObjectExpression(node);
+        break;
+        
+      case 'ArrayExpression': 
+      case 'array':
+        this.visitArrayExpression(node);
+        break;
+        
+      case 'MemberExpression':
+        this.visitMemberExpression(node);
+        break;
+        
+      case 'Property':
+        this.visitProperty(node);
+        break;
+        
+      case 'Newline':
+        // Skip newlines for semantic tokens
+        break;
+        
+      case 'Error':
+        this.visitError(node);
+        break;
+        
+      default:
+        // Unknown node type - still visit children
+        console.warn(`Unknown node type: ${node.type}`);
+        this.visitChildren(node);
+    }
+  }
+  
+  visitChildren(node: any): void {
+    // Check various possible child properties
+    const childProps = ['values', 'children', 'body', 'content', 'nodes', 'elements'];
+    
+    for (const prop of childProps) {
+      if (node[prop]) {
+        if (Array.isArray(node[prop])) {
+          for (const child of node[prop]) {
+            this.visitNode(child);
+          }
+        } else if (typeof node[prop] === 'object') {
+          this.visitNode(node[prop]);
+        }
+      }
+    }
+  }
+  
+  visitDirective(node: any): void {
+    if (!node.location) return;
+    
+    // Highlight the directive keyword (e.g., /var, /show)
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: node.kind.length + 1, // +1 for the / character
+      tokenType: 'directive',
+      modifiers: []
+    });
+    
+    // Special handling for when directives
+    if (node.kind === 'when') {
+      this.visitWhenDirective(node);
+      return;
+    }
+    
+    // Handle variable declarations
+    if ((node.kind === 'var' || node.kind === 'exe' || node.kind === 'path') && 
+        node.values?.identifier) {
+      const identifierNodes = node.values.identifier;
+      if (Array.isArray(identifierNodes) && identifierNodes.length > 0) {
+        const firstIdentifier = identifierNodes[0];
+        const identifierName = firstIdentifier.identifier || '';
+        
+        if (identifierName) {
+          // Calculate the actual position of the identifier
+          // It should be after "/var @" which is directive length + 2
+          const identifierStart = node.location.start.column + node.kind.length + 2; // +1 for /, +1 for space, @ is part of identifier display
+          
+          this.addToken({
+            line: node.location.start.line - 1,
+            char: identifierStart - 1,
+            length: identifierName.length + 1, // +1 for @
+            tokenType: 'variable',
+            modifiers: ['declaration']
+          });
+        }
+      }
+      
+      // For /exe directives, also visit parameters
+      if (node.kind === 'exe' && node.values?.params) {
+        for (const param of node.values.params) {
+          this.visitNode(param);
+        }
+      }
+    }
+    
+    // Process directive values with appropriate context
+    if (node.values) {
+      this.visitDirectiveValues(node);
+    }
+  }
+  
+  visitDirectiveValues(directive: any): void {
+    const values = directive.values;
+    
+    // Special handling for /run directives
+    if (directive.kind === 'run') {
+      this.visitRunDirective(directive);
+      return;
+    }
+    
+    // Handle based on the directive kind and meta info
+    if (directive.kind === 'exe' && values.template) {
+      // Handle /exe template content specially
+      this.pushContext({
+        templateType: 'backtick',
+        interpolationAllowed: true,
+        variableStyle: '@var'
+      });
+      
+      for (const node of values.template) {
+        this.visitNode(node);
+      }
+      
+      this.popContext();
+    } else if (directive.meta?.wrapperType) {
+      // This is a template-like value (for other directives)
+      this.visitTemplateValue(directive);
+    } else if (values.variable) {
+      // Handle /show @var directives
+      if (Array.isArray(values.variable)) {
+        for (const varRef of values.variable) {
+          this.visitNode(varRef);
+        }
+      } else {
+        this.visitNode(values.variable);
+      }
+    } else if (values.command) {
+      // Handle /run commands
+      if (Array.isArray(values.command)) {
+        // Shell command with parts
+        this.pushContext({
+          inCommand: true,
+          interpolationAllowed: true,
+          variableStyle: '@var'
+        });
+        
+        for (const part of values.command) {
+          this.visitNode(part);
+        }
+        
+        this.popContext();
+      } else {
+        this.visitCommand(values.command);
+      }
+    } else if (values.expression) {
+      this.visitExpression(values.expression);
+    } else if (values.value && Array.isArray(values.value)) {
+      // Visit the value array content
+      for (const node of values.value) {
+        if (typeof node === 'object' && node !== null) {
+          this.visitNode(node);
+        } else if (directive.location) {
+          // Handle primitive values (numbers, booleans, null)
+          this.handlePrimitiveValue(node, directive);
+        }
+      }
+    } else if (values.value !== undefined && directive.location) {
+      // Single primitive value
+      this.handlePrimitiveValue(values.value, directive);
+    }
+    
+    // Visit other child nodes
+    this.visitChildren(values);
+  }
+  
+  visitRunDirective(directive: any): void {
+    const values = directive.values;
+    
+    // Check for language-specific run commands
+    if (values?.lang) {
+      // Highlight the language identifier
+      const langText = this.extractText(Array.isArray(values.lang) ? values.lang : [values.lang]);
+      if (langText && directive.location) {
+        // Calculate position after "/run "
+        const langStart = directive.location.start.column + 4; // "/run" + space
+        
+        this.addToken({
+          line: directive.location.start.line - 1,
+          char: langStart,
+          length: langText.length,
+          tokenType: 'embedded',
+          modifiers: []
+        });
+      }
+      
+      // Mark code content for embedded highlighting
+      if (values.code && Array.isArray(values.code)) {
+        for (const codeNode of values.code) {
+          if (codeNode.location && codeNode.content) {
+            // Find the actual code content (between braces)
+            const codeContent = codeNode.content;
+            const codeStart = codeNode.location.start.column + langText.length + 2; // After "python {"
+            
+            this.addToken({
+              line: codeNode.location.start.line - 1,
+              char: codeStart,
+              length: codeContent.length,
+              tokenType: 'embeddedCode',
+              modifiers: [],
+              data: { language: langText }
+            });
+          }
+        }
+      }
+    } else {
+      // Regular shell command - handle interpolation in command content
+      if (values.command && Array.isArray(values.command)) {
+        this.pushContext({
+          inCommand: true,
+          interpolationAllowed: true,
+          variableStyle: '@var'
+        });
+        
+        for (const part of values.command) {
+          this.visitNode(part);
+        }
+        
+        this.popContext();
+      } else {
+        // Fallback - visit all children
+        this.visitChildren(values);
+      }
+    }
+  }
+  
+  visitTemplateValue(directive: any): void {
+    const wrapperType = directive.meta?.wrapperType;
+    const values = directive.values?.value || [];
+    
+    // Determine template context from wrapperType
+    let templateType: 'backtick' | 'doubleColon' | 'tripleColon' | 'doubleQuote' | 'singleQuote' | null = null;
+    let variableStyle: '@var' | '{{var}}' = '@var';
+    let interpolationAllowed = true;
+    let delimiterLength = 1;
+    
+    switch (wrapperType) {
+      case 'backtick':
+        templateType = 'backtick';
+        delimiterLength = 1;
+        break;
+      case 'doubleColon':
+        templateType = 'doubleColon';
+        delimiterLength = 2;
+        break;
+      case 'tripleColon':
+        templateType = 'tripleColon';
+        variableStyle = '{{var}}';
+        delimiterLength = 3;
+        break;
+      case 'doubleQuote':
+        templateType = 'doubleQuote';
+        delimiterLength = 1;
+        break;
+      case 'singleQuote':
+        templateType = 'singleQuote';
+        interpolationAllowed = false;
+        delimiterLength = 1;
+        break;
+    }
+    
+    if (templateType && values.length > 0) {
+      // Calculate delimiter positions based on content
+      const firstValue = values[0];
+      const lastValue = values[values.length - 1];
+      
+      if (firstValue.location) {
+        // Opening delimiter should be just before the first content
+        const openDelimiterStart = firstValue.location.start.column - delimiterLength - 1;
+        
+        // Add opening delimiter token for templates (not quotes)
+        if (templateType === 'backtick' || templateType === 'doubleColon' || templateType === 'tripleColon') {
+          this.addToken({
+            line: firstValue.location.start.line - 1,
+            char: openDelimiterStart,
+            length: delimiterLength,
+            tokenType: 'template',
+            modifiers: []
+          });
+        }
+      }
+      
+      // Process template content with proper context
+      this.pushContext({
+        templateType: templateType as any,
+        interpolationAllowed,
+        variableStyle,
+        inSingleQuotes: templateType === 'singleQuote'
+      });
+      
+      // Visit the value nodes
+      for (const node of values) {
+        this.visitNode(node);
+      }
+      
+      this.popContext();
+      
+      // Add closing delimiter token
+      if (lastValue.location && (templateType === 'backtick' || templateType === 'doubleColon' || templateType === 'tripleColon')) {
+        const closeDelimiterStart = lastValue.location.end.column;
+        
+        this.addToken({
+          line: lastValue.location.end.line - 1,
+          char: closeDelimiterStart,
+          length: delimiterLength,
+          tokenType: 'template',
+          modifiers: []
+        });
+      }
+    }
+  }
+  
+  visitTemplate(node: any): void {
+    if (!node.location) return;
+    
+    // Use AST properties to determine template type
+    let templateType: 'backtick' | 'doubleColon' | 'tripleColon' | null = null;
+    let variableStyle: '@var' | '{{var}}' = '@var';
+    let delimiterLength = 1;
+    
+    // Check node properties or delimiter info
+    if (node.delimiter) {
+      switch (node.delimiter) {
+        case '`':
+          templateType = 'backtick';
+          delimiterLength = 1;
+          break;
+        case '::':
+          templateType = 'doubleColon';
+          delimiterLength = 2;
+          break;
+        case ':::':
+          templateType = 'tripleColon';
+          variableStyle = '{{var}}';
+          delimiterLength = 3;
+          break;
+      }
+    } else if (node.templateType) {
+      // Some AST nodes might have explicit templateType
+      templateType = node.templateType;
+      delimiterLength = templateType === 'tripleColon' ? 3 : (templateType === 'doubleColon' ? 2 : 1);
+      if (templateType === 'tripleColon') {
+        variableStyle = '{{var}}';
+      }
+    }
+    
+    if (templateType) {
+      // Highlight template delimiters if we have delimiter locations
+      if (node.openDelimiterLocation) {
+        this.addToken({
+          line: node.openDelimiterLocation.start.line - 1,
+          char: node.openDelimiterLocation.start.column - 1,
+          length: delimiterLength,
+          tokenType: 'template',
+          modifiers: []
+        });
+      }
+      
+      if (node.closeDelimiterLocation) {
+        this.addToken({
+          line: node.closeDelimiterLocation.start.line - 1,
+          char: node.closeDelimiterLocation.start.column - 1,
+          length: delimiterLength,
+          tokenType: 'template',
+          modifiers: []
+        });
+      }
+      
+      // Process template content with proper context
+      this.pushContext({
+        templateType,
+        interpolationAllowed: true,
+        variableStyle
+      });
+      
+      this.visitChildren(node);
+      
+      this.popContext();
+    }
+  }
+  
+  visitStringLiteral(node: any): void {
+    if (!node.location) return;
+    
+    const text = this.getCachedText(
+      { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+      { line: node.location.end.line - 1, character: node.location.end.column }
+    );
+    
+    // Check if it's a single-quoted string (literal)
+    const isSingleQuoted = text.startsWith("'") && text.endsWith("'");
+    
+    if (isSingleQuoted) {
+      // Single quotes never interpolate - everything is literal
+      this.addToken({
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
+        length: text.length,
+        tokenType: 'string',
+        modifiers: ['literal']
+      });
+    } else {
+      // Double quotes always interpolate
+      this.pushContext({
+        interpolationAllowed: true,
+        variableStyle: '@var'
+      });
+      
+      this.addToken({
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
+        length: text.length,
+        tokenType: 'string',
+        modifiers: []
+      });
+      
+      this.visitChildren(node);
+      
+      this.popContext();
+    }
+  }
+  
+  visitVariableReference(node: any): void {
+    if (!node.location) return;
+    
+    const ctx = this.currentContext;
+    const identifier = node.identifier || '';
+    const valueType = node.valueType;
+    
+    // For variable declarations in directives, we've already handled them
+    if (valueType === 'identifier') {
+      return; // Already processed in visitDirective
+    }
+    
+    // Calculate base variable length (including @)
+    const baseLength = identifier.length + 1; // +1 for @
+    
+    // Check if we're in an interpolation context (templates, commands, etc)
+    if (ctx.interpolationAllowed && (ctx.templateType || ctx.inCommand)) {
+      // In triple-colon templates, varIdentifier actually represents {{var}} syntax
+      if (ctx.templateType === 'tripleColon' && valueType === 'varIdentifier') {
+        // The parser optimizes {{var}} to varIdentifier in triple-colon context
+        // Use the actual location length which includes {{}}
+        const actualLength = node.location.end.column - node.location.start.column;
+        this.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column - 1,
+          length: actualLength,
+          tokenType: 'interpolation',
+          modifiers: []
+        });
+      } else if (ctx.variableStyle === '@var' && valueType === 'varIdentifier') {
+        this.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column - 1,
+          length: baseLength,
+          tokenType: 'interpolation',
+          modifiers: []
+        });
+      } else if (ctx.variableStyle === '{{var}}' && valueType === 'varInterpolation') {
+        this.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column - 1,
+          length: identifier.length + 4, // {{}} adds 4 chars
+          tokenType: 'interpolation',
+          modifiers: []
+        });
+      } else if (node.identifier) {
+        // Wrong style for context - mark as invalid
+        this.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column - 1,
+          length: baseLength,
+          tokenType: 'variable',
+          modifiers: ['invalid']
+        });
+      }
+    } else {
+      // Not in template/interpolation context - regular variable reference
+      if (valueType === 'varIdentifier' || valueType === 'varInterpolation') {
+        // Highlight the base variable
+        const actualText = this.getCachedText(
+          { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+          { line: node.location.start.line - 1, character: node.location.start.column - 1 + baseLength }
+        );
+        
+        // AST Location Quirk: The parser has inconsistent behavior with @ symbol inclusion
+        // - Standalone variables: Location includes the @ symbol
+        // - Field access variables: Location does NOT include the @ symbol
+        // This is a known parser issue that should ideally be fixed in the grammar
+        // TODO: Fix this in the parser for consistent AST locations
+        const needsAtAdjustment = node.fields && node.fields.length > 0;
+        const charPos = node.location.start.column - 1 - (needsAtAdjustment ? 1 : 0);
+        
+        this.addToken({
+          line: node.location.start.line - 1,
+          char: charPos,
+          length: baseLength,
+          tokenType: 'variableRef',
+          modifiers: ['reference']
+        });
+        
+        // Handle field access if present
+        if (node.fields && Array.isArray(node.fields)) {
+          // currentPos needs to match where we ended the base variable
+          let currentPos = charPos + baseLength;
+          
+          for (const field of node.fields) {
+            if (field.type === 'field' && field.value) {
+              // Add dot operator
+              this.addToken({
+                line: node.location.start.line - 1,
+                char: currentPos,
+                length: 1, // .
+                tokenType: 'operator',
+                modifiers: []
+              });
+              currentPos += 1;
+              
+              // Add field name
+              this.addToken({
+                line: node.location.start.line - 1,
+                char: currentPos,
+                length: field.value.length,
+                tokenType: 'property',
+                modifiers: []
+              });
+              currentPos += field.value.length;
+            } else if (field.type === 'arrayIndex' && field.value !== undefined) {
+              // Add opening bracket
+              this.addToken({
+                line: node.location.start.line - 1,
+                char: currentPos,
+                length: 1, // [
+                tokenType: 'operator',
+                modifiers: []
+              });
+              currentPos += 1;
+              
+              // Add index value
+              const indexStr = String(field.value);
+              this.addToken({
+                line: node.location.start.line - 1,
+                char: currentPos,
+                length: indexStr.length,
+                tokenType: 'number',
+                modifiers: []
+              });
+              currentPos += indexStr.length;
+              
+              // Add closing bracket
+              this.addToken({
+                line: node.location.start.line - 1,
+                char: currentPos,
+                length: 1, // ]
+                tokenType: 'operator',
+                modifiers: []
+              });
+              currentPos += 1;
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  visitLoadContent(node: any): void {
+    if (!node.location) return;
+    
+    const ctx = this.currentContext;
+    
+    // Add token for the entire file reference
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: node.location.end.column - node.location.start.column,
+      tokenType: 'alligator',
+      modifiers: []
+    });
+    
+    // If it has a section, add a separate token for that
+    if (node.options?.section?.identifier) {
+      const sectionNode = node.options.section.identifier;
+      if (sectionNode.location) {
+        this.addToken({
+          line: sectionNode.location.start.line - 1,
+          char: sectionNode.location.start.column - 1,
+          length: sectionNode.location.end.column - sectionNode.location.start.column,
+          tokenType: 'section',
+          modifiers: []
+        });
+      }
+    }
+  }
+  
+  visitFileReference(node: any): void {
+    if (!node.location) return;
+    
+    const ctx = this.currentContext;
+    const text = this.extractText([node]);
+    
+    // In triple-colon, file references become XML
+    if (ctx.templateType === 'tripleColon') {
+      this.addToken({
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
+        length: text.length,
+        tokenType: 'xmlTag',
+        modifiers: []
+      });
+    } else {
+      // File reference with alligator syntax (in any other context)
+      this.addToken({
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
+        length: text.length,
+        tokenType: 'alligator',
+        modifiers: []
+      });
+      
+      // If it has a section marker, highlight that separately
+      if (node.section && node.sectionLocation) {
+        this.addToken({
+          line: node.sectionLocation.start.line - 1,
+          char: node.sectionLocation.start.column - 1,
+          length: node.section.length,
+          tokenType: 'section',
+          modifiers: []
+        });
+      }
+    }
+  }
+  
+  visitCommand(node: any): void {
+    if (!node.location) return;
+    
+    // Check for language-specific commands
+    if (node.language) {
+      // Highlight the language identifier
+      if (node.languageLocation) {
+        this.addToken({
+          line: node.languageLocation.start.line - 1,
+          char: node.languageLocation.start.column - 1,
+          length: node.language.length,
+          tokenType: 'embedded',
+          modifiers: []
+        });
+      }
+      
+      // Mark the code content for external highlighting
+      if (node.codeLocation) {
+        this.pushContext({
+          interpolationAllowed: false,
+          commandLanguage: node.language
+        });
+        
+        this.addToken({
+          line: node.codeLocation.start.line - 1,
+          char: node.codeLocation.start.column - 1,
+          length: node.code?.length || 0,
+          tokenType: 'embeddedCode',
+          modifiers: []
+        });
+        
+        this.popContext();
+      }
+    } else {
+      // Regular shell command - allow interpolation
+      this.pushContext({
+        inCommand: true,
+        interpolationAllowed: true,
+        variableStyle: '@var'
+      });
+      
+      // Handle CommandBracketContent nodes that may contain interpolation
+      if (node.content && Array.isArray(node.content)) {
+        for (const part of node.content) {
+          this.visitNode(part);
+        }
+      } else if (node.values && Array.isArray(node.values)) {
+        for (const value of node.values) {
+          this.visitNode(value);
+        }
+      } else {
+        this.visitChildren(node);
+      }
+      
+      this.popContext();
+    }
+  }
+  
+  visitOperator(node: any): void {
+    if (!node.location || !node.operator) return;
+    
+    // Handle operator array format ['>', undefined] or string format
+    const operatorText = Array.isArray(node.operator) ? node.operator[0] : node.operator;
+    
+    if (operatorText) {
+      // Handle UnaryExpression (e.g., !@var)
+      if (node.type === 'UnaryExpression' && node.operand) {
+        // For unary operators, the operator is at the start
+        this.addToken({
+          line: node.location.start.line - 1,
+          char: node.location.start.column - 1,
+          length: operatorText.length,
+          tokenType: 'operator',
+          modifiers: []
+        });
+        
+        // Visit the operand
+        this.visitNode(node.operand);
+      }
+      // Handle BinaryExpression (e.g., @a && @b)
+      else if (node.left && node.right) {
+        // Calculate operator position - it should be between left and right operands
+        const operatorStart = node.left.location.end.column;
+        
+        this.addToken({
+          line: node.location.start.line - 1,
+          char: operatorStart,
+          length: operatorText.length,
+          tokenType: 'operator',
+          modifiers: []
+        });
+        
+        // Visit operands
+        this.visitNode(node.left);
+        this.visitNode(node.right);
+      }
+    }
+  }
+  
+  visitLiteral(node: any): void {
+    if (!node.location) return;
+    
+    const value = node.value;
+    const valueType = node.valueType;
+    let tokenType = 'string';
+    let modifiers: string[] = [];
+    
+    if (typeof value === 'number') {
+      tokenType = 'number';
+    } else if (typeof value === 'boolean') {
+      tokenType = 'boolean';
+    } else if (value === null) {
+      tokenType = 'null';
+    } else if (valueType === 'string') {
+      // String literals - check the source to see if single quoted
+      const text = this.getCachedText(
+        { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+        { line: node.location.end.line - 1, character: node.location.end.column }
+      );
+      
+      if (text.startsWith("'") && text.endsWith("'")) {
+        modifiers.push('literal');
+      }
+    }
+    
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: node.location.end.column - node.location.start.column,
+      tokenType,
+      modifiers
+    });
+  }
+  
+  visitComment(node: any): void {
+    if (!node.location) return;
+    
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: node.content?.length || 0,
+      tokenType: 'comment',
+      modifiers: []
+    });
+  }
+  
+  visitText(node: any): void {
+    // Text nodes may contain embedded elements in templates
+    if (this.currentContext.interpolationAllowed) {
+      this.visitChildren(node);
+    }
+  }
+  
+  visitExpression(node: any): void {
+    // Handle when expressions and other complex structures
+    this.visitChildren(node);
+  }
+  
+  private addToken(token: TokenInfo): void {
+    const typeIndex = this.tokenTypes.indexOf(token.tokenType);
+    if (typeIndex === -1) {
+      console.warn(`Unknown token type: ${token.tokenType}`);
+      return;
+    }
+    
+    let modifierMask = 0;
+    for (const modifier of token.modifiers) {
+      const modifierIndex = this.tokenModifiers.indexOf(modifier);
+      if (modifierIndex !== -1) {
+        modifierMask |= 1 << modifierIndex;
+      }
+    }
+    
+    // Debug logging
+    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld')) {
+      const text = this.document.getText({
+        start: { line: token.line, character: token.char },
+        end: { line: token.line, character: token.char + token.length }
+      });
+      console.log(`[TOKEN] ${token.tokenType} at ${token.line}:${token.char} len=${token.length} "${text}" mods=[${token.modifiers.join(',')}]`);
+    }
+    
+    this.builder.push(
+      token.line,
+      token.char,
+      token.length,
+      typeIndex,
+      modifierMask
+    );
+  }
+  
+  visitWhenExpression(node: any): void {
+    if (!node.location) return;
+    
+    // Highlight 'when' keyword
+    if (node.keywordLocation) {
+      this.addToken({
+        line: node.keywordLocation.start.line - 1,
+        char: node.keywordLocation.start.column - 1,
+        length: 4, // 'when'
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+    
+    // Visit conditions and actions
+    this.visitChildren(node);
+  }
+  
+  visitWhenDirective(node: any): void {
+    // For when directives, we need to process condition and action
+    if (node.values) {
+      // Handle block form (e.g., /when @var first: [...])
+      if (node.values.conditions && Array.isArray(node.values.conditions)) {
+        // Visit the variable being tested
+        if (node.values.variable) {
+          if (Array.isArray(node.values.variable)) {
+            for (const v of node.values.variable) {
+              this.visitNode(v);
+            }
+          } else {
+            this.visitNode(node.values.variable);
+          }
+        }
+        
+        // Highlight the pattern matching keyword (first:, all:, any:)
+        if (node.values.patternType && node.values.patternLocation) {
+          this.addToken({
+            line: node.values.patternLocation.start.line - 1,
+            char: node.values.patternLocation.start.column - 1,
+            length: node.values.patternType.length + 1, // Include the colon
+            tokenType: 'keyword',
+            modifiers: []
+          });
+        }
+        
+        // Visit each condition/action pair
+        for (const pair of node.values.conditions) {
+          // Highlight condition pattern if it exists
+          if (pair.pattern && pair.patternLocation) {
+            // Pattern keywords like first:, all:, any:
+            this.addToken({
+              line: pair.patternLocation.start.line - 1,
+              char: pair.patternLocation.start.column - 1,
+              length: pair.pattern.length,
+              tokenType: 'keyword',
+              modifiers: []
+            });
+          }
+          
+          // Visit condition
+          if (pair.condition) {
+            if (Array.isArray(pair.condition)) {
+              for (const cond of pair.condition) {
+                this.visitNode(cond);
+              }
+            } else {
+              this.visitNode(pair.condition);
+            }
+          }
+          
+          // Highlight the arrow if present
+          if (pair.arrowLocation) {
+            this.addToken({
+              line: pair.arrowLocation.start.line - 1,
+              char: pair.arrowLocation.start.column - 1,
+              length: 2, // =>
+              tokenType: 'operator',
+              modifiers: []
+            });
+          }
+          
+          // Visit action
+          if (pair.action) {
+            if (Array.isArray(pair.action)) {
+              for (const action of pair.action) {
+                this.visitNode(action);
+              }
+            } else {
+              this.visitNode(pair.action);
+            }
+          }
+        }
+      }
+      // Handle simple form (e.g., /when @condition => action)
+      else if (node.values.condition) {
+        // Visit condition (which may contain operators)
+        if (Array.isArray(node.values.condition)) {
+          for (const cond of node.values.condition) {
+            this.visitNode(cond);
+          }
+        } else {
+          this.visitNode(node.values.condition);
+        }
+        
+        // Handle the => arrow operator
+        if (node.values.action) {
+          const conditionEnd = Array.isArray(node.values.condition) 
+            ? node.values.condition[node.values.condition.length - 1].location?.end 
+            : node.values.condition.location?.end;
+          const actionStart = Array.isArray(node.values.action)
+            ? node.values.action[0].location?.start
+            : node.values.action.location?.start;
+            
+          if (conditionEnd && actionStart) {
+            // Find the arrow position (between condition end and action start)
+            const arrowChar = conditionEnd.column + 1; // Space after condition
+            
+            this.addToken({
+              line: conditionEnd.line - 1,
+              char: arrowChar - 1,
+              length: 2, // =>
+              tokenType: 'operator',
+              modifiers: []
+            });
+          }
+        }
+        
+        // Visit action
+        if (node.values.action) {
+          if (Array.isArray(node.values.action)) {
+            for (const action of node.values.action) {
+              this.visitNode(action);
+            }
+          } else {
+            this.visitNode(node.values.action);
+          }
+        }
+      }
+    }
+  }
+  
+  visitExecInvocation(node: any): void {
+    if (!node.location) return;
+    
+    // ExecInvocation nodes now have their own location
+    // For @exec(@cmd), we want to highlight the function name part
+    if (node.commandRef && node.commandRef.name) {
+      const name = node.commandRef.name;
+      
+      // ExecInvocation always starts with @ for the function name
+      // The @ is always at the start of the ExecInvocation location
+      const charPos = node.location.start.column - 1;
+      
+      this.addToken({
+        line: node.location.start.line - 1,
+        char: charPos,
+        length: name.length + 1, // +1 for @
+        tokenType: 'variableRef',
+        modifiers: ['reference']
+      });
+      
+      // Visit arguments if any
+      if (node.commandRef.args && Array.isArray(node.commandRef.args)) {
+        // Set context for arguments (they're in a function call context)
+        this.pushContext({ inCommand: true, interpolationAllowed: true, variableStyle: '@var' });
+        for (const arg of node.commandRef.args) {
+          this.visitNode(arg);
+        }
+        this.popContext();
+      }
+    }
+  }
+  
+  visitCommandReference(node: any): void {
+    if (!node.location) return;
+    
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: node.name?.length || this.extractText([node]).length,
+      tokenType: 'variableRef',
+      modifiers: ['reference']
+    });
+  }
+  
+  visitParameter(node: any): void {
+    if (!node.location) return;
+    
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: node.name?.length || this.extractText([node]).length,
+      tokenType: 'parameter',
+      modifiers: []
+    });
+  }
+  
+  visitPathSeparator(node: any): void {
+    // Path separators are usually just visual, skip semantic tokens
+  }
+  
+  visitDotSeparator(node: any): void {
+    // Dot separators for field access - could highlight as operator
+    if (node.location) {
+      this.addToken({
+        line: node.location.start.line - 1,
+        char: node.location.start.column - 1,
+        length: 1, // '.'
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+  }
+  
+  visitSectionMarker(node: any): void {
+    if (!node.location) return;
+    
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: node.content?.length || 1,
+      tokenType: 'section',
+      modifiers: []
+    });
+  }
+  
+  visitFrontmatter(node: any): void {
+    if (!node.location) return;
+    
+    // Highlight frontmatter as metadata
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: 3, // '---'
+      tokenType: 'comment',
+      modifiers: []
+    });
+    
+    // Visit content
+    this.visitChildren(node);
+    
+    // Closing delimiter
+    if (node.closeLocation) {
+      this.addToken({
+        line: node.closeLocation.start.line - 1,
+        char: node.closeLocation.start.column - 1,
+        length: 3, // '---'
+        tokenType: 'comment',
+        modifiers: []
+      });
+    }
+  }
+  
+  visitCodeFence(node: any): void {
+    if (!node.location) return;
+    
+    // Highlight language identifier if present
+    if (node.language && node.languageLocation) {
+      this.addToken({
+        line: node.languageLocation.start.line - 1,
+        char: node.languageLocation.start.column - 1,
+        length: node.language.length,
+        tokenType: 'embedded',
+        modifiers: []
+      });
+    }
+    
+    // Mark code content for external highlighting
+    if (node.codeLocation && node.language) {
+      this.addToken({
+        line: node.codeLocation.start.line - 1,
+        char: node.codeLocation.start.column - 1,
+        length: node.code?.length || 0,
+        tokenType: 'embeddedCode',
+        modifiers: [],
+        data: { language: node.language } // VSCode can use this for injection
+      });
+    }
+  }
+  
+  visitMlldRunBlock(node: any): void {
+    // Similar to code fence but for mlld run blocks
+    this.visitCodeFence(node);
+  }
+  
+  visitError(node: any): void {
+    // Handle error nodes gracefully
+    if (!node.location) {
+      // Try to infer location from parent or context
+      if (this.tryInferLocation(node)) {
+        // Location was inferred, continue with token generation
+      } else {
+        // Skip this error node if we can't determine its location
+        return;
+      }
+    }
+    
+    // Determine the best token type for the error
+    const errorType = this.getErrorTokenType(node);
+    
+    // Mark syntax errors with appropriate token type
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: node.content?.length || node.text?.length || 1,
+      tokenType: errorType,
+      modifiers: ['invalid']
+    });
+    
+    // Try to partially highlight valid content within the error
+    if (node.partialContent || node.children) {
+      this.visitChildren(node);
+    }
+  }
+  
+  tryInferLocation(node: any): boolean {
+    // Try to use parent's location as a fallback
+    if (node.parent?.location) {
+      node.location = node.parent.location;
+      return true;
+    }
+    
+    // Try to use surrounding siblings
+    if (node.previousSibling?.location && node.nextSibling?.location) {
+      node.location = {
+        start: node.previousSibling.location.end,
+        end: node.nextSibling.location.start
+      };
+      return true;
+    }
+    
+    return false;
+  }
+  
+  getErrorTokenType(node: any): string {
+    // Try to determine the intended token type from context
+    if (node.expectedType) {
+      switch (node.expectedType) {
+        case 'directive': return 'directive';
+        case 'variable': return 'variable';
+        case 'string': return 'string';
+        case 'number': return 'number';
+        default: return 'variable'; // Default fallback
+      }
+    }
+    
+    // Infer from content patterns
+    if (node.content || node.text) {
+      const text = node.content || node.text;
+      if (text.startsWith('/')) return 'directive';
+      if (text.startsWith('@')) return 'variable';
+      if (text.match(/^["']|^`|^::|^:::/)) return 'string';
+      if (text.match(/^\d/)) return 'number';
+    }
+    
+    return 'variable'; // Default fallback
+  }
+  
+  visitTernaryExpression(node: any): void {
+    if (!node.location) return;
+    
+    // Visit condition
+    if (node.condition) this.visitNode(node.condition);
+    
+    // Highlight ? operator
+    if (node.questionLocation) {
+      this.addToken({
+        line: node.questionLocation.start.line - 1,
+        char: node.questionLocation.start.column - 1,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+    
+    // Visit true branch
+    if (node.trueBranch) this.visitNode(node.trueBranch);
+    
+    // Highlight : operator
+    if (node.colonLocation) {
+      this.addToken({
+        line: node.colonLocation.start.line - 1,
+        char: node.colonLocation.start.column - 1,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+    
+    // Visit false branch
+    if (node.falseBranch) this.visitNode(node.falseBranch);
+  }
+  
+  private extractText(nodes: any[]): string {
+    let text = '';
+    for (const node of nodes) {
+      if (node.type === 'Text' && node.content) {
+        text += node.content;
+      } else if (node.content) {
+        text += node.content;
+      } else if (node.value) {
+        text += node.value;
+      } else if (node.values && Array.isArray(node.values)) {
+        text += this.extractText(node.values);
+      }
+    }
+    return text.trim();
+  }
+  
+  private handlePrimitiveValue(value: any, directive: any): void {
+    // Calculate position after the = sign
+    const source = this.document.getText();
+    const directiveText = source.substring(directive.location.start.offset, directive.location.end.offset);
+    const equalIndex = directiveText.indexOf('=');
+    
+    if (equalIndex === -1) return;
+    
+    // Find the actual value position after the equals sign
+    const afterEqual = directiveText.substring(equalIndex + 1).trimStart();
+    const valueStart = directive.location.start.column + equalIndex + 1 + (directiveText.length - equalIndex - 1 - afterEqual.length);
+    
+    let tokenType = 'string';
+    let modifiers: string[] = [];
+    let tokenLength = 0;
+    
+    if (typeof value === 'number') {
+      tokenType = 'number';
+      tokenLength = String(value).length;
+    } else if (typeof value === 'boolean') {
+      tokenType = 'boolean';
+      tokenLength = String(value).length;
+    } else if (value === null) {
+      tokenType = 'null';
+      tokenLength = 4; // 'null'
+    } else if (typeof value === 'string') {
+      // For strings, we need to include the quotes in the token
+      const quotedLength = afterEqual.indexOf(afterEqual[0], 1) + 1;
+      tokenLength = quotedLength;
+      
+      // Check if it's single-quoted
+      if (afterEqual.startsWith("'")) {
+        modifiers.push('literal');
+      }
+    }
+    
+    this.addToken({
+      line: directive.location.start.line - 1,
+      char: valueStart - 1,
+      length: tokenLength,
+      tokenType,
+      modifiers
+    });
+  }
+  
+  visitObjectExpression(node: any): void {
+    if (!node.location) return;
+    
+    const text = this.getCachedText(
+      { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+      { line: node.location.end.line - 1, character: node.location.end.column - 1 }
+    );
+    
+    // Highlight opening brace
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: 1, // {
+      tokenType: 'operator',
+      modifiers: []
+    });
+    
+    // Visit object properties - mlld constructs will be AST nodes
+    // The parser preserves full AST structure for mlld elements even when nested!
+    // Example: { "config": <file.json>, "exec": @build(), "msg": `Hello @name` }
+    //   - Keys are just strings (no location data)
+    //   - <file.json> is a full load-content AST node with location
+    //   - @build() is a full ExecInvocation AST node with location
+    //   - `Hello @name` has wrapperType and content nodes with locations
+    //   - Primitive values (42, true, "plain") have no location data
+    if (node.properties && typeof node.properties === 'object') {
+      for (const [key, value] of Object.entries(node.properties)) {
+        if (typeof value === 'object' && value !== null && value.type) {
+          // This is an AST node (mlld construct)
+          // Objects and arrays don't create interpolation contexts
+          // @varRef in object values is a regular reference, not interpolation
+          this.visitNode(value);
+        } else if (typeof value === 'object' && value !== null && value.content) {
+          // This might be a wrapped string literal or template
+          if (value.wrapperType) {
+            // This is a template value with content nodes
+            // NOTE: We don't have exact delimiter positions in object values
+            // The AST only provides content node locations, not delimiter locations
+            // Skip delimiter tokenization to avoid incorrect position guessing
+            
+            // Process template content with proper context
+            this.pushContext({
+              templateType: value.wrapperType as any,
+              interpolationAllowed: value.wrapperType !== 'singleQuote',
+              variableStyle: value.wrapperType === 'tripleColon' ? '{{var}}' : '@var'
+            });
+            
+            if (Array.isArray(value.content)) {
+              for (const contentNode of value.content) {
+                this.visitNode(contentNode);
+              }
+            }
+            
+            this.popContext();
+          } else if (Array.isArray(value.content)) {
+            // Plain content nodes
+            for (const contentNode of value.content) {
+              this.visitNode(contentNode);
+            }
+          }
+        }
+        // Property keys and primitive values can't be highlighted individually
+        // without parsing the text to find their positions
+      }
+    }
+    
+    // Highlight closing brace
+    if (text.endsWith('}')) {
+      this.addToken({
+        line: node.location.end.line - 1,
+        char: node.location.end.column - 2, // Position before }
+        length: 1, // }
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+  }
+  
+  visitArrayExpression(node: any): void {
+    if (!node.location) return;
+    
+    const text = this.getCachedText(
+      { line: node.location.start.line - 1, character: node.location.start.column - 1 },
+      { line: node.location.end.line - 1, character: node.location.end.column - 1 }
+    );
+    
+    // Highlight opening bracket
+    this.addToken({
+      line: node.location.start.line - 1,
+      char: node.location.start.column - 1,
+      length: 1, // [
+      tokenType: 'operator',
+      modifiers: []
+    });
+    
+    // Visit array items - mlld objects will be AST nodes, primitives won't
+    if (node.items && Array.isArray(node.items)) {
+      for (const item of node.items) {
+        if (typeof item === 'object' && item !== null && item.type) {
+          // This is an AST node (mlld construct)
+          this.visitNode(item);
+        } else if (typeof item === 'object' && item !== null && item.content) {
+          // This is a wrapped string literal
+          if (Array.isArray(item.content)) {
+            for (const contentNode of item.content) {
+              this.visitNode(contentNode);
+            }
+          }
+        }
+        // Primitive values (numbers, booleans) can't be highlighted individually
+        // without parsing the text to find their positions
+      }
+    }
+    
+    // Highlight closing bracket
+    if (text.endsWith(']')) {
+      this.addToken({
+        line: node.location.end.line - 1,
+        char: node.location.end.column - 2, // Position before ]
+        length: 1, // ]
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+  }
+  
+  visitMemberExpression(node: any): void {
+    if (!node.location) return;
+    
+    // Visit the object part
+    if (node.object) {
+      this.visitNode(node.object);
+    }
+    
+    // Highlight the dot operator
+    if (node.computed === false && node.property) {
+      // For non-computed access (@user.name), highlight the dot
+      const objectEnd = node.object?.location?.end?.column || node.location.start.column;
+      
+      this.addToken({
+        line: node.location.start.line - 1,
+        char: objectEnd - 1,
+        length: 1, // .
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+    
+    // Visit the property part
+    if (node.property) {
+      if (node.computed) {
+        // For computed access (@items[0]), the brackets are part of ArrayExpression
+        this.visitNode(node.property);
+      } else {
+        // For dot access, the property is an identifier
+        if (node.property.location) {
+          this.addToken({
+            line: node.property.location.start.line - 1,
+            char: node.property.location.start.column - 1,
+            length: node.property.name?.length || node.property.identifier?.length || 0,
+            tokenType: 'property',
+            modifiers: []
+          });
+        }
+      }
+    }
+  }
+  
+  visitProperty(node: any): void {
+    if (!node.location) return;
+    
+    // Visit the key
+    if (node.key) {
+      if (node.key.type === 'Literal' || node.key.type === 'StringLiteral') {
+        this.visitNode(node.key);
+      } else if (node.key.location) {
+        // Identifier key
+        this.addToken({
+          line: node.key.location.start.line - 1,
+          char: node.key.location.start.column - 1,
+          length: node.key.name?.length || node.key.identifier?.length || 0,
+          tokenType: 'property',
+          modifiers: []
+        });
+      }
+    }
+    
+    // Highlight the colon
+    if (node.colonLocation) {
+      this.addToken({
+        line: node.colonLocation.start.line - 1,
+        char: node.colonLocation.start.column - 1,
+        length: 1, // :
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+    
+    // Visit the value
+    if (node.value) {
+      this.visitNode(node.value);
+    }
+  }
+}

@@ -29,7 +29,7 @@ import {
   SemanticTokensBuilder,
   SemanticTokensParams,
   SemanticTokensRangeParams
-} from 'vscode-languageserver/node';
+} from 'vscode-languageserver/node.js';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { parse } from '@grammar/parser';
 import { NodeFileSystem } from '@services/fs/NodeFileSystem';
@@ -147,6 +147,9 @@ export async function startLanguageServer(): Promise<void> {
   });
 
   connection.onInitialized(() => {
+    connection.console.log('[LSP] Server initialized');
+    connection.console.log('[LSP] Semantic tokens provider available: ' + (!!connection.languages.semanticTokens));
+    
     if (hasConfigurationCapability) {
       // Register for all configuration changes
       connection.client.register(DidChangeConfigurationNotification.type, undefined);
@@ -176,6 +179,9 @@ export async function startLanguageServer(): Promise<void> {
       result = connection.workspace.getConfiguration({
         scopeUri: resource,
         section: 'mlldLanguageServer'
+      }).then((config) => {
+        // Ensure we always have valid settings
+        return config || defaultSettings;
       });
       documentSettings.set(resource, result);
     }
@@ -194,7 +200,7 @@ export async function startLanguageServer(): Promise<void> {
   });
 
   async function validateDocument(textDocument: TextDocument): Promise<void> {
-    const settings = await getDocumentSettings(textDocument.uri);
+    const settings = await getDocumentSettings(textDocument.uri) || defaultSettings;
     const analysis = await analyzeDocument(textDocument);
     
     // Send diagnostics
@@ -215,30 +221,67 @@ export async function startLanguageServer(): Promise<void> {
     const variables = new Map<string, VariableInfo>();
     const imports: string[] = [];
     const exports: string[] = [];
+    let ast: any[] = [];
 
     try {
+      // Debug log to understand what we're parsing
+      if (text.length === 0) {
+        logger.warn('Attempting to parse empty document', { uri: document.uri });
+        // Return empty analysis for empty documents
+        const analysis: DocumentAnalysis = {
+          ast: [],
+          errors: [],
+          variables,
+          imports,
+          exports,
+          lastAnalyzed: document.version
+        };
+        documentCache.set(document.uri, analysis);
+        return analysis;
+      }
+      
       const result = await parse(text);
       
       if (!result.success) {
         // Convert parse error to diagnostic
         const error = result.error;
+        
+        // Log the error for debugging
+        logger.debug('Parse error, attempting fault-tolerant parsing', { 
+          message: error.message, 
+          line: error.line, 
+          column: error.column,
+          textLength: text.length
+        });
+        
         const diagnostic: Diagnostic = {
           severity: DiagnosticSeverity.Error,
           range: {
             start: { line: (error.line || 1) - 1, character: (error.column || 1) - 1 },
             end: { line: (error.line || 1) - 1, character: (error.column || 1) }
           },
-          message: error.message,
+          message: error.message || 'Parse error',
           source: 'mlld'
         };
         errors.push(diagnostic);
+        
+        // Attempt fault-tolerant parsing
+        const partialAst = await attemptPartialParsing(text, error);
+        ast = partialAst.nodes;
+        errors.push(...partialAst.errors);
+        
+        // Analyze whatever we could parse
+        if (ast.length > 0) {
+          analyzeAST(ast, document, variables, imports, exports);
+        }
       } else {
-        // Analyze AST for variables and imports
-        analyzeAST(result.ast, document, variables, imports, exports);
+        // Full parse succeeded
+        ast = result.ast;
+        analyzeAST(ast, document, variables, imports, exports);
       }
 
       const analysis: DocumentAnalysis = {
-        ast: result.success ? result.ast : [],
+        ast,
         errors,
         variables,
         imports,
@@ -892,18 +935,36 @@ export async function startLanguageServer(): Promise<void> {
 
   // Semantic Tokens Provider
   connection.languages.semanticTokens.on(async (params: SemanticTokensParams): Promise<SemanticTokens> => {
+    connection.console.log(`[SEMANTIC] Tokens requested for ${params.textDocument.uri}`);
+    logger.debug('Semantic tokens requested', { uri: params.textDocument.uri });
     const document = documents.get(params.textDocument.uri);
     if (!document) {
+      connection.console.log(`[SEMANTIC] Document not found: ${params.textDocument.uri}`);
       return { data: [] };
     }
 
     const analysis = await analyzeDocument(document);
     const builder = new SemanticTokensBuilder();
     
+    connection.console.log(`[SEMANTIC] Processing AST with ${analysis.ast.length} nodes, ${analysis.errors.length} errors`);
+    logger.debug('Processing semantic tokens', { 
+      uri: params.textDocument.uri,
+      astLength: analysis.ast.length,
+      hasErrors: analysis.errors.length > 0
+    });
+    
     // Process the AST to generate semantic tokens
     processASTForSemanticTokens(analysis.ast, document, builder);
     
-    return builder.build();
+    const tokens = builder.build();
+    const tokenCount = tokens.data.length / 5; // Each token is 5 integers
+    connection.console.log(`[SEMANTIC] Built ${tokenCount} tokens`);
+    logger.debug('Semantic tokens built', { 
+      uri: params.textDocument.uri,
+      tokenCount: tokenCount
+    });
+    
+    return tokens;
   });
 
   function processASTForSemanticTokens(
@@ -916,10 +977,133 @@ export async function startLanguageServer(): Promise<void> {
     visitor.visitAST(ast);
   }
 
+  /**
+   * Attempts to parse a document line by line or section by section
+   * to recover as much valid AST as possible when the full parse fails
+   */
+  async function attemptPartialParsing(
+    text: string, 
+    originalError: any
+  ): Promise<{ nodes: any[], errors: Diagnostic[] }> {
+    const nodes: any[] = [];
+    const errors: Diagnostic[] = [];
+    const lines = text.split('\n');
+    
+    // Try to parse up to the error location first
+    if (originalError.line && originalError.line > 1) {
+      const textBeforeError = lines.slice(0, originalError.line - 1).join('\n');
+      if (textBeforeError.trim()) {
+        try {
+          const result = await parse(textBeforeError);
+          if (result.success) {
+            nodes.push(...result.ast);
+          }
+        } catch (e) {
+          // Ignore - we're doing best effort
+        }
+      }
+    }
+    
+    // Try to parse individual top-level constructs
+    let currentBlock = '';
+    let blockStartLine = 0;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmedLine = line.trim();
+      
+      // Skip empty lines
+      if (!trimmedLine) {
+        continue;
+      }
+      
+      // Check if this is a new top-level construct
+      const isTopLevel = trimmedLine.startsWith('/') || 
+                        trimmedLine.startsWith('>>') ||
+                        trimmedLine.startsWith('---') || // frontmatter
+                        trimmedLine.startsWith('```'); // code fence
+      
+      if (isTopLevel && currentBlock) {
+        // Try to parse the previous block
+        await tryParseBlock(currentBlock, blockStartLine, nodes, errors);
+        currentBlock = '';
+      }
+      
+      if (isTopLevel) {
+        blockStartLine = i;
+      }
+      
+      currentBlock += (currentBlock ? '\n' : '') + line;
+    }
+    
+    // Parse any remaining block
+    if (currentBlock) {
+      await tryParseBlock(currentBlock, blockStartLine, nodes, errors);
+    }
+    
+    return { nodes, errors };
+  }
+  
+  async function tryParseBlock(
+    block: string, 
+    startLine: number, 
+    nodes: any[], 
+    errors: Diagnostic[]
+  ): Promise<void> {
+    try {
+      const result = await parse(block);
+      if (result.success && result.ast.length > 0) {
+        // Adjust line numbers in the AST
+        adjustLineNumbers(result.ast, startLine);
+        nodes.push(...result.ast);
+      }
+    } catch (e: any) {
+      // Record error but continue
+      errors.push({
+        severity: DiagnosticSeverity.Error,
+        range: {
+          start: { line: startLine, character: 0 },
+          end: { line: startLine, character: block.indexOf('\n') > 0 ? block.indexOf('\n') : block.length }
+        },
+        message: `Syntax error in block: ${e.message || 'Unknown error'}`,
+        source: 'mlld'
+      });
+    }
+  }
+  
+  function adjustLineNumbers(ast: any[], offset: number): void {
+    // Recursively adjust line numbers in AST nodes
+    function adjustNode(node: any): void {
+      if (node && typeof node === 'object') {
+        if (node.location) {
+          if (node.location.start) {
+            node.location.start.line += offset;
+          }
+          if (node.location.end) {
+            node.location.end.line += offset;
+          }
+        }
+        
+        // Recursively process child nodes
+        for (const key in node) {
+          const value = node[key];
+          if (Array.isArray(value)) {
+            value.forEach(adjustNode);
+          } else if (value && typeof value === 'object') {
+            adjustNode(value);
+          }
+        }
+      }
+    }
+    
+    ast.forEach(adjustNode);
+  }
+
   // Make the connection listen on the input/output streams
   documents.listen(connection);
   connection.listen();
   
   // Log that the server started
   connection.console.log('mlld language server started');
+  connection.console.log('Semantic tokens provider registered: ' + (!!connection.languages.semanticTokens));
 }

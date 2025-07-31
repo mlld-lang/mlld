@@ -1,88 +1,133 @@
 {
-  "Text Variable": {
-    "prefix": "text",
+  "Variable": {
+    "prefix": "var",
     "body": [
-      "@text ${1:name} = \"${2:value}\""
+      "/var @${1:name} = \"${2:value}\""
     ],
-    "description": "Create a text variable"
+    "description": "Create a variable"
   },
-  "Text Variable with Template": {
-    "prefix": "texttemplate",
+  "Variable with Template": {
+    "prefix": "vartemplate",
     "body": [
-      "@text ${1:name} = [[${2:content with {{${3:variable}}}}]]"
+      "/var @${1:name} = `${2:content with @${3:variable}}`"
     ],
-    "description": "Create a text variable with template interpolation"
+    "description": "Create a variable with template interpolation"
   },
   "Data Object": {
-    "prefix": "data",
+    "prefix": "vardata",
     "body": [
-      "@data ${1:name} = {",
+      "/var @${1:name} = {",
       "  \"${2:key}\": \"${3:value}\"",
       "}"
     ],
     "description": "Create a data object"
   },
-  "Path Variable": {
-    "prefix": "path",
+  "Array": {
+    "prefix": "vararray",
     "body": [
-      "@path ${1:name} = ${2:./path/to/file}"
+      "/var @${1:name} = [${2:\"item1\", \"item2\"}]"
     ],
-    "description": "Create a path variable"
+    "description": "Create an array"
+  },
+  "Path Variable": {
+    "prefix": "varpath",
+    "body": [
+      "/var @${1:name} = <${2:./path/to/file}>"
+    ],
+    "description": "Load file contents into a variable"
   },
   "Run Command": {
     "prefix": "run",
     "body": [
-      "@run ${1:name} = ```${2|bash,sh|}",
-      "${3:command}",
-      "```"
+      "/run {${1:echo \"Hello World\"}}"
     ],
-    "description": "Run a shell command"
+    "description": "Run a shell command (single line)"
+  },
+  "Shell Script": {
+    "prefix": "sh",
+    "body": [
+      "/sh {",
+      "  ${1:echo \"Multi-line script\"}",
+      "}"
+    ],
+    "description": "Run a multi-line shell script"
   },
   "Execute JavaScript": {
-    "prefix": "exec",
+    "prefix": "exe",
     "body": [
-      "@exec ${1:name} = ```javascript",
-      "${2:// code}",
-      "return ${3:result};",
-      "```"
+      "/exe @${1:name}(${2:param}) = js {",
+      "  ${3:// code}",
+      "  return ${4:result};",
+      "}"
     ],
-    "description": "Execute JavaScript code"
+    "description": "Define a JavaScript executable"
   },
-  "Add File": {
-    "prefix": "add",
+  "Show Content": {
+    "prefix": "show",
     "body": [
-      "@add [${1:file.md}]"
+      "/show `${1:Content to display}`"
     ],
-    "description": "Include content from a file"
+    "description": "Display content"
   },
-  "Add Section": {
-    "prefix": "addsection",
+  "Show Variable": {
+    "prefix": "showvar",
     "body": [
-      "@add \"${1:Section Name}\" from [${2:file.md}]"
+      "/show @${1:variableName}"
     ],
-    "description": "Include a specific section from a file"
-  },
-  "Add Template": {
-    "prefix": "addtemplate",
-    "body": [
-      "@add template ${1:templateName}(${2:param1, param2})",
-      "${3:Template content with {{param1}} and {{param2}}}"
-    ],
-    "description": "Define a reusable template"
+    "description": "Display a variable's value"
   },
   "Import All": {
     "prefix": "import",
     "body": [
-      "@import * from [${1:config.mld}]"
+      "/import * from \"${1:config.mld}\""
     ],
     "description": "Import all variables from a file"
   },
   "Import Selected": {
     "prefix": "importselect",
     "body": [
-      "@import {${1:var1, var2}} from [${2:config.mld}]"
+      "/import { @${1:var1}, @${2:var2} } from \"${3:config.mld}\""
     ],
     "description": "Import specific variables from a file"
+  },
+  "Import Module": {
+    "prefix": "importmodule",
+    "body": [
+      "/import { ${1:function} } from @${2:company/module}"
+    ],
+    "description": "Import from a module"
+  },
+  "When Condition": {
+    "prefix": "when",
+    "body": [
+      "/when @${1:condition} => ${2:/show `Action`}"
+    ],
+    "description": "Simple conditional"
+  },
+  "When First": {
+    "prefix": "whenfirst",
+    "body": [
+      "/when @${1:variable} first: [",
+      "  \"${2:value1}\" => ${3:/show `Case 1`}",
+      "  \"${4:value2}\" => ${5:/show `Case 2`}",
+      "  _ => ${6:/show `Default`}",
+      "]"
+    ],
+    "description": "Switch-style conditional (first match)"
+  },
+  "Output to File": {
+    "prefix": "output",
+    "body": [
+      "/output @${1:content} to \"${2:output.txt}\""
+    ],
+    "description": "Output content to a file"
+  },
+  "Foreach": {
+    "prefix": "foreach",
+    "body": [
+      "/var @${1:results} = foreach @${2:function}(@${3:array})"
+    ],
+    "description": "Apply function to each array element"
   },
   "Comment": {
     "prefix": ">>",
@@ -90,5 +135,26 @@
       ">> ${1:comment}"
     ],
     "description": "Add a comment"
+  },
+  "Template Backtick": {
+    "prefix": "template",
+    "body": [
+      "`${1:Hello @name!}`"
+    ],
+    "description": "Backtick template with @ interpolation"
+  },
+  "Template Double Colon": {
+    "prefix": "template::",
+    "body": [
+      "::${1:Text with `backticks` and @var}::"
+    ],
+    "description": "Double-colon template (for text with backticks)"
+  },
+  "Template Triple Colon": {
+    "prefix": "template:::",
+    "body": [
+      ":::${1:Hey @user, check out {{link}}!}:::"
+    ],
+    "description": "Triple-colon template (for social media with @ symbols)"
   }
 }

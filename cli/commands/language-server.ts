@@ -12,11 +12,16 @@
 import { logger } from '@core/utils/logger';
 
 // Command entry point
-export async function languageServerCommand(): Promise<void> {
+export async function languageServerCommand(args?: string[]): Promise<void> {
+  // The --stdio flag is passed by VSCode and other editors
+  // We don't need to do anything special with it as the connection
+  // will be set up automatically via stdio
+  const hasStdio = args?.includes('--stdio');
+  
   // Check if vscode-languageserver is installed
   try {
     // Dynamic import to check if the package exists
-    const lspModule = await import('vscode-languageserver/node').catch(() => null);
+    const lspModule = await import('vscode-languageserver/node.js').catch(() => null);
     
     if (!lspModule) {
       console.error('Error: Language server dependencies not installed.');

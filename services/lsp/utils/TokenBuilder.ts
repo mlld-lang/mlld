@@ -1,0 +1,67 @@
+import { SemanticTokensBuilder } from 'vscode-languageserver/node';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+
+export interface TokenInfo {
+  line: number;
+  char: number;
+  length: number;
+  tokenType: string;
+  modifiers: string[];
+  data?: any;
+}
+
+export class TokenBuilder {
+  constructor(
+    private builder: SemanticTokensBuilder,
+    private tokenTypes: string[],
+    private tokenModifiers: string[],
+    private document: TextDocument
+  ) {}
+  
+  addToken(token: TokenInfo): void {
+    const typeIndex = this.tokenTypes.indexOf(token.tokenType);
+    if (typeIndex === -1) {
+      console.warn(`Unknown token type: ${token.tokenType}`);
+      return;
+    }
+    
+    let modifierMask = 0;
+    for (const modifier of token.modifiers) {
+      const modifierIndex = this.tokenModifiers.indexOf(modifier);
+      if (modifierIndex !== -1) {
+        modifierMask |= 1 << modifierIndex;
+      }
+    }
+    
+    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld')) {
+      const text = this.document.getText({
+        start: { line: token.line, character: token.char },
+        end: { line: token.line, character: token.char + token.length }
+      });
+      console.log(`[TOKEN] ${token.tokenType} at ${token.line}:${token.char} len=${token.length} "${text}" mods=[${token.modifiers.join(',')}]`);
+    }
+    
+    this.builder.push(
+      token.line,
+      token.char,
+      token.length,
+      typeIndex,
+      modifierMask
+    );
+  }
+  
+  getTokenTypeIndex(type: string): number {
+    return this.tokenTypes.indexOf(type);
+  }
+  
+  buildModifierMask(modifiers: string[]): number {
+    let mask = 0;
+    for (const modifier of modifiers) {
+      const index = this.tokenModifiers.indexOf(modifier);
+      if (index !== -1) {
+        mask |= 1 << index;
+      }
+    }
+    return mask;
+  }
+}

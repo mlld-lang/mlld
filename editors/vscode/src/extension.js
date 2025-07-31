@@ -33,17 +33,22 @@ function startLanguageServer(context) {
   const serverCommand = 'mlld';
   const serverArgs = ['language-server'];
   
+  console.log(`Language server command: ${serverCommand} ${serverArgs.join(' ')}`);
+  
   // Server options - run the mlld language-server command
   const serverOptions = {
     run: {
       command: serverCommand,
       args: serverArgs,
-      options: { shell: true }
+      transport: TransportKind.stdio
     },
     debug: {
       command: serverCommand,
       args: serverArgs,
-      options: { shell: true }
+      transport: TransportKind.stdio,
+      options: {
+        execArgv: ['--nolazy', '--inspect=6009']
+      }
     }
   };
 
@@ -58,6 +63,30 @@ function startLanguageServer(context) {
     // Pass configuration to the language server
     initializationOptions: {
       // Can add custom initialization options here
+    },
+    // Enable semantic tokens
+    semanticTokens: {
+      augmentsSyntaxTokens: false, // Don't merge with TextMate tokens
+      multilineTokenSupport: true,
+      overlappingTokenSupport: false,
+      tokenTypes: ['directive', 'variable', 'variableRef', 'interpolation', 'template', 'templateContent', 'operator', 'keyword', 'embedded', 'embeddedCode', 'alligator', 'xmlTag', 'section', 'parameter', 'comment', 'string', 'number', 'boolean', 'null'],
+      tokenModifiers: ['declaration', 'reference', 'readonly', 'interpolated', 'literal', 'invalid', 'deprecated']
+    },
+    middleware: {
+      // Ensure semantic tokens are enabled
+      provideDocumentSemanticTokens: (document, token, next) => {
+        console.log('[EXTENSION] Semantic tokens requested for', document.uri.toString());
+        const result = next(document, token);
+        result.then(tokens => {
+          console.log('[EXTENSION] Semantic tokens received:', tokens ? 'yes' : 'no');
+          if (tokens && tokens.data) {
+            console.log('[EXTENSION] Token count:', tokens.data.length / 5);
+          }
+        }).catch(err => {
+          console.error('[EXTENSION] Semantic tokens error:', err);
+        });
+        return result;
+      }
     }
   };
 
@@ -70,7 +99,23 @@ function startLanguageServer(context) {
   );
 
   // Start the client. This will also launch the server
-  client.start().catch(error => {
+  console.log('Starting mlld language server client...');
+  client.start().then(() => {
+    console.log('mlld language server started successfully');
+    
+    // Check if semantic tokens are supported
+    const capabilities = client.initializeResult?.capabilities;
+    console.log('[EXTENSION] Server capabilities:', capabilities);
+    console.log('[EXTENSION] Semantic tokens provider:', capabilities?.semanticTokensProvider);
+    
+    // Force refresh semantic tokens for active editor
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor && activeEditor.document.languageId === 'mlld') {
+      console.log('[EXTENSION] Requesting semantic tokens refresh for active document');
+      vscode.commands.executeCommand('vscode.provideDocumentSemanticTokens', activeEditor.document.uri);
+    }
+  }).catch(error => {
+    console.error('Failed to start mlld language server:', error);
     vscode.window.showErrorMessage(
       `Failed to start mlld language server: ${error.message}\n\n` +
       `Make sure mlld is installed:\n` +
