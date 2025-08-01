@@ -1,0 +1,66 @@
+/exe @calculate(op, a, b) = when: [
+  @op == "add" => @add(@a, @b)
+  @op == "multiply" => @multiply(@a, @b)
+  @op == "divide" && @b != 0 => @divide(@a, @b)
+  @op == "divide" => "Error: Division by zero"
+  true => "Unknown operation"
+]
+
+=== START TOKENS ===
+/exe --> keyword
+@calculate --> variable[declaration]
+( --> operator
+op --> parameter
+, --> operator
+a --> parameter
+, --> operator
+b --> parameter
+) --> operator
+= --> operator
+when --> keyword
+: --> operator
+[ --> operator
+@op --> variable
+== --> operator
+"add" --> string
+=> --> operator
+@add --> variable
+( --> operator
+@a --> variable
+, --> operator
+@b --> variable
+) --> operator
+@op --> variable
+== --> operator
+"multiply" --> string
+=> --> operator
+@multiply --> variable
+( --> operator
+@a --> variable
+, --> operator
+@b --> variable
+) --> operator
+@op --> variable
+== --> operator
+"divide" --> string
+&& --> operator
+@b --> variable
+!= --> operator
+0 --> number
+=> --> operator
+@divide --> variable
+( --> operator
+@a --> variable
+, --> operator
+@b --> variable
+) --> operator
+@op --> variable
+== --> operator
+"divide" --> string
+=> --> operator
+"Error: Division by zero" --> string
+true --> keyword
+=> --> operator
+"Unknown operation" --> string
+] --> operator
+=== END TOKENS ===
