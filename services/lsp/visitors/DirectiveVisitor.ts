@@ -74,6 +74,61 @@ export class DirectiveVisitor extends BaseVisitor {
     if (node.values) {
       this.visitDirectiveValues(node, context);
     }
+    
+    // Handle end-of-line comments
+    if (node.meta?.comment) {
+      this.visitEndOfLineComment(node.meta.comment);
+    }
+  }
+  
+  private visitEndOfLineComment(comment: any): void {
+    if (!comment.location) return;
+    
+    if (process.env.DEBUG_LSP || this.document.uri.includes('test-syntax')) {
+      console.log('[EOL-COMMENT]', {
+        marker: comment.marker,
+        content: comment.content,
+        location: `${comment.location.start.line}:${comment.location.start.column}-${comment.location.end.line}:${comment.location.end.column}`,
+        offset: `${comment.location.start.offset}-${comment.location.end.offset}`
+      });
+    }
+    
+    // The comment location in the AST starts after the space after the marker
+    // We need to find the actual position of the marker in the source text
+    const sourceText = this.document.getText();
+    const lineStart = sourceText.split('\n').slice(0, comment.location.start.line - 1).join('\n').length;
+    const lineOffset = lineStart > 0 ? lineStart + 1 : 0; // +1 for newline if not first line
+    
+    // Find the marker position by searching backwards from the comment start
+    const searchStart = Math.max(0, comment.location.start.offset - 10); // Look back up to 10 chars
+    const searchText = sourceText.substring(searchStart, comment.location.start.offset);
+    const markerIndex = searchText.lastIndexOf(comment.marker);
+    
+    if (markerIndex !== -1) {
+      // Found the marker, calculate the actual start position
+      const markerOffset = searchStart + markerIndex;
+      const markerLine = comment.location.start.line - 1;
+      const markerChar = markerOffset - lineOffset;
+      const totalLength = comment.location.end.offset - markerOffset;
+      
+      // Token for the entire comment including the marker
+      this.tokenBuilder.addToken({
+        line: markerLine,
+        char: markerChar,
+        length: totalLength,
+        tokenType: 'comment',
+        modifiers: []
+      });
+    } else {
+      // Fallback: just use the comment location as-is
+      this.tokenBuilder.addToken({
+        line: comment.location.start.line - 1,
+        char: comment.location.start.column - 1,
+        length: comment.location.end.offset - comment.location.start.offset,
+        tokenType: 'comment',
+        modifiers: []
+      });
+    }
   }
   
   private handleVariableDeclaration(node: any): void {

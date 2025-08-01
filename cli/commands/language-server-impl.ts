@@ -39,6 +39,7 @@ import * as fs from 'fs/promises';
 import { logger } from '@core/utils/logger';
 import type { MlldLanguageServerConfig, VariableInfo, DocumentAnalysis } from './language-server';
 import { ASTSemanticVisitor } from '@services/lsp/ASTSemanticVisitor';
+import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 
 // Semantic token types for mlld syntax
 // Standard VSCode semantic token types we use
@@ -98,6 +99,9 @@ const TOKEN_MODIFIERS = [
 ];
 
 export async function startLanguageServer(): Promise<void> {
+  // Initialize error patterns for enhanced error messages
+  await initializePatterns();
+  
   // Create a connection for the server
   const connection = createConnection(ProposedFeatures.all);
 
@@ -279,6 +283,9 @@ export async function startLanguageServer(): Promise<void> {
           textLength: text.length
         });
         
+        // Enhance the parse error to get user-friendly message
+        const enhancedError = await enhanceParseError(error as any, text, document.uri);
+        
         // Check if error has detailed mlldErrorLocation
         const mlldError = error as any;
         let range: Range;
@@ -304,6 +311,13 @@ export async function startLanguageServer(): Promise<void> {
             start: { line: startLine, character: startChar },
             end: { line: endLine, character: endChar }
           };
+        } else if (enhancedError && enhancedError.location) {
+          // Use location from enhanced error
+          const loc = enhancedError.location;
+          range = {
+            start: { line: loc.line - 1, character: loc.column - 1 },
+            end: { line: loc.line - 1, character: loc.column }
+          };
         } else {
           // Fallback to basic line/column
           range = {
@@ -312,8 +326,8 @@ export async function startLanguageServer(): Promise<void> {
           };
         }
         
-        // Format error message for better readability in VSCode
-        let formattedMessage = error.message || 'Parse error';
+        // Use enhanced error message if available, otherwise fall back to original
+        let formattedMessage = enhancedError ? enhancedError.message : (error.message || 'Parse error');
         
         // Replace escaped newlines with actual newlines for better formatting
         formattedMessage = formattedMessage.replace(/\\n/g, '\n');

@@ -1,0 +1,1 @@
+Comments (${MARKER}) are not allowed inside ${CONTEXT} conditions. Comments can only appear at the start of a line or at the end of a complete directive.

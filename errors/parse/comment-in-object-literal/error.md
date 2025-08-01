@@ -1,0 +1,1 @@
+Comments (${MARKER}) are not allowed inside ${CONTEXT}s. Place comments before or after the complete object definition.

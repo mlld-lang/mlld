@@ -1,0 +1,1 @@
+Comments (${MARKER}) are not allowed inside ${CONTEXT}s. Arrays should contain values separated by commas, not key-value pairs with comments.

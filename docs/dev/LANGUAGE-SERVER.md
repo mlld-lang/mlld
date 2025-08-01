@@ -308,8 +308,14 @@ npm test tests/lsp/highlighting-rules.test.ts
 
 Enable debug logging:
 ```bash
+# Server-side debug logging
 DEBUG=mlld:lsp mlld language-server
+
+# VSCode client-side debug logging  
+DEBUG_LSP=true code .
 ```
+
+**Debug Mode**: Files with 'test-syntax' in the name trigger additional debug output.
 
 ### Adding Features
 
@@ -322,11 +328,25 @@ DEBUG=mlld:lsp mlld language-server
 4. Add tests for new capabilities
 5. Update this documentation
 
+#### Semantic Token Implementation Checklist
+
+When adding new syntax support:
+1. Identify the AST node type in the grammar
+2. Add node type to visitor mapping in `ASTSemanticVisitor.initializeVisitors()`
+3. Create or update the appropriate visitor class
+4. Handle token position calculation (1-based AST to 0-based LSP)
+5. Test with VSCode Token Inspector
+6. Add test cases to semantic tokens tests
+
 ### Known Issues
 
 - **Parser Location Quirk**: The AST has inconsistent @ symbol inclusion for variable references with field access. This is handled with a workaround in the semantic visitor but should be fixed in the parser.
 - **Object Property Locations**: Plain JavaScript values in objects/arrays don't have location information, only mlld constructs do.
 - **Template Delimiters in Objects**: Exact delimiter positions aren't available for templates inside object values, so these aren't tokenized to avoid guessing.
+- **Variable Field Access Position Drift**: Position calculation for field access can drift due to manual tracking. See `services/lsp/visitors/VariableVisitor.ts:111-150`.
+- **Missing Operator Nodes**: Some operators aren't AST nodes and require manual position calculation using text search methods.
+
+For detailed active issues, see `docs/dev/LSP-ISSUES.md`.
 
 ## Troubleshooting
 
@@ -381,9 +401,15 @@ If syntax highlighting isn't showing correctly:
 
 4. **Enable Debug Logging**:
    ```bash
+   # VSCode client-side debugging
    DEBUG_LSP=true code .
    ```
    Then check Developer Tools console for `[TOKEN]` logs
+   
+   For server-side debugging:
+   ```bash
+   DEBUG=mlld:lsp mlld language-server
+   ```
 
 5. **Test with Default Theme**:
    - Some themes don't support all semantic token types

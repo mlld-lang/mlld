@@ -3,8 +3,13 @@
 // Purpose: Single directive for all variable types with type inference from syntax
 
 SlashVar "var directive"
-  = DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent tail:TailModifiers? security:(_ s:SecurityOptions { return s; })? {
-      helpers.debug('AtVar matched', { id, value, tail });
+  = DirectiveContext "/var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent ending:SecuredDirectiveEnding {
+      helpers.debug('AtVar matched', { id, value, ending });
+      
+      // Extract ending components
+      let tail = ending.tail;
+      const security = ending.security;
+      const comment = ending.comment;
       
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
@@ -136,6 +141,11 @@ SlashVar "var directive"
       // Apply security options if present
       if (security) {
         metaInfo.security = security;
+      }
+      
+      // Add comment to meta if present
+      if (comment) {
+        metaInfo.comment = comment;
       }
       
       // Create directive with 'var' kind and single subtype

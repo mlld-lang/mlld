@@ -25,8 +25,8 @@ SlashShow
   // REMOVED: Foreach section expression - superseded by file reference interpolation
   // Migration: Use /show <*.md # section> as "template" instead
   // Foreach command expression: /show foreach @command(@arrays)
-  = DirectiveContext "/show" _ expr:ForeachCommandExpression {
-      helpers.debug('SlashShow matched foreach expression', { expr });
+  = DirectiveContext "/show" _ expr:ForeachCommandExpression ending:StandardDirectiveEnding {
+      helpers.debug('SlashShow matched foreach expression', { expr, ending });
       
       // Extract the inner value from the ForeachCommandExpression
       const foreachValue = expr.value;
@@ -63,6 +63,11 @@ SlashShow
         hasExecInvocation: true
       };
       
+      // Add comment from ending if present
+      if (ending.comment) {
+        meta.comment = ending.comment;
+      }
+      
       return helpers.createStructuredDirective(
         DirectiveKind.show,
         'showForeach',
@@ -74,8 +79,8 @@ SlashShow
       );
     }
   // Double-bracketed path with section: [[path/to/file.md # Section]]
-  / DirectiveContext "/show" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? {
-      helpers.debug('SlashShow matched double-bracketed path section', { content, rename });
+  / DirectiveContext "/show" _ content:WrappedTemplateContent &{ return content.type === 'doubleBracketSection'; } rename:AsNewTitle? ending:StandardDirectiveEnding {
+      helpers.debug('SlashShow matched double-bracketed path section', { content, rename, ending });
       
       const rawPath = content.raw.split(' # ')[0];
       const sectionText = content.section;
@@ -107,6 +112,11 @@ SlashShow
         path: helpers.createPathMetadata(rawPath, content.parts)
       };
       
+      // Add comment from ending if present
+      if (ending.comment) {
+        meta.comment = ending.comment;
+      }
+      
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
         'showPathSection', 
@@ -118,8 +128,8 @@ SlashShow
       );
     }
   // Load content expression: <path/to/file.md> or <path # Section>
-  / DirectiveContext "/show" _ content:AlligatorExpression rename:AsNewTitle? {
-      helpers.debug('SlashShow matched load content expression', { content, rename });
+  / DirectiveContext "/show" _ content:AlligatorExpression rename:AsNewTitle? ending:StandardDirectiveEnding {
+      helpers.debug('SlashShow matched load content expression', { content, rename, ending });
       
       // Handle content loading
       const values = {
@@ -146,6 +156,11 @@ SlashShow
         sourceType: content.source.type
       };
       
+      // Add comment from ending if present
+      if (ending.comment) {
+        meta.comment = ending.comment;
+      }
+      
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
         'showLoadContent', 
@@ -156,9 +171,9 @@ SlashShow
         'load-content'
       );
     }
-  / DirectiveContext "/show" _ security:(SecurityOptions _)? template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/show" _ security:(SecurityOptions _)? template:TemplateCore _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('SlashShow matched template content', { template, headerLevel, underHeader });
+      helpers.debug('SlashShow matched template content', { template, headerLevel, underHeader, ending });
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
@@ -207,6 +222,11 @@ SlashShow
         ...helpers.createSecurityMeta(securityOptions)
       };
       
+      // Add comment from ending if present
+      if (ending.comment) {
+        meta.comment = ending.comment;
+      }
+      
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
         'showTemplate', 
@@ -218,9 +238,9 @@ SlashShow
       );
     }
   // Variable reference MUST come before exec invocation to match simple @varname first
-  / DirectiveContext "/show" _ security:(SecurityOptions _)? "@" varRef:ShowVariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/show" _ security:(SecurityOptions _)? "@" varRef:ShowVariableReference !("(") !TailModifiers _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('SlashShow matched variable reference', { varRef, headerLevel, underHeader });
+      helpers.debug('SlashShow matched variable reference', { varRef, headerLevel, underHeader, ending });
       
       // Extract variable reference information
       const id = varRef.identifier;
@@ -270,6 +290,11 @@ SlashShow
         ...helpers.createSecurityMeta(securityOptions)
       };
       
+      // Add comment from ending if present
+      if (ending.comment) {
+        meta.comment = ending.comment;
+      }
+      
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
         'showVariable', 
@@ -281,8 +306,8 @@ SlashShow
       );
     }
   // Unified reference (exec invocation or variable) with tail modifiers - /show @obj.method() | @modifiers
-  / DirectiveContext "/show" _ invocation:UnifiedReferenceWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
-      helpers.debug('SlashShow matched unified reference with tail modifiers', { invocation, headerLevel, underHeader });
+  / DirectiveContext "/show" _ invocation:UnifiedReferenceWithTail _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+      helpers.debug('SlashShow matched unified reference with tail modifiers', { invocation, headerLevel, underHeader, ending });
       
       // Handle both ExecInvocation and VariableReferenceWithTail types
       const isExecInvocation = invocation.type === 'ExecInvocation';
@@ -345,6 +370,11 @@ SlashShow
         argumentCount: isExecInvocation && commandRef.args ? commandRef.args.length : 0
       };
       
+      // Add comment from ending if present
+      if (ending.comment) {
+        meta.comment = ending.comment;
+      }
+      
       // Determine subtype based on invocation type
       const subtype = isExecInvocation ? 'showInvocation' : 'showVariable';
       
@@ -358,9 +388,9 @@ SlashShow
         'invocation'
       );
     }
-  / DirectiveContext "/show" _ security:(SecurityOptions _)? "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
+  / DirectiveContext "/show" _ security:(SecurityOptions _)? "\"" content:$([^"]*) "\"" _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
       const securityOptions = security ? security[0] : null;
-      helpers.debug('SlashShow matched quoted string', { content, headerLevel, underHeader, securityOptions });
+      helpers.debug('SlashShow matched quoted string', { content, headerLevel, underHeader, securityOptions, ending });
       
       // Create path structure
       const path = {
@@ -421,6 +451,11 @@ SlashShow
         ...helpers.createSecurityMeta(securityOptions)
       };
       
+      // Add comment from ending if present
+      if (ending.comment) {
+        meta.comment = ending.comment;
+      }
+      
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
         'showPath', 
@@ -431,8 +466,8 @@ SlashShow
         'path'
       );
     }
-  / DirectiveContext "/show" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? {
-      helpers.debug('SlashShow matched path', { path, headerLevel, underHeader, security });
+  / DirectiveContext "/show" _ path:PathExpression security:(_ s:SecurityOptions { return s; })? _ headerLevel:HeaderLevel? underHeader:UnderHeader? ending:StandardDirectiveEnding {
+      helpers.debug('SlashShow matched path', { path, headerLevel, underHeader, security, ending });
       
       // Extract header level and under header if provided
       const headerLevelValue = headerLevel ? headerLevel : null;
@@ -482,6 +517,11 @@ SlashShow
         },
         ...helpers.createSecurityMeta(security)
       };
+      
+      // Add comment from ending if present
+      if (ending.comment) {
+        meta.comment = ending.comment;
+      }
       
       return helpers.createStructuredDirective(
         DirectiveKind.show, 

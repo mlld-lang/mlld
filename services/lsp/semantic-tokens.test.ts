@@ -410,6 +410,25 @@ describe('Semantic Tokens', () => {
       const comment = tokens.find(t => t.tokenType === 'comment');
       expect(comment).toBeDefined();
     });
+    
+    it('should highlight end-of-line >> comments', async () => {
+      const code = '/var @x = 10 >> this is a comment';
+      const tokens = await getSemanticTokens(code);
+      
+      const comment = tokens.find(t => t.tokenType === 'comment');
+      expect(comment).toBeDefined();
+      expect(comment?.line).toBe(0);
+      expect(comment?.char).toBeGreaterThanOrEqual(12); // After the value
+    });
+    
+    it('should highlight end-of-line << comments', async () => {
+      const code = '/show @result << another comment style';
+      const tokens = await getSemanticTokens(code);
+      
+      const comment = tokens.find(t => t.tokenType === 'comment');
+      expect(comment).toBeDefined();
+      expect(comment?.tokenType).toBe('comment');
+    });
   });
   
   describe('Literals', () => {

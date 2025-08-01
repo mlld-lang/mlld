@@ -7,7 +7,7 @@ This file tests all syntax highlighting features including the new operators and
 << This is also a comment
 
 ## Directives
-/var @name = "John"
+/var @name = "John" << comment
 /show @name
 /run {echo "Hello"}
 /exe @greet(name) = `Hello @name!`
@@ -27,8 +27,8 @@ This file tests all syntax highlighting features including the new operators and
 ## Operators and Expressions
 
 ### Logical Operators
-/var @result = @a && @b || !@c
-/var @complex = (@x || @y) && !@z
+/var @result = @a && @b || !@c >> comment
+/var @complex = (@x || @y) && !@z << comment 
 /var @negation = !@isActive
 
 ### Comparison Operators
@@ -75,7 +75,7 @@ This file tests all syntax highlighting features including the new operators and
 ### Without directive prefixes
 /when @production => @config = "prod.json"
 /when @development => @setupDev()
-/when @test => @validate() = @runTests()
+/when @test => @validate() = @runTests() << comment
 
 ### Mixed implicit/explicit in blocks
 /when: [
