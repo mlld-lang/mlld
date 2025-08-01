@@ -30,6 +30,10 @@ tests/
 │   ├── exceptions/         # Generated from exceptions/ test cases
 │   ├── warnings/           # Generated from warnings/ test cases
 │   └── invalid/            # Generated from invalid/ test cases
+├── tokens/                  # Precision semantic token tests
+│   ├── token-test-runner.test.ts  # Test runner
+│   ├── utils/              # Token test utilities
+│   └── */*.mld             # Self-documenting token test files
 └── utils/                  # Test utilities and helpers
 ```
 
@@ -124,6 +128,9 @@ npm run test:watch
 
 # Run examples (includes long-running LLM calls)
 npm run test:examples
+
+# Run semantic token precision tests
+npm test tests/tokens/
 ```
 
 **Note**: Examples are excluded from the default test run because they can include long-running LLM calls via `oneshot` commands. Use `npm run test:examples` to test examples specifically.
@@ -135,10 +142,14 @@ The main test runner is in `interpreter/interpreter.fixture.test.ts`. It:
 1. Recursively finds all `.generated-fixture.json` files
 2. Sets up appropriate test environment for each fixture
 3. Runs different test types based on fixture metadata:
-   - **Valid tests**: Compare output to expected result
-   - **Smoke tests**: Verify execution doesn't crash
+   - **Valid tests**: Compare output to expected result + validate semantic token coverage
+   - **Smoke tests**: Verify execution doesn't crash + validate semantic token coverage
    - **Exception tests**: Verify specific errors are thrown
    - **Warning tests**: Verify warnings are produced
+4. Validates semantic token coverage:
+   - Every character must have a semantic token (except whitespace/commas)
+   - Reports uncovered text with precise line/column locations
+   - Tests fail if any mlld syntax lacks tokens
 
 ### Output Formatting in Tests
 
@@ -184,6 +195,71 @@ To convert an example smoke test to a full validation test:
 3. The fixture generator will pick up the expected output on next build
 4. The test will become a full validation test instead of a smoke test
 
+## Semantic Token Testing
+
+mlld uses a dual-strategy approach for testing LSP semantic tokens (syntax highlighting):
+
+### 1. Coverage Testing (Automatic)
+
+All tests in `tests/cases/` automatically validate semantic token coverage. If any mlld syntax lacks tokens, tests fail with precise location info:
+
+```
+Error: Semantic token coverage issues in when-exe-when-expressions:
+  - UncoveredText at 6:18-6:28 " = when: ["
+  - UncoveredText at 7:1-7:38 "  @name == \"World\" => \"Hello, World!\""
+```
+
+### 2. Precision Testing (`tests/tokens/`)
+
+Self-documenting `.mld` files test specific tokenization behavior.
+
+Run precision tests: `npm test tests/tokens/`
+
+### Semantic Token Test Example
+
+```mlld
+/var @name = 'Hello @world'
+/var @greeting = `Hello @world`
+/var @ops = @a && @b || !@c
+
+=== START TOKENS ===
+/var --> keyword
+@name --> variable[declaration]
+= --> operator
+'Hello @world' --> string
+/var --> keyword
+@greeting --> variable[declaration]
+= --> operator
+`Hello ` --> string
+@world --> variable
+`` --> string
+/var --> keyword
+@ops --> variable[declaration]
+= --> operator
+@a --> variable
+&& --> operator
+@b --> variable
+|| --> operator
+! --> operator
+@c --> variable
+=== END TOKENS ===
+
+=== START PARTIAL TOKENS ===
+&& --> operator
+|| --> operator
+! --> operator
+=== END PARTIAL TOKENS ===
+
+=== START NOT TOKENS ===
+@world --> interpolation    >> Single quotes don't interpolate
+=== END NOT TOKENS ===
+```
+
+The test file can contain any combination of:
+- `START TOKENS` - Exact match of all tokens in order
+- `START PARTIAL TOKENS` - Match specific tokens anywhere in output
+- `START NOT TOKENS` - Ensure these tokens are NOT generated
+
 ## Best Practices
 
 ### Writing Test Cases
@@ -227,6 +303,7 @@ tests/cases/valid/modules/modules-test-config.mld
 2. **Check fixture JSON files** to understand test setup
 3. **Review actual vs expected output** in test failures
 4. **Use `--verbose` flag** for detailed test output
+5. **Debug semantic tokens** - Test failures show exact uncovered text ranges
 
 ## Integration with CI/CD
 
