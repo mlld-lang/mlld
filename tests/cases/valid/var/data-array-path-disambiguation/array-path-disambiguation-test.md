@@ -1,1 +1,0 @@
-This is the content of array-path-disambiguation-test.md file.
