@@ -647,7 +647,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       if (fixture.name === 'comments-inline') {
         // Set up files for comments-inline test
         await fileSystem.writeFile('/inline-test-utils.mld', '/var @x = "Value X"\n/var @y = "Value Y"');
-        await fileSystem.writeFile('/README.md', '# Example Project\n\nThis is the main README content.');
+        await fileSystem.writeFile('/inline-test-README.md', '# Example Project\n\nThis is the main README content.');
       } else if (fixture.name.startsWith('import-')) {
         // Set up files for import alias tests
         if (fixture.name === 'import-alias') {

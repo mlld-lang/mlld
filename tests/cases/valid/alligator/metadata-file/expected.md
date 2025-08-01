@@ -6,9 +6,9 @@ This test verifies that files loaded with alligator syntax include rich metadata
 
 ## Access file metadata
 
-Filename: README.md
-Relative path: ./README.md
-Absolute path: /README.md
+Filename: metadata-test-README.md
+Relative path: ./metadata-test-README.md
+Absolute path: /metadata-test-README.md
 ## Default content behavior
 
 # mlld

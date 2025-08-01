@@ -4,7 +4,7 @@ This test verifies that files loaded with alligator syntax include rich metadata
 
 ## Load a single file
 
-/var @readme = <README.md>
+/var @readme = <metadata-test-README.md>
 
 ## Access file metadata
 

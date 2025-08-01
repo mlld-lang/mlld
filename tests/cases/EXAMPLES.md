@@ -908,7 +908,7 @@ Result: unbuffered output
 ```mlld
 # Test exec invocation from module imports
 
-/import { sayHello, greetUser, multiLine, withParams, greeting } from "./test-module.mld"
+/import { sayHello, greetUser, multiLine, withParams, greeting } from "./exe-invocation-test-module.mld"
 
 ## Direct invocation
 /run @sayHello()

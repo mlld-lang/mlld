@@ -20,4 +20,4 @@ This tests that inline comments at the end of directives are properly handled.
 
 /show @greeting >> Show variable with >> comment
 /show @config << Show with << comment
-/show <README.md> >> Include the readme file
+/show <inline-test-README.md> >> Include the readme file
