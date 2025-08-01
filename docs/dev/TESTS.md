@@ -201,9 +201,13 @@ mlld uses a dual-strategy approach for testing LSP semantic tokens (syntax highl
 
 ### 1. Coverage Testing (Automatic)
 
-All tests in `tests/cases/` automatically validate semantic token coverage. If any mlld syntax lacks tokens, tests fail with precise location info:
+All tests in `tests/cases/` can validate semantic token coverage when enabled with `MLLD_TOKEN_COVERAGE=1`. If any mlld syntax lacks tokens, tests fail with precise location info:
 
-```
+```bash
+# Run tests with token coverage checking
+MLLD_TOKEN_COVERAGE=1 npm test
+
+# Example failure output:
 Error: Semantic token coverage issues in when-exe-when-expressions:
   - UncoveredText at 6:18-6:28 " = when: ["
   - UncoveredText at 7:1-7:38 "  @name == \"World\" => \"Hello, World!\""

@@ -1,4 +1,4 @@
 # Test Path Module Rejection
 
-/path @mod = "./module.mld"
+/path @mod = "./path-module-content-module.mld"
 /show @mod

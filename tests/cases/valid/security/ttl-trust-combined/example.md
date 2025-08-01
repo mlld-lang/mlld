@@ -2,8 +2,8 @@
 
 This tests combining TTL and Trust options.
 
-/import (30m) trust verify { config } from "./config.mld"
-/import (1h) trust always { utils } from "./utils.mld"
+/import (30m) trust verify { config } from "./security-test-config.mld"
+/import (1h) trust always { utils } from "./security-test-utils.mld"
 /import (live) trust never { dangerous } from "./dangerous.mld"
 
 /show (5m) trust always @config.greeting

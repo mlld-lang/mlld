@@ -1,2 +1,2 @@
-/path @docsDir = "file.md"
+/path @docsDir = "assignment-file.md"
 /show @docsDir

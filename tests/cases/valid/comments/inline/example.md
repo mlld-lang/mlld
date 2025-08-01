@@ -10,7 +10,7 @@ This tests that inline comments at the end of directives are properly handled.
 /var @username = "Test" >> Another variable with >> comment
 /var @version = "1.0" << Version with << comment
 
-/import { x, y } from "./utils.mld" >> Import some utilities
+/import { x, y } from "./inline-test-utils.mld" >> Import some utilities
 
 /exe @sayHello(name) = {echo "Hello, {{name}}!"} << Parameterized command
 

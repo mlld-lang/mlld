@@ -2,8 +2,8 @@
 
 This tests special TTL values: live and static.
 
-/import (live) { api } from "./api.mld"
-/import (static) { constants } from "./constants.mld"
+/import (live) { api } from "./security-test-api.mld"
+/import (static) { constants } from "./security-test-constants.mld"
 
 /show (live) @api.status
 /show (static) @constants.version

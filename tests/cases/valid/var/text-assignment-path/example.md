@@ -1,2 +1,2 @@
-/var @content = <file.md>
+/var @content = <text-assignment-path-file.md>
 /show @content
