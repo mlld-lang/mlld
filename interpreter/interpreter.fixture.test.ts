@@ -51,10 +51,186 @@ export const skipTests: Record<string, string> = {
   'now-enhanced-formats': 'Requires @time module to be installed',
 };
 
+// Validate semantic token coverage for AST
+interface TokenCoverageIssue {
+  nodeType: string;
+  location: string;
+  text: string;
+}
+
 describe('Mlld Interpreter - Fixture Tests', () => {
   let fileSystem: MemoryFileSystem;
   let pathService: PathService;
   
+  // Track semantic token coverage issues across all tests
+  const allCoverageIssues: Record<string, TokenCoverageIssue[]> = {};
+  
+  // Token types and modifiers from language server
+  const TOKEN_TYPES = [
+    'keyword', 'variable', 'string', 'operator', 'label', 'type',
+    'parameter', 'comment', 'number', 'property', 'interface',
+    'typeParameter', 'namespace'
+  ];
+  
+  const TOKEN_MODIFIERS = [
+    'declaration', 'reference', 'readonly', 'interpolated',
+    'literal', 'invalid', 'deprecated'
+  ];
+  
+  const TOKEN_TYPE_MAP: Record<string, string> = {
+    'directive': 'keyword',
+    'variableRef': 'variable',
+    'interpolation': 'variable',
+    'template': 'operator',
+    'templateContent': 'string',
+    'embedded': 'label',
+    'embeddedCode': 'string',
+    'alligator': 'interface',
+    'alligatorOpen': 'interface',
+    'alligatorClose': 'interface',
+    'xmlTag': 'type',
+    'section': 'namespace',
+    'boolean': 'keyword',
+    'null': 'keyword',
+    'keyword': 'keyword',
+    'variable': 'variable',
+    'string': 'string',
+    'operator': 'operator',
+    'parameter': 'parameter',
+    'comment': 'comment',
+    'number': 'number',
+    'property': 'property'
+  };
+  
+  async function validateSemanticTokenCoverage(
+    ast: any[],
+    input: string
+  ): Promise<TokenCoverageIssue[]> {
+    try {
+      // Dynamically import to avoid mock conflicts
+      const { SemanticTokensBuilder } = await import('vscode-languageserver/node.js');
+      const { TextDocument } = await import('vscode-languageserver-textdocument');
+      const { ASTSemanticVisitor } = await import('@services/lsp/ASTSemanticVisitor');
+      
+      // Create a document
+      const document = TextDocument.create('test.mld', 'mlld', 1, input);
+      
+      // Create a builder that tracks tokens
+      const tokens: Array<{line: number, char: number, length: number, type: string}> = [];
+      const builder = new SemanticTokensBuilder();
+      const originalPush = builder.push.bind(builder);
+      
+      // Override push to track tokens
+      (builder as any).push = (line: number, char: number, length: number, typeIdx: number, modifiers: number) => {
+        // Check if typeIdx is valid
+        if (typeIdx < 0 || typeIdx >= TOKEN_TYPES.length) {
+          tokens.push({ line, char, length, type: 'Other' });
+        } else {
+          tokens.push({ line, char, length, type: TOKEN_TYPES[typeIdx] });
+        }
+        return originalPush(line, char, length, typeIdx, modifiers);
+      };
+      
+      // Run the semantic visitor
+      const visitor = new ASTSemanticVisitor(document, builder, TOKEN_TYPES, TOKEN_MODIFIERS, TOKEN_TYPE_MAP);
+      visitor.visitAST(ast);
+      
+      // Find all AST nodes with locations
+      const nodesWithLocations: Array<{node: any, path: string[]}> = [];
+      
+      function collectNodes(nodes: any[], parentPath: string[] = []) {
+        for (const node of nodes) {
+          if (!node || typeof node !== 'object') continue;
+          
+          // Skip node types that don't need semantic tokens
+          if (node.type === 'Text' || node.type === 'Newline') {
+            continue;
+          }
+          
+          if (node.location) {
+            nodesWithLocations.push({ node, path: [...parentPath, node.type || 'unknown'] });
+          }
+          
+          // Recurse into child nodes
+          for (const key of Object.keys(node)) {
+            if (key === 'location' || key === 'type') continue;
+            const value = node[key];
+            
+            if (Array.isArray(value)) {
+              collectNodes(value, [...parentPath, node.type || 'unknown', key]);
+            } else if (value && typeof value === 'object' && value.location) {
+              collectNodes([value], [...parentPath, node.type || 'unknown', key]);
+            }
+          }
+        }
+      }
+      
+      collectNodes(ast);
+      
+      // Instead of checking nodes, check for uncovered text
+      const issues: TokenCoverageIssue[] = [];
+      const lines = input.split('\n');
+      
+      // Create coverage map for each line
+      lines.forEach((line, lineIdx) => {
+        // Skip empty lines
+        if (!line.trim()) return;
+        
+        // Create character coverage array
+        const coverage = new Array(line.length).fill(false);
+        
+        // Mark covered characters
+        tokens.filter(t => t.line === lineIdx).forEach(token => {
+          for (let i = 0; i < token.length; i++) {
+            if (token.char + i < coverage.length) {
+              coverage[token.char + i] = true;
+            }
+          }
+        });
+        
+        // Find uncovered ranges
+        let inUncovered = false;
+        let uncoveredStart = 0;
+        
+        for (let i = 0; i < line.length; i++) {
+          if (!coverage[i] && !inUncovered) {
+            inUncovered = true;
+            uncoveredStart = i;
+          } else if (coverage[i] && inUncovered) {
+            inUncovered = false;
+            const text = line.substring(uncoveredStart, i);
+            // Only report non-whitespace uncovered text
+            if (text.trim() && !text.match(/^[\s,]+$/)) {
+              issues.push({
+                nodeType: 'UncoveredText',
+                location: `${lineIdx + 1}:${uncoveredStart + 1}-${lineIdx + 1}:${i + 1}`,
+                text: text
+              });
+            }
+          }
+        }
+        
+        // Handle end of line
+        if (inUncovered) {
+          const text = line.substring(uncoveredStart);
+          if (text.trim() && !text.match(/^[\s,]+$/)) {
+            issues.push({
+              nodeType: 'UncoveredText',
+              location: `${lineIdx + 1}:${uncoveredStart + 1}-${lineIdx + 1}:${line.length + 1}`,
+              text: text
+            });
+          }
+        }
+      });
+      
+      return issues;
+    } catch (error) {
+      // If we can't validate, just return empty array and log
+      console.warn('Could not validate semantic tokens:', error.message);
+      return [];
+    }
+  }
+
   // Pattern matching for error messages with ${VARIABLE} placeholders
   function matchErrorPattern(actualError: string, expectedPattern: string): { 
     matches: boolean; 
@@ -1008,6 +1184,27 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             expect(typeof result).toBe('string');
           }
           
+          // Validate semantic token coverage for valid fixtures with AST
+          if (isValidFixture && fixture.ast) {
+            const coverageIssues = await validateSemanticTokenCoverage(fixture.ast, fixture.input);
+            
+            // Store issues for summary report
+            allCoverageIssues[fixture.name] = coverageIssues;
+            
+            if (coverageIssues.length > 0) {
+              const issueList = coverageIssues.map(issue => 
+                `  - ${issue.nodeType} at ${issue.location} "${issue.text}"`
+              ).join('\n');
+              
+              // Phase 2: Actually fail tests with coverage issues
+              throw new Error(
+                `Semantic token coverage issues in ${fixture.name}:\n${issueList}\n\n` +
+                `These AST nodes are not generating semantic tokens, which means they show as "Other" in VSCode.\n` +
+                `To fix: Update ASTSemanticVisitor to handle these node types.`
+              );
+            }
+          }
+          
           // TODO: Add warning validation for warning fixtures
         }
       } catch (error) {
@@ -1049,7 +1246,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       }
     });
   });
-  
+
   // Summary report after all tests
   describe('Test Fixture Summary', () => {
     it('should report fixture health', () => {
@@ -1074,6 +1271,52 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       }
       
       // This test always passes - it's just for reporting
+      expect(true).toBe(true);
+    });
+    
+    it('should report semantic token coverage', () => {
+      const fixturesWithIssues = Object.keys(allCoverageIssues).filter(
+        name => allCoverageIssues[name].length > 0
+      );
+      
+      console.log('\n=== Semantic Token Coverage Report ===');
+      console.log(`Total fixtures checked: ${Object.keys(allCoverageIssues).length}`);
+      console.log(`Fixtures with coverage issues: ${fixturesWithIssues.length}`);
+      
+      if (fixturesWithIssues.length > 0) {
+        console.log('\nTop coverage issues by node type:');
+        
+        // Collect all issues by node type
+        const issuesByType: Record<string, number> = {};
+        const examplesByType: Record<string, { fixture: string; issue: TokenCoverageIssue }> = {};
+        
+        fixturesWithIssues.forEach(fixtureName => {
+          allCoverageIssues[fixtureName].forEach(issue => {
+            issuesByType[issue.nodeType] = (issuesByType[issue.nodeType] || 0) + 1;
+            if (!examplesByType[issue.nodeType]) {
+              examplesByType[issue.nodeType] = { fixture: fixtureName, issue };
+            }
+          });
+        });
+        
+        // Sort by frequency
+        const sortedTypes = Object.entries(issuesByType)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 10); // Top 10
+        
+        sortedTypes.forEach(([nodeType, count]) => {
+          const example = examplesByType[nodeType];
+          console.log(`  - ${nodeType}: ${count} occurrences`);
+          console.log(`    Example: ${example.fixture} at ${example.issue.location}`);
+          console.log(`    Text: "${example.issue.text}"`);
+        });
+        
+        console.log('\nTo fix these issues:');
+        console.log('1. Update ASTSemanticVisitor to handle missing node types');
+        console.log('2. Check visitor dispatch in initializeVisitors()');
+        console.log('3. Ensure all AST nodes with locations generate tokens');
+      }
+      
       expect(true).toBe(true);
     });
   });
