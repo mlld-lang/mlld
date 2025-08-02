@@ -12,11 +12,38 @@ ExeRHSContent "exe assignment value"
   / ExeTemplatePattern          // [[...]] and `...` - template executables
   / ExeSectionPattern           // [@file # section] - section extraction
   / ExeResolverPattern          // @resolver/path - resolver patterns
+  / ExeExecInvocationPattern    // @func(args) - function calls with parameters
   / ExeCommandReference         // @otherCmd - command references
 
 // -------------------------------------------------------------
 // EXE-SPECIFIC RHS PATTERNS
 // -------------------------------------------------------------
+
+// Exe exec invocation pattern - wraps SimpleExec for exe context
+ExeExecInvocationPattern "exe exec invocation"
+  = invocation:SimpleExec {
+      // Transform SimpleExec result to exe context structure
+      return {
+        type: 'exeExecInvocation',
+        values: {
+          commandRef: invocation.commandRef,
+          args: invocation.commandRef.args || []
+        },
+        raw: {
+          commandRef: invocation.commandRef.name,
+          args: (invocation.commandRef.args || []).map(arg => 
+            arg.type === 'Text' ? arg.content : 
+            arg.type === 'VariableReference' ? '@' + arg.identifier : ''
+          )
+        },
+        meta: {
+          isExecInvocation: true,
+          parameterCount: (invocation.commandRef.args || []).length
+        },
+        subtype: 'exeCommand',
+        source: 'invocation'
+      };
+    }
 
 // Slash run pattern for exe context - handles "/run {command}" or "/run js {code}" syntax
 ExeSlashRunPattern "exe slash run pattern"
