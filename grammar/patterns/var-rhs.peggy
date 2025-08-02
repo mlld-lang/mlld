@@ -165,8 +165,9 @@ ObjectPropertyValue "object property value"
 RunCommandValue
   = "run" _ "\"" command:$([^"]*) "\"" {
       // Quoted command syntax: run "echo hello"
-      // Parse the command string to extract parts
-      const parts = helpers.parseCommandContent(command);
+      // Parse the command string to extract parts with proper location
+      const commandLocation = location();
+      const parts = helpers.parseCommandContent(command, commandLocation);
       
       // Extract command base
       let commandBases = [];
@@ -176,7 +177,7 @@ RunCommandValue
         if (cmdMatch) {
           commandBases.push(helpers.createNode(NodeType.CommandBase, {
             command: cmdMatch[1],
-            location: location()
+            location: commandLocation
           }));
         }
       }
