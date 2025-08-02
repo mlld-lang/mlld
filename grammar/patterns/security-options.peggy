@@ -23,39 +23,68 @@ TTLOption "TTL cache duration"
 // TTL Value types
 TTLValue "TTL value"
   = duration:TTLDuration { return { type: 'duration', ...duration }; }
-  / special:TTLSpecial { return { type: 'special', value: special }; }
+  / special:TTLSpecial { 
+      const specialValue = special.value || special; // Handle both old string and new object format
+      return { 
+        type: 'special', 
+        value: specialValue,
+        location: special.location || location()
+      }; 
+    }
 
 // TTL Duration with units
 TTLDuration "TTL duration"
   = num:Integer unit:TTLUnit {
-      const seconds = helpers.ttlToSeconds(num, unit);
-      return { value: num, unit, seconds };
+      const unitValue = unit.unit || unit; // Handle both old string and new object format
+      const seconds = helpers.ttlToSeconds(num, unitValue);
+      return { 
+        value: num, 
+        unit: unitValue, 
+        seconds,
+        location: location()
+      };
     }
 
 // TTL time units
 TTLUnit "TTL time unit"
-  = "s" { return "seconds"; }
-  / "m" { return "minutes"; }
-  / "h" { return "hours"; }
-  / "d" { return "days"; }
-  / "w" { return "weeks"; }
+  = unit:("s" / "m" / "h" / "d" / "w") {
+      const unitMap = {
+        "s": "seconds",
+        "m": "minutes",
+        "h": "hours",
+        "d": "days",
+        "w": "weeks"
+      };
+      return {
+        unit: unitMap[unit],
+        location: location()
+      };
+    }
 
 // TTL special values
 TTLSpecial "TTL special value"
-  = "live" { return "live"; }
-  / "static" { return "static"; }
+  = value:("live" / "static") {
+      return {
+        value: value,
+        location: location()
+      };
+    }
 
 // Trust Option pattern (no angle brackets)
 TrustOption "Trust level"
   = "trust" _ level:TrustLevel {
-      return level;
+      // Handle both old string and new object format
+      return level.level || level;
     }
 
 // Trust levels
 TrustLevel "Trust level value"
-  = "always" { return "always"; }
-  / "verify" { return "verify"; }
-  / "never" { return "never"; }
+  = level:("always" / "verify" / "never") {
+      return {
+        level: level,
+        location: location()
+      };
+    }
 
 // Integer for TTL values
 Integer "Integer"

@@ -180,8 +180,12 @@ SlashImportFull
       const importsRaw = imports.map(item => {
         if (typeof item === 'string') {
           return item;
-        } else {
+        } else if (item.original) {
+          // Aliased import
           return `${item.original} as ${item.alias}`;
+        } else {
+          // Simple import with new location-aware format
+          return item.name;
         }
       }).join(", ");
       
@@ -206,11 +210,17 @@ SlashImportFull
             return helpers.createVariableReferenceNode('import', { 
               identifier: item
             }, location());
-          } else {
+          } else if (item.original) {
+            // Aliased import
             return helpers.createVariableReferenceNode('import', { 
               identifier: item.original,
               alias: item.alias
-            }, location());
+            }, item.location || location());
+          } else {
+            // Simple import with new location-aware format
+            return helpers.createVariableReferenceNode('import', { 
+              identifier: item.name
+            }, item.location || location());
           }
         }),
         path: path.values?.path || path.values?.module || path.values?.url || (typeof path === 'string' ? [helpers.createNode(NodeType.Text, { content: path, location: location() })] : path) // Handle file, module, and URL paths
@@ -486,9 +496,16 @@ ImportsList
 ImportItem
   = name:BaseIdentifier alias:(" as " aliasName:BaseIdentifier { return aliasName; })? {
       if (alias) {
-        return { original: name, alias: alias };
+        return { 
+          original: name, 
+          alias: alias,
+          location: location()
+        };
       }
-      return name;
+      return {
+        name: name,
+        location: location()
+      };
     }
 
 // Path parts for import context - allows @var interpolation

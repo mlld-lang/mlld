@@ -270,6 +270,195 @@ describe('Location Tracking', () => {
     });
   });
   
+  describe('Import Specifier Location Tracking', () => {
+    test('simple import specifiers should have location', () => {
+      const input = '/import { utils } from "./file.mld"';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      expect(directive.type).toBe('Directive');
+      expect(directive.kind).toBe('import');
+      
+      const importSpec = directive.values.imports[0];
+      expect(importSpec.type).toBe('VariableReference');
+      expect(importSpec.identifier).toBe('utils');
+      expect(importSpec.location).toBeDefined();
+      expect(isValidLocation(importSpec.location)).toBe(true);
+    });
+    
+    test('aliased import specifiers should have location', () => {
+      const input = '/import { data as myData } from "./file.mld"';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      const importSpec = directive.values.imports[0];
+      expect(importSpec.type).toBe('VariableReference');
+      expect(importSpec.identifier).toBe('data');
+      expect(importSpec.alias).toBe('myData');
+      expect(importSpec.location).toBeDefined();
+      expect(isValidLocation(importSpec.location)).toBe(true);
+    });
+    
+    test('multiple import specifiers should each have location', () => {
+      const input = '/import { foo, bar as baz, qux } from "./file.mld"';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      expect(directive.values.imports).toHaveLength(3);
+      
+      // Check each import specifier
+      directive.values.imports.forEach((importSpec: any, index: number) => {
+        expect(importSpec.type).toBe('VariableReference');
+        expect(importSpec.location).toBeDefined();
+        expect(isValidLocation(importSpec.location)).toBe(true);
+        
+        // Verify locations are different for each specifier
+        if (index > 0) {
+          const prevSpec = directive.values.imports[index - 1];
+          expect(importSpec.location.start.offset).toBeGreaterThan(prevSpec.location.end.offset);
+        }
+      });
+    });
+    
+    test('wildcard imports with alias should have location', () => {
+      const input = '/import { * as utils } from "./file.mld"';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      const importSpec = directive.values.imports[0];
+      expect(importSpec.type).toBe('VariableReference');
+      expect(importSpec.identifier).toBe('*');
+      expect(importSpec.alias).toBe('utils');
+      expect(importSpec.location).toBeDefined();
+      expect(isValidLocation(importSpec.location)).toBe(true);
+    });
+    
+    test('import from module reference should have location', () => {
+      const input = '/import { Logger } from @company/shared';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      const importSpec = directive.values.imports[0];
+      expect(importSpec.type).toBe('VariableReference');
+      expect(importSpec.identifier).toBe('Logger');
+      expect(importSpec.location).toBeDefined();
+      expect(isValidLocation(importSpec.location)).toBe(true);
+    });
+    
+    test('import with TTL and trust should maintain specifier locations', () => {
+      const input = '/import { config as cfg } from "./settings.mld" (5m) trust always';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      const importSpec = directive.values.imports[0];
+      expect(importSpec.type).toBe('VariableReference');
+      expect(importSpec.identifier).toBe('config');
+      expect(importSpec.alias).toBe('cfg');
+      expect(importSpec.location).toBeDefined();
+      expect(isValidLocation(importSpec.location)).toBe(true);
+    });
+  });
+  
+  describe('TTL and Trust Location Tracking', () => {
+    test('TTL duration should have location', () => {
+      const input = '/path @api = "https://api.com" (5m)';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      expect(directive.type).toBe('Directive');
+      expect(directive.kind).toBe('path');
+      
+      // Check TTL exists
+      expect(directive.values.ttl).toBeDefined();
+      expect(directive.values.ttl.type).toBe('duration');
+      expect(directive.values.ttl.value).toBe(5);
+      expect(directive.values.ttl.unit).toBe('minutes');
+      expect(directive.values.ttl.location).toBeDefined();
+      expect(isValidLocation(directive.values.ttl.location)).toBe(true);
+    });
+    
+    test('TTL special values should have location', () => {
+      const input = '/import "./data.mld" (live)';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      expect(directive.values.ttl).toBeDefined();
+      expect(directive.values.ttl.type).toBe('special');
+      expect(directive.values.ttl.value).toBe('live');
+      expect(directive.values.ttl.location).toBeDefined();
+      expect(isValidLocation(directive.values.ttl.location)).toBe(true);
+    });
+    
+    test('Trust level should have location', () => {
+      const input = '/run {command} trust always';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      expect(directive.type).toBe('Directive');
+      expect(directive.kind).toBe('run');
+      
+      // Check trust level is in withClause
+      expect(directive.values.withClause).toBeDefined();
+      expect(directive.values.withClause.trust).toBeDefined();
+      expect(directive.values.withClause.trust.level).toBe('always');
+      expect(directive.values.withClause.trust.location).toBeDefined();
+      expect(isValidLocation(directive.values.withClause.trust.location)).toBe(true);
+    });
+    
+    test('TTL and trust combined should both have locations', () => {
+      const input = '/import { config } from "./settings.mld" (30d) trust verify';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      
+      // Check TTL
+      expect(directive.values.ttl).toBeDefined();
+      expect(directive.values.ttl.type).toBe('duration');
+      expect(directive.values.ttl.value).toBe(30);
+      expect(directive.values.ttl.unit).toBe('days');
+      expect(directive.values.ttl.location).toBeDefined();
+      expect(isValidLocation(directive.values.ttl.location)).toBe(true);
+      
+      // Check trust is in withClause
+      expect(directive.values.withClause).toBeDefined();
+      expect(directive.values.withClause.trust).toBeDefined();
+      expect(directive.values.withClause.trust.level).toBe('verify');
+      expect(directive.values.withClause.trust.location).toBeDefined();
+      expect(isValidLocation(directive.values.withClause.trust.location)).toBe(true);
+    });
+    
+    test.skip('TTL in with clause should have location', () => {
+      const input = '/run {script} with { ttl: 10h }';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      expect(directive.values.withClause).toBeDefined();
+      
+      // Note: with clause parsing might need separate investigation
+      // This test documents expected behavior once implemented
+    });
+    
+    test('Different TTL units should all have locations', () => {
+      const testCases = [
+        { input: '/path @a = "url" (5s)', unit: 'seconds' },
+        { input: '/path @b = "url" (10m)', unit: 'minutes' },
+        { input: '/path @c = "url" (2h)', unit: 'hours' },
+        { input: '/path @d = "url" (7d)', unit: 'days' },
+        { input: '/path @e = "url" (1w)', unit: 'weeks' }
+      ];
+      
+      testCases.forEach(({ input, unit }) => {
+        const ast = parse(input);
+        const directive = ast[0];
+        
+        expect(directive.values.ttl).toBeDefined();
+        expect(directive.values.ttl.unit).toBe(unit);
+        expect(directive.values.ttl.location).toBeDefined();
+        expect(isValidLocation(directive.values.ttl.location)).toBe(true);
+      });
+    });
+  });
+  
   describe('Field Access Location Tracking', () => {
     test('dot notation field access location', () => {
       const input = '/var @data = @user.profile.name';
