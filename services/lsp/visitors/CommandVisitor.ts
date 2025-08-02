@@ -16,7 +16,23 @@ export class CommandVisitor extends BaseVisitor {
   }
   
   visitNode(node: any, context: VisitorContext): void {
-    if (!node.location) return;
+    if (process.env.DEBUG_LSP === 'true' && node.type === 'ExecInvocation') {
+      console.log('[EXEC-NODE]', {
+        type: node.type,
+        location: node.location,
+        locationType: typeof node.location,
+        isNone: node.location === 'none',
+        commandRef: !!node.commandRef
+      });
+    }
+    
+    if (!node.location || node.location === 'none') {
+      // For ExecInvocation with location 'none', try to process it anyway
+      if (node.type === 'ExecInvocation' && node.commandRef) {
+        this.visitExecInvocation(node, context);
+      }
+      return;
+    }
     
     switch (node.type) {
       case 'ExecInvocation':
@@ -82,6 +98,93 @@ export class CommandVisitor extends BaseVisitor {
   private visitExecInvocation(node: any, context: VisitorContext): void {
     if (node.commandRef && node.commandRef.name) {
       const name = node.commandRef.name;
+      
+      // Handle case where location is 'none' or undefined - use identifier location
+      if (node.location === 'none' || !node.location) {
+        if (process.env.DEBUG_LSP === 'true') {
+          console.log('[EXEC-INVOCATION]', {
+            name: node.commandRef.name,
+            hasIdentifier: !!node.commandRef.identifier,
+            identifierLength: node.commandRef.identifier?.length,
+            firstIdentifier: node.commandRef.identifier?.[0]
+          });
+        }
+        
+        if (!node.commandRef.identifier?.[0]?.location) {
+          // Can't process without location info
+          return;
+        }
+        const identifierLoc = node.commandRef.identifier[0].location;
+        
+        // Add the @ and function name
+        this.tokenBuilder.addToken({
+          line: identifierLoc.start.line - 1,
+          char: identifierLoc.start.column - 1,
+          length: name.length + 1, // +1 for @
+          tokenType: 'variable',
+          modifiers: []
+        });
+        
+        // If there are args, add parentheses
+        if (node.commandRef.args && node.commandRef.args.length >= 0) {
+          // Add opening parenthesis
+          this.tokenBuilder.addToken({
+            line: identifierLoc.start.line - 1,
+            char: identifierLoc.start.column - 1 + name.length + 1, // After @name
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+          
+          // Process arguments
+          const newContext = {
+            ...context,
+            inCommand: true,
+            interpolationAllowed: true,
+            variableStyle: '@var' as const,
+            inFunctionArgs: true
+          };
+          
+          for (let i = 0; i < node.commandRef.args.length; i++) {
+            const arg = node.commandRef.args[i];
+            this.mainVisitor.visitNode(arg, newContext);
+            
+            // Add comma between args
+            if (i < node.commandRef.args.length - 1) {
+              // We need to find the comma position between args
+              // This is tricky without proper location info
+            }
+          }
+          
+          // Add closing parenthesis
+          // Calculate based on the identifier end + args
+          const lastArg = node.commandRef.args[node.commandRef.args.length - 1];
+          if (lastArg?.location) {
+            this.tokenBuilder.addToken({
+              line: lastArg.location.end.line - 1,
+              char: lastArg.location.end.column, // Right after last arg
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
+          } else {
+            // Empty args - put paren right after opening paren
+            this.tokenBuilder.addToken({
+              line: identifierLoc.start.line - 1,
+              char: identifierLoc.start.column - 1 + name.length + 2, // After @name(
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
+          }
+        }
+        return;
+      }
+      
+      // Original code for when location is available
+      if (!node.location || typeof node.location !== 'object') {
+        return;
+      }
       const charPos = node.location.start.column - 1;
       
       this.tokenBuilder.addToken({
