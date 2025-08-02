@@ -1,0 +1,11 @@
+/var @result = foreach @cmd(@items)
+
+=== START TOKENS ===
+@result --> variable[declaration]
+= --> operator
+foreach --> keyword
+@cmd --> variable
+( --> operator
+@items --> variable
+) --> operator
+=== END TOKENS ===

@@ -1,0 +1,17 @@
+/var @section = <README.md # Introduction>|@upper|@trim
+
+=== START TOKENS ===
+@section --> variable[declaration]
+= --> operator
+< --> operator
+README.md --> string
+# --> operator
+Introduction --> label
+> --> operator
+| --> operator
+@ --> operator
+upper --> variable
+| --> operator
+@ --> operator
+trim --> variable
+=== END TOKENS ===

@@ -1,0 +1,15 @@
+/var @processed = <test-file.txt>|@upper|@trim
+
+=== START TOKENS ===
+@processed --> variable[declaration]
+= --> operator
+< --> operator
+test-file.txt --> string
+> --> operator
+| --> operator
+@ --> operator
+upper --> variable
+| --> operator
+@ --> operator
+trim --> variable
+=== END TOKENS ===

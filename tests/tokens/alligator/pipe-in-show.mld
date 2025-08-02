@@ -1,0 +1,10 @@
+/show <test-file.txt>|@upper
+
+=== START TOKENS ===
+< --> operator
+test-file.txt --> string
+> --> operator
+| --> operator
+@ --> operator
+upper --> variable
+=== END TOKENS ===

@@ -49,12 +49,8 @@ export class StructureVisitor extends BaseVisitor {
     const sourceText = this.document.getText();
     const objectText = sourceText.substring(node.location.start.offset, node.location.end.offset);
     
-    // Use OperatorTokenHelper for braces
-    this.operatorHelper.tokenizeDelimiters(
-      node.location.start.offset,
-      node.location.end.offset - 1,
-      'brace'
-    );
+    // Add opening brace
+    this.operatorHelper.addOperatorToken(node.location.start.offset, 1);
     
     if (node.properties && typeof node.properties === 'object') {
       // Check if this is a plain object (all values are primitives) or has mlld constructs
@@ -127,6 +123,9 @@ export class StructureVisitor extends BaseVisitor {
         }
       }
     }
+    
+    // Add closing brace
+    this.operatorHelper.addOperatorToken(node.location.end.offset - 1, 1);
   }
   
   private tokenizePlainObject(node: any, objectText: string): void {
@@ -215,12 +214,8 @@ export class StructureVisitor extends BaseVisitor {
     const sourceText = this.document.getText();
     const arrayText = sourceText.substring(node.location.start.offset, node.location.end.offset);
     
-    // Use OperatorTokenHelper for brackets
-    this.operatorHelper.tokenizeDelimiters(
-      node.location.start.offset,
-      node.location.end.offset - 1,
-      'bracket'
-    );
+    // Add opening bracket
+    this.operatorHelper.addOperatorToken(node.location.start.offset, 1);
     
     if (node.items && Array.isArray(node.items)) {
       // Check if this is a plain array (all values are primitives) or has mlld constructs
@@ -269,6 +264,9 @@ export class StructureVisitor extends BaseVisitor {
         }
       }
     }
+    
+    // Add closing bracket
+    this.operatorHelper.addOperatorToken(node.location.end.offset - 1, 1);
   }
   
   private tokenizePlainArray(node: any, arrayText: string): void {

@@ -18,6 +18,7 @@ import { ExpressionVisitor } from '@services/lsp/visitors/ExpressionVisitor';
 import { LiteralVisitor } from '@services/lsp/visitors/LiteralVisitor';
 import { StructureVisitor } from '@services/lsp/visitors/StructureVisitor';
 import { FileReferenceVisitor } from '@services/lsp/visitors/FileReferenceVisitor';
+import { ForeachVisitor } from '@services/lsp/visitors/ForeachVisitor';
 import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
 
@@ -50,6 +51,7 @@ export class ASTSemanticVisitor {
     const literalVisitor = new LiteralVisitor(this.document, this.tokenBuilder);
     const structureVisitor = new StructureVisitor(this.document, this.tokenBuilder);
     const fileReferenceVisitor = new FileReferenceVisitor(this.document, this.tokenBuilder);
+    const foreachVisitor = new ForeachVisitor(this.document, this.tokenBuilder);
     
     directiveVisitor.setMainVisitor(this);
     variableVisitor.setMainVisitor(this);
@@ -58,6 +60,7 @@ export class ASTSemanticVisitor {
     expressionVisitor.setMainVisitor(this);
     structureVisitor.setMainVisitor(this);
     fileReferenceVisitor.setMainVisitor(this);
+    foreachVisitor.setMainVisitor(this);
     
     this.registerVisitor('Directive', directiveVisitor);
     this.registerVisitor('VariableReference', variableVisitor);
@@ -85,6 +88,8 @@ export class ASTSemanticVisitor {
     this.registerVisitor('Frontmatter', fileReferenceVisitor);
     this.registerVisitor('CodeFence', fileReferenceVisitor);
     this.registerVisitor('MlldRunBlock', fileReferenceVisitor);
+    this.registerVisitor('foreach', foreachVisitor);
+    this.registerVisitor('foreach-command', foreachVisitor);
   }
   
   private registerVisitor(nodeType: string, visitor: INodeVisitor): void {

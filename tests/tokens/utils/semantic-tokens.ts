@@ -84,7 +84,7 @@ export async function generateSemanticTokens(source: string): Promise<Token[]> {
     
     // Create visitor and generate tokens
     const visitor = new ASTSemanticVisitor(document, builder, TOKEN_TYPES, TOKEN_MODIFIERS, TOKEN_TYPE_MAP);
-    visitor.visitAST(ast);
+    await visitor.visitAST(ast);
     
     // Get the built tokens
     const semanticTokens = builder.build();

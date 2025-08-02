@@ -278,11 +278,32 @@ export class FileReferenceVisitor extends BaseVisitor {
       modifiers: []
     });
     
+    // Determine where the file content ends (before pipes if present)
+    let contentEndOffset = node.location.end.offset;
+    let pipeStartOffset = -1;
+    
+    if (node.pipes && node.pipes.length > 0) {
+      // Find the first pipe in the text
+      const firstPipeIndex = nodeText.indexOf('|');
+      if (firstPipeIndex !== -1) {
+        pipeStartOffset = node.location.start.offset + firstPipeIndex;
+        contentEndOffset = pipeStartOffset;
+      }
+    }
+    
     if (!node.options?.section?.identifier) {
-      // No section - tokenize as: <, filename, >
+      // No section - tokenize as: <, filename, >, [pipes]
       
-      // Token for filename (everything between < and >)
-      const filenameLength = nodeText.length - 2; // Exclude < and >
+      // Calculate filename length (from < to > or to first |)
+      let closeIndex;
+      if (node.pipes && node.pipes.length > 0) {
+        const pipeIndex = nodeText.indexOf('|');
+        closeIndex = pipeIndex !== -1 ? pipeIndex - 1 : nodeText.lastIndexOf('>');
+      } else {
+        closeIndex = nodeText.lastIndexOf('>');
+      }
+      const filenameLength = closeIndex - 1; // -1 for the initial <
+      
       if (filenameLength > 0) {
         this.tokenBuilder.addToken({
           line: node.location.start.line - 1,
@@ -294,15 +315,16 @@ export class FileReferenceVisitor extends BaseVisitor {
       }
       
       // Token for ">"
+      const closePos = nodeStartChar + closeIndex;
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
-        char: nodeStartChar + nodeText.length - 1,
+        char: closePos,
         length: 1,
         tokenType: 'alligatorClose',
         modifiers: []
       });
     } else {
-      // Has section - tokenize as: <, filename, #, section, >
+      // Has section - tokenize as: <, filename, #, section, >, [pipes]
       
       // Find the # position to know where filename ends
       const hashIndex = nodeText.indexOf('#');
@@ -345,13 +367,103 @@ export class FileReferenceVisitor extends BaseVisitor {
       }
       
       // Token for ">"
+      let closeIndexForSection;
+      if (node.pipes && node.pipes.length > 0) {
+        const pipeIndex = nodeText.indexOf('|');
+        // Find the > before the pipe
+        const beforePipe = nodeText.substring(0, pipeIndex);
+        closeIndexForSection = beforePipe.lastIndexOf('>');
+      } else {
+        closeIndexForSection = nodeText.lastIndexOf('>');
+      }
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
-        char: nodeStartChar + nodeText.length - 1,
+        char: nodeStartChar + closeIndexForSection,
         length: 1,
         tokenType: 'alligatorClose',
         modifiers: []
       });
+    }
+    
+    // Handle pipes if present
+    if (node.pipes && node.pipes.length > 0) {
+      let currentPos = nodeText.indexOf('|');
+      
+      for (const pipe of node.pipes) {
+        if (currentPos !== -1) {
+          // Token for "|"
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: nodeStartChar + currentPos,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+          
+          // Token for "@"
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: nodeStartChar + currentPos + 1,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+          
+          // Token for pipe name
+          this.tokenBuilder.addToken({
+            line: node.location.start.line - 1,
+            char: nodeStartChar + currentPos + 2,
+            length: pipe.name.length,
+            tokenType: 'variableRef',
+            modifiers: []
+          });
+          
+          let nextPos = currentPos + 2 + pipe.name.length;
+          
+          // Handle pipe arguments if present
+          if (pipe.args && pipe.args.length > 0) {
+            // Token for "("
+            this.tokenBuilder.addToken({
+              line: node.location.start.line - 1,
+              char: nodeStartChar + nextPos,
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
+            nextPos++;
+            
+            // For now, we'll tokenize args as a single string
+            // This could be enhanced to parse individual arguments
+            const argsEnd = nodeText.indexOf(')', nextPos);
+            if (argsEnd !== -1) {
+              const argsLength = argsEnd - nextPos;
+              if (argsLength > 0) {
+                this.tokenBuilder.addToken({
+                  line: node.location.start.line - 1,
+                  char: nodeStartChar + nextPos,
+                  length: argsLength,
+                  tokenType: 'string',
+                  modifiers: []
+                });
+              }
+              
+              // Token for ")"
+              this.tokenBuilder.addToken({
+                line: node.location.start.line - 1,
+                char: nodeStartChar + argsEnd,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+              
+              nextPos = argsEnd + 1;
+            }
+          }
+          
+          // Find next pipe
+          currentPos = nodeText.indexOf('|', nextPos);
+        }
+      }
     }
   }
   

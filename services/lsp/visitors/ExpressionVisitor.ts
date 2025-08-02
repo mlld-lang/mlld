@@ -5,10 +5,12 @@ import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 export class ExpressionVisitor extends BaseVisitor {
   private mainVisitor: any;
   private operatorHelper: OperatorTokenHelper;
+  private tokenizedParentheses: Set<number>;
   
   constructor(document: any, tokenBuilder: any) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
+    this.tokenizedParentheses = new Set();
   }
   
   setMainVisitor(visitor: any): void {
@@ -57,6 +59,21 @@ export class ExpressionVisitor extends BaseVisitor {
         
         this.mainVisitor.visitNode(node.operand, context);
       } else if (node.type === 'BinaryExpression') {
+        // Check for parentheses before the left side
+        const sourceText = this.document.getText();
+        
+        // Check if there's an opening parenthesis right before this expression
+        if (node.location.start.offset > 0) {
+          const charBefore = sourceText[node.location.start.offset - 1];
+          if (charBefore === '(' && !this.tokenizedParentheses.has(node.location.start.offset - 1)) {
+            this.operatorHelper.addOperatorToken(
+              node.location.start.offset - 1,
+              1
+            );
+            this.tokenizedParentheses.add(node.location.start.offset - 1);
+          }
+        }
+        
         // Visit left side first
         this.mainVisitor.visitNode(node.left, context);
         
@@ -65,6 +82,18 @@ export class ExpressionVisitor extends BaseVisitor {
         
         // Visit right side after
         this.mainVisitor.visitNode(node.right, context);
+        
+        // Check for closing parenthesis after this expression
+        if (node.location.end.offset < sourceText.length) {
+          const charAfter = sourceText[node.location.end.offset];
+          if (charAfter === ')' && !this.tokenizedParentheses.has(node.location.end.offset)) {
+            this.operatorHelper.addOperatorToken(
+              node.location.end.offset,
+              1
+            );
+            this.tokenizedParentheses.add(node.location.end.offset);
+          }
+        }
       }
     }
   }
@@ -161,11 +190,37 @@ export class ExpressionVisitor extends BaseVisitor {
           if (firstAction?.content && firstAction?.wrapperType && firstAction.content[0]) {
             firstAction = firstAction.content[0];
           }
+          
+          // Determine the action start offset
+          let actionStartOffset = null;
+          if (firstAction?.location) {
+            actionStartOffset = firstAction.location.start.offset;
+          } else if (typeof firstAction === 'number' || typeof firstAction === 'string' || typeof firstAction === 'boolean' || firstAction === null) {
+            // For primitive values, we need to search for them in the source text
+            const sourceText = this.document.getText();
+            const searchStart = lastCondition?.location?.end?.offset || node.location.start.offset;
+            const searchEnd = node.location.end.offset;
+            const searchText = sourceText.substring(searchStart, searchEnd);
             
-          if (lastCondition?.location && firstAction?.location) {
+            // Search for => first to know where to look for the value
+            const arrowIndex = searchText.indexOf('=>');
+            if (arrowIndex !== -1) {
+              // Add the => token
+              this.operatorHelper.addOperatorToken(searchStart + arrowIndex, 2);
+              
+              // Now search for the primitive value after =>
+              const afterArrow = searchText.substring(arrowIndex + 2).trim();
+              if (afterArrow.startsWith(String(firstAction))) {
+                const valueOffset = searchStart + arrowIndex + 2 + searchText.substring(arrowIndex + 2).indexOf(afterArrow);
+                actionStartOffset = valueOffset;
+              }
+            }
+          }
+            
+          if (lastCondition?.location && actionStartOffset && !this.tokenizedParentheses.has(lastCondition.location.end.offset)) {
             this.operatorHelper.tokenizeOperatorBetween(
               lastCondition.location.end.offset,
-              firstAction.location.start.offset,
+              actionStartOffset,
               '=>'
             );
           }

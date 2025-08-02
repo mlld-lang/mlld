@@ -1,0 +1,18 @@
+/var @wrapped = <test-file.txt>|@wrap(80)|@trim
+
+=== START TOKENS ===
+@wrapped --> variable[declaration]
+= --> operator
+< --> operator
+test-file.txt --> string
+> --> operator
+| --> operator
+@ --> operator
+wrap --> variable
+( --> operator
+80 --> string
+) --> operator
+| --> operator
+@ --> operator
+trim --> variable
+=== END TOKENS ===

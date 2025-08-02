@@ -1,0 +1,17 @@
+/var @result = foreach @cmd(@items) with { separator: ", " }
+
+=== START TOKENS ===
+@result --> variable[declaration]
+= --> operator
+foreach --> keyword
+@cmd --> variable
+( --> operator
+@items --> variable
+) --> operator
+with --> keyword
+{ --> operator
+separator --> string
+: --> operator
+", " --> string
+} --> operator
+=== END TOKENS ===

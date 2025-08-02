@@ -1,8 +1,15 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
+import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 
 export class CommandVisitor extends BaseVisitor {
   private mainVisitor: any;
+  private operatorHelper: OperatorTokenHelper;
+  
+  constructor(document: any, tokenBuilder: any) {
+    super(document, tokenBuilder);
+    this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
+  }
   
   setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
@@ -150,9 +157,15 @@ export class CommandVisitor extends BaseVisitor {
             this.mainVisitor.visitNode(arg, newContext);
             
             // Add comma between args
-            if (i < node.commandRef.args.length - 1) {
-              // We need to find the comma position between args
-              // This is tricky without proper location info
+            if (i < node.commandRef.args.length - 1 && arg.location) {
+              const nextArg = node.commandRef.args[i + 1];
+              if (nextArg.location) {
+                this.operatorHelper.tokenizeOperatorBetween(
+                  arg.location.end.offset,
+                  nextArg.location.start.offset,
+                  ','
+                );
+              }
             }
           }
           
@@ -160,13 +173,24 @@ export class CommandVisitor extends BaseVisitor {
           // Calculate based on the identifier end + args
           const lastArg = node.commandRef.args[node.commandRef.args.length - 1];
           if (lastArg?.location) {
-            this.tokenBuilder.addToken({
-              line: lastArg.location.end.line - 1,
-              char: lastArg.location.end.column, // Right after last arg
-              length: 1,
-              tokenType: 'operator',
-              modifiers: []
-            });
+            // Find the closing parenthesis in the source text
+            const sourceText = this.document.getText();
+            const searchStart = lastArg.location.end.offset;
+            const searchEnd = Math.min(searchStart + 10, sourceText.length);
+            const searchText = sourceText.substring(searchStart, searchEnd);
+            const closeParenIndex = searchText.indexOf(')');
+            
+            if (closeParenIndex !== -1) {
+              const closeParenOffset = searchStart + closeParenIndex;
+              const closeParenPos = this.document.positionAt(closeParenOffset);
+              this.tokenBuilder.addToken({
+                line: closeParenPos.line,
+                char: closeParenPos.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+            }
           } else {
             // Empty args - put paren right after opening paren
             this.tokenBuilder.addToken({
@@ -214,7 +238,9 @@ export class CommandVisitor extends BaseVisitor {
           inFunctionArgs: true
         };
         
-        for (const arg of node.commandRef.args) {
+        for (let i = 0; i < node.commandRef.args.length; i++) {
+          const arg = node.commandRef.args[i];
+          
           // For Text nodes (string arguments), tokenize with quotes
           if (arg.type === 'Text' && arg.location) {
             // For string arguments in function invocations, we need to include the quotes
@@ -232,6 +258,18 @@ export class CommandVisitor extends BaseVisitor {
             });
           } else {
             this.mainVisitor.visitNode(arg, newContext);
+          }
+          
+          // Add comma between args
+          if (i < node.commandRef.args.length - 1 && arg.location) {
+            const nextArg = node.commandRef.args[i + 1];
+            if (nextArg.location) {
+              this.operatorHelper.tokenizeOperatorBetween(
+                arg.location.end.offset,
+                nextArg.location.start.offset,
+                ','
+              );
+            }
           }
         }
         

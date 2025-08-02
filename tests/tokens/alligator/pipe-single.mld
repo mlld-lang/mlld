@@ -1,0 +1,12 @@
+/var @upper = <test-file.txt>|@upper
+
+=== START TOKENS ===
+@upper --> variable[declaration]
+= --> operator
+< --> operator
+test-file.txt --> string
+> --> operator
+| --> operator
+@ --> operator
+upper --> variable
+=== END TOKENS ===
