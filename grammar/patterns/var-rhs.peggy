@@ -163,7 +163,37 @@ ObjectPropertyValue "object property value"
 
 // Run command in object context
 RunCommandValue
-  = "run" _ content:UnifiedCommandBrackets {
+  = "run" _ "\"" command:$([^"]*) "\"" {
+      // Quoted command syntax: run "echo hello"
+      // Parse the command string to extract parts
+      const parts = helpers.parseCommandContent(command);
+      
+      // Extract command base
+      let commandBases = [];
+      
+      if (parts.length > 0 && parts[0].type === NodeType.Text) {
+        const cmdMatch = parts[0].content.match(/^(\S+)/);
+        if (cmdMatch) {
+          commandBases.push(helpers.createNode(NodeType.CommandBase, {
+            command: cmdMatch[1],
+            location: location()
+          }));
+        }
+      }
+      
+      return {
+        type: 'command',
+        command: parts,
+        commandBases: commandBases,
+        hasRunKeyword: true,
+        meta: {
+          isMultiLine: false,
+          commandCount: commandBases.length,
+          hasScriptRunner: false
+        }
+      };
+    }
+  / "run" _ content:UnifiedCommandBrackets {
       // Use the same command parsing as regular /run directives
       return {
         type: 'command',
