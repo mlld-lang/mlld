@@ -459,6 +459,74 @@ describe('Location Tracking', () => {
     });
   });
   
+  describe('Pipeline Operator Location Tracking', () => {
+    test('pipeline array syntax should have location for each command', () => {
+      const input = '/run {echo "test"} pipeline [@upper, @trim]';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      expect(directive.type).toBe('Directive');
+      expect(directive.kind).toBe('run');
+      
+      // Check pipeline exists in withClause
+      expect(directive.values.withClause).toBeDefined();
+      expect(directive.values.withClause.pipeline).toBeDefined();
+      expect(directive.values.withClause.pipeline).toHaveLength(2);
+      
+      // Check each pipeline command has location
+      const [upper, trim] = directive.values.withClause.pipeline;
+      
+      // @upper command
+      expect(upper.identifier[0].type).toBe('VariableReference');
+      expect(upper.identifier[0].identifier).toBe('upper');
+      expect(upper.identifier[0].location).toBeDefined();
+      expect(isValidLocation(upper.identifier[0].location)).toBe(true);
+      
+      // @trim command
+      expect(trim.identifier[0].type).toBe('VariableReference');
+      expect(trim.identifier[0].identifier).toBe('trim');
+      expect(trim.identifier[0].location).toBeDefined();
+      expect(isValidLocation(trim.identifier[0].location)).toBe(true);
+    });
+    
+    test('pipeline with function arguments should track argument locations', () => {
+      const input = '/show @data pipeline [@filter("active"), @sort("name")]';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      expect(directive.values.withClause.pipeline).toHaveLength(2);
+      
+      const [filter, sort] = directive.values.withClause.pipeline;
+      
+      // Check filter command
+      expect(filter.identifier[0].identifier).toBe('filter');
+      expect(filter.args).toHaveLength(1);
+      expect(filter.args[0].type).toBe('Text');
+      expect(filter.args[0].content).toBe('active');
+      expect(filter.args[0].location).toBeDefined();
+      expect(isValidLocation(filter.args[0].location)).toBe(true);
+      
+      // Check sort command
+      expect(sort.identifier[0].identifier).toBe('sort');
+      expect(sort.args).toHaveLength(1);
+      expect(sort.args[0].type).toBe('Text');
+      expect(sort.args[0].content).toBe('name');
+      expect(sort.args[0].location).toBeDefined();
+      expect(isValidLocation(sort.args[0].location)).toBe(true);
+    });
+    
+    test.skip('pipe operator syntax should have location (not yet implemented)', () => {
+      const input = '/run {echo "test"} | @upper | @trim';
+      const ast = parse(input);
+      
+      // This test documents the expected behavior once pipe operator is implemented
+      const directive = ast[0];
+      expect(directive.values.withClause).toBeDefined();
+      expect(directive.values.withClause.pipeline).toBeDefined();
+      expect(directive.values.withClause.pipeline).toHaveLength(2);
+    });
+  });
+  
   describe('Field Access Location Tracking', () => {
     test('dot notation field access location', () => {
       const input = '/var @data = @user.profile.name';

@@ -67,7 +67,8 @@ CondensedPipe "condensed pipe"
   = "|" "@" name:BaseIdentifier args:CondensedPipeArgs? {
       return { 
         name: name,
-        args: args || []
+        args: args || [],
+        location: location()
       };
     }
 

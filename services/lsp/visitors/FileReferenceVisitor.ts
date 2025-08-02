@@ -1,9 +1,16 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { TextExtractor } from '@services/lsp/utils/TextExtractor';
+import { CommentTokenHelper } from '@services/lsp/utils/CommentTokenHelper';
 
 export class FileReferenceVisitor extends BaseVisitor {
   private mainVisitor: any;
+  private commentHelper: CommentTokenHelper;
+  
+  constructor(document: any, tokenBuilder: any) {
+    super(document, tokenBuilder);
+    this.commentHelper = new CommentTokenHelper(document, tokenBuilder);
+  }
   
   setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
@@ -368,16 +375,7 @@ export class FileReferenceVisitor extends BaseVisitor {
   }
   
   private visitComment(node: any): void {
-    // Use the full location span to include the >> or << marker
-    const length = node.location.end.offset - node.location.start.offset;
-    
-    this.tokenBuilder.addToken({
-      line: node.location.start.line - 1,
-      char: node.location.start.column - 1,
-      length: length,
-      tokenType: 'comment',
-      modifiers: []
-    });
+    this.commentHelper.tokenizeStandaloneComment(node);
   }
   
   private visitParameter(node: any): void {

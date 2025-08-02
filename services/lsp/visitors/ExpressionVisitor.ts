@@ -1,8 +1,15 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
+import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 
 export class ExpressionVisitor extends BaseVisitor {
   private mainVisitor: any;
+  private operatorHelper: OperatorTokenHelper;
+  
+  constructor(document: any, tokenBuilder: any) {
+    super(document, tokenBuilder);
+    this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
+  }
   
   setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
@@ -39,6 +46,7 @@ export class ExpressionVisitor extends BaseVisitor {
     
     if (operatorText) {
       if (node.type === 'UnaryExpression' && node.operand) {
+        // Unary operators are at the start of the node
         this.tokenBuilder.addToken({
           line: node.location.start.line - 1,
           char: node.location.start.column - 1,
@@ -48,36 +56,12 @@ export class ExpressionVisitor extends BaseVisitor {
         });
         
         this.mainVisitor.visitNode(node.operand, context);
-      } else if (node.left && node.right) {
+      } else if (node.type === 'BinaryExpression') {
         // Visit left side first
         this.mainVisitor.visitNode(node.left, context);
         
-        // Calculate operator position
-        // The operator is typically after a space following the left operand
-        const sourceText = this.document.getText();
-        const leftEnd = node.left.location.end.offset;
-        const rightStart = node.right.location.start.offset;
-        const between = sourceText.substring(leftEnd, rightStart);
-        const operatorIndex = between.indexOf(operatorText);
-        
-        if (operatorIndex !== -1) {
-          // Calculate the actual position of the operator
-          const operatorLine = node.left.location.end.line - 1;
-          const operatorChar = node.left.location.end.column - 1 + operatorIndex;
-          
-          // Debug logging
-          if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
-            console.log(`[OPERATOR] Found ${operatorText} at line ${operatorLine}, char ${operatorChar}`);
-          }
-          
-          this.tokenBuilder.addToken({
-            line: operatorLine,
-            char: operatorChar,
-            length: operatorText.length,
-            tokenType: 'operator',
-            modifiers: []
-          });
-        }
+        // Use helper to tokenize binary operator
+        this.operatorHelper.tokenizeBinaryExpression(node);
         
         // Visit right side after
         this.mainVisitor.visitNode(node.right, context);
@@ -88,47 +72,19 @@ export class ExpressionVisitor extends BaseVisitor {
   private visitTernaryExpression(node: any, context: VisitorContext): void {
     if (node.condition) this.mainVisitor.visitNode(node.condition, context);
     
-    // Add '?' operator between condition and trueBranch
-    if (node.condition?.location && node.trueBranch?.location) {
-      const sourceText = this.document.getText();
-      const start = node.condition.location.end.offset;
-      const end = node.trueBranch.location.start.offset;
-      const between = sourceText.substring(start, end);
-      const questionIndex = between.indexOf('?');
-      
-      if (questionIndex !== -1) {
-        this.tokenBuilder.addToken({
-          line: node.condition.location.end.line - 1,
-          char: node.condition.location.end.column + questionIndex - 1,
-          length: 1,
-          tokenType: 'operator',
-          modifiers: []
-        });
-      }
-    }
-    
     if (node.trueBranch) this.mainVisitor.visitNode(node.trueBranch, context);
     
-    // Add ':' operator between trueBranch and falseBranch
-    if (node.trueBranch?.location && node.falseBranch?.location) {
-      const sourceText = this.document.getText();
-      const start = node.trueBranch.location.end.offset;
-      const end = node.falseBranch.location.start.offset;
-      const between = sourceText.substring(start, end);
-      const colonIndex = between.indexOf(':');
-      
-      if (colonIndex !== -1) {
-        this.tokenBuilder.addToken({
-          line: node.trueBranch.location.end.line - 1,
-          char: node.trueBranch.location.end.column + colonIndex - 1,
-          length: 1,
-          tokenType: 'operator',
-          modifiers: []
-        });
-      }
-    }
-    
     if (node.falseBranch) this.mainVisitor.visitNode(node.falseBranch, context);
+    
+    // Use helper to tokenize ternary operators
+    if (node.condition?.location && node.trueBranch?.location && node.falseBranch?.location) {
+      this.operatorHelper.tokenizeTernaryOperators(
+        node.condition.location.end.offset,
+        node.trueBranch.location.start.offset,
+        node.trueBranch.location.end.offset,
+        node.falseBranch.location.start.offset
+      );
+    }
   }
   
   private visitWhenExpression(node: any, context: VisitorContext): void {
@@ -176,13 +132,10 @@ export class ExpressionVisitor extends BaseVisitor {
     // Find and tokenize opening '['
     const openBracketIndex = nodeText.indexOf('[', colonIndex);
     if (openBracketIndex !== -1) {
-      this.tokenBuilder.addToken({
-        line: node.location.start.line - 1,
-        char: node.location.start.column + openBracketIndex - 1,
-        length: 1,
-        tokenType: 'operator',
-        modifiers: []
-      });
+      this.operatorHelper.addOperatorToken(
+        node.location.start.offset + openBracketIndex,
+        1
+      );
     }
     
     // Process each condition/action pair
@@ -210,22 +163,11 @@ export class ExpressionVisitor extends BaseVisitor {
           }
             
           if (lastCondition?.location && firstAction?.location) {
-            const betweenText = sourceText.substring(
+            this.operatorHelper.tokenizeOperatorBetween(
               lastCondition.location.end.offset,
-              firstAction.location.start.offset
+              firstAction.location.start.offset,
+              '=>'
             );
-            const arrowIndex = betweenText.indexOf('=>');
-            
-            if (arrowIndex !== -1) {
-              const position = this.document.positionAt(lastCondition.location.end.offset + arrowIndex);
-              this.tokenBuilder.addToken({
-                line: position.line,
-                char: position.character,
-                length: 2,
-                tokenType: 'operator',
-                modifiers: []
-              });
-            }
           }
         }
         
@@ -273,14 +215,10 @@ export class ExpressionVisitor extends BaseVisitor {
     // Find and tokenize closing ']'
     const closeBracketIndex = nodeText.lastIndexOf(']');
     if (closeBracketIndex !== -1) {
-      const position = this.document.positionAt(node.location.start.offset + closeBracketIndex);
-      this.tokenBuilder.addToken({
-        line: position.line,
-        char: position.character,
-        length: 1,
-        tokenType: 'operator',
-        modifiers: []
-      });
+      this.operatorHelper.addOperatorToken(
+        node.location.start.offset + closeBracketIndex,
+        1
+      );
     }
   }
 }

@@ -19,17 +19,19 @@ No ambiguity with arrays or strings.
 1. Path interpolation: <@baseDir/file.md>
 2. Section extraction: <file.md # Section>
 3. Section rename: <file.md # Section> as "## New Title"
-4. Future: AST extraction, range extraction
+4. Pipe transformations: <file.txt>|@upper|@trim
+5. Future: AST extraction, range extraction
 */
 
 // Main alligator expression
 AlligatorExpression "alligator expression"
-  = "<" _ source:AlligatorSource options:AlligatorOptions? _ ">" {
-      helpers.debug('AlligatorExpression matched', { source, options });
+  = "<" _ source:AlligatorSource options:AlligatorOptions? _ ">" pipes:CondensedPipeChain? {
+      helpers.debug('AlligatorExpression matched', { source, options, pipes });
       return {
         type: 'load-content',
         source: source,
         ...(options ? { options } : {}),
+        ...(pipes && pipes.length > 0 ? { pipes } : {}),
         location: location()
       };
     }
@@ -282,3 +284,4 @@ URLHost
 
 URLPath  
   = "/" chars:[^> ]* { return '/' + chars.join(''); }
+

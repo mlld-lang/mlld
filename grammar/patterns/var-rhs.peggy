@@ -79,7 +79,8 @@ VariableWithSpacedPipes "variable with flexible pipe syntax"
         pipes.push({
           type: 'CondensedPipe',
           transform: firstPipe,
-          hasAt: true
+          hasAt: true,
+          location: location()
         });
       }
       if (restPipes && restPipes.length > 0) {
@@ -102,7 +103,8 @@ SpacedOrCondensedPipe
       return {
         type: 'CondensedPipe',
         transform: transform,
-        hasAt: true
+        hasAt: true,
+        location: location()
       };
     }
 

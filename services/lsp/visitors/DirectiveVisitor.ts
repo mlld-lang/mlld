@@ -2,10 +2,20 @@ import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { LocationHelpers } from '@services/lsp/utils/LocationHelpers';
 import { TextExtractor } from '@services/lsp/utils/TextExtractor';
+import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
+import { CommentTokenHelper } from '@services/lsp/utils/CommentTokenHelper';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
 
 export class DirectiveVisitor extends BaseVisitor {
   private mainVisitor: any;
+  private operatorHelper: OperatorTokenHelper;
+  private commentHelper: CommentTokenHelper;
+  
+  constructor(document: any, tokenBuilder: any) {
+    super(document, tokenBuilder);
+    this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
+    this.commentHelper = new CommentTokenHelper(document, tokenBuilder);
+  }
   
   setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
@@ -43,13 +53,10 @@ export class DirectiveVisitor extends BaseVisitor {
         // Add opening parenthesis
         const firstParam = node.values.params[0];
         if (firstParam && firstParam.location) {
-          this.tokenBuilder.addToken({
-            line: firstParam.location.start.line - 1,
-            char: firstParam.location.start.column - 2, // '(' is before param
-            length: 1,
-            tokenType: 'operator',
-            modifiers: []
-          });
+          this.operatorHelper.addOperatorToken(
+            firstParam.location.start.offset - 1, // '(' is before param
+            1
+          );
         }
         
         // Process parameters
@@ -59,25 +66,13 @@ export class DirectiveVisitor extends BaseVisitor {
           
           // Add comma after each parameter except the last
           if (i < node.values.params.length - 1 && param.location) {
-            // Find the comma position after the parameter
-            const sourceText = this.document.getText();
             const nextParam = node.values.params[i + 1];
             if (nextParam && nextParam.location) {
-              const searchStart = param.location.end.offset;
-              const searchEnd = nextParam.location.start.offset;
-              const betweenText = sourceText.substring(searchStart, searchEnd);
-              const commaIndex = betweenText.indexOf(',');
-              
-              if (commaIndex !== -1) {
-                const position = this.document.positionAt(searchStart + commaIndex);
-                this.tokenBuilder.addToken({
-                  line: position.line,
-                  char: position.character,
-                  length: 1,
-                  tokenType: 'operator',
-                  modifiers: []
-                });
-              }
+              this.operatorHelper.tokenizeOperatorBetween(
+                param.location.end.offset,
+                nextParam.location.start.offset,
+                ','
+              );
             }
           }
         }
@@ -86,14 +81,10 @@ export class DirectiveVisitor extends BaseVisitor {
         const lastParam = node.values.params[node.values.params.length - 1];
         if (lastParam && lastParam.location) {
           // The closing parenthesis is right after the last parameter
-          // AST positions are 1-based, we need 0-based
-          this.tokenBuilder.addToken({
-            line: lastParam.location.end.line - 1,
-            char: lastParam.location.end.column - 1, // Convert to 0-based
-            length: 1,
-            tokenType: 'operator',
-            modifiers: []
-          });
+          this.operatorHelper.addOperatorToken(
+            lastParam.location.end.offset,
+            1
+          );
         }
         
         // Now add the = operator after the closing parenthesis
@@ -101,21 +92,15 @@ export class DirectiveVisitor extends BaseVisitor {
             node.values.command !== undefined || node.values.code !== undefined ||
             node.values.content !== undefined || node.meta?.wrapperType !== undefined) {
           // Find the = sign in the source text after the closing parenthesis
-          const sourceText = this.document.getText();
-          const searchStart = lastParam.location.end.offset;
-          const searchEnd = Math.min(searchStart + 10, sourceText.length);
-          const searchText = sourceText.substring(searchStart, searchEnd);
-          const equalIndex = searchText.indexOf('=');
+          const equalOffset = this.operatorHelper.findOperatorNear(
+            lastParam.location.end.offset,
+            '=',
+            10,
+            'forward'
+          );
           
-          if (equalIndex !== -1) {
-            const position = this.document.positionAt(searchStart + equalIndex);
-            this.tokenBuilder.addToken({
-              line: position.line,
-              char: position.character,
-              length: 1,
-              tokenType: 'operator',
-              modifiers: []
-            });
+          if (equalOffset !== null) {
+            this.operatorHelper.addOperatorToken(equalOffset, 1);
           }
         }
       } else {
@@ -146,42 +131,7 @@ export class DirectiveVisitor extends BaseVisitor {
       });
     }
     
-    // The comment location in the AST starts after the space after the marker
-    // We need to find the actual position of the marker in the source text
-    const sourceText = this.document.getText();
-    const lineStart = sourceText.split('\n').slice(0, comment.location.start.line - 1).join('\n').length;
-    const lineOffset = lineStart > 0 ? lineStart + 1 : 0; // +1 for newline if not first line
-    
-    // Find the marker position by searching backwards from the comment start
-    const searchStart = Math.max(0, comment.location.start.offset - 10); // Look back up to 10 chars
-    const searchText = sourceText.substring(searchStart, comment.location.start.offset);
-    const markerIndex = searchText.lastIndexOf(comment.marker);
-    
-    if (markerIndex !== -1) {
-      // Found the marker, calculate the actual start position
-      const markerOffset = searchStart + markerIndex;
-      const markerLine = comment.location.start.line - 1;
-      const markerChar = markerOffset - lineOffset;
-      const totalLength = comment.location.end.offset - markerOffset;
-      
-      // Token for the entire comment including the marker
-      this.tokenBuilder.addToken({
-        line: markerLine,
-        char: markerChar,
-        length: totalLength,
-        tokenType: 'comment',
-        modifiers: []
-      });
-    } else {
-      // Fallback: just use the comment location as-is
-      this.tokenBuilder.addToken({
-        line: comment.location.start.line - 1,
-        char: comment.location.start.column - 1,
-        length: comment.location.end.offset - comment.location.start.offset,
-        tokenType: 'comment',
-        modifiers: []
-      });
-    }
+    this.commentHelper.tokenizeEndOfLineComment(comment);
   }
   
   private handleVariableDeclaration(node: any, skipEquals: boolean = false): void {
@@ -209,23 +159,34 @@ export class DirectiveVisitor extends BaseVisitor {
             node.values.command !== undefined || node.values.code !== undefined ||
             node.values.content !== undefined || node.meta?.wrapperType !== undefined)) {
           // Calculate position after variable name (including @)
-          let equalPosition = identifierStart + identifierName.length + 1;
+          const baseOffset = node.location.start.offset + identifierStart + identifierName.length;
           
           // For /exe with params, = comes after the closing parenthesis
           if (node.kind === 'exe' && node.values.params && node.values.params.length > 0) {
             const lastParam = node.values.params[node.values.params.length - 1];
             if (lastParam?.location) {
-              equalPosition = lastParam.location.end.column + 1; // After ')' 
+              const equalOffset = this.operatorHelper.findOperatorNear(
+                lastParam.location.end.offset,
+                '=',
+                10,
+                'forward'
+              );
+              if (equalOffset !== null) {
+                this.operatorHelper.addOperatorToken(equalOffset, 1);
+              }
+            }
+          } else {
+            // Find = after the variable name
+            const equalOffset = this.operatorHelper.findOperatorNear(
+              baseOffset,
+              '=',
+              10,
+              'forward'
+            );
+            if (equalOffset !== null) {
+              this.operatorHelper.addOperatorToken(equalOffset, 1);
             }
           }
-          
-          this.tokenBuilder.addToken({
-            line: node.location.start.line - 1,
-            char: equalPosition,
-            length: 1,
-            tokenType: 'operator',
-            modifiers: []
-          });
         }
       }
     }
@@ -444,14 +405,10 @@ export class DirectiveVisitor extends BaseVisitor {
         const braceIndex = directiveText.indexOf('{');
         if (braceIndex !== -1) {
           // Add opening brace token
-          const openBracePosition = this.document.positionAt(directive.location.start.offset + braceIndex);
-          this.tokenBuilder.addToken({
-            line: openBracePosition.line,
-            char: openBracePosition.character,
-            length: 1,
-            tokenType: 'operator',
-            modifiers: []
-          });
+          this.operatorHelper.addOperatorToken(
+            directive.location.start.offset + braceIndex,
+            1
+          );
           
           // Find closing brace position
           const closeBraceIndex = directiveText.lastIndexOf('}');
@@ -514,14 +471,10 @@ export class DirectiveVisitor extends BaseVisitor {
             }
             
             // Add closing brace token
-            const closeBracePosition = this.document.positionAt(directive.location.start.offset + closeBraceIndex);
-            this.tokenBuilder.addToken({
-              line: closeBracePosition.line,
-              char: closeBracePosition.character,
-              length: 1,
-              tokenType: 'operator',
-              modifiers: []
-            });
+            this.operatorHelper.addOperatorToken(
+              directive.location.start.offset + closeBraceIndex,
+              1
+            );
           }
         }
       }
@@ -533,13 +486,10 @@ export class DirectiveVisitor extends BaseVisitor {
         
         // Add opening brace
         if (firstCommand.location) {
-          this.tokenBuilder.addToken({
-            line: firstCommand.location.start.line - 1,
-            char: firstCommand.location.start.column - 2, // Brace is before command
-            length: 1,
-            tokenType: 'operator',
-            modifiers: []
-          });
+          this.operatorHelper.addOperatorToken(
+            firstCommand.location.start.offset - 1, // Brace is before command
+            1
+          );
         }
         
         // Process command content
@@ -576,13 +526,10 @@ export class DirectiveVisitor extends BaseVisitor {
         
         // Add closing brace
         if (lastCommand.location) {
-          this.tokenBuilder.addToken({
-            line: lastCommand.location.end.line - 1,
-            char: lastCommand.location.end.column - 1,
-            length: 1,
-            tokenType: 'operator',
-            modifiers: []
-          });
+          this.operatorHelper.addOperatorToken(
+            lastCommand.location.end.offset,
+            1
+          );
         }
       } else {
         this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
@@ -747,13 +694,10 @@ export class DirectiveVisitor extends BaseVisitor {
     if (braceIndex === -1) return;
     
     // Add opening brace token
-    this.tokenBuilder.addToken({
-      line: directive.location.start.line - 1,
-      char: directive.location.start.column - 1 + braceIndex,
-      length: 1,
-      tokenType: 'operator',
-      modifiers: []
-    });
+    this.operatorHelper.addOperatorToken(
+      directive.location.start.offset + braceIndex,
+      1
+    );
     
     // Find closing brace position
     const closeBraceIndex = directiveText.lastIndexOf('}');
@@ -793,13 +737,10 @@ export class DirectiveVisitor extends BaseVisitor {
       }
       
       // Add closing brace token
-      this.tokenBuilder.addToken({
-        line: directive.location.start.line - 1,
-        char: directive.location.start.column - 1 + closeBraceIndex,
-        length: 1,
-        tokenType: 'operator',
-        modifiers: []
-      });
+      this.operatorHelper.addOperatorToken(
+        directive.location.start.offset + closeBraceIndex,
+        1
+      );
     }
   }
   
@@ -858,7 +799,6 @@ export class DirectiveVisitor extends BaseVisitor {
         }
         
         // Find and add => operator
-        const sourceText = this.document.getText();
         const conditionEnd = Array.isArray(node.values.condition)
           ? node.values.condition[node.values.condition.length - 1].location?.end
           : node.values.condition.location?.end;
@@ -867,18 +807,11 @@ export class DirectiveVisitor extends BaseVisitor {
           : node.values.action.location?.start;
           
         if (conditionEnd && actionStart) {
-          const betweenText = sourceText.substring(conditionEnd.offset, actionStart.offset);
-          const arrowIndex = betweenText.indexOf('=>');
-          if (arrowIndex !== -1) {
-            const arrowPosition = this.document.positionAt(conditionEnd.offset + arrowIndex);
-            this.tokenBuilder.addToken({
-              line: arrowPosition.line,
-              char: arrowPosition.character,
-              length: 2,
-              tokenType: 'operator',
-              modifiers: []
-            });
-          }
+          this.operatorHelper.tokenizeOperatorBetween(
+            conditionEnd.offset,
+            actionStart.offset,
+            '=>'
+          );
         }
         
         // Process action
@@ -1129,7 +1062,6 @@ export class DirectiveVisitor extends BaseVisitor {
             });
           } else if (pair.condition && pair.action) {
             // For bare form without explicit arrowLocation, find => between condition and action
-            const sourceText = this.document.getText();
             const conditionEnd = Array.isArray(pair.condition)
               ? pair.condition[pair.condition.length - 1].location?.end
               : pair.condition.location?.end;
@@ -1138,18 +1070,11 @@ export class DirectiveVisitor extends BaseVisitor {
               : pair.action.location?.start;
               
             if (conditionEnd && actionStart) {
-              const betweenText = sourceText.substring(conditionEnd.offset, actionStart.offset);
-              const arrowIndex = betweenText.indexOf('=>');
-              if (arrowIndex !== -1) {
-                const arrowPosition = this.document.positionAt(conditionEnd.offset + arrowIndex);
-                this.tokenBuilder.addToken({
-                  line: arrowPosition.line,
-                  char: arrowPosition.character,
-                  length: 2,
-                  tokenType: 'operator',
-                  modifiers: []
-                });
-              }
+              this.operatorHelper.tokenizeOperatorBetween(
+                conditionEnd.offset,
+                actionStart.offset,
+                '=>'
+              );
             }
           }
           
@@ -1203,19 +1128,11 @@ export class DirectiveVisitor extends BaseVisitor {
             
           if (conditionEnd && actionStart) {
             // Find the arrow operator between condition and action
-            const sourceText = this.document.getText();
-            const between = sourceText.substring(conditionEnd.offset, actionStart.offset);
-            const arrowIndex = between.indexOf('=>');
-            
-            if (arrowIndex !== -1) {
-              this.tokenBuilder.addToken({
-                line: conditionEnd.line - 1,
-                char: conditionEnd.column - 1 + arrowIndex,
-                length: 2,
-                tokenType: 'operator',
-                modifiers: []
-              });
-            }
+            this.operatorHelper.tokenizeOperatorBetween(
+              conditionEnd.offset,
+              actionStart.offset,
+              '=>'
+            );
           }
         }
         
