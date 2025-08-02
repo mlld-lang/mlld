@@ -127,7 +127,14 @@ export async function processContentLoader(node: any, env: Environment): Promise
     // The smart object will handle string conversion when needed
     return result;
   } catch (error: any) {
-    throw new MlldError(`Failed to load content: ${pathOrUrl}`, {
+    let errorMessage = `Failed to load content: ${pathOrUrl}`;
+    
+    // Add helpful hint for relative paths
+    if (!pathOrUrl.startsWith('/') && !pathOrUrl.startsWith('@') && !env.isURL(pathOrUrl)) {
+      errorMessage += `\n\nHint: Paths are relative to mlld files. You can make them relative to your project root with the \`@base/\` prefix`;
+    }
+    
+    throw new MlldError(errorMessage, {
       path: pathOrUrl,
       error: error.message
     });

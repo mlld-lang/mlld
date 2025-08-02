@@ -14,18 +14,22 @@ export class ExecParameterConflictError extends MlldDirectiveError {
   ) {
     const message = `Exec parameter '${paramName}' in '@${execName}' conflicts with existing variable '@${paramName}'. To avoid ambiguity, mlld doesn't allow exec parameters to use the same name as defined variables. Consider renaming the parameter.`;
     
-    super(message, {
-      nodeType: 'exec-parameter-conflict',
-      paramName,
-      execName,
-      existingVarLocation: `${existingVarLocation.filePath}:${existingVarLocation.line}:${existingVarLocation.column}`,
-      directiveTrace: {}
+    super(message, 'exe', {
+      context: {
+        nodeType: 'exec-parameter-conflict',
+        paramName,
+        execName,
+        existingVarLocation: `${existingVarLocation.filePath}:${existingVarLocation.line}:${existingVarLocation.column}`,
+        directiveTrace: {}
+      },
+      location: execLocation
     });
     
     this.name = 'ExecParameterConflict';
   }
 
   getHelpText(): string {
-    return `💡 Consider renaming the parameter to avoid conflicts, e.g., '@${this.details.execName}(${this.details.paramName}Data)' or '@${this.details.execName}(items)'`;
+    const context = this.details as any;
+    return `💡 Consider renaming the parameter to avoid conflicts, e.g., '@${context.execName}(${context.paramName}Data)' or '@${context.execName}(items)'`;
   }
 }

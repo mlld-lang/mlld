@@ -24,13 +24,6 @@
           }
         },
         {
-          "prefix": "@tests/",
-          "resolver": "LOCAL",
-          "config": {
-            "basePath": "modules/llm/tests"
-          }
-        },
-        {
           "prefix": "@example/",
           "resolver": "LOCAL",
           "config": {
