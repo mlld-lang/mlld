@@ -1,0 +1,24 @@
+/exe @greet(name) = when: [
+  @name == "World" => "Hello, World!"
+  true => "Welcome!"
+]
+
+=== START TOKENS ===
+@greet --> variable[declaration]
+( --> operator
+name --> parameter
+) --> operator
+= --> operator
+when --> keyword
+: --> operator
+[ --> operator
+@name --> variable
+== --> operator
+"World" --> string
+=> --> operator
+"Hello, World!" --> string
+true --> keyword
+=> --> operator
+"Welcome!" --> string
+] --> operator
+=== END TOKENS ===

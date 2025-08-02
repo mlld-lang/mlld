@@ -1,0 +1,52 @@
+/var @access = when: [
+  (@role == "admin" || @role == "mod") && @active => "granted"
+  @role == "user" && (@score > 100 || @premium) => "limited"
+  !(@banned || @suspended) => "basic"
+  true => "denied"
+]
+
+=== START TOKENS ===
+@access --> variable[declaration]
+= --> operator
+when --> keyword
+: --> operator
+[ --> operator
+( --> operator
+@role --> variable
+== --> operator
+"admin" --> string
+|| --> operator
+@role --> variable
+== --> operator
+"mod" --> string
+) --> operator
+&& --> operator
+@active --> variable
+=> --> operator
+"granted" --> string
+@role --> variable
+== --> operator
+"user" --> string
+&& --> operator
+( --> operator
+@score --> variable
+> --> operator
+100 --> number
+|| --> operator
+@premium --> variable
+) --> operator
+=> --> operator
+"limited" --> string
+! --> operator
+( --> operator
+@banned --> variable
+|| --> operator
+@suspended --> variable
+) --> operator
+=> --> operator
+"basic" --> string
+true --> keyword
+=> --> operator
+"denied" --> string
+] --> operator
+=== END TOKENS ===

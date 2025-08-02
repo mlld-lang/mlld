@@ -137,7 +137,16 @@ export async function generateSemanticTokens(source: string): Promise<Token[]> {
       });
     }
     
-    return tokens;
+    // Filter out directive tokens (keywords that start with /)
+    // since we know all directives are tokenized correctly
+    const filteredTokens = tokens.filter(token => {
+      // Keep all non-keyword tokens
+      if (token.type !== 'keyword') return true;
+      // For keyword tokens, exclude those that start with /
+      return !token.text?.startsWith('/');
+    });
+    
+    return filteredTokens;
   } catch (error) {
     // Log the error for debugging
     console.error('Failed to generate semantic tokens:', error);

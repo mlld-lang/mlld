@@ -1,0 +1,33 @@
+/var @config = {
+  "name": "my-app",
+  "version": "1.0.0",
+  "debug": true,
+  "port": 3000,
+  "features": null
+}
+
+=== START TOKENS ===
+@config --> variable[declaration]
+= --> operator
+{ --> operator
+"name" --> string
+: --> operator
+"my-app" --> string
+, --> operator
+"version" --> string
+: --> operator
+"1.0.0" --> string
+, --> operator
+"debug" --> string
+: --> operator
+true --> keyword
+, --> operator
+"port" --> string
+: --> operator
+3000 --> number
+, --> operator
+"features" --> string
+: --> operator
+null --> keyword
+} --> operator
+=== END TOKENS ===

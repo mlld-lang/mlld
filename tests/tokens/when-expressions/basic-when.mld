@@ -7,7 +7,6 @@
 ]
 
 === START TOKENS ===
-/exe --> keyword
 @calculate --> variable[declaration]
 ( --> operator
 op --> parameter

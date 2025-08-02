@@ -35,9 +35,10 @@ export class DirectiveVisitor extends BaseVisitor {
     
     if ((node.kind === 'var' || node.kind === 'exe' || node.kind === 'path') && 
         node.values?.identifier) {
-      this.handleVariableDeclaration(node);
-      
-      if (node.kind === 'exe' && node.values?.params) {
+      // For /exe with params, handle variable declaration without = first
+      if (node.kind === 'exe' && node.values?.params && node.values.params.length > 0) {
+        this.handleVariableDeclaration(node, true); // Skip = operator for now
+        
         // Add opening parenthesis
         const firstParam = node.values.params[0];
         if (firstParam && firstParam.location) {
@@ -51,8 +52,33 @@ export class DirectiveVisitor extends BaseVisitor {
         }
         
         // Process parameters
-        for (const param of node.values.params) {
+        for (let i = 0; i < node.values.params.length; i++) {
+          const param = node.values.params[i];
           this.mainVisitor.visitNode(param, context);
+          
+          // Add comma after each parameter except the last
+          if (i < node.values.params.length - 1 && param.location) {
+            // Find the comma position after the parameter
+            const sourceText = this.document.getText();
+            const nextParam = node.values.params[i + 1];
+            if (nextParam && nextParam.location) {
+              const searchStart = param.location.end.offset;
+              const searchEnd = nextParam.location.start.offset;
+              const betweenText = sourceText.substring(searchStart, searchEnd);
+              const commaIndex = betweenText.indexOf(',');
+              
+              if (commaIndex !== -1) {
+                const position = this.document.positionAt(searchStart + commaIndex);
+                this.tokenBuilder.addToken({
+                  line: position.line,
+                  char: position.character,
+                  length: 1,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
+            }
+          }
         }
         
         // Add closing parenthesis
@@ -68,6 +94,32 @@ export class DirectiveVisitor extends BaseVisitor {
             modifiers: []
           });
         }
+        
+        // Now add the = operator after the closing parenthesis
+        if (node.values.value !== undefined || node.values.template !== undefined || 
+            node.values.command !== undefined || node.values.code !== undefined ||
+            node.values.content !== undefined || node.meta?.wrapperType !== undefined) {
+          // Find the = sign in the source text after the closing parenthesis
+          const sourceText = this.document.getText();
+          const searchStart = lastParam.location.end.offset;
+          const searchEnd = Math.min(searchStart + 10, sourceText.length);
+          const searchText = sourceText.substring(searchStart, searchEnd);
+          const equalIndex = searchText.indexOf('=');
+          
+          if (equalIndex !== -1) {
+            const position = this.document.positionAt(searchStart + equalIndex);
+            this.tokenBuilder.addToken({
+              line: position.line,
+              char: position.character,
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
+          }
+        }
+      } else {
+        // For other directives or exe without params, handle normally
+        this.handleVariableDeclaration(node);
       }
     }
     
@@ -131,7 +183,7 @@ export class DirectiveVisitor extends BaseVisitor {
     }
   }
   
-  private handleVariableDeclaration(node: any): void {
+  private handleVariableDeclaration(node: any, skipEquals: boolean = false): void {
     const identifierNodes = node.values.identifier;
     if (Array.isArray(identifierNodes) && identifierNodes.length > 0) {
       const firstIdentifier = identifierNodes[0];
@@ -151,10 +203,10 @@ export class DirectiveVisitor extends BaseVisitor {
           modifiers: ['declaration']
         });
         
-        // Add = operator token if there's a value
-        if (node.values.value !== undefined || node.values.template !== undefined || 
+        // Add = operator token if there's a value (unless skipEquals is true)
+        if (!skipEquals && (node.values.value !== undefined || node.values.template !== undefined || 
             node.values.command !== undefined || node.values.code !== undefined ||
-            node.meta?.wrapperType !== undefined) {
+            node.values.content !== undefined || node.meta?.wrapperType !== undefined)) {
           // Calculate position after variable name (including @)
           let equalPosition = identifierStart + identifierName.length + 1;
           
@@ -238,7 +290,12 @@ export class DirectiveVisitor extends BaseVisitor {
         this.visitWithClause(values.withClause, directive, context);
       }
     } else if (values.value !== undefined && directive.location) {
-      this.handlePrimitiveValue(values.value, directive);
+      // Check if the value is a WhenExpression object
+      if (typeof values.value === 'object' && values.value !== null && values.value.type === 'WhenExpression') {
+        this.mainVisitor.visitNode(values.value, context);
+      } else {
+        this.handlePrimitiveValue(values.value, directive);
+      }
     } else if (values.loadContent) {
       // Handle file references with or without sections
       this.mainVisitor.visitNode(values.loadContent, context);
@@ -346,13 +403,31 @@ export class DirectiveVisitor extends BaseVisitor {
           directive.location.end.offset
         );
         
+        // Find language identifier (e.g., 'js', 'python', etc.)
+        const langMatch = directiveText.match(/\s+(js|javascript|python|py|sh|bash|node)\s*\{/);
+        if (langMatch) {
+          const langText = langMatch[1];
+          const langIndex = langMatch.index! + langMatch[0].indexOf(langText);
+          
+          // Add language identifier token
+          const langPosition = this.document.positionAt(directive.location.start.offset + langIndex);
+          this.tokenBuilder.addToken({
+            line: langPosition.line,
+            char: langPosition.character,
+            length: langText.length,
+            tokenType: 'embedded',
+            modifiers: []
+          });
+        }
+        
         // Find the opening brace position
         const braceIndex = directiveText.indexOf('{');
         if (braceIndex !== -1) {
           // Add opening brace token
+          const openBracePosition = this.document.positionAt(directive.location.start.offset + braceIndex);
           this.tokenBuilder.addToken({
-            line: directive.location.start.line - 1,
-            char: directive.location.start.column + braceIndex - 1,
+            line: openBracePosition.line,
+            char: openBracePosition.character,
             length: 1,
             tokenType: 'operator',
             modifiers: []
@@ -361,23 +436,49 @@ export class DirectiveVisitor extends BaseVisitor {
           // Find closing brace position
           const closeBraceIndex = directiveText.lastIndexOf('}');
           if (closeBraceIndex !== -1 && closeBraceIndex > braceIndex) {
-            // Extract code content between braces (including spaces)
+            // Extract code content between braces
             const codeContent = directiveText.substring(braceIndex + 1, closeBraceIndex);
             
-            // Add embedded code token
-            this.tokenBuilder.addToken({
-              line: directive.location.start.line - 1,
-              char: directive.location.start.column + braceIndex,
-              length: codeContent.length,
-              tokenType: 'embeddedCode',
-              modifiers: [],
-              data: { language: langText }
-            });
+            // Find the actual content bounds (trim whitespace for display)
+            let contentStart = 0;
+            let contentEnd = codeContent.length;
+            
+            // Find first non-whitespace
+            while (contentStart < codeContent.length && /\s/.test(codeContent[contentStart])) {
+              if (codeContent[contentStart] === '\n') {
+                contentStart++;
+                break; // Stop after first newline
+              }
+              contentStart++;
+            }
+            
+            // Find last non-whitespace
+            while (contentEnd > contentStart && /\s/.test(codeContent[contentEnd - 1])) {
+              if (codeContent[contentEnd - 1] === '\n') {
+                // Include content up to the last newline
+                contentEnd--;
+                break;
+              }
+              contentEnd--;
+            }
+            
+            // Add code content token
+            if (contentEnd > contentStart) {
+              const codePosition = this.document.positionAt(directive.location.start.offset + braceIndex + 1 + contentStart);
+              this.tokenBuilder.addToken({
+                line: codePosition.line,
+                char: codePosition.character,
+                length: contentEnd - contentStart,
+                tokenType: 'string',
+                modifiers: []
+              });
+            }
             
             // Add closing brace token
+            const closeBracePosition = this.document.positionAt(directive.location.start.offset + closeBraceIndex);
             this.tokenBuilder.addToken({
-              line: directive.location.start.line - 1,
-              char: directive.location.start.column + closeBraceIndex - 1,
+              line: closeBracePosition.line,
+              char: closeBracePosition.character,
               length: 1,
               tokenType: 'operator',
               modifiers: []
@@ -593,6 +694,53 @@ export class DirectiveVisitor extends BaseVisitor {
   
   private visitWhenDirective(node: any, context: VisitorContext): void {
     if (node.values) {
+      // Handle simple when form: /when @condition => action
+      if (node.values.condition && node.values.action) {
+        // Process condition
+        if (Array.isArray(node.values.condition)) {
+          for (const cond of node.values.condition) {
+            this.mainVisitor.visitNode(cond, context);
+          }
+        } else {
+          this.mainVisitor.visitNode(node.values.condition, context);
+        }
+        
+        // Find and add => operator
+        const sourceText = this.document.getText();
+        const conditionEnd = Array.isArray(node.values.condition)
+          ? node.values.condition[node.values.condition.length - 1].location?.end
+          : node.values.condition.location?.end;
+        const actionStart = Array.isArray(node.values.action)
+          ? node.values.action[0].location?.start
+          : node.values.action.location?.start;
+          
+        if (conditionEnd && actionStart) {
+          const betweenText = sourceText.substring(conditionEnd.offset, actionStart.offset);
+          const arrowIndex = betweenText.indexOf('=>');
+          if (arrowIndex !== -1) {
+            const arrowPosition = this.document.positionAt(conditionEnd.offset + arrowIndex);
+            this.tokenBuilder.addToken({
+              line: arrowPosition.line,
+              char: arrowPosition.character,
+              length: 2,
+              tokenType: 'operator',
+              modifiers: []
+            });
+          }
+        }
+        
+        // Process action
+        if (Array.isArray(node.values.action)) {
+          for (const action of node.values.action) {
+            this.mainVisitor.visitNode(action, context);
+          }
+        } else {
+          this.mainVisitor.visitNode(node.values.action, context);
+        }
+        return;
+      }
+      
+      // Handle block form: /when @var: [...] or /when @var first: [...]
       if (node.values.conditions && Array.isArray(node.values.conditions)) {
         if (node.values.variable) {
           if (Array.isArray(node.values.variable)) {

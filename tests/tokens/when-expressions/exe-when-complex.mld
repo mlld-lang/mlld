@@ -1,0 +1,64 @@
+/exe @processRequest(method, path, auth) = when: [
+  @method == "GET" && @path == "/users" => @listUsers()
+  @method == "POST" && @path == "/users" => @createUser(@auth)
+  @method == "DELETE" || @method == "PUT" => "Method not allowed"
+  !@auth => "Unauthorized"
+  true => @defaultHandler()
+]
+
+=== START TOKENS ===
+@processRequest --> variable[declaration]
+( --> operator
+method --> parameter
+, --> operator
+path --> parameter
+, --> operator
+auth --> parameter
+) --> operator
+= --> operator
+when --> keyword
+: --> operator
+[ --> operator
+@method --> variable
+== --> operator
+"GET" --> string
+&& --> operator
+@path --> variable
+== --> operator
+"/users" --> string
+=> --> operator
+@listUsers --> variable
+( --> operator
+) --> operator
+@method --> variable
+== --> operator
+"POST" --> string
+&& --> operator
+@path --> variable
+== --> operator
+"/users" --> string
+=> --> operator
+@createUser --> variable
+( --> operator
+@auth --> variable
+) --> operator
+@method --> variable
+== --> operator
+"DELETE" --> string
+|| --> operator
+@method --> variable
+== --> operator
+"PUT" --> string
+=> --> operator
+"Method not allowed" --> string
+! --> operator
+@auth --> variable
+=> --> operator
+"Unauthorized" --> string
+true --> keyword
+=> --> operator
+@defaultHandler --> variable
+( --> operator
+) --> operator
+] --> operator
+=== END TOKENS ===

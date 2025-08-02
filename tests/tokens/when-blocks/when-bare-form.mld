@@ -1,0 +1,27 @@
+/when @features: [
+  @hasAuth => @authModule = "enabled"
+  @hasChat => @chatModule = "enabled"
+  @hasAnalytics => @setupAnalytics()
+]
+
+=== START TOKENS ===
+@features --> variable
+: --> operator
+[ --> operator
+@hasAuth --> variable
+=> --> operator
+@authModule --> variable
+= --> operator
+"enabled" --> string
+@hasChat --> variable
+=> --> operator
+@chatModule --> variable
+= --> operator
+"enabled" --> string
+@hasAnalytics --> variable
+=> --> operator
+@setupAnalytics --> variable
+( --> operator
+) --> operator
+] --> operator
+=== END TOKENS ===

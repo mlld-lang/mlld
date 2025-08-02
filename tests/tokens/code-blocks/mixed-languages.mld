@@ -1,0 +1,67 @@
+/var @jsResult = js { return "JavaScript"; }
+/var @pyResult = python { return "Python" }
+/var @bashResult = bash { echo "Bash" }
+
+/exe @polyglot(lang) = when: [
+  @lang == "js" => js { return "Running JavaScript"; }
+  @lang == "python" => python { return "Running Python" }
+  @lang == "bash" => bash { echo "Running Bash" }
+  true => "Unknown language"
+]
+
+=== START TOKENS ===
+@jsResult --> variable[declaration]
+= --> operator
+js --> label
+{ --> operator
+return "JavaScript"; --> string
+} --> operator
+@pyResult --> variable[declaration]
+= --> operator
+python --> label
+{ --> operator
+return "Python" --> string
+} --> operator
+@bashResult --> variable[declaration]
+= --> operator
+bash --> label
+{ --> operator
+echo "Bash" --> string
+} --> operator
+@polyglot --> variable[declaration]
+( --> operator
+lang --> parameter
+) --> operator
+= --> operator
+when --> keyword
+: --> operator
+[ --> operator
+@lang --> variable
+== --> operator
+"js" --> string
+=> --> operator
+js --> label
+{ --> operator
+return "Running JavaScript"; --> string
+} --> operator
+@lang --> variable
+== --> operator
+"python" --> string
+=> --> operator
+python --> label
+{ --> operator
+return "Running Python" --> string
+} --> operator
+@lang --> variable
+== --> operator
+"bash" --> string
+=> --> operator
+bash --> label
+{ --> operator
+echo "Running Bash" --> string
+} --> operator
+true --> keyword
+=> --> operator
+"Unknown language" --> string
+] --> operator
+=== END TOKENS ===

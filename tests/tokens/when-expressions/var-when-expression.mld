@@ -1,0 +1,33 @@
+/var @status = when: [
+  @score > 90 => "Excellent"
+  @score >= 80 => "Good"
+  @score >= 70 => "Fair"
+  true => "Needs improvement"
+]
+
+=== START TOKENS ===
+@status --> variable[declaration]
+= --> operator
+when --> keyword
+: --> operator
+[ --> operator
+@score --> variable
+> --> operator
+90 --> number
+=> --> operator
+"Excellent" --> string
+@score --> variable
+>= --> operator
+80 --> number
+=> --> operator
+"Good" --> string
+@score --> variable
+>= --> operator
+70 --> number
+=> --> operator
+"Fair" --> string
+true --> keyword
+=> --> operator
+"Needs improvement" --> string
+] --> operator
+=== END TOKENS ===

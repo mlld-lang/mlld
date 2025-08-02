@@ -1,0 +1,36 @@
+/var @items = [1, 2, 3, true, false, null, "text"]
+
+/var @names = [
+  "Alice",
+  "Bob",
+  "Charlie"
+]
+
+=== START TOKENS ===
+@items --> variable[declaration]
+= --> operator
+[ --> operator
+1 --> number
+, --> operator
+2 --> number
+, --> operator
+3 --> number
+, --> operator
+true --> keyword
+, --> operator
+false --> keyword
+, --> operator
+null --> keyword
+, --> operator
+"text" --> string
+] --> operator
+@names --> variable[declaration]
+= --> operator
+[ --> operator
+"Alice" --> string
+, --> operator
+"Bob" --> string
+, --> operator
+"Charlie" --> string
+] --> operator
+=== END TOKENS ===

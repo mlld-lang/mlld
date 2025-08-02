@@ -1,0 +1,43 @@
+/var @template = `Hello @name!`
+
+/var @complex = {
+  "greeting": @template,
+  "computed": @calculate(42),
+  "file": <config.json>,
+  "dynamic": run "echo test"
+}
+
+=== START TOKENS ===
+@template --> variable[declaration]
+= --> operator
+` --> operator
+Hello  --> string
+@name --> variable
+! --> string
+` --> operator
+@complex --> variable[declaration]
+= --> operator
+{ --> operator
+"greeting" --> string
+: --> operator
+@template --> variable
+, --> operator
+"computed" --> string
+: --> operator
+@calculate --> variable
+( --> operator
+42 --> number
+) --> operator
+, --> operator
+"file" --> string
+: --> operator
+< --> operator
+config.json --> string
+> --> operator
+, --> operator
+"dynamic" --> string
+: --> operator
+run --> keyword
+"echo test" --> string
+} --> operator
+=== END TOKENS ===

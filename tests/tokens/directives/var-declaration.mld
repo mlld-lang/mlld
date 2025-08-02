@@ -2,11 +2,9 @@
 /var @count = 42
 
 === START TOKENS ===
-/var --> keyword
 @greeting --> variable[declaration]
 = --> operator
 "Hello, World!" --> string
-/var --> keyword
 @count --> variable[declaration]
 = --> operator
 42 --> number

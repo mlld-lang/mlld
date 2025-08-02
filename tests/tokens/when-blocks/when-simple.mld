@@ -1,0 +1,35 @@
+/when @isProduction => /show `⚠️ Production Environment`
+
+/when @score > 90 => /show `Excellent!`
+
+/when @isAdmin && @isActive => /show `Admin panel`
+
+/when !@isLocked => /show `Resource available`
+
+=== START TOKENS ===
+@isProduction --> variable
+=> --> operator
+` --> operator
+⚠️ Production Environment --> string
+` --> operator
+@score --> variable
+> --> operator
+90 --> number
+=> --> operator
+` --> operator
+Excellent! --> string
+` --> operator
+@isAdmin --> variable
+&& --> operator
+@isActive --> variable
+=> --> operator
+` --> operator
+Admin panel --> string
+` --> operator
+! --> operator
+@isLocked --> variable
+=> --> operator
+` --> operator
+Resource available --> string
+` --> operator
+=== END TOKENS ===

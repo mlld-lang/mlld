@@ -1,0 +1,31 @@
+/when @input any: [
+  @contains("help")
+  @contains("assist")
+  @contains("support")
+] => /show `How can I help you?`
+
+=== START TOKENS ===
+@input --> variable
+any --> keyword
+: --> operator
+[ --> operator
+@contains --> variable
+( --> operator
+"help" --> string
+) --> operator
+, --> operator
+@contains --> variable
+( --> operator
+"assist" --> string
+) --> operator
+, --> operator
+@contains --> variable
+( --> operator
+"support" --> string
+) --> operator
+] --> operator
+=> --> operator
+` --> operator
+How can I help you? --> string
+` --> operator
+=== END TOKENS ===

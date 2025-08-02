@@ -1,0 +1,95 @@
+/var @data = {
+  "users": [
+    {
+      "id": 1,
+      "name": "Alice",
+      "roles": ["admin", "user"],
+      "active": true
+    },
+    {
+      "id": 2,
+      "name": "Bob",
+      "roles": ["user"],
+      "active": false
+    }
+  ],
+  "settings": {
+    "theme": "dark",
+    "notifications": {
+      "email": true,
+      "push": false
+    }
+  }
+}
+
+=== START TOKENS ===
+@data --> variable[declaration]
+= --> operator
+{ --> operator
+"users" --> string
+: --> operator
+[ --> operator
+{ --> operator
+"id" --> string
+: --> operator
+1 --> number
+, --> operator
+"name" --> string
+: --> operator
+"Alice" --> string
+, --> operator
+"roles" --> string
+: --> operator
+[ --> operator
+"admin" --> string
+, --> operator
+"user" --> string
+] --> operator
+, --> operator
+"active" --> string
+: --> operator
+true --> keyword
+} --> operator
+, --> operator
+{ --> operator
+"id" --> string
+: --> operator
+2 --> number
+, --> operator
+"name" --> string
+: --> operator
+"Bob" --> string
+, --> operator
+"roles" --> string
+: --> operator
+[ --> operator
+"user" --> string
+] --> operator
+, --> operator
+"active" --> string
+: --> operator
+false --> keyword
+} --> operator
+] --> operator
+, --> operator
+"settings" --> string
+: --> operator
+{ --> operator
+"theme" --> string
+: --> operator
+"dark" --> string
+, --> operator
+"notifications" --> string
+: --> operator
+{ --> operator
+"email" --> string
+: --> operator
+true --> keyword
+, --> operator
+"push" --> string
+: --> operator
+false --> keyword
+} --> operator
+} --> operator
+} --> operator
+=== END TOKENS ===
