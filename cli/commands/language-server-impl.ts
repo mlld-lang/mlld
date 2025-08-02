@@ -1050,7 +1050,7 @@ export async function startLanguageServer(): Promise<void> {
   ): Promise<void> {
     // Use the AST visitor for comprehensive semantic token generation
     const visitor = new ASTSemanticVisitor(document, builder, TOKEN_TYPES, TOKEN_MODIFIERS, TOKEN_TYPE_MAP);
-    visitor.visitAST(ast);
+    await visitor.visitAST(ast);
   }
 
   /**
