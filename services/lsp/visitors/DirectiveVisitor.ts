@@ -381,6 +381,12 @@ export class DirectiveVisitor extends BaseVisitor {
   private visitRunDirective(directive: any, context: VisitorContext): void {
     const values = directive.values;
     
+    // Handle /run @function() syntax (including implicit directives)
+    if (values?.execRef) {
+      this.mainVisitor.visitNode(values.execRef, context);
+      return;
+    }
+    
     if (values?.lang) {
       const langText = TextExtractor.extract(Array.isArray(values.lang) ? values.lang : [values.lang]);
       if (langText && directive.location) {
@@ -743,12 +749,36 @@ export class DirectiveVisitor extends BaseVisitor {
       // Handle block form: /when @var: [...] or /when @var first: [...]
       if (node.values.conditions && Array.isArray(node.values.conditions)) {
         if (node.values.variable) {
-          if (Array.isArray(node.values.variable)) {
-            for (const v of node.values.variable) {
-              this.mainVisitor.visitNode(v, context);
+          // The variable location is often wrong in the AST, so we need to find it manually
+          const sourceText = this.document.getText();
+          const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+          
+          // Extract the variable identifier
+          let varIdentifier = '';
+          if (Array.isArray(node.values.variable) && node.values.variable[0]) {
+            varIdentifier = node.values.variable[0].identifier || '';
+          } else if (node.values.variable && node.values.variable.identifier) {
+            varIdentifier = node.values.variable.identifier;
+          }
+          
+          if (varIdentifier) {
+            // Find the @ symbol followed by the identifier after /when
+            const varPattern = new RegExp(`\\s+@${varIdentifier}(?=\\s|:|$)`);
+            const match = nodeText.match(varPattern);
+            
+            if (match && match.index !== undefined) {
+              const varOffset = match.index + match[0].indexOf('@');
+              const varPosition = this.document.positionAt(node.location.start.offset + varOffset);
+              
+              // Add variable token
+              this.tokenBuilder.addToken({
+                line: varPosition.line,
+                char: varPosition.character,
+                length: varIdentifier.length + 1, // +1 for @
+                tokenType: 'variable',
+                modifiers: []
+              });
             }
-          } else {
-            this.mainVisitor.visitNode(node.values.variable, context);
           }
         }
         
@@ -796,34 +826,130 @@ export class DirectiveVisitor extends BaseVisitor {
           }
         }
         
-        if (node.values.patternType && node.values.patternLocation) {
-          this.tokenBuilder.addToken({
-            line: node.values.patternLocation.start.line - 1,
-            char: node.values.patternLocation.start.column - 1,
-            length: node.values.patternType.length + 1,
-            tokenType: 'keyword',
-            modifiers: []
-          });
-        }
-        
-        // Add closing bracket if there are conditions
-        if (node.values.conditions.length > 0 && node.location) {
+        // Handle pattern modifier (first:, all:, any:)
+        if (node.values.modifier && Array.isArray(node.values.modifier) && node.values.modifier.length > 0) {
+          const modifierText = node.values.modifier[0];
+          if (process.env.DEBUG_LSP || this.document.uri.includes('test-syntax')) {
+            console.log('[PATTERN-MOD] Found modifier:', modifierText);
+          }
+          if (modifierText.type === 'Text' && modifierText.content) {
+            // Need to find the actual position of the modifier in the source text
+            const sourceText = this.document.getText();
+            const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+            
+            // Find variable end position
+            let searchStart = 0;
+            // Since variable location is often wrong, find it manually
+            const varMatch = nodeText.match(/\s+@\w+/);
+            if (varMatch && varMatch.index !== undefined) {
+              searchStart = varMatch.index + varMatch[0].length;
+            } else {
+              // If no variable, start after /when
+              searchStart = 5; // length of "/when"
+            }
+            
+            // Look for the modifier text followed by a colon
+            const modifierPattern = new RegExp(`\\s+(${modifierText.content})\\s*:`);
+            const match = nodeText.substring(searchStart).match(modifierPattern);
+            
+            if (match && match.index !== undefined) {
+              const modifierOffset = searchStart + match.index + match[0].indexOf(modifierText.content);
+              const modifierPosition = this.document.positionAt(node.location.start.offset + modifierOffset);
+              
+              this.tokenBuilder.addToken({
+                line: modifierPosition.line,
+                char: modifierPosition.character,
+                length: modifierText.content.length,
+                tokenType: 'keyword',
+                modifiers: []
+              });
+              
+              // Also add the colon after the modifier
+              const colonOffset = modifierOffset + modifierText.content.length;
+              const colonMatch = nodeText.substring(colonOffset).match(/^\s*:/);
+              if (colonMatch) {
+                const colonPosition = this.document.positionAt(node.location.start.offset + colonOffset + colonMatch.index! + colonMatch[0].indexOf(':'));
+                this.tokenBuilder.addToken({
+                  line: colonPosition.line,
+                  char: colonPosition.character,
+                  length: 1,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
+            }
+          }
+        } else if (node.raw?.modifier || node.meta?.modifier) {
+          // Fallback to raw/meta modifier if available
+          const modifierText = node.raw?.modifier || node.meta?.modifier;
+          if (process.env.DEBUG_LSP || this.document.uri.includes('test-syntax')) {
+            console.log('[PATTERN-MOD] Using raw/meta modifier:', modifierText);
+          }
           const sourceText = this.document.getText();
-          const directiveText = sourceText.substring(
-            node.location.start.offset,
-            node.location.end.offset
-          );
-          const closeBracketIndex = directiveText.lastIndexOf(']');
-          if (closeBracketIndex !== -1) {
+          const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+          
+          // Find variable end position
+          let searchStart = 0;
+          // Since variable location is often wrong, find it manually
+          const varMatch = nodeText.match(/\s+@\w+/);
+          if (varMatch && varMatch.index !== undefined) {
+            searchStart = varMatch.index + varMatch[0].length;
+          } else {
+            // If no variable, start after /when
+            searchStart = 5; // length of "/when"
+          }
+          
+          // Look for the modifier text followed by a colon
+          const modifierPattern = new RegExp(`\\s+(${modifierText})\\s*:`);
+          const match = nodeText.substring(searchStart).match(modifierPattern);
+          
+          if (match && match.index !== undefined) {
+            const modifierOffset = searchStart + match.index + match[0].indexOf(modifierText);
+            const modifierPosition = this.document.positionAt(node.location.start.offset + modifierOffset);
+            
             this.tokenBuilder.addToken({
-              line: node.location.start.line - 1,
-              char: node.location.start.column - 1 + closeBracketIndex,
-              length: 1,
-              tokenType: 'operator',
+              line: modifierPosition.line,
+              char: modifierPosition.character,
+              length: modifierText.length,
+              tokenType: 'keyword',
               modifiers: []
             });
+            
+            // Also add the colon after the modifier
+            const colonOffset = modifierOffset + modifierText.length;
+            const colonMatch = nodeText.substring(colonOffset).match(/^\s*:/);
+            if (colonMatch) {
+              const colonPosition = this.document.positionAt(node.location.start.offset + colonOffset + colonMatch.index! + colonMatch[0].indexOf(':'));
+              this.tokenBuilder.addToken({
+                line: colonPosition.line,
+                char: colonPosition.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+            }
+          }
+        } else {
+          // For simple when blocks without pattern modifier, just add colon after variable
+          if (node.values.variable && Array.isArray(node.values.variable) && node.values.variable[0]?.location) {
+            const varEnd = node.values.variable[0].location.end;
+            const sourceText = this.document.getText();
+            const afterVar = sourceText.substring(varEnd.offset, varEnd.offset + 5);
+            const colonIndex = afterVar.indexOf(':');
+            if (colonIndex !== -1) {
+              const colonPosition = this.document.positionAt(varEnd.offset + colonIndex);
+              this.tokenBuilder.addToken({
+                line: colonPosition.line,
+                char: colonPosition.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+            }
           }
         }
+        
+        // Note: Opening bracket is already handled in the expression/colon handling code above
         
         for (const pair of node.values.conditions) {
           if (pair.pattern && pair.patternLocation) {
@@ -846,6 +972,7 @@ export class DirectiveVisitor extends BaseVisitor {
             }
           }
           
+          // Handle arrow operator
           if (pair.arrowLocation) {
             this.tokenBuilder.addToken({
               line: pair.arrowLocation.start.line - 1,
@@ -854,6 +981,30 @@ export class DirectiveVisitor extends BaseVisitor {
               tokenType: 'operator',
               modifiers: []
             });
+          } else if (pair.condition && pair.action) {
+            // For bare form without explicit arrowLocation, find => between condition and action
+            const sourceText = this.document.getText();
+            const conditionEnd = Array.isArray(pair.condition)
+              ? pair.condition[pair.condition.length - 1].location?.end
+              : pair.condition.location?.end;
+            const actionStart = Array.isArray(pair.action)
+              ? pair.action[0].location?.start
+              : pair.action.location?.start;
+              
+            if (conditionEnd && actionStart) {
+              const betweenText = sourceText.substring(conditionEnd.offset, actionStart.offset);
+              const arrowIndex = betweenText.indexOf('=>');
+              if (arrowIndex !== -1) {
+                const arrowPosition = this.document.positionAt(conditionEnd.offset + arrowIndex);
+                this.tokenBuilder.addToken({
+                  line: arrowPosition.line,
+                  char: arrowPosition.character,
+                  length: 2,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
+            }
           }
           
           if (pair.action) {
@@ -864,6 +1015,27 @@ export class DirectiveVisitor extends BaseVisitor {
             } else {
               this.mainVisitor.visitNode(pair.action, context);
             }
+          }
+        }
+        
+        // Add closing bracket after processing all conditions
+        if (node.values.conditions.length > 0 && node.location) {
+          const sourceText = this.document.getText();
+          const directiveText = sourceText.substring(
+            node.location.start.offset,
+            node.location.end.offset
+          );
+          const closeBracketIndex = directiveText.lastIndexOf(']');
+          if (closeBracketIndex !== -1) {
+            // Calculate absolute position of the closing bracket
+            const absolutePosition = this.document.positionAt(node.location.start.offset + closeBracketIndex);
+            this.tokenBuilder.addToken({
+              line: absolutePosition.line,
+              char: absolutePosition.character,
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
           }
         }
       } else if (node.values.condition) {
