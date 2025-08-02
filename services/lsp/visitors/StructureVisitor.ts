@@ -1,8 +1,15 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
+import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 
 export class StructureVisitor extends BaseVisitor {
   private mainVisitor: any;
+  private operatorHelper: OperatorTokenHelper;
+  
+  constructor(document: any, tokenBuilder: any) {
+    super(document, tokenBuilder);
+    this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
+  }
   
   setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
@@ -42,14 +49,12 @@ export class StructureVisitor extends BaseVisitor {
     const sourceText = this.document.getText();
     const objectText = sourceText.substring(node.location.start.offset, node.location.end.offset);
     
-    // Add opening brace
-    this.tokenBuilder.addToken({
-      line: node.location.start.line - 1,
-      char: node.location.start.column - 1,
-      length: 1,
-      tokenType: 'operator',
-      modifiers: []
-    });
+    // Use OperatorTokenHelper for braces
+    this.operatorHelper.tokenizeDelimiters(
+      node.location.start.offset,
+      node.location.end.offset - 1,
+      'brace'
+    );
     
     if (node.properties && typeof node.properties === 'object') {
       // Check if this is a plain object (all values are primitives) or has mlld constructs
@@ -81,14 +86,7 @@ export class StructureVisitor extends BaseVisitor {
             // Find and tokenize the colon
             const colonIndex = objectText.indexOf(':', keyMatch.index + keyMatch[0].length);
             if (colonIndex !== -1) {
-              const colonPosition = this.document.positionAt(node.location.start.offset + colonIndex);
-              this.tokenBuilder.addToken({
-                line: colonPosition.line,
-                char: colonPosition.character,
-                length: 1,
-                tokenType: 'operator',
-                modifiers: []
-              });
+              this.operatorHelper.addOperatorToken(node.location.start.offset + colonIndex, 1);
             }
           }
           
@@ -119,32 +117,16 @@ export class StructureVisitor extends BaseVisitor {
           const entries = Object.entries(node.properties);
           const currentIndex = entries.findIndex(([k]) => k === key);
           if (currentIndex < entries.length - 1) {
-            const searchStart = lastPropertyEndOffset - node.location.start.offset;
-            const commaIndex = objectText.indexOf(',', searchStart);
-            if (commaIndex !== -1) {
-              const commaPosition = this.document.positionAt(node.location.start.offset + commaIndex);
-              this.tokenBuilder.addToken({
-                line: commaPosition.line,
-                char: commaPosition.character,
-                length: 1,
-                tokenType: 'operator',
-                modifiers: []
-              });
-            }
+            // Use helper to find and tokenize comma
+            this.operatorHelper.tokenizeOperatorBetween(
+              lastPropertyEndOffset,
+              node.location.end.offset,
+              ','
+            );
           }
         }
       }
     }
-    
-    // Add closing brace
-    const closeBracePosition = this.document.positionAt(node.location.end.offset - 1);
-    this.tokenBuilder.addToken({
-      line: closeBracePosition.line,
-      char: closeBracePosition.character,
-      length: 1,
-      tokenType: 'operator',
-      modifiers: []
-    });
   }
   
   private tokenizePlainObject(node: any, objectText: string): void {
@@ -171,14 +153,7 @@ export class StructureVisitor extends BaseVisitor {
       });
       
       // Token for colon
-      const colonPosition = this.document.positionAt(node.location.start.offset + keyStart + colonIndex);
-      this.tokenBuilder.addToken({
-        line: colonPosition.line,
-        char: colonPosition.character,
-        length: 1,
-        tokenType: 'operator',
-        modifiers: []
-      });
+      this.operatorHelper.addOperatorToken(node.location.start.offset + keyStart + colonIndex, 1);
       
       // Token for value
       const value = match[2] !== undefined ? `"${match[2]}"` : match[3];
@@ -229,14 +204,7 @@ export class StructureVisitor extends BaseVisitor {
       
       // Only add comma if it comes before the next property or closing brace
       if (commaIndex !== -1 && (nextPropertyIndex === -1 || commaIndex < nextPropertyIndex)) {
-        const commaPosition = this.document.positionAt(node.location.start.offset + commaIndex);
-        this.tokenBuilder.addToken({
-          line: commaPosition.line,
-          char: commaPosition.character,
-          length: 1,
-          tokenType: 'operator',
-          modifiers: []
-        });
+        this.operatorHelper.addOperatorToken(node.location.start.offset + commaIndex, 1);
       }
       
       lastMatchEnd = afterValue;
@@ -247,14 +215,12 @@ export class StructureVisitor extends BaseVisitor {
     const sourceText = this.document.getText();
     const arrayText = sourceText.substring(node.location.start.offset, node.location.end.offset);
     
-    // Add opening bracket
-    this.tokenBuilder.addToken({
-      line: node.location.start.line - 1,
-      char: node.location.start.column - 1,
-      length: 1,
-      tokenType: 'operator',
-      modifiers: []
-    });
+    // Use OperatorTokenHelper for brackets
+    this.operatorHelper.tokenizeDelimiters(
+      node.location.start.offset,
+      node.location.end.offset - 1,
+      'bracket'
+    );
     
     if (node.items && Array.isArray(node.items)) {
       // Check if this is a plain array (all values are primitives) or has mlld constructs
@@ -290,32 +256,19 @@ export class StructureVisitor extends BaseVisitor {
           
           // Find and tokenize comma if not the last item
           if (i < node.items.length - 1) {
-            const searchStart = lastItemEndOffset - node.location.start.offset;
-            const commaIndex = arrayText.indexOf(',', searchStart);
-            if (commaIndex !== -1) {
-              const commaPosition = this.document.positionAt(node.location.start.offset + commaIndex);
-              this.tokenBuilder.addToken({
-                line: commaPosition.line,
-                char: commaPosition.character,
-                length: 1,
-                tokenType: 'operator',
-                modifiers: []
-              });
-            }
+            // Use helper to tokenize comma between items
+            const nextItemStart = (i + 1 < node.items.length && node.items[i + 1]?.location) 
+              ? node.items[i + 1].location.start.offset 
+              : node.location.end.offset;
+            this.operatorHelper.tokenizeOperatorBetween(
+              lastItemEndOffset,
+              nextItemStart,
+              ','
+            );
           }
         }
       }
     }
-    
-    // Add closing bracket
-    const closeBracketPosition = this.document.positionAt(node.location.end.offset - 1);
-    this.tokenBuilder.addToken({
-      line: closeBracketPosition.line,
-      char: closeBracketPosition.character,
-      length: 1,
-      tokenType: 'operator',
-      modifiers: []
-    });
   }
   
   private tokenizePlainArray(node: any, arrayText: string): void {
@@ -378,14 +331,7 @@ export class StructureVisitor extends BaseVisitor {
       
       // Add comma if found and not at the end
       if (commaIndex !== -1 && hasMoreItems && commaIndex < afterValue + remainingText.search(/["tfn\d]/)) {
-        const commaPosition = this.document.positionAt(node.location.start.offset + commaIndex);
-        this.tokenBuilder.addToken({
-          line: commaPosition.line,
-          char: commaPosition.character,
-          length: 1,
-          tokenType: 'operator',
-          modifiers: []
-        });
+        this.operatorHelper.addOperatorToken(node.location.start.offset + commaIndex, 1);
       }
       
       lastMatchEnd = afterValue;
@@ -397,16 +343,13 @@ export class StructureVisitor extends BaseVisitor {
       this.mainVisitor.visitNode(node.object, context);
     }
     
-    if (node.computed === false && node.property) {
-      const objectEnd = node.object?.location?.end?.column || node.location.start.column;
-      
-      this.tokenBuilder.addToken({
-        line: node.location.start.line - 1,
-        char: objectEnd - 1,
-        length: 1,
-        tokenType: 'operator',
-        modifiers: []
-      });
+    if (node.computed === false && node.property && node.object?.location) {
+      // Use helper to tokenize dot operator
+      this.operatorHelper.tokenizeOperatorBetween(
+        node.object.location.end.offset,
+        node.property.location?.start?.offset || node.location.end.offset,
+        '.'
+      );
     }
     
     if (node.property) {
@@ -442,13 +385,7 @@ export class StructureVisitor extends BaseVisitor {
     }
     
     if (node.colonLocation) {
-      this.tokenBuilder.addToken({
-        line: node.colonLocation.start.line - 1,
-        char: node.colonLocation.start.column - 1,
-        length: 1,
-        tokenType: 'operator',
-        modifiers: []
-      });
+      this.operatorHelper.addOperatorToken(node.colonLocation.start.offset, 1);
     }
     
     if (node.value) {
