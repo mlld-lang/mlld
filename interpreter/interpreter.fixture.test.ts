@@ -171,10 +171,25 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       const issues: TokenCoverageIssue[] = [];
       const lines = input.split('\n');
       
+      // Coverage configuration from environment
+      const checkMarkdown = process.env.MLLD_TOKEN_CHECK_MARKDOWN === '1';
+      const checkOperators = process.env.MLLD_TOKEN_CHECK_OPERATORS !== '0'; // Default to true
+      const checkPunctuation = process.env.MLLD_TOKEN_CHECK_PUNCTUATION !== '0'; // Default to true
+      
       // Create coverage map for each line
       lines.forEach((line, lineIdx) => {
         // Skip empty lines
         if (!line.trim()) return;
+        
+        // Skip markdown content lines if not checking markdown
+        if (!checkMarkdown) {
+          // Skip lines that are pure markdown (headers, plain text paragraphs)
+          if (line.match(/^#+\s/) || // Headers
+              (!line.includes('/') && !line.includes('@') && !line.includes('=') && 
+               !line.includes('=>') && !line.includes('when:') && !line.match(/^\s*[{\[\(]/))) {
+            return;
+          }
+        }
         
         // Create character coverage array
         const coverage = new Array(line.length).fill(false);
@@ -199,21 +214,126 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           } else if (coverage[i] && inUncovered) {
             inUncovered = false;
             const text = line.substring(uncoveredStart, i);
-            // Only report non-whitespace uncovered text
-            if (text.trim() && !text.match(/^[\s,]+$/)) {
+            
+            // Skip whitespace and commas
+            if (!text.trim() || text.match(/^[\s,]+$/)) {
+              continue;
+            }
+            
+            // Skip if the text is primarily operators/punctuation with whitespace
+            const trimmed = text.trim();
+            
+            // Skip operators if configured (including with surrounding whitespace)
+            if (!checkOperators) {
+              if (trimmed.match(/^(=>|==|!=|&&|\|\||[<>]=?|[+\-*/%]|=)$/) ||
+                  text.match(/^\s*(=>|==|!=|&&|\|\||[<>]=?|[+\-*/%]|=)\s*$/)) {
+                continue;
+              }
+              // Skip operator sequences like " = {", " && ", " || ", etc.
+              if (text.match(/^\s*=\s*[{[]?\s*$/) ||  // " = {" or " = ["
+                  text.match(/^\s*(&&|\|\|)\s*$/) ||   // " && " or " || "
+                  text.match(/^\s*=>\s*$/) ||          // " => "
+                  text.match(/^["\s]*=>\s*["\s]*$/)) { // quotes around =>
+                continue;
+              }
+            }
+            
+            // Skip punctuation if configured (including with surrounding whitespace)
+            if (!checkPunctuation) {
+              if (trimmed.match(/^[(){}[\]:;.,]$/) ||
+                  text.match(/^\s*[(){}[\]:;.,]\s*$/)) {
+                continue;
+              }
+              // Skip punctuation sequences
+              if (text.match(/^["\s]+$/) ||          // just quotes and spaces
+                  text.match(/^\s*[{}]\s*$/) ||      // braces with spaces
+                  text.match(/^["'`]+[})\]]*["'`]*$/) || // quote/backtick sequences with optional closing brackets
+                  text.match(/^\s*=\s*[`'"]+$/) ||   // " = `" or similar
+                  text.match(/^[`'"]+$/) ||          // just quotes or backticks
+                  text.match(/^["\s]*[})\]]+["\s]*$/)) { // closing brackets with quotes
+                continue;
+              }
+            }
+            
+            // For longer uncovered ranges, check if they primarily consist of mlld syntax
+            // that should have been tokenized (when expressions, code blocks, etc.)
+            if (text.includes('when:') || 
+                (text.includes('=>') && text.length > 4) || // Longer sequences with =>
+                text.includes(' js ') || 
+                text.includes(' sh ') || 
+                text.includes(' python ')) {
+              // These are legitimate coverage issues - mlld syntax that needs tokens
               issues.push({
                 nodeType: 'UncoveredText',
                 location: `${lineIdx + 1}:${uncoveredStart + 1}-${lineIdx + 1}:${i + 1}`,
                 text: text
               });
+              continue;
             }
+            
+            issues.push({
+              nodeType: 'UncoveredText',
+              location: `${lineIdx + 1}:${uncoveredStart + 1}-${lineIdx + 1}:${i + 1}`,
+              text: text
+            });
           }
         }
         
         // Handle end of line
         if (inUncovered) {
           const text = line.substring(uncoveredStart);
+          
+          // Apply same filtering rules
           if (text.trim() && !text.match(/^[\s,]+$/)) {
+            const trimmed = text.trim();
+            
+            // Skip operators if configured (including with surrounding whitespace)
+            if (!checkOperators) {
+              if (trimmed.match(/^(=>|==|!=|&&|\|\||[<>]=?|[+\-*/%]|=)$/) ||
+                  text.match(/^\s*(=>|==|!=|&&|\|\||[<>]=?|[+\-*/%]|=)\s*$/)) {
+                return;
+              }
+              // Skip operator sequences
+              if (text.match(/^\s*=\s*[{[]?\s*$/) ||
+                  text.match(/^\s*(&&|\|\|)\s*$/) ||
+                  text.match(/^\s*=>\s*$/) ||
+                  text.match(/^["\s]*=>\s*["\s]*$/)) {
+                return;
+              }
+            }
+            
+            // Skip punctuation if configured (including with surrounding whitespace)
+            if (!checkPunctuation) {
+              if (trimmed.match(/^[(){}[\]:;.,]$/) ||
+                  text.match(/^\s*[(){}[\]:;.,]\s*$/)) {
+                return;
+              }
+              // Skip punctuation sequences
+              if (text.match(/^["\s]+$/) ||
+                  text.match(/^\s*[{}]\s*$/) ||
+                  text.match(/^["'`]+[})\]]*["'`]*$/) ||
+                  text.match(/^\s*=\s*[`'"]+$/) ||
+                  text.match(/^[`'"]+$/) ||
+                  text.match(/^["\s]*[})\]]+["\s]*$/)) {
+                return;
+              }
+            }
+            
+            // For longer uncovered ranges, check if they primarily consist of mlld syntax
+            if (text.includes('when:') || 
+                (text.includes('=>') && text.length > 4) ||
+                text.includes(' js ') || 
+                text.includes(' sh ') || 
+                text.includes(' python ')) {
+              // These are legitimate coverage issues
+              issues.push({
+                nodeType: 'UncoveredText',
+                location: `${lineIdx + 1}:${uncoveredStart + 1}-${lineIdx + 1}:${line.length + 1}`,
+                text: text
+              });
+              return;
+            }
+            
             issues.push({
               nodeType: 'UncoveredText',
               location: `${lineIdx + 1}:${uncoveredStart + 1}-${lineIdx + 1}:${line.length + 1}`,
@@ -1318,6 +1438,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       if (process.env.MLLD_TOKEN_COVERAGE !== '1') {
         console.log('\n=== Semantic Token Coverage Report ===');
         console.log('Token coverage checking disabled. Run with MLLD_TOKEN_COVERAGE=1 to enable.');
+        console.log('\nAdditional coverage options:');
+        console.log('  MLLD_TOKEN_CHECK_MARKDOWN=1    - Check markdown content (default: off)');
+        console.log('  MLLD_TOKEN_CHECK_OPERATORS=0   - Skip operator coverage (default: on)');
+        console.log('  MLLD_TOKEN_CHECK_PUNCTUATION=0 - Skip punctuation coverage (default: on)');
         expect(true).toBe(true);
         return;
       }
@@ -1329,6 +1453,12 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       console.log('\n=== Semantic Token Coverage Report ===');
       console.log(`Total fixtures checked: ${Object.keys(allCoverageIssues).length}`);
       console.log(`Fixtures with coverage issues: ${fixturesWithIssues.length}`);
+      
+      // Show current configuration
+      console.log('\nCurrent configuration:');
+      console.log(`  Checking markdown: ${process.env.MLLD_TOKEN_CHECK_MARKDOWN === '1' ? 'YES' : 'NO'}`);
+      console.log(`  Checking operators: ${process.env.MLLD_TOKEN_CHECK_OPERATORS !== '0' ? 'YES' : 'NO'}`);
+      console.log(`  Checking punctuation: ${process.env.MLLD_TOKEN_CHECK_PUNCTUATION !== '0' ? 'YES' : 'NO'}`);
       
       if (fixturesWithIssues.length > 0) {
         console.log('\nTop coverage issues by node type:');
