@@ -48,7 +48,9 @@ export const skipTests: Record<string, string> = {
   'bracket-notation-comprehensive': 'Issue #306: Bracket notation field access lost in grammar parsing pipeline',
   // Tests that require @time module
   'now-lowercase-basic': 'Requires @time module to be installed',
+  'var-now-lowercase-basic': 'Requires @time module to be installed',
   'now-enhanced-formats': 'Requires @time module to be installed',
+  'import-now-enhanced-formats': 'Requires @time module to be installed',
 };
 
 // Validate semantic token coverage for AST
@@ -454,6 +456,10 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     
     if (!testCasePath || !fs.existsSync(testCasePath)) {
       // No test case directory found
+      if (process.env.DEBUG_FIXTURES) {
+        console.log(`No test case found for fixture: ${fixtureName}`);
+        console.log(`Derived path: ${testCasePath}`);
+      }
       return;
     }
     
@@ -464,7 +470,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
   // Convert fixture path to test case directory path
   function getTestCasePathFromFixture(fixturePath: string): string | null {
     // Extract components from fixture path
-    // If fixturePath is relative (e.g., valid/import/import-all.generated-fixture.json)
+    // If fixturePath is relative (e.g., valid/directives/import/import-all.generated-fixture.json)
     // make it absolute first
     const absoluteFixturePath = path.isAbsolute(fixturePath) 
       ? fixturePath 
@@ -476,88 +482,38 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     const relativePath = path.relative(fixturesRoot, fixtureDir);
     const parts = relativePath.split(path.sep);
     
+    if (process.env.DEBUG_FIXTURES) {
+      console.log(`getTestCasePathFromFixture: fixture=${fixturePath}`);
+      console.log(`  fixtureDir=${fixtureDir}`);
+      console.log(`  fixtureName=${fixtureName}`);
+      console.log(`  relativePath=${relativePath}`);
+      console.log(`  parts=${parts.join(', ')}`);
+    }
+    
     if (parts.length < 2) {
       return null;
     }
     
     const category = parts[0]; // 'valid', 'invalid', etc.
-    const directive = parts[1]; // 'import', 'var', etc.
     
-    // Handle different naming patterns
-    let testSubdir: string;
+    // For the new structure, fixtures mirror the test case structure exactly
+    // e.g., fixtures/valid/directives/import/import-all/import-all.generated-fixture.json
+    //   -> cases/valid/directives/import/import-all/
     
-    if (parts.length > 2) {
-      // Fixture is already in a subdirectory (e.g., valid/alligator/alligator-glob-pattern.json)
-      // Map to tests/cases/valid/alligator/glob-pattern
-      testSubdir = fixtureName.replace(new RegExp(`^${directive}-`), '');
-      return path.join(__dirname, '../tests/cases', category, directive, testSubdir);
-    } else {
-      // Fixture is in directive root (e.g., valid/import/import-all.json)
-      // Try multiple patterns to find the test case directory
-      
-      // Pattern 1: Remove directive prefix (e.g., import-all -> all)
-      if (fixtureName.startsWith(directive + '-')) {
-        testSubdir = fixtureName.substring(directive.length + 1);
-        
-        // For variant tests, extract the base test name
-        // Common variant patterns:
-        // - var-path-section-bracket -> path
-        // - var-text-assignment-add-section-bracket -> text-assignment-add  
-        // - import-all-variable -> all
-        // - var-data-array-mixed -> data-array
-        
-        // Try removing common test variant suffixes
-        // Note: Be careful not to remove actual test names that end with these words
-        const suffixPatterns = [
-          /-section-bracket(?:-rename)?$/,
-          /-variable$/,
-          /-mixed$/,
-          /-multiline$/,
-          /-boolean$/,
-          /-number$/,
-          /-simple$/
-        ];
-        
-        let baseTestName = testSubdir;
-        for (const pattern of suffixPatterns) {
-          if (pattern.test(baseTestName)) {
-            baseTestName = baseTestName.replace(pattern, '');
-            let testPath = path.join(__dirname, '../tests/cases', category, directive, baseTestName);
-            if (fs.existsSync(testPath)) {
-              return testPath;
-            }
-          }
-        }
-        
-        // Try the full subdirectory name
-        let testPath = path.join(__dirname, '../tests/cases', category, directive, testSubdir);
-        if (fs.existsSync(testPath)) {
-          return testPath;
-        }
-      }
-      
-      // Pattern 2: Direct mapping (e.g., alligator-glob-concat -> alligator-glob-concat)
-      let testPath = path.join(__dirname, '../tests/cases', category, fixtureName);
-      if (fs.existsSync(testPath)) {
-        return testPath;
-      }
-      
-      // Pattern 3: Use fixture name as-is under directive
-      testPath = path.join(__dirname, '../tests/cases', category, directive, fixtureName);
-      if (fs.existsSync(testPath)) {
-        return testPath;
-      }
-      
-      // Pattern 4: For tests with subdirectories but no directive prefix
-      // (e.g., fixtures/valid/foo/foo.json -> cases/valid/foo/)
-      if (directive === fixtureName) {
-        testPath = path.join(__dirname, '../tests/cases', category, directive);
-        if (fs.existsSync(testPath)) {
-          return testPath;
-        }
-      }
+    // Build the test case path by mirroring the fixture path structure
+    const testCasePath = path.join(__dirname, '../tests/cases', relativePath);
+    
+    if (process.env.DEBUG_FIXTURES) {
+      console.log(`  testCasePath=${testCasePath}`);
+      console.log(`  exists=${fs.existsSync(testCasePath)}`);
     }
     
+    // Check if the path exists
+    if (fs.existsSync(testCasePath)) {
+      return testCasePath;
+    }
+    
+    // If not found, return null
     return null;
   }
   
@@ -851,7 +807,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       } else if (fixture.name === 'reserved-now-variable-lowercase') {
         // Mock time for the lowercase now variable test
         process.env.MLLD_MOCK_TIME = '2024-05-30T14:30:00.000Z';
-      } else if (fixture.name === 'now-basic-compat') {
+      } else if (fixture.name === 'now-basic-compat' || fixture.name === 'var-now-basic-compat') {
         // Mock time for the NOW compatibility test
         process.env.MLLD_MOCK_TIME = '2024-01-15T10:30:00.000Z';
       } else if (fixture.name === 'reserved-debug-variable') {
@@ -1135,7 +1091,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               // JSON stdin content (default for all other stdin tests)
               stdinContent = '{"name": "test-project", "version": "1.0.0"}';
             }
-          } else if (fixture.name.includes('input-stdin-compatibility') || fixture.name.includes('input-input-new-syntax')) {
+          } else if (fixture.name.includes('input-stdin-compatibility') || fixture.name.includes('input-input-new-syntax') || fixture.name === 'input-new-syntax') {
             // These tests expect JSON with config and data fields
             stdinContent = '{"config": {"greeting": "Hello from stdin!"}, "data": {"message": "Input data loaded"}}';
           } else if (fixture.name === 'import-stdin-deprecated') {
@@ -1292,7 +1248,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               // JSON stdin content (default for all other stdin tests)
               stdinContent = '{"name": "test-project", "version": "1.0.0"}';
             }
-          } else if (fixture.name.includes('input-stdin-compatibility') || fixture.name.includes('input-input-new-syntax')) {
+          } else if (fixture.name.includes('input-stdin-compatibility') || fixture.name.includes('input-input-new-syntax') || fixture.name === 'input-new-syntax') {
             // These tests expect JSON with config and data fields
             stdinContent = '{"config": {"greeting": "Hello from stdin!"}, "data": {"message": "Input data loaded"}}';
           } else if (fixture.name === 'import-stdin-deprecated') {
@@ -1393,7 +1349,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         }
         if (fixture.name === 'reserved-now-variable' || fixture.name === 'reserved-now-variable-lowercase' || 
             fixture.name === 'reserved-debug-variable' || fixture.name === 'reserved-debug-variable-lowercase' ||
-            fixture.name === 'resolver-contexts' || fixture.name === 'now-basic-compat') {
+            fixture.name === 'resolver-contexts' || fixture.name === 'now-basic-compat' || fixture.name === 'var-now-basic-compat') {
           delete process.env.MLLD_MOCK_TIME;
         }
         if (fixture.name === 'modules-hash') {
