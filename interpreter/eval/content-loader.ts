@@ -10,6 +10,7 @@ import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
 import type { ArrayVariable, Variable } from '@core/types/variable/VariableTypes';
 import { createRenamedContentVariable, createLoadContentResultVariable, extractVariableValue } from '@interpreter/utils/variable-migration';
+import { applyCondensedPipes } from '@interpreter/core/interpreter';
 
 /**
  * Check if a path contains glob patterns
@@ -31,7 +32,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
     });
   }
 
-  const { source, options } = node;
+  const { source, options, pipes } = node;
 
   if (!source) {
     throw new MlldError('Content loader expression missing source', {
@@ -41,6 +42,8 @@ export async function processContentLoader(node: any, env: Environment): Promise
 
   // Check if we have a transform template
   const hasTransform = options?.transform?.type === 'template';
+  // Check if we have pipes
+  const hasPipes = pipes && pipes.length > 0;
 
   // Reconstruct the path/URL string from the source
   let pathOrUrl: string;
@@ -86,6 +89,11 @@ export async function processContentLoader(node: any, env: Environment): Promise
         // URLs don't have frontmatter, so no file context for rename interpolation
         const sectionContent = await extractSection(processedContent, sectionName, options.section.renamed, undefined, env);
         
+        // Apply pipes if present
+        if (hasPipes) {
+          return await applyCondensedPipes(sectionContent, pipes, env);
+        }
+        
         // For URLs with sections, return plain string (backward compatibility)
         return sectionContent;
       }
@@ -99,6 +107,20 @@ export async function processContentLoader(node: any, env: Environment): Promise
         status: response.status
       });
       
+      // Apply pipes if present
+      if (hasPipes) {
+        // For LoadContentResult objects, apply pipes to the content
+        const pipedContent = await applyCondensedPipes(urlResult.content, pipes, env);
+        // Return a new result with piped content
+        return new LoadContentResultURLImpl({
+          content: pipedContent,
+          rawContent: response.content,
+          url: pathOrUrl,
+          headers: response.headers,
+          status: response.status
+        });
+      }
+      
       return urlResult;
     }
     
@@ -111,6 +133,24 @@ export async function processContentLoader(node: any, env: Environment): Promise
         return await applyTransformToResults(results, options.transform, env);
       }
       
+      // Apply pipes if present
+      if (hasPipes) {
+        // For arrays of results, apply pipes to each result's content
+        const pipedResults = await Promise.all(
+          results.map(async (result) => {
+            const pipedContent = await applyCondensedPipes(result.content, pipes, env);
+            return new LoadContentResultImpl({
+              content: pipedContent,
+              filename: result.filename,
+              relative: result.relative,
+              absolute: result.absolute,
+              _rawContent: result._rawContent
+            });
+          })
+        );
+        return pipedResults;
+      }
+      
       return results;
     }
     
@@ -121,6 +161,25 @@ export async function processContentLoader(node: any, env: Environment): Promise
     if (hasTransform && options.transform) {
       const transformed = await applyTransformToResults([result], options.transform, env);
       return transformed[0]; // Return single result
+    }
+    
+    // Apply pipes if present
+    if (hasPipes) {
+      // Check if result is a string (from section extraction) or LoadContentResult
+      if (typeof result === 'string') {
+        return await applyCondensedPipes(result, pipes, env);
+      } else {
+        // For LoadContentResult objects, apply pipes to the content
+        const pipedContent = await applyCondensedPipes(result.content, pipes, env);
+        // Return a new result with piped content
+        return new LoadContentResultImpl({
+          content: pipedContent,
+          filename: result.filename,
+          relative: result.relative,
+          absolute: result.absolute,
+          _rawContent: result._rawContent
+        });
+      }
     }
     
     // Always return the full LoadContentResult object
