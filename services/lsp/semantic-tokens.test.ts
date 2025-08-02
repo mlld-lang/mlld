@@ -565,10 +565,16 @@ describe('Semantic Tokens', () => {
       
       // Check braces
       const braces = tokens.filter(t => t.tokenType === 'operator' && (t.text === '{' || t.text === '}'));
-      expect(braces).toHaveLength(2);
+      expect(braces.length).toBeGreaterThanOrEqual(2); // May have more with embedded language service
       
-      // Note: Property keys and primitive values are not AST nodes
-      // The mlld AST only preserves mlld constructs as nodes
+      // With embedded language service, we now get tokens for property names and values
+      const strings = tokens.filter(t => t.tokenType === 'string');
+      expect(strings.length).toBeGreaterThan(0); // Property names are tokenized as strings
+      
+      const numbers = tokens.filter(t => t.tokenType === 'number');
+      expect(numbers).toContainEqual(expect.objectContaining({
+        text: '42'
+      }));
     });
     
     it('highlights arrays', async () => {
@@ -577,10 +583,14 @@ describe('Semantic Tokens', () => {
       
       // Check brackets
       const brackets = tokens.filter(t => t.tokenType === 'operator' && (t.text === '[' || t.text === ']'));
-      expect(brackets).toHaveLength(2);
+      expect(brackets.length).toBeGreaterThanOrEqual(2); // May have more with embedded language service
       
-      // Note: Primitive values (numbers) are not AST nodes
-      // Only mlld constructs get location data
+      // With embedded language service, we now get tokens for array items
+      const numbers = tokens.filter(t => t.tokenType === 'number');
+      expect(numbers).toHaveLength(3); // All three numbers should be tokenized
+      expect(numbers).toContainEqual(expect.objectContaining({ text: '1' }));
+      expect(numbers).toContainEqual(expect.objectContaining({ text: '2' }));
+      expect(numbers).toContainEqual(expect.objectContaining({ text: '3' }));
     });
     
     it('highlights arrays with mlld constructs', async () => {

@@ -173,6 +173,10 @@ This file tests all syntax highlighting features including the new operators and
   features: ["operators", "expressions", "when"],
   active: true
 }
+/var @mlldobj = {
+  name: @var,
+  file: <file.md>
+}
 
 ## Code Blocks
 /run js {

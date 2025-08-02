@@ -1,6 +1,7 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
+import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
 
 export class StructureVisitor extends BaseVisitor {
   private mainVisitor: any;
@@ -129,7 +130,26 @@ export class StructureVisitor extends BaseVisitor {
   }
   
   private tokenizePlainObject(node: any, objectText: string): void {
-    // For plain objects, we need to manually parse and tokenize
+    // Try to use embedded language service for JSON tokenization
+    if (embeddedLanguageService.ensureInitialized()) {
+      const startPos = this.document.positionAt(node.location.start.offset);
+      const tokens = embeddedLanguageService.generateTokens(
+        objectText, 
+        'javascript', // JavaScript parser handles JSON
+        startPos.line,
+        startPos.character
+      );
+      
+      // Add the tokens from the embedded service
+      for (const token of tokens) {
+        this.tokenBuilder.addToken(token);
+      }
+      
+      // The embedded service handles all tokens including delimiters
+      return;
+    }
+    
+    // Fallback to regex-based tokenization if embedded service not ready
     // This regex matches property patterns like "key": value
     const propertyRegex = /"([^"]+)":\s*(?:"([^"]*)"|(true|false|null|\d+(?:\.\d+)?))/g;
     let match;
@@ -270,7 +290,26 @@ export class StructureVisitor extends BaseVisitor {
   }
   
   private tokenizePlainArray(node: any, arrayText: string): void {
-    // For plain arrays, we need to manually parse and tokenize
+    // Try to use embedded language service for JSON tokenization
+    if (embeddedLanguageService.ensureInitialized()) {
+      const startPos = this.document.positionAt(node.location.start.offset);
+      const tokens = embeddedLanguageService.generateTokens(
+        arrayText, 
+        'javascript', // JavaScript parser handles JSON arrays
+        startPos.line,
+        startPos.character
+      );
+      
+      // Add the tokens from the embedded service
+      for (const token of tokens) {
+        this.tokenBuilder.addToken(token);
+      }
+      
+      // The embedded service handles all tokens including delimiters
+      return;
+    }
+    
+    // Fallback to regex-based tokenization if embedded service not ready
     // This regex matches array items like strings, numbers, booleans, null
     const itemRegex = /(?:"([^"]*)"|(true|false|null|\d+(?:\.\d+)?))/g;
     let match;
