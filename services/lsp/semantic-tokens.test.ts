@@ -180,7 +180,7 @@ export async function getSemanticTokens(code: string): Promise<SemanticToken[]> 
   
   const builder = new SemanticTokensBuilder();
   const visitor = new ASTSemanticVisitor(document, builder, TOKEN_TYPES, TOKEN_MODIFIERS, TOKEN_TYPE_MAP);
-  visitor.visitAST(parseResult.ast);
+  await visitor.visitAST(parseResult.ast);
   
   const result = builder.build();
   return parseSemanticTokens(result.data, code);
@@ -338,8 +338,14 @@ describe('Semantic Tokens', () => {
       const code = '/run python { print("Hello") }';
       const tokens = await getSemanticTokens(code);
       
-      const embeddedCode = tokens.find(t => t.tokenType === 'string');
-      expect(embeddedCode).toBeDefined();
+      // We don't tokenize the entire code block as a string
+      // Instead, we tokenize the language identifier as 'label'
+      const languageToken = tokens.find(t => t.tokenType === 'label' && t.text === 'python');
+      expect(languageToken).toBeDefined();
+      
+      // And we have braces as operators
+      const braces = tokens.filter(t => t.tokenType === 'operator' && (t.text === '{' || t.text === '}'));
+      expect(braces).toHaveLength(2);
     });
 
     it('handles commands with embedded code blocks', async () => {

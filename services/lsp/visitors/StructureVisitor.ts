@@ -92,11 +92,26 @@ export class StructureVisitor extends BaseVisitor {
             }
           }
           
-          // Process the value if it's an AST node
-          if (typeof value === 'object' && value !== null && value.type) {
-            this.mainVisitor.visitNode(value, context);
-            if (value.location) {
-              lastPropertyEndOffset = value.location.end.offset;
+          // Process the value
+          if (typeof value === 'object' && value !== null) {
+            if (value.type) {
+              // Regular AST node
+              this.mainVisitor.visitNode(value, context);
+              if (value.location) {
+                lastPropertyEndOffset = value.location.end.offset;
+              }
+            } else if (value.content && Array.isArray(value.content) && value.wrapperType) {
+              // Template value with content array
+              for (const contentNode of value.content) {
+                if (contentNode.type) {
+                  this.mainVisitor.visitNode(contentNode, context);
+                }
+              }
+              // Update last offset based on last content node
+              const lastContent = value.content[value.content.length - 1];
+              if (lastContent?.location) {
+                lastPropertyEndOffset = lastContent.location.end.offset;
+              }
             }
           }
           

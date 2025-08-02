@@ -19,6 +19,7 @@ import { LiteralVisitor } from '@services/lsp/visitors/LiteralVisitor';
 import { StructureVisitor } from '@services/lsp/visitors/StructureVisitor';
 import { FileReferenceVisitor } from '@services/lsp/visitors/FileReferenceVisitor';
 import { INodeVisitor } from '@services/lsp/visitors/base/VisitorInterface';
+import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
 
 export class ASTSemanticVisitor {
   private contextStack: ContextStack;
@@ -102,8 +103,11 @@ export class ASTSemanticVisitor {
     this.contextStack.pop();
   }
   
-  visitAST(ast: any[]): void {
+  async visitAST(ast: any[]): Promise<void> {
     this.textCache.clear();
+    
+    // Initialize embedded language service if not already initialized
+    await embeddedLanguageService.initialize();
     
     if (process.env.DEBUG_LSP) {
       console.log('ASTSemanticVisitor: Processing AST with', ast.length, 'nodes');

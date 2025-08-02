@@ -161,7 +161,7 @@ async function getSemanticTokens(code: string): Promise<SemanticToken[]> {
   
   const builder = new SemanticTokensBuilder();
   const visitor = new ASTSemanticVisitor(document, builder, TOKEN_TYPES, TOKEN_MODIFIERS);
-  visitor.visitAST(parseResult.ast);
+  await visitor.visitAST(parseResult.ast);
   
   const result = builder.build();
   return parseSemanticTokens(result.data, code);

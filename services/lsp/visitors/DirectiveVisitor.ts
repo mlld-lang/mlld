@@ -2,6 +2,7 @@ import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { LocationHelpers } from '@services/lsp/utils/LocationHelpers';
 import { TextExtractor } from '@services/lsp/utils/TextExtractor';
+import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
 
 export class DirectiveVisitor extends BaseVisitor {
   private mainVisitor: any;
@@ -233,6 +234,7 @@ export class DirectiveVisitor extends BaseVisitor {
   private visitDirectiveValues(directive: any, context: VisitorContext): void {
     const values = directive.values;
     
+    
     // Handle /show directives with content field first
     if (directive.kind === 'show' && values.content && directive.meta?.wrapperType) {
       const tempDirective = { ...directive, values: { ...values, value: values.content } };
@@ -248,6 +250,9 @@ export class DirectiveVisitor extends BaseVisitor {
     if (directive.kind === 'exe' && values.template) {
       // Use visitTemplateValue to properly handle template delimiters
       this.visitTemplateValue(directive, context);
+    } else if (directive.kind === 'exe' && values.code && directive.raw?.lang) {
+      // Handle /exe with inline code
+      this.visitInlineCode(directive, context);
     } else if (directive.meta?.wrapperType) {
       this.visitTemplateValue(directive, context);
     } else if (values.variable) {
@@ -277,11 +282,17 @@ export class DirectiveVisitor extends BaseVisitor {
       this.mainVisitor.visitNode(values.expression, context);
     } else if (values.value && Array.isArray(values.value)) {
       // First handle the value array (e.g., load-content nodes)
-      for (const node of values.value) {
-        if (typeof node === 'object' && node !== null) {
-          this.mainVisitor.visitNode(node, context);
-        } else if (directive.location) {
-          this.handlePrimitiveValue(node, directive);
+      // Check if this is a code node array first
+      if (values.value.length === 1 && values.value[0]?.type === 'code') {
+        // This is inline code like /var @x = js { ... }
+        this.visitInlineCode(directive, context);
+      } else {
+        for (const node of values.value) {
+          if (typeof node === 'object' && node !== null) {
+            this.mainVisitor.visitNode(node, context);
+          } else if (directive.location) {
+            this.handlePrimitiveValue(node, directive);
+          }
         }
       }
       
@@ -299,6 +310,9 @@ export class DirectiveVisitor extends BaseVisitor {
     } else if (values.loadContent) {
       // Handle file references with or without sections
       this.mainVisitor.visitNode(values.loadContent, context);
+    } else if (values.code && directive.location) {
+      // Handle inline code in /var and /exe directives (e.g., /var @x = js { return 42; })
+      this.visitInlineCode(directive, context);
     }
     
     // Handle withClause for directives that don't have values.value
@@ -468,16 +482,35 @@ export class DirectiveVisitor extends BaseVisitor {
               contentEnd--;
             }
             
-            // Add code content token
-            if (contentEnd > contentStart) {
-              const codePosition = this.document.positionAt(directive.location.start.offset + braceIndex + 1 + contentStart);
-              this.tokenBuilder.addToken({
-                line: codePosition.line,
-                char: codePosition.character,
-                length: contentEnd - contentStart,
-                tokenType: 'string',
-                modifiers: []
-              });
+            // Use embedded language service for syntax highlighting
+            if (langMatch && langMatch[1] && contentEnd > contentStart) {
+              const language = langMatch[1];
+              const actualCode = codeContent.substring(contentStart, contentEnd);
+              
+              // Check if embedded language service is initialized and supports this language
+              if (embeddedLanguageService.isLanguageSupported(language)) {
+                try {
+                  // Calculate the starting position of the code content
+                  const codePosition = this.document.positionAt(directive.location.start.offset + braceIndex + 1 + contentStart);
+                  
+                  // Generate semantic tokens for the embedded code
+                  const embeddedTokens = embeddedLanguageService.generateTokens(
+                    actualCode,
+                    language,
+                    codePosition.line,
+                    codePosition.character
+                  );
+                  
+                  // Add all embedded language tokens
+                  for (const token of embeddedTokens) {
+                    this.tokenBuilder.addToken(token);
+                  }
+                } catch (error) {
+                  console.error(`Failed to tokenize embedded ${language} code:`, error);
+                  // No fallback - if tree-sitter fails, we want to know about it and fix it
+                }
+              }
+              // If language not supported, no tokens - this is intentional
             }
             
             // Add closing brace token
@@ -654,6 +687,119 @@ export class DirectiveVisitor extends BaseVisitor {
           modifiers: []
         });
       }
+    }
+  }
+  
+  private visitInlineCode(directive: any, context: VisitorContext): void {
+    const values = directive.values;
+    
+    // Handle different code structures:
+    // 1. /var with values.value[0].type === 'code'
+    // 2. /exe with values.code and directive.raw.lang
+    const codeNode = values.code || 
+                    (Array.isArray(values.value) && values.value[0]?.type === 'code' ? values.value[0] : null);
+    
+    if (!directive.location) return;
+    
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(
+      directive.location.start.offset,
+      directive.location.end.offset
+    );
+    
+    // Get language and code content based on directive type
+    let language: string | undefined;
+    let codeContent: string | undefined;
+    
+    if (directive.kind === 'exe' && directive.raw) {
+      // For /exe directives
+      language = directive.raw.lang;
+      codeContent = directive.raw.code;
+    } else if (codeNode) {
+      // For /var directives with code nodes
+      language = codeNode.lang || codeNode.language;
+      codeContent = codeNode.code;
+    }
+    
+    if (!language || !codeContent) {
+      return;
+    }
+    
+    // Find language identifier and opening brace in the source text
+    const langBraceMatch = directiveText.match(new RegExp(`=\\s*(${language})\\s*\\{`));
+    if (!langBraceMatch) {
+      return;
+    }
+    
+    const langStart = directiveText.indexOf(langBraceMatch[0]) + langBraceMatch[0].indexOf(language);
+    
+    // Add language identifier token (using 'label' type as per TOKEN_TYPE_MAP)
+    this.tokenBuilder.addToken({
+      line: directive.location.start.line - 1,
+      char: directive.location.start.column - 1 + langStart,
+      length: language.length,
+      tokenType: 'label',
+      modifiers: []
+    });
+    
+    // Find the opening brace position
+    const braceIndex = directiveText.indexOf('{', langStart);
+    if (braceIndex === -1) return;
+    
+    // Add opening brace token
+    this.tokenBuilder.addToken({
+      line: directive.location.start.line - 1,
+      char: directive.location.start.column - 1 + braceIndex,
+      length: 1,
+      tokenType: 'operator',
+      modifiers: []
+    });
+    
+    // Find closing brace position
+    const closeBraceIndex = directiveText.lastIndexOf('}');
+    if (closeBraceIndex !== -1 && closeBraceIndex > braceIndex) {
+      // Use code content from directive
+      const trimmedCode = codeContent.trim();
+      
+      // Calculate where the code starts in the source
+      const codeStartIndex = directiveText.indexOf(trimmedCode, braceIndex + 1);
+      
+      if (trimmedCode && embeddedLanguageService && 
+          embeddedLanguageService.isLanguageSupported(language)) {
+        try {
+          // Calculate the starting position of the actual code
+          const codePosition = this.document.positionAt(
+            directive.location.start.offset + codeStartIndex
+          );
+          
+          
+          // Generate semantic tokens for the embedded code
+          const embeddedTokens = embeddedLanguageService.generateTokens(
+            trimmedCode,
+            language,
+            codePosition.line,
+            codePosition.character
+          );
+          
+          
+          // Add all embedded language tokens
+          for (const token of embeddedTokens) {
+            this.tokenBuilder.addToken(token);
+          }
+        } catch (error) {
+          console.error(`Failed to tokenize inline ${language} code:`, error);
+        }
+      } else {
+      }
+      
+      // Add closing brace token
+      this.tokenBuilder.addToken({
+        line: directive.location.start.line - 1,
+        char: directive.location.start.column - 1 + closeBraceIndex,
+        length: 1,
+        tokenType: 'operator',
+        modifiers: []
+      });
     }
   }
   

@@ -1030,7 +1030,7 @@ export async function startLanguageServer(): Promise<void> {
     });
     
     // Process the AST to generate semantic tokens
-    processASTForSemanticTokens(analysis.ast, document, builder);
+    await processASTForSemanticTokens(analysis.ast, document, builder);
     
     const tokens = builder.build();
     const tokenCount = tokens.data.length / 5; // Each token is 5 integers
@@ -1043,11 +1043,11 @@ export async function startLanguageServer(): Promise<void> {
     return tokens;
   });
 
-  function processASTForSemanticTokens(
+  async function processASTForSemanticTokens(
     ast: any[],
     document: TextDocument,
     builder: SemanticTokensBuilder
-  ): void {
+  ): Promise<void> {
     // Use the AST visitor for comprehensive semantic token generation
     const visitor = new ASTSemanticVisitor(document, builder, TOKEN_TYPES, TOKEN_MODIFIERS, TOKEN_TYPE_MAP);
     visitor.visitAST(ast);
