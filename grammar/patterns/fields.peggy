@@ -9,7 +9,11 @@
 // Example: obj.property, var.field
 FieldAccess
   = DotSeparator field:BaseIdentifier {
-      return { type: 'field', value: field };
+      return { 
+        type: 'field', 
+        value: field,
+        location: location()
+      };
     }
 
 // NUMERIC FIELD ACCESS
@@ -17,23 +21,43 @@ FieldAccess
 // Allows direct property access with numeric indices
 NumericFieldAccess
   = DotSeparator index:NumberLiteral {
-      return { type: 'numericField', value: index };
+      return { 
+        type: 'numericField', 
+        value: index,
+        location: location()
+      };
     }
 
 // ARRAY INDEXING WITH BRACKETS
 // Example: array[0], list[index], obj["key-with-spaces"]
 ArrayAccess
   = "[" _ index:NumberLiteral _ "]" {
-      return { type: 'arrayIndex', value: index };
+      return { 
+        type: 'arrayIndex', 
+        value: index,
+        location: location()
+      };
     }
   / "[" _ index:StringLiteral _ "]" {
-      return { type: 'bracketAccess', value: index };
+      return { 
+        type: 'bracketAccess', 
+        value: index,
+        location: location()
+      };
     }
   / "[" _ "@" index:BaseIdentifier _ "]" {
-      return { type: 'variableIndex', value: index };
+      return { 
+        type: 'variableIndex', 
+        value: index,
+        location: location()
+      };
     }
   / "[" _ index:BaseIdentifier _ "]" {
-      return { type: 'stringIndex', value: index };
+      return { 
+        type: 'stringIndex', 
+        value: index,
+        location: location()
+      };
     }
 
 // COMBINED FIELD ACCESS

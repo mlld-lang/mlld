@@ -70,10 +70,7 @@ SlashWhen
       
       const values = {
         conditions: conditions,
-        modifier: [helpers.createNode(NodeType.Text, { 
-          content: modifier, 
-          location: location() 
-        })]
+        modifier: [modifier]
       };
       
       if (action) {
@@ -82,7 +79,7 @@ SlashWhen
       
       // Create raw representation
       const raw = {
-        modifier: modifier,
+        modifier: modifier.content,
         conditions: conditions.map(c => ({
           condition: helpers.reconstructRawString(c.condition),
           action: c.action ? helpers.reconstructRawString(c.action) : undefined
@@ -99,7 +96,7 @@ SlashWhen
         values,
         raw,
         {
-          modifier: modifier,
+          modifier: modifier.content,
           conditionCount: conditions.length,
           hasVariable: false
         },
@@ -247,7 +244,11 @@ WhenMatchForm
 // -------------------------------------------------------------
 
 WhenBlockForm
-  = DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ 
+  = DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { 
+      return helpers.createVariableReferenceNode('identifier', {
+        identifier: id
+      }, location()); 
+    })? _ 
     modifier:WhenModifier? _ ":" _ "[" _ conditions:WhenConditionList _ "]" 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
@@ -259,16 +260,11 @@ WhenBlockForm
       
       // Only add modifier if present
       if (modifier) {
-        values.modifier = [helpers.createNode(NodeType.Text, { 
-          content: modifier, 
-          location: location() 
-        })];
+        values.modifier = [modifier]; // Already has correct location from WhenModifier rule
       }
       
       if (variable) {
-        values.variable = [helpers.createVariableReferenceNode('identifier', {
-          identifier: variable
-        }, location())];
+        values.variable = [variable]; // Already has correct location
       }
       
       if (action) {
@@ -277,7 +273,7 @@ WhenBlockForm
       
       // Create raw representation
       const raw = {
-        modifier: modifier,
+        modifier: modifier.content,
         conditions: conditions.map(c => ({
           condition: helpers.reconstructRawString(c.condition),
           action: c.action ? helpers.reconstructRawString(c.action) : undefined
@@ -298,7 +294,7 @@ WhenBlockForm
         values,
         raw,
         {
-          modifier: modifier || 'default',  // Use 'default' when no modifier specified
+          modifier: modifier ? modifier.content : 'default',  // Use 'default' when no modifier specified
           conditionCount: conditions.length,
           hasVariable: !!variable
         },
@@ -346,7 +342,12 @@ WhenBareBlockForm
 // -------------------------------------------------------------
 
 WhenModifier
-  = "first" / "all" / "any"
+  = mod:("first" / "all" / "any") {
+      return helpers.createNode(NodeType.Text, { 
+        content: mod, 
+        location: location() 
+      });
+    }
 
 // -------------------------------------------------------------
 // CONDITION EXPRESSIONS

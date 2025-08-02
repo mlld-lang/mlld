@@ -269,4 +269,78 @@ describe('Location Tracking', () => {
       });
     });
   });
+  
+  describe('Field Access Location Tracking', () => {
+    test('dot notation field access location', () => {
+      const input = '/var @data = @user.profile.name';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      const value = directive.values.value[0];
+      
+      expect(value.type).toBe('VariableReference');
+      expect(value.fields).toBeDefined();
+      expect(value.fields.length).toBe(2);
+      
+      // Check first field access (.profile)
+      const firstField = value.fields[0];
+      expect(firstField.type).toBe('field');
+      expect(firstField.value).toBe('profile');
+      expect(firstField.location).toBeDefined();
+      expect(firstField.location.start.offset).toBe(18); // After @user
+      expect(firstField.location.end.offset).toBe(26);   // After .profile
+      
+      // Check second field access (.name)
+      const secondField = value.fields[1];
+      expect(secondField.type).toBe('field');
+      expect(secondField.value).toBe('name');
+      expect(secondField.location).toBeDefined();
+      expect(secondField.location.start.offset).toBe(26); // After .profile
+      expect(secondField.location.end.offset).toBe(31);   // After .name
+    });
+
+    test('array access location', () => {
+      const input = '/var @item = @array[0]';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      const value = directive.values.value[0];
+      
+      expect(value.type).toBe('VariableReference');
+      expect(value.fields).toBeDefined();
+      expect(value.fields.length).toBe(1);
+      
+      const arrayAccess = value.fields[0];
+      expect(arrayAccess.type).toBe('arrayIndex');
+      expect(arrayAccess.value).toBe(0);
+      expect(arrayAccess.location).toBeDefined();
+      expect(arrayAccess.location.start.offset).toBe(19); // Start of [
+      expect(arrayAccess.location.end.offset).toBe(22);   // After ]
+    });
+
+    test('mixed field and array access location', () => {
+      const input = '/var @result = @data.users[0].name';
+      const ast = parse(input);
+      
+      const directive = ast[0];
+      const value = directive.values.value[0];
+      
+      expect(value.fields.length).toBe(3);
+      
+      // .users field
+      expect(value.fields[0].type).toBe('field');
+      expect(value.fields[0].value).toBe('users');
+      expect(value.fields[0].location.start.offset).toBe(20);
+      
+      // [0] array access
+      expect(value.fields[1].type).toBe('arrayIndex');
+      expect(value.fields[1].value).toBe(0);
+      expect(value.fields[1].location.start.offset).toBe(26);
+      
+      // .name field
+      expect(value.fields[2].type).toBe('field');
+      expect(value.fields[2].value).toBe('name');
+      expect(value.fields[2].location.start.offset).toBe(29);
+    });
+  });
 });
