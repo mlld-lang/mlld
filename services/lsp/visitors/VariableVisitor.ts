@@ -1,9 +1,16 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { LocationHelpers } from '@services/lsp/utils/LocationHelpers';
+import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 
 export class VariableVisitor extends BaseVisitor {
   private mainVisitor: any;
+  private operatorHelper: OperatorTokenHelper;
+  
+  constructor(document: any, tokenBuilder: any) {
+    super(document, tokenBuilder);
+    this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
+  }
   
   setMainVisitor(visitor: any): void {
     this.mainVisitor = visitor;
@@ -86,9 +93,10 @@ export class VariableVisitor extends BaseVisitor {
     baseLength: number
   ): void {
     if (valueType === 'varIdentifier' || valueType === 'varInterpolation') {
-      // Check if the location already includes the @ symbol
+      // WORKAROUND: Parser location quirk - inconsistent @ symbol inclusion
       // In /show directive context, the AST location doesn't include @
       // In other contexts (assignments, expressions, objects), it does
+      // TODO: Remove this workaround when parser is fixed (see docs/dev/LANGUAGE-SERVER.md:343)
       const source = this.document.getText();
       const charAtOffset = source.charAt(node.location.start.offset);
       const includesAt = charAtOffset === '@';
@@ -107,94 +115,35 @@ export class VariableVisitor extends BaseVisitor {
         modifiers: ['reference']
       });
       
-      if (node.fields && Array.isArray(node.fields)) {
-        let currentPos = charPos + baseLength;
-        
-        for (const field of node.fields) {
-          if (field.type === 'field' && field.value) {
-            this.tokenBuilder.addToken({
-              line: node.location.start.line - 1,
-              char: currentPos,
-              length: 1,
-              tokenType: 'operator',
-              modifiers: []
-            });
-            currentPos += 1;
-            
-            this.tokenBuilder.addToken({
-              line: node.location.start.line - 1,
-              char: currentPos,
-              length: field.value.length,
-              tokenType: 'property',
-              modifiers: []
-            });
-            currentPos += field.value.length;
-          } else if (field.type === 'arrayIndex' && field.value !== undefined) {
-            this.tokenBuilder.addToken({
-              line: node.location.start.line - 1,
-              char: currentPos,
-              length: 1,
-              tokenType: 'operator',
-              modifiers: []
-            });
-            currentPos += 1;
-            
-            const indexStr = String(field.value);
-            this.tokenBuilder.addToken({
-              line: node.location.start.line - 1,
-              char: currentPos,
-              length: indexStr.length,
-              tokenType: 'number',
-              modifiers: []
-            });
-            currentPos += indexStr.length;
-            
-            this.tokenBuilder.addToken({
-              line: node.location.start.line - 1,
-              char: currentPos,
-              length: 1,
-              tokenType: 'operator',
-              modifiers: []
-            });
-            currentPos += 1;
-          }
-        }
-      }
+      // Use OperatorTokenHelper for property access tokenization
+      this.operatorHelper.tokenizePropertyAccess(node);
       
       // Handle pipes if present
       if (node.pipes && Array.isArray(node.pipes)) {
+        // Use OperatorTokenHelper to tokenize all pipeline operators
+        this.operatorHelper.tokenizePipelineOperators(node.location.start.offset, node.location.end.offset);
+        
+        // Still need to tokenize the transform names
         const sourceText = this.document.getText();
         const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
         
         let pipePos = nodeText.indexOf('|');
         for (const pipe of node.pipes) {
-          if (pipePos !== -1) {
-            // Token for "|"
+          if (pipePos !== -1 && pipe.transform) {
+            const transformStart = pipePos + 1;
+            const hasAt = pipe.hasAt !== false; // Default to true if not specified
+            const transformLength = pipe.transform.length + (hasAt ? 1 : 0);
+            
             this.tokenBuilder.addToken({
               line: node.location.start.line - 1,
-              char: node.location.start.column - 1 + pipePos,
-              length: 1,
-              tokenType: 'operator',
-              modifiers: []
+              char: node.location.start.column - 1 + transformStart,
+              length: transformLength,
+              tokenType: 'variableRef',
+              modifiers: ['reference']
             });
             
-            // Token for pipe transform name
-            if (pipe.transform) {
-              const transformStart = pipePos + 1;
-              const hasAt = pipe.hasAt !== false; // Default to true if not specified
-              const transformLength = pipe.transform.length + (hasAt ? 1 : 0);
-              
-              this.tokenBuilder.addToken({
-                line: node.location.start.line - 1,
-                char: node.location.start.column - 1 + transformStart,
-                length: transformLength,
-                tokenType: 'variableRef',
-                modifiers: ['reference']
-              });
-              
-              // Find next pipe
-              pipePos = nodeText.indexOf('|', transformStart + transformLength);
-            }
+            // Find next pipe
+            pipePos = nodeText.indexOf('|', transformStart + transformLength);
           }
         }
       }
