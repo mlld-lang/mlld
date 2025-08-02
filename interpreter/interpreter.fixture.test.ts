@@ -327,102 +327,141 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     }
   }
   
-  // Helper function to copy example files to virtual filesystem
+  // Helper function to automatically discover and copy test files to virtual filesystem
   async function setupExampleFiles(fixtureName: string) {
-    // Extract the base name from the fixture path
-    const baseName = path.basename(fixtureName, '.generated-fixture.json');
+    // Derive test case directory from fixture path
+    const testCasePath = getTestCasePathFromFixture(fixtureName);
     
+    if (!testCasePath || !fs.existsSync(testCasePath)) {
+      // No test case directory found
+      return;
+    }
     
-    // Map fixture names to example directory paths
-    const exampleDirMappings: Record<string, string> = {
-      'var-text-assignment-add': 'var/text-assignment-add',
-      'var-text-assignment-add-section-bracket': 'var/text-assignment-add',
-      'var-text-assignment-add-section-bracket-rename': 'var/text-assignment-add',
-      'var-text-assignment-path': 'var/text-assignment-path',
-      'var-text-assignment-run': 'var/text-assignment-run',
-      'var-path': 'var/path',
-      'var-path-section-bracket': 'var/path',
-      'var-path-section-bracket-rename': 'var/path',
-      'show-path': 'show/add/path',
-      'show-path-section': 'show/add/path',
-      'show-section': 'show/add/section',
-      'show-section-rename': 'show/add/section',
-      'import-all': 'import/all',
-      'import-all-variable': 'import/all',
-      'import-alias': 'import/alias',
-      'import-selected': 'import/selected',
-      'path-assignment': 'path/assignment',
-      'path-assignment-absolute': 'path/assignment',
-      'path-assignment-project': 'path/assignment',
-      'path-assignment-special': 'path/assignment',
-      'path-assignment-variable': 'path/assignment',
-      'run-file-content-escaping': 'run/file-content-escaping',
-      'modules-explicit-export': 'modules/explicit-export',
-      'modules-auto-export': 'modules/auto-export',
-      'modules-metadata': 'modules/metadata',
-      'var-foreach-text-template': 'var/foreach-text-template',
-      'exe-invocation-module': 'exe-invocation-module',
-      'exe-sh-module': 'exe-sh-module',
-      'env-vars-allowed': 'input/env-vars-allowed',
-      'import-namespace-json': 'import/namespace-json',
-      'import-namespace-nested': 'import/namespace-nested',
-      'exe-shadow-env-import': 'exe-shadow-env-import',
-      'import-namespace-shorthand': 'import/namespace-shorthand',
-      'import-namespace-special-chars': 'import/namespace-special-chars',
-      'import-stdin-shorthand': 'import/stdin',
-      'var-data-array-path-disambiguation': 'var/data-array-path-disambiguation',
-      'var-data-object-literals-in-arrays': 'var/data-object-literals-in-arrays',
-      'var-data-array-valid-patterns': 'var/data-array-valid-patterns',
-      // Alligator syntax tests
-      'alligator-glob-pattern': 'alligator/glob-pattern',
-      'alligator-metadata-file': 'alligator/metadata-file',
-      'alligator-metadata-json': 'alligator/metadata-json',
-      'alligator-metadata-url': 'alligator/metadata-url',
-      'alligator-section-extraction': 'alligator/section-extraction',
-      'alligator-glob-rename': 'alligator-glob-rename',
-      'alligator-glob-concat': 'alligator-glob-concat',
-      'alligator-array-template-interpolation': 'alligator/array-template-interpolation',
-      // File reference interpolation test
-      'file-reference-interpolation': 'file-reference-interpolation',
-      // HTML conversion tests
-      'html-conversion-basic-article': 'html-conversion/basic-article',
-      'html-conversion-complex-elements': 'html-conversion/complex-elements',
-      'html-conversion-edge-cases': 'html-conversion/edge-cases',
-      'html-conversion-metadata-extraction': 'html-conversion/metadata-extraction',
-      'html-conversion-readability-extraction': 'html-conversion/readability-extraction',
-      'html-conversion-url-section-extraction': 'html-conversion/url-section-extraction',
-      'html-conversion-heading-hierarchy': 'html-conversion/heading-hierarchy',
-    };
+    // Read all files in the test case directory
+    await copyTestFilesToVFS(testCasePath, '/');
+  }
+  
+  // Convert fixture path to test case directory path
+  function getTestCasePathFromFixture(fixturePath: string): string | null {
+    // Extract components from fixture path
+    // If fixturePath is relative (e.g., valid/import/import-all.generated-fixture.json)
+    // make it absolute first
+    const absoluteFixturePath = path.isAbsolute(fixturePath) 
+      ? fixturePath 
+      : path.join(__dirname, '../tests/fixtures', fixturePath);
     
-    // Check if we have a mapping for this fixture
-    const exampleSubPath = exampleDirMappings[baseName];
-    if (exampleSubPath) {
-      const exampleDir = path.join(__dirname, '../tests/cases/valid', exampleSubPath);
+    const fixtureDir = path.dirname(absoluteFixturePath);
+    const fixtureName = path.basename(absoluteFixturePath, '.generated-fixture.json');
+    const fixturesRoot = path.join(__dirname, '../tests/fixtures');
+    const relativePath = path.relative(fixturesRoot, fixtureDir);
+    const parts = relativePath.split(path.sep);
+    
+    if (parts.length < 2) {
+      return null;
+    }
+    
+    const category = parts[0]; // 'valid', 'invalid', etc.
+    const directive = parts[1]; // 'import', 'var', etc.
+    
+    // Handle different naming patterns
+    let testSubdir: string;
+    
+    if (parts.length > 2) {
+      // Fixture is already in a subdirectory (e.g., valid/alligator/alligator-glob-pattern.json)
+      // Map to tests/cases/valid/alligator/glob-pattern
+      testSubdir = fixtureName.replace(new RegExp(`^${directive}-`), '');
+      return path.join(__dirname, '../tests/cases', category, directive, testSubdir);
+    } else {
+      // Fixture is in directive root (e.g., valid/import/import-all.json)
+      // Try multiple patterns to find the test case directory
       
-      // Check if the directory exists
-      if (fs.existsSync(exampleDir)) {
-        // Read all files in the example directory
-        const files = fs.readdirSync(exampleDir);
+      // Pattern 1: Remove directive prefix (e.g., import-all -> all)
+      if (fixtureName.startsWith(directive + '-')) {
+        testSubdir = fixtureName.substring(directive.length + 1);
         
-        for (const file of files) {
-          // Skip example.md and expected.md files (these are the test definitions)
-          if (file.startsWith('example') || file.startsWith('expected')) {
-            continue;
-          }
-          
-          // Copy other files to the virtual filesystem
-          const filePath = path.join(exampleDir, file);
-          const stat = fs.statSync(filePath);
-          
-          if (stat.isFile()) {
-            const content = fs.readFileSync(filePath, 'utf8');
-            // Place files at root of virtual filesystem
-            await fileSystem.writeFile(`/${file}`, content);
-          } else if (stat.isDirectory()) {
-            // Recursively copy subdirectories
-            await copyDirToVFS(filePath, `/${file}`);
+        // For variant tests, extract the base test name
+        // Common variant patterns:
+        // - var-path-section-bracket -> path
+        // - var-text-assignment-add-section-bracket -> text-assignment-add  
+        // - import-all-variable -> all
+        // - var-data-array-mixed -> data-array
+        
+        // Try removing common test variant suffixes
+        // Note: Be careful not to remove actual test names that end with these words
+        const suffixPatterns = [
+          /-section-bracket(?:-rename)?$/,
+          /-variable$/,
+          /-mixed$/,
+          /-multiline$/,
+          /-boolean$/,
+          /-number$/,
+          /-simple$/
+        ];
+        
+        let baseTestName = testSubdir;
+        for (const pattern of suffixPatterns) {
+          if (pattern.test(baseTestName)) {
+            baseTestName = baseTestName.replace(pattern, '');
+            let testPath = path.join(__dirname, '../tests/cases', category, directive, baseTestName);
+            if (fs.existsSync(testPath)) {
+              return testPath;
+            }
           }
         }
+        
+        // Try the full subdirectory name
+        let testPath = path.join(__dirname, '../tests/cases', category, directive, testSubdir);
+        if (fs.existsSync(testPath)) {
+          return testPath;
+        }
+      }
+      
+      // Pattern 2: Direct mapping (e.g., alligator-glob-concat -> alligator-glob-concat)
+      let testPath = path.join(__dirname, '../tests/cases', category, fixtureName);
+      if (fs.existsSync(testPath)) {
+        return testPath;
+      }
+      
+      // Pattern 3: Use fixture name as-is under directive
+      testPath = path.join(__dirname, '../tests/cases', category, directive, fixtureName);
+      if (fs.existsSync(testPath)) {
+        return testPath;
+      }
+      
+      // Pattern 4: For tests with subdirectories but no directive prefix
+      // (e.g., fixtures/valid/foo/foo.json -> cases/valid/foo/)
+      if (directive === fixtureName) {
+        testPath = path.join(__dirname, '../tests/cases', category, directive);
+        if (fs.existsSync(testPath)) {
+          return testPath;
+        }
+      }
+    }
+    
+    return null;
+  }
+  
+  // Recursive function to copy test files to virtual filesystem
+  async function copyTestFilesToVFS(sourcePath: string, targetPath: string) {
+    const entries = fs.readdirSync(sourcePath, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      const sourceFile = path.join(sourcePath, entry.name);
+      const targetFile = path.join(targetPath, entry.name);
+      
+      if (entry.isDirectory()) {
+        // Recursively copy subdirectories
+        await copyTestFilesToVFS(sourceFile, targetFile);
+      } else if (entry.isFile()) {
+        // Skip test definition files
+        if (entry.name.startsWith('example') && entry.name.endsWith('.md')) continue;
+        if (entry.name.startsWith('expected') && entry.name.endsWith('.md')) continue;
+        if (entry.name === 'error.md') continue;
+        if (entry.name === 'warning.md') continue;
+        
+        // Copy all other files to the virtual filesystem
+        const content = fs.readFileSync(sourceFile, 'utf8');
+        await fileSystem.writeFile(targetFile, content);
       }
     }
   }

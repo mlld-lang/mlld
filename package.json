@@ -58,6 +58,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:tokens": "MLLD_TOKEN_COVERAGE=1 npm test interpreter/interpreter.fixture.test.ts",
     "test:examples": "INCLUDE_EXAMPLES=true vitest run interpreter/interpreter.fixture.test.ts",
     "test:ast": "npx vitest run core/ast",
     "test:mlldx": "vitest run tests/ephemeral-mode.test.ts --config vitest.config.mlldx.mts",
