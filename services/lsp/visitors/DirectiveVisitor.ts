@@ -4,17 +4,20 @@ import { LocationHelpers } from '@services/lsp/utils/LocationHelpers';
 import { TextExtractor } from '@services/lsp/utils/TextExtractor';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
 import { CommentTokenHelper } from '@services/lsp/utils/CommentTokenHelper';
+import { LanguageBlockHelper } from '@services/lsp/utils/LanguageBlockHelper';
 import { embeddedLanguageService } from '@services/lsp/embedded/EmbeddedLanguageService';
 
 export class DirectiveVisitor extends BaseVisitor {
   private mainVisitor: any;
   private operatorHelper: OperatorTokenHelper;
   private commentHelper: CommentTokenHelper;
+  private languageHelper: LanguageBlockHelper;
   
   constructor(document: any, tokenBuilder: any) {
     super(document, tokenBuilder);
     this.operatorHelper = new OperatorTokenHelper(document, tokenBuilder);
     this.commentHelper = new CommentTokenHelper(document, tokenBuilder);
+    this.languageHelper = new LanguageBlockHelper(document, tokenBuilder);
   }
   
   setMainVisitor(visitor: any): void {
@@ -376,107 +379,9 @@ export class DirectiveVisitor extends BaseVisitor {
         });
       }
       
-      // For language-specific code blocks, extract from source text
+      // For language-specific code blocks, use the language helper
       if (values.code && directive.location) {
-        const sourceText = this.document.getText();
-        const directiveText = sourceText.substring(
-          directive.location.start.offset,
-          directive.location.end.offset
-        );
-        
-        // Find language identifier (e.g., 'js', 'python', etc.)
-        const langMatch = directiveText.match(/\s+(js|javascript|python|py|sh|bash|node)\s*\{/);
-        if (langMatch) {
-          const langText = langMatch[1];
-          const langIndex = langMatch.index! + langMatch[0].indexOf(langText);
-          
-          // Add language identifier token
-          const langPosition = this.document.positionAt(directive.location.start.offset + langIndex);
-          this.tokenBuilder.addToken({
-            line: langPosition.line,
-            char: langPosition.character,
-            length: langText.length,
-            tokenType: 'embedded',
-            modifiers: []
-          });
-        }
-        
-        // Find the opening brace position
-        const braceIndex = directiveText.indexOf('{');
-        if (braceIndex !== -1) {
-          // Add opening brace token
-          this.operatorHelper.addOperatorToken(
-            directive.location.start.offset + braceIndex,
-            1
-          );
-          
-          // Find closing brace position
-          const closeBraceIndex = directiveText.lastIndexOf('}');
-          if (closeBraceIndex !== -1 && closeBraceIndex > braceIndex) {
-            // Extract code content between braces
-            const codeContent = directiveText.substring(braceIndex + 1, closeBraceIndex);
-            
-            // Find the actual content bounds (trim whitespace for display)
-            let contentStart = 0;
-            let contentEnd = codeContent.length;
-            
-            // Find first non-whitespace
-            while (contentStart < codeContent.length && /\s/.test(codeContent[contentStart])) {
-              if (codeContent[contentStart] === '\n') {
-                contentStart++;
-                break; // Stop after first newline
-              }
-              contentStart++;
-            }
-            
-            // Find last non-whitespace
-            while (contentEnd > contentStart && /\s/.test(codeContent[contentEnd - 1])) {
-              if (codeContent[contentEnd - 1] === '\n') {
-                // Include content up to the last newline
-                contentEnd--;
-                break;
-              }
-              contentEnd--;
-            }
-            
-            // Use embedded language service for syntax highlighting
-            if (langMatch && langMatch[1] && contentEnd > contentStart) {
-              const language = langMatch[1];
-              const actualCode = codeContent.substring(contentStart, contentEnd);
-              
-              // Check if embedded language service is initialized and supports this language
-              if (embeddedLanguageService.isLanguageSupported(language)) {
-                try {
-                  // Calculate the starting position of the code content
-                  const codePosition = this.document.positionAt(directive.location.start.offset + braceIndex + 1 + contentStart);
-                  
-                  // Generate semantic tokens for the embedded code
-                  const embeddedTokens = embeddedLanguageService.generateTokens(
-                    actualCode,
-                    language,
-                    codePosition.line,
-                    codePosition.character
-                  );
-                  
-                  // Add all embedded language tokens
-                  for (const token of embeddedTokens) {
-                    this.tokenBuilder.addToken(token);
-                  }
-                } catch (error) {
-                  console.error(`Failed to tokenize embedded ${language} code:`, error);
-                  // No fallback - if tree-sitter fails, we want to know about it and fix it
-                }
-              }
-              // If language not supported, no tokens - this is intentional
-            }
-            
-            // Add closing brace token
-            this.operatorHelper.addOperatorToken(
-              directive.location.start.offset + closeBraceIndex,
-              1
-            );
-          }
-        }
+        this.languageHelper.tokenizeCodeBlock(directive);
       }
     } else {
       // Regular command with braces
@@ -484,13 +389,8 @@ export class DirectiveVisitor extends BaseVisitor {
         const firstCommand = values.command[0];
         const lastCommand = values.command[values.command.length - 1];
         
-        // Add opening brace
-        if (firstCommand.location) {
-          this.operatorHelper.addOperatorToken(
-            firstCommand.location.start.offset - 1, // Brace is before command
-            1
-          );
-        }
+        // Use language helper for brace tokenization
+        this.languageHelper.tokenizeCommandBraces(firstCommand, lastCommand);
         
         // Process command content
         const newContext = {
@@ -522,14 +422,6 @@ export class DirectiveVisitor extends BaseVisitor {
             continue;
           }
           this.mainVisitor.visitNode(part, newContext);
-        }
-        
-        // Add closing brace
-        if (lastCommand.location) {
-          this.operatorHelper.addOperatorToken(
-            lastCommand.location.end.offset,
-            1
-          );
         }
       } else {
         this.visitChildren(values, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
@@ -646,102 +538,8 @@ export class DirectiveVisitor extends BaseVisitor {
     const codeNode = values.code || 
                     (Array.isArray(values.value) && values.value[0]?.type === 'code' ? values.value[0] : null);
     
-    if (!directive.location) return;
-    
-    const sourceText = this.document.getText();
-    const directiveText = sourceText.substring(
-      directive.location.start.offset,
-      directive.location.end.offset
-    );
-    
-    // Get language and code content based on directive type
-    let language: string | undefined;
-    let codeContent: string | undefined;
-    
-    if (directive.kind === 'exe' && directive.raw) {
-      // For /exe directives
-      language = directive.raw.lang;
-      codeContent = directive.raw.code;
-    } else if (codeNode) {
-      // For /var directives with code nodes
-      language = codeNode.lang || codeNode.language;
-      codeContent = codeNode.code;
-    }
-    
-    if (!language || !codeContent) {
-      return;
-    }
-    
-    // Find language identifier and opening brace in the source text
-    const langBraceMatch = directiveText.match(new RegExp(`=\\s*(${language})\\s*\\{`));
-    if (!langBraceMatch) {
-      return;
-    }
-    
-    const langStart = directiveText.indexOf(langBraceMatch[0]) + langBraceMatch[0].indexOf(language);
-    
-    // Add language identifier token (using 'label' type as per TOKEN_TYPE_MAP)
-    this.tokenBuilder.addToken({
-      line: directive.location.start.line - 1,
-      char: directive.location.start.column - 1 + langStart,
-      length: language.length,
-      tokenType: 'label',
-      modifiers: []
-    });
-    
-    // Find the opening brace position
-    const braceIndex = directiveText.indexOf('{', langStart);
-    if (braceIndex === -1) return;
-    
-    // Add opening brace token
-    this.operatorHelper.addOperatorToken(
-      directive.location.start.offset + braceIndex,
-      1
-    );
-    
-    // Find closing brace position
-    const closeBraceIndex = directiveText.lastIndexOf('}');
-    if (closeBraceIndex !== -1 && closeBraceIndex > braceIndex) {
-      // Use code content from directive
-      const trimmedCode = codeContent.trim();
-      
-      // Calculate where the code starts in the source
-      const codeStartIndex = directiveText.indexOf(trimmedCode, braceIndex + 1);
-      
-      if (trimmedCode && embeddedLanguageService && 
-          embeddedLanguageService.isLanguageSupported(language)) {
-        try {
-          // Calculate the starting position of the actual code
-          const codePosition = this.document.positionAt(
-            directive.location.start.offset + codeStartIndex
-          );
-          
-          
-          // Generate semantic tokens for the embedded code
-          const embeddedTokens = embeddedLanguageService.generateTokens(
-            trimmedCode,
-            language,
-            codePosition.line,
-            codePosition.character
-          );
-          
-          
-          // Add all embedded language tokens
-          for (const token of embeddedTokens) {
-            this.tokenBuilder.addToken(token);
-          }
-        } catch (error) {
-          console.error(`Failed to tokenize inline ${language} code:`, error);
-        }
-      } else {
-      }
-      
-      // Add closing brace token
-      this.operatorHelper.addOperatorToken(
-        directive.location.start.offset + closeBraceIndex,
-        1
-      );
-    }
+    // Use the language helper for inline code tokenization
+    this.languageHelper.tokenizeInlineCode(directive, codeNode);
   }
   
   private handlePrimitiveValue(value: any, directive: any): void {
