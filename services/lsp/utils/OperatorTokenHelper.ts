@@ -311,6 +311,8 @@ export class OperatorTokenHelper {
     tokenType: string = 'operator'
   ): void {
     const position = this.document.positionAt(offset);
+    
+    
     this.tokenBuilder.addToken({
       line: position.line,
       char: position.character,

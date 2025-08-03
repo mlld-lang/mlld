@@ -31,14 +31,6 @@ export class DirectiveVisitor extends BaseVisitor {
   visitNode(node: any, context: VisitorContext): void {
     if (!node.location) return;
     
-    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
-      console.log('[DIRECTIVE-VISIT]', {
-        kind: node.kind,
-        implicit: node.meta?.implicit,
-        hasIdentifier: !!node.values?.identifier,
-        hasValue: node.values?.value !== undefined
-      });
-    }
     
     // Only add directive token if not an implicit directive
     if (!node.meta?.implicit) {
@@ -158,15 +150,6 @@ export class DirectiveVisitor extends BaseVisitor {
           ? node.location.start.column 
           : node.location.start.column + node.kind.length + 2;
         
-        if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
-          console.log('[VAR-DECL]', {
-            implicit: node.meta?.implicit,
-            identifierName,
-            hasValue: node.values.value !== undefined,
-            skipEquals,
-            kind: node.kind
-          });
-        }
         
         this.tokenBuilder.addToken({
           line: node.location.start.line - 1,
@@ -183,8 +166,9 @@ export class DirectiveVisitor extends BaseVisitor {
           // Calculate position after variable name (including @)
           let baseOffset;
           if (node.meta?.implicit) {
-            // For implicit directives, the identifier location is more reliable
-            baseOffset = firstIdentifier.location.end.offset;
+            // For implicit directives, the identifier location spans the whole assignment
+            // So we need to search from the start + identifier length
+            baseOffset = firstIdentifier.location.start.offset + identifierName.length + 1; // +1 for @
           } else {
             baseOffset = node.location.start.offset + identifierStart + identifierName.length;
           }
@@ -212,19 +196,8 @@ export class DirectiveVisitor extends BaseVisitor {
               'forward'
             );
             
-            if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
-              console.log('[EQUALS-SEARCH]', {
-                baseOffset,
-                equalOffset,
-                implicit: node.meta?.implicit,
-                text: this.document.getText().substring(baseOffset - 5, baseOffset + 15)
-              });
-            }
             
             if (equalOffset !== null) {
-              if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
-                console.log('[ADDING-EQUALS]', { equalOffset });
-              }
               this.operatorHelper.addOperatorToken(equalOffset, 1);
             }
           }
