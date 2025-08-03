@@ -31,6 +31,15 @@ export class DirectiveVisitor extends BaseVisitor {
   visitNode(node: any, context: VisitorContext): void {
     if (!node.location) return;
     
+    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+      console.log('[DIRECTIVE-VISIT]', {
+        kind: node.kind,
+        implicit: node.meta?.implicit,
+        hasIdentifier: !!node.values?.identifier,
+        hasValue: node.values?.value !== undefined
+      });
+    }
+    
     // Only add directive token if not an implicit directive
     if (!node.meta?.implicit) {
       this.tokenBuilder.addToken({
@@ -149,6 +158,16 @@ export class DirectiveVisitor extends BaseVisitor {
           ? node.location.start.column 
           : node.location.start.column + node.kind.length + 2;
         
+        if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+          console.log('[VAR-DECL]', {
+            implicit: node.meta?.implicit,
+            identifierName,
+            hasValue: node.values.value !== undefined,
+            skipEquals,
+            kind: node.kind
+          });
+        }
+        
         this.tokenBuilder.addToken({
           line: node.location.start.line - 1,
           char: identifierStart - 1,
@@ -162,7 +181,13 @@ export class DirectiveVisitor extends BaseVisitor {
             node.values.command !== undefined || node.values.code !== undefined ||
             node.values.content !== undefined || node.meta?.wrapperType !== undefined)) {
           // Calculate position after variable name (including @)
-          const baseOffset = node.location.start.offset + identifierStart + identifierName.length;
+          let baseOffset;
+          if (node.meta?.implicit) {
+            // For implicit directives, the identifier location is more reliable
+            baseOffset = firstIdentifier.location.end.offset;
+          } else {
+            baseOffset = node.location.start.offset + identifierStart + identifierName.length;
+          }
           
           // For /exe with params, = comes after the closing parenthesis
           if (node.kind === 'exe' && node.values.params && node.values.params.length > 0) {
@@ -183,10 +208,23 @@ export class DirectiveVisitor extends BaseVisitor {
             const equalOffset = this.operatorHelper.findOperatorNear(
               baseOffset,
               '=',
-              10,
+              20,  // Increased search distance for implicit directives
               'forward'
             );
+            
+            if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+              console.log('[EQUALS-SEARCH]', {
+                baseOffset,
+                equalOffset,
+                implicit: node.meta?.implicit,
+                text: this.document.getText().substring(baseOffset - 5, baseOffset + 15)
+              });
+            }
+            
             if (equalOffset !== null) {
+              if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+                console.log('[ADDING-EQUALS]', { equalOffset });
+              }
               this.operatorHelper.addOperatorToken(equalOffset, 1);
             }
           }
@@ -753,6 +791,21 @@ export class DirectiveVisitor extends BaseVisitor {
                   tokenType: 'operator',
                   modifiers: []
                 });
+                
+                // Look for opening bracket after the pattern modifier's colon
+                const afterColon = nodeText.substring(colonOffset + colonMatch[0].length);
+                const openBracketMatch = afterColon.match(/^\s*\[/);
+                if (openBracketMatch) {
+                  const bracketOffset = colonOffset + colonMatch[0].length + openBracketMatch.index! + openBracketMatch[0].indexOf('[');
+                  const bracketPosition = this.document.positionAt(node.location.start.offset + bracketOffset);
+                  this.tokenBuilder.addToken({
+                    line: bracketPosition.line,
+                    char: bracketPosition.character,
+                    length: 1,
+                    tokenType: 'operator',
+                    modifiers: []
+                  });
+                }
               }
             }
           }
@@ -804,6 +857,21 @@ export class DirectiveVisitor extends BaseVisitor {
                 tokenType: 'operator',
                 modifiers: []
               });
+              
+              // Look for opening bracket after the pattern modifier's colon
+              const afterColon = nodeText.substring(colonOffset + colonMatch[0].length);
+              const openBracketMatch = afterColon.match(/^\s*\[/);
+              if (openBracketMatch) {
+                const bracketOffset = colonOffset + colonMatch[0].length + openBracketMatch.index! + openBracketMatch[0].indexOf('[');
+                const bracketPosition = this.document.positionAt(node.location.start.offset + bracketOffset);
+                this.tokenBuilder.addToken({
+                  line: bracketPosition.line,
+                  char: bracketPosition.character,
+                  length: 1,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
             }
           }
         } else {

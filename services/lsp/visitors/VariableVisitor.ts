@@ -66,6 +66,19 @@ export class VariableVisitor extends BaseVisitor {
         tokenType: 'interpolation',
         modifiers: []
       });
+      
+      // Still need to handle property access for interpolated variables
+      if (node.fields) {
+        if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+          console.log('[INTERPOLATION-FIELDS]', {
+            identifier,
+            hasFields: !!node.fields,
+            fieldCount: node.fields?.length,
+            fields: node.fields
+          });
+        }
+        this.operatorHelper.tokenizePropertyAccess(node);
+      }
     } else if (context.variableStyle === '{{var}}' && valueType === 'varInterpolation') {
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
@@ -116,6 +129,14 @@ export class VariableVisitor extends BaseVisitor {
       });
       
       // Use OperatorTokenHelper for property access tokenization
+      if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+        console.log('[VAR-FIELDS]', {
+          identifier,
+          hasFields: !!node.fields,
+          fieldCount: node.fields?.length,
+          fields: node.fields
+        });
+      }
       this.operatorHelper.tokenizePropertyAccess(node);
       
       // Handle pipes if present

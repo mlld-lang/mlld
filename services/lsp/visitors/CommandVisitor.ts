@@ -188,13 +188,70 @@ export class CommandVisitor extends BaseVisitor {
               }
             } else {
               // Regular AST node
+              if (process.env.DEBUG_LSP === 'true') {
+                console.log('[CMD-ARG]', {
+                  argType: arg.type,
+                  argIdentifier: arg.identifier,
+                  hasFields: !!arg.fields
+                });
+              }
               this.mainVisitor.visitNode(arg, newContext);
             }
             
             // Add comma between args
             if (i < node.commandRef.args.length - 1) {
-              // For primitive args, we need to calculate comma position differently
-              // This is a simplified approach - in reality would need more robust handling
+              const currentArg = node.commandRef.args[i];
+              const nextArg = node.commandRef.args[i + 1];
+              
+              // Get the end position of the current arg
+              let currentArgEnd = null;
+              if (currentArg?.location) {
+                currentArgEnd = currentArg.location.end.offset;
+              } else if (typeof currentArg !== 'object' || currentArg === null || !currentArg.type) {
+                // For primitive values, estimate based on string length
+                const sourceText = this.document.getText();
+                const argStr = String(currentArg);
+                const searchStart = identifierLoc.start.offset + name.length + 2; // After @name(
+                const argIndex = sourceText.indexOf(argStr, searchStart);
+                if (argIndex !== -1) {
+                  currentArgEnd = argIndex + argStr.length;
+                }
+              }
+              
+              // Get the start position of the next arg
+              let nextArgStart = null;
+              if (nextArg?.location) {
+                nextArgStart = nextArg.location.start.offset;
+              } else if (typeof nextArg !== 'object' || nextArg === null || !nextArg.type) {
+                // For primitive values, search for it after current arg
+                const sourceText = this.document.getText();
+                const nextArgStr = String(nextArg);
+                if (currentArgEnd) {
+                  const nextArgIndex = sourceText.indexOf(nextArgStr, currentArgEnd);
+                  if (nextArgIndex !== -1) {
+                    nextArgStart = nextArgIndex;
+                  }
+                }
+              }
+              
+              // Find comma between the args
+              if (currentArgEnd && nextArgStart) {
+                const sourceText = this.document.getText();
+                const betweenText = sourceText.substring(currentArgEnd, nextArgStart);
+                const commaIndex = betweenText.indexOf(',');
+                
+                if (commaIndex !== -1) {
+                  const commaOffset = currentArgEnd + commaIndex;
+                  const commaPos = this.document.positionAt(commaOffset);
+                  this.tokenBuilder.addToken({
+                    line: commaPos.line,
+                    char: commaPos.character,
+                    length: 1,
+                    tokenType: 'operator',
+                    modifiers: []
+                  });
+                }
+              }
             }
           }
           

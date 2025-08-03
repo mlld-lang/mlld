@@ -8,11 +8,18 @@
 // DOT NOTATION FIELD ACCESS
 // Example: obj.property, var.field
 FieldAccess
-  = DotSeparator field:BaseIdentifier {
+  = DotSeparator fieldStart:("" { return peg$currPos; }) field:BaseIdentifier {
       return { 
         type: 'field', 
         value: field,
-        location: location()
+        location: {
+          start: {
+            offset: fieldStart,
+            line: location().start.line,
+            column: location().start.column + 1
+          },
+          end: location().end
+        }
       };
     }
 
@@ -20,11 +27,18 @@ FieldAccess
 // Example: obj.123, var.456 
 // Allows direct property access with numeric indices
 NumericFieldAccess
-  = DotSeparator index:NumberLiteral {
+  = DotSeparator fieldStart:("" { return peg$currPos; }) index:NumberLiteral {
       return { 
         type: 'numericField', 
         value: index,
-        location: location()
+        location: {
+          start: {
+            offset: fieldStart,
+            line: location().start.line,
+            column: location().start.column + 1
+          },
+          end: location().end
+        }
       };
     }
 

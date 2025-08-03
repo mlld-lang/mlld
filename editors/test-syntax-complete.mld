@@ -84,6 +84,32 @@ This file tests all syntax highlighting features including the new operators and
   @z == "bye" => @transform() = @applyFilter(@data)
 ]
 
+/when @var: [
+  @x == "implicit assignment" => @process()
+  @y == "hello" => /var @y = "explicit assignment"
+  @z == "bye" => @transform() = @applyFilter(@data)
+]
+
+/when first: [
+  @x == "implicit assignment" => @process()
+  @y == "hello" => /var @y = "explicit assignment"
+  @z == "bye" => @transform() = @applyFilter(@data)
+]
+
+/when all: [
+  @x == "implicit assignment" 
+  @y == "hello" 
+  @z == "bye"
+] => => @process()
+
+
+/when any: [
+  @x == "implicit assignment" 
+  @y == "hello" 
+  @z == "bye"
+] => => @process()
+
+
 ## Alligator Syntax (File Loading)
 
 ### Basic file loading

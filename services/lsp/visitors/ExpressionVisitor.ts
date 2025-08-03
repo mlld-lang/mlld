@@ -191,38 +191,18 @@ export class ExpressionVisitor extends BaseVisitor {
             firstAction = firstAction.content[0];
           }
           
-          // Determine the action start offset
-          let actionStartOffset = null;
-          if (firstAction?.location) {
-            actionStartOffset = firstAction.location.start.offset;
-          } else if (typeof firstAction === 'number' || typeof firstAction === 'string' || typeof firstAction === 'boolean' || firstAction === null) {
-            // For primitive values, we need to search for them in the source text
+          // Always try to find and tokenize the => operator
+          if (lastCondition?.location) {
             const sourceText = this.document.getText();
-            const searchStart = lastCondition?.location?.end?.offset || node.location.start.offset;
+            const searchStart = lastCondition.location.end.offset;
             const searchEnd = node.location.end.offset;
             const searchText = sourceText.substring(searchStart, searchEnd);
             
-            // Search for => first to know where to look for the value
+            // Search for => and tokenize it
             const arrowIndex = searchText.indexOf('=>');
             if (arrowIndex !== -1) {
-              // Add the => token
               this.operatorHelper.addOperatorToken(searchStart + arrowIndex, 2);
-              
-              // Now search for the primitive value after =>
-              const afterArrow = searchText.substring(arrowIndex + 2).trim();
-              if (afterArrow.startsWith(String(firstAction))) {
-                const valueOffset = searchStart + arrowIndex + 2 + searchText.substring(arrowIndex + 2).indexOf(afterArrow);
-                actionStartOffset = valueOffset;
-              }
             }
-          }
-            
-          if (lastCondition?.location && actionStartOffset && !this.tokenizedParentheses.has(lastCondition.location.end.offset)) {
-            this.operatorHelper.tokenizeOperatorBetween(
-              lastCondition.location.end.offset,
-              actionStartOffset,
-              '=>'
-            );
           }
         }
         

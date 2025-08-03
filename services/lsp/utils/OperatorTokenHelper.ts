@@ -77,25 +77,42 @@ export class OperatorTokenHelper {
       if (!field.location) continue;
       
       if (field.type === 'field' && field.value) {
-        // Token for dot operator
-        const dotPosition = this.document.positionAt(field.location.start.offset);
-        this.tokenBuilder.addToken({
-          line: dotPosition.line,
-          char: dotPosition.character,
-          length: 1,
-          tokenType: 'operator',
-          modifiers: []
-        });
+        // The field location should point to the start of the field name (after the dot)
+        // We need to verify the dot is actually before it
+        const sourceText = this.document.getText();
+        const dotOffset = field.location.start.offset - 1;
         
-        // Token for property name
-        const propPosition = this.document.positionAt(field.location.start.offset + 1);
-        this.tokenBuilder.addToken({
-          line: propPosition.line,
-          char: propPosition.character,
-          length: field.value.length,
-          tokenType: 'property',
-          modifiers: []
-        });
+        // Verify there's actually a dot at this position
+        if (sourceText[dotOffset] === '.') {
+          const dotPosition = this.document.positionAt(dotOffset);
+          
+          this.tokenBuilder.addToken({
+            line: dotPosition.line,
+            char: dotPosition.character,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+          
+          // Token for property name (field location already points to it)
+          const propPosition = this.document.positionAt(field.location.start.offset);
+          this.tokenBuilder.addToken({
+            line: propPosition.line,
+            char: propPosition.character,
+            length: field.value.length,
+            tokenType: 'property',
+            modifiers: []
+          });
+        } else {
+          // If no dot found, the location might be off - try to find it
+          console.error('[FIELD-ERROR] No dot found before field', {
+            fieldValue: field.value,
+            expectedDotOffset: dotOffset,
+            charAtOffset: sourceText[dotOffset],
+            contextBefore: sourceText.substring(dotOffset - 5, dotOffset),
+            contextAfter: sourceText.substring(dotOffset, dotOffset + 5)
+          });
+        }
       } else if (field.type === 'arrayIndex') {
         // Token for opening bracket
         const openBracketPos = this.document.positionAt(field.location.start.offset);
