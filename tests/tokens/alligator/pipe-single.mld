@@ -7,6 +7,5 @@
 test-file.txt --> string
 > --> operator
 | --> operator
-@ --> operator
-upper --> variable
+@upper --> variable
 === END TOKENS ===

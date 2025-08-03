@@ -1,4 +1,4 @@
-/when @request first: [
+/when first: [
   @method == "GET" && @path == "/api/users" => @listUsers()
   @method == "POST" && @path == "/api/users" => @createUser()
   @method == "PUT" && @path == "/api/users/*" => @updateUser(@params.id)
@@ -7,7 +7,6 @@
 ]
 
 === START TOKENS ===
-@request --> variable
 first --> keyword
 : --> operator
 [ --> operator

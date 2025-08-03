@@ -60,6 +60,7 @@ const TOKEN_TYPE_MAP = {
   'section': 'label',              // Section names (#section)
   'boolean': 'keyword',            // true/false
   'null': 'keyword',               // null
+  'module': 'type',                // Module names in imports
   // Standard types (pass through)
   'keyword': 'keyword',
   'variable': 'variable',

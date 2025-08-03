@@ -1,0 +1,31 @@
+/var @formatted = <data.json>|@json|@xml
+/var @upper = <greeting.txt>|@uppercase
+/var @processed = <raw.txt>|@clean|@format
+
+=== START TOKENS ===
+@formatted --> variable[declaration]
+= --> operator
+< --> operator
+data.json --> string
+> --> operator
+| --> operator
+@json --> variable
+| --> operator
+@xml --> variable
+@upper --> variable[declaration]
+= --> operator
+< --> operator
+greeting.txt --> string
+> --> operator
+| --> operator
+@uppercase --> variable
+@processed --> variable[declaration]
+= --> operator
+< --> operator
+raw.txt --> string
+> --> operator
+| --> operator
+@clean --> variable
+| --> operator
+@format --> variable
+=== END TOKENS ===

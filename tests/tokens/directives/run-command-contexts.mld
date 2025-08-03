@@ -1,0 +1,21 @@
+/var @name = "World"
+
+/run {echo "Hello @name"}
+/run "echo 'hello name'"
+/exe @step1(var) = "echo 'hello @var'"
+
+=== START TOKENS ===
+@name --> variable[declaration]
+= --> operator
+"World" --> string
+{ --> operator
+echo "Hello @name" --> string
+} --> operator
+"echo 'hello name'" --> string
+@step1 --> variable[declaration]
+( --> operator
+var --> parameter
+) --> operator
+= --> operator
+"echo 'hello @var'" --> string
+=== END TOKENS ===

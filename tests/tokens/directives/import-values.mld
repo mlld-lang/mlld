@@ -1,0 +1,45 @@
+/import { greeting, config } from "shared.mld"
+/import { helper } from "./utils.mld"
+/import { fetchData, parseJSON } from @corp/utils
+/import @corp/utils
+/import @corp/utils as corpUtils
+/import { API_KEY, NODE_ENV } from @input
+
+=== START TOKENS ===
+{ --> operator
+greeting --> variable
+, --> operator
+config --> variable
+} --> operator
+from --> keyword
+"shared.mld" --> string
+{ --> operator
+helper --> variable
+} --> operator
+from --> keyword
+"./utils.mld" --> string
+{ --> operator
+fetchData --> variable
+, --> operator
+parseJSON --> variable
+} --> operator
+from --> keyword
+@corp --> namespace
+/ --> operator
+utils --> type
+@corp --> namespace
+/ --> operator
+utils --> type
+@corp --> namespace
+/ --> operator
+utils --> type
+as --> keyword
+corpUtils --> variable
+{ --> operator
+API_KEY --> variable
+, --> operator
+NODE_ENV --> variable
+} --> operator
+from --> keyword
+@input --> keyword
+=== END TOKENS ===

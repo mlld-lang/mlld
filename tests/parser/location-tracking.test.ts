@@ -494,9 +494,9 @@ describe('Location Tracking', () => {
       const ast = parse(input);
       
       const directive = ast[0];
-      expect(directive.values.withClause.pipeline).toHaveLength(2);
+      expect(directive.values.invocation.withClause.pipeline).toHaveLength(2);
       
-      const [filter, sort] = directive.values.withClause.pipeline;
+      const [filter, sort] = directive.values.invocation.withClause.pipeline;
       
       // Check filter command
       expect(filter.identifier[0].identifier).toBe('filter');
@@ -544,7 +544,7 @@ describe('Location Tracking', () => {
       expect(firstField.type).toBe('field');
       expect(firstField.value).toBe('profile');
       expect(firstField.location).toBeDefined();
-      expect(firstField.location.start.offset).toBe(18); // After @user
+      expect(firstField.location.start.offset).toBe(19); // After @user
       expect(firstField.location.end.offset).toBe(26);   // After .profile
       
       // Check second field access (.name)
@@ -552,7 +552,7 @@ describe('Location Tracking', () => {
       expect(secondField.type).toBe('field');
       expect(secondField.value).toBe('name');
       expect(secondField.location).toBeDefined();
-      expect(secondField.location.start.offset).toBe(26); // After .profile
+      expect(secondField.location.start.offset).toBe(27); // After .profile
       expect(secondField.location.end.offset).toBe(31);   // After .name
     });
 
@@ -587,7 +587,7 @@ describe('Location Tracking', () => {
       // .users field
       expect(value.fields[0].type).toBe('field');
       expect(value.fields[0].value).toBe('users');
-      expect(value.fields[0].location.start.offset).toBe(20);
+      expect(value.fields[0].location.start.offset).toBe(21);
       
       // [0] array access
       expect(value.fields[1].type).toBe('arrayIndex');
@@ -597,7 +597,7 @@ describe('Location Tracking', () => {
       // .name field
       expect(value.fields[2].type).toBe('field');
       expect(value.fields[2].value).toBe('name');
-      expect(value.fields[2].location.start.offset).toBe(29);
+      expect(value.fields[2].location.start.offset).toBe(30);
     });
   });
 });

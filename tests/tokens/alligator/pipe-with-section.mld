@@ -9,9 +9,7 @@ README.md --> string
 Introduction --> label
 > --> operator
 | --> operator
-@ --> operator
-upper --> variable
+@upper --> variable
 | --> operator
-@ --> operator
-trim --> variable
+@trim --> variable
 === END TOKENS ===

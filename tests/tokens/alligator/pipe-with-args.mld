@@ -7,12 +7,10 @@
 test-file.txt --> string
 > --> operator
 | --> operator
-@ --> operator
-wrap --> variable
+@wrap --> variable
 ( --> operator
 80 --> string
 ) --> operator
 | --> operator
-@ --> operator
-trim --> variable
+@trim --> variable
 === END TOKENS ===
