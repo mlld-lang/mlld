@@ -10,12 +10,10 @@ all --> keyword
 : --> operator
 [ --> operator
 @isAuthenticated --> variable
-, --> operator
 @hasPermission --> variable
 ( --> operator
 "write" --> string
 ) --> operator
-, --> operator
 ! --> operator
 @isBanned --> variable
 ] --> operator

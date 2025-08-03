@@ -31,10 +31,20 @@ export class LiteralVisitor extends BaseVisitor {
       }
     }
     
+    // For string literals, we need to include the quotes in the token
+    let startChar = node.location.start.column - 1;
+    let length = node.location.end.column - node.location.start.column;
+    
+    if (tokenType === 'string' && node.meta?.wrapperType) {
+      // The AST location is for the content only, but we need to include quotes
+      startChar -= 1; // Move start back to include opening quote
+      length += 2;    // Add 2 for both quotes
+    }
+    
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
-      char: node.location.start.column - 1,
-      length: node.location.end.column - node.location.start.column,
+      char: startChar,
+      length,
       tokenType,
       modifiers
     });

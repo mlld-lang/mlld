@@ -215,6 +215,15 @@ export class ASTSemanticVisitor {
         const lineStart = source.split('\n').slice(0, node.location.start.line - 1).join('\n').length + (node.location.start.line > 1 ? 1 : 0);
         const charStart = lineStart + node.location.start.column - 1;
         
+        if (process.env.DEBUG_LSP === 'true') {
+          console.log('[TEXT-QUOTE-CHECK]', {
+            charStart,
+            charBefore: charStart > 0 ? source[charStart - 1] : 'N/A',
+            content: node.content,
+            locationCol: node.location.start.column
+          });
+        }
+        
         // Check if there's a quote before the content
         if (charStart > 0 && source[charStart - 1] === '"') {
           this.tokenBuilder.addToken({

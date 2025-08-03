@@ -948,6 +948,42 @@ export class DirectiveVisitor extends BaseVisitor {
             });
           }
         }
+        
+        // Handle action for when blocks (after ] =>)
+        if (node.values.action) {
+          // Find and tokenize => operator
+          const sourceText = this.document.getText();
+          const directiveText = sourceText.substring(
+            node.location.start.offset,
+            node.location.end.offset
+          );
+          const closeBracketIndex = directiveText.lastIndexOf(']');
+          if (closeBracketIndex !== -1) {
+            const afterBracket = directiveText.substring(closeBracketIndex + 1);
+            const arrowIndex = afterBracket.indexOf('=>');
+            if (arrowIndex !== -1) {
+              const arrowPosition = this.document.positionAt(
+                node.location.start.offset + closeBracketIndex + 1 + arrowIndex
+              );
+              this.tokenBuilder.addToken({
+                line: arrowPosition.line,
+                char: arrowPosition.character,
+                length: 2,
+                tokenType: 'operator',
+                modifiers: []
+              });
+            }
+          }
+          
+          // Process the action
+          if (Array.isArray(node.values.action)) {
+            for (const action of node.values.action) {
+              this.mainVisitor.visitNode(action, context);
+            }
+          } else {
+            this.mainVisitor.visitNode(node.values.action, context);
+          }
+        }
       } else if (node.values.condition) {
         if (Array.isArray(node.values.condition)) {
           for (const cond of node.values.condition) {

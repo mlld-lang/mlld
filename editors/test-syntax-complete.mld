@@ -100,14 +100,14 @@ This file tests all syntax highlighting features including the new operators and
   @x == "implicit assignment" 
   @y == "hello" 
   @z == "bye"
-] => => @process()
+] => @process()
 
 
 /when any: [
-  @x == "implicit assignment" 
+  @x == "implicit assignment"
   @y == "hello" 
   @z == "bye"
-] => => @process()
+] => @process()
 
 
 ## Alligator Syntax (File Loading)
