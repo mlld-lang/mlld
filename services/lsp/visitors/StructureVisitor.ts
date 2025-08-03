@@ -50,9 +50,6 @@ export class StructureVisitor extends BaseVisitor {
     const sourceText = this.document.getText();
     const objectText = sourceText.substring(node.location.start.offset, node.location.end.offset);
     
-    // Add opening brace
-    this.operatorHelper.addOperatorToken(node.location.start.offset, 1);
-    
     if (node.properties && typeof node.properties === 'object') {
       // Check if this is a plain object (all values are primitives) or has mlld constructs
       const hasASTNodes = Object.values(node.properties).some(value => 
@@ -60,9 +57,12 @@ export class StructureVisitor extends BaseVisitor {
       );
       
       if (!hasASTNodes) {
-        // Plain object - need to manually parse and tokenize
+        // Plain object - let embedded service handle all tokens including braces
         this.tokenizePlainObject(node, objectText);
+        return; // Don't add braces manually
       } else {
+        // Add opening brace for objects with mlld constructs
+        this.operatorHelper.addOperatorToken(node.location.start.offset, 1);
         // Object with mlld constructs - process AST nodes
         let lastPropertyEndOffset = node.location.start.offset + 1; // After '{'
         
@@ -130,112 +130,26 @@ export class StructureVisitor extends BaseVisitor {
   }
   
   private tokenizePlainObject(node: any, objectText: string): void {
-    // Try to use embedded language service for JSON tokenization
-    if (embeddedLanguageService.ensureInitialized()) {
-      const startPos = this.document.positionAt(node.location.start.offset);
-      const tokens = embeddedLanguageService.generateTokens(
-        objectText, 
-        'javascript', // JavaScript parser handles JSON
-        startPos.line,
-        startPos.character
-      );
-      
-      // Add the tokens from the embedded service
-      for (const token of tokens) {
-        this.tokenBuilder.addToken(token);
-      }
-      
-      // The embedded service handles all tokens including delimiters
-      return;
-    }
+    // Always use embedded language service for JSON tokenization
+    embeddedLanguageService.ensureInitialized();
     
-    // Fallback to regex-based tokenization if embedded service not ready
-    // This regex matches property patterns like "key": value
-    const propertyRegex = /"([^"]+)":\s*(?:"([^"]*)"|(true|false|null|\d+(?:\.\d+)?))/g;
-    let match;
-    let lastMatchEnd = 1; // After '{'
+    const startPos = this.document.positionAt(node.location.start.offset);
+    const tokens = embeddedLanguageService.generateTokens(
+      objectText, 
+      'javascript', // JavaScript parser handles JSON
+      startPos.line,
+      startPos.character
+    );
     
-    while ((match = propertyRegex.exec(objectText)) !== null) {
-      const keyStart = match.index;
-      const keyWithQuotes = match[0].substring(0, match[0].indexOf(':'));
-      const colonIndex = match[0].indexOf(':');
-      const valueStart = match[0].indexOf(':', colonIndex) + 1;
-      
-      // Token for property key (with quotes)
-      const keyPosition = this.document.positionAt(node.location.start.offset + keyStart);
-      this.tokenBuilder.addToken({
-        line: keyPosition.line,
-        char: keyPosition.character,
-        length: keyWithQuotes.length,
-        tokenType: 'string',
-        modifiers: []
-      });
-      
-      // Token for colon
-      this.operatorHelper.addOperatorToken(node.location.start.offset + keyStart + colonIndex, 1);
-      
-      // Token for value
-      const value = match[2] !== undefined ? `"${match[2]}"` : match[3];
-      const valuePosition = this.document.positionAt(node.location.start.offset + match.index + match[0].indexOf(value));
-      
-      if (match[2] !== undefined) {
-        // String value
-        this.tokenBuilder.addToken({
-          line: valuePosition.line,
-          char: valuePosition.character,
-          length: value.length,
-          tokenType: 'string',
-          modifiers: []
-        });
-      } else if (match[3] === 'true' || match[3] === 'false') {
-        // Boolean
-        this.tokenBuilder.addToken({
-          line: valuePosition.line,
-          char: valuePosition.character,
-          length: match[3].length,
-          tokenType: 'boolean',
-          modifiers: []
-        });
-      } else if (match[3] === 'null') {
-        // Null
-        this.tokenBuilder.addToken({
-          line: valuePosition.line,
-          char: valuePosition.character,
-          length: 4,
-          tokenType: 'null',
-          modifiers: []
-        });
-      } else {
-        // Number
-        this.tokenBuilder.addToken({
-          line: valuePosition.line,
-          char: valuePosition.character,
-          length: match[3].length,
-          tokenType: 'number',
-          modifiers: []
-        });
-      }
-      
-      // Look for comma after this property
-      const afterValue = match.index + match[0].length;
-      const commaIndex = objectText.indexOf(',', afterValue);
-      const nextPropertyIndex = objectText.indexOf('"', afterValue);
-      
-      // Only add comma if it comes before the next property or closing brace
-      if (commaIndex !== -1 && (nextPropertyIndex === -1 || commaIndex < nextPropertyIndex)) {
-        this.operatorHelper.addOperatorToken(node.location.start.offset + commaIndex, 1);
-      }
-      
-      lastMatchEnd = afterValue;
+    // Add the tokens from the embedded service
+    for (const token of tokens) {
+      this.tokenBuilder.addToken(token);
     }
   }
   
   private visitArrayExpression(node: any, context: VisitorContext): void {
     const sourceText = this.document.getText();
     const arrayText = sourceText.substring(node.location.start.offset, node.location.end.offset);
-    
-    // Add opening bracket
-    this.operatorHelper.addOperatorToken(node.location.start.offset, 1);
     
     if (node.items && Array.isArray(node.items)) {
       // Check if this is a plain array (all values are primitives) or has mlld constructs
@@ -252,9 +166,12 @@ export class StructureVisitor extends BaseVisitor {
       }
       
       if (!hasASTNodes) {
-        // Plain array - need to manually parse and tokenize
+        // Plain array - let embedded service handle all tokens including brackets
         this.tokenizePlainArray(node, arrayText);
+        return; // Don't add brackets manually
       } else {
+        // Add opening bracket for arrays with mlld constructs
+        this.operatorHelper.addOperatorToken(node.location.start.offset, 1);
         // Array with mlld constructs - process AST nodes
         let lastItemEndOffset = node.location.start.offset + 1; // After '['
         
@@ -290,88 +207,20 @@ export class StructureVisitor extends BaseVisitor {
   }
   
   private tokenizePlainArray(node: any, arrayText: string): void {
-    // Try to use embedded language service for JSON tokenization
-    if (embeddedLanguageService.ensureInitialized()) {
-      const startPos = this.document.positionAt(node.location.start.offset);
-      const tokens = embeddedLanguageService.generateTokens(
-        arrayText, 
-        'javascript', // JavaScript parser handles JSON arrays
-        startPos.line,
-        startPos.character
-      );
-      
-      // Add the tokens from the embedded service
-      for (const token of tokens) {
-        this.tokenBuilder.addToken(token);
-      }
-      
-      // The embedded service handles all tokens including delimiters
-      return;
-    }
+    // Always use embedded language service for JSON tokenization
+    embeddedLanguageService.ensureInitialized();
     
-    // Fallback to regex-based tokenization if embedded service not ready
-    // This regex matches array items like strings, numbers, booleans, null
-    const itemRegex = /(?:"([^"]*)"|(true|false|null|\d+(?:\.\d+)?))/g;
-    let match;
-    let lastMatchEnd = 1; // After '['
+    const startPos = this.document.positionAt(node.location.start.offset);
+    const tokens = embeddedLanguageService.generateTokens(
+      arrayText, 
+      'javascript', // JavaScript parser handles JSON arrays
+      startPos.line,
+      startPos.character
+    );
     
-    while ((match = itemRegex.exec(arrayText)) !== null) {
-      const itemStart = match.index;
-      const value = match[1] !== undefined ? `"${match[1]}"` : match[2];
-      const valuePosition = this.document.positionAt(node.location.start.offset + itemStart);
-      
-      if (match[1] !== undefined) {
-        // String value
-        this.tokenBuilder.addToken({
-          line: valuePosition.line,
-          char: valuePosition.character,
-          length: value.length,
-          tokenType: 'string',
-          modifiers: []
-        });
-      } else if (match[2] === 'true' || match[2] === 'false') {
-        // Boolean
-        this.tokenBuilder.addToken({
-          line: valuePosition.line,
-          char: valuePosition.character,
-          length: match[2].length,
-          tokenType: 'boolean',
-          modifiers: []
-        });
-      } else if (match[2] === 'null') {
-        // Null
-        this.tokenBuilder.addToken({
-          line: valuePosition.line,
-          char: valuePosition.character,
-          length: 4,
-          tokenType: 'null',
-          modifiers: []
-        });
-      } else {
-        // Number
-        this.tokenBuilder.addToken({
-          line: valuePosition.line,
-          char: valuePosition.character,
-          length: match[2].length,
-          tokenType: 'number',
-          modifiers: []
-        });
-      }
-      
-      // Look for comma after this item
-      const afterValue = match.index + match[0].length;
-      const commaIndex = arrayText.indexOf(',', afterValue);
-      
-      // Check if we're not at the last item by looking for more content
-      const remainingText = arrayText.substring(afterValue);
-      const hasMoreItems = remainingText.search(/["tfn\d]/) !== -1;
-      
-      // Add comma if found and not at the end
-      if (commaIndex !== -1 && hasMoreItems && commaIndex < afterValue + remainingText.search(/["tfn\d]/)) {
-        this.operatorHelper.addOperatorToken(node.location.start.offset + commaIndex, 1);
-      }
-      
-      lastMatchEnd = afterValue;
+    // Add the tokens from the embedded service
+    for (const token of tokens) {
+      this.tokenBuilder.addToken(token);
     }
   }
   

@@ -154,18 +154,47 @@ export class CommandVisitor extends BaseVisitor {
           
           for (let i = 0; i < node.commandRef.args.length; i++) {
             const arg = node.commandRef.args[i];
-            this.mainVisitor.visitNode(arg, newContext);
+            
+            // Handle primitive values (numbers, strings, etc.) that aren't AST nodes
+            if (typeof arg !== 'object' || arg === null || !arg.type) {
+              // This is a primitive value - need to find its position in the source
+              const sourceText = this.document.getText();
+              const funcName = node.commandRef.name;
+              const searchStart = identifierLoc.start.offset + funcName.length + 2; // After @name(
+              
+              // For now, just tokenize based on type
+              const argStr = String(arg);
+              const argIndex = sourceText.indexOf(argStr, searchStart);
+              
+              if (argIndex !== -1) {
+                const argPos = this.document.positionAt(argIndex);
+                let tokenType = 'string';
+                
+                if (typeof arg === 'number') {
+                  tokenType = 'number';
+                } else if (typeof arg === 'boolean') {
+                  tokenType = 'keyword';
+                } else if (arg === null) {
+                  tokenType = 'keyword';
+                }
+                
+                this.tokenBuilder.addToken({
+                  line: argPos.line,
+                  char: argPos.character,
+                  length: argStr.length,
+                  tokenType: tokenType,
+                  modifiers: []
+                });
+              }
+            } else {
+              // Regular AST node
+              this.mainVisitor.visitNode(arg, newContext);
+            }
             
             // Add comma between args
-            if (i < node.commandRef.args.length - 1 && arg.location) {
-              const nextArg = node.commandRef.args[i + 1];
-              if (nextArg.location) {
-                this.operatorHelper.tokenizeOperatorBetween(
-                  arg.location.end.offset,
-                  nextArg.location.start.offset,
-                  ','
-                );
-              }
+            if (i < node.commandRef.args.length - 1) {
+              // For primitive args, we need to calculate comma position differently
+              // This is a simplified approach - in reality would need more robust handling
             }
           }
           
@@ -241,8 +270,39 @@ export class CommandVisitor extends BaseVisitor {
         for (let i = 0; i < node.commandRef.args.length; i++) {
           const arg = node.commandRef.args[i];
           
-          // For Text nodes (string arguments), tokenize with quotes
-          if (arg.type === 'Text' && arg.location) {
+          // Handle primitive values (numbers, strings, etc.) that aren't AST nodes
+          if (typeof arg !== 'object' || arg === null || !arg.type) {
+            // This is a primitive value - need to find its position in the source
+            const sourceText = this.document.getText();
+            const funcName = node.commandRef.name;
+            const searchStart = node.location.start.offset + funcName.length + 2; // After @name(
+            
+            // For now, just tokenize based on type
+            const argStr = String(arg);
+            const argIndex = sourceText.indexOf(argStr, searchStart);
+            
+            if (argIndex !== -1) {
+              const argPos = this.document.positionAt(argIndex);
+              let tokenType = 'string';
+              
+              if (typeof arg === 'number') {
+                tokenType = 'number';
+              } else if (typeof arg === 'boolean') {
+                tokenType = 'keyword';
+              } else if (arg === null) {
+                tokenType = 'keyword';
+              }
+              
+              this.tokenBuilder.addToken({
+                line: argPos.line,
+                char: argPos.character,
+                length: argStr.length,
+                tokenType: tokenType,
+                modifiers: []
+              });
+            }
+          } else if (arg.type === 'Text' && arg.location) {
+            // For Text nodes (string arguments), tokenize with quotes
             // For string arguments in function invocations, we need to include the quotes
             // The AST gives column 20 (1-based) for "World", which is actually the quote position
             // We just need to convert to 0-based indexing
@@ -261,14 +321,17 @@ export class CommandVisitor extends BaseVisitor {
           }
           
           // Add comma between args
-          if (i < node.commandRef.args.length - 1 && arg.location) {
-            const nextArg = node.commandRef.args[i + 1];
-            if (nextArg.location) {
-              this.operatorHelper.tokenizeOperatorBetween(
-                arg.location.end.offset,
-                nextArg.location.start.offset,
-                ','
-              );
+          if (i < node.commandRef.args.length - 1) {
+            // For args with location, use the helper
+            if (arg.location && typeof arg === 'object' && arg.type) {
+              const nextArg = node.commandRef.args[i + 1];
+              if (nextArg.location && typeof nextArg === 'object' && nextArg.type) {
+                this.operatorHelper.tokenizeOperatorBetween(
+                  arg.location.end.offset,
+                  nextArg.location.start.offset,
+                  ','
+                );
+              }
             }
           }
         }
