@@ -418,9 +418,8 @@ describe('Semantic Tokens Coverage Tests', () => {
       ]);
     });
     
-    // TODO: Fix grammar to properly parse field access in direct assignments
-    // See issues/GRAMMAR-FILE-REFERENCE-FIELD-ACCESS.md
-    it.skip('tokenizes file references with field access in direct assignment', async () => {
+    // Fixed: Grammar now properly parses field access in direct assignments
+    it('tokenizes file references with field access in direct assignment', async () => {
       const code = '/var @version = <package.json>.version';
       await expectTokens(code, [
         { tokenType: 'keyword', text: '/var' },
@@ -434,9 +433,8 @@ describe('Semantic Tokens Coverage Tests', () => {
       ]);
     });
     
-    // TODO: Fix grammar to properly parse pipes in direct assignments
-    // See issues/GRAMMAR-FILE-REFERENCE-FIELD-ACCESS.md
-    it.skip('tokenizes file references with pipes in direct assignment', async () => {
+    // Fixed: Grammar now properly parses pipes in direct assignments
+    it('tokenizes file references with pipes in direct assignment', async () => {
       const code = '/var @formatted = <data.json>|@json|@xml';
       await expectTokens(code, [
         { tokenType: 'keyword', text: '/var' },
@@ -446,9 +444,11 @@ describe('Semantic Tokens Coverage Tests', () => {
         { tokenType: 'string', text: 'data.json' },
         { tokenType: 'operator', text: '>' },
         { tokenType: 'operator', text: '|' },
-        { tokenType: 'variable', text: '@json' },
+        { tokenType: 'operator', text: '@' },
+        { tokenType: 'variable', text: 'json' },
         { tokenType: 'operator', text: '|' },
-        { tokenType: 'variable', text: '@xml' }
+        { tokenType: 'operator', text: '@' },
+        { tokenType: 'variable', text: 'xml' }
       ]);
     });
   });

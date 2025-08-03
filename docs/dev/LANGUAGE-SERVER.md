@@ -280,6 +280,35 @@ The semantic token implementation uses:
 - **Full AST Preservation** - mlld constructs in arrays/objects retain location information
 - **Standard Token Types Only** - Maps mlld-specific types to VSCode's built-in semantic token types for maximum compatibility
 
+#### Abstraction Helpers
+
+To eliminate code duplication and ensure consistent tokenization, the semantic token implementation uses specialized helper classes in `services/lsp/utils/`:
+
+- **OperatorTokenHelper** - Centralizes all operator tokenization:
+  - `tokenizeOperatorBetween()` - Find and tokenize operators between AST nodes
+  - `tokenizeBinaryExpression()` - Handle comparison/logical operators (`==`, `&&`, etc.)
+  - `tokenizePropertyAccess()` - Handle field access (`.property`, `[index]`)
+  - `tokenizePipelineOperators()` - Handle pipe operators (`|`)
+  - `tokenizeDelimiters()` - Handle braces, brackets, parentheses
+  - `tokenizeTernaryOperators()` - Handle `?` and `:` in ternary expressions
+
+- **CommentTokenHelper** - Handles comment tokenization:
+  - Tokenizes `>>` and `<<` comment markers
+  - Manages end-of-line and standalone comments
+  - Handles comment location quirks from the AST
+
+- **TemplateTokenHelper** - Manages template contexts:
+  - Handles different template delimiters (backticks, `::`, `:::`)
+  - Tracks interpolation contexts and variable styles
+  - Manages template type for proper variable handling
+
+- **LanguageBlockHelper** - Centralizes embedded language handling:
+  - Tokenizes language identifiers (`js`, `node`, `sh`, etc.)
+  - Handles opening/closing braces for code blocks
+  - Coordinates with embedded language service
+
+These helpers achieve ~50% code reduction in visitor implementations and ensure consistent operator tokenization across the entire LSP.
+
 #### Key Design Decisions
 
 1. **No Custom Token Types**: We map all mlld concepts to VSCode's standard semantic token types. This ensures compatibility with all themes without requiring custom theme rules.

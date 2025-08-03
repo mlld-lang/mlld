@@ -359,17 +359,26 @@ export class CommandVisitor extends BaseVisitor {
               });
             }
           } else if (arg.type === 'Text' && arg.location) {
-            // For Text nodes (string arguments), tokenize with quotes
-            // For string arguments in function invocations, we need to include the quotes
-            // The AST gives column 20 (1-based) for "World", which is actually the quote position
-            // We just need to convert to 0-based indexing
-            const quotedStart = arg.location.start.column - 1; // Convert 1-based to 0-based
-            const quotedLength = arg.content.length + 2; // Include both quotes
+            // For Text nodes (string arguments), the AST location includes the quotes
+            // We need to use the actual span from the AST
+            const tokenStart = arg.location.start.column - 1; // Convert 1-based to 0-based
+            const tokenLength = arg.location.end.column - arg.location.start.column;
+            
+            if (process.env.DEBUG_LSP === 'true') {
+              console.log('[STRING-ARG]', {
+                content: arg.content,
+                start: arg.location.start,
+                end: arg.location.end,
+                tokenStart,
+                tokenLength,
+                calc: `${arg.location.end.column} - ${arg.location.start.column} = ${tokenLength}`
+              });
+            }
             
             this.tokenBuilder.addToken({
               line: arg.location.start.line - 1,
-              char: quotedStart,
-              length: quotedLength,
+              char: tokenStart,
+              length: tokenLength,
               tokenType: 'string',
               modifiers: []
             });

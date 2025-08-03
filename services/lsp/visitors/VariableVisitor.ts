@@ -148,24 +148,40 @@ export class VariableVisitor extends BaseVisitor {
         const sourceText = this.document.getText();
         const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
         
-        let pipePos = nodeText.indexOf('|');
-        for (const pipe of node.pipes) {
-          if (pipePos !== -1 && pipe.transform) {
-            const transformStart = pipePos + 1;
+        // Since pipe locations in AST are unreliable, we'll parse the text manually
+        let currentPos = 0;
+        let pipeIndex = 0;
+        
+        while (pipeIndex < node.pipes.length) {
+          const pipePos = nodeText.indexOf('|', currentPos);
+          if (pipePos === -1) break;
+          
+          const pipe = node.pipes[pipeIndex];
+          if (pipe.transform) {
+            // Skip whitespace after |
+            let transformStart = pipePos + 1;
+            while (transformStart < nodeText.length && /\s/.test(nodeText[transformStart])) {
+              transformStart++;
+            }
+            
+            // Calculate absolute position of the transform
+            const transformStartOffset = node.location.start.offset + transformStart;
+            const transformPosition = this.document.positionAt(transformStartOffset);
             const hasAt = pipe.hasAt !== false; // Default to true if not specified
             const transformLength = pipe.transform.length + (hasAt ? 1 : 0);
             
             this.tokenBuilder.addToken({
-              line: node.location.start.line - 1,
-              char: node.location.start.column - 1 + transformStart,
+              line: transformPosition.line,
+              char: transformPosition.character,
               length: transformLength,
               tokenType: 'variableRef',
               modifiers: ['reference']
             });
             
-            // Find next pipe
-            pipePos = nodeText.indexOf('|', transformStart + transformLength);
+            // Move past this transform for next search
+            currentPos = transformStart + transformLength;
           }
+          pipeIndex++;
         }
       }
     }

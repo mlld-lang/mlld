@@ -141,20 +141,20 @@
     "body": [
       "`${1:Hello @name!}`"
     ],
-    "description": "Backtick template with @ interpolation"
+    "description": "Backtick template with @var interpolation"
   },
   "Template Double Colon": {
     "prefix": "template::",
     "body": [
       "::${1:Text with `backticks` and @var}::"
     ],
-    "description": "Double-colon template (for text with backticks)"
+    "description": "Double-colon template (useful for text with backticks)"
   },
   "Template Triple Colon": {
     "prefix": "template:::",
     "body": [
       ":::${1:Hey @user, check out {{link}}!}:::"
     ],
-    "description": "Triple-colon template (for social media with @ symbols)"
+    "description": "Triple-colon template for {{var}} interpolation"
   }
 }

@@ -224,12 +224,19 @@ export class ASTSemanticVisitor {
           });
         }
         
-        // Check if there's a quote before the content
-        if (charStart > 0 && source[charStart - 1] === '"') {
+        // Check if this is likely a quoted string argument
+        // The AST location often points to the content, not the quotes
+        // Check if we're in a context that suggests quotes (like after '(' or ',')
+        const charBefore = charStart > 0 ? source[charStart - 1] : '';
+        const isLikelyQuoted = charBefore === '(' || charBefore === ',' || charBefore === ' ';
+        
+        if (isLikelyQuoted) {
+          // Use the AST's location span which should include quotes
+          const tokenLength = node.location.end.column - node.location.start.column;
           this.tokenBuilder.addToken({
             line: node.location.start.line - 1,
-            char: node.location.start.column - 2, // Include opening quote
-            length: node.content.length + 2, // Include both quotes
+            char: node.location.start.column - 1,
+            length: tokenLength,
             tokenType: 'string',
             modifiers: []
           });

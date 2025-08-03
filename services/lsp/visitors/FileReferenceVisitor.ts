@@ -247,18 +247,21 @@ export class FileReferenceVisitor extends BaseVisitor {
               modifiers: []
             });
             
-            // Token for pipe name (including @)
-            const pipeName = '@' + pipe.name;
-            this.tokenBuilder.addToken({
-              line: node.location.start.line - 1,
-              char: nodeStartChar + currentPos + 1,
-              length: pipeName.length,
-              tokenType: 'variableRef',
-              modifiers: []
-            });
+            // Token for "@" + pipe name as a single variable token (for FileReference nodes)
+            const atSymbolPos = nodeText.indexOf('@', currentPos);
+            if (atSymbolPos !== -1) {
+              const pipeName = '@' + pipe.name;
+              this.tokenBuilder.addToken({
+                line: node.location.start.line - 1,
+                char: nodeStartChar + atSymbolPos,
+                length: pipeName.length,
+                tokenType: 'variable',
+                modifiers: []
+              });
+            }
             
             // Find next pipe
-            currentPos = nodeText.indexOf('|', currentPos + pipeName.length);
+            currentPos = nodeText.indexOf('|', currentPos + 1 + pipe.name.length);
         }
       }
     }
@@ -387,81 +390,74 @@ export class FileReferenceVisitor extends BaseVisitor {
     
     // Handle pipes if present
     if (node.pipes && node.pipes.length > 0) {
-      let currentPos = nodeText.indexOf('|');
-      
       for (const pipe of node.pipes) {
-        if (currentPos !== -1) {
-          // Token for "|"
+        // The pipe location includes the |@ prefix, so adjust accordingly
+        const pipeStartOffset = pipe.location.start.offset;
+        const pipeStartChar = pipe.location.start.column - 1;
+        
+        // Token for "|"
+        this.tokenBuilder.addToken({
+          line: pipe.location.start.line - 1,
+          char: pipeStartChar,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+        
+        // Token for "@pipeName" as a single variable token
+        this.tokenBuilder.addToken({
+          line: pipe.location.start.line - 1,
+          char: pipeStartChar + 1,
+          length: pipe.name.length + 1, // +1 for @
+          tokenType: 'variable',
+          modifiers: []
+        });
+        
+        // Handle pipe arguments if present
+        if (pipe.args && pipe.args.length > 0) {
+          // Find the opening parenthesis position
+          const argsStartOffset = pipeStartChar + 2 + pipe.name.length;
+          
+          // Token for "("
           this.tokenBuilder.addToken({
-            line: node.location.start.line - 1,
-            char: nodeStartChar + currentPos,
+            line: pipe.location.start.line - 1,
+            char: argsStartOffset,
             length: 1,
             tokenType: 'operator',
             modifiers: []
           });
           
-          // Token for "@"
-          this.tokenBuilder.addToken({
-            line: node.location.start.line - 1,
-            char: nodeStartChar + currentPos + 1,
-            length: 1,
-            tokenType: 'operator',
-            modifiers: []
-          });
+          // For now, tokenize all args as a single string token
+          // This matches the test expectation for "80" as a string
+          // Use the pipe's location to extract just the pipe text
+          const pipeText = sourceText.substring(pipe.location.start.offset, pipe.location.end.offset);
+          const localOpenParen = pipeText.indexOf('(');
+          const localCloseParen = pipeText.indexOf(')');
           
-          // Token for pipe name
-          this.tokenBuilder.addToken({
-            line: node.location.start.line - 1,
-            char: nodeStartChar + currentPos + 2,
-            length: pipe.name.length,
-            tokenType: 'variableRef',
-            modifiers: []
-          });
+          if (localOpenParen !== -1 && localCloseParen !== -1) {
+            const argsText = pipeText.substring(localOpenParen + 1, localCloseParen);
+            
+            if (argsText.length > 0) {
+              this.tokenBuilder.addToken({
+                line: pipe.location.start.line - 1,
+                char: argsStartOffset + 1,
+                length: argsText.length,
+                tokenType: 'string',
+                modifiers: []
+              });
+            }
+          }
           
-          let nextPos = currentPos + 2 + pipe.name.length;
-          
-          // Handle pipe arguments if present
-          if (pipe.args && pipe.args.length > 0) {
-            // Token for "("
+          // Token for ")"
+          if (localCloseParen !== -1) {
             this.tokenBuilder.addToken({
-              line: node.location.start.line - 1,
-              char: nodeStartChar + nextPos,
+              line: pipe.location.start.line - 1,
+              char: pipeStartChar + localCloseParen,
               length: 1,
               tokenType: 'operator',
               modifiers: []
             });
-            nextPos++;
-            
-            // For now, we'll tokenize args as a single string
-            // This could be enhanced to parse individual arguments
-            const argsEnd = nodeText.indexOf(')', nextPos);
-            if (argsEnd !== -1) {
-              const argsLength = argsEnd - nextPos;
-              if (argsLength > 0) {
-                this.tokenBuilder.addToken({
-                  line: node.location.start.line - 1,
-                  char: nodeStartChar + nextPos,
-                  length: argsLength,
-                  tokenType: 'string',
-                  modifiers: []
-                });
-              }
-              
-              // Token for ")"
-              this.tokenBuilder.addToken({
-                line: node.location.start.line - 1,
-                char: nodeStartChar + argsEnd,
-                length: 1,
-                tokenType: 'operator',
-                modifiers: []
-              });
-              
-              nextPos = argsEnd + 1;
-            }
           }
-          
-          // Find next pipe
-          currentPos = nodeText.indexOf('|', nextPos);
         }
       }
     }

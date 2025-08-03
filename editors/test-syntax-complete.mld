@@ -9,14 +9,16 @@ This file tests all syntax highlighting features including the new operators and
 ## Directives
 /var @name = "John" << comment
 /show @name
-/run {echo "Hello"}
+/run {echo "Hello @name"}
+/run "echo 'hello name'"
 /exe @greet(name) = `Hello @name!`
 /var @docs = <~/Documents>
 /var @files = <**/*.md>
 /var @file = <somefile.md # Something Old> as "## Something New"
 /import { helper } from "./utils.mld"
 /import @mlld/github
-/import { func } from @mlld/githb 
+/import { func } from @mlld/github
+/import { func, other } from "@base/something.mld"
 /import { func as other, x, y as something } from @mlld/github
 
 /when @condition => /show "Success"
@@ -78,9 +80,15 @@ This file tests all syntax highlighting features including the new operators and
 /when @test => @validate() = @runTests() << comment
 
 ### Mixed implicit/explicit in blocks
-/when: [
+/when [
   @x == "implicit assignment" => @process()
   @y == "hello" => /var @y = "explicit assignment"
+  @z == "bye" => @transform() = @applyFilter(@data)
+]
+
+/when @condition: [
+  @x == "implicit assignment" => @process()
+  @y == "hello" => var @y = "explicit assignment"
   @z == "bye" => @transform() = @applyFilter(@data)
 ]
 
@@ -234,7 +242,7 @@ This file tests all syntax highlighting features including the new operators and
     @region == "us" => <config-us.json>
     @region == "eu" => <config-eu.json>  
     true => <config-default.json>
-  ] | @json
+  ]
   @notify(@admin.email, :::High traffic detected: {{users}} users:::)
 ]
 
