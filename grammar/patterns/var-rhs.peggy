@@ -13,6 +13,7 @@ VarRHSContent "var assignment value"
   / TemplateStyleInterpolation  // Handles backtick, [[...]], double/single quotes
   / DataObjectLiteral           // Use data-context object parsing for proper typing
   / ArrayLiteral                // Arrays: [1, 2, 3] - always arrays!
+  / AlligatorWithFields         // File/URL with field access: <file.md>.field - must come before AlligatorExpression
   / AlligatorExpression         // File/URL loading: <file.md> - always loading! (includes transform/rename)
   / VariableWithSpacedPipes     // Variable references @var with spaced or unspaced pipes
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
@@ -32,6 +33,28 @@ ExpressionWithOperator
 
 // Note: AlligatorWithTransform was removed because AlligatorExpression 
 // already handles "as" clauses internally in alligator.peggy
+
+// ALLIGATOR WITH FIELDS - Handles <file.md>.field syntax for direct assignment
+// This pattern allows field access after file references outside of template contexts
+AlligatorWithFields "alligator with field access"
+  = base:AlligatorExpression fields:AnyFieldAccess+ pipes:CondensedPipeChain? {
+      helpers.debug('AlligatorWithFields matched', { 
+        source: base.source,
+        fieldCount: fields.length,
+        pipeCount: pipes ? pipes.length : 0
+      });
+      
+      // Combine pipes from base (before >) and pipes after fields
+      const allPipes = [...(base.pipes || []), ...(pipes || [])];
+      
+      // Convert load-content node to FileReference node with fields
+      return helpers.createFileReferenceNode(
+        base.source,
+        fields,
+        allPipes,
+        location()
+      );
+    }
 
 // TEMPLATE WITH PIPELINE - Handles template content (quoted/backtick) followed by pipes
 TemplateWithPipeline "template with pipeline"
