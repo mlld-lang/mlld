@@ -87,7 +87,36 @@ The server tracks:
 - Variable definitions across files
 - Export declarations
 
-### 6. Semantic Tokens (Syntax Highlighting)
+### 6. Embedded Language Highlighting
+
+The language server provides syntax highlighting for embedded code blocks using web-tree-sitter:
+
+#### Supported Syntax
+
+```mlld
+# Multi-line blocks
+/run js {
+  const x = 42;
+  console.log(x);
+}
+
+# Inline code
+/var @result = js { return Math.random(); }
+/exe @deploy() = sh { npm test && npm run deploy }
+
+# Supported languages
+/run js { ... }     # JavaScript
+/run py { ... }     # Python  
+/run sh { ... }     # Bash/Shell
+```
+
+#### Implementation
+
+- **EmbeddedLanguageService** manages tree-sitter parsers for each language
+- Converts tree-sitter ASTs to LSP semantic tokens
+- WASM parser files must be bundled in production builds
+
+### 7. Semantic Tokens (Syntax Highlighting)
 
 The language server provides semantic tokens for accurate syntax highlighting that understands context. Unlike simple TextMate grammars, semantic tokens analyze the full AST to provide context-aware highlighting.
 
@@ -346,6 +375,24 @@ DEBUG_LSP=true code .
 
 **Debug Mode**: Files with 'test-syntax' in the name trigger additional debug output.
 
+#### Semantic Token Coverage Testing
+
+Test semantic token coverage with environment variables:
+
+```bash
+# Enable coverage checking
+MLLD_TOKEN_COVERAGE=1 npm test
+
+# Skip operator coverage checking
+MLLD_TOKEN_COVERAGE=1 MLLD_TOKEN_CHECK_OPERATORS=0 npm test
+
+# Skip punctuation coverage checking
+MLLD_TOKEN_COVERAGE=1 MLLD_TOKEN_CHECK_PUNCTUATION=0 npm test
+
+# Include markdown content coverage
+MLLD_TOKEN_COVERAGE=1 MLLD_TOKEN_CHECK_MARKDOWN=1 npm test
+```
+
 ### Adding Features
 
 1. Update type definitions in `language-server.ts`
@@ -372,10 +419,8 @@ When adding new syntax support:
 - **Parser Location Quirk**: The AST has inconsistent @ symbol inclusion for variable references with field access. This is handled with a workaround in the semantic visitor but should be fixed in the parser.
 - **Object Property Locations**: Plain JavaScript values in objects/arrays don't have location information, only mlld constructs do.
 - **Template Delimiters in Objects**: Exact delimiter positions aren't available for templates inside object values, so these aren't tokenized to avoid guessing.
-- **Variable Field Access Position Drift**: Position calculation for field access can drift due to manual tracking. See `services/lsp/visitors/VariableVisitor.ts:111-150`.
+- **Variable Field Access Position Drift**: Position calculation for field access can drift due to manual tracking in the `visitFieldAccess` method.
 - **Missing Operator Nodes**: Some operators aren't AST nodes and require manual position calculation using text search methods.
-
-For detailed active issues, see `docs/dev/LSP-ISSUES.md`.
 
 ## Troubleshooting
 
