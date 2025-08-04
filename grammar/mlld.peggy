@@ -164,6 +164,7 @@ Directive
       SlashVar      // NEW: Var directives (unified variable assignment)
     / SlashShow     // NEW: Show directives (content display) - replaces AtAdd
     / SlashExe      // NEW: Exe directives (define commands/code) - replaces AtExec
+    / SlashFor      // For directives (iteration)
     / SlashRun      // Run directives (commands, code)
     / SlashPath     // Path directives (path variables)
     / SlashImport   // Import directives (from other files)

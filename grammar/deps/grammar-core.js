@@ -30,6 +30,7 @@ export const DirectiveKind = {
     var: 'var', // NEW: Replaces text/data
     show: 'show', // NEW: Replaces add
     exe: 'exe', // NEW: Replaces exec
+    for: 'for', // For loops
     path: 'path',
     import: 'import',
     output: 'output',
@@ -67,19 +68,19 @@ export const helpers = {
             return false;
         // Check if it's followed by a valid directive keyword
         const directiveKeywords = Object.keys(DirectiveKind);
-        const afterAtPos = pos + 1;
+        const afterSlashPos = pos + 1;
         // Look ahead to see if a directive keyword follows
         for (const keyword of directiveKeywords) {
-            // Check if there's enough text after @ for this keyword
-            if (afterAtPos + keyword.length > input.length)
+            // Check if there's enough text after / for this keyword
+            if (afterSlashPos + keyword.length > input.length)
                 continue;
-            const potentialKeyword = input.substring(afterAtPos, afterAtPos + keyword.length);
+            const potentialKeyword = input.substring(afterSlashPos, afterSlashPos + keyword.length);
             // Check if the text matches the keyword and is followed by whitespace or EOL
             if (potentialKeyword === keyword) {
                 // If we're at the end of input or the next char is whitespace, it's a directive
-                if (afterAtPos + keyword.length === input.length)
+                if (afterSlashPos + keyword.length === input.length)
                     return true;
-                const nextChar = input[afterAtPos + keyword.length];
+                const nextChar = input[afterSlashPos + keyword.length];
                 if (' \t\r\n'.includes(nextChar))
                     return true;
             }
@@ -1049,5 +1050,35 @@ export const helpers = {
             },
             location
         });
+    },
+    /**
+     * Creates a ForExpression node for for...in expressions in /var assignments
+     */
+    createForExpression(variable, source, expression, location) {
+        return {
+            type: 'ForExpression',
+            nodeId: randomUUID(),
+            variable: variable,
+            source: source,
+            expression: Array.isArray(expression) ? expression : [expression],
+            location: location,
+            meta: {
+                isForExpression: true
+            }
+        };
+    },
+    /**
+     * Creates an action node for /for directive actions
+     */
+    createForActionNode(directive, content, location) {
+        const kind = directive;
+        return [this.createNode(NodeType.Directive, {
+                kind,
+                subtype: kind,
+                values: { content: Array.isArray(content) ? content : [content] },
+                raw: { content: this.reconstructRawString(content) },
+                meta: { implicit: true },
+                location
+            })];
     }
 };

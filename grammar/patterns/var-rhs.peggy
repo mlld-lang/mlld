@@ -5,6 +5,7 @@
 VarRHSContent "var assignment value"
   = ExpressionWithOperator      // Try expressions FIRST but only if operators present
   / WhenExpression              // when: [...] expressions for conditional values
+  / ForExpression               // for @var in @collection => expression
   / ForeachCommandExpression    // foreach @command(@arrays)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
@@ -406,3 +407,27 @@ WhenExpressionConditionPair
 // Actions in when expressions are values, not directives
 WhenExpressionAction
   = VarRHSContent
+
+// FOR EXPRESSION - for @var in @collection => expression
+// Used in /var and /exe assignments to collect results
+ForExpression "for expression"
+  = "for" _ pattern:ForIterationPattern _ "=>" _ expr:VarRHSContent {
+      helpers.debug('ForExpression matched', { pattern, expr });
+      
+      return helpers.createForExpression(
+        pattern.variable,
+        pattern.source, 
+        expr,
+        location()
+      );
+    }
+  // Error recovery
+  / "for" _ "@" id:BaseIdentifier _ "in" _ source:VarRHSContent _ !"=>" {
+      helpers.mlldError("Missing '=>' in for expression. Expected: for @var in @collection => expression", "=>", location());
+    }
+  / "for" _ "@" id:BaseIdentifier _ !"in" {
+      helpers.mlldError("Missing 'in' in for expression. Expected: for @var in @collection => expression", "in", location());
+    }
+  / "for" _ {
+      helpers.mlldError("Invalid for expression syntax. Expected: for @var in @collection => expression", "@", location());
+    }

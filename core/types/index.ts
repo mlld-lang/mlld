@@ -27,6 +27,7 @@ export * from './run';
 export * from './output';
 export * from './when';
 export * from './var'; // New unified var directive
+export * from './for'; // For loop directive and expression
 export * from './load-content'; // Load content types and utilities including URL metadata
 
 // Import node types for the MlldNode union
@@ -56,6 +57,9 @@ import {
 // Import WhenExpressionNode
 import { WhenExpressionNode } from './when';
 
+// Import ForExpression
+import { ForExpression } from './for';
+
 /**
  * Unified AST node type - MlldNode
  * 
@@ -83,7 +87,8 @@ export type MlldNode =
   | BinaryExpression
   | TernaryExpression
   | UnaryExpression
-  | WhenExpressionNode;
+  | WhenExpressionNode
+  | ForExpression;
 
 // =========================================================================
 // VARIABLE TYPES
