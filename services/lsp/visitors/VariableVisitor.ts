@@ -149,10 +149,7 @@ export class VariableVisitor extends BaseVisitor {
           });
         }
         
-        // Use OperatorTokenHelper to tokenize all pipeline operators
-        this.operatorHelper.tokenizePipelineOperators(node.location.start.offset, node.location.end.offset);
-        
-        // Parse text to find transform positions
+        // Parse text to find pipe and transform positions
         const sourceText = this.document.getText();
         const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
         
@@ -166,6 +163,17 @@ export class VariableVisitor extends BaseVisitor {
         while (pipeIndex < node.pipes.length) {
           const pipePos = nodeText.indexOf('|', currentPos);
           if (pipePos === -1) break;
+          
+          // Token for "|"
+          const absolutePipePos = node.location.start.offset + pipePos;
+          const pipePosition = this.document.positionAt(absolutePipePos);
+          this.tokenBuilder.addToken({
+            line: pipePosition.line,
+            char: pipePosition.character,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
           
           const pipe = node.pipes[pipeIndex];
           if (pipe && pipe.transform) {

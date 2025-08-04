@@ -253,3 +253,17 @@ This file tests all syntax highlighting features including the new operators and
 
 ---
 End of syntax test file.
+
+
+
+/var @upper = @text | @uppercase | @upper | @down
+/var @ham = @data | @json | @bacon | @dog 
+
+### Condensed pipes (no spaces)
+/var @chain = @input|@trim
+
+### File pipes
+/var @processed = <raw.txt>|@clean
+
+/when @success => @result = @success.data | @format
+

@@ -261,8 +261,52 @@ export class FileReferenceVisitor extends BaseVisitor {
                   modifiers: []
                 });
                 
-                // Find next pipe
-                currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
+                // Check for arguments
+                if (pipe.args && pipe.args.length > 0) {
+                  const openParenPos = nodeText.indexOf('(', atSymbolPos + pipeName.length);
+                  const closeParenPos = nodeText.indexOf(')', openParenPos);
+                  
+                  if (openParenPos !== -1 && closeParenPos !== -1) {
+                    // Token for "("
+                    this.tokenBuilder.addToken({
+                      line: node.location.start.line - 1,
+                      char: nodeStartChar + openParenPos,
+                      length: 1,
+                      tokenType: 'operator',
+                      modifiers: []
+                    });
+                    
+                    // Token for argument content
+                    const argContent = nodeText.substring(openParenPos + 1, closeParenPos);
+                    if (argContent.length > 0) {
+                      this.tokenBuilder.addToken({
+                        line: node.location.start.line - 1,
+                        char: nodeStartChar + openParenPos + 1,
+                        length: argContent.length,
+                        tokenType: 'string',
+                        modifiers: []
+                      });
+                    }
+                    
+                    // Token for ")"
+                    this.tokenBuilder.addToken({
+                      line: node.location.start.line - 1,
+                      char: nodeStartChar + closeParenPos,
+                      length: 1,
+                      tokenType: 'operator',
+                      modifiers: []
+                    });
+                    
+                    // Find next pipe after the closing paren
+                    currentPos = nodeText.indexOf('|', closeParenPos);
+                  } else {
+                    // Find next pipe
+                    currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
+                  }
+                } else {
+                  // Find next pipe
+                  currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
+                }
               } else {
                 // No transform name, just move past this pipe
                 currentPos = nodeText.indexOf('|', currentPos + 1);
@@ -474,7 +518,7 @@ export class FileReferenceVisitor extends BaseVisitor {
         // Handle pipe arguments if present
         if (pipe.args && pipe.args.length > 0) {
           // Find the opening parenthesis position
-          const argsStartOffset = pipeStartChar + 2 + pipe.name.length;
+          const argsStartOffset = pipeStartChar + 2 + (pipeTransform?.length || 0);
           
           // Token for "("
           this.tokenBuilder.addToken({
