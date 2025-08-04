@@ -273,6 +273,9 @@ The language server supports these settings:
 | `mlldLanguageServer.enableAutocomplete` | boolean | true | Enable/disable autocomplete |
 | `mlldLanguageServer.projectPath` | string | auto | Override project path detection |
 | `mlldLanguageServer.includePaths` | string[] | [] | Additional paths for import resolution |
+| `mlldLanguageServer.validationDelay` | number | 1000 | Delay in ms before showing errors (reduces noise while typing) |
+| `mlldLanguageServer.semanticTokenDelay` | number | 250 | Delay in ms before updating syntax highlighting |
+| `mlldLanguageServer.showIncompleteLineErrors` | boolean | false | Show errors for incomplete lines while typing |
 
 ## Architecture
 
@@ -299,6 +302,17 @@ The server maintains:
 - Text extraction caching for semantic tokens
 - Debounced validation
 - Lazy import resolution
+
+### Graceful Incomplete Line Handling
+
+The language server implements intelligent error suppression to improve the editing experience:
+
+1. **Debounced Validation** - Errors are delayed by `validationDelay` ms (default: 1000ms) to avoid showing errors while typing
+2. **Smart Error Filtering** - Common "incomplete line" errors are suppressed on the line being edited
+3. **Token Preservation** - Syntax highlighting is preserved even when parsing fails by using the last valid tokens
+4. **Different Delays** - Semantic tokens update faster (250ms) than error validation (1000ms)
+
+This prevents annoying red squiggles while typing new directives like `/var @name = "value"` and maintains syntax highlighting even when the document temporarily has syntax errors.
 
 ### Semantic Token Architecture
 

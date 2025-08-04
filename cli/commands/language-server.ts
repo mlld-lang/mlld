@@ -99,6 +99,10 @@ export interface MlldLanguageServerConfig {
   enableAutocomplete: boolean;
   projectPath?: string;
   includePaths?: string[];
+  // Graceful incomplete line handling
+  validationDelay?: number;           // Default: 1000ms
+  semanticTokenDelay?: number;        // Default: 250ms
+  showIncompleteLineErrors?: boolean; // Default: false
 }
 
 export interface VariableInfo {
@@ -121,4 +125,14 @@ export interface DocumentAnalysis {
   imports: string[];
   exports: string[];
   lastAnalyzed: number;
+}
+
+export interface DocumentState {
+  uri: string;
+  version: number;
+  content: string;
+  lastValidAST?: any[];
+  lastValidTokens?: any; // SemanticTokens data
+  currentEditLine?: number;
+  lastEditTime: number;
 }

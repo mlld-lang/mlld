@@ -37,7 +37,7 @@ import { PathService } from '@services/fs/PathService';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { logger } from '@core/utils/logger';
-import type { MlldLanguageServerConfig, VariableInfo, DocumentAnalysis } from './language-server';
+import type { MlldLanguageServerConfig, VariableInfo, DocumentAnalysis, DocumentState } from './language-server';
 import { ASTSemanticVisitor } from '@services/lsp/ASTSemanticVisitor';
 import { initializePatterns, enhanceParseError } from '@core/errors/patterns/init';
 
@@ -98,6 +98,82 @@ const TOKEN_MODIFIERS = [
   'deprecated'        // deprecated syntax
 ];
 
+// Debounced processor for delayed validation and token generation
+class DebouncedProcessor {
+  private validationTimers = new Map<string, NodeJS.Timeout>();
+  private tokenTimers = new Map<string, NodeJS.Timeout>();
+  
+  constructor(
+    private validateFn: (document: TextDocument) => Promise<void>,
+    private tokenFn: (document: TextDocument) => Promise<void>
+  ) {}
+  
+  scheduleValidation(document: TextDocument, delay: number): void {
+    const uri = document.uri;
+    
+    // Clear existing timer
+    const existingTimer = this.validationTimers.get(uri);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    
+    // Set new timer
+    const timer = setTimeout(async () => {
+      this.validationTimers.delete(uri);
+      await this.validateFn(document);
+    }, delay);
+    
+    this.validationTimers.set(uri, timer);
+  }
+  
+  scheduleTokenGeneration(document: TextDocument, delay: number): void {
+    const uri = document.uri;
+    
+    // Clear existing timer
+    const existingTimer = this.tokenTimers.get(uri);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    
+    // Set new timer
+    const timer = setTimeout(async () => {
+      this.tokenTimers.delete(uri);
+      await this.tokenFn(document);
+    }, delay);
+    
+    this.tokenTimers.set(uri, timer);
+  }
+  
+  // Immediately process validation (for document open, etc.)
+  async validateNow(document: TextDocument): Promise<void> {
+    const uri = document.uri;
+    
+    // Clear any pending timer
+    const existingTimer = this.validationTimers.get(uri);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+      this.validationTimers.delete(uri);
+    }
+    
+    await this.validateFn(document);
+  }
+  
+  // Clean up timers for closed documents
+  clearTimers(uri: string): void {
+    const validationTimer = this.validationTimers.get(uri);
+    if (validationTimer) {
+      clearTimeout(validationTimer);
+      this.validationTimers.delete(uri);
+    }
+    
+    const tokenTimer = this.tokenTimers.get(uri);
+    if (tokenTimer) {
+      clearTimeout(tokenTimer);
+      this.tokenTimers.delete(uri);
+    }
+  }
+}
+
 export async function startLanguageServer(): Promise<void> {
   // Initialize error patterns for enhanced error messages
   await initializePatterns();
@@ -111,6 +187,9 @@ export async function startLanguageServer(): Promise<void> {
   // Document analysis cache
   const documentCache = new Map<string, DocumentAnalysis>();
   
+  // Document state tracking for graceful incomplete line handling
+  const documentStates = new Map<string, DocumentState>();
+  
   // File system services
   const fileSystem = new NodeFileSystem();
   const pathService = new PathService();
@@ -121,12 +200,77 @@ export async function startLanguageServer(): Promise<void> {
 
   const defaultSettings: MlldLanguageServerConfig = {
     maxNumberOfProblems: 100,
-    enableAutocomplete: true
+    enableAutocomplete: true,
+    validationDelay: 1000,
+    semanticTokenDelay: 250,
+    showIncompleteLineErrors: false
   };
   let globalSettings: MlldLanguageServerConfig = defaultSettings;
 
   // Cache the settings of all open documents
   const documentSettings: Map<string, Thenable<MlldLanguageServerConfig>> = new Map();
+  
+  // Helper functions for document state management
+  function getOrCreateDocumentState(uri: string): DocumentState {
+    let state = documentStates.get(uri);
+    if (!state) {
+      state = {
+        uri,
+        version: 0,
+        content: '',
+        lastEditTime: Date.now()
+      };
+      documentStates.set(uri, state);
+    }
+    return state;
+  }
+  
+  // Patterns that indicate incomplete typing
+  const INCOMPLETE_ERROR_PATTERNS = [
+    /Expected ".*" but found end of input/,
+    /Expected .* but found newline/,
+    /Unexpected end of input/,
+    /Expected expression/,
+    /Expected value/,
+    /Unterminated string/,
+    /Expected closing/,
+    /Expected "="/,
+    /Expected identifier/,
+    /Expected ":" but found/,
+    /Expected ">" but found/
+  ];
+  
+  function isIncompleteLineError(error: any): boolean {
+    if (!error?.message) return false;
+    return INCOMPLETE_ERROR_PATTERNS.some(pattern => pattern.test(error.message));
+  }
+  
+  function filterIncompleteLineErrors(
+    errors: Diagnostic[],
+    currentEditLine: number | undefined,
+    timeSinceEdit: number,
+    showIncompleteLineErrors: boolean
+  ): Diagnostic[] {
+    if (showIncompleteLineErrors || currentEditLine === undefined) {
+      return errors;
+    }
+    
+    return errors.filter(error => {
+      // Always show errors on other lines
+      if (error.range.start.line !== currentEditLine) {
+        return true;
+      }
+      
+      // If recently edited (within 2 seconds), check if it's an incomplete error
+      if (timeSinceEdit < 2000) {
+        // Check if the error message indicates incomplete typing
+        const errorMessage = (error as any).message || error.message || '';
+        return !INCOMPLETE_ERROR_PATTERNS.some(pattern => pattern.test(errorMessage));
+      }
+      
+      return true;
+    });
+  }
 
   connection.onInitialize((params: InitializeParams) => {
     const capabilities = params.capabilities;
@@ -195,7 +339,7 @@ export async function startLanguageServer(): Promise<void> {
     }
 
     // Revalidate all open text documents
-    documents.all().forEach(validateDocument);
+    documents.all().forEach(doc => debouncedProcessor.validateNow(doc));
   });
 
   function getDocumentSettings(resource: string): Thenable<MlldLanguageServerConfig> {
@@ -220,23 +364,77 @@ export async function startLanguageServer(): Promise<void> {
   documents.onDidClose(e => {
     documentSettings.delete(e.document.uri);
     documentCache.delete(e.document.uri);
+    documentStates.delete(e.document.uri);
+    debouncedProcessor.clearTimers(e.document.uri);
   });
 
   // The content of a text document has changed
-  documents.onDidChangeContent(change => {
-    validateDocument(change.document);
+  documents.onDidChangeContent(async (change) => {
+    const document = change.document;
+    const settings = await getDocumentSettings(document.uri) || defaultSettings;
+    
+    // Update document state with change info
+    const state = getOrCreateDocumentState(document.uri);
+    state.version = document.version;
+    state.content = document.getText();
+    
+    // Track which line is being edited
+    const changeEvent = (change as any);
+    if (changeEvent.contentChanges && changeEvent.contentChanges.length > 0) {
+      const firstChange = changeEvent.contentChanges[0];
+      if (firstChange.range) {
+        state.currentEditLine = firstChange.range.start.line;
+        state.lastEditTime = Date.now();
+      }
+    }
+    
+    // Schedule debounced validation
+    debouncedProcessor.scheduleValidation(
+      document,
+      settings.validationDelay ?? defaultSettings.validationDelay!
+    );
+    
+    // Schedule debounced semantic token generation
+    debouncedProcessor.scheduleTokenGeneration(
+      document,
+      settings.semanticTokenDelay ?? defaultSettings.semanticTokenDelay!
+    );
   });
 
   async function validateDocument(textDocument: TextDocument): Promise<void> {
     const settings = await getDocumentSettings(textDocument.uri) || defaultSettings;
     const analysis = await analyzeDocument(textDocument);
+    const state = getOrCreateDocumentState(textDocument.uri);
+    
+    // Filter errors based on incomplete line settings
+    const timeSinceEdit = Date.now() - state.lastEditTime;
+    const filteredErrors = filterIncompleteLineErrors(
+      analysis.errors,
+      state.currentEditLine,
+      timeSinceEdit,
+      settings.showIncompleteLineErrors ?? false
+    );
     
     // Send diagnostics
     connection.sendDiagnostics({
       uri: textDocument.uri,
-      diagnostics: analysis.errors.slice(0, settings.maxNumberOfProblems)
+      diagnostics: filteredErrors.slice(0, settings.maxNumberOfProblems)
     });
   }
+  
+  // Wrapper function for semantic token generation
+  async function generateSemanticTokensForDocument(document: TextDocument): Promise<void> {
+    // This will be called by the debounced processor
+    // We'll update the semantic token handler to use cached tokens on failure
+    const state = getOrCreateDocumentState(document.uri);
+    state.lastEditTime = Date.now(); // Mark that we're processing
+  }
+  
+  // Create the debounced processor
+  const debouncedProcessor = new DebouncedProcessor(
+    validateDocument,
+    generateSemanticTokensForDocument
+  );
 
   async function analyzeDocument(document: TextDocument): Promise<DocumentAnalysis> {
     const cached = documentCache.get(document.uri);
@@ -1018,29 +1216,52 @@ export async function startLanguageServer(): Promise<void> {
       return { data: [] };
     }
 
-    const analysis = await analyzeDocument(document);
-    const builder = new SemanticTokensBuilder();
+    const state = getOrCreateDocumentState(document.uri);
     
-    connection.console.log(`[SEMANTIC] Processing AST with ${analysis.ast.length} nodes, ${analysis.errors.length} errors`);
-    connection.console.log(`[SEMANTIC] Using TOKEN_TYPES: ${TOKEN_TYPES.join(', ')}`);
-    logger.debug('Processing semantic tokens', { 
-      uri: params.textDocument.uri,
-      astLength: analysis.ast.length,
-      hasErrors: analysis.errors.length > 0
-    });
-    
-    // Process the AST to generate semantic tokens
-    await processASTForSemanticTokens(analysis.ast, document, builder);
-    
-    const tokens = builder.build();
-    const tokenCount = tokens.data.length / 5; // Each token is 5 integers
-    connection.console.log(`[SEMANTIC] Built ${tokenCount} tokens`);
-    logger.debug('Semantic tokens built', { 
-      uri: params.textDocument.uri,
-      tokenCount: tokenCount
-    });
-    
-    return tokens;
+    try {
+      const analysis = await analyzeDocument(document);
+      const builder = new SemanticTokensBuilder();
+      
+      connection.console.log(`[SEMANTIC] Processing AST with ${analysis.ast.length} nodes, ${analysis.errors.length} errors`);
+      connection.console.log(`[SEMANTIC] Using TOKEN_TYPES: ${TOKEN_TYPES.join(', ')}`);
+      logger.debug('Processing semantic tokens', { 
+        uri: params.textDocument.uri,
+        astLength: analysis.ast.length,
+        hasErrors: analysis.errors.length > 0
+      });
+      
+      // Process the AST to generate semantic tokens
+      await processASTForSemanticTokens(analysis.ast, document, builder);
+      
+      const tokens = builder.build();
+      const tokenCount = tokens.data.length / 5; // Each token is 5 integers
+      connection.console.log(`[SEMANTIC] Built ${tokenCount} tokens`);
+      logger.debug('Semantic tokens built', { 
+        uri: params.textDocument.uri,
+        tokenCount: tokenCount
+      });
+      
+      // Cache the successful tokens
+      state.lastValidTokens = tokens;
+      state.lastValidAST = analysis.ast;
+      
+      return tokens;
+    } catch (error) {
+      connection.console.log(`[SEMANTIC] Error generating tokens, using cached tokens if available`);
+      logger.error('Error generating semantic tokens, falling back to cache', {
+        error: error.message,
+        uri: document.uri
+      });
+      
+      // If we have cached tokens, return them
+      if (state.lastValidTokens) {
+        connection.console.log(`[SEMANTIC] Returning cached tokens`);
+        return state.lastValidTokens;
+      }
+      
+      // No cached tokens available
+      return { data: [] };
+    }
   });
 
   async function processASTForSemanticTokens(
