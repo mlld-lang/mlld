@@ -130,37 +130,50 @@ export class ASTSemanticVisitor {
     
     const actualContext = context || this.currentContext;
     
-    if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld') || this.document.uri.includes('test-syntax')) {
-      console.log(`[VISITOR] Node: ${node.type}`, {
-        location: node.location ? `${node.location.start.line}:${node.location.start.column}` : 'none',
-        content: node.content || node.identifier || node.value || '?'
-      });
-    }
-    
-    if (!node.location && node.type !== 'Text' && node.type !== 'Newline' && process.env.DEBUG_LSP) {
-      console.warn(`Node type ${node.type} missing location`);
-    }
-    
-    const visitor = this.visitors.get(node.type);
-    if (visitor) {
-      visitor.visitNode(node, actualContext);
-    } else {
-      switch (node.type) {
-        case 'Text':
-          this.visitText(node, actualContext);
-          break;
-        case 'Newline':
-          break;
-        case 'Error':
-          this.visitError(node);
-          break;
-        case 'Parameter':
-          this.visitParameter(node, actualContext);
-          break;
-        default:
-          console.warn(`Unknown node type: ${node.type}`);
-          this.visitChildren(node, actualContext);
+    try {
+      if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('fails.mld') || this.document.uri.includes('test-syntax')) {
+        console.log(`[VISITOR] Node: ${node.type}`, {
+          location: node.location ? `${node.location.start.line}:${node.location.start.column}` : 'none',
+          content: node.content || node.identifier || node.value || '?'
+        });
       }
+      
+      if (!node.location && node.type !== 'Text' && node.type !== 'Newline' && process.env.DEBUG_LSP) {
+        console.warn(`Node type ${node.type} missing location`);
+      }
+      
+      const visitor = this.visitors.get(node.type);
+      if (visitor) {
+        visitor.visitNode(node, actualContext);
+      } else {
+        switch (node.type) {
+          case 'Text':
+            this.visitText(node, actualContext);
+            break;
+          case 'Newline':
+            break;
+          case 'Error':
+            this.visitError(node);
+            break;
+          case 'Parameter':
+            this.visitParameter(node, actualContext);
+            break;
+          default:
+            console.warn(`Unknown node type: ${node.type}`);
+            this.visitChildren(node, actualContext);
+        }
+      }
+    } catch (error) {
+      console.error(`[SEMANTIC-TOKEN-ERROR] Error visiting node type ${node.type}:`, {
+        error: error.message,
+        stack: error.stack,
+        node: {
+          type: node.type,
+          location: node.location,
+          content: node.content || node.identifier || node.value
+        }
+      });
+      // Continue processing other nodes
     }
   }
   

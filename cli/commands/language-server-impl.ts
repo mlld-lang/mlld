@@ -1048,9 +1048,20 @@ export async function startLanguageServer(): Promise<void> {
     document: TextDocument,
     builder: SemanticTokensBuilder
   ): Promise<void> {
-    // Use the AST visitor for comprehensive semantic token generation
-    const visitor = new ASTSemanticVisitor(document, builder, TOKEN_TYPES, TOKEN_MODIFIERS, TOKEN_TYPE_MAP);
-    await visitor.visitAST(ast);
+    try {
+      // Use the AST visitor for comprehensive semantic token generation
+      const visitor = new ASTSemanticVisitor(document, builder, TOKEN_TYPES, TOKEN_MODIFIERS, TOKEN_TYPE_MAP);
+      await visitor.visitAST(ast);
+    } catch (error) {
+      connection.console.error(`[SEMANTIC-ERROR] Error processing AST for semantic tokens: ${error.message}`);
+      connection.console.error(`[SEMANTIC-ERROR] Stack trace: ${error.stack}`);
+      logger.error('Error in semantic token processing', {
+        error: error.message,
+        stack: error.stack,
+        uri: document.uri
+      });
+      // Don't re-throw - return partial results instead of crashing
+    }
   }
 
   /**

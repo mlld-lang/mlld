@@ -89,7 +89,7 @@ TemplateWithPipeline "template with pipeline"
 
 // VARIABLE WITH SPACED PIPES - Allows both "@var | @pipe" and "@var|@pipe" in var RHS
 VariableWithSpacedPipes "variable with flexible pipe syntax"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* firstPipe:(_ "|" _ "@" transform:BaseIdentifier { return transform; })? restPipes:SpacedOrCondensedPipe* {
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* firstPipe:(_ pipeStart:("" { return peg$currPos; }) "|" _ "@" transform:BaseIdentifier { return { transform, pipeStart }; })? restPipes:SpacedOrCondensedPipe* {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -99,11 +99,21 @@ VariableWithSpacedPipes "variable with flexible pipe syntax"
       // Collect all pipes
       const pipes = [];
       if (firstPipe) {
+        const loc = location();
+        const startOffset = firstPipe.pipeStart;
         pipes.push({
           type: 'CondensedPipe',
-          transform: firstPipe,
+          transform: firstPipe.transform,
           hasAt: true,
-          location: location()
+          location: {
+            source: loc.source,
+            start: { 
+              offset: startOffset,
+              line: loc.start.line,
+              column: loc.start.column - (loc.start.offset - startOffset)
+            },
+            end: loc.end
+          }
         });
       }
       if (restPipes && restPipes.length > 0) {
@@ -122,12 +132,22 @@ VariableWithSpacedPipes "variable with flexible pipe syntax"
 
 // Flexible pipe pattern for var RHS - allows whitespace
 SpacedOrCondensedPipe
-  = _ "|" _ "@" transform:BaseIdentifier {
+  = _ pipeStart:("" { return peg$currPos; }) "|" _ "@" transform:BaseIdentifier {
+      const loc = location();
+      const startOffset = pipeStart;
       return {
         type: 'CondensedPipe',
         transform: transform,
         hasAt: true,
-        location: location()
+        location: {
+          source: loc.source,
+          start: { 
+            offset: startOffset,
+            line: loc.start.line,
+            column: loc.start.column - (loc.start.offset - startOffset)
+          },
+          end: loc.end
+        }
       };
     }
 

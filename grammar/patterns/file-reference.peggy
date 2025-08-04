@@ -64,11 +64,25 @@ FileReferenceContent "file reference content"
 
 // Condensed pipe syntax (no whitespace allowed)
 CondensedPipe "condensed pipe"
-  = "|" "@" name:BaseIdentifier args:CondensedPipeArgs? {
+  = pipeStart:("" { return peg$currPos; }) "|" "@" name:BaseIdentifier args:CondensedPipeArgs? {
+      // Calculate precise location for the pipe starting from |
+      const loc = location();
+      const startOffset = pipeStart;
+      
       return { 
-        name: name,
+        type: 'CondensedPipe',
+        transform: name,
+        hasAt: true,
         args: args || [],
-        location: location()
+        location: {
+          source: loc.source,
+          start: { 
+            offset: startOffset,
+            line: loc.start.line,
+            column: loc.start.column - (loc.start.offset - startOffset)
+          },
+          end: loc.end
+        }
       };
     }
 

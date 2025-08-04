@@ -250,22 +250,31 @@ export class FileReferenceVisitor extends BaseVisitor {
             // Token for "@" + pipe name as a single variable token (for FileReference nodes)
             const atSymbolPos = nodeText.indexOf('@', currentPos);
             if (atSymbolPos !== -1) {
-              const pipeName = '@' + pipe.name;
-              this.tokenBuilder.addToken({
-                line: node.location.start.line - 1,
-                char: nodeStartChar + atSymbolPos,
-                length: pipeName.length,
-                tokenType: 'variable',
-                modifiers: []
-              });
+              const pipeTransform = pipe.transform || pipe.name; // Support both properties
+              if (pipeTransform) {
+                const pipeName = '@' + pipeTransform;
+                this.tokenBuilder.addToken({
+                  line: node.location.start.line - 1,
+                  char: nodeStartChar + atSymbolPos,
+                  length: pipeName.length,
+                  tokenType: 'variable',
+                  modifiers: []
+                });
+                
+                // Find next pipe
+                currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
+              } else {
+                // No transform name, just move past this pipe
+                currentPos = nodeText.indexOf('|', currentPos + 1);
+              }
+            } else {
+              // No @ symbol found, move to next pipe
+              currentPos = nodeText.indexOf('|', currentPos + 1);
             }
-            
-            // Find next pipe
-            currentPos = nodeText.indexOf('|', currentPos + 1 + pipe.name.length);
+          }
         }
       }
     }
-  }
   
   private visitLoadContent(node: any, context: VisitorContext): void {
     const sourceText = this.document.getText();
@@ -390,7 +399,55 @@ export class FileReferenceVisitor extends BaseVisitor {
     
     // Handle pipes if present
     if (node.pipes && node.pipes.length > 0) {
+      // Check if we can use pipe locations
+      const hasPipeLocations = node.pipes[0]?.location?.start?.offset !== undefined;
+      
+      if (!hasPipeLocations) {
+        // Fallback to text-based parsing
+        let currentPos = nodeText.indexOf('|');
+        for (const pipe of node.pipes) {
+          if (currentPos !== -1) {
+            // Token for "|"
+            this.tokenBuilder.addToken({
+              line: node.location.start.line - 1,
+              char: nodeStartChar + currentPos,
+              length: 1,
+              tokenType: 'operator',
+              modifiers: []
+            });
+            
+            // Token for "@pipeName"
+            const atSymbolPos = nodeText.indexOf('@', currentPos);
+            if (atSymbolPos !== -1) {
+              const pipeTransform = pipe.transform || pipe.name;
+              if (pipeTransform) {
+                const pipeName = '@' + pipeTransform;
+                this.tokenBuilder.addToken({
+                  line: node.location.start.line - 1,
+                  char: nodeStartChar + atSymbolPos,
+                  length: pipeName.length,
+                  tokenType: 'variable',
+                  modifiers: []
+                });
+                currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
+              } else {
+                currentPos = nodeText.indexOf('|', currentPos + 1);
+              }
+            } else {
+              currentPos = nodeText.indexOf('|', currentPos + 1);
+            }
+          }
+        }
+        return;
+      }
+      
+      // Use pipe locations when available
       for (const pipe of node.pipes) {
+        if (!pipe.location?.start) {
+          console.warn('[FileRef] Individual pipe missing location');
+          continue;
+        }
+        
         // The pipe location includes the |@ prefix, so adjust accordingly
         const pipeStartOffset = pipe.location.start.offset;
         const pipeStartChar = pipe.location.start.column - 1;
@@ -405,10 +462,11 @@ export class FileReferenceVisitor extends BaseVisitor {
         });
         
         // Token for "@pipeName" as a single variable token
+        const pipeTransform = pipe.transform || pipe.name; // Support both properties
         this.tokenBuilder.addToken({
           line: pipe.location.start.line - 1,
           char: pipeStartChar + 1,
-          length: pipe.name.length + 1, // +1 for @
+          length: pipeTransform.length + 1, // +1 for @
           tokenType: 'variable',
           modifiers: []
         });

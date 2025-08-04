@@ -7,11 +7,9 @@
 /var @chain = @input|@trim|@lowercase|@slug
 
 === START TOKENS ===
-/var --> keyword
 @text --> variable[declaration]
 = --> operator
 "Hello World" --> string
-/var --> keyword
 @data --> variable[declaration]
 = --> operator
 { --> operator
@@ -23,17 +21,14 @@ value --> property
 : --> operator
 42 --> number
 } --> operator
-/var --> keyword
 @input --> variable[declaration]
 = --> operator
 "  some text  " --> string
-/var --> keyword
 @upper --> variable[declaration]
 = --> operator
 @text --> variable
 | --> operator
 @uppercase --> variable
-/var --> keyword
 @json --> variable[declaration]
 = --> operator
 @data --> variable
@@ -41,7 +36,6 @@ value --> property
 @json --> variable
 | --> operator
 @pretty --> variable
-/var --> keyword
 @chain --> variable[declaration]
 = --> operator
 @input --> variable

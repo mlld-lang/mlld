@@ -140,15 +140,26 @@ export class VariableVisitor extends BaseVisitor {
       this.operatorHelper.tokenizePropertyAccess(node);
       
       // Handle pipes if present
-      if (node.pipes && Array.isArray(node.pipes)) {
+      if (node.pipes && Array.isArray(node.pipes) && node.pipes.length > 0) {
+        if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+          console.log('[VAR-PIPES]', {
+            identifier: node.identifier,
+            pipeCount: node.pipes.length,
+            pipes: node.pipes.map(p => ({ transform: p.transform, hasAt: p.hasAt }))
+          });
+        }
+        
         // Use OperatorTokenHelper to tokenize all pipeline operators
         this.operatorHelper.tokenizePipelineOperators(node.location.start.offset, node.location.end.offset);
         
-        // Still need to tokenize the transform names
+        // Parse text to find transform positions
         const sourceText = this.document.getText();
         const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
         
-        // Since pipe locations in AST are unreliable, we'll parse the text manually
+        if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+          console.log('[VAR-PIPES-TEXT]', { nodeText });
+        }
+        
         let currentPos = 0;
         let pipeIndex = 0;
         
@@ -157,7 +168,7 @@ export class VariableVisitor extends BaseVisitor {
           if (pipePos === -1) break;
           
           const pipe = node.pipes[pipeIndex];
-          if (pipe.transform) {
+          if (pipe && pipe.transform) {
             // Skip whitespace after |
             let transformStart = pipePos + 1;
             while (transformStart < nodeText.length && /\s/.test(nodeText[transformStart])) {
@@ -167,19 +178,22 @@ export class VariableVisitor extends BaseVisitor {
             // Calculate absolute position of the transform
             const transformStartOffset = node.location.start.offset + transformStart;
             const transformPosition = this.document.positionAt(transformStartOffset);
-            const hasAt = pipe.hasAt !== false; // Default to true if not specified
-            const transformLength = pipe.transform.length + (hasAt ? 1 : 0);
+            const hasAt = pipe.hasAt !== false;
+            const transformLength = (pipe.transform?.length || 0) + (hasAt ? 1 : 0);
             
             this.tokenBuilder.addToken({
               line: transformPosition.line,
               char: transformPosition.character,
               length: transformLength,
-              tokenType: 'variableRef',
-              modifiers: ['reference']
+              tokenType: 'variable',
+              modifiers: []
             });
             
             // Move past this transform for next search
             currentPos = transformStart + transformLength;
+          } else {
+            // No transform, just move past the pipe
+            currentPos = pipePos + 1;
           }
           pipeIndex++;
         }
