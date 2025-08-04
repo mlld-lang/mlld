@@ -403,15 +403,64 @@ export class CommandVisitor extends BaseVisitor {
         }
         
         // Add closing parenthesis
-        // The ExecInvocation node ends right after the closing paren
-        // So the closing paren is at end.column - 1
-        this.tokenBuilder.addToken({
-          line: node.location.end.line - 1,
-          char: node.location.end.column - 2, // -1 for 0-based, -1 for the paren position
-          length: 1,
-          tokenType: 'operator',
-          modifiers: []
-        });
+        // Find the actual closing paren position in the source
+        const sourceText = this.document.getText();
+        const funcStartOffset = node.location.start.offset;
+        const nodeText = sourceText.substring(funcStartOffset, node.location.end.offset);
+        
+        // Find the first closing paren (which should be for our function call)
+        const closeParenIndex = nodeText.indexOf(')');
+        if (closeParenIndex !== -1) {
+          const closeParenOffset = funcStartOffset + closeParenIndex;
+          const closeParenPos = this.document.positionAt(closeParenOffset);
+          
+          this.tokenBuilder.addToken({
+            line: closeParenPos.line,
+            char: closeParenPos.character,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
+      }
+      
+      // Handle withClause pipeline (for pipes after function calls)
+      if (node.withClause && node.withClause.pipeline) {
+        // The pipes are in a different structure for ExecInvocation
+        // They're in withClause.pipeline as an array of command-like objects
+        for (const pipeCommand of node.withClause.pipeline) {
+          // Find and tokenize the pipe operator
+          const sourceText = this.document.getText();
+          
+          // The pipe should be between the previous element and this command
+          if (pipeCommand.identifier && pipeCommand.identifier.length > 0) {
+            const pipeIdentifier = pipeCommand.identifier[0];
+            if (pipeIdentifier.location) {
+              // Search backwards from the identifier to find the pipe
+              const searchStart = Math.max(0, pipeIdentifier.location.start.offset - 5);
+              const searchText = sourceText.substring(searchStart, pipeIdentifier.location.start.offset);
+              const pipeIndex = searchText.lastIndexOf('|');
+              
+              if (pipeIndex !== -1) {
+                const pipeOffset = searchStart + pipeIndex;
+                const pipePos = this.document.positionAt(pipeOffset);
+                
+                this.tokenBuilder.addToken({
+                  line: pipePos.line,
+                  char: pipePos.character,
+                  length: 1,
+                  tokenType: 'operator',
+                  modifiers: []
+                });
+              }
+            }
+            
+            // Process the identifier (which is the transform)
+            for (const id of pipeCommand.identifier) {
+              this.mainVisitor.visitNode(id, context);
+            }
+          }
+        }
       }
     }
   }

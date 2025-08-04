@@ -141,7 +141,7 @@ export class VariableVisitor extends BaseVisitor {
       
       // Handle pipes if present
       if (node.pipes && Array.isArray(node.pipes) && node.pipes.length > 0) {
-        if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+        if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax') || this.document.uri.includes('test-vscode')) {
           console.log('[VAR-PIPES]', {
             identifier: node.identifier,
             pipeCount: node.pipes.length,
@@ -153,7 +153,7 @@ export class VariableVisitor extends BaseVisitor {
         const sourceText = this.document.getText();
         const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
         
-        if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax')) {
+        if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-syntax') || this.document.uri.includes('test-vscode')) {
           console.log('[VAR-PIPES-TEXT]', { nodeText });
         }
         
@@ -163,6 +163,16 @@ export class VariableVisitor extends BaseVisitor {
         while (pipeIndex < node.pipes.length) {
           const pipePos = nodeText.indexOf('|', currentPos);
           if (pipePos === -1) break;
+          
+          if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('debug-even') || this.document.uri.includes('test-vscode') || this.document.uri.includes('test-final')) {
+            console.log('[PIPE-SEARCH]', {
+              pipeIndex,
+              currentPos,
+              pipePos,
+              searchingFrom: nodeText.substring(currentPos),
+              fullText: nodeText
+            });
+          }
           
           // Token for "|"
           const absolutePipePos = node.location.start.offset + pipePos;
@@ -183,22 +193,52 @@ export class VariableVisitor extends BaseVisitor {
               transformStart++;
             }
             
+            if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-final')) {
+              console.log('[TRANSFORM-POS]', {
+                pipeIndex,
+                pipePos,
+                transformStart,
+                charAtTransformStart: nodeText[transformStart],
+                expectedTransform: pipe.transform
+              });
+            }
+            
             // Calculate absolute position of the transform
             const transformStartOffset = node.location.start.offset + transformStart;
             const transformPosition = this.document.positionAt(transformStartOffset);
             const hasAt = pipe.hasAt !== false;
             const transformLength = (pipe.transform?.length || 0) + (hasAt ? 1 : 0);
             
-            this.tokenBuilder.addToken({
+            const tokenInfo = {
               line: transformPosition.line,
               char: transformPosition.character,
               length: transformLength,
               tokenType: 'variable',
               modifiers: []
-            });
+            };
+            
+            if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-final') || this.document.uri.includes('test-syntax')) {
+              console.log('[PIPE-TOKEN]', {
+                pipeIndex,
+                transform: pipe.transform,
+                token: tokenInfo
+              });
+            }
+            
+            this.tokenBuilder.addToken(tokenInfo);
             
             // Move past this transform for next search
             currentPos = transformStart + transformLength;
+            
+            if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('simple-four')) {
+              console.log('[PIPE-NEXT]', {
+                pipeIndex,
+                transformStart,
+                transformLength,
+                newCurrentPos: currentPos,
+                remainingText: nodeText.substring(currentPos)
+              });
+            }
           } else {
             // No transform, just move past the pipe
             currentPos = pipePos + 1;

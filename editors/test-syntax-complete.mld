@@ -256,14 +256,19 @@ End of syntax test file.
 
 
 
-/var @upper = @text | @uppercase | @upper | @down
-/var @ham = @data | @json | @bacon | @dog 
 
-### Condensed pipes (no spaces)
-/var @chain = @input|@trim
+/var @upper = @text(@abc) | @uppercase | @upper 
+/var @upper = @text(@abc) | @uppercase | @upper | @new 
+/var @upper = @text(@abc) | @uppercase | @upper | @new | @other
+/var @upper = @text(@abc) | @uppercase | @upper | @new | @other | @some
+/var @ham = @data | @json | @bacon | @something
+/var @ham = @data | @json | @bacon
+/var @chain = @input|@trim|@upper
+/var @chain = @input|@trim|@upper|@down
+
 
 ### File pipes
-/var @processed = <raw.txt>|@clean
+/var @processed = <raw.txt>|@clean|@horse|@ham|@something
 
-/when @success => @result = @success.data | @format
+/when @success => @result = @success.data | @format | @horse | @help 
 
