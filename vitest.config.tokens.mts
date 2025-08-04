@@ -16,16 +16,8 @@ export default defineConfig({
       NODE_ENV: 'production'
     },
     globals: true,
-    include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    exclude: [
-      '**/node_modules/**', 
-      '**/dist/**', 
-      '**/.{idea,git,cache,output,temp}/**', 
-      '**/mlld-ast/**', 
-      '**/lib/**', 
-      '**/tests/ast-perf.test.ts', 
-      '**/tests/ephemeral-mode.test.ts',
-      // Exclude token edge case tests - run with npm run test:tokens
+    // Only include token-related tests
+    include: [
       'tests/tokens/**/*.test.ts',
       'services/lsp/semantic-tokens*.test.ts',
       'services/lsp/embedded-language-tokens.test.ts',
@@ -35,16 +27,5 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       exclude: ['**/node_modules/**', '**/dist/**', '**/build/**']
     }
-  },
-  /* // COMMENT OUT build section
-  build: {
-    target: 'esnext',
-    rollupOptions: {
-      external: ['peggy'],
-      output: {
-        format: 'esm'
-      }
-    }
   }
-  */
-}); 
+});

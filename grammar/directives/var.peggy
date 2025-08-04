@@ -66,6 +66,21 @@ SlashVar "var directive"
       else if (value && value.type === 'variableReference') {
         processedValue = [value.value];
         metaInfo.inferredType = 'reference';
+        
+        // Handle pipes if present (following TemplateWithPipeline pattern)
+        if (value.pipes && value.pipes.length > 0) {
+          const pipeline = value.pipes.map(pipe => ({
+            identifier: [helpers.createVariableReferenceNode('varIdentifier', { 
+              identifier: pipe.transform 
+            }, location())],
+            args: pipe.args || [],
+            fields: [],
+            rawIdentifier: pipe.transform,
+            rawArgs: pipe.args || []
+          }));
+          
+          tail = tail ? Object.assign({}, { pipeline }, tail) : { pipeline };
+        }
       }
       // Handle variable references with tail modifiers
       else if (value && value.type === 'VariableReferenceWithTail') {

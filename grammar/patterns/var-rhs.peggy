@@ -70,11 +70,11 @@ TemplateWithPipeline "template with pipeline"
       // Convert condensed pipes to pipeline format
       const pipeline = pipes.map(pipe => ({
         identifier: [helpers.createVariableReferenceNode('varIdentifier', { 
-          identifier: pipe.name 
+          identifier: pipe.transform 
         }, location())],
         args: pipe.args || [],
         fields: [],
-        rawIdentifier: pipe.name,
+        rawIdentifier: pipe.transform,
         rawArgs: pipe.args || []
       }));
       

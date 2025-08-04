@@ -59,6 +59,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:tokens": "vitest run --config vitest.config.tokens.mts",
+    "test:tokens:watch": "vitest --config vitest.config.tokens.mts",
     "tokens": "npm test tokens",
     "tokens:coverage": "MLLD_TOKEN_COVERAGE=1 MLLD_TOKEN_CHECK_OPERATORS=0 MLLD_TOKEN_CHECK_PUNCTUATION=0 npm test interpreter/interpreter.fixture.test.ts",
     "test:examples": "INCLUDE_EXAMPLES=true vitest run interpreter/interpreter.fixture.test.ts",
