@@ -98,6 +98,124 @@ Output:
 - Values maintain their Variable wrapper type during iteration
 - Field access and operations work as expected
 
+## Debugging
+
+When for loops fail silently or behave unexpectedly, mlld provides built-in debugging support to help you understand execution.
+
+### Using DEBUG_FOR
+
+Use the `DEBUG_FOR` environment variable to get detailed visibility into for loop execution:
+
+```bash
+DEBUG_FOR=1 mlld run script.mld
+```
+
+This outputs:
+- Collection type and size before iteration starts
+- Preview of the first few items
+- Progress for each iteration (e.g., "iteration 2/5")
+- Current item value and key (for objects)
+- Action type being executed
+- Completion status for each iteration
+- Total iterations completed
+
+Example output:
+```
+[DEBUG_FOR] For loop starting: {
+  directive: '/for',
+  variable: 'item',
+  collectionType: 'array',
+  collectionSize: 3,
+  location: '6:1'
+}
+[DEBUG_FOR] Collection preview: {
+  firstItems: [
+    { key: null, value: 'apple' },
+    { key: null, value: 'banana' },
+    { key: null, value: 'cherry' }
+  ]
+}
+[DEBUG_FOR] For loop iteration 1/3: {
+  variable: 'item',
+  currentValue: 'apple',
+  currentKey: null,
+  hasKey: false
+}
+```
+
+### Error Debugging
+
+When an error occurs in a for loop, the debug output helps identify exactly which iteration failed:
+
+```
+[DEBUG_FOR] For loop iteration 3/4: {
+  variable: 'item',
+  currentValue: null,
+  currentKey: null,
+  hasKey: false
+}
+Error: Cannot process null item
+```
+
+This shows the error occurred on iteration 3 of 4, with a null value.
+
+### Object Iteration Debugging
+
+When iterating over objects, the debug output shows both keys and values:
+
+```mlld
+/var @config = {"host": "localhost", "port": 3000}
+/for @value in @config => /show "@value_key: @value"
+```
+
+Debug output:
+```
+[DEBUG_FOR] For loop iteration 1/2: {
+  variable: 'value',
+  currentValue: 'localhost',
+  currentKey: 'host',
+  hasKey: true
+}
+```
+
+### Debug Environment Variables
+
+```bash
+DEBUG_FOR=1 mlld run script.mld           # For loop debugging only
+MLLD_DEBUG=true mlld run script.mld       # General mlld debugging (includes for loops)
+DEBUG_FOR=1 mlld run script.mld 2>&1      # Capture debug output with regular output
+```
+
+Note: Debug output is sent to stderr, so use `2>&1` to see it with regular output.
+
+### Debugging Strategies
+
+1. **Pre-loop Inspection**: Always inspect your data before the loop
+   ```mlld
+   /var @items = <*.md>
+   /show "Processing @items.length items"
+   ```
+
+2. **Add Progress Indicators**: Use `/show` statements to track execution
+   ```mlld
+   /for @item in @items => /show "Processing: @item"
+   ```
+
+3. **Manual Unrolling**: For critical debugging, temporarily unroll the loop
+   ```mlld
+   >> Instead of: /for @file in @files => @process(@file)
+   >> Use:
+   @process(@files[0])
+   @process(@files[1])
+   @process(@files[2])
+   ```
+
+4. **Start Small**: Test with array slicing
+   ```mlld
+   /var @subset = @items.slice(0, 3)
+   /for @item in @subset => @process(@item)
+   ```
+
 ## Comparison with Foreach
 
 While `foreach` is designed for complex operations with parameterized commands and cartesian products, `/for` provides a simpler syntax for basic iteration:

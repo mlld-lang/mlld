@@ -6,6 +6,8 @@ import { toIterable } from './for-utils';
 import { createArrayVariable } from '@core/types/variable';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import { VariableImporter } from './import/VariableImporter';
+import { logger } from '@core/utils/logger';
+import { DebugUtils } from '../env/DebugUtils';
 
 // Helper to ensure a value is wrapped as a Variable
 function ensureVariable(name: string, value: unknown): Variable {
@@ -25,6 +27,9 @@ export async function evaluateForDirective(
 ): Promise<EvalResult> {
   const varNode = directive.values.variable[0];
   const varName = varNode.identifier;
+  
+  // Debug support
+  const debugEnabled = process.env.DEBUG_FOR === '1' || process.env.DEBUG_FOR === 'true' || process.env.MLLD_DEBUG === 'true';
 
   // Trace support
   env.pushDirective('/for', `@${varName} in ...`, directive.location);
@@ -46,7 +51,37 @@ export async function evaluateForDirective(
     // Execute action for each item
     let i = 0;
     const iterableArray = Array.from(iterable);
+    
+    // Debug: Log collection info
+    if (debugEnabled) {
+      console.error('[DEBUG_FOR] For loop starting:', {
+        directive: '/for',
+        variable: varName,
+        collectionType: Array.isArray(sourceValue) ? 'array' : typeof sourceValue,
+        collectionSize: iterableArray.length,
+        location: directive.location ? `${directive.location.start.line}:${directive.location.start.column}` : 'unknown'
+      });
+      
+      // Show first few items for context
+      if (iterableArray.length > 0) {
+        const preview = iterableArray.slice(0, 3).map(([key, value]) => ({
+          key,
+          value: DebugUtils.truncateValue(value, typeof value, 30)
+        }));
+        console.error('[DEBUG_FOR] Collection preview:', { firstItems: preview });
+      }
+    }
     for (const [key, value] of iterableArray) {
+      // Debug: Log iteration start
+      if (debugEnabled) {
+        console.error(`[DEBUG_FOR] For loop iteration ${i + 1}/${iterableArray.length}:`, {
+          variable: varName,
+          currentValue: DebugUtils.truncateValue(value, typeof value, 50),
+          currentKey: key,
+          hasKey: key !== null && typeof key === 'string'
+        });
+      }
+      
       const childEnv = env.createChildEnvironment();
       // Preserve Variable wrappers when setting iteration variable
       const iterationVar = ensureVariable(varName, value);
@@ -63,6 +98,13 @@ export async function evaluateForDirective(
       const actionNodes = directive.values.action;
       let actionResult: any = { value: undefined, env: childEnv };
       
+      // Debug: Log action evaluation
+      if (debugEnabled && actionNodes.length > 0) {
+        console.error('[DEBUG_FOR] Evaluating for loop action:', {
+          actionType: actionNodes[0].type,
+          actionCount: actionNodes.length
+        });
+      }
       
       for (const actionNode of actionNodes) {
         actionResult = await evaluate(actionNode, childEnv);
@@ -72,6 +114,14 @@ export async function evaluateForDirective(
       const childNodes = childEnv.getNodes();
       for (const node of childNodes) {
         env.addNode(node);
+      }
+      
+      // Debug: Log iteration completion
+      if (debugEnabled) {
+        console.error(`[DEBUG_FOR] For loop iteration ${i + 1} completed:`, {
+          outputNodes: childNodes.length,
+          hasExecOutput: actionResult.value !== undefined && actionResult.value !== null
+        });
       }
       
       // If the action was a bare exec invocation that produced output,
@@ -98,6 +148,16 @@ export async function evaluateForDirective(
         env.addNode(textNode);
       }
       i++;
+    }
+    
+    // Debug: Log for loop completion
+    if (debugEnabled) {
+      console.error('[DEBUG_FOR] For loop completed:', {
+        directive: '/for',
+        variable: varName,
+        totalIterations: i,
+        expectedIterations: iterableArray.length
+      });
     }
   } finally {
     env.popDirective();

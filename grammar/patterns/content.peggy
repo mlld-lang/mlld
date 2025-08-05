@@ -146,7 +146,7 @@ DoubleQuotedChar
 BacktickInterpolation
   = BacktickExecInvocation    // @func(args) - must come before variable
   / FileReferenceInterpolation // <file.md> references with fields/pipes
-  / VariableWithPipes         // @var or @var.field with optional pipes
+  / TemplateVariableReference // @var - NO tail modifier constraints
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
@@ -247,7 +247,7 @@ DoubleColonContent "Content with @var interpolation"
 DoubleColonInterpolation
   = BacktickExecInvocation      // @func(args)
   / FileReferenceInterpolation   // <file.md>
-  / VariableWithPipes           // @var or @var.field with pipes
+  / TemplateVariableReference   // @var - NO tail modifier constraints
   / "@" !BaseIdentifier char:. { // @ followed by non-identifier
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
@@ -371,7 +371,7 @@ LiteralOnlyContent "Literal text without any interpolation"
 
 // Double quoted content with @var interpolation (supports multiline)
 InterpolatedDoubleQuoteContent "Double quoted content with @var interpolation"
-  = '"' parts:(SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DoubleQuotedText)* '"' {
+  = '"' parts:(SpecialVariable / FileReferenceInterpolation / TemplateVariableReference / DoubleQuotedText)* '"' {
       // Handle empty string case - create Text node with empty content
       if (parts.length === 0) {
         return [helpers.createNode(NodeType.Text, { content: '', location: location() })];

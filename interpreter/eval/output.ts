@@ -15,7 +15,7 @@ import type { EvalResult } from '../core/interpreter';
 import { evaluate, interpolate } from '../core/interpreter';
 import { MlldOutputError } from '@core/errors';
 import { evaluateDataValue } from './data-value-evaluator';
-import { isTextLike, isExecutable, createSimpleTextVariable } from '@core/types/variable';
+import { isTextLike, isExecutable, isTemplate, createSimpleTextVariable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
 import * as path from 'path';
 
@@ -205,7 +205,11 @@ async function evaluateVariableSource(
   directive: DirectiveNode,
   env: Environment
 ): Promise<string> {
-  if (directive.subtype === 'outputInvocation' || directive.subtype === 'outputExecInvocation') {
+  // Check if the source has args, which indicates it's an invocation
+  const source = directive.values.source;
+  const hasArgs = source.args && Array.isArray(source.args) && source.args.length > 0;
+  
+  if (hasArgs || directive.subtype === 'outputInvocation' || directive.subtype === 'outputExecInvocation') {
     // @output @template(args) to target or @output @command(args) to target
     return await evaluateInvocationSource(directive, env);
   } else {
@@ -241,8 +245,29 @@ async function evaluateInvocationSource(
     );
   }
   
-  if (isTextLike(variable) && !isExecutable(variable)) {
-    // It's a regular text variable (not an executable template)
+  // For any variable with args, treat it as an invocation
+  if (args.length > 0) {
+    // Create an ExecInvocation node and use the standard evaluator
+    const execNode = {
+      type: 'ExecInvocation',
+      commandRef: {
+        name: varName,
+        identifier: [{
+          type: 'Text',
+          content: varName
+        }],
+        args: args
+      },
+      withClause: null
+    };
+    
+    // Use the standard exec invocation evaluator
+    const { evaluateExecInvocation } = await import('./exec-invocation');
+    const result = await evaluateExecInvocation(execNode as any, env);
+    return String(result.value);
+    
+  } else if (isTextLike(variable)) {
+    // It's a regular text variable (not a template)
     const templateContent = variable.value;
     
     // Create a child environment for parameter substitution
@@ -278,7 +303,7 @@ async function evaluateInvocationSource(
             isParameter: true
           }
         );
-        childEnv.setParameterVariable(paramName, paramVar);
+        childEnv.set(paramName, paramVar);
       }
     }
     
