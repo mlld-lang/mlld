@@ -5,6 +5,35 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc33]
+
+### Added
+- **Wildcard (*) Literal**: New wildcard literal that always evaluates to true in conditional contexts -- specifically useful as a catch-all in a multiple condition /when sequence in order to be more immediately understandable than '/when... true' 
+  - Basic usage: `/when * => /show "Always executes"`
+  - Default handler in when blocks: `/when [@condition => action, * => "default"]`
+  - Catch-all pattern in exe functions: `/exe @handler() = when: [* => "default response"]`
+  - Works with logical operators: `/when * && @check => action`
+  - Evaluates to true in ternary expressions: `/var @result = * ? "yes" : "no"`
+  - Follows Unix glob convention where `*` means "match anything"
+
+### Fixed
+- **Template Variable References**: Fixed parsing bug where tail modifier keywords (`with`, `pipeline`, `needs`, `as`, `trust`) were incorrectly interpreted inside template contexts
+  - Created separate `TemplateVariableReference` pattern for template interpolation that doesn't check for tail modifiers
+  - Keywords like "with" can now appear as literal text after variables in templates
+  - Fixes: `/exe @claude(prompt,tools) = `@prompt with @tools`` now parses correctly
+  - Affects backtick templates, double-colon templates, and double-quoted strings
+  - Template variables should never have tail modifiers - those constructs only make sense in command contexts
+
+- **Shell Escaping in /for Loops**: Fixed shell command escaping issues when iterating over arrays with special characters
+  - Loop variables are now properly quoted when used in shell commands
+  - Handles filenames with spaces, quotes, and other special characters correctly
+  - Example: `/for @file in <*.md> => /run echo "@file"` now works with "file with spaces.md"
+
+- **Nested Function Execution**: Fixed execution of nested functions in imported modules
+  - Functions like `@module.category.function()` now execute correctly instead of returning string representations
+  - Deeply nested module exports are now properly resolved as executable functions
+  - Affects complex module structures with multiple levels of organization
+
 ## [2.0.0-rc32]
 
 ### Added

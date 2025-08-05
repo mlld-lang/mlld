@@ -57,6 +57,10 @@ export function isTruthy(value: any): boolean {
   }
   
   if (typeof value === 'string') {
+    // Wildcard is always true
+    if (value === '*') {
+      return true;
+    }
     // Empty string is false
     if (value === '') {
       return false;

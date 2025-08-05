@@ -80,6 +80,14 @@ AtomicExpression
         location: location()
       });
     }
+  / value:WildcardLiteral {
+      // Wrap wildcard literal in a Literal node
+      return helpers.createNode('Literal', {
+        value: value,
+        valueType: 'wildcard',
+        location: location()
+      });
+    }
 
 // Error recovery for common mistakes
 / "(" _ expr:Expression _ &{

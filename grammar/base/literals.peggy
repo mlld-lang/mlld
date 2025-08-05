@@ -39,6 +39,10 @@ BooleanLiteral "Boolean Literal"
 NullLiteral "Null Literal"
   = "null" { return null; }
 
+// Wildcard literal - always true in conditional contexts
+WildcardLiteral "Wildcard Literal"
+  = "*" { return "*"; }
+
 // -------------------------------------------------------------
 // TEMPLATE LITERALS
 // -------------------------------------------------------------
