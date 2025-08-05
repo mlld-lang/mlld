@@ -1176,7 +1176,7 @@ export const helpers = {
       subtype: kind,
       values: { content: Array.isArray(content) ? content : [content] },
       raw: { content: this.reconstructRawString(content) },
-      meta: { implicit: true },
+      meta: { implicit: false },
       location
     })];
   }

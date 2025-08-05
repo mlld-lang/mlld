@@ -1,0 +1,27 @@
+/var @files = ["a.txt", "b.txt"]
+/for @file in @files => /show `Processing @file`
+/for @file in @files => /output @file to "output.md"
+
+=== START TOKENS ===
+@files --> variable[declaration]
+= --> operator
+[ --> operator
+"a.txt" --> string
+, --> operator
+"b.txt" --> string
+] --> operator
+@file --> variable
+in --> keyword
+@files --> variable
+=> --> operator
+show --> directive
+`Processing @file` --> string
+@file --> variable
+in --> keyword
+@files --> variable
+=> --> operator
+output --> directive
+@file --> variable
+to --> keyword
+"output.md" --> string
+=== END TOKENS ===
