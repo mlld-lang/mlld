@@ -387,8 +387,7 @@ async function processCategoryDirectory(categoryPath, categoryName) {
   const stats = { total: 0, fixtures: 0, skipped: 0 };
   
   if (categoryName === 'valid') {
-    // For valid cases, we now have three main categories: directives, features, integration
-    // plus the special examples directory
+    // Process all directories under valid/
     const topLevelEntries = await fs.readdir(categoryPath, { withFileTypes: true });
     const topLevelDirs = topLevelEntries.filter(d => d.isDirectory()).map(d => d.name);
     
@@ -404,21 +403,21 @@ async function processCategoryDirectory(categoryPath, categoryName) {
         continue;
       }
       
-      // For directives, features, and integration categories
-      if (['directives', 'features', 'integration'].includes(topLevelDir)) {
-        // Process all subdirectories within the category
+      // Check if this directory contains test subdirectories
+      const entries = await fs.readdir(topLevelPath, { withFileTypes: true });
+      const hasSubDirs = entries.some(e => e.isDirectory());
+      const hasDirectMdFiles = entries.some(f => f.name.startsWith('example') && f.name.endsWith('.md'));
+      
+      if (hasSubDirs) {
+        // This is a category directory (like directives, features, etc)
+        // Process all subdirectories within it
         await processTestCategory(topLevelPath, categoryName, topLevelDir, stats);
-      } else {
-        // Handle any test directories directly under valid/ (should be rare now)
-        const entries = await fs.readdir(topLevelPath);
-        const hasDirectMdFiles = entries.some(f => f.startsWith('example') && f.endsWith('.md'));
-        
-        if (hasDirectMdFiles) {
-          const processed = await processExampleDirectory(topLevelPath, categoryName, topLevelDir);
-          stats.total += processed.total;
-          stats.fixtures += processed.fixtures;
-          stats.skipped += processed.skipped;
-        }
+      } else if (hasDirectMdFiles) {
+        // This directory contains test files directly
+        const processed = await processExampleDirectory(topLevelPath, categoryName, topLevelDir);
+        stats.total += processed.total;
+        stats.fixtures += processed.fixtures;
+        stats.skipped += processed.skipped;
       }
     }
   } else {
@@ -537,13 +536,8 @@ async function processExampleDirectory(dirPath, category, name, directive = null
     const testPath = path.relative(path.join(PROJECT_ROOT, 'tests', 'cases'), dirPath);
     const pathParts = testPath.split(path.sep);
     
-    if (pathParts.includes('directives') || pathParts.includes('features') || pathParts.includes('integration')) {
-      // Use the full path structure for organized tests
-      outputDir = path.join(FIXTURES_DIR, testPath);
-    } else {
-      // Fallback for any tests not yet categorized
-      outputDir = path.join(FIXTURES_DIR, category, name);
-    }
+    // Always preserve the full path structure for all valid tests
+    outputDir = path.join(FIXTURES_DIR, testPath);
   } else {
     // For other categories (exceptions, warnings, invalid), keep existing logic
     outputDir = directive ? 
