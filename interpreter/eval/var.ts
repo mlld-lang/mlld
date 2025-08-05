@@ -540,6 +540,25 @@ export async function evaluateVar(
     env.setVariable(identifier, whenVariable);
     return { value: whenVariable, env };
     
+  } else if (valueNode && valueNode.type === 'ForExpression') {
+    // Handle for expressions: for @item in @collection => expression
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[DEBUG] var.ts: Processing ForExpression:', {
+        identifier,
+        variable: valueNode.variable?.identifier,
+        hasSource: !!valueNode.source,
+        hasExpression: !!valueNode.expression
+      });
+    }
+    
+    // Import and evaluate the for expression
+    const { evaluateForExpression } = await import('./for');
+    const forResult = await evaluateForExpression(valueNode, env);
+    
+    // The result is already an ArrayVariable
+    env.setVariable(identifier, forResult);
+    return { value: forResult, env };
+    
   } else {
     // Default case - try to interpolate as text
     if (process.env.MLLD_DEBUG === 'true') {

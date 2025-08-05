@@ -53,6 +53,7 @@ After typing `/`, suggests available directives:
 - `/exe` - Define reusable commands (replaces /exec)
 - `/import` - Import from files/modules
 - `/when` - Conditional execution
+- `/for` - Iterate over collections
 - `/output` - Define output target
 
 #### Variables
@@ -195,9 +196,10 @@ The semantic token generation follows this flow:
 2. **Visit AST** → `ASTSemanticVisitor` processes each node type
 3. **Dispatch to Visitors** → Specialized visitors handle different node types:
    - `DirectiveVisitor` - Handles directives and their specific syntax
-   - `ExpressionVisitor` - Handles operators, literals, and expressions
+   - `ExpressionVisitor` - Handles operators, literals, and expressions (including `for` expressions)
    - `VariableVisitor` - Handles variable references and field access
    - `FileReferenceVisitor` - Handles alligator syntax and comments
+   - `ForeachVisitor` - Handles foreach command syntax
 4. **Generate Tokens** → Each visitor adds tokens with:
    - Line and character position
    - Length (calculated from AST locations)

@@ -508,6 +508,13 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     return evaluateWhenExpression(node as any, env, context);
   }
   
+  // Handle for expressions
+  if (node.type === 'ForExpression') {
+    const { evaluateForExpression } = await import('../eval/for');
+    const result = await evaluateForExpression(node as any, env);
+    return { value: result, env };
+  }
+  
   
   // If we get here, it's an unknown node type
   throw new Error(`Unknown node type: ${node.type}`);

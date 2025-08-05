@@ -428,6 +428,6 @@ ForExpression "for expression"
   / "for" _ "@" id:BaseIdentifier _ !"in" {
       helpers.mlldError("Missing 'in' in for expression. Expected: for @var in @collection => expression", "in", location());
     }
-  / "for" _ {
+  / "for" _ !"each" _ !BaseIdentifier {
       helpers.mlldError("Invalid for expression syntax. Expected: for @var in @collection => expression", "@", location());
     }

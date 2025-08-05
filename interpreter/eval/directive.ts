@@ -12,6 +12,7 @@ import { evaluateOutput } from './output';
 import { evaluateVar } from './var';
 import { evaluateShow } from './show';
 import { evaluateExe } from './exe';
+import { evaluateForDirective } from './for';
 
 /**
  * Extract trace information from a directive
@@ -126,6 +127,9 @@ export async function evaluateDirective(
       
     case 'exe':
       return await evaluateExe(directive, env);
+      
+    case 'for':
+      return await evaluateForDirective(directive as any, env);
       
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);

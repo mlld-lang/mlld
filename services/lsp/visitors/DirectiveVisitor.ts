@@ -58,6 +58,11 @@ export class DirectiveVisitor extends BaseVisitor {
       return;
     }
     
+    if (node.kind === 'for') {
+      this.visitForDirective(node, context);
+      return;
+    }
+    
     // Handle implicit exe directives (e.g., @transform() = @applyFilter(@data))
     if (node.kind === 'exe' && node.meta?.implicit && node.values?.commandRef) {
       // Token for @commandName
@@ -1674,6 +1679,65 @@ export class DirectiveVisitor extends BaseVisitor {
           tokenType: 'variable',
           modifiers: []
         });
+      }
+    }
+  }
+  
+  private visitForDirective(directive: any, context: VisitorContext): void {
+    const values = directive.values;
+    if (!values || !directive.location) return;
+    
+    const sourceText = this.document.getText();
+    const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+    
+    // Process variable
+    if (values.variable && Array.isArray(values.variable)) {
+      for (const varNode of values.variable) {
+        this.mainVisitor.visitNode(varNode, context);
+      }
+    }
+    
+    // Find and tokenize "in" keyword
+    const inMatch = directiveText.match(/\s+in\s+/);
+    if (inMatch && inMatch.index !== undefined) {
+      const inOffset = directive.location.start.offset + inMatch.index + inMatch[0].indexOf('in');
+      const inPosition = this.document.positionAt(inOffset);
+      
+      this.tokenBuilder.addToken({
+        line: inPosition.line,
+        char: inPosition.character,
+        length: 2,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+    
+    // Process source collection
+    if (values.source && Array.isArray(values.source)) {
+      for (const sourceNode of values.source) {
+        this.mainVisitor.visitNode(sourceNode, context);
+      }
+    }
+    
+    // Find and tokenize "=>" operator
+    const arrowMatch = directiveText.match(/\s+=>\s+/);
+    if (arrowMatch && arrowMatch.index !== undefined) {
+      const arrowOffset = directive.location.start.offset + arrowMatch.index + arrowMatch[0].indexOf('=>');
+      const arrowPosition = this.document.positionAt(arrowOffset);
+      
+      this.tokenBuilder.addToken({
+        line: arrowPosition.line,
+        char: arrowPosition.character,
+        length: 2,
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+    
+    // Process action
+    if (values.action && Array.isArray(values.action)) {
+      for (const actionNode of values.action) {
+        this.mainVisitor.visitNode(actionNode, context);
       }
     }
   }

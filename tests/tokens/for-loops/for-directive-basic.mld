@@ -1,0 +1,18 @@
+/var @items = ["apple", "banana", "cherry"]
+/for @item in @items => /show `Item: @item`
+
+=== START TOKENS ===
+@items --> variable[declaration]
+= --> operator
+[ --> operator
+"apple" --> string
+, --> operator
+"banana" --> string
+, --> operator
+"cherry" --> string
+] --> operator
+@item --> variable
+in --> keyword
+@items --> variable
+=> --> operator
+=== END TOKENS ===

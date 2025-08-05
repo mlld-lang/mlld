@@ -74,6 +74,7 @@ export class ASTSemanticVisitor {
     this.registerVisitor('UnaryExpression', expressionVisitor);
     this.registerVisitor('TernaryExpression', expressionVisitor);
     this.registerVisitor('WhenExpression', expressionVisitor);
+    this.registerVisitor('ForExpression', expressionVisitor);
     this.registerVisitor('Literal', literalVisitor);
     this.registerVisitor('ObjectExpression', structureVisitor);
     this.registerVisitor('object', structureVisitor);

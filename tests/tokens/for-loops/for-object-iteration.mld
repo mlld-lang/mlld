@@ -1,0 +1,24 @@
+/var @config = {"host": "localhost", "port": 3000, "secure": true}
+/for @value in @config => /show `Setting: @value_key = @value`
+
+=== START TOKENS ===
+@config --> variable[declaration]
+= --> operator
+{ --> operator
+"host" --> string
+: --> operator
+"localhost" --> string
+, --> operator
+"port" --> string
+: --> operator
+3000 --> number
+, --> operator
+"secure" --> string
+: --> operator
+true --> keyword
+} --> operator
+@value --> variable
+in --> keyword
+@config --> variable
+=> --> operator
+=== END TOKENS ===

@@ -1,0 +1,40 @@
+/var @transform = for @item in [1, 2, 3] => @item * 2
+/var @numbers = [1, 2, 3, 4, 5]
+/var @doubled = @transform(@numbers, 2)
+
+=== START TOKENS ===
+@transform --> variable[declaration]
+= --> operator
+for --> keyword
+@item --> variable
+in --> keyword
+[ --> operator
+1 --> number
+, --> operator
+2 --> number
+, --> operator
+3 --> number
+] --> operator
+=> --> operator
+@item --> variable
+@numbers --> variable[declaration]
+= --> operator
+[ --> operator
+1 --> number
+, --> operator
+2 --> number
+, --> operator
+3 --> number
+, --> operator
+4 --> number
+, --> operator
+5 --> number
+] --> operator
+@doubled --> variable[declaration]
+= --> operator
+@transform --> variable
+( --> operator
+@numbers --> variable
+2 --> number
+) --> operator
+=== END TOKENS ===

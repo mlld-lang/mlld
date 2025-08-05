@@ -1,0 +1,21 @@
+/var @names = ["Alice", "Bob", "Charlie"]
+/var @greetings = for @name in @names => `Hello, @name!`
+
+=== START TOKENS ===
+@names --> variable[declaration]
+= --> operator
+[ --> operator
+"Alice" --> string
+, --> operator
+"Bob" --> string
+, --> operator
+"Charlie" --> string
+] --> operator
+@greetings --> variable[declaration]
+= --> operator
+for --> keyword
+@name --> variable
+in --> keyword
+@names --> variable
+=> --> operator
+=== END TOKENS ===

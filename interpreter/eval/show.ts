@@ -710,6 +710,13 @@ export async function evaluateShow(
       content = applyHeaderTransform(content, newTitle);
     }
     
+  } else if (directive.subtype === 'show' && directive.values?.content) {
+    // Handle simple show directive with content (used in for loops)
+    const templateNodes = directive.values.content;
+    
+    // Process the content using the standard interpolation
+    content = await interpolate(templateNodes, env);
+    
   } else {
     throw new Error(`Unsupported show subtype: ${directive.subtype}`);
   }

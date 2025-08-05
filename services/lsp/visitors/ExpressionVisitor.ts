@@ -21,7 +21,8 @@ export class ExpressionVisitor extends BaseVisitor {
     return node.type === 'BinaryExpression' || 
            node.type === 'UnaryExpression' ||
            node.type === 'TernaryExpression' ||
-           node.type === 'WhenExpression';
+           node.type === 'WhenExpression' ||
+           node.type === 'ForExpression';
   }
   
   visitNode(node: any, context: VisitorContext): void {
@@ -37,6 +38,9 @@ export class ExpressionVisitor extends BaseVisitor {
         break;
       case 'WhenExpression':
         this.visitWhenExpression(node, context);
+        break;
+      case 'ForExpression':
+        this.visitForExpression(node, context);
         break;
     }
   }
@@ -254,6 +258,72 @@ export class ExpressionVisitor extends BaseVisitor {
         node.location.start.offset + closeBracketIndex,
         1
       );
+    }
+  }
+  
+  private visitForExpression(node: any, context: VisitorContext): void {
+    // Add 'for' keyword token
+    const sourceText = this.document.getText();
+    const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
+    const forIndex = nodeText.indexOf('for');
+    
+    if (forIndex !== -1) {
+      this.tokenBuilder.addToken({
+        line: node.location.start.line - 1,
+        char: node.location.start.column + forIndex - 1,
+        length: 3,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+    
+    // Process variable
+    if (node.variable) {
+      this.mainVisitor.visitNode(node.variable, context);
+    }
+    
+    // Find and tokenize "in" keyword
+    const inMatch = nodeText.match(/\s+in\s+/);
+    if (inMatch && inMatch.index !== undefined) {
+      const inOffset = node.location.start.offset + inMatch.index + inMatch[0].indexOf('in');
+      const inPosition = this.document.positionAt(inOffset);
+      
+      this.tokenBuilder.addToken({
+        line: inPosition.line,
+        char: inPosition.character,
+        length: 2,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+    
+    // Process source collection
+    if (node.source && Array.isArray(node.source)) {
+      for (const sourceNode of node.source) {
+        this.mainVisitor.visitNode(sourceNode, context);
+      }
+    }
+    
+    // Find and tokenize "=>" operator
+    const arrowMatch = nodeText.match(/\s+=>\s+/);
+    if (arrowMatch && arrowMatch.index !== undefined) {
+      const arrowOffset = node.location.start.offset + arrowMatch.index + arrowMatch[0].indexOf('=>');
+      const arrowPosition = this.document.positionAt(arrowOffset);
+      
+      this.tokenBuilder.addToken({
+        line: arrowPosition.line,
+        char: arrowPosition.character,
+        length: 2,
+        tokenType: 'operator',
+        modifiers: []
+      });
+    }
+    
+    // Process expression
+    if (node.expression && Array.isArray(node.expression)) {
+      for (const exprNode of node.expression) {
+        this.mainVisitor.visitNode(exprNode, context);
+      }
     }
   }
 }
