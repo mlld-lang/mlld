@@ -1,246 +1,99 @@
-# mlld Escaping Architecture
+---
+updated: 2025-08-05
+tags: #arch, #security, #interpreter
+related-docs: docs/security.md, docs/slash/var.md, docs/slash/run.md
+related-code: interpreter/core/interpolation-context.ts, interpreter/core/interpreter.ts, interpreter/eval/run.ts, interpreter/eval/for.ts
+related-types: core/types { InterpolationContext, EscapingStrategy }
+---
 
-This document describes mlld's approach to escaping, covering both mlld syntax escaping and shell command safety. The system uses a clear 4-layer architecture where each layer has a single, well-defined responsibility.
+# ESCAPING
 
-## Overview
+## tldr
 
-mlld processes escaping through four distinct layers:
+mlld uses context-aware escaping during interpolation. Variables store raw values. When interpolated into shell commands, they're escaped. When used in templates or JavaScript, they're not. Bug exists where some code paths (nested functions, /for loops) bypass escaping, causing shell injection vulnerabilities.
 
-1. **mlld Syntax Escaping** (Grammar/Parser level)
-2. **String Escape Processing** (Post-parse processing)
-3. **Variable Interpolation** (Value substitution)
-4. **Context-Specific Escaping** (Shell safety, URL encoding, etc.)
+- **Escape at the boundary**: When values cross from mlld to shell
+- **Context determines strategy**: `InterpolationContext.ShellCommand` vs `Template` vs `Default`
+- **No round-trip escaping**: Values stay raw until used
+- **Critical bug**: Some paths skip `interpolate()` and concatenate raw values
 
-Each layer operates independently and in sequence, ensuring predictable behavior and preventing double-escaping issues.
+## Principles
 
-## Layer 1: mlld Syntax Escaping
+- **Context-aware escaping**: Shell contexts escape, templates don't
+- **Single source of truth**: Variables store raw, unescaped values
+- **Escape at usage**: `interpolate()` applies context-appropriate escaping
+- **No double escaping**: Each context gets exactly what it needs
 
-**Purpose**: Allow literal use of mlld syntax characters in content  
-**When**: During parsing (PEG grammar)  
-**Location**: `grammar/base/segments.peggy`
+## Details
 
-### Supported Escape Sequences
+### The Four Layers
 
-```mlld
-\@   → @     (prevent variable interpolation)
-\[   → [     (literal bracket in commands/text)
-\]   → ]     (literal bracket in commands/text)
-\\   → \     (literal backslash)
-```
+1. **mlld Syntax Escaping** - `\@`, `\[`, `\]`, `\\` during parsing
+2. **String Escape Processing** - `\n`, `\t`, etc. after parsing
+3. **Variable Interpolation** - Replace `@var` with values
+4. **Context-Specific Escaping** - Apply `InterpolationContext` strategy
 
-### Examples
+### InterpolationContext System
 
-```mlld
-# Prevent variable interpolation
-@text email = "contact\@example.com"
-# Result: contact@example.com
+Entry point: `interpreter/core/interpolation-context.ts`
 
-# Include literal brackets
-run [echo "array\[0\] = value"]
-# Command sees: echo "array[0] = value"
-
-# Literal backslash
-@text path = "C:\\Users\\Documents"
-# Result: C:\Users\Documents
-```
-
-### Implementation
-
-The grammar processes these escape sequences during parsing, producing clean strings in the AST with the escape characters removed. This happens only for mlld syntax characters - not for string escape sequences like `\n`.
-
-## Layer 2: String Escape Processing
-
-**Purpose**: Process standard string escape sequences  
-**When**: After parsing, before interpolation  
-**Location**: `interpreter/utils/string-processor.ts`
-
-### Supported Escape Sequences
-
-```mlld
-\n   → newline
-\t   → tab
-\r   → carriage return
-\\   → backslash
-\"   → double quote
-\'   → single quote
-\0   → null character
-```
-
-### Examples
-
-```mlld
-# Multi-line text
-@text message = "Line 1\nLine 2\tTabbed"
-# Result: Line 1
-#         Line 2    Tabbed
-
-# Quoted strings
-@text quoted = "He said \"Hello\" to me"
-# Result: He said "Hello" to me
-```
-
-### Context
-
-String escape processing applies uniformly across all string contexts - text assignments, command arguments, templates, etc. This ensures consistent behavior regardless of where strings appear.
-
-## Layer 3: Variable Interpolation
-
-**Purpose**: Replace variable references with their values  
-**When**: During directive evaluation  
-**Location**: `interpreter/core/interpolation.ts`
-
-### Interpolation Contexts
-
-Different contexts use different variable syntax:
-
-- **Commands and Paths**: `@variable` syntax
-- **Templates**: `{{variable}}` syntax
-- **No mixing**: Cannot use `{{}}` in commands or `@` in templates
-
-### Examples
-
-```mlld
-# In commands - use @variable
-@text name = "Alice"
-run [echo "Hello @name"]
-# Executes: echo "Hello Alice"
-
-# In templates - use {{variable}}
-@text greeting = :::Hello {{name}}!:::
-@add @greeting
-# Output: Hello Alice!
-
-# Field access
-@data user = { "name": "Bob", "age": 30 }
-run [echo "@user.name is @user.age years old"]
-# Executes: echo "Bob is 30 years old"
-```
-
-### Escaping in Interpolation
-
-Values are interpolated as-is at this layer. Safety escaping happens in Layer 4 based on the execution context.
-
-## Layer 4: Context-Specific Escaping
-
-**Purpose**: Apply appropriate escaping for the execution context  
-**When**: Just before execution/output  
-**Location**: Various evaluators and output handlers
-
-### Shell Command Escaping
-
-For shell commands, mlld uses the `shell-quote` library to ensure safe execution:
-
-```mlld
-@text file = "my file.txt"
-run [cat @file]
-# Executes: cat 'my file.txt'
-
-@text danger = "'; rm -rf /"
-run [echo @danger]
-# Executes: echo ''\''; rm -rf /'
-# (Single quotes with proper escaping)
-```
-
-### Shell Operator Restrictions
-
-To maintain security and clarity, mlld restricts shell operators:
-
-- **Allowed**: Pipes (`|`) for data flow
-- **Banned**: Command chaining (`;`, `&&`, `||`), redirects (`>`, `>>`), background (`&`)
-
-```mlld
-# ALLOWED - pipes for data flow
-run [ls -la | grep "test" | wc -l]
-
-# ERROR - use mlld control flow instead
-run [mkdir test && cd test]  # Error: Use separate @run commands
-run [test -f file || echo "missing"]  # Error: Use @when
-
-# Do it the mlld way
-run [mkdir test]
-run [cd test]
-
-@when run [test -f file] => @add "file exists"
-```
-
-### Other Contexts
-
-While shell escaping is the primary focus, the architecture supports other contexts:
-
-- **URL Encoding**: For URL parameters and paths
-- **File Paths**: Platform-specific path normalization
-- **JSON Output**: Proper JSON string escaping
-- **XML Output**: Entity encoding for special characters
-
-## Complete Example
-
-Here's how all layers work together:
-
-```mlld
-@text user = "Alice"
-@text file = "data\[2024\].txt"
-@text message = "Processing complete\nStatus: Success"
-
-# Layer 1: \[ and \] become literal brackets
-# Layer 2: \n becomes newline
-# Layer 3: @user and @file are interpolated
-# Layer 4: Shell escaping applied to final values
-
-run [echo "User: @user, File: @file"]
-# Executes: echo 'User: Alice, File: data[2024].txt'
-
-@add @message
-# Output: Processing complete
-#         Status: Success
-```
-
-## Security Considerations
-
-1. **No Double Escaping**: Each layer tracks what escaping has been applied
-2. **Context Awareness**: Escaping strategy matches execution context
-3. **Safe Defaults**: Maximum safety escaping unless explicitly overridden
-4. **Clear Errors**: Banned operators produce clear error messages at parse time
-
-## Implementation Notes
-
-### Parser Integration
-
-The `ShellCommandLine` parser in `grammar/patterns/shell-command.peggy` provides structured parsing of commands, enabling:
-- Detection of operators at parse time
-- Clear error messages with exact locations
-- Structured AST for proper escaping
-
-### Escape State Tracking
-
-Each value carries metadata about what escaping has been applied:
 ```typescript
-interface EscapedValue {
-  value: string;
-  escapingApplied: Set<'syntax' | 'string' | 'shell' | 'url'>;
+export enum InterpolationContext {
+  Default = 'default',           // No escaping
+  ShellCommand = 'shell-command', // Escape: \ " $ `
+  Template = 'template',          // No escaping
+  ShellCode = 'shell-code',       // Different shell context
+  Url = 'url',                    // URL encoding
+  DataValue = 'data-value',       // JSON-like
+  FilePath = 'file-path'          // Path normalization
 }
 ```
 
-This prevents double-escaping and enables proper handling across contexts.
+### Shell Escaping Implementation
 
-## Best Practices
+`ShellCommandEscapingStrategy` escapes these characters:
+- `\` → `\\` (backslash)
+- `"` → `\"` (double quotes)
+- `$` → `\$` (dollar signs)
+- `` ` `` → `` \` `` (backticks)
 
-1. **Use mlld patterns**: Separate commands, `@when` conditionals
-2. **Trust the escaping**: Don't try to pre-escape values
-3. **Keep it simple**: One command per `@run`, use pipes for data flow
-4. **Explicit intent**: If you need shell features, make it clear in your code structure
+### The Critical Flow
 
-## Migration from Raw Shell Scripts
-
-When converting shell scripts to mlld:
-
-```bash
-# Shell script
-mkdir -p "$OUTPUT_DIR" && cd "$OUTPUT_DIR" && echo "Ready"
-
-# mlld equivalent
-run [mkdir -p @OUTPUT_DIR]
-run [cd @OUTPUT_DIR]
-run [echo "Ready"]
+```
+/run {echo "@dangerous"}
+          ↓
+evaluateRun() calls interpolate(nodes, env, InterpolationContext.ShellCommand)
+          ↓
+interpolate() gets @dangerous value: "has `backticks`"
+          ↓
+ShellCommandEscapingStrategy.escape() → "has \`backticks\`"
+          ↓
+env.executeCommand("echo \"has \`backticks\`\"")
 ```
 
-The mlld version is more verbose but also more explicit, easier to debug, and safer from injection attacks.
+### Where Context is Determined
+
+`getInterpolationContext()` maps directive types to contexts:
+- `/run` → `ShellCommand`
+- `/exe` → `ShellCommand`
+- `/var` with templates → `Template`
+- JavaScript code → `Default`
+
+## Gotchas
+
+- **The Bug**: `/for` loops and nested function calls bypass `interpolate()`, directly concatenating values
+- **Shell executor can't escape**: By the time `executeCommand()` receives a string, it can't distinguish variables from literals
+- **No shell-quote library**: Despite docs claiming otherwise, uses custom `ShellCommandEscapingStrategy`
+- **Escaping happens during interpolation**: Not before storage, not after execution
+
+## Debugging
+
+To trace escaping issues:
+1. Set breakpoint in `interpolate()` at `interpreter/core/interpreter.ts:1075`
+2. Check if code path reaches `EscapingStrategyFactory.getStrategy()`
+3. Verify correct `InterpolationContext` is passed
+4. If bypassed, look for direct `String()` concatenation
+
+Key files for the fix:
+- `interpreter/eval/for.ts:84` - Direct string concatenation bug
+- `interpreter/eval/exec-invocation.ts` - Nested function call handling

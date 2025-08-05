@@ -590,8 +590,8 @@ export async function evaluateExecInvocation(
   }
   // Handle command executables
   else if (isCommandExecutable(definition)) {
-    // Interpolate the command template with parameters
-    const command = await interpolate(definition.commandTemplate, execEnv);
+    // Interpolate the command template with parameters using ShellCommand context
+    const command = await interpolate(definition.commandTemplate, execEnv, InterpolationContext.ShellCommand);
     
     if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
       logger.debug('Executing command', {

@@ -1,5 +1,6 @@
 import type { ForDirective, ForExpression, Environment, ArrayVariable, Variable } from '@core/types';
-import { evaluate, type EvalResult } from '../core/interpreter';
+import { evaluate, interpolate, type EvalResult } from '../core/interpreter';
+import { InterpolationContext } from '../core/interpolation-context';
 import { MlldDirectiveError } from '@core/errors';
 import { toIterable } from './for-utils';
 import { createArrayVariable } from '@core/types/variable';
@@ -78,10 +79,20 @@ export async function evaluateForDirective(
       if (directive.values.action.length === 1 && 
           directive.values.action[0].type === 'ExecInvocation' &&
           actionResult.value !== undefined && actionResult.value !== null) {
+        // Create nodes for the command output and interpolate safely
+        const outputNodes = [{ 
+          type: 'Text' as const, 
+          content: String(actionResult.value),
+          nodeId: `${directive.nodeId}-output-${i}`
+        }];
+        
+        // Use interpolate with Template context for safe text handling
+        const safeContent = await interpolate(outputNodes, childEnv, InterpolationContext.Template);
+        
         const textNode = {
           type: 'Text' as const,
           nodeId: `${directive.nodeId}-exec-output-${i}`,
-          content: String(actionResult.value) + '\n', // Always add newline after each output
+          content: safeContent + '\n', // Always add newline after each output
           location: directive.values.action[0].location
         };
         env.addNode(textNode);
