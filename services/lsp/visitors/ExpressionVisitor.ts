@@ -262,6 +262,13 @@ export class ExpressionVisitor extends BaseVisitor {
   }
   
   private visitForExpression(node: any, context: VisitorContext): void {
+    if (!node.location) return;
+    
+    // Debug logging
+    if (process.env.DEBUG_LSP || this.document.uri.includes('test-syntax')) {
+      console.log('[FOR-EXPRESSION] Processing', { node });
+    }
+    
     // Add 'for' keyword token
     const sourceText = this.document.getText();
     const nodeText = sourceText.substring(node.location.start.offset, node.location.end.offset);
@@ -279,7 +286,11 @@ export class ExpressionVisitor extends BaseVisitor {
     
     // Process variable
     if (node.variable) {
-      this.mainVisitor.visitNode(node.variable, context);
+      // Handle both single node and array format
+      const varNode = Array.isArray(node.variable) ? node.variable[0] : node.variable;
+      if (varNode) {
+        this.mainVisitor.visitNode(varNode, context);
+      }
     }
     
     // Find and tokenize "in" keyword
@@ -322,7 +333,21 @@ export class ExpressionVisitor extends BaseVisitor {
     // Process expression
     if (node.expression && Array.isArray(node.expression)) {
       for (const exprNode of node.expression) {
-        this.mainVisitor.visitNode(exprNode, context);
+        // Special handling for exec invocations and directives
+        if (exprNode.type === 'ExecInvocation' || exprNode.type === 'Directive') {
+          this.mainVisitor.visitNode(exprNode, context);
+        } else if (exprNode.type === 'StringLiteral' || exprNode.content) {
+          // Handle template literals
+          const templateNode = {
+            type: 'StringLiteral',
+            location: exprNode.location,
+            content: exprNode.content || [exprNode],
+            wrapperType: exprNode.wrapperType || 'backtick'
+          };
+          this.mainVisitor.visitNode(templateNode, context);
+        } else {
+          this.mainVisitor.visitNode(exprNode, context);
+        }
       }
     }
   }

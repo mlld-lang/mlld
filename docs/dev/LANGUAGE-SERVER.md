@@ -391,6 +391,21 @@ DEBUG_LSP=true code .
 
 **Debug Mode**: Files with 'test-syntax' in the name trigger additional debug output.
 
+#### Visitor Debugging
+
+When tokenization fails, check AST structure first:
+```bash
+npm run ast -- 'problem syntax here'
+```
+
+Common visitor issues:
+- **Variables can be arrays or single nodes** - Always check `Array.isArray(node.variable)`
+- **Operators aren't AST nodes** - Search between nodes: `text.substring(left.end.offset, right.start.offset).indexOf('=>')`
+- **String interpolation needs array processing** - Loop through `node.parts` for Text/VariableReference nodes
+- **Template types affect interpolation** - Check `node.meta?.wrapperType` for context
+
+Use VSCode's Token Inspector (Developer: Inspect Editor Tokens and Scopes) to verify tokens.
+
 #### Semantic Token Coverage Testing
 
 Test semantic token coverage with environment variables:
@@ -432,11 +447,11 @@ When adding new syntax support:
 
 ### Known Issues
 
-- **Parser Location Quirk**: The AST has inconsistent @ symbol inclusion for variable references with field access. This is handled with a workaround in the semantic visitor but should be fixed in the parser.
-- **Object Property Locations**: Plain JavaScript values in objects/arrays don't have location information, only mlld constructs do.
-- **Template Delimiters in Objects**: Exact delimiter positions aren't available for templates inside object values, so these aren't tokenized to avoid guessing.
-- **Variable Field Access Position Drift**: Position calculation for field access can drift due to manual tracking in the `visitFieldAccess` method.
-- **Missing Operator Nodes**: Some operators aren't AST nodes and require manual position calculation using text search methods.
+- **Missing Operator Nodes**: Operators (`=>`, `|`, etc.) aren't AST nodes. Visitors must search between nodes. See issue #338.
+- **Variable nodes inconsistent**: Can be single node or array. Always check `Array.isArray()`.
+- **Parser Location Quirk**: @ symbol inclusion inconsistent for variable field access.
+- **Object Property Locations**: Only mlld constructs have locations, not plain JS values.
+- **ForExpression vs Directive**: For loops appear as both expressions and directives, requiring different handling.
 
 ## Troubleshooting
 

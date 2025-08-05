@@ -672,15 +672,43 @@ export class DirectiveVisitor extends BaseVisitor {
     // Process target
     if (values.target) {
       if (values.target.type === 'file' && values.target.path) {
-        // File path - tokenize as string
-        if (values.target.meta?.quoted && values.target.path[0]) {
-          const pathNode = values.target.path[0];
-          if (pathNode.location) {
-            // Include the quotes in the token
+        // File path - tokenize as string with proper interpolation handling
+        if (values.target.meta?.quoted && values.target.path) {
+          // For quoted paths, we need to handle interpolation
+          // First, add opening quote token
+          const firstPart = values.target.path[0];
+          if (firstPart && firstPart.location) {
             this.tokenBuilder.addToken({
-              line: pathNode.location.start.line - 1,
-              char: pathNode.location.start.column - 2, // -2 to include opening quote
-              length: pathNode.content.length + 2, // +2 for quotes
+              line: firstPart.location.start.line - 1,
+              char: firstPart.location.start.column - 2, // -2 for opening quote
+              length: 1,
+              tokenType: 'string',
+              modifiers: []
+            });
+          }
+          
+          // Process each path part (text and variables)
+          for (const pathPart of values.target.path) {
+            if (pathPart.type === 'Text' && pathPart.location) {
+              this.tokenBuilder.addToken({
+                line: pathPart.location.start.line - 1,
+                char: pathPart.location.start.column - 1,
+                length: pathPart.content.length,
+                tokenType: 'string',
+                modifiers: []
+              });
+            } else if (pathPart.type === 'VariableReference') {
+              this.mainVisitor.visitNode(pathPart, context);
+            }
+          }
+          
+          // Add closing quote token
+          const lastPart = values.target.path[values.target.path.length - 1];
+          if (lastPart && lastPart.location) {
+            this.tokenBuilder.addToken({
+              line: lastPart.location.end.line - 1,
+              char: lastPart.location.end.column - 1,
+              length: 1,
               tokenType: 'string',
               modifiers: []
             });
@@ -1770,7 +1798,13 @@ export class DirectiveVisitor extends BaseVisitor {
     // Process action
     if (values.action && Array.isArray(values.action)) {
       for (const actionNode of values.action) {
-        this.mainVisitor.visitNode(actionNode, context);
+        // Special handling for output directives to ensure proper tokenization
+        if (actionNode.type === 'Directive' && actionNode.kind === 'output') {
+          // For output directives, ensure they are processed with full tokenization
+          this.visitOutputDirective(actionNode, context);
+        } else {
+          this.mainVisitor.visitNode(actionNode, context);
+        }
       }
     }
   }

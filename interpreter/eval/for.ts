@@ -3,7 +3,7 @@ import { evaluate, type EvalResult } from '../core/interpreter';
 import { MlldDirectiveError } from '@core/errors';
 import { toIterable } from './for-utils';
 import { createArrayVariable } from '@core/types/variable';
-import { isVariable } from '../utils/variable-resolution';
+import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import { VariableImporter } from './import/VariableImporter';
 
 // Helper to ensure a value is wrapped as a Variable
@@ -132,8 +132,38 @@ export async function evaluateForExpression(
     }
 
     try {
-      const result = await evaluate(expr.expression, childEnv);
-      results.push(result.value);
+      // Expression is an array of nodes, evaluate them
+      let exprResult: unknown = null;
+      if (Array.isArray(expr.expression) && expr.expression.length > 0) {
+        // Debug log
+        if (process.env.DEBUG_FOR) {
+          console.error('[DEBUG_FOR] Evaluating expression:', JSON.stringify(expr.expression, null, 2));
+        }
+        
+        // Handle wrapped content structure (similar to for directive actions)
+        let nodesToEvaluate = expr.expression;
+        if (expr.expression.length === 1 && expr.expression[0].content && expr.expression[0].wrapperType) {
+          // Unwrap the content
+          nodesToEvaluate = expr.expression[0].content;
+          if (process.env.DEBUG_FOR) {
+            console.error('[DEBUG_FOR] Unwrapped to:', JSON.stringify(nodesToEvaluate, null, 2));
+          }
+        }
+        
+        // Evaluate all nodes
+        const result = await evaluate(nodesToEvaluate, childEnv);
+        if (process.env.DEBUG_FOR) {
+          console.error('[DEBUG_FOR] Result:', result);
+        }
+        
+        // Extract the actual value from Variables
+        if (isVariable(result.value)) {
+          exprResult = await extractVariableValue(result.value, childEnv);
+        } else {
+          exprResult = result.value;
+        }
+      }
+      results.push(exprResult);
     } catch (error) {
       // Collect error with context
       errors.push({ 

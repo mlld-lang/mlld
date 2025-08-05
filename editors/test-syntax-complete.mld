@@ -284,3 +284,5 @@ End of syntax test file.
 This is a template that contains @var
 `
 /for @item in @items => @template(@item)
+
+/var @array = for @item in @items => @otherfunc(@item)

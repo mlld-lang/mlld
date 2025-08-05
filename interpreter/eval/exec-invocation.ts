@@ -656,6 +656,16 @@ export async function evaluateExecInvocation(
       const { evaluateWhenExpression } = await import('./when-expression');
       const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
       result = whenResult.value;
+    } else if (definition.language === 'mlld-for') {
+      // Special handling for mlld-for expressions
+      const forExprNode = definition.codeTemplate[0];
+      if (!forExprNode || forExprNode.type !== 'ForExpression') {
+        throw new MlldInterpreterError('mlld-for executable missing ForExpression node');
+      }
+      
+      // Evaluate the for expression with the parameter environment
+      const { evaluateForExpression } = await import('./for');
+      result = await evaluateForExpression(forExprNode, execEnv);
     } else {
       // For bash/sh, don't interpolate the code template - bash handles its own variable substitution
       let code: string;

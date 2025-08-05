@@ -4,6 +4,7 @@
 
 ExeRHSContent "exe assignment value"
   = WhenExpression              // when: [...] expressions for conditional execution
+  / ForExpression               // for @var in @collection => expression
   / ExeSlashRunPattern          // /run {command} or /run js {code} - optional slash syntax
   / ExeRunCommandPattern        // run {command} - explicit run command syntax
   / ExeCodePattern              // js {code} - language-specific code blocks

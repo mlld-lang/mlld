@@ -8,6 +8,7 @@ import { createExecutableVariable, createSimpleTextVariable, type VariableSource
 import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError';
 import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadowEnvResolver';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { logger } from '@core/utils/logger';
 
 /**
  * Auto-unwrap LoadContentResult objects to their content property
@@ -422,6 +423,43 @@ export async function evaluateExe(
       type: 'code',
       codeTemplate: contentNodes, // Store the WhenExpression node
       language: 'mlld-when', // Special language marker
+      paramNames,
+      sourceDirective: 'exec'
+    } satisfies CodeExecutable;
+    
+  } else if (directive.subtype === 'exeFor') {
+    // Handle for expression executable: @exe name(params) = for @var in @collection => expression
+    const contentNodes = directive.values?.content;
+    if (!contentNodes || !Array.isArray(contentNodes) || contentNodes.length === 0) {
+      throw new Error('Exec for directive missing for expression');
+    }
+    
+    const forExprNode = contentNodes[0];
+    if (!forExprNode || forExprNode.type !== 'ForExpression') {
+      throw new Error('Exec for directive content must be a ForExpression');
+    }
+    
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    
+    // Check for parameter conflicts
+    checkParameterConflicts(paramNames, identifier, directive.location, env);
+    
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('Creating exe for expression:', { 
+        identifier,
+        paramNames,
+        variable: forExprNode.variable?.identifier
+      });
+    }
+    
+    // Create a special executable that evaluates the for expression
+    // We'll treat this as a code executable with special handling
+    executableDef = {
+      type: 'code',
+      codeTemplate: contentNodes, // Store the ForExpression node
+      language: 'mlld-for', // Special language marker
       paramNames,
       sourceDirective: 'exec'
     } satisfies CodeExecutable;
