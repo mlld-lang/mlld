@@ -21,6 +21,7 @@ Directives must appear at start of line (no indentation) and use the `/` prefix:
 /path     - Define filesystem path variables
 /var     - Define structured data variables
 /when     - Conditional actions
+/for      - Iterate over collections
 /output   - Write content to files or streams
 ```
 
@@ -221,6 +222,21 @@ def hello():
 /exe @calculate(x) = js {return @x * 2}           # Code executable
 /exe @getIntro(file) = <@file # Introduction>     # Section executable
 /exe @js = { formatDate, parseJSON }               # Shadow environment
+```
+
+### /for
+
+```mlld
+# Output form - executes action for each item
+/for @item in @array => /show @item
+/for @file in <*.md> => /show `Processing @file.filename`
+
+# Object iteration with key access
+/for @value in @config => /show `@value_key: @value`
+
+# Collection form - returns array
+/var @doubled = for @n in @numbers => @n * 2
+/var @greetings = for @name in @names => `Hello, @name!`
 ```
 
 ### /var

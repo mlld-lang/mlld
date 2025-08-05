@@ -1,24 +1,16 @@
 # Foreach
 
-The `foreach` operator enables powerful iteration over arrays with two distinct syntaxes: parameterized commands for complex operations and direct section extraction for documentation workflows.
+The `foreach` operator enables powerful iteration over arrays with parameterized commands for complex operations and cartesian product support.
 
-## Two Foreach Patterns
+> **Note**: For simple iteration tasks, consider using the `/for` directive instead. Use `foreach` when you need parameterized commands or cartesian products.
 
-### Pattern 1: Parameterized Commands (Traditional)
+## Foreach Pattern
 
 ```mlld
 /var @<result> = foreach <parameterized-command>(<arrays>)
 ```
 
 Apply exec commands or text templates to arrays with cartesian product support.
-
-### Pattern 2: Section Extraction (NEW)
-
-```mlld
-/var @<result> = foreach <@array.field # section> as ::template::
-```
-
-Extract sections from files and apply templates directly - perfect for documentation assembly.
 
 ## Basic Command Syntax
 
@@ -157,123 +149,36 @@ Generate structured reports from data:
 @add @rows
 ```
 
-## Section Extraction Syntax (NEW)
+## Section Extraction with Alligator Globs
 
-The new section extraction syntax enables direct iteration over file arrays with automatic section extraction and template application.
-
-### Basic Section Extraction
-
-Extract the same section from multiple files:
+For extracting sections from multiple files, use the alligator glob syntax with the 'as' template feature instead of foreach:
 
 ```mlld
-@data files = [
-  {"path": "guide.md", "name": "User Guide"},
-  {"path": "api.md", "name": "API Reference"},
-  {"path": "tutorial.md", "name": "Tutorial"}
-]
+# Extract sections from multiple files with templates
+/var @docs = <docs/*.md # Introduction> as "## <>.filename\n<>.content"
 
-# Extract "introduction" section from each file
-@data intros = foreach <@files.path # introduction> as :::### {{files.name}}:::
-@add @intros
+# With specific paths
+/var @sections = <guide.md # Overview, api.md # Endpoints, faq.md # Troubleshooting> as "### <>.filename\n<>.content"
+
+# Dynamic section names require parameterized commands
+/exe @getSection(file, section) = <@file # @section>
+/var @results = foreach @getSection(@files, @sections)
 ```
 
-Result: Creates an array with formatted introductions from all three files.
+> **Note**: The alligator glob syntax with 'as' templates provides a cleaner, more direct approach for most documentation assembly tasks that previously required foreach section extraction.
 
-### Variable Section Names
+## Complex Data Processing
 
-Use dynamic section names stored in the array data:
-
-```mlld
-@data docs = [
-  {"path": "guide.md", "section": "overview", "title": "Overview"},
-  {"path": "api.md", "section": "endpoints", "title": "API Endpoints"},
-  {"path": "faq.md", "section": "troubleshooting", "title": "Troubleshooting"}
-]
-
-# Extract different sections based on array data
-@data sections = foreach <@docs.path # @docs.section> as :::## {{docs.title}}:::
-@add @sections
-```
-
-### Module Documentation Assembly
-
-Perfect for building documentation from module files:
+Work with combinations of parameters using cartesian products:
 
 ```mlld
-@import <@./scan.mld.md>  # Assume this provides file scanning
-@data modules = @scanFiles("./modules", "*.mld.md")
+/var @departments = ["engineering", "sales", "support"]
+/var @quarters = ["Q1", "Q2", "Q3", "Q4"]
 
-# Extract tldr sections and format as module index
-@add foreach <@modules.path # tldr> as :::### [{{modules.frontmatter.name}}]({{modules.path}}):::
-```
-
-### All Directive Support
-
-Section extraction works with all foreach-compatible directives:
-
-```mlld
-# Data directive - store results
-@data summaries = foreach <@files.path # summary> as ::{{files.name}}: Summary::
-
-# Text directive - assign to variable  
-@text content = foreach <@docs.path # @docs.section> as :::## {{docs.title}}:::
-
-# Add directive - direct output
-@add foreach <@modules.path # interface> as :::```{{modules.language}}\n{{content}}\n```:::
-```
-
-### Section Variable Collection (Traditional Method)
-
-For comparison, the traditional method using parameterized commands:
-
-```mlld
-@data sections = ["introduction", "methodology", "results", "conclusion"]
-@text extractSection(name) = :::Content from {{name}} section:::
-
-# Extract all sections with foreach
-@data allSections = foreach @extractSection(@sections)
-@add @allSections
-
-# Or extract from specific files
-@exec getSection(file, section) = run [(echo "From @file:")]\n@add <file.md # @section>
-@data files = ["report1.md", "report2.md", "report3.md"]
-@data sections = ["summary", "recommendations"]
-@data extracted = foreach @getSection(@files, @sections)
-```
-
-### Dynamic Documentation Assembly (Traditional Method)
-
-Build documentation by collecting sections across multiple files:
-
-```mlld
-@data sources = [
-  {"file": "intro.md", "section": "overview"},
-  {"file": "guide.md", "section": "getting-started"},
-  {"file": "api.md", "section": "endpoints"},
-  {"file": "examples.md", "section": "tutorials"}
-]
-
-@text includeSection(source) = ::
-## {{source.section}} 
-@add <{{source.file}} # {{source.section}}>
-::
-
-@data documentation = foreach @includeSection(@sources)
-@add @documentation
-```
-
-### Nested Data Processing
-
-Work with complex combinations of parameters:
-
-```mlld
-@data departments = ["engineering", "sales", "support"]
-@data quarters = ["Q1", "Q2", "Q3", "Q4"]
-
-@exec get_revenue(dept, quarter) = run [(
+/exe @getRevenue(dept, quarter) = run {
   curl -s "https://api.company.com/revenue/@dept/@quarter" | jq .total
-)]
-@data revenues = foreach @get_revenue(@departments, @quarters)
+}
+/var @revenues = foreach @getRevenue(@departments, @quarters)
 
 # Generates 12 API calls (3 departments × 4 quarters)
 ```
@@ -382,9 +287,33 @@ Command failed with exit code 1
 6. **Missing Error Handling**: Not accounting for individual iteration failures
 7. **Type Assumptions**: Assuming array elements have specific structure without validation
 
-## Choosing the Right Pattern
+## Comparison with /for
 
-- **Use parameterized commands** for complex operations, cartesian products, or when you need reusable logic
-- **Use section extraction** for documentation workflows, file processing, or when directly working with file arrays
+| Feature | `foreach` | `/for` | Alligator Globs |
+|---------|-----------|---------|-----------------|
+| Simple iteration | ✓ | ✓ (simpler syntax) | N/A |
+| Cartesian product | ✓ | ✗ | ✗ |
+| Parameterized commands | ✓ | ✗ | N/A |
+| Section extraction | ✗ (deprecated) | ✗ | ✓ (with 'as') |
+| Object key access | ✗ | ✓ (`@var_key`) | N/A |
+| Inline expressions | ✗ | ✓ | ✓ (in templates) |
+| Output actions | ✗ | ✓ | ✗ |
+| File glob patterns | ✗ | ✗ | ✓ |
+
+**Use `/for`** for:
+- Simple iteration with output actions
+- Collecting transformed values
+- Object iteration with key access
+- Cleaner syntax for basic loops
+
+**Use `foreach`** for:
+- Cartesian products (multiple arrays)
+- Parameterized executable commands
+- Complex batch operations
+
+**Use alligator globs `<pattern>`** for:
+- Extracting sections from multiple files
+- File pattern matching with templates
+- Documentation assembly workflows
 
 The `foreach` operator makes mlld particularly powerful for batch operations, especially when working with AI models, data processing pipelines, and automation workflows.

@@ -79,6 +79,11 @@ This file tests all syntax highlighting features including the new operators and
 /when @development => @setupDev()
 /when @test => @validate() = @runTests() << comment
 
+### Interpolation
+/var @var = `Hello world this is a @variable`
+/var @other = "Hello this is also a @variable"
+/var @myvar = 'This @variable is just text'
+
 ### Mixed implicit/explicit in blocks
 /when [
   @x == "implicit assignment" => @process()
@@ -257,7 +262,7 @@ End of syntax test file.
 
 
 
-/var @upper = @text(@abc) | @uppercase | @upper 
+/var @upper = @text(@abc) | @uppercase | @upper
 /var @upper = @text(@abc) | @uppercase | @upper | @new 
 /var @upper = @text(@abc) | @uppercase | @upper | @new | @other
 /var @upper = @text(@abc) | @uppercase | @upper | @new | @other | @some
@@ -286,3 +291,4 @@ This is a template that contains @var
 /for @item in @items => @template(@item)
 
 /var @array = for @item in @items => @otherfunc(@item)
+/exe @function(@items) = for @item in @items => @otherfunc(@item) 

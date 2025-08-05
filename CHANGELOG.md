@@ -5,6 +5,20 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc32]
+
+### Added
+- **For Loop Iteration**: New `/for` directive for iteration over arrays and objects
+  - Output form: `/for @item in @collection => action` - Executes action for each item
+  - Collection form: `/var @results = for @item in @collection => expression` - Collects results into array
+  - Array iteration: `/for @item in ["a", "b", "c"] => /show @item`
+  - Object iteration: `/for @value in {"x": 1, "y": 2} => /show @value` 
+  - Object key access: `@value_key` pattern provides access to keys when iterating objects
+  - Works with all iterable values including globs: `/for @file in <*.md> => /show @file.filename`
+  - Preserves variable type information throughout iteration for consistent behavior
+  - Semantic token support in LSP for syntax highlighting
+  - Compatible with pipelines and transformations
+
 ## [2.0.0-rc31]
 
 ### Added

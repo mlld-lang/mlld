@@ -286,12 +286,48 @@ Path: <>.relative
 ]
 ```
 
-### 11. Iteration with foreach
+### 11. Iteration with foreach and for
+
+#### foreach - Transform collections
 ```mlld
 /var @names = ["Alice", "Bob", "Charlie"]
 /exe @greetTemplate(name) = ::Hello, {{name}}!::
 /var @greetings = foreach @greetTemplate(@names)
 >> greetings = ["Hello, Alice!", "Hello, Bob!", "Hello, Charlie!"]
+```
+
+#### /for - Iterate and execute
+```mlld
+>> Output form - executes action for each item
+/var @items = ["apple", "banana", "cherry"]
+/for @item in @items => /show `Fruit: @item`
+>> Outputs:
+>> Fruit: apple
+>> Fruit: banana
+>> Fruit: cherry
+
+>> Collection form - returns array of results
+/var @numbers = [1, 2, 3]
+/var @doubled = for @n in @numbers => js { return @n * 2 }
+>> doubled = [2, 4, 6]
+
+>> Object iteration
+/var @config = {"host": "localhost", "port": 3000}
+/for @value in @config => /show `Value: @value`
+
+>> Object key access with underscore pattern
+/for @value in @config => /show `@value_key: @value`
+>> Outputs:
+>> host: localhost
+>> port: 3000
+
+>> Works with file globs
+/for @file in <*.md> => /show `Processing @file.filename`
+
+>> Empty arrays handled gracefully
+/var @empty = []
+/for @x in @empty => /show @x  >> No output
+/var @results = for @x in @empty => @x  >> results = []
 ```
 
 ## Basic Examples

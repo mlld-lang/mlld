@@ -102,12 +102,24 @@ PR: @currentPR
 /var @answer = run {claude -p "@question"} | @checkFacts | @improveClarity | @addExamples
 ```
 
-### 4. Cartesian Products
+### 4. Iteration and Processing
 
 ```mlld
+# For loops - execute actions for each item
+/var @files = ["report.md", "summary.md", "notes.md"]
+/for @file in @files => /show `Processing: @file`
+
+# Collect results with for expressions
+/var @scores = [85, 92, 78, 95]
+/var @grades = for @score in @scores => when: [
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  true => "C"
+]
+
+# Cartesian products with foreach
 /var @models = ["claude-3", "gpt-4", "gemini"]
 /var @prompts = ["Explain X", "Compare Y", "Design Z"]
-
 /exe @query(model, prompt) = run "@model -p '@prompt'"
 /var @results = foreach @query(@models, @prompts)  << 9 results
 ```
