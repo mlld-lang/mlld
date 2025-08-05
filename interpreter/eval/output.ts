@@ -112,7 +112,8 @@ export async function evaluateOutput(
     } else {
       throw new MlldOutputError(
         'No target specified for output directive',
-        directive.location
+        'unknown',
+        { location: directive.location }
       );
     }
     
@@ -131,7 +132,8 @@ export async function evaluateOutput(
     } else {
       throw new MlldOutputError(
         `Unknown target type: ${targetType}`,
-        directive.location
+        'unknown',
+        { location: directive.location }
       );
     }
     
@@ -156,7 +158,8 @@ export async function evaluateOutput(
     if (error instanceof Error) {
       throw new MlldOutputError(
         `Failed to process output: ${error.message}`,
-        directive.location
+        format || 'unknown',
+        { location: directive.location, cause: error }
       );
     }
     throw error;
@@ -224,7 +227,7 @@ async function evaluateInvocationSource(
     : undefined;
   
   if (!varName) {
-    throw new MlldOutputError(`Invalid variable reference in output directive`, directive.location);
+    throw new MlldOutputError(`Invalid variable reference in output directive`, 'unknown', { location: directive.location });
   }
   const args = directive.values.source.args || [];
   

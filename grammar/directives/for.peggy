@@ -2,8 +2,18 @@
 // Implementation of the /for directive for iteration
 
 SlashFor "for directive"
-  = DirectiveContext "/for" _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction {
-      helpers.debug('SlashFor matched', { pattern, action });
+  = DirectiveContext "/for" _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction ending:StandardDirectiveEnding {
+      helpers.debug('SlashFor matched', { pattern, action, ending });
+      
+      const meta = {
+        hasVariables: true,
+        actionType: 'single'
+      };
+      
+      // Add comment from ending if present
+      if (ending.comment) {
+        meta.comment = ending.comment;
+      }
       
       return helpers.createStructuredDirective(
         'for',
@@ -18,10 +28,7 @@ SlashFor "for directive"
           source: helpers.reconstructRawString(pattern.source),
           action: helpers.reconstructRawString(action)
         },
-        {
-          hasVariables: true,
-          actionType: 'single'
-        },
+        meta,
         location()
       );
     }

@@ -15,7 +15,10 @@ in --> keyword
 @files --> variable
 => --> operator
 show --> directive
-`Processing @file` --> string
+` --> operator
+Processing  --> string
+@file --> variable
+` --> operator
 @file --> variable
 in --> keyword
 @files --> variable

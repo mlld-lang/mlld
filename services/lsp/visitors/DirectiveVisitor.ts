@@ -321,10 +321,41 @@ export class DirectiveVisitor extends BaseVisitor {
     
     
     // Handle /show directives with content field first
-    if (directive.kind === 'show' && values.content && directive.meta?.wrapperType) {
-      const tempDirective = { ...directive, values: { ...values, value: values.content } };
-      this.visitTemplateValue(tempDirective, context);
-      return;
+    if (directive.kind === 'show' && values.content) {
+      // Check for wrapperType in either location (meta or content[0])
+      const wrapperType = directive.meta?.wrapperType || 
+                         (values.content[0] && values.content[0].wrapperType);
+      
+      
+      if (wrapperType) {
+        // For show directives, the content structure is nested
+        // values.content[0].content contains the actual template nodes
+        const templateContent = values.content[0]?.content || values.content;
+        
+        const tempDirective = { 
+          ...directive, 
+          values: { ...values, value: templateContent },
+          meta: { ...directive.meta, wrapperType }
+        };
+        this.visitTemplateValue(tempDirective, context);
+        return;
+      } else {
+        // No wrapperType found, but we still need to process the content
+        // This happens for show directives in for actions
+        if (Array.isArray(values.content)) {
+          for (const contentItem of values.content) {
+            if (contentItem.content && Array.isArray(contentItem.content)) {
+              // Process template content nodes
+              for (const node of contentItem.content) {
+                this.mainVisitor.visitNode(node, context);
+              }
+            } else {
+              this.mainVisitor.visitNode(contentItem, context);
+            }
+          }
+        }
+        return;
+      }
     }
     
     if (directive.kind === 'run') {
@@ -746,6 +777,7 @@ export class DirectiveVisitor extends BaseVisitor {
     // For /exe directives, use template array instead of value
     const values = directive.kind === 'exe' ? (directive.values?.template || []) : (directive.values?.value || []);
     
+    
     let templateType: 'backtick' | 'doubleColon' | 'tripleColon' | null = null;
     let variableStyle: '@var' | '{{var}}' = '@var';
     let interpolationAllowed = true;
@@ -800,6 +832,7 @@ export class DirectiveVisitor extends BaseVisitor {
     if (templateType && values.length > 0) {
       const firstValue = values[0];
       const lastValue = values[values.length - 1];
+      
       
       if (firstValue?.location) {
         // Calculate delimiter position more safely

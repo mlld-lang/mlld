@@ -43,7 +43,9 @@ export async function evaluateForDirective(
     }
 
     // Execute action for each item
-    for (const [key, value] of iterable) {
+    let i = 0;
+    const iterableArray = Array.from(iterable);
+    for (const [key, value] of iterableArray) {
       const childEnv = env.createChildEnvironment();
       // Preserve Variable wrappers when setting iteration variable
       const iterationVar = ensureVariable(varName, value);
@@ -56,7 +58,35 @@ export async function evaluateForDirective(
       }
 
       // Evaluate action in child environment
-      await evaluate(directive.values.action, childEnv);
+      // Handle action which might be an array of nodes (following /when pattern)
+      const actionNodes = directive.values.action;
+      let actionResult: any = { value: undefined, env: childEnv };
+      
+      
+      for (const actionNode of actionNodes) {
+        actionResult = await evaluate(actionNode, childEnv);
+      }
+      
+      // Transfer output nodes from child to parent environment
+      const childNodes = childEnv.getNodes();
+      for (const node of childNodes) {
+        env.addNode(node);
+      }
+      
+      // If the action was a bare exec invocation that produced output,
+      // we need to add it as a text node (similar to how /run works)
+      if (directive.values.action.length === 1 && 
+          directive.values.action[0].type === 'ExecInvocation' &&
+          actionResult.value !== undefined && actionResult.value !== null) {
+        const textNode = {
+          type: 'Text' as const,
+          nodeId: `${directive.nodeId}-exec-output-${i}`,
+          content: String(actionResult.value) + '\n', // Always add newline after each output
+          location: directive.values.action[0].location
+        };
+        env.addNode(textNode);
+      }
+      i++;
     }
   } finally {
     env.popDirective();

@@ -20,7 +20,7 @@ by the /run directive. It uses a unified LHS/RHS pattern where:
 
 // Primary /exe directive - unified LHS parsing with RHS delegation
 SlashExe
-  = DirectiveContext "/exe" _ "@"? id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:ExeRHSContent withClause:WithClause? trust:(_ t:TrustOption { return t; })? comment:InlineComment? {
+  = DirectiveContext "/exe" _ "@"? id:BaseIdentifier meta:ExecMetadata? params:ExecParameters? _ "=" _ content:ExeRHSContent withClause:WithClause? trust:(_ t:TrustOption { return t; })? ending:StandardDirectiveEnding {
       helpers.debug('SlashExe matched with ExeRHSContent', { id, params, content });
       
       // Create identifier node  
@@ -126,7 +126,7 @@ SlashExe
       );
     }
   // Special case: environment declaration without @ prefix
-  / DirectiveContext "/exe" _ id:BaseIdentifier _ "=" _ content:ExeRHSContent withClause:WithClause? trust:(_ t:TrustOption { return t; })? comment:InlineComment? {
+  / DirectiveContext "/exe" _ id:BaseIdentifier _ "=" _ content:ExeRHSContent withClause:WithClause? trust:(_ t:TrustOption { return t; })? ending:StandardDirectiveEnding {
       // Only allow environment declarations without @
       if (content.subtype !== 'environment') {
         helpers.mlldError("Invalid /exe syntax. Variable names must start with '@'. Use: /exe @" + id + " = ...", "@", location());
