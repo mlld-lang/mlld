@@ -28,6 +28,7 @@ windsurf.md
 .continue/
 .aider/
 .sourcegraph/
+.crush
 
 # Development & Test files
 *.test.ts
@@ -43,6 +44,7 @@ repomix-output.xml
 prepare-main.js
 todo.txt
 WHEN-PLAN.md
+todo/*
 
 # Config files
 tsconfig.json

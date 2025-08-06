@@ -134,3 +134,5 @@ output-test.md
 # Error capture directory
 errors/captured/
 parseperf-results.json
+.aider*
+.crush
