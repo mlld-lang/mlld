@@ -9,7 +9,7 @@ export function toIterable(value: unknown): Iterable<[string | null, unknown]> |
   
   // Handle arrays - preserve Variable items
   if (Array.isArray(value)) {
-    return value.map((item, index) => [null, item]); // Keep items as-is (may be Variables)
+    return value.map((item, index) => [String(index), item]); // Use index as key for arrays
   }
   
   // Handle objects

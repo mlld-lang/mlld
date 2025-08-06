@@ -5,6 +5,47 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [2.0.0-rc34]
+
+### Added
+- **Array Index Support in For Loops**: The `_key` pattern
+now provides array indices when iterating over arrays
+  - Arrays provide their indices as keys: `0`, `1`, `2`, etc.
+  - Example: `/for @item in ["a", "b", "c"] => /show
+"@item_key: @item"` outputs `0: a`, `1: b`, `2: c`
+  - Objects continue to provide property names as keys
+  - Enables consistent key access patterns across all
+collection types
+
+- **Dot Escape Sequence**: Added `\.` to escape sequences for
+  literal dots in strings
+  - Disambiguates between field access and string
+concatenation
+  - `@variable.field` - attempts to access the `field`
+property
+  - `@variable\.txt` - produces the string value followed by
+`.txt`
+  - Works in all string contexts: double quotes, backticks,
+and templates
+  - Example: `/output @content to "file-@num\.txt"` creates
+`file-42.txt`
+
+- **Metadata Shelf for Alligator Arrays**: Preserves LoadContentResult metadata when arrays pass through JavaScript functions
+  - When `<*.md>` arrays are passed to JS functions like `slice()`, metadata (filename, frontmatter, etc.) is preserved
+  - Enables patterns like: `/var @subset = @slice(@files, 0, 5)` followed by `/for @file in @subset => /show @file.filename`
+  - Transparent to JS functions - they receive content strings as before
+  - Fixes issue where `@file.filename` would fail after JS array operations
+
+### Fixed
+- **Missing Slash in For Actions**: Fixed syntax error on
+line 18 of `llm/run/testing.mld` where `/show` was missing
+its slash prefix
+
+- **LoadContentResult Preservation in For Loops**: For loops now properly preserve LoadContentResult objects
+  - `@file` in `/for @file in <*.md>` maintains its properties (filename, content, fm, etc.)
+  - Field access like `@file.filename` works correctly in all for loop contexts
+
 ## [2.0.0-rc33]
 
 ### Added

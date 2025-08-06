@@ -9,29 +9,7 @@ import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictEr
 import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadowEnvResolver';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { logger } from '@core/utils/logger';
-
-/**
- * Auto-unwrap LoadContentResult objects to their content property
- * WHY: LoadContentResult objects should behave like their content when passed to JS functions,
- * maintaining consistency with how they work in mlld contexts (interpolation, display, etc).
- * GOTCHA: LoadContentResultArray objects are unwrapped to arrays of content strings.
- * @param value - The value to potentially unwrap
- * @returns The unwrapped content or the original value
- */
-function autoUnwrapLoadContent(value: any): any {
-  // Handle single LoadContentResult
-  if (isLoadContentResult(value)) {
-    return value.content;
-  }
-  
-  // Handle LoadContentResultArray - unwrap to array of content strings
-  if (isLoadContentResultArray(value)) {
-    return value.map(item => item.content);
-  }
-  
-  // Return original value if not a LoadContentResult
-  return value;
-}
+import { AutoUnwrapManager } from './auto-unwrap-manager';
 
 /**
  * Extract parameter names from the params array.
@@ -566,7 +544,7 @@ function createSyncJsWrapper(
       // This ensures JS code can reference all declared parameters
       if (argValue !== undefined) {
         // Auto-unwrap LoadContentResult objects
-        argValue = autoUnwrapLoadContent(argValue);
+        argValue = AutoUnwrapManager.unwrap(argValue);
         
         // Try to parse numeric values (same logic as async wrapper)
         if (typeof argValue === 'string') {
@@ -757,7 +735,7 @@ function createExecWrapper(
           argValue = argValue instanceof Promise ? await argValue : argValue;
           
           // Auto-unwrap LoadContentResult objects
-          argValue = autoUnwrapLoadContent(argValue);
+          argValue = AutoUnwrapManager.unwrap(argValue);
           
           // Try to parse numeric values
           if (typeof argValue === 'string') {

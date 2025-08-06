@@ -21,7 +21,7 @@ EscapeSequence "Escape sequence"
 
 // String escape sequence - processes standard string escapes like \n, \t
 StringEscapeSequence "String escape sequence"
-  = "\\" char:("n" / "t" / "r" / "0" / "\\" / '"' / "'") {
+  = "\\" char:("n" / "t" / "r" / "0" / "\\" / '"' / "'" / ".") {
       switch (char) {
         case 'n': return '\n';
         case 't': return '\t';
@@ -30,6 +30,7 @@ StringEscapeSequence "String escape sequence"
         case '\\': return '\\';
         case '"': return '"';
         case "'": return "'";
+        case '.': return '.';
         default: return char;
       }
     }

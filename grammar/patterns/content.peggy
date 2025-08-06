@@ -170,9 +170,14 @@ BacktickExecInvocation
 
 // Text inside backticks (excluding @ and < for interpolation)
 BacktickTextSegment
-  = chars:(![`@<] char:. { return char; })+ {
+  = chars:BacktickTemplateChar+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
+
+BacktickTemplateChar
+  = StringEscapeSequence  // Process string escapes first
+  / EscapeSequence       // Then mlld syntax escapes
+  / ![`@<] char:. { return char; }
 
 // Text inside double colons (excluding ::, @ and < for interpolation)
 DoubleColonTextSegment

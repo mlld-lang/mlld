@@ -3,17 +3,39 @@ import { evaluate, interpolate, type EvalResult } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldDirectiveError } from '@core/errors';
 import { toIterable } from './for-utils';
-import { createArrayVariable } from '@core/types/variable';
+import { createArrayVariable, createObjectVariable } from '@core/types/variable';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import { VariableImporter } from './import/VariableImporter';
 import { logger } from '@core/utils/logger';
 import { DebugUtils } from '../env/DebugUtils';
+import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 
 // Helper to ensure a value is wrapped as a Variable
 function ensureVariable(name: string, value: unknown): Variable {
   // If already a Variable, return as-is
   if (isVariable(value)) {
     return value;
+  }
+  
+  // Special handling for LoadContentResult objects
+  // These need to be preserved as objects with their special metadata
+  if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
+    return createObjectVariable(
+      name,
+      value,
+      false, // Not complex - it's already evaluated
+      {
+        directive: 'var',
+        syntax: 'object',
+        hasInterpolation: false,
+        isMultiLine: false
+      },
+      {
+        isLoadContentResult: true,
+        arrayType: isLoadContentResultArray(value) ? 'load-content-result' : undefined,
+        source: 'for-loop'
+      }
+    );
   }
   
   // Otherwise, create a Variable from the value

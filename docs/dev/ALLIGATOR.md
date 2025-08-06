@@ -321,6 +321,39 @@ LoadContentResult objects automatically unwrap to their `.content` property when
 4. **Type Checking**: In JavaScript, the unwrapped content is a string, so `typeof` returns "string", not "object"
 5. **Auto-unwrapping**: Only happens for LoadContentResult objects passed as parameters - field access preserves the object
 
+## Metadata Shelf Architecture
+
+### tldr
+
+The metadata shelf preserves LoadContentResult metadata when arrays are passed through JavaScript functions. When LoadContentResultArray is unwrapped to content strings for JS, the shelf stores the original objects and restores them when matching content returns.
+
+### Principles
+
+- Transparent restoration (JS functions don't need modification)
+- Content-based matching (uses content string as key)
+- Automatic cleanup (shelf clears after each operation)
+- Preserves auto-unwrap semantics (JS still receives strings)
+
+### Details
+
+When LoadContentResult objects pass through JS functions:
+
+1. **Storage Phase**: Before unwrapping, `autoUnwrapLoadContent()` stores LoadContentResult objects on the shelf
+2. **Execution Phase**: JS function receives unwrapped content strings, processes them normally
+3. **Restoration Phase**: When JS returns an array, `metadataShelf.restoreMetadata()` checks each string against the shelf
+4. **Cleanup Phase**: Shelf is cleared to prevent memory leaks
+
+Key components:
+- `interpreter/eval/metadata-shelf.ts` - Core shelf implementation
+- `autoUnwrapLoadContent()` - Entry point for storage
+- `restoreMetadata()` - Restoration logic after JS execution
+
+### Gotchas
+
+- Only restores when content strings match exactly
+- Shelf must be cleared after each operation
+- Currently only in exec-invocation.ts (needs integration in exe.ts, run.ts)
+
 ## Debugging
 
 Enable debug output to trace array behavior:

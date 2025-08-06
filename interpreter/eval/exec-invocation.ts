@@ -12,30 +12,53 @@ import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
 import type { ShadowEnvironmentCapture } from '../env/types/ShadowEnvironmentCapture';
-import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
+import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
+import { AutoUnwrapManager } from './auto-unwrap-manager';
 
 /**
- * Auto-unwrap LoadContentResult objects to their content property
- * WHY: LoadContentResult objects should behave like their content when passed to JS functions,
- * maintaining consistency with how they work in mlld contexts (interpolation, display, etc).
- * GOTCHA: LoadContentResultArray objects are unwrapped to arrays of content strings.
- * @param value - The value to potentially unwrap
- * @returns The unwrapped content or the original value
+ * Simple metadata shelf for preserving LoadContentResult metadata
+ * This is a module-level implementation that works for synchronous operations
  */
-function autoUnwrapLoadContent(value: any): any {
-  // Handle single LoadContentResult
-  if (isLoadContentResult(value)) {
-    return value.content;
+class SimpleMetadataShelf {
+  private shelf: Map<string, LoadContentResult> = new Map();
+  
+  storeMetadata(value: any): void {
+    if (isLoadContentResultArray(value)) {
+      for (const item of value) {
+        if (isLoadContentResult(item)) {
+          this.shelf.set(item.content, item);
+        }
+      }
+    } else if (isLoadContentResult(value)) {
+      this.shelf.set(value.content, value);
+    }
   }
   
-  // Handle LoadContentResultArray - unwrap to array of content strings
-  if (isLoadContentResultArray(value)) {
-    return value.map(item => item.content);
+  restoreMetadata(value: any): any {
+    if (!Array.isArray(value)) return value;
+    
+    const restored: any[] = [];
+    let hasRestorable = false;
+    
+    for (const item of value) {
+      if (typeof item === 'string' && this.shelf.has(item)) {
+        restored.push(this.shelf.get(item));
+        hasRestorable = true;
+      } else {
+        restored.push(item);
+      }
+    }
+    
+    return hasRestorable ? restored : value;
   }
   
-  // Return original value if not a LoadContentResult
-  return value;
+  clear(): void {
+    this.shelf.clear();
+  }
 }
+
+// Module-level shelf instance
+const metadataShelf = new SimpleMetadataShelf();
 
 /**
  * Evaluate an ExecInvocation node
@@ -731,8 +754,11 @@ export async function evaluateExecInvocation(
             };
             codeParams[paramName] = prepareValueForShadow(resolvedVar);
           } else {
+            // Store metadata on shelf before unwrapping
+            metadataShelf.storeMetadata(paramVar.value);
+            
             // Auto-unwrap LoadContentResult objects for JS/Python
-            const unwrappedValue = autoUnwrapLoadContent(paramVar.value);
+            const unwrappedValue = AutoUnwrapManager.unwrap(paramVar.value);
             if (unwrappedValue !== paramVar.value) {
               // Value was unwrapped, create a new variable with the unwrapped content
               const unwrappedVar = {
@@ -821,6 +847,9 @@ export async function evaluateExecInvocation(
       Object.keys(variableMetadata).length > 0 ? variableMetadata : undefined
     );
     
+    // Process the result
+    let processedResult: any;
+    
     // If the result looks like JSON (from return statement), parse it
     if (typeof codeResult === 'string' && 
         (codeResult.startsWith('"') || codeResult.startsWith('{') || codeResult.startsWith('[') || 
@@ -828,15 +857,20 @@ export async function evaluateExecInvocation(
          /^-?\d+(\.\d+)?$/.test(codeResult))) {
       try {
         const parsed = JSON.parse(codeResult);
-        // Keep the parsed value as the result
-        result = parsed;
+        processedResult = parsed;
       } catch {
         // Not valid JSON, use as-is
-        result = codeResult;
+        processedResult = codeResult;
       }
     } else {
-      result = codeResult;
+      processedResult = codeResult;
     }
+    
+    // Attempt to restore metadata from shelf
+    result = metadataShelf.restoreMetadata(processedResult);
+    
+    // Clear the shelf to prevent memory leaks
+    metadataShelf.clear();
     }
   }
   // Handle command reference executables
