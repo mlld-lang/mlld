@@ -153,7 +153,7 @@ Pipeline errors include context about which step failed:
 
 ```mlld
 # Error will show "Pipeline step 2 failed"
-@text data = run [(cat data.json)] | @invalidTransformer
+/var @data = run {cat data.json} | @invalidTransformer
 ```
 
 ## Best Practices
@@ -162,6 +162,86 @@ Pipeline errors include context about which step failed:
 2. **Use meaningful names**: Name your @exec functions clearly
 3. **Handle errors early**: Validate data before transforming
 4. **Test incrementally**: Build pipelines step by step
+
+## Pipeline Context and Retry
+
+Pipelines provide access to execution context through the `@pipeline` variable and support retry mechanisms for validation and error recovery.
+
+### @pipeline Context Variable
+
+Access pipeline execution state within functions:
+
+```mlld
+# Access stage outputs by index
+@pipeline[0]      # Input to the pipeline
+@pipeline[1]      # Output of first stage
+@pipeline[-1]     # Output of previous stage
+
+# Retry and attempt information
+@pipeline.try     # Current attempt number (1, 2, 3...)
+@pipeline.tries   # Array of all attempt outputs for current stage
+
+# Stage information
+@pipeline.stage   # Current stage number (1-based)
+@pipeline.length  # Number of completed stages
+```
+
+### Retry Mechanism
+
+Functions can return `retry` to re-execute the current pipeline stage:
+
+```mlld
+/exe @validator(input) = when: [
+  @isValid(@input) => @input
+  @pipeline.try < 3 => retry
+  * => "fallback"
+]
+
+/var @result = @data | @transform | @validator
+```
+
+#### Examples
+
+**Validation with Retry:**
+```mlld
+/exe @requireJSON(text) = when: [
+  @isJSON(@text) => @text
+  @pipeline.try < 3 => retry
+  * => "{}"
+]
+
+/var @result = @prompt | @claude | @requireJSON
+```
+
+**Best-of-N Selection:**
+```mlld
+/exe @selectBest(response) = when: [
+  @response.score > 8 => @response
+  @pipeline.try < 3 => retry
+  * => @selectHighestScore(@pipeline.tries)
+]
+
+/var @result = @prompt | @generate | @selectBest
+```
+
+**Variation Generation:**
+```mlld
+/exe @variations(input) = when: [
+  @pipeline.try < 5 => retry
+  * => @pipeline.tries
+]
+
+/var @results = @prompt | @model | @variations
+# Returns array of 5 different responses
+```
+
+### Important Notes
+
+- `retry` only works within pipeline context
+- Maximum 10 retries per stage (hard limit)
+- Attempt outputs stored in `@pipeline.tries`
+- Counters reset when moving to next stage
+- Empty output terminates pipeline early
 
 ## See Also
 

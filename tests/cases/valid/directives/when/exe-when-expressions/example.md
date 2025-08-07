@@ -43,7 +43,7 @@ Define arithmetic operations as separate functions:
   @op == "multiply" => @multiply(@a, @b)
   @op == "divide" && @b != 0 => @divide(@a, @b)
   @op == "divide" => "Error: Division by zero"
-  true => "Unknown operation"
+  * => "Unknown operation"
 ]
 
 Calculations:

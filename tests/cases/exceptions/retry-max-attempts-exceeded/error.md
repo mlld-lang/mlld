@@ -1,0 +1,1 @@
+Maximum retry attempts (10) exceeded at pipeline stage 1

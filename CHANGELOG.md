@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.0.0-rc35]
+
+### Added
+- **Pipeline Context Variable**: The `@pipeline` context variable provides access to pipeline execution state
+  - Array indexing: `@pipeline[0]` (pipeline input), `@pipeline[1]` (first stage output), `@pipeline[-1]` (previous stage output)
+  - Retry tracking: `@pipeline.try` increments with each retry attempt (starts at 1)
+  - Stage information: `@pipeline.stage` shows current pipeline stage number
+  - Output history: `@pipeline.length` indicates number of completed stages
+  - Attempt history: `@pipeline.tries` array contains all retry attempts for current stage
+
+- **Pipeline Retry Mechanism**: The `retry` keyword enables stage re-execution in pipelines
+  - Functions return `retry` to signal pipeline should re-execute current stage
+  - Maximum 10 retries per stage prevents infinite loops
+  - Works in when expressions: `/exe @validator(input) = when: [@isValid(@input) => @input, @pipeline.try < 3 => retry, * => null]`
+  - Context validation ensures `retry` only works within pipeline execution
+  - Attempt outputs stored in `@pipeline.tries` for best-of-N selection patterns
+
+### Fixed
+- **Pipeline State Management**: Enhanced state tracking across pipeline stages with proper attempt counting and history preservation
+
 ## [2.0.0-rc34]
 
 ### Added

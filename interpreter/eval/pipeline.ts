@@ -1,6 +1,6 @@
 import type { Environment } from '../env/Environment';
 import type { PipelineCommand } from '@core/types';
-import { MlldCommandExecutionError } from '@core/errors';
+import { MlldCommandExecutionError, MlldError } from '@core/errors';
 import { interpolate } from '../core/interpreter';
 import { createPipelineInput, isPipelineInput } from '../utils/pipeline-input';
 import { 
@@ -55,7 +55,7 @@ export async function executePipeline(
       currentCommand: command.rawIdentifier,
       input: currentOutput,
       previousOutputs: [...pipelineState.previousOutputs],
-      format: format || 'json',
+      format: format,  // Don't default - let it be undefined for backwards compatibility
       attemptCount: pipelineState.attemptCounts.get(i) || 1,
       attemptHistory: pipelineState.attemptHistory.get(i) || [],
       stageVariables: Object.fromEntries(pipelineState.stageVariables)
@@ -66,35 +66,14 @@ export async function executePipeline(
     
     /**
      * Create pipeline input for this stage
-     * WHY: Each pipeline stage receives a special PipelineInput object that provides
-     * both raw text and lazily-parsed format-specific data (JSON, CSV, XML).
-     * GOTCHA: First stage gets raw string from command output, subsequent stages
-     * get string output from previous pipeline function.
+     * WHY: Each pipeline stage receives either a simple string (no format) or
+     * a special PipelineInput object (with format) that provides both raw text
+     * and lazily-parsed format-specific data (JSON, CSV, XML).
+     * CRITICAL: When no format is specified, we pass raw strings for backwards
+     * compatibility. Only create PipelineInput when format is explicitly set.
      * CONTEXT: Pipeline functions work with raw data transformations, not mlld
      * Variable types, so we extract values at pipeline boundaries.
      */
-    if (process.env.MLLD_DEBUG === 'true') {
-      logger.debug('Creating pipeline input:', {
-        stage: i + 1,
-        currentOutputType: typeof currentOutput,
-        currentOutputLength: typeof currentOutput === 'string' ? currentOutput.length : 'N/A',
-        currentOutputSample: typeof currentOutput === 'string' ? currentOutput.substring(0, 100) : String(currentOutput),
-        format: format || 'text'
-      });
-    }
-    const pipelineInputObj = createPipelineInput(currentOutput, format || 'text');
-    
-    if (process.env.MLLD_DEBUG === 'true') {
-      logger.debug('Created PipelineInput object:', {
-        type: typeof pipelineInputObj,
-        keys: Object.keys(pipelineInputObj),
-        hasText: 'text' in pipelineInputObj,
-        hasType: 'type' in pipelineInputObj,
-        textPreview: pipelineInputObj.text ? pipelineInputObj.text.substring(0, 50) : 'N/A',
-        typeValue: pipelineInputObj.type
-      });
-    }
-    
     const inputSource: VariableSource = {
       directive: 'var',
       syntax: 'template',
@@ -102,24 +81,53 @@ export async function executePipeline(
       isMultiLine: false
     };
     
-    /**
-     * Create PipelineInputVariable wrapper
-     * WHY: Pipeline stages need access to both the PipelineInput object (for format-aware
-     * parsing) and the raw text (for fallback). The Variable wrapper preserves both.
-     * CONTEXT: This Variable has isPipelineInput metadata to signal extraction behavior.
-     */
-    const inputVar = createPipelineInputVariable(
-      'input',
-      pipelineInputObj,
-      (format || 'text') as 'json' | 'csv' | 'xml' | 'text',
-      currentOutput,
-      inputSource,
-      i + 1, // stage number
-      {
-        isSystem: true,
-        isPipelineInput: true
+    let inputVar;
+    
+    if (format) {
+      // Only create PipelineInput when format is specified
+      if (process.env.MLLD_DEBUG === 'true') {
+        logger.debug('Creating PipelineInput with format:', {
+          stage: i + 1,
+          format,
+          currentOutputType: typeof currentOutput,
+          currentOutputLength: typeof currentOutput === 'string' ? currentOutput.length : 'N/A'
+        });
       }
-    );
+      
+      const pipelineInputObj = createPipelineInput(currentOutput, format);
+      
+      inputVar = createPipelineInputVariable(
+        'input',
+        pipelineInputObj,
+        format as 'json' | 'csv' | 'xml' | 'text',
+        currentOutput,
+        inputSource,
+        i + 1, // stage number
+        {
+          isSystem: true,
+          isPipelineInput: true
+        }
+      );
+    } else {
+      // No format - create a simple text variable for backwards compatibility
+      if (process.env.MLLD_DEBUG === 'true') {
+        logger.debug('Creating simple text input (no format):', {
+          stage: i + 1,
+          currentOutputType: typeof currentOutput,
+          currentOutputLength: typeof currentOutput === 'string' ? currentOutput.length : 'N/A'
+        });
+      }
+      
+      inputVar = createSimpleTextVariable(
+        'input',
+        currentOutput,
+        inputSource,
+        {
+          isSystem: true,
+          isPipelineParameter: true
+        }
+      );
+    }
     
     /**
      * Set @input as parameter variable
@@ -137,6 +145,9 @@ export async function executePipeline(
     const pipelineContext = createPipelineContextObject(baseOutput, pipelineState, i);
     const pipelineVar = createPipelineContextVariable('pipeline', pipelineContext, inputSource);
     pipelineEnv.setParameterVariable('pipeline', pipelineVar);
+    
+    // Also set @p as an alias for convenience in pipeline contexts
+    pipelineEnv.setParameterVariable('p', pipelineVar);
     
     try {
       // Resolve the command reference
@@ -168,6 +179,27 @@ export async function executePipeline(
       // Execute the command with @INPUT as the first argument if no args provided
       let args = command.args || [];
       
+      // Validate arguments - prevent explicit @input passing
+      for (const arg of args) {
+        if (arg && typeof arg === 'object') {
+          const isInputVariable = 
+            (arg.type === 'variable' && arg.name === 'input') ||
+            (arg.type === 'VariableReference' && arg.identifier === 'input');
+          
+          if (isInputVariable) {
+            throw new MlldError(
+              '@input is a special variable that is automatically available in pipelines - you don\'t need to pass it explicitly.\n\n' +
+              'In pipelines, @input is implicitly passed to the first parameter of your function.\n\n' +
+              'Instead of: /var @result = "test"|@myFunc(@input)\n' +
+              'Just use:   /var @result = "test"|@myFunc\n\n' +
+              'Your function should declare a parameter to receive @input:\n' +
+              '/exe @myFunc(data) = js { return data.toUpperCase(); }',
+              location
+            );
+          }
+        }
+      }
+      
       // Evaluate arguments if they are variable references or other nodes
       const evaluatedArgs = [];
       for (const arg of args) {
@@ -183,17 +215,64 @@ export async function executePipeline(
         if (typeof arg === 'string') {
           evaluatedArgs.push({ type: 'Text', content: arg });
         } else if (arg && typeof arg === 'object') {
-          if (arg.type === 'VariableReference') {
+          // Check if this is already a resolved Variable (not a VariableReference node)
+          if (arg.type === 'variable' || (arg.name && arg.value !== undefined)) {
+            // This is likely a variable reference that needs to be looked up
+            // Try pipeline environment first for pipeline-specific variables (@p, @input)
+            let actualVariable = pipelineEnv.getVariable(arg.name);
+            if (!actualVariable) {
+              // Fall back to parent environment for user variables
+              actualVariable = env.getVariable(arg.name);
+            }
+            
+            if (actualVariable) {
+              const { extractVariableValue } = await import('../utils/variable-resolution');
+              const value = await extractVariableValue(actualVariable, env);
+              evaluatedArgs.push({ type: 'Text', content: value });
+            } else {
+              evaluatedArgs.push({ type: 'Text', content: arg });
+            }
+          } else if (arg.type === 'VariableReference') {
             // Handle variable references directly
             const varRef = arg as any;
-            const variable = env.getVariable(varRef.identifier);
+            
+            // Try pipeline environment first for pipeline-specific variables (@p, @input)
+            let variable = pipelineEnv.getVariable(varRef.identifier);
+            
+            // Fall back to parent environment for user variables
+            if (!variable) {
+              variable = env.getVariable(varRef.identifier);
+            }
+            
             if (!variable) {
               throw new Error(`Variable not found: ${varRef.identifier}`);
             }
             
             // Extract variable value for pipeline arguments - WHY: Pipeline arguments need raw values
             const { resolveVariable, ResolutionContext } = await import('../utils/variable-resolution');
+            
+            if (process.env.MLLD_DEBUG === 'true') {
+              logger.debug('Resolving pipeline argument variable:', {
+                identifier: varRef.identifier,
+                variableType: variable?.type,
+                variableValue: typeof variable?.value === 'string' ? variable.value : typeof variable?.value,
+                hasValue: variable?.value !== undefined
+              });
+            }
+            
+            // Use env (not pipelineEnv) for resolution since the variable might be from parent scope
             const value = await resolveVariable(variable, env, ResolutionContext.PipelineInput);
+            
+            
+            if (process.env.MLLD_DEBUG === 'true') {
+              logger.debug('Resolved pipeline argument value:', {
+                identifier: varRef.identifier,
+                resolvedType: typeof value,
+                resolvedValue: typeof value === 'string' ? value : typeof value,
+                isNull: value === null,
+                isUndefined: value === undefined
+              });
+            }
             
             // Apply field access if present
             let finalValue = value;
@@ -202,23 +281,26 @@ export async function executePipeline(
               finalValue = await accessField(value, varRef.fields, varRef.identifier);
             }
             
-            // Convert to string
-            const stringValue = typeof finalValue === 'string' ? finalValue :
-                              typeof finalValue === 'object' ? JSON.stringify(finalValue) :
-                              String(finalValue);
+            // Pass the actual value, not stringified
+            // WHY: JavaScript functions need the actual object, not a JSON string
+            // CONTEXT: When passing @p (pipeline context) to functions, they need the object
             
             if (process.env.MLLD_DEBUG === 'true') {
               logger.debug('Evaluated variable reference:', {
                 identifier: varRef.identifier,
                 resolvedValue: value,
-                stringValue
+                valueType: typeof finalValue
               });
             }
             
-            evaluatedArgs.push({ type: 'Text', content: stringValue });
+            // Pass objects directly, only stringify primitives for text content
+            evaluatedArgs.push({ 
+              type: 'Text', 
+              content: typeof finalValue === 'object' ? finalValue : String(finalValue)
+            });
           } else {
-            // For other node types, interpolate
-            const value = await interpolate([arg], env);
+            // For other node types, interpolate using pipelineEnv for variable resolution
+            const value = await interpolate([arg], pipelineEnv);
             evaluatedArgs.push({ type: 'Text', content: value });
           }
         }
@@ -278,6 +360,16 @@ export async function executePipeline(
       }
       
       const result = await executeCommandVariable(commandVar, args, pipelineEnv, currentOutput);
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        logger.debug('Pipeline stage result:', {
+          stage: i,
+          command: command.rawIdentifier,
+          resultLength: result?.length,
+          resultPreview: result ? String(result).substring(0, 100) : null,
+          resultType: typeof result
+        });
+      }
       
       /**
        * Check for retry signal in result
@@ -629,24 +721,27 @@ async function executeCommandVariable(
    * Parameter binding for executable functions
    * WHY: Pipeline functions need parameters bound from either explicit arguments
    * or the pipeline input. The first parameter gets special handling.
-   * GOTCHA: First parameter in pipeline context can be either:
-   *   - stdinInput (for first stage receiving command output)
-   *   - argValue (for subsequent stages or explicit arguments)
+   * CRITICAL: In pipelines, @input ALWAYS binds to the first parameter,
+   * and explicit arguments bind to subsequent parameters (starting from the second).
    * CONTEXT: This creates the execution environment where functions can access
    * their parameters by name (e.g., @text in templates).
    */
   if (execDef.paramNames) {
     for (let i = 0; i < execDef.paramNames.length; i++) {
       const paramName = execDef.paramNames[i];
-      const argValue = i < args.length ? args[i] : null;
+      // In pipelines, explicit args bind starting from the SECOND parameter
+      // First parameter always gets @input (stdinInput) implicitly
+      const argIndex = pipelineCtx !== undefined && stdinInput !== undefined ? i - 1 : i;
+      const argValue = argIndex >= 0 && argIndex < args.length ? args[argIndex] : null;
       
-      // Check if this is the first parameter in a pipeline context
-      const isPipelineParam = i === 0 && pipelineCtx !== undefined;
+      // First parameter in pipeline context ALWAYS gets @input
+      const isPipelineParam = i === 0 && pipelineCtx !== undefined && stdinInput !== undefined;
       
       if (process.env.MLLD_DEBUG === 'true') {
         logger.debug('Parameter binding check:', {
           i,
           paramName,
+          argIndex,
           stdinInput: stdinInput ? String(stdinInput).substring(0, 50) + '...' : undefined,
           hasPipelineCtx: !!pipelineCtx,
           isPipelineParam,
@@ -655,13 +750,8 @@ async function executeCommandVariable(
       }
       
       if (isPipelineParam) {
-        // Extract the actual value from the argument or stdin
-        // For first stage of pipeline: value comes from stdinInput
-        // For subsequent stages: value comes from args[0]
-        const textValue = stdinInput !== undefined ? stdinInput :
-                         argValue === null ? '' :
-                         typeof argValue === 'string' ? argValue :
-                         argValue.content !== undefined ? argValue.content : String(argValue);
+        // First parameter ALWAYS gets the pipeline input (stdinInput)
+        const textValue = stdinInput || '';
         
         /**
          * Format-aware parameter binding
@@ -734,35 +824,73 @@ async function executeCommandVariable(
       } else {
         // Regular parameter handling
         // Note: argValue has already been evaluated and has { type: 'Text', content: actualValue } structure
-        const textValue = argValue === null ? '' :
-                         typeof argValue === 'string' ? argValue :
-                         argValue.type === 'Text' && argValue.content !== undefined ? argValue.content :
-                         argValue.content !== undefined ? argValue.content : String(argValue);
+        // IMPORTANT: content can be an object (like @p pipeline context) that needs to be passed as-is
+        let paramValue: any;
+        
+        if (argValue === null) {
+          paramValue = '';
+        } else if (typeof argValue === 'string') {
+          paramValue = argValue;
+        } else if (argValue.type === 'Text' && argValue.content !== undefined) {
+          // The content might be an object (e.g., pipeline context)
+          paramValue = argValue.content;
+        } else if (argValue.content !== undefined) {
+          paramValue = argValue.content;
+        } else {
+          paramValue = String(argValue);
+        }
         
         if (process.env.MLLD_DEBUG === 'true') {
           logger.debug('Regular parameter handling:', {
             paramName,
-            textValue,
+            paramValueType: typeof paramValue,
+            isObject: typeof paramValue === 'object',
             argValueType: typeof argValue,
             hasContent: argValue?.content !== undefined
           });
         }
         
-        const paramSource: VariableSource = {
-          directive: 'var',
-          syntax: 'quoted',
-          hasInterpolation: false,
-          isMultiLine: false
-        };
-        
-        const paramVar = createSimpleTextVariable(
-          paramName,
-          textValue,
-          paramSource,
-          { isParameter: true }
-        );
-        
-        execEnv.setParameterVariable(paramName, paramVar);
+        // Check if we're passing an object (like @p pipeline context)
+        if (typeof paramValue === 'object' && paramValue !== null) {
+          // For objects, create an object variable that preserves the actual object
+          const paramVar = {
+            type: 'object',
+            name: paramName,
+            value: paramValue,
+            metadata: { 
+              isParameter: true,
+              isPipelineContext: paramValue.stage !== undefined // Check if it's pipeline context
+            }
+          };
+          
+          if (process.env.MLLD_DEBUG === 'true') {
+            logger.debug('Setting object parameter:', {
+              paramName,
+              hasStage: paramValue.stage !== undefined,
+              hasTry: paramValue.try !== undefined,
+              keys: Object.keys(paramValue)
+            });
+          }
+          
+          execEnv.setParameterVariable(paramName, paramVar);
+        } else {
+          // For non-objects, create a text variable as before
+          const paramSource: VariableSource = {
+            directive: 'var',
+            syntax: 'quoted',
+            hasInterpolation: false,
+            isMultiLine: false
+          };
+          
+          const paramVar = createSimpleTextVariable(
+            paramName,
+            String(paramValue), // Ensure it's a string for text variables
+            paramSource,
+            { isParameter: true }
+          );
+          
+          execEnv.setParameterVariable(paramName, paramVar);
+        }
       }
     }
   }
@@ -853,7 +981,7 @@ async function executeCommandVariable(
     }
     
     if (process.env.MLLD_DEBUG === 'true') {
-      logger.debug('Executing code with params:', {
+      logger.debug('[executeCommandVariable] About to executeCode with params:', {
         paramNames: Object.keys(params),
         paramTypes: Object.entries(params).map(([k, v]) => [k, typeof v, v?.constructor?.name])
       });
@@ -877,6 +1005,22 @@ async function executeCommandVariable(
     const { InterpolationContext } = await import('../core/interpolation-context');
     
     const result = await interpolate(execDef.template, execEnv, InterpolationContext.Default);
+    return result;
+  } else if (execDef.type === 'commandRef') {
+    // Handle command references - recursively call the referenced command
+    const refExecVar = env.getVariable(execDef.commandRef);
+    if (!refExecVar || !isExecutableVariable(refExecVar)) {
+      throw new Error(`Referenced executable not found: ${execDef.commandRef}`);
+    }
+    
+    // Recursively execute the referenced command with the same input
+    const result = await executeCommandVariable(
+      refExecVar,
+      currentOutput,
+      env,
+      execDef.commandArgs,
+      location
+    );
     return result;
   }
   

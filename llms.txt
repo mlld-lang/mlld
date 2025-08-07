@@ -940,6 +940,7 @@ mlld supports Unix-style pipelines for chaining commands:
 - Functions without arguments get smart parameter handling
 - Each step runs in a child environment
 - Use `with { format: "json|csv|xml|text" }` to specify parsing
+- Functions can access @pipeline context variable during execution
 
 ### Smart Parameter Handling
 
@@ -992,6 +993,72 @@ Specify how data should be parsed in pipelines using `format`:
 ```
 
 Formats: `json` (default), `csv`, `xml`, `text`
+
+### Pipeline Context and Retry
+
+Functions in pipelines can access @pipeline context and use retry mechanism:
+
+```mlld
+>> @pipeline context variable provides execution state
+@pipeline[0]      # Input to the pipeline
+@pipeline[1]      # Output of first stage
+@pipeline[-1]     # Output of previous stage
+@pipeline.try     # Current attempt number (1, 2, 3...)
+@pipeline.tries   # Array of all attempt outputs
+@pipeline.stage   # Current stage number
+@pipeline.length  # Number of completed stages
+
+>> Functions can return 'retry' to re-execute current stage
+/exe @validator(input) = when: [
+  @isValid(@input) => @input
+  @pipeline.try < 3 => retry      # Re-execute if less than 3 attempts
+  * => "fallback"
+]
+
+>> Best-of-N selection pattern
+/exe @selectBest(response) = when: [
+  @response.score > 8 => @response
+  @pipeline.try < 3 => retry
+  * => @selectHighestScore(@pipeline.tries)  # Select from all attempts
+]
+
+/var @result = @prompt | @generate | @selectBest
+
+>> Variation generation pattern
+/exe @variations(input) = when: [
+  @pipeline.try < 5 => retry
+  * => @pipeline.tries      # Return all 5 variations
+]
+
+/var @results = @prompt | @model | @variations
+```
+
+**Important:** `retry` only works in pipeline context, max 10 retries per stage
+
+### Syntactic Sugar: @p Alias
+
+In pipeline contexts, `@p` is a shorter alias for `@pipeline`:
+
+```mlld
+>> Pass pipeline context to functions explicitly
+/exe @validator(input, ctx) = when: [
+  @ctx.try < 3 => retry
+  * => @input
+]
+/var @result = @data | @validator(@p)  >> @p = @pipeline
+
+>> Access specific fields concisely
+/exe @checker(input, attempt) = js {
+  return attempt < 3 ? "retry" : input;
+}
+/var @result = @data | @checker(@p.try)  >> Just the try count
+
+>> Pass entire context to JavaScript
+/exe @analyzer(input, pipeline) = js {
+  return `Stage ${pipeline.stage}: ${input}`;
+}
+/var @result = @data | @analyzer(@p)  >> Entire context object
+```
 
 ## Philosophy: Simplicity in Files, Complexity in Modules
 

@@ -64,8 +64,8 @@ mlld supports two equivalent syntaxes for pipeline transformations:
 
 ### Shorthand Syntax
 ```mlld
-@data result = @input | @transformer1 | @transformer2
-@text output = @message | @upper | @trim
+/var @result = @input | @transformer1 | @transformer2
+/var @output = @message | @upper | @trim
 ```
 
 ### Longhand Syntax  
@@ -167,20 +167,132 @@ if (commandVar?.metadata?.isBuiltinTransformer) {
 3. **@CSV / @csv** - Converts JSON arrays to CSV format
 4. **@MD / @md** - Formats markdown using prettier
 
-## Pipeline Context Tracking (v1.4.7+)
+## Pipeline Context and Retry (v2.0.0-rc35+)
 
-The pipeline execution system now tracks context information that's available during pipeline execution. This enables better debugging and introspection of pipeline operations.
+The pipeline execution system tracks context information and supports retry mechanisms for sophisticated pipeline control flow.
 
-### Pipeline Context Structure
+### Pipeline State Structure
 
 ```typescript
-interface PipelineContext {
-  stage: number;              // Current stage (1-based)
-  totalStages: number;        // Total number of pipeline stages
-  currentCommand: string;     // Command being executed (e.g., "json", "extractNames")
-  input: any;                // Input data for current stage
-  previousOutputs: string[];  // Outputs from previous stages
+interface PipelineState {
+  previousOutputs: string[];              // Outputs from completed stages
+  attemptCounts: Map<number, number>;     // Retry attempts per stage
+  attemptHistory: Map<number, string[]>;  // All attempts per stage
+  stageVariables: Map<string, any>;       // Named variables from for loops
+  currentStageIndex: number;              // Current stage being executed
 }
+```
+
+### @pipeline Context Variable
+
+The `@pipeline` variable provides access to pipeline execution state:
+
+```mlld
+# Array indexing for stage outputs
+@pipeline[0]      # Input to the pipeline
+@pipeline[1]      # Output of first stage
+@pipeline[-1]     # Output of previous stage
+@pipeline[-2]     # Output two stages back
+
+# Retry and attempt tracking
+@pipeline.try     # Current attempt number (1, 2, 3...)
+@pipeline.tries   # Array of all attempt outputs for current stage
+
+# Stage information
+@pipeline.stage   # Current stage number (1-based)
+@pipeline.length  # Number of completed stages
+```
+
+#### Syntactic Sugar: @p Alias
+
+In pipeline contexts, `@p` is available as a shorter alias for `@pipeline`:
+
+```mlld
+# These are equivalent:
+/var @result = "data"|@validator(@pipeline)
+/var @result = "data"|@validator(@p)
+
+# Especially useful for accessing specific fields:
+/exe @checker(input, try) = when: [
+  @try < 3 => retry
+  * => @input
+]
+/var @result = "data"|@checker(@p.try)
+
+# Pass entire context to JavaScript functions:
+/exe @analyzer(input, ctx) = js {
+  return `Stage ${ctx.stage}: ${input} (attempt ${ctx.try})`;
+}
+/var @result = "data"|@analyzer(@p)
+```
+
+### Retry Mechanism
+
+Functions can return the `retry` keyword to re-execute the current pipeline stage:
+
+```mlld
+/exe @validator(input) = when: [
+  @isValid(@input) => @input
+  @pipeline.try < 3 => retry
+  * => null
+]
+
+/var @result = @input | @transform | @validator | @process
+```
+
+#### How Retry Works
+
+1. **Signal Detection**: When a function returns `retry`, the pipeline executor detects this signal
+2. **Attempt Tracking**: The current output is stored in `@pipeline.tries` array
+3. **Counter Increment**: `@pipeline.try` increments from 1 to 2, 3, etc.
+4. **Stage Re-execution**: The pipeline re-executes the current stage with the same input
+5. **Safety Limit**: After 10 attempts, an error is thrown to prevent infinite loops
+
+#### Implementation Details
+
+The retry mechanism is implemented through:
+
+1. **Grammar Support**: `retry` keyword parsed as Literal with `valueType: 'retry'`
+2. **Context Validation**: Interpreter validates pipeline context before allowing retry
+3. **State Management**: Pipeline maintains attempt counts and history per stage
+4. **Signal Propagation**: Retry signals pass through when expressions unchanged
+
+### Example Patterns
+
+#### Validation with Retry
+
+```mlld
+/exe @requireValid(response) = when: [
+  @response.valid => @response
+  @pipeline.try < 5 => retry
+  * => throw "Invalid after 5 attempts"
+]
+
+/var @result = @prompt | @generate | @requireValid
+```
+
+#### Best-of-N Selection
+
+```mlld
+/exe @selectBest(input) = when: [
+  @input.score > 8 => @input
+  @pipeline.try < 3 => retry
+  * => @selectHighestScore(@pipeline.tries)
+]
+
+/var @result = @prompt | @claude | @selectBest
+```
+
+#### Variation Generation
+
+```mlld
+/exe @generateVariations(input) = when: [
+  @pipeline.try < 5 => retry
+  * => @pipeline.tries
+]
+
+/var @variations = @prompt | @model | @generateVariations
+# Returns array of 5 different responses
 ```
 
 ## Pipeline Format Feature (v1.4.10+)

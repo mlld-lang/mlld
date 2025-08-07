@@ -186,14 +186,14 @@ Bob,25,LA\`
 /var @multiplier = "3"
 
 /exe @useParent(input, mult) = js {
-  // Pipeline stages need explicit parameters
-  // mult might be wrapped as PipelineInput
+  // First param gets implicit @input from pipeline
+  // Second param gets explicitly passed @multiplier
   const multValue = typeof mult === 'object' && mult.text ? mult.text : mult;
   const multiplier = parseInt(multValue);
   return input.data[0].value * multiplier;
 }
 /var @data = [{"value": 10},]
-/var @result = @data with { format: "json", pipeline: [@useParent(@input, @multiplier)] }
+/var @result = @data with { format: "json", pipeline: [@useParent(@multiplier)] }
 /show @result`;
 
       const result = await interpret(input, { fileSystem, pathService });
@@ -256,7 +256,7 @@ Bob,25,LA\`
 
       await expect(
         interpret(input, { fileSystem, pathService })
-      ).rejects.toThrow(/Pipeline step 1 failed/);
+      ).rejects.toThrow(/Pipeline step 2 failed/);
     });
   });
 
