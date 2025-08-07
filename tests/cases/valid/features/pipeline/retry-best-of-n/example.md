@@ -31,7 +31,7 @@
 
 /exe @collectFiveAttempts(input) = when: [
   @pipeline.try < 5 => retry
-  * => @selectBest(@input, @pipeline)
+  * => @selectBest(@input, @p)
 ]
 
 # Test best-of-N pattern: generate 5 variations and select the best

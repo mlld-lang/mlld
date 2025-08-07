@@ -5,21 +5,27 @@
 
 >> JSON format (default)
 /exe @processJSON(input) = js {
-console.log('Type:', input.type);
-console.log('Text length:', input.text.length);
-  
-  // Handle both JSON format and CSV format containing JSON text
-let data;
-if (input.type === 'json') {
-console.log('Data:', input.data);
-data = input.data;
+  // Handle both plain strings (no format) and PipelineInput objects
+  let data;
+  if (typeof input === 'string') {
+    // No format specified - got plain string
+    data = JSON.parse(input);
   } else {
-    // For other formats, parse the JSON from text
-data = JSON.parse(input.text);
-console.log('Parsed data from text:', data);
+    // Format specified - got PipelineInput object
+    console.log('Type:', input.type);
+    console.log('Text length:', input.text.length);
+    
+    if (input.type === 'json') {
+      console.log('Data:', input.data);
+      data = input.data;
+    } else {
+      // For other formats, parse the JSON from text
+      data = JSON.parse(input.text);
+      console.log('Parsed data from text:', data);
+    }
   }
   
-return data.map(p => p.name).join(', ');
+  return data.map(p => p.name).join(', ');
 }
 
 /var @names = @getData() | @processJSON

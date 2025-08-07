@@ -1,11 +1,11 @@
 # Retry Attempt Tracking Test
 
-/exe @generateAttempt(input, pipeline) = `attempt-@{pipeline.try}: @input`
+/exe @generateAttempt(input, pipeline) = `attempt-@pipeline.try: @input`
 
-/exe @collectAttempts(input, pipeline) = `current: @input, history: [@{pipeline.tries}], try: @{pipeline.try}`
+/exe @collectAttempts(input, pipeline) = `current: @input, history: [@pipeline.tries], try: @pipeline.try`
 
 /exe @retryCollector(input, pipeline) = when: [
-  @{pipeline.try} >= 3 => @input
+  @pipeline.try >= 3 => @input
   * => retry
 ]
 
