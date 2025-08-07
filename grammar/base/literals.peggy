@@ -44,6 +44,29 @@ WildcardLiteral "Wildcard Literal"
   = "*" { return "*"; }
 
 // -------------------------------------------------------------
+// TIME DURATION LITERALS
+// -------------------------------------------------------------
+
+// Time duration literals for relative time comparisons (e.g., 90m, 12h, 7d)
+TimeDurationLiteral "Time Duration Literal"
+  = num:NumberLiteral unit:TimeUnit {
+      return {
+        type: 'TimeDuration',
+        value: num,
+        unit: unit,
+        location: location()
+      };
+    }
+
+TimeUnit "Time Unit"
+  = "s" { return 'seconds'; }
+  / "m" { return 'minutes'; }
+  / "h" { return 'hours'; }
+  / "d" { return 'days'; }
+  / "w" { return 'weeks'; }
+  / "y" { return 'years'; }
+
+// -------------------------------------------------------------
 // TEMPLATE LITERALS
 // -------------------------------------------------------------
 

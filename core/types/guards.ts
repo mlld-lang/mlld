@@ -17,7 +17,11 @@ import type {
   FileReferenceNode,
   BinaryExpression,
   TernaryExpression,
-  UnaryExpression
+  UnaryExpression,
+  FieldAccessNode,
+  ArraySliceNode,
+  ArrayFilterNode,
+  TimeDurationNode
 } from './primitives';
 
 // Import the union type
@@ -152,4 +156,19 @@ export function isTernaryExpression(node: any): node is TernaryExpression {
 
 export function isUnaryExpression(node: any): node is UnaryExpression {
   return node?.type === 'UnaryExpression';
+}
+
+/**
+ * Array operation type guards
+ */
+export function isArraySliceNode(node: FieldAccessNode): node is ArraySliceNode {
+  return node.type === 'arraySlice';
+}
+
+export function isArrayFilterNode(node: FieldAccessNode): node is ArrayFilterNode {
+  return node.type === 'arrayFilter';
+}
+
+export function isTimeDurationNode(node: any): node is TimeDurationNode {
+  return node?.type === 'TimeDuration';
 }

@@ -33,12 +33,52 @@ export interface TextNode extends BaseMlldNode {
 
 // Field access node - represents a single field/array access in a chain
 export interface FieldAccessNode {
-  type: 'field' | 'numericField' | 'arrayIndex' | 'stringIndex';
-  value: string | number;  // The field name or index value
+  type: 'field' | 'numericField' | 'arrayIndex' | 'stringIndex' | 'bracketAccess' | 'variableIndex' | 'arraySlice' | 'arrayFilter';
+  value?: string | number;  // The field name or index value (optional for slice/filter)
   // 'field': .name (value is string)
   // 'numericField': .123 (value is number) 
   // 'arrayIndex': [123] (value is number)
   // 'stringIndex': ["key"] (value is string)
+  // 'bracketAccess': ["key"] (value is string)
+  // 'variableIndex': [@var] (value is string)
+  // 'arraySlice': [start:end] (see start/end fields)
+  // 'arrayFilter': [?condition] (see condition field)
+  
+  // Operation-specific fields for slice operations
+  start?: number | null;  // null means from beginning
+  end?: number | null;    // null means to end
+  
+  // Operation-specific fields for filter operations
+  condition?: FilterCondition;
+  
+  location?: SourceLocation;
+}
+
+// Array slice node - specific type for array slicing
+export interface ArraySliceNode extends FieldAccessNode {
+  type: 'arraySlice';
+  start: number | null;
+  end: number | null;
+}
+
+// Array filter node - specific type for array filtering
+export interface ArrayFilterNode extends FieldAccessNode {
+  type: 'arrayFilter';
+  condition: FilterCondition;
+}
+
+// Filter condition for array filtering
+export interface FilterCondition {
+  field: string | string[];  // String array for nested fields (e.g., ['fm', 'draft'])
+  operator?: '==' | '!=' | '>' | '>=' | '<' | '<=' | '~';  // '~' for string contains
+  value?: any;  // Comparison value, TimeDuration, or VariableReference
+}
+
+// Time duration node for relative time comparisons
+export interface TimeDurationNode extends BaseMlldNode {
+  type: 'TimeDuration';
+  value: number;
+  unit: 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks' | 'years';
 }
 
 // Variable reference node

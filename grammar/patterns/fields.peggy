@@ -43,8 +43,91 @@ NumericFieldAccess
     }
 
 // ARRAY INDEXING WITH BRACKETS
-// Example: array[0], list[index], obj["key-with-spaces"]
+// Extended to support slice operations [0:5] and filter operations [?field>100]
+// Example: array[0], list[index], obj["key-with-spaces"], array[0:5], array[?size>100]
 ArrayAccess
+  = SliceOperation      // MUST contain ':' 
+  / FilterOperation     // MUST start with '?'
+  / ExistingArrayIndex  // Everything else (existing patterns)
+
+// Slice operations - ':' is required
+SliceOperation
+  = "[" _ start:SliceIndex? _ ":" _ end:SliceIndex? _ "]" {
+      return {
+        type: 'arraySlice',
+        start: start !== undefined ? start : null,
+        end: end !== undefined ? end : null,
+        location: location()
+      };
+    }
+
+// Support negative indices (only used in slice operations)
+SliceIndex
+  = sign:"-"? num:NumberLiteral {
+      return sign ? -num : num;
+    }
+
+// Filter operations - '?' is required
+FilterOperation
+  = "[" _ "?" _ condition:FilterCondition _ "]" {
+      return {
+        type: 'arrayFilter',
+        condition: condition,
+        location: location()
+      };
+    }
+
+// Filter conditions (in order of precedence)
+FilterCondition
+  = field:FilterField _ "~" _ value:StringLiteral {
+      // String contains operator
+      return { field, operator: '~', value };
+    }
+  / field:FilterField _ op:FilterComparisonOp _ value:FilterValue {
+      // Use FilterComparisonOp which allows '=' as shorthand
+      return { field, operator: op, value };
+    }
+  / field:FilterField {
+      // Existence/truthy check
+      return { field };
+    }
+
+// Support nested field access (e.g., fm.draft, metadata.author)
+FilterField
+  = first:BaseIdentifier rest:("." id:BaseIdentifier { return id; })* {
+      return rest.length > 0 ? [first, ...rest] : first;
+    }
+
+// Extended comparison operators for filter context
+// Allows '=' as shorthand for '==' in filters for brevity
+FilterComparisonOp
+  = "=" !"=" { return '=='; }  // Single '=' means equality in filters
+  / "==" { return '=='; }
+  / "!=" { return '!='; }
+  / "<=" { return '<='; }
+  / ">=" { return '>='; }
+  / "<" !"=" { return '<'; }
+  / ">" !"=" { return '>'; }
+
+// Filter values can be literals, durations, or variable references
+FilterValue
+  = StringLiteral
+  / TimeDurationLiteral  // Time durations: 90m, 12h, 7d, 2w, 1y
+  / NumberLiteral
+  / BooleanLiteral
+  / AtVarInFilter  // Variable reference in filter context
+
+// Simple variable reference in filter context (no context check needed)
+AtVarInFilter
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
+    }
+
+// Keep existing array index patterns
+ExistingArrayIndex
   = "[" _ index:NumberLiteral _ "]" {
       return { 
         type: 'arrayIndex', 
