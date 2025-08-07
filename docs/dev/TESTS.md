@@ -14,27 +14,20 @@ The project uses an organized fixture system that automatically generates test f
 tests/
 ├── cases/                    # Source test cases (markdown files)
 │   ├── valid/               # Tests that should parse and execute successfully
-│   │   ├── examples/        # Auto-copied from examples/ directory
-│   │   ├── add/            # Add directive tests
-│   │   ├── data/           # Data directive tests
-│   │   ├── exec/           # Exec directive tests
-│   │   ├── import/         # Import directive tests
-│   │   ├── path/           # Path directive tests
-│   │   ├── run/            # Run directive tests
-│   │   └── text/           # Text directive tests
+│   │   ├── directives/     # Organized by directive type
+│   │   │   ├── exe/       # /exe directive tests
+│   │   │   ├── var/       # /var directive tests
+│   │   │   ├── import/    # /import directive tests
+│   │   │   └── ...        # Other directives
+│   │   ├── features/       # Feature-specific tests
+│   │   ├── integration/    # Cross-feature integration tests
+│   │   └── examples/       # Auto-copied from examples/ directory
 │   ├── exceptions/          # Tests that should fail at runtime
 │   ├── warnings/           # Tests that should produce warnings
 │   └── invalid/            # Tests that should fail to parse
 ├── fixtures/                # Generated test fixtures (JSON)
-│   ├── valid/              # Generated from valid/ test cases
-│   ├── exceptions/         # Generated from exceptions/ test cases
-│   ├── warnings/           # Generated from warnings/ test cases
-│   └── invalid/            # Generated from invalid/ test cases
-├── tokens/                  # Precision semantic token tests
-│   ├── token-test-runner.test.ts  # Test runner
-│   ├── utils/              # Token test utilities
-│   └── */*.mld             # Self-documenting token test files
-└── utils/                  # Test utilities and helpers
+│   └── [mirrors cases/]    # Same structure as cases/
+└── tokens/                  # Precision semantic token tests
 ```
 
 #### Test Case Format
@@ -47,6 +40,58 @@ Each test case directory typically contains:
 For tests with variants, use naming like:
 - `example-multiline.md` / `expected-multiline.md`
 - `example-with-variables.md` / `expected-with-variables.md`
+
+### Creating Test Cases
+
+#### File Placement
+```bash
+# Valid test that should succeed
+tests/cases/valid/directives/var/my-test/
+  example.md      # Input mlld code
+  expected.md     # Expected output
+  data.json       # Support file (auto-copied)
+
+# Test that should fail parsing
+tests/cases/invalid/my-error/
+  example.md      # Input that fails to parse
+  error.md        # Expected error pattern
+
+# Test that should fail at runtime  
+tests/cases/exceptions/my-exception/
+  example.md      # Input that throws
+  error.md        # Expected error pattern
+```
+
+#### Registering Test Files
+
+Support files in test directories are automatically copied to the virtual filesystem root during test execution. For tests requiring specific file setups, register them in `interpreter/interpreter.fixture.test.ts`:
+
+```typescript
+// Auto-discovery: Files in test case directory are copied automatically
+tests/cases/valid/import/alias/
+  example.md
+  expected.md
+  alias-test-config.mld  # Auto-copied to /alias-test-config.mld
+  alias-test-utils.mld   # Auto-copied to /alias-test-utils.mld
+
+// Manual registration for complex setups (line ~760)
+if (fixture.name === 'import-alias') {
+  await fileSystem.writeFile('/config.mld', '/var @author = "Config Author"');
+  await fileSystem.writeFile('/utils.mld', '/var @author = "Utils Author"');
+}
+```
+
+**CRITICAL**: All test files must have unique names across the entire test suite. Files are copied to a single virtual filesystem root.
+
+```bash
+# BAD - Causes collisions
+tests/cases/valid/import/all/config.mld
+tests/cases/valid/import/namespace/config.mld
+
+# GOOD - Unique names
+tests/cases/valid/import/all/import-all-config.mld  
+tests/cases/valid/import/namespace/namespace-config.mld
+```
 
 ### Test Types
 
