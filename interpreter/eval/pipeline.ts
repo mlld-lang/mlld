@@ -11,6 +11,17 @@ import {
 import { logger } from '@core/utils/logger';
 
 /**
+ * Enhanced pipeline state tracking for retry and context management
+ */
+interface PipelineState {
+  previousOutputs: string[];
+  attemptCounts: Map<number, number>;      // Retry attempts per stage
+  attemptHistory: Map<number, string[]>;   // All attempts per stage
+  stageVariables: Map<string, any>;        // Named variables from for loops
+  currentStageIndex: number;               // Current stage being executed
+}
+
+/**
  * Execute a pipeline of transformation commands with @input threading
  */
 export async function executePipeline(
@@ -21,19 +32,33 @@ export async function executePipeline(
   format?: string
 ): Promise<string> {
   let currentOutput = baseOutput;
-  const previousOutputs: string[] = [];
+  
+  // Enhanced pipeline state tracking
+  const pipelineState: PipelineState = {
+    previousOutputs: [],
+    attemptCounts: new Map(),
+    attemptHistory: new Map(),
+    stageVariables: new Map(),
+    currentStageIndex: 0
+  };
   
   for (let i = 0; i < pipeline.length; i++) {
     const command = pipeline[i];
     
-    // Set pipeline context in the environment
+    // Update current stage index
+    pipelineState.currentStageIndex = i;
+    
+    // Set enhanced pipeline context in the environment
     env.setPipelineContext({
       stage: i + 1,
       totalStages: pipeline.length,
       currentCommand: command.rawIdentifier,
       input: currentOutput,
-      previousOutputs: [...previousOutputs],
-      format: format || 'json'
+      previousOutputs: [...pipelineState.previousOutputs],
+      format: format || 'json',
+      attemptCount: pipelineState.attemptCounts.get(i) || 1,
+      attemptHistory: pipelineState.attemptHistory.get(i) || [],
+      stageVariables: Object.fromEntries(pipelineState.stageVariables)
     });
     
     // Create child environment with @input variable
@@ -103,6 +128,15 @@ export async function executePipeline(
      * CONTEXT: Child environment ensures @input is scoped to this pipeline stage only.
      */
     pipelineEnv.setParameterVariable('input', inputVar);
+    
+    /**
+     * Create @pipeline special variable with full context
+     * WHY: Provides access to pipeline execution state for retry logic and context access.
+     * CONTEXT: Available only during pipeline execution with array indexing support.
+     */
+    const pipelineContext = createPipelineContextObject(baseOutput, pipelineState, i);
+    const pipelineVar = createPipelineContextVariable('pipeline', pipelineContext, inputSource);
+    pipelineEnv.setParameterVariable('pipeline', pipelineVar);
     
     try {
       // Resolve the command reference
@@ -246,6 +280,40 @@ export async function executePipeline(
       const result = await executeCommandVariable(commandVar, args, pipelineEnv, currentOutput);
       
       /**
+       * Check for retry signal in result
+       * WHY: Functions can return 'retry' to signal pipeline should re-execute current stage.
+       * CONTEXT: Retry mechanism enables sophisticated validation and retry logic.
+       */
+      if (isRetrySignal(result)) {
+        const currentAttempts = pipelineState.attemptCounts.get(i) || 1;
+        
+        // Store this attempt's output in history
+        const attempts = pipelineState.attemptHistory.get(i) || [];
+        attempts.push(currentOutput);
+        pipelineState.attemptHistory.set(i, attempts);
+        
+        // Check retry limit
+        if (currentAttempts >= 10) {
+          throw new MlldCommandExecutionError(
+            `Maximum retry attempts (10) exceeded at pipeline stage ${i + 1}`,
+            location,
+            {
+              command: command.rawIdentifier,
+              attempts: currentAttempts,
+              exitCode: 1
+            }
+          );
+        }
+        
+        // Increment attempt counter
+        pipelineState.attemptCounts.set(i, currentAttempts + 1);
+        
+        // Retry the current stage
+        i--;
+        continue;
+      }
+      
+      /**
        * Pipeline termination check
        * WHY: Empty output signals intentional pipeline termination, allowing
        * early exit from multi-stage pipelines.
@@ -265,8 +333,12 @@ export async function executePipeline(
        */
       currentOutput = result;
       
-      // Store this stage's output for context
-      previousOutputs.push(result);
+      // Store this stage's output in pipeline state
+      pipelineState.previousOutputs.push(result);
+      
+      // Clear attempt counters for this stage when successful
+      pipelineState.attemptCounts.delete(i);
+      pipelineState.attemptHistory.delete(i);
       
     } catch (error) {
       // Clear pipeline context on error
@@ -305,6 +377,75 @@ export async function executePipeline(
   }
   
   return currentOutput;
+}
+
+/**
+ * Helper function to detect retry signal
+ */
+function isRetrySignal(result: any): boolean {
+  // Check both direct string and evaluate result structure
+  return result === 'retry' || (result && result.value === 'retry');
+}
+
+/**
+ * Create pipeline context object with array indexing support
+ */
+function createPipelineContextObject(baseOutput: string, pipelineState: PipelineState, currentStage: number): any {
+  const context: any = {
+    // Array indexing support
+    0: baseOutput,                           // Input to pipeline
+    
+    // Special fields
+    try: pipelineState.attemptCounts.get(currentStage) || 1,
+    tries: pipelineState.attemptHistory.get(currentStage) || [],
+    stage: currentStage + 1,
+    length: pipelineState.previousOutputs.length,
+    
+    // Named fields from for loops (if any)
+    ...Object.fromEntries(pipelineState.stageVariables)
+  };
+  
+  // Add previous stage outputs with 1-indexed access
+  pipelineState.previousOutputs.forEach((output, idx) => {
+    context[idx + 1] = output;
+  });
+  
+  // Add negative indexing support via getters
+  Object.defineProperty(context, -1, {
+    get: () => pipelineState.previousOutputs[pipelineState.previousOutputs.length - 1],
+    enumerable: false
+  });
+  
+  Object.defineProperty(context, -2, {
+    get: () => pipelineState.previousOutputs[pipelineState.previousOutputs.length - 2],
+    enumerable: false
+  });
+  
+  // Add more negative indices as needed
+  for (let i = 3; i <= Math.max(10, pipelineState.previousOutputs.length); i++) {
+    Object.defineProperty(context, -i, {
+      get: () => pipelineState.previousOutputs[pipelineState.previousOutputs.length - i],
+      enumerable: false
+    });
+  }
+  
+  return context;
+}
+
+/**
+ * Create pipeline context variable wrapper
+ */
+function createPipelineContextVariable(name: string, context: any, source: VariableSource): any {
+  return {
+    type: 'object',
+    name,
+    value: context,
+    metadata: {
+      isPipelineContext: true,
+      source,
+      isSystem: true
+    }
+  };
 }
 
 /**
@@ -639,6 +780,23 @@ async function executeCommandVariable(
     const result = await env.executeCommand(command, { input: stdinInput } as any);
     return result;
   } else if (execDef.type === 'code' && execDef.codeTemplate) {
+    // Special handling for mlld-when expressions
+    if (execDef.language === 'mlld-when') {
+      // The codeTemplate contains the WhenExpression node
+      const whenExprNode = execDef.codeTemplate[0];
+      if (!whenExprNode || whenExprNode.type !== 'WhenExpression') {
+        throw new Error('mlld-when executable missing WhenExpression node');
+      }
+      
+      // Evaluate the when expression with the parameter environment
+      const { evaluateWhenExpression } = await import('./when-expression');
+      const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
+      
+      // Return the result
+      return String(whenResult.value || '');
+    }
+    
+    // Regular JavaScript/code execution
     // Interpolate code template
     const { interpolate } = await import('../core/interpreter');
     const { InterpolationContext } = await import('../core/interpolation-context');

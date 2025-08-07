@@ -43,6 +43,16 @@ NullLiteral "Null Literal"
 WildcardLiteral "Wildcard Literal"
   = "*" { return "*"; }
 
+// Retry literal - signals pipeline retry
+RetryLiteral "Retry Literal"
+  = "retry" { 
+      return helpers.createNode('Literal', { 
+        value: 'retry', 
+        valueType: 'retry',
+        location: location() 
+      }); 
+    }
+
 // -------------------------------------------------------------
 // TIME DURATION LITERALS
 // -------------------------------------------------------------

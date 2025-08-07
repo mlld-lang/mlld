@@ -499,6 +499,16 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   
   // Handle literal nodes
   if (isLiteralNode(node)) {
+    // Check for retry literal
+    if (node.valueType === 'retry') {
+      // Check if we're in pipeline context
+      const pipelineCtx = env.getPipelineContext();
+      if (!pipelineCtx) {
+        throw new Error('retry keyword used outside pipeline context');
+      }
+      return { value: 'retry', env };
+    }
+    
     return { value: node.value, env };
   }
   

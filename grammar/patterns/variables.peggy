@@ -26,6 +26,7 @@ SpecialVariableName
   / "base" { return 'base'; }
   / "input" { return 'input'; }
   / "debug" { return 'debug'; }
+  / "pipeline" { return 'pipeline' ; }
 
 // AtVar for direct variable references (using context detection)
 // Used in paths, commands, and single bracket contexts

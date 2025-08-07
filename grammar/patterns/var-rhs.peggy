@@ -195,12 +195,13 @@ ExecInvocationPattern "exec invocation pattern"
 // Note: BracketAmbiguous removed - use ArrayLiteral for arrays, AlligatorExpression for file loading
 
 
-// Primitive values for arrays
+// Primitive values for arrays and when expressions
 PrimitiveValue
   = ExpressionString        // Returns Literal node for both single and double quotes
   / NumberLiteral
   / BooleanLiteral
   / NullLiteral
+  / RetryLiteral           // retry keyword for pipeline control
 
 // Object property values - use data context patterns for proper typing and unwrapping
 ObjectPropertyValue "object property value"

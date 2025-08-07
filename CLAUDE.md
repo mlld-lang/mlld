@@ -3,10 +3,14 @@
 repo: github.com/mlld-lang/mlld
 
 ## Agents
-Agents dispatched with the 'Task' tool can sometimes perform work you did not intend and the results can be counterproductive or even destructive. Please do not send agents on tasks without having a discussion with me first.
+Agents dispatched with the 'Task' tool can sometimes perform work you did not intend and the results can be counterproductive or even destructive. Please do not send Task agents on tasks without having a discussion with the user first.
 
 ## Style Guide
 - **Name convention**: Always write "mlld" in all lowercase when referring to the language (not "MLLD", "Mlld", or "MllD")
+
+## Reduce Clutter
+- Use /tmp for temporary test files and throwaway scripts
+- Edit existing files rather than writing new 'revised' versions of the same file.
 
 ## Git Guidelines
 - **NEVER EVER USE `git add -A`** ALWAYS add the specific files to be committed
