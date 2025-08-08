@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [2.0.0-rc35]
+## [2.0.0-rc35] (unrelease)
 
 ### Added
 - **Pipeline Context Variable**: The `@pipeline` context variable provides access to pipeline execution state
@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Works in when expressions: `/exe @validator(input) = when: [@isValid(@input) => @input, @pipeline.try < 3 => retry, * => null]`
   - Context validation ensures `retry` only works within pipeline execution
   - Attempt outputs stored in `@pipeline.tries` for best-of-N selection patterns
+
+- **Issue #342 – Pipeline whitespace and stacked pipes**:
+  - Outside templates/quotes, pipelines now support spaced and multi-line stacked forms for variables and `<file>` values
+  - Inside templates/quotes/interpolation, condensed-only `|@transform` remains supported adjacent to the value
+  - Node-level attachment: pipelines attach to the value node (variable or load-content), not directive tail
+  - Added fixtures under `tests/cases/valid/feat/pipeline/*`; updated grammar unit tests accordingly
 
 ### Fixed
 - **Pipeline State Management**: Enhanced state tracking across pipeline stages with proper attempt counting and history preservation

@@ -68,6 +68,30 @@ Processing [1,2,3] with filter active
 /show @result
 ```
 
+### Syntax Matrix: Where spaces are allowed
+
+- Outside templates/quotes (e.g., `/var` RHS):
+  - Spaced and stacked pipes are allowed for variables and `<file>` values
+  - Examples:
+    ```mlld
+    /var @out = @value | @upper | @trim
+    /var @data = <data.json> | @json | @md
+    /var @x = @value
+      | @f
+      | @t
+      | @fmt
+    ```
+
+- Inside templates/quotes/interpolation (``, ::, :::, "…"):
+  - Condensed-only: adjacent `|@transform` is supported
+  - Examples:
+    ```mlld
+    /var @g = `Hello @name|@upper!`
+    /var @formatted = `<data.json>|@json`
+    ```
+
+Note: All forms are equivalent to `with { pipeline: [...] }`.
+
 ### With Functions
 ```mlld
 /exe @addHeader(content) = ::# Report
@@ -94,6 +118,17 @@ The pipeline operator is syntactic sugar for the `with` clause:
 /var @result1 = /run "echo hello" | @uppercase
 
 /var @result2 = /run "echo hello" with { pipeline: [@uppercase] }
+```
+
+## Stacked (multi-line) Pipelines
+
+Use stacked form outside templates for readability:
+
+```mlld
+/var @result = @value
+  | @normalize
+  | @validate
+  | @md
 ```
 
 ## Pipeline Format Feature

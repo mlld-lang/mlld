@@ -968,6 +968,35 @@ mlld includes transformers for common formats (both UPPERCASE and lowercase):
 /var @report = run {cat data.json} | @json | @addTotal | @md
 ```
 
+### Pipeline Whitespace and Stacked Syntax
+
+mlld supports both condensed and whitespace-separated pipelines, plus a stacked multi-line form.
+
+- Condensed (no spaces): attach pipes adjacent to the value
+  ```mlld
+  /var @greet = `Hi @name|@upper!`
+  /var @data = `<data.json>|@json|@xml`
+  ```
+
+- Spaced (single line, outside templates/quotes):
+  ```mlld
+  /var @out = @value | @upper | @trim
+  /var @data = <data.json> | @json | @md
+  ```
+
+- Stacked (multi-line, outside templates/quotes):
+  ```mlld
+  /var @myvar = @value
+    | @function
+    | @transform
+    | @format
+  ```
+
+Context rules:
+- Inside templates/quotes/interpolation (backticks, double-colon, triple-colon, and double quotes): condensed-only pipes are supported next to the variable or file reference (e.g., `@var|@json`, `<file>|@json`).
+- Outside templates/quotes (e.g., `/var` RHS): spaced and stacked pipelines are allowed for variables and `<file>` values.
+- All forms are equivalent to `with { pipeline: [...] }` in behavior.
+
 ### Pipeline Format Feature
 
 Specify how data should be parsed in pipelines using `format`:
