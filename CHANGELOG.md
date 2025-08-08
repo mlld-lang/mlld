@@ -28,6 +28,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Inside templates/quotes/interpolation, condensed-only `|@transform` remains supported adjacent to the value
   - Node-level attachment: pipelines attach to the value node (variable or load-content), not directive tail
   - Added fixtures under `tests/cases/valid/feat/pipeline/*`; updated grammar unit tests accordingly
+  - Optional-whitespace pipelines outside templates now support full arguments via `CommandArgumentList` (objects, arrays, nested execs, and variable field access like `@var.field`)
+  - Introduced dedicated TemplatePipe (no-args) for template contexts; template pipes do not accept arguments to avoid ambiguity
+  - Internal grammar cleanup: consolidated non-template pipe handling under the optional-whitespace form; condensed-pipe pattern retained only for template interpolation
+
+- **When/Exe syntax improvements**:
+  - Optional colon support for `/when` block and match forms, and for `/exe` RHS when expressions
+    - `when [ ... ]` works alongside `when: [ ... ]` (backward compatible)
+  - Grammar support for switch-style `/exe` when-expression modifier: `/exe @fn() = when first [ ... ]`
+    - Modifier is parsed and attached to `WhenExpression.meta.modifier`
+    - Interpreter behavior for `first` in exe when-expressions will land in the next release
 
 ### Fixed
 - **Pipeline State Management**: Enhanced state tracking across pipeline stages with proper attempt counting and history preservation
@@ -35,6 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Removed `/var...when`**: Eliminated redundant feature in favor of more capable `/exe...when` 
 - **Unified Template/Quote Grammar**: Consolidated duplicate grammar patterns
 - **Prohibited Implicit Executables in `/when` RHS**: Removed ability to define executables within when actions for cleaner separation
+- **Field access in with-clause pipeline arguments**: Fixed evaluation of field access (e.g., `@p.try`) in `with { pipeline: [...] }` arguments by using multi-field access resolution; resolves "Unknown field access type: undefined" during pipeline execution
 
 ## [2.0.0-rc34]
 

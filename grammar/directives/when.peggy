@@ -25,24 +25,10 @@ Modifiers:
 
 // Primary /when directive
 SlashWhen
-  // Error recovery: /when @var [...] without colon (MUST come before WhenSimpleForm)
-  = DirectiveContext "/when" _ "@" id:BaseIdentifier tail:("." prop:BaseIdentifier { return prop; })* _ "[" {
-      const fullVar = "@" + id + (tail.length > 0 ? "." + tail.join(".") : "");
-      helpers.mlldError("Invalid /when syntax. Missing ':' after variable.\\n\\n" +
-            "The syntax /when " + fullVar + " [...] requires a colon after the variable.\\n" +
-            "This is the block form that compares the variable value against each condition.\\n\\n" +
-            "Correct syntax:\\n" +
-            "  /when " + fullVar + ": [\\n" +
-            "    \"value1\" => /show \"First case\"\\n" +
-            "    \"value2\" => /show \"Second case\"\\n" +
-            "  ]\\n\\n" +
-            "Or use the simple form without brackets:\\n" +
-            "  /when " + fullVar + " => /show \"Action\"", ":", location());
-    }
-  / WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
+  = WhenMatchForm  // This MUST come before WhenSimpleForm to handle colon syntax
   / WhenSimpleForm
   // Error recovery: any: with individual actions (MUST come before WhenBlockForm)
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; }) _ "any" _ ":" _ "[" _ &{
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; }) _ "any" _ ":"? _ "[" _ &{
       // Look ahead to see if there are individual actions (=> inside the block)
       let i = peg$currPos;
       let depth = 1;
@@ -63,7 +49,7 @@ SlashWhen
     }
   / WhenBlockForm
   // Bare block form with modifier: /when <modifier>: [...] => <action>
-  / DirectiveContext "/when" _ modifier:WhenModifier _ ":" _ "[" _ conditions:WhenConditionList _ "]" 
+  / DirectiveContext "/when" _ modifier:WhenModifier _ ":"? _ "[" _ conditions:WhenConditionList _ "]" 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
       helpers.debug('WhenBareBlockWithModifierForm matched', { modifier, conditions, action });
@@ -79,12 +65,12 @@ SlashWhen
       
       // Create raw representation
       const raw = {
-        modifier: modifier.content,
         conditions: conditions.map(c => ({
           condition: helpers.reconstructRawString(c.condition),
           action: c.action ? helpers.reconstructRawString(c.action) : undefined
         }))
       };
+      if (modifier) raw.modifier = modifier.content;
       
       if (action) {
         raw.action = helpers.reconstructRawString(action);
@@ -96,7 +82,7 @@ SlashWhen
         values,
         raw,
         {
-          modifier: modifier.content,
+          modifier: modifier ? modifier.content : 'default',
           conditionCount: conditions.length,
           hasVariable: false
         },
@@ -113,7 +99,7 @@ SlashWhen
       helpers.mlldError("Missing action in /when directive. Expected a directive after '=>'.", "directive", location());
     }
   // Error recovery: all: with individual actions AND block action
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":" _ "[" _ &{
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ "all" _ ":"? _ "[" _ &{
       // Look ahead to see if there are BOTH individual actions AND a block action
       let i = peg$currPos;
       let depth = 1;
@@ -145,7 +131,7 @@ SlashWhen
             "  /when @var all: [@cond1, @cond2] => /show \"All matched\"  (block action)", "]", location());
     }
   // Error recovery: Unclosed brackets in block form
-  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:WhenModifier? _ ":" _ "[" _ &{
+  / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:WhenModifier? _ ":"? _ "[" _ &{
       // Check if we hit newline or EOF before closing bracket
       let i = peg$currPos;
       let depth = 1;
@@ -168,7 +154,7 @@ SlashWhen
     }
   // Error recovery: Invalid modifier - check it's not a valid modifier
   / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ 
-    modifier:BaseIdentifier &{ return modifier !== "first" && modifier !== "all" && modifier !== "any"; } _ ":" _ "[" {
+    modifier:BaseIdentifier &{ return modifier !== "first" && modifier !== "all" && modifier !== "any"; } _ ":"? _ "[" {
       helpers.mlldError("Invalid /when modifier: '" + modifier + "'. Valid modifiers are: 'first', 'all', 'any'.\\n" +
             "Examples:\\n" +
             "  /when @var first: [...] => action\\n" +
@@ -249,7 +235,7 @@ WhenBlockForm
         identifier: id
       }, location()); 
     })? _ 
-    modifier:WhenModifier? _ ":" _ "[" _ conditions:WhenConditionList _ "]" 
+    modifier:WhenModifier? _ ":"? _ "[" _ conditions:WhenConditionList _ "]" 
     _ action:("=>" _ a:WhenAction { return a; })? {
       
       helpers.debug('WhenBlockForm matched', { variable, modifier, conditions, action });
@@ -273,12 +259,12 @@ WhenBlockForm
       
       // Create raw representation
       const raw = {
-        modifier: modifier.content,
         conditions: conditions.map(c => ({
           condition: helpers.reconstructRawString(c.condition),
           action: c.action ? helpers.reconstructRawString(c.action) : undefined
         }))
       };
+      if (modifier) raw.modifier = modifier.content;
       
       if (variable) {
         raw.variable = variable;

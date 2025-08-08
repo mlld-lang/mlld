@@ -277,8 +277,8 @@ export async function executePipeline(
             // Apply field access if present
             let finalValue = value;
             if (varRef.fields && varRef.fields.length > 0) {
-              const { accessField } = await import('../utils/field-access');
-              finalValue = await accessField(value, varRef.fields, varRef.identifier);
+              const { accessFields } = await import('../utils/field-access');
+              finalValue = await accessFields(value, varRef.fields);
             }
             
             // Pass the actual value, not stringified

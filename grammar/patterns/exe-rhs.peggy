@@ -270,16 +270,22 @@ ExecAsNewTitle
 // Purpose: Allow when: [...] expressions that return values based on first matching condition
 
 WhenExpression "when expression"
-  = "when" _ ":" _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
+  // Standard: when: [ ... ]
+  = "when" _ modifier:WhenExprModifier? _ ":"? _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
       helpers.debug('WhenExpression matched', { 
         conditionCount: conditions.length,
         hasTailModifiers: !!tail
       });
       
-      return helpers.createWhenExpression(conditions, tail, location());
+      const node = helpers.createWhenExpression(conditions, tail, location());
+      if (modifier) {
+        node.meta = node.meta || {};
+        node.meta.modifier = modifier;
+      }
+      return node;
     }
   // Error recovery patterns
-  / "when" _ ":" _ "[" _ &{
+  / "when" _ WhenExprModifier? _ ":"? _ "[" _ &{
       return helpers.isUnclosedArray(input, peg$currPos);
     } {
       helpers.mlldError(
@@ -288,20 +294,17 @@ WhenExpression "when expression"
         location()
       );
     }
-  / "when" _ ":" _ {
+  / "when" _ WhenExprModifier? _ ":"? _ {
       helpers.mlldError(
         `Missing condition list in when expression. Expected: when: [condition => value, ...]`,
         "[",
         location()
       );
     }
-  / "when" _ &{ return !input.substring(peg$currPos).startsWith(':'); } {
-      helpers.mlldError(
-        `Missing ':' in when expression. Expected: when: [...]`,
-        ":",
-        location()
-      );
-    }
+  // No longer require ':' strictly; keep above recoveries for clearer messages
+
+// Optional modifier for when-expression in /exe RHS (currently supports 'first')
+WhenExprModifier = mod:("first") _ { return mod; }
 
 // Value-oriented condition list for when expressions
 WhenExpressionConditionList
