@@ -488,9 +488,29 @@ export async function evaluateRun(
         (codeParams as any).__capturedShadowEnvs = capturedEnvs;
       }
       
-      output = await AutoUnwrapManager.executeWithPreservation(async () => {
-        return await env.executeCode(code, definition.language || 'javascript', codeParams, executionContext);
-      });
+      // Special handling for mlld-when expressions
+      if (definition.language === 'mlld-when') {
+        // The codeTemplate contains the WhenExpression node
+        const whenExprNode = definition.codeTemplate[0];
+        if (!whenExprNode || whenExprNode.type !== 'WhenExpression') {
+          throw new Error('mlld-when executable missing WhenExpression node');
+        }
+        
+        // Create parameter environment
+        const execEnv = env.createChild();
+        for (const [key, value] of Object.entries(codeParams)) {
+          execEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
+        }
+        
+        // Evaluate the when expression with the parameter environment
+        const { evaluateWhenExpression } = await import('./when-expression');
+        const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
+        output = whenResult.value;
+      } else {
+        output = await AutoUnwrapManager.executeWithPreservation(async () => {
+          return await env.executeCode(code, definition.language || 'javascript', codeParams, executionContext);
+        });
+      }
     } else if (definition.type === 'template') {
       // Handle template executables
       const tempEnv = env.createChild();

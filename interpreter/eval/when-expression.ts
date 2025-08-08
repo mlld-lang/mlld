@@ -88,6 +88,16 @@ export async function evaluateWhenExpression(
         }
         
         try {
+          // Debug: What are we trying to evaluate?
+          if (Array.isArray(pair.action) && pair.action[0]) {
+            const firstAction = pair.action[0];
+            logger.debug('WhenExpression evaluating action:', {
+              actionType: firstAction.type,
+              actionKind: firstAction.kind,
+              actionSubtype: firstAction.subtype
+            });
+          }
+          
           // Evaluate the action to get its value
           const actionResult = await evaluate(pair.action, env, {
             ...context,
@@ -95,6 +105,38 @@ export async function evaluateWhenExpression(
           });
           
           let value = actionResult.value;
+          
+          // Debug: What did we get back?
+          logger.debug('WhenExpression action result:', {
+            valueType: typeof value,
+            valueLength: typeof value === 'string' ? value.length : 'not string',
+            valuePreview: typeof value === 'string' ? value.substring(0, 50) : String(value).substring(0, 50)
+          });
+          
+          // Handle directive actions in expression context
+          logger.debug('WhenExpression action debug', { 
+            actionType: Array.isArray(pair.action) ? 'array' : typeof pair.action,
+            actionLength: Array.isArray(pair.action) ? pair.action.length : 'not array',
+            firstActionType: Array.isArray(pair.action) && pair.action[0] ? pair.action[0].type : 'no first action',
+            firstActionKind: Array.isArray(pair.action) && pair.action[0] && pair.action[0].kind ? pair.action[0].kind : 'no kind',
+            value: typeof value === 'string' ? value.substring(0, 100) : typeof value
+          });
+          
+          if (Array.isArray(pair.action) && pair.action.length === 1) {
+            const singleAction = pair.action[0];
+            if (singleAction && typeof singleAction === 'object' && singleAction.type === 'Directive') {
+              const directiveKind = singleAction.kind;
+              // For side-effect directives, return appropriate values instead of their output
+              if (directiveKind === 'show' || directiveKind === 'output') {
+                // Show and output actions should return empty string (side effects already happened)
+                value = '';
+              } else if (directiveKind === 'var') {
+                // Variable assignments should return the assigned value
+                // The assignment has already happened as a side effect
+                value = value || '';
+              }
+            }
+          }
           
           // Apply tail modifiers if present
           if (node.withClause && node.withClause.pipes) {

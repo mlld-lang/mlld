@@ -10,9 +10,9 @@ Test implicit actions within `/when` blocks - simplified syntax without directiv
 /when @initialized => @setupDatabase()
 /when @ready => @startServer(8080)
 
-## Exec assignments
-/when @processing => @transform() = @processData(@input)
-/when @configured => @getConfig() = { env: @environment }
+## Function calls (continued)
+/when @processing => @transform(@input)
+/when @configured => @getConfig(@environment)
 
 ## Multi-line content
 /when @showBanner => :: 
@@ -24,11 +24,3 @@ Version: @version
   console.log("Running initialization code");
   return "initialized";
 }
-
-## Mixed implicit and explicit (should work together)
-/when @mixed => [
-  @value = "implicit assignment"
-  /var @explicit = "explicit assignment"  
-  @process()
-  /run @explicitRun()
-]

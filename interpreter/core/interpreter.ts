@@ -544,11 +544,8 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     return evaluateWhenExpression(node as any, env, context);
   }
   
-  // Handle when RHS actions (side effects with return values)
-  if (node.type === 'WhenRHSAction') {
-    const { evaluateWhenRHSAction } = await import('../eval/when-rhs-action');
-    return evaluateWhenRHSAction(node as any, env, context);
-  }
+  // Note: WhenRHSAction nodes have been replaced with regular Directive nodes
+  // that get evaluated through the normal directive evaluation path below
   
   // Handle for expressions
   if (node.type === 'ForExpression') {

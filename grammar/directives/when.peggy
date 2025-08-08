@@ -849,7 +849,7 @@ WhenImplicitAction
   = WhenImplicitVarAssignment
   / WhenImplicitFunctionCall
   / WhenImplicitRichContent
-  // NOTE: WhenImplicitExecAssignment removed - use /exe...when at top level instead
+  / WhenImplicitExecDefinitionError  // Error recovery for removed exec definitions
 
 // Implicit var assignment: @x = "value"
 WhenImplicitVarAssignment
@@ -1060,4 +1060,19 @@ WhenImplicitRichContent
         meta: metaInfo,
         location: location()
       })];
+    }
+
+// Error recovery - catch implicit exe definitions and provide helpful error
+WhenImplicitExecDefinitionError
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? ")" _ "=" _ value:VarRHSContent {
+      helpers.mlldError(
+        `Implicit executable definitions are not allowed in /when actions.\n\n` +
+        `Instead of:\n` +
+        `  /when @condition => @${name}() = ...\n\n` +
+        `Use a separate /exe directive:\n` +
+        `  /exe @${name}() = when: [@condition => ..., * => default]\n\n` +
+        `This keeps executable definitions at the top level where they belong.`,
+        "/exe",
+        location()
+      );
     }

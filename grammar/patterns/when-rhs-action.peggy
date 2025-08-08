@@ -1,66 +1,182 @@
 // When RHS Action Pattern
 // =======================
 // Unified pattern for actions in RHS when expressions
-// Supports both side effects (show, output, var assignment) and value returns
+// Generates regular directive nodes (same as when.peggy) that get evaluated through normal evaluate() chain
 // Used in both /when and /exe...when RHS contexts
 
-// Main pattern - try side-effect actions first, fall back to pure values
+// Main pattern - try error recovery first, then side-effect actions, then pure values
 WhenRHSAction "when RHS action"
-  = WhenRHSShowAction
+  = WhenRHSExeDefinitionError  // Error recovery FIRST - before ExecInvocationPattern can match
+  / WhenRHSShowAction
   / WhenRHSOutputAction  
   / WhenRHSVarAssignment
   / WhenRHSFunctionCall
   / VarRHSContent  // Pure values (fallback)
 
-// Show action - displays content AND returns it
+// Show action - creates regular show directive node
 WhenRHSShowAction
   = "show" _ content:WhenRHSShowContent {
       helpers.debug('WhenRHSShowAction matched', { content });
       
-      return {
-        type: 'WhenRHSAction',
-        subtype: 'show',
-        content: content,
-        sideEffect: true,
-        returnsValue: true,
-        location: location()
-      };
+      // Handle different content types and create appropriate show directive
+      if (content && typeof content === 'object' && content.wrapperType) {
+        // Template content (quotes, backticks, etc.)
+        return helpers.createNode(NodeType.Directive, {
+          kind: 'show',
+          subtype: 'showTemplate',
+          values: { content: content.content },
+          raw: { content: content.raw || text() },
+          meta: { wrapperType: content.wrapperType },
+          location: location()
+        });
+      } else if (content && content.type === 'VariableReference') {
+        // Variable reference
+        return helpers.createNode(NodeType.Directive, {
+          kind: 'show',
+          subtype: 'showVariable',
+          values: { variable: [content] },
+          raw: { variable: '@' + content.identifier },
+          meta: {},
+          location: location()
+        });
+      } else if (content && content.type === 'ExecInvocation') {
+        // Function call
+        return helpers.createNode(NodeType.Directive, {
+          kind: 'show',
+          subtype: 'showExecInvocation',
+          values: { execInvocation: content },
+          raw: { execInvocation: content.commandRef.name },
+          meta: {},
+          location: location()
+        });
+      } else {
+        // Primitive value or other content
+        return helpers.createNode(NodeType.Directive, {
+          kind: 'show',
+          subtype: 'showLiteral',
+          values: { content: [helpers.createNode(NodeType.Text, { content: String(content), location: location() })] },
+          raw: { content: String(content) },
+          meta: {},
+          location: location()
+        });
+      }
     }
 
-// Output action - writes to file/stream AND returns content
+// Output action - creates regular output directive node
 WhenRHSOutputAction
   = "output" _ source:WhenRHSOutputSource _ "to" _ target:WhenRHSOutputTarget format:(_ "as" _ f:OutputFormat { return f; })? {
       helpers.debug('WhenRHSOutputAction matched', { source, target, format });
       
-      return {
-        type: 'WhenRHSAction',
-        subtype: 'output',
-        source: source,
-        target: target,
-        format: format || null,
-        sideEffect: true,
-        returnsValue: true,
-        location: location()
+      // Create standard output directive node (same structure as when.peggy)
+      const values = {
+        target: target
       };
+      
+      const raw = {
+        target: target.raw || String(target)
+      };
+      
+      let subtype = 'outputDocument';
+      const meta = { 
+        hasSource: false,
+        targetType: target.type || 'file',
+        enhanced: true
+      };
+      
+      if (source) {
+        // Handle source content
+        if (source && typeof source === 'object' && source.content) {
+          // Template content
+          values.source = source.content;
+          raw.source = source.raw || text();
+          meta.hasSource = true;
+          meta.sourceType = 'template';
+          subtype = 'outputTemplate';
+        } else {
+          // Other content
+          values.source = [helpers.createNode(NodeType.Text, { content: String(source), location: location() })];
+          raw.source = String(source);
+          meta.hasSource = true;
+          meta.sourceType = 'text';
+          subtype = 'outputText';
+        }
+      }
+      
+      if (format) {
+        meta.format = format;
+      }
+      
+      return helpers.createNode(NodeType.Directive, {
+        kind: 'output',
+        subtype: subtype,
+        values: values,
+        raw: raw,
+        meta: meta,
+        location: location()
+      });
     }
 
-// Variable assignment - sets variable AND returns value
+// Variable assignment - creates regular var directive node
 WhenRHSVarAssignment  
   = "@" name:BaseIdentifier _ "=" _ value:VarRHSContent {
       helpers.debug('WhenRHSVarAssignment matched', { name, value });
       
-      return {
-        type: 'WhenRHSAction',
-        subtype: 'varAssignment',
-        identifier: name,
-        value: value,
-        sideEffect: true,
-        returnsValue: true,
+      // Create variable reference for identifier
+      const idNode = helpers.createVariableReferenceNode('identifier', { identifier: name }, location());
+      
+      // Process the value based on its structure (simplified from var.peggy)
+      let processedValue;
+      let metaInfo = {};
+      
+      // Handle template content (backtick, [[...]], quotes)
+      if (value && value.content && value.wrapperType) {
+        processedValue = value.content;
+        metaInfo.wrapperType = value.wrapperType;
+        metaInfo.inferredType = 'template';
+      }
+      // Handle object literals
+      else if (value && value.type === 'object') {
+        processedValue = [value];
+        metaInfo.inferredType = 'object';
+      }
+      // Handle array literals
+      else if (value && value.type === 'array') {
+        processedValue = [value];
+        metaInfo.inferredType = 'array';
+      }
+      // Handle exec invocations (function calls)
+      else if (value && value.type === 'ExecInvocation') {
+        processedValue = [value];
+        metaInfo.inferredType = 'computed';
+      }
+      // Handle variable references
+      else if (value && value.type === 'variableReference') {
+        processedValue = [value.value];
+        metaInfo.inferredType = 'reference';
+      }
+      // Handle primitives and other values
+      else {
+        processedValue = Array.isArray(value) ? value : [value];
+        metaInfo.inferredType = 'primitive';
+      }
+      
+      return helpers.createNode(NodeType.Directive, {
+        kind: 'var',
+        subtype: 'assignment',
+        values: {
+          identifier: [idNode],
+          value: processedValue
+        },
+        raw: {
+          identifier: '@' + name,
+          value: text()
+        },
+        meta: metaInfo,
         location: location()
-      };
+      });
     }
 
-// Function call - executes function AND returns result
+// Function call - just return the invocation directly (it gets evaluated normally)
 WhenRHSFunctionCall
   = ref:UnifiedReference &{ 
       // Check if this is actually an executable reference
@@ -70,14 +186,8 @@ WhenRHSFunctionCall
     } {
       helpers.debug('WhenRHSFunctionCall matched', { ref });
       
-      return {
-        type: 'WhenRHSAction',
-        subtype: 'functionCall',
-        reference: ref,
-        sideEffect: true,
-        returnsValue: true,
-        location: location()
-      };
+      // Just return the reference directly - it will be evaluated normally
+      return ref;
     }
 
 // Show content for RHS context - use same patterns as VarRHSContent

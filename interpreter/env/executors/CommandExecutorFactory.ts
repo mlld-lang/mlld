@@ -100,6 +100,11 @@ export class CommandExecutorFactory {
       case 'shell':
         return this.bashExecutor;
       
+      case 'mlld-when':
+        // Special case: mlld-when is handled elsewhere, not by a code executor
+        // This shouldn't reach here, but return null to trigger special handling
+        return null;
+      
       default:
         return null;
     }

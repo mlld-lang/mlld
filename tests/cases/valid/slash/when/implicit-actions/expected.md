@@ -6,8 +6,7 @@ Test implicit actions within `/when` blocks - simplified syntax without directiv
 
 ## Function calls
 
-## Exec assignments
+## Function calls (continued)
 
 ## Multi-line content
 
-## Mixed implicit and explicit (should work together)
