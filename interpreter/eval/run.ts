@@ -15,7 +15,42 @@ import { logger } from '@core/utils/logger';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 
-// Revert: remove extractRawTextContent helper
+/**
+ * Extract raw text content from nodes without any interpolation processing
+ * This preserves exact formatting and indentation for code blocks
+ */
+function extractRawTextContent(nodes: MlldNode[]): string {
+  const parts: string[] = [];
+  for (const node of nodes) {
+    if (node.type === 'Text') {
+      parts.push(node.content || '');
+    } else if (node.type === 'Newline') {
+      parts.push('\n');
+    } else {
+      parts.push(String((node as any).value || (node as any).content || ''));
+    }
+  }
+  const rawContent = parts.join('');
+  return rawContent.replace(/^\n/, '');
+}
+
+/**
+ * Remove common leading indentation across all non-empty lines.
+ * Preserves relative indentation and trailing whitespace.
+ */
+function dedentCommonIndent(src: string): string {
+  const lines = src.replace(/\r\n/g, '\n').split('\n');
+  let minIndent: number | null = null;
+  for (const line of lines) {
+    if (line.trim().length === 0) continue;
+    const match = line.match(/^[ \t]*/);
+    const indent = match ? match[0].length : 0;
+    if (minIndent === null || indent < minIndent) minIndent = indent;
+    if (minIndent === 0) break;
+  }
+  if (!minIndent) return src;
+  return lines.map(l => (l.trim().length === 0 ? '' : l.slice(minIndent!))).join('\n');
+}
 
 /**
  * Determine the taint level of command arguments
@@ -158,8 +193,8 @@ export async function evaluateRun(
       throw new Error('Run code directive missing code');
     }
     
-    // Interpolate code content (original behavior)
-    const code = await interpolate(codeNodes, env, InterpolationContext.ShellCommand);
+    // Verbatim code (no interpolation) with dedent to avoid top-level indent issues
+    const code = dedentCommonIndent(extractRawTextContent(codeNodes));
     
     // Handle arguments passed to code blocks (e.g., /run js (@var1, @var2) {...})
     const args = directive.values?.args || [];
@@ -473,6 +508,7 @@ export async function evaluateRun(
         tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
       }
       
+      // Interpolate executable code templates with parameters (canonical behavior)
       const code = await interpolate(definition.codeTemplate, tempEnv, InterpolationContext.ShellCommand);
       if (process.env.DEBUG_EXEC) {
         logger.debug('run.ts code execution debug:', {

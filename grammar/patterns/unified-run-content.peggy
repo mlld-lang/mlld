@@ -19,10 +19,11 @@ This pattern detects the content type and applies appropriate parsing rules.
 // Used by: AtRun directive when language is specified
 // Purpose: Parse code content without language detection
 UnifiedCodeBrackets "Code brackets {...}"
-  = "{" _ content:$(UnifiedCodeContent) _ "}" {
+  = "{" content:$(UnifiedCodeContent) "}" {
       helpers.debug('UnifiedCodeBrackets matched', { content });
       return {
-        content: content.trim(),
+        // Preserve leading whitespace; only strip trailing whitespace/newlines
+        content: content.replace(/\s+$/, ''),
         isMultiLine: content.includes('\n')
       };
     }
