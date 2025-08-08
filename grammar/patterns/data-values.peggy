@@ -66,7 +66,7 @@ DataTemplateValue "data template value"
         wrapperType: 'doubleBracket'
       };
     }
-  / "`" parts:BacktickInterpolation* "`" {
+  / "`" parts:UnifiedBacktickInterpolation* "`" {
       // Backtick templates
       return {
         content: parts,

@@ -141,6 +141,22 @@ EscapedBacktickStringChar
   / !"`" char:. { return char; }
 
 // -------------------------------------------------------------
+// QUOTED TEXT SEGMENTS (moved from content.peggy for reuse)
+// -------------------------------------------------------------
+
+// Text inside double quotes (supports newlines)
+DoubleQuotedText
+  = chars:DoubleQuotedChar+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
+    }
+
+// Character inside double quotes
+DoubleQuotedChar
+  = StringEscapeSequence  // Handle \n, \t, etc.
+  / EscapeSequence       // Handle \@, \", etc.
+  / !["@<\n\r] char:. { return char; }  // Exclude < to trigger FileReferenceInterpolation
+
+// -------------------------------------------------------------
 // SEPARATOR NODES
 // -------------------------------------------------------------
 

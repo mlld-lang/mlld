@@ -637,14 +637,14 @@ AddDirectiveRef
         }
       };
     }
-  / RHSContext _ path:InterpolatedDoubleQuoteContent {
-      // Handle quoted paths
+  / RHSContext _ quote:UnifiedDoubleQuote {
+      // Handle quoted paths - extract content from unified quote
       return {
         subtype: 'showPath',
-        values: { path: path },
-        raw: { path: helpers.reconstructRawString(path) },
+        values: { path: quote.content },
+        raw: { path: helpers.reconstructRawString(quote.content) },
         meta: { 
-          path: helpers.createPathMetadata(helpers.reconstructRawString(path), path)
+          path: helpers.createPathMetadata(helpers.reconstructRawString(quote.content), quote.content)
         }
       };
     }

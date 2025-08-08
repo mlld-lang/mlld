@@ -22,6 +22,6 @@
 ]
 
 # Test retry mechanism in when expressions
-/var @result = "test-data"|@scoreGenerator(@p.try)|@validateScore|@qualityControl
+/var @result = "test-data" with { pipeline: [@scoreGenerator(@p.try), @validateScore, @qualityControl] }
 
 /show @result

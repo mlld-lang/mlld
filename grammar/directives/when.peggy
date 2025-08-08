@@ -847,9 +847,9 @@ WhenOutputTarget
 // Implicit action patterns - these match the same syntax as explicit directives but without "/"
 WhenImplicitAction
   = WhenImplicitVarAssignment
-  / WhenImplicitExecAssignment  
   / WhenImplicitFunctionCall
   / WhenImplicitRichContent
+  // NOTE: WhenImplicitExecAssignment removed - use /exe...when at top level instead
 
 // Implicit var assignment: @x = "value"
 WhenImplicitVarAssignment
@@ -954,59 +954,9 @@ WhenImplicitVarAssignment
       })];
     }
 
-// Implicit exec assignment: @func() = @helper()  
-WhenImplicitExecAssignment
-  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "=" _ value:VarRHSContent {
-      // Create exec directive with assignment semantics (same as /exe)
-      const ref = {
-        name,
-        identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
-        args: args || [],
-        isCommandReference: true
-      };
-      
-      // Process the value using the same logic as VarRHSContent
-      let processedValue;
-      let metaInfo = { implicit: true };
-      
-      // Handle the value using same patterns as implicit var assignment
-      if (value && value.content && value.wrapperType) {
-        processedValue = value.content;
-        metaInfo.wrapperType = value.wrapperType;
-        metaInfo.inferredType = 'template';
-      }
-      else if (value && value.type === 'ExecInvocation') {
-        processedValue = [value];
-        metaInfo.inferredType = 'computed';
-      }
-      else if (value && value.type === 'variableReference') {
-        processedValue = [value.value];
-        metaInfo.inferredType = 'reference';
-      }
-      else if (value && value.type === 'VariableReferenceWithTail') {
-        processedValue = [value.variable];
-        metaInfo.inferredType = 'reference';
-      }
-      else {
-        processedValue = Array.isArray(value) ? value : [value];
-        metaInfo.inferredType = 'unknown';
-      }
-      
-      return [helpers.createNode(NodeType.Directive, {
-        kind: 'exe',
-        subtype: 'exe',
-        values: { 
-          commandRef: ref,
-          value: processedValue
-        },
-        raw: {
-          commandRef: name,
-          value: helpers.reconstructRawString(processedValue)
-        },
-        meta: metaInfo,
-        location: location()
-      })];
-    }
+// REMOVED: Implicit exec assignment is no longer supported in when RHS
+// Users should use /exe...when at the top level for conditional executable definitions
+// Example: /exe @func() = when: [@condition => value, * => default]
 
 // Implicit function call: @doSomething()
 WhenImplicitFunctionCall  

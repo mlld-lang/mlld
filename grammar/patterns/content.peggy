@@ -130,27 +130,11 @@ SingleQuotedCommandContent
       return chars.join('');
     }
 
-// Text inside double quotes (supports newlines)
-DoubleQuotedText
-  = chars:DoubleQuotedChar+ {
-      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
-    }
+// MOVED TO segments.peggy - DoubleQuotedText and DoubleQuotedChar are now defined there
+// since they're used by multiple patterns across the grammar
 
-// Character inside double quotes
-DoubleQuotedChar
-  = StringEscapeSequence  // Handle \n, \t, etc.
-  / EscapeSequence       // Handle \@, \", etc.
-  / !["@<\n\r] char:. { return char; }  // Exclude < to trigger FileReferenceInterpolation
-
-// Content inside backtick templates - supports @var and @func(args) and <file.md>
-BacktickInterpolation
-  = BacktickExecInvocation    // @func(args) - must come before variable
-  / FileReferenceInterpolation // <file.md> references with fields/pipes
-  / TemplateVariableReference // @var - NO tail modifier constraints
-  / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
-      return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
-    }
-  / BacktickTextSegment       // Plain text
+// REMOVED: BacktickInterpolation has been replaced by UnifiedBacktickInterpolation
+// All uses have been migrated to the unified pattern in unified-quotes.peggy
 
 // Function call in backtick template
 BacktickExecInvocation
@@ -368,21 +352,9 @@ CodeLiteralPart
 // SEMANTIC DELIMITER PATTERNS - Clear semantic meaning for each delimiter type
 // -------------------------------------------------------------
 
-// Literal text without any interpolation (single quotes only)
-LiteralOnlyContent "Literal text without any interpolation"
-  = "'" content:EscapedSingleStringContent "'" { 
-      return [helpers.createNode(NodeType.Text, { content, location: location() })];
-    }
-
-// Double quoted content with @var interpolation (supports multiline)
-InterpolatedDoubleQuoteContent "Double quoted content with @var interpolation"
-  = '"' parts:(SpecialVariable / FileReferenceInterpolation / TemplateVariableReference / DoubleQuotedText)* '"' {
-      // Handle empty string case - create Text node with empty content
-      if (parts.length === 0) {
-        return [helpers.createNode(NodeType.Text, { content: '', location: location() })];
-      }
-      return parts;
-    }
+// DEPRECATED AND REMOVED: These patterns have been replaced by UnifiedQuote patterns
+// LiteralOnlyContent -> Use UnifiedSingleQuote and extract .content
+// InterpolatedDoubleQuoteContent -> Use UnifiedDoubleQuote and extract .content
 
 // REMOVED: InterpolatedPathContent - bracket syntax no longer supported
 
@@ -397,63 +369,16 @@ InterpolatedTemplateContent "Template content with interpolation"
 
 // REMOVED: PathStyleInterpolation - bracket syntax no longer supported
 
-// Template-style interpolation: multiple types with different interpolation behavior
-TemplateStyleInterpolation "Template interpolation patterns"  
-  = rule:TripleColonContent {
-      helpers.debug('TemplateStyleInterpolation matched triple colon with {{var}} interpolation', { rule });
-      
-      return {
-        content: rule,
-        wrapperType: 'tripleColon'
-      };
-    }
-  / rule:InterpolatedTemplateContent {
-      helpers.debug('TemplateStyleInterpolation matched InterpolatedTemplateContent', { 
-        rule, 
-        isArray: Array.isArray(rule),
-        length: Array.isArray(rule) ? rule.length : 'not array',
-        hasType: rule && typeof rule === 'object' && 'type' in rule
-      });
-      
-      // Check if this is actually a double-bracketed section
-      if (rule && typeof rule === 'object' && !Array.isArray(rule) && rule.type === 'doubleBracketSection') {
-        return rule; // Pass through the section structure
-      }
-      
-      return {
-        content: rule,
-        wrapperType: 'doubleColon'  // Now means @var interpolation
-      };
-    }
-  / '`' parts:(BacktickInterpolation)* '`' {
-      helpers.debug('TemplateStyleInterpolation matched backtick with @var interpolation', { parts });
-      
-      return {
-        content: parts,
-        wrapperType: 'backtick'
-      };
-    }
-  / rule:InterpolatedDoubleQuoteContent {
-      helpers.debug('TemplateStyleInterpolation matched double quotes with @var interpolation', { rule });
-      
-      return {
-        content: rule,
-        wrapperType: 'doubleQuote'
-      };
-    }
-  / rule:LiteralOnlyContent {
-      helpers.debug('TemplateStyleInterpolation matched single quotes (literal)', { rule });
-      
-      return {
-        content: rule,
-        wrapperType: 'singleQuote'
-      };
-    }
+// REMOVED: TemplateStyleInterpolation has been completely replaced by UnifiedQuoteOrTemplate
+// All uses have been migrated to use the unified patterns from:
+// - unified-quotes.peggy for quote patterns
+// - unified-templates.peggy for template patterns  
+// - unified-quote-template.peggy for the combined pattern
 
 // Command-style interpolation: supports all relevant interpolation types
 CommandStyleInterpolation "Command interpolation patterns"
-  = InterpolatedDoubleQuoteContent // "command with @var"
-  / LiteralOnlyContent            // 'literal command'
+  = quote:UnifiedDoubleQuote { return quote.content; }  // "command with @var"
+  / quote:UnifiedSingleQuote { return quote.content; }  // 'literal command'
   / CommandBracketContent         // [command with @var] - permissive for shell commands
   / InterpolatedTemplateContent   // [[command with {{var}}]]
 
@@ -505,7 +430,7 @@ SemanticTextContent "Semantic content for @text directive"
 
 // For templates in text, add directives
 WrappedTemplateContent "Wrapped template content"
-  = content:TemplateStyleInterpolation {
+  = content:UnifiedQuoteOrTemplate {
       helpers.debug('WrappedTemplateContent matched', { 
         contentType: typeof content,
         isArray: Array.isArray(content),
@@ -538,8 +463,8 @@ WrappedCommandContent "Wrapped command content"
 
 // Specialized command interpolation that allows complex shell syntax
 CommandContentInterpolation "Command content interpolation patterns"
-  = InterpolatedDoubleQuoteContent // "command with @var"
-  / LiteralOnlyContent            // 'literal command'
+  = quote:UnifiedDoubleQuote { return quote.content; }  // "command with @var"
+  / quote:UnifiedSingleQuote { return quote.content; }  // 'literal command'
   / CommandBracketContent         // [command with @var] - permissive for shell commands
   / InterpolatedTemplateContent   // [[command with {{var}}]]
 

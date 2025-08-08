@@ -271,13 +271,6 @@ Path: <>.relative
 /when @needsSetup => @initialize()                       # Implicit /run
 /when @task == "build" => @output = @compile(@source)   # Implicit /exe
 
->> Value-returning when expressions in /var
-/var @greeting = when: [
-  @time < 12 => "Good morning"
-  @time < 18 => "Good afternoon"
-  true => "Good evening"
-]
-
 >> Bare form: ALL matching conditions execute
 /when @features: [
   @hasAuth => @enableLogin()            # Implicit /run

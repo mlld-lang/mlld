@@ -2,4 +2,4 @@
 
 # Test retry behavior across multiple pipeline stages
 
-final: s2-try1: s1-try1: initial (stage 5)
+final: s2-try3: s1-try2: initial (stage 5)

@@ -47,6 +47,26 @@ export const helpers = {
     if (process.env.DEBUG_MLLD_GRAMMAR) console.log('[DEBUG GRAMMAR]', msg, ...args);
   },
 
+  isExecutableReference(ref: any): boolean {
+    // Check if reference is a function call (has execution semantics)
+    // This includes ExecInvocation, FieldAccessExec, or any reference with arguments
+    if (!ref) return false;
+    
+    // Direct exec invocation
+    if (ref.type === 'ExecInvocation') return true;
+    
+    // Field access with execution (e.g., @obj.method())
+    if (ref.type === 'FieldAccessExec') return true;
+    
+    // Check for presence of arguments (indicates function call)
+    if (ref.arguments !== undefined && ref.arguments !== null) return true;
+    
+    // Check for parentheses in unified references
+    if (ref.hasParentheses === true) return true;
+    
+    return false;
+  },
+
   isLogicalLineStart(input: string, pos: number) {
     if (pos === 0) return true;
     let i = pos - 1;

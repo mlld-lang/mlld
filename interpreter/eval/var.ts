@@ -523,23 +523,6 @@ export async function evaluateVar(
     }
     resolvedValue = result.value;
     
-  } else if (valueNode && valueNode.type === 'WhenExpression') {
-    // Handle when expressions: when: [condition => value, ...]
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] var.ts: Creating WhenExpression variable:', {
-        identifier,
-        conditionCount: valueNode.conditions?.length
-      });
-    }
-    
-    // Create a lazy-evaluated WhenExpressionVariable
-    const { createLazyWhenExpressionVariable } = await import('./when-expression');
-    const whenVariable = await createLazyWhenExpressionVariable(identifier, valueNode, env);
-    
-    // Skip the normal variable creation flow
-    env.setVariable(identifier, whenVariable);
-    return { value: whenVariable, env };
-    
   } else if (valueNode && valueNode.type === 'ForExpression') {
     // Handle for expressions: for @item in @collection => expression
     if (process.env.MLLD_DEBUG === 'true') {

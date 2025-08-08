@@ -100,7 +100,7 @@ BacktickTemplateArgument "backtick template argument"
 
 // Backtick template pattern
 BacktickTemplate "backtick template"
-  = "`" parts:(BacktickInterpolation)* "`" {
+  = "`" parts:(UnifiedBacktickInterpolation)* "`" {
       // Return as a template structure that preserves interpolation
       return {
         content: parts,

@@ -35,6 +35,6 @@
 ]
 
 # Test best-of-N pattern: generate 5 variations and select the best
-/var @result = "prompt"|@generateVariation(@p)|@collectFiveAttempts
+/var @result = "prompt" with { pipeline: [@generateVariation(@p), @collectFiveAttempts] }
 
 /show @result

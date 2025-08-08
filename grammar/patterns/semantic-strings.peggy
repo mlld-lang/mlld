@@ -19,7 +19,7 @@ TemplateString "Template Context String"
   = "'" content:EscapedSingleStringContent "'" {
       return [helpers.createNode(NodeType.Text, { content, location: location() })];
     }
-  / InterpolatedDoubleQuoteContent  // Already returns AST nodes
+  / quote:UnifiedDoubleQuote { return quote.content; }  // Extract content from unified quote
 
 // ExpressionString - For expression contexts that need typed Literal nodes
 ExpressionString "Expression Context String"

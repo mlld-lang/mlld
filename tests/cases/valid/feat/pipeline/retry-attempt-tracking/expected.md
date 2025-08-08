@@ -2,4 +2,4 @@
 
 # Test that @pipeline.tries collects all retry attempts
 
-current: attempt-1: base, history: [], try: 1
+current: attempt-3: base, history: [attempt-1: base, attempt-2: base], try: 3

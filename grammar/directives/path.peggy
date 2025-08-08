@@ -20,8 +20,11 @@ It is used in the form:
 // Primary /path directive - handles bracketed paths using proper abstraction
 SlashPath
   // Double quoted string path with @var interpolation
-  = DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ content:InterpolatedDoubleQuoteContent ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
-      helpers.debug('SlashPath matched double quoted string with interpolation', { id, content, ttl, tail });
+  = DirectiveContext "/path" _ "@" id:BaseIdentifier _ "=" _ quote:UnifiedDoubleQuote ttl:(_ TTLClause)? tail:TailModifiers? comment:InlineComment? {
+      helpers.debug('SlashPath matched double quoted string with interpolation', { id, quote });
+      
+      // Extract content from unified quote
+      const content = quote.content;
       
       // Create variable reference node for identifier
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());

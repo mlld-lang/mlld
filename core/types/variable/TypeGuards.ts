@@ -21,7 +21,6 @@ import {
   ExecutableVariable,
   PipelineInputVariable,
   PrimitiveVariable,
-  WhenExpressionVariable,
   TextLikeVariable,
   StructuredVariable,
   ExternalVariable
@@ -129,12 +128,6 @@ export function isPrimitive(variable: Variable): variable is PrimitiveVariable {
   return variable.type === 'primitive';
 }
 
-/**
- * Type guard for WhenExpressionVariable
- */
-export function isWhenExpression(variable: Variable): variable is WhenExpressionVariable {
-  return variable.type === 'when-expression';
-}
 
 // =========================================================================
 // COMPOSITE TYPE GUARDS
@@ -193,7 +186,6 @@ export class VariableTypeGuards {
   static isExecutable = isExecutable;
   static isPipelineInput = isPipelineInput;
   static isPrimitive = isPrimitive;
-  static isWhenExpression = isWhenExpression;
 
   // Composite type guards
   static isTextLike = isTextLike;
@@ -344,7 +336,6 @@ export class FastTypeGuards {
   static requiresLazyEvaluation(variable: Variable): boolean {
     return isTemplate(variable) || 
            isPipelineInput(variable) ||
-           isWhenExpression(variable) ||
            (isImported(variable) && variable.metadata?.isComplex);
   }
 }

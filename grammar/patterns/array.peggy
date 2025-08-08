@@ -53,7 +53,7 @@ ArrayValue "array value"
   / ExecInvocationPattern   // @func() execution
   / VariableWithTail        // @var with modifiers
   / AtVar                   // @var references
-  / TemplateStyleInterpolation  // `template`, [[template]], "string"
+  / UnifiedQuoteOrTemplate      // `template`, [[template]], "string" (replaces TemplateStyleInterpolation)
   / CodeExecution           // run {command} or js {code}
   / NestedDirective         // embedded directives
   / DataString              // 'string' or "string with @interpolation"

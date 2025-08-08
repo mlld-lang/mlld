@@ -4,16 +4,16 @@
 
 VarRHSContent "var assignment value"
   = ExpressionWithOperator      // Try expressions FIRST but only if operators present
-  / WhenExpression              // when: [...] expressions for conditional values
+  / VarWhenError                // Error recovery: when expressions not allowed in /var
   / ForExpression               // for @var in @collection => expression
   / ForeachCommandExpression    // foreach @command(@arrays)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
   / TemplateWithPipeline        // Template content with pipeline support
-  / TemplateStyleInterpolation  // Handles backtick, [[...]], double/single quotes
+  / ArrayLiteral                // Arrays: [1, 2, 3] - MUST come before templates to handle [[nested]]
   / DataObjectLiteral           // Use data-context object parsing for proper typing
-  / ArrayLiteral                // Arrays: [1, 2, 3] - always arrays!
+  / UnifiedQuoteOrTemplate      // Unified quotes and templates (moved after arrays)
   / AlligatorWithFields         // File/URL with field access: <file.md>.field - must come before AlligatorExpression
   / AlligatorExpression         // File/URL loading: <file.md> - always loading! (includes transform/rename)
   / VariableWithSpacedPipes     // Variable references @var with spaced or unspaced pipes
@@ -59,7 +59,7 @@ AlligatorWithFields "alligator with field access"
 
 // TEMPLATE WITH PIPELINE - Handles template content (quoted/backtick) followed by pipes
 TemplateWithPipeline "template with pipeline"
-  = template:TemplateStyleInterpolation pipes:CondensedPipeChain {
+  = template:UnifiedQuoteOrTemplate pipes:CondensedPipeChain {
       helpers.debug('TemplateWithPipeline matched', { 
         template: template.wrapperType,
         pipelineCount: pipes.length
@@ -355,59 +355,20 @@ CodeChar
       return char;
     }
 
-// WHEN EXPRESSION - Value-returning when expressions for variable assignments
-// Used by: VarRHSContent
-// Purpose: Allow when: [...] expressions that return values based on first matching condition
-
-WhenExpression "when expression"
-  = "when" _ ":" _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
-      helpers.debug('WhenExpression matched', { 
-        conditionCount: conditions.length,
-        hasTailModifiers: !!tail
-      });
-      
-      return helpers.createWhenExpression(conditions, tail, location());
-    }
-  // Error recovery patterns
-  / "when" _ ":" _ "[" _ &{
-      return helpers.isUnclosedArray(input, peg$currPos);
-    } {
+// VAR WHEN ERROR - Error recovery for when expressions in /var context
+// when expressions are not allowed in /var assignments - use /exe instead
+VarWhenError
+  = "when" _ ":" _ "[" {
       helpers.mlldError(
-        `Unclosed array in when expression. Expected ']' to close the condition list.`,
-        "]",
+        "when: expressions are not allowed in /var assignments.\n\n" +
+        "Instead of:\n" +
+        "  /var @result = when: [@condition => value, ...]\n\n" +
+        "Use:\n" +
+        "  /exe @result() = when: [@condition => value, ...]",
+        "/exe",
         location()
       );
     }
-  / "when" _ ":" _ {
-      helpers.mlldError(
-        `Missing condition list in when expression. Expected: when: [condition => value, ...]`,
-        "[",
-        location()
-      );
-    }
-  / "when" _ &{ return !input.substring(peg$currPos).startsWith(':'); } {
-      helpers.mlldError(
-        `Missing ':' in when expression. Expected: when: [...]`,
-        ":",
-        location()
-      );
-    }
-
-// Value-oriented condition list for when expressions
-WhenExpressionConditionList
-  = first:WhenExpressionConditionPair rest:(_ pair:WhenExpressionConditionPair { return pair; })* {
-      return [first, ...rest];
-    }
-
-// Single condition => value pair for expressions
-WhenExpressionConditionPair
-  = condition:WhenConditionExpression _ "=>" _ action:WhenExpressionAction {
-      return { condition, action: [action] };
-    }
-
-// Actions in when expressions are values, not directives
-WhenExpressionAction
-  = VarRHSContent
 
 // FOR EXPRESSION - for @var in @collection => expression
 // Used in /var and /exe assignments to collect results

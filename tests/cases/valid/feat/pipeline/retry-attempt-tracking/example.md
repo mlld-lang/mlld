@@ -10,6 +10,6 @@
 ]
 
 # Test that @pipeline.tries collects all retry attempts
-/var @result = "base"|@generateAttempt(@p)|@retryCollector(@p)|@collectAttempts(@p)
+/var @result = "base" with { pipeline: [@generateAttempt(@p), @retryCollector(@p), @collectAttempts(@p)] }
 
 /show @result

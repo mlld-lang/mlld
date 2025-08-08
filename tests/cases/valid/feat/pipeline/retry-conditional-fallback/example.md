@@ -26,6 +26,6 @@
 ]
 
 # Test conditional retry with fallback after max attempts
-/var @result = "seed-data"|@jsonGenerator(@p.try)|@validateJSON|@retryUntilValidJSON
+/var @result = "seed-data" with { pipeline: [@jsonGenerator(@p.try), @validateJSON, @retryUntilValidJSON] }
 
 /show @result

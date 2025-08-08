@@ -381,19 +381,19 @@ ImportAlligatorAdapter
 
 // Quoted path for imports
 QuotedPath
-  = content:InterpolatedDoubleQuoteContent {
-      helpers.debug('QuotedPath matched with interpolation', { content });
-      const rawPath = helpers.reconstructRawString(content);
+  = quote:UnifiedDoubleQuote {
+      helpers.debug('QuotedPath matched with interpolation', { quote });
+      const rawPath = helpers.reconstructRawString(quote.content);
       return {
         type: 'path',
         subtype: 'filePath',
         values: { 
-          path: content
+          path: quote.content
         },
         raw: { 
           path: rawPath
         },
-        meta: helpers.createPathMetadata(rawPath, content)
+        meta: helpers.createPathMetadata(rawPath, quote.content)
       };
     }
   / "'" content:$([^']*) "'" {

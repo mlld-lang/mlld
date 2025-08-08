@@ -35,6 +35,6 @@
 ]
 
 # Test complex retry logic with attempt selection
-/var @result = "test-data"|@qualityScorer(@p.try)|@adaptiveRetry
+/var @result = "test-data" with { pipeline: [@qualityScorer(@p.try), @adaptiveRetry] }
 
 /show @result

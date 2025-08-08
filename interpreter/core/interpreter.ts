@@ -264,6 +264,32 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   }
   
   // Handle single node
+  
+  // Handle all template/quote structures from unified patterns
+  // These have either content or values.content arrays that need interpolation
+  if (!Array.isArray(node) && node && typeof node === 'object') {
+    // Check for template structures with content to interpolate
+    let contentToInterpolate = null;
+    
+    // Pattern 1: Direct content with wrapperType (from UnifiedQuoteOrTemplate)
+    if ('content' in node && Array.isArray(node.content) && 'wrapperType' in node && !node.type) {
+      contentToInterpolate = node.content;
+    }
+    // Pattern 2: Template nodes with type field (from TemplateCore and directives)
+    else if (node.type === 'template' && node.values?.content && Array.isArray(node.values.content)) {
+      contentToInterpolate = node.values.content;
+    }
+    // Pattern 3: Template nodes with direct content field
+    else if (node.type === 'template' && node.content && Array.isArray(node.content)) {
+      contentToInterpolate = node.content;
+    }
+    
+    if (contentToInterpolate) {
+      const interpolated = await interpolate(contentToInterpolate, env);
+      return { value: interpolated, env };
+    }
+  }
+  
   if (isDocument(node)) {
     return evaluateDocument(node, env);
   }
@@ -516,6 +542,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   if (node.type === 'WhenExpression') {
     const { evaluateWhenExpression } = await import('../eval/when-expression');
     return evaluateWhenExpression(node as any, env, context);
+  }
+  
+  // Handle when RHS actions (side effects with return values)
+  if (node.type === 'WhenRHSAction') {
+    const { evaluateWhenRHSAction } = await import('../eval/when-rhs-action');
+    return evaluateWhenRHSAction(node as any, env, context);
   }
   
   // Handle for expressions

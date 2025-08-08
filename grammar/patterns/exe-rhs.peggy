@@ -260,3 +260,61 @@ ExecAsNewTitle
   / _ "as" _ varRef:VariableNoTail {
       return [varRef];
     }
+
+// -------------------------------------------------------------
+// WHEN EXPRESSION - Conditional execution for executable assignments
+// -------------------------------------------------------------
+
+// WHEN EXPRESSION - Value-returning when expressions for executable assignments
+// Used by: ExeRHSContent
+// Purpose: Allow when: [...] expressions that return values based on first matching condition
+
+WhenExpression "when expression"
+  = "when" _ ":" _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
+      helpers.debug('WhenExpression matched', { 
+        conditionCount: conditions.length,
+        hasTailModifiers: !!tail
+      });
+      
+      return helpers.createWhenExpression(conditions, tail, location());
+    }
+  // Error recovery patterns
+  / "when" _ ":" _ "[" _ &{
+      return helpers.isUnclosedArray(input, peg$currPos);
+    } {
+      helpers.mlldError(
+        `Unclosed array in when expression. Expected ']' to close the condition list.`,
+        "]",
+        location()
+      );
+    }
+  / "when" _ ":" _ {
+      helpers.mlldError(
+        `Missing condition list in when expression. Expected: when: [condition => value, ...]`,
+        "[",
+        location()
+      );
+    }
+  / "when" _ &{ return !input.substring(peg$currPos).startsWith(':'); } {
+      helpers.mlldError(
+        `Missing ':' in when expression. Expected: when: [...]`,
+        ":",
+        location()
+      );
+    }
+
+// Value-oriented condition list for when expressions
+WhenExpressionConditionList
+  = first:WhenExpressionConditionPair rest:(_ pair:WhenExpressionConditionPair { return pair; })* {
+      return [first, ...rest];
+    }
+
+// Single condition => value pair for expressions
+WhenExpressionConditionPair
+  = condition:WhenConditionExpression _ "=>" _ action:WhenExpressionAction {
+      return { condition, action: [action] };
+    }
+
+// Actions in when expressions - for /exe context, supports both side effects and return values
+WhenExpressionAction
+  = WhenRHSAction  // Use the unified pattern that supports show, output, var assignment, and values
