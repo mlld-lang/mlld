@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Pipeline State Management**: Enhanced state tracking across pipeline stages with proper attempt counting and history preservation
+- **Issue #341 - `/exe...when` RHS Actions**: `/exe` functions with `when:` expressions now support all `/when` RHS actions (show, variable assignment, output, function calls) with local variable semantics
+- **Removed `/var...when`**: Eliminated redundant feature in favor of more capable `/exe...when` 
+- **Unified Template/Quote Grammar**: Consolidated duplicate grammar patterns
+- **Prohibited Implicit Executables in `/when` RHS**: Removed ability to define executables within when actions for cleaner separation
 
 ## [2.0.0-rc34]
 
