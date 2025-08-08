@@ -15,6 +15,7 @@ VarRHSContent "var assignment value"
   / DataObjectLiteral           // Use data-context object parsing for proper typing
   / UnifiedQuoteOrTemplate      // Unified quotes and templates (moved after arrays)
   / AlligatorWithFields         // File/URL with field access: <file.md>.field - must come before AlligatorExpression
+  / AlligatorWithPostPipes      // <file> followed by external pipe chain with optional whitespace/newlines
   / AlligatorExpression         // File/URL loading: <file.md> - always loading! (includes transform/rename)
   / VariableWithSpacedPipes     // Variable references @var with spaced or unspaced pipes
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
@@ -38,7 +39,7 @@ ExpressionWithOperator
 // ALLIGATOR WITH FIELDS - Handles <file.md>.field syntax for direct assignment
 // This pattern allows field access after file references outside of template contexts
 AlligatorWithFields "alligator with field access"
-  = base:AlligatorExpression fields:AnyFieldAccess+ pipes:CondensedPipeChain? {
+  = base:AlligatorExpression fields:AnyFieldAccess+ pipes:SpacedOrCondensedPipeChain? {
       helpers.debug('AlligatorWithFields matched', { 
         source: base.source,
         fieldCount: fields.length,
@@ -88,9 +89,24 @@ TemplateWithPipeline "template with pipeline"
       };
     }
 
+// ALLIGATOR WITH POST PIPES - Merge inside-angle pipes with external spaced/condensed pipe chains
+AlligatorWithPostPipes "alligator with external pipe chain"
+  = base:AlligatorExpression pipes:SpacedOrCondensedPipeChain {
+      helpers.debug('AlligatorWithPostPipes matched', {
+        innerPipes: base.pipes ? base.pipes.length : 0,
+        outerPipes: pipes.length
+      });
+      const allPipes = [...(base.pipes || []), ...(pipes || [])];
+      return {
+        ...base,
+        ...(allPipes.length > 0 ? { pipes: allPipes } : {})
+      };
+    }
+
 // VARIABLE WITH SPACED PIPES - Allows both "@var | @pipe" and "@var|@pipe" in var RHS
+// Supports optional arguments: | @transform(args)
 VariableWithSpacedPipes "variable with flexible pipe syntax"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* firstPipe:(_ pipeStart:("" { return peg$currPos; }) "|" _ "@" transform:BaseIdentifier { return { transform, pipeStart }; })? restPipes:SpacedOrCondensedPipe* {
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* firstPipe:(_ pipeStart:("" { return peg$currPos; }) "|" _ "@" transform:BaseIdentifier args:CondensedPipeArgs? { return { transform, args, pipeStart }; })? restPipes:SpacedOrCondensedPipe* {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -106,6 +122,7 @@ VariableWithSpacedPipes "variable with flexible pipe syntax"
           type: 'CondensedPipe',
           transform: firstPipe.transform,
           hasAt: true,
+          args: firstPipe.args || [],
           location: {
             source: loc.source,
             start: { 
@@ -131,15 +148,16 @@ VariableWithSpacedPipes "variable with flexible pipe syntax"
       return varRef;
     }
 
-// Flexible pipe pattern for var RHS - allows whitespace
+// Flexible pipe pattern for var RHS - allows whitespace and optional args
 SpacedOrCondensedPipe
-  = _ pipeStart:("" { return peg$currPos; }) "|" _ "@" transform:BaseIdentifier {
+  = _ pipeStart:("" { return peg$currPos; }) "|" _ "@" transform:BaseIdentifier args:CondensedPipeArgs? {
       const loc = location();
       const startOffset = pipeStart;
       return {
         type: 'CondensedPipe',
         transform: transform,
         hasAt: true,
+        args: args || [],
         location: {
           source: loc.source,
           start: { 
@@ -151,6 +169,10 @@ SpacedOrCondensedPipe
         }
       };
     }
+
+// Chain of spaced-or-condensed pipes
+SpacedOrCondensedPipeChain "flexible pipe chain"
+  = pipes:SpacedOrCondensedPipe+ { return pipes; }
 
 // FIELD ACCESS EXEC PATTERN - Matches @obj.field() with nested field access
 FieldAccessExecPattern "field access exec invocation"

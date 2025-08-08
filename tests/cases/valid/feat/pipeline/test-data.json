@@ -1,0 +1,7 @@
+{
+  "users": [
+    { "name": "Alice", "email": "alice@example.com", "address": { "city": "Wonderland", "state": "NY" } },
+    { "name": "Bob", "email": "bob@example.com", "address": { "city": "Buildtown", "state": "CA" } }
+  ]
+}
+

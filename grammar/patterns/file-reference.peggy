@@ -102,11 +102,31 @@ PipeArg
   / NumberLiteral  
   / "@" varName:BaseIdentifier { return { type: 'variable', name: varName }; }
 
-// Chain of condensed pipes
-CondensedPipeChain "pipe chain"
-  = pipes:CondensedPipe+ {
-      return pipes;
+// Spaced or condensed pipe (interpolation contexts allow condensed only; var RHS may add spaced variant)
+SpacedOrCondensedFilePipe
+  = HWS pipeStart:("" { return peg$currPos; }) "|" HWS "@" name:BaseIdentifier args:CondensedPipeArgs? {
+      const loc = location();
+      const startOffset = pipeStart;
+      return { 
+        type: 'CondensedPipe',
+        transform: name,
+        hasAt: true,
+        args: args || [],
+        location: {
+          source: loc.source,
+          start: { 
+            offset: startOffset,
+            line: loc.start.line,
+            column: loc.start.column - (loc.start.offset - startOffset)
+          },
+          end: loc.end
+        }
+      };
     }
+
+// Chain of condensed pipes (kept as canonical inside interpolation contexts)
+CondensedPipeChain "pipe chain"
+  = pipes:CondensedPipe+ { return pipes; }
 
 // Field access chain for file references
 FileFieldChain "field chain"

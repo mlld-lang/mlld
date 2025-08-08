@@ -30,9 +30,21 @@ SlashVar "var directive"
         metaInfo.wrapperType = value.wrapperType;
         metaInfo.inferredType = 'template';
         
-        // Check if template has a pipeline attached
+        // Check if template has a pipeline attached (only condensed pipes immediately after template)
         if (value.withClause) {
           tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
+
+        // Condensed-only inside backtick/double-colon/triple-colon templates.
+        // Allow tail pipelines for simple quotes; ignore only for template wrappers.
+        if (!value.withClause && tail && tail.pipeline) {
+          const wrapper = value.wrapperType;
+          const isTemplateWrapper = wrapper === 'backtick' || wrapper === 'doubleColon' || wrapper === 'tripleColon';
+          if (isTemplateWrapper) {
+            const filteredTail = { ...tail };
+            delete filteredTail.pipeline;
+            tail = filteredTail;
+          }
         }
       }
       // Handle object literals (already typed by DataObjectLiteral)
@@ -63,24 +75,12 @@ SlashVar "var directive"
         metaInfo.inferredType = 'file-content';
       }
       // Handle variable references
-      else if (value && value.type === 'variableReference') {
-        processedValue = [value.value];
+      else if (value && (value.type === 'variableReference' || value.type === 'VariableReference')) {
+        // Store the variable reference node directly
+        processedValue = [value];
         metaInfo.inferredType = 'reference';
-        
-        // Handle pipes if present (following TemplateWithPipeline pattern)
-        if (value.pipes && value.pipes.length > 0) {
-          const pipeline = value.pipes.map(pipe => ({
-            identifier: [helpers.createVariableReferenceNode('varIdentifier', { 
-              identifier: pipe.transform 
-            }, location())],
-            args: pipe.args || [],
-            fields: [],
-            rawIdentifier: pipe.transform,
-            rawArgs: pipe.args || []
-          }));
-          
-          tail = tail ? Object.assign({}, { pipeline }, tail) : { pipeline };
-        }
+        // Note: keep node-level condensed pipes on the VariableReference; they will be
+        // applied during evaluation via applyCondensedPipes. Do not promote to tail.
       }
       // Handle variable references with tail modifiers
       else if (value && value.type === 'VariableReferenceWithTail') {

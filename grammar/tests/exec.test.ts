@@ -3,6 +3,52 @@ import { parse } from '@grammar/parser';
 import { isExeCommandDirective, isExeCodeDirective } from '@core/types/exe';
 
 describe('Exec directive', () => {
+  describe('pipeline whitespace variations in /var RHS', () => {
+    test('variable with spaced pipeline', async () => {
+      const content = '/var @out = @value | @upper | @trim';
+      const { ast } = await parse(content);
+      const dir = ast[0];
+      expect(dir.type).toBe('Directive');
+      expect(dir.kind).toBe('var');
+      // Node-level pipes attached to the VariableReference value
+      const valueNode: any = dir.values.value[0];
+      expect(valueNode.type).toBe('VariableReference');
+      expect(valueNode.pipes?.length).toBe(2);
+      expect(valueNode.pipes[0].transform).toBe('upper');
+      expect(valueNode.pipes[1].transform).toBe('trim');
+    });
+
+    test('stacked pipes over multiple lines', async () => {
+      const content = '/var @x = @value\n  | @f\n  | @t\n  | @fmt';
+      const { ast } = await parse(content);
+      const dir = ast[0];
+      const valueNode: any = dir.values.value[0];
+      expect(valueNode.type).toBe('VariableReference');
+      expect(valueNode.pipes?.length).toBe(3);
+      expect(valueNode.pipes.map((p:any)=>p.transform)).toEqual(['f','t','fmt']);
+    });
+
+    test('alligator with external spaced pipes', async () => {
+      const content = '/var @data = <data.json> | @json | @upper';
+      const { ast } = await parse(content);
+      const dir = ast[0];
+      expect(dir.values.value[0].type).toBe('load-content');
+      // Spaced pipes after <file> are parsed as node-level (attached to the load-content node), not tail
+      const load = dir.values.value[0] as any;
+      expect(load.pipes?.length).toBe(2);
+      expect(load.pipes[0].transform).toBe('json');
+      expect(load.pipes[1].transform).toBe('upper');
+    });
+
+    test('templates do not accept spaced tail pipelines', async () => {
+      const content = '/var @t = `hello` | @upper';
+      const { ast } = await parse(content);
+      const dir = ast[0];
+      // Spaced tail pipeline after templates is ignored; condensed form would be allowed
+      expect(dir.values.withClause?.pipeline).toBeUndefined();
+      expect(dir.meta.wrapperType).toBe('backtick');
+    });
+  });
   describe('execCommand subtype', () => {
     test('Basic exec command', async () => {
       const content = '/exe @listFiles = {ls -la}';

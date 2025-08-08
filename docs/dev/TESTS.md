@@ -14,12 +14,14 @@ The project uses an organized fixture system that automatically generates test f
 tests/
 ├── cases/                    # Source test cases (markdown files)
 │   ├── valid/               # Tests that should parse and execute successfully
-│   │   ├── directives/     # Organized by directive type
+│   │   ├── slash/     # Organized by directive type
 │   │   │   ├── exe/       # /exe directive tests
 │   │   │   ├── var/       # /var directive tests
 │   │   │   ├── import/    # /import directive tests
 │   │   │   └── ...        # Other directives
-│   │   ├── features/       # Feature-specific tests
+│   │   ├── feat/          # Feature-specific tests
+│   │   │   └── ...        # Feature collections
+│   │   │       └── ...    # Actual feature tests
 │   │   ├── integration/    # Cross-feature integration tests
 │   │   └── examples/       # Auto-copied from examples/ directory
 │   ├── exceptions/          # Tests that should fail at runtime
