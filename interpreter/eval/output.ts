@@ -352,8 +352,13 @@ async function evaluateSimpleVariableSource(
       ? identifierNodes[0].identifier 
       : undefined;
   } else if (Array.isArray(directive.values.source) && directive.values.source[0]?.type === 'VariableReference') {
-    // Structure from @when action
+    // Legacy structure from older when-actions
     varName = directive.values.source[0].identifier;
+  } else if (Array.isArray(directive.values.source) && directive.values.source[0]?.type === 'Text') {
+    // Gracefully handle template-as-array passed directly
+    const parts = directive.values.source as any[];
+    const { interpolate } = await import('../core/interpreter');
+    return await interpolate(parts as any, env);
   } else {
     throw new MlldOutputError(
       'Invalid source structure for variable output',

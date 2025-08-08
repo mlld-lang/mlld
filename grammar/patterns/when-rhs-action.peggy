@@ -67,15 +67,9 @@ WhenRHSOutputAction
   = "output" _ source:WhenRHSOutputSource _ "to" _ target:WhenRHSOutputTarget format:(_ "as" _ f:OutputFormat { return f; })? {
       helpers.debug('WhenRHSOutputAction matched', { source, target, format });
       
-      // Create standard output directive node (same structure as when.peggy)
-      const values = {
-        target: target
-      };
-      
-      const raw = {
-        target: target.raw || String(target)
-      };
-      
+      // Build base directive structure
+      const values = { target };
+      const raw = { target: target.raw || String(target) };
       let subtype = 'outputDocument';
       const meta = { 
         hasSource: false,
@@ -84,20 +78,42 @@ WhenRHSOutputAction
       };
       
       if (source) {
-        // Handle source content
-        if (source && typeof source === 'object' && source.content) {
-          // Template content
+        meta.hasSource = true;
+        
+        // Case 1: Template/quoted content (UnifiedQuoteOrTemplate)
+        if (source && typeof source === 'object' && source.content && source.wrapperType) {
           values.source = source.content;
           raw.source = source.raw || text();
-          meta.hasSource = true;
-          meta.sourceType = 'template';
-          subtype = 'outputTemplate';
-        } else {
-          // Other content
+          meta.sourceType = 'literal'; // Treat templates/quotes as literal content to be interpolated
+          meta.wrapperType = source.wrapperType;
+          subtype = 'outputText';
+        }
+        // Case 2: Variable reference
+        else if (source && source.type === 'VariableReference') {
+          // Canonical: use structured source with identifier/args
+          values.source = {
+            identifier: [source],
+            args: []
+          };
+          raw.source = '@' + source.identifier;
+          meta.sourceType = 'variable';
+          subtype = 'outputVariable';
+        }
+        // Case 3: Exec invocation (function call)
+        else if (source && source.type === 'ExecInvocation') {
+          values.source = {
+            identifier: source.commandRef.identifier,
+            args: source.commandRef.args || []
+          };
+          raw.source = source.commandRef.name;
+          meta.sourceType = 'execInvocation';
+          subtype = 'outputInvocation';
+        }
+        // Case 4: Primitive values (numbers, booleans, null) or plain strings
+        else {
           values.source = [helpers.createNode(NodeType.Text, { content: String(source), location: location() })];
           raw.source = String(source);
-          meta.hasSource = true;
-          meta.sourceType = 'text';
+          meta.sourceType = 'literal';
           subtype = 'outputText';
         }
       }
@@ -108,10 +124,10 @@ WhenRHSOutputAction
       
       return helpers.createNode(NodeType.Directive, {
         kind: 'output',
-        subtype: subtype,
-        values: values,
-        raw: raw,
-        meta: meta,
+        subtype,
+        values,
+        raw,
+        meta,
         location: location()
       });
     }

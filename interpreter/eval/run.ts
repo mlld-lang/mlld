@@ -15,6 +15,8 @@ import { logger } from '@core/utils/logger';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
 
+// Revert: remove extractRawTextContent helper
+
 /**
  * Determine the taint level of command arguments
  * WHY: Commands containing variables may include untrusted data from LLM outputs,
@@ -156,8 +158,8 @@ export async function evaluateRun(
       throw new Error('Run code directive missing code');
     }
     
-    // Get the code - use default context for code blocks
-    const code = await interpolate(codeNodes, env, InterpolationContext.Default);
+    // Interpolate code content (original behavior)
+    const code = await interpolate(codeNodes, env, InterpolationContext.ShellCommand);
     
     // Handle arguments passed to code blocks (e.g., /run js (@var1, @var2) {...})
     const args = directive.values?.args || [];
@@ -471,7 +473,7 @@ export async function evaluateRun(
         tempEnv.setParameterVariable(key, createSimpleTextVariable(key, value));
       }
       
-      const code = await interpolate(definition.codeTemplate, tempEnv, InterpolationContext.Default);
+      const code = await interpolate(definition.codeTemplate, tempEnv, InterpolationContext.ShellCommand);
       if (process.env.DEBUG_EXEC) {
         logger.debug('run.ts code execution debug:', {
           codeTemplate: definition.codeTemplate,
@@ -490,6 +492,8 @@ export async function evaluateRun(
       
       // Special handling for mlld-when expressions
       if (definition.language === 'mlld-when') {
+        logger.debug('🎯 mlld-when handler in run.ts CALLED');
+        
         // The codeTemplate contains the WhenExpression node
         const whenExprNode = definition.codeTemplate[0];
         if (!whenExprNode || whenExprNode.type !== 'WhenExpression') {
@@ -506,6 +510,11 @@ export async function evaluateRun(
         const { evaluateWhenExpression } = await import('./when-expression');
         const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
         output = whenResult.value;
+        
+        logger.debug('🎯 mlld-when result:', {
+          outputType: typeof output,
+          outputValue: String(output).substring(0, 100)
+        });
       } else {
         output = await AutoUnwrapManager.executeWithPreservation(async () => {
           return await env.executeCode(code, definition.language || 'javascript', codeParams, executionContext);

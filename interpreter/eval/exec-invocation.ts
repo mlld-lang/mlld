@@ -669,6 +669,8 @@ export async function evaluateExecInvocation(
   else if (isCodeExecutable(definition)) {
     // Special handling for mlld-when expressions
     if (definition.language === 'mlld-when') {
+      console.log('🎯 EXEC-INVOCATION MLLD-WHEN HANDLER CALLED');
+      
       // The codeTemplate contains the WhenExpression node
       const whenExprNode = definition.codeTemplate[0];
       if (!whenExprNode || whenExprNode.type !== 'WhenExpression') {
@@ -679,6 +681,8 @@ export async function evaluateExecInvocation(
       const { evaluateWhenExpression } = await import('./when-expression');
       const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
       result = whenResult.value;
+      
+      console.log('🎯 EXEC-INVOCATION RESULT:', String(result));
     } else if (definition.language === 'mlld-for') {
       // Special handling for mlld-for expressions
       const forExprNode = definition.codeTemplate[0];

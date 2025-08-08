@@ -28,6 +28,8 @@ export async function evaluateWhenExpression(
   env: Environment,
   context?: EvaluationContext
 ): Promise<EvalResult> {
+  console.log('🚨 WHEN-EXPRESSION EVALUATOR CALLED');
+  
   const errors: Error[] = [];
   
   // Empty conditions array - return null
@@ -99,50 +101,65 @@ export async function evaluateWhenExpression(
           }
           
           // Evaluate the action to get its value
-          const actionResult = await evaluate(pair.action, env, {
-            ...context,
-            isExpression: true // Mark as expression context
-          });
+          // IMPORTANT SCOPING RULE:
+          // - /when (directive) uses global scope semantics (handled elsewhere)
+          // - when: [...] in /exe uses LOCAL scope – evaluate actions in a child env
+          const actionEnv = env.createChild();
+          const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
           
           let value = actionResult.value;
           
           // Debug: What did we get back?
-          logger.debug('WhenExpression action result:', {
+          console.log('🔍 WHEN-EXPRESSION action result:', {
             valueType: typeof value,
-            valueLength: typeof value === 'string' ? value.length : 'not string',
-            valuePreview: typeof value === 'string' ? value.substring(0, 50) : String(value).substring(0, 50)
-          });
-          
-          // Handle directive actions in expression context
-          logger.debug('WhenExpression action debug', { 
-            actionType: Array.isArray(pair.action) ? 'array' : typeof pair.action,
-            actionLength: Array.isArray(pair.action) ? pair.action.length : 'not array',
-            firstActionType: Array.isArray(pair.action) && pair.action[0] ? pair.action[0].type : 'no first action',
-            firstActionKind: Array.isArray(pair.action) && pair.action[0] && pair.action[0].kind ? pair.action[0].kind : 'no kind',
-            value: typeof value === 'string' ? value.substring(0, 100) : typeof value
+            valuePreview: String(value).substring(0, 50),
+            actionKind: Array.isArray(pair.action) && pair.action[0] ? pair.action[0].kind : 'unknown'
           });
           
           if (Array.isArray(pair.action) && pair.action.length === 1) {
             const singleAction = pair.action[0];
             if (singleAction && typeof singleAction === 'object' && singleAction.type === 'Directive') {
               const directiveKind = singleAction.kind;
-              // For side-effect directives, return appropriate values instead of their output
-              if (directiveKind === 'show' || directiveKind === 'output') {
-                // Show and output actions should return empty string (side effects already happened)
+              // For side-effect directives, handle appropriately for expression context
+              if (directiveKind === 'show') {
+                // Show actions in when expressions should display their output (the return value IS the side effect)
+                // Don't suppress show output - it's the main requirement of Issue #341
+                // Keep the original value which contains the show content
+              } else if (directiveKind === 'output') {
+                // Output actions should return empty string (file write is the side effect)
                 value = '';
               } else if (directiveKind === 'var') {
-                // Variable assignments should return the assigned value
-                // The assignment has already happened as a side effect
-                value = value || '';
+                // Variable assignments should return the assigned value in when expressions
+                // The variable evaluator returns empty string, but we need the assigned value
+                // Extract the variable identifier and get its value from the result environment
+                const identifier = singleAction.values?.identifier;
+                if (identifier && Array.isArray(identifier) && identifier[0]) {
+                  const varName = identifier[0].identifier;
+                  if (varName && actionResult.env) {
+                    try {
+                      const variable = actionResult.env.getVariable(varName);
+                      if (variable) {
+                        // Return the assigned variable's raw value, not the Variable wrapper
+                        const { extractVariableValue } = await import('../utils/variable-resolution');
+                        const variableValue = await extractVariableValue(variable, actionResult.env);
+                        value = variableValue as any;
+                      }
+                    } catch (e) {
+                      // If we can't get the variable value, fall back to empty string
+                      logger.debug('Could not get variable value for when expression:', { varName, error: e });
+                    }
+                  }
+                }
               }
             }
           }
           
           // Apply tail modifiers if present
           if (node.withClause && node.withClause.pipes) {
-            value = await applyTailModifiers(value, node.withClause.pipes, env);
+            value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
           }
           
+          // Return value with parent env to prevent leaking local assignments
           return { value, env };
         } catch (actionError) {
           throw new MlldWhenExpressionError(

@@ -115,6 +115,11 @@ class ShellCommandEscapingStrategy implements EscapingStrategy {
 }
 
 /**
+ * Shell code escaping - preserves exact formatting for code blocks
+ */
+// REMOVED: ShellCodeEscapingStrategy (revert)
+
+/**
  * Template escaping - values remain completely literal
  */
 class TemplateEscapingStrategy implements EscapingStrategy {
@@ -148,6 +153,7 @@ class DataValueEscapingStrategy implements EscapingStrategy {
  */
 EscapingStrategyFactory.register(InterpolationContext.Default, new DefaultEscapingStrategy());
 EscapingStrategyFactory.register(InterpolationContext.ShellCommand, new ShellCommandEscapingStrategy());
+// Revert: do not register ShellCode strategy
 EscapingStrategyFactory.register(InterpolationContext.Template, new TemplateEscapingStrategy());
 EscapingStrategyFactory.register(InterpolationContext.DataValue, new DataValueEscapingStrategy());
 
@@ -159,11 +165,8 @@ export function getInterpolationContext(directiveType?: string, subtype?: string
   
   switch (directiveType) {
     case 'run':
-      if (subtype === 'runCommand' || subtype === 'runExec') {
+      if (subtype === 'runCommand' || subtype === 'runExec' || subtype === 'runCode') {
         return InterpolationContext.ShellCommand;
-      }
-      if (subtype === 'runCode') {
-        return InterpolationContext.ShellCode;
       }
       break;
       
