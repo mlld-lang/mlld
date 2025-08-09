@@ -1,0 +1,10 @@
+PREFIX-HELLO WORLD-SUFFIX
+
+PREFIX-ATAD TSET-SUFFIX
+
+TXET ELPMAS-XIFERP
+
+PREFIX-{
+  "message": "hello",
+  "type": "greeting"
+}-SUFFIX

@@ -16,21 +16,37 @@ export async function applyWithClause(
   
   // Apply pipeline transformations
   if (withClause.pipeline && withClause.pipeline.length > 0) {
-    // Extract format from with clause if specified
-    const format = withClause.format as string | undefined;
+    // Check if we should use the new unified pipeline processor (feature flag)
+    const USE_UNIFIED_PIPELINE = process.env.MLLD_UNIFIED_PIPELINE === 'true';
     
-    // Import the pipeline execution function
-    const { executePipeline } = await import('./pipeline');
-    
-    // Execute the entire pipeline with format
-    result = await executePipeline(
-      result,
-      withClause.pipeline,
-      env,
-      undefined, // location
-      format,
-      false // isRetryable - with-clause doesn't track source function
-    );
+    if (USE_UNIFIED_PIPELINE) {
+      // Use new unified pipeline processor
+      const { processPipeline } = await import('./pipeline/unified-processor');
+      result = await processPipeline({
+        value: result,
+        env,
+        pipeline: withClause.pipeline,
+        format: withClause.format as string | undefined,
+        isRetryable: false // with-clause doesn't track source function
+      });
+    } else {
+      // Original pipeline handling
+      // Extract format from with clause if specified
+      const format = withClause.format as string | undefined;
+      
+      // Import the pipeline execution function
+      const { executePipeline } = await import('./pipeline');
+      
+      // Execute the entire pipeline with format
+      result = await executePipeline(
+        result,
+        withClause.pipeline,
+        env,
+        undefined, // location
+        format,
+        false // isRetryable - with-clause doesn't track source function
+      );
+    }
   }
   
   // Apply trust validation

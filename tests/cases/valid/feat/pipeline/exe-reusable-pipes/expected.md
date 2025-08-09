@@ -1,0 +1,14 @@
+ALICE
+BOB
+
+[HELLO]
+[world]
+
+HIHIHIHI
+
+[{
+  "NAME": "TEST"
+}]
+
+MESSAGE: INPUT
+MESSAGE: DIRECT
