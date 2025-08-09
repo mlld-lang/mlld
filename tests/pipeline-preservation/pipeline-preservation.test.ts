@@ -256,7 +256,7 @@ Bob,25,LA\`
 
       await expect(
         interpret(input, { fileSystem, pathService })
-      ).rejects.toThrow(/Pipeline step 2 failed/);
+      ).rejects.toThrow(/Pipeline failed at stage 2/);
     });
   });
 

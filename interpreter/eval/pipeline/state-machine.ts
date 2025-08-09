@@ -1,11 +1,28 @@
 /**
+ * Retry Context - Tracks a single retry request and its cascade
+ */
+export interface RetryContext {
+  id: string;                    // Unique ID for this retry context
+  requestingStage: number;       // Stage that requested the retry
+  retryingStage: number;         // Stage being retried
+  attemptNumber: number;         // Which attempt within this context
+  parentContextId?: string;      // If this retry happened within another retry
+}
+
+/**
  * Pipeline Events - The immutable log of what happened
  */
 export type PipelineEvent =
   | { type: 'PIPELINE_START'; input: string }
-  | { type: 'STAGE_START'; stage: number; input: string }
-  | { type: 'STAGE_SUCCESS'; stage: number; output: string }
-  | { type: 'STAGE_RETRY'; stage: number; from: number; reason?: string }
+  | { type: 'STAGE_START'; stage: number; input: string; contextId?: string }
+  | { type: 'STAGE_SUCCESS'; stage: number; output: string; contextId?: string }
+  | { 
+      type: 'STAGE_RETRY_REQUEST';     // Stage X requests retry of stage X-1
+      requestingStage: number;          // Who's asking for retry
+      targetStage: number;              // Who to retry
+      contextId: string;                // New retry context ID
+      parentContextId?: string;         // Parent retry context if nested
+    }
   | { type: 'STAGE_FAILURE'; stage: number; error: Error }
   | { type: 'PIPELINE_COMPLETE'; output: string }
   | { type: 'PIPELINE_ABORT'; reason: string };
@@ -19,7 +36,11 @@ export interface PipelineState {
   currentInput: string;
   baseInput: string;
   events: PipelineEvent[];
-  // NO derived state - compute from events
+  
+  // Retry context management
+  activeContexts: RetryContext[];        // Stack of active retry contexts
+  contextRetryCount: Map<string, Map<number, number>>; // contextId -> stage -> count
+  globalStageRetryCount: Map<number, number>; // stage -> total retry count (global cap)
 }
 
 /**
@@ -53,12 +74,18 @@ export type NextStep =
  */
 export interface StageContext {
   stage: number;              // 1-indexed stage number
-  attempt: number;            // How many times THIS stage has been attempted
+  attempt: number;            // How many times THIS stage has been attempted (globally)
+  contextAttempt: number;     // Attempt count within current context chain
   history: string[];          // Previous successful outputs from THIS stage
   previousOutputs: string[];  // Outputs from previous stages (0..stage-1)
   globalAttempt: number;      // Total retry count + 1
   totalStages: number;        // Total number of stages
   outputs: Record<number, string>; // Array-style access (0=base, 1..n=stage outputs)
+  activeContexts: Array<{     // Active retry contexts (for debugging)
+    id: string;
+    requesting: number;
+    retrying: number;
+  }>;
 }
 
 /**
@@ -67,12 +94,12 @@ export interface StageContext {
 export class EventQuery {
   /**
    * Find the last retry event that affects the given stage
-   * A retry from stage X invalidates all stages >= X
+   * A retry targeting stage X invalidates all stages >= X
    */
   static lastRetryIndexAffectingStage(events: PipelineEvent[], stage: number): number {
     for (let i = events.length - 1; i >= 0; i--) {
       const e = events[i];
-      if (e.type === 'STAGE_RETRY' && e.from <= stage) {
+      if (e.type === 'STAGE_RETRY_REQUEST' && e.targetStage <= stage) {
         return i;
       }
     }
@@ -106,12 +133,25 @@ export class EventQuery {
   }
 
   /**
-   * Count how many times a specific stage has issued a retry
+   * Count how many times a specific stage has requested a retry
    */
   static countSelfRetries(events: PipelineEvent[], stage: number): number {
     let count = 0;
     for (const e of events) {
-      if (e.type === 'STAGE_RETRY' && e.stage === stage) {
+      if (e.type === 'STAGE_RETRY_REQUEST' && e.requestingStage === stage) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Count how many times a specific stage has been started (attempt count)
+   */
+  static countStageStarts(events: PipelineEvent[], stage: number): number {
+    let count = 0;
+    for (const e of events) {
+      if (e.type === 'STAGE_START' && e.stage === stage) {
         count++;
       }
     }
@@ -122,16 +162,17 @@ export class EventQuery {
    * Count total retries across all stages
    */
   static countTotalRetries(events: PipelineEvent[]): number {
-    return events.filter(e => e.type === 'STAGE_RETRY').length;
+    return events.filter(e => e.type === 'STAGE_RETRY_REQUEST').length;
   }
 }
 
 /**
- * Pipeline State Machine - Pure event-sourced logic
+ * Pipeline State Machine - Pure event-sourced logic with recursive retry support
  */
 export class PipelineStateMachine {
   private state: PipelineState;
-  private readonly maxRetries = 10;
+  private readonly maxRetriesPerContext = 10;  // Max retries per stage within a context
+  private readonly maxGlobalRetriesPerStage = 20; // Global cap per stage across all contexts
   private readonly totalStages: number;
 
   constructor(totalStages: number) {
@@ -145,7 +186,10 @@ export class PipelineStateMachine {
       currentStage: 0,
       currentInput: '',
       baseInput: '',
-      events: []
+      events: [],
+      activeContexts: [],
+      contextRetryCount: new Map(),
+      globalStageRetryCount: new Map()
     };
   }
 
@@ -231,8 +275,15 @@ export class PipelineStateMachine {
   }
 
   private handleStageSuccess(stage: number, output: string): NextStep {
-    // Record success
-    this.recordEvent({ type: 'STAGE_SUCCESS', stage, output });
+    const currentContext = this.getCurrentContext();
+    
+    // Record success event
+    this.recordEvent({ 
+      type: 'STAGE_SUCCESS', 
+      stage, 
+      output,
+      contextId: currentContext?.id 
+    });
     
     // Early termination on empty output
     if (output === '') {
@@ -240,21 +291,63 @@ export class PipelineStateMachine {
       this.recordEvent({ type: 'PIPELINE_COMPLETE', output: '' });
       return { type: 'COMPLETE', output: '' };
     }
+    
+    // Check if this completes a retry context
+    if (currentContext && stage === currentContext.requestingStage - 1) {
+      // We've successfully completed the retry requested by the context
+      this.state.activeContexts.pop();
+      
+      // Continue from the requesting stage with the retry output
+      const nextStage = currentContext.requestingStage;
+      
+      // Check if we're at the end
+      if (nextStage >= this.totalStages) {
+        this.state.status = 'COMPLETED';
+        this.recordEvent({ type: 'PIPELINE_COMPLETE', output });
+        return { type: 'COMPLETE', output };
+      }
+      
+      this.state.currentStage = nextStage;
+      this.state.currentInput = output;
+      
+      // Get parent context for the stage start event
+      const parentContext = this.getCurrentContext();
+      
+      this.recordEvent({ 
+        type: 'STAGE_START', 
+        stage: nextStage, 
+        input: output,
+        contextId: parentContext?.id
+      });
+      
+      return {
+        type: 'EXECUTE_STAGE',
+        stage: nextStage,
+        input: output,
+        context: this.buildStageContext(nextStage)
+      };
+    }
 
+    // Normal progression to next stage
+    const nextStage = stage + 1;
+    
     // Check if pipeline complete
-    if (stage === this.totalStages - 1) {
+    if (nextStage >= this.totalStages) {
       this.state.status = 'COMPLETED';
       this.recordEvent({ type: 'PIPELINE_COMPLETE', output });
       return { type: 'COMPLETE', output };
     }
 
-    // Move to next stage
-    const nextStage = stage + 1;
     this.state.currentStage = nextStage;
     this.state.currentInput = output;
 
     // Record next stage start
-    this.recordEvent({ type: 'STAGE_START', stage: nextStage, input: output });
+    this.recordEvent({ 
+      type: 'STAGE_START', 
+      stage: nextStage, 
+      input: output,
+      contextId: currentContext?.id
+    });
 
     return {
       type: 'EXECUTE_STAGE',
@@ -265,32 +358,75 @@ export class PipelineStateMachine {
   }
 
   private handleStageRetry(stage: number, reason?: string, fromOverride?: number): NextStep {
-    // Check retry limit (count only this stage's retries)
-    const retries = EventQuery.countSelfRetries(this.state.events, stage);
-    if (retries >= this.maxRetries) {
-      return this.handleAbort(`Stage ${stage} exceeded retry limit`);
-    }
-
-    // Determine restart point (default to local retry)
-    const from = fromOverride ?? stage;
+    // Determine target stage (retry the previous stage that provided input)
+    const targetStage = fromOverride ?? Math.max(0, stage - 1);
     
-    // Record retry event
-    this.recordEvent({ type: 'STAGE_RETRY', stage, from, reason });
+    // Get current context if we're in one
+    const currentContext = this.getCurrentContext();
+    
+    // Create new retry context
+    const newContextId = this.generateContextId();
+    const newContext: RetryContext = {
+      id: newContextId,
+      requestingStage: stage,
+      retryingStage: targetStage,
+      attemptNumber: 1,
+      parentContextId: currentContext?.id
+    };
+    
+    // Check global retry limit for target stage
+    const globalRetries = this.state.globalStageRetryCount.get(targetStage) || 0;
+    if (globalRetries >= this.maxGlobalRetriesPerStage) {
+      return this.handleAbort(
+        `Stage ${targetStage} exceeded global retry limit (${this.maxGlobalRetriesPerStage})`
+      );
+    }
+    
+    // Check per-context retry limit for target stage
+    const contextRetries = this.countRetriesForStageInContext(targetStage, newContextId);
+    if (contextRetries >= this.maxRetriesPerContext) {
+      return this.handleAbort(
+        `Stage ${targetStage} exceeded retry limit in context ${newContextId}`
+      );
+    }
+    
+    // Record retry request event
+    this.recordEvent({
+      type: 'STAGE_RETRY_REQUEST',
+      requestingStage: stage,
+      targetStage,
+      contextId: newContextId,
+      parentContextId: currentContext?.id
+    });
+    
+    // Push new context onto stack
+    this.state.activeContexts.push(newContext);
+    
+    // Increment retry counts
+    this.incrementRetryCount(newContextId, targetStage);
+    this.state.globalStageRetryCount.set(targetStage, globalRetries + 1);
+    
+    // Calculate input for retry
+    const retryInput = this.getInputForStage(targetStage);
+    
+    // Update state
     this.state.status = 'RETRYING';
-
-    // Calculate restart point
-    const restartPoint = this.calculateRestartPoint(from);
-    this.state.currentStage = restartPoint.stage;
-    this.state.currentInput = restartPoint.input;
-
-    // Record stage start for the restart
-    this.recordEvent({ type: 'STAGE_START', stage: restartPoint.stage, input: restartPoint.input });
-
+    this.state.currentStage = targetStage;
+    this.state.currentInput = retryInput;
+    
+    // Record stage start in new context
+    this.recordEvent({
+      type: 'STAGE_START',
+      stage: targetStage,
+      input: retryInput,
+      contextId: newContextId
+    });
+    
     return {
       type: 'EXECUTE_STAGE',
-      stage: restartPoint.stage,
-      input: restartPoint.input,
-      context: this.buildStageContext(restartPoint.stage)
+      stage: targetStage,
+      input: retryInput,
+      context: this.buildStageContext(targetStage)
     };
   }
 
@@ -316,57 +452,162 @@ export class PipelineStateMachine {
   }
 
   /**
-   * Calculate where to restart after a retry
+   * Generate unique context ID
    */
-  private calculateRestartPoint(from: number): { stage: number; input: string } {
-    if (from === 0) {
-      return { stage: 0, input: this.state.baseInput };
+  private generateContextId(): string {
+    return `ctx-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+  
+  /**
+   * Get current active context
+   */
+  private getCurrentContext(): RetryContext | undefined {
+    return this.state.activeContexts[this.state.activeContexts.length - 1];
+  }
+  
+  /**
+   * Count retries for a stage within a specific context
+   */
+  private countRetriesForStageInContext(stage: number, contextId: string): number {
+    const contextCounts = this.state.contextRetryCount.get(contextId);
+    return contextCounts?.get(stage) || 0;
+  }
+  
+  /**
+   * Get/create context retry counts
+   */
+  private getOrCreateContextCounts(contextId: string): Map<number, number> {
+    if (!this.state.contextRetryCount.has(contextId)) {
+      this.state.contextRetryCount.set(contextId, new Map());
     }
-
-    // Find the last successful output of the previous stage
-    // considering any retries that might have invalidated it
-    const boundary = EventQuery.lastRetryIndexAffectingStage(this.state.events, from - 1);
-    const prevOutput = EventQuery.lastOkAfter(this.state.events, from - 1, boundary);
+    return this.state.contextRetryCount.get(contextId)!;
+  }
+  
+  /**
+   * Increment retry count for stage in context
+   */
+  private incrementRetryCount(contextId: string, stage: number): void {
+    const counts = this.getOrCreateContextCounts(contextId);
+    counts.set(stage, (counts.get(stage) || 0) + 1);
+  }
+  
+  /**
+   * Get input for a stage (considering retry contexts)
+   */
+  private getInputForStage(stage: number): string {
+    if (stage === 0) {
+      return this.state.baseInput;
+    }
     
-    return {
-      stage: from,
-      input: prevOutput ?? this.state.baseInput
-    };
+    // Find the most recent success for stage-1
+    for (let i = this.state.events.length - 1; i >= 0; i--) {
+      const event = this.state.events[i];
+      if (event.type === 'STAGE_SUCCESS' && event.stage === stage - 1) {
+        return event.output;
+      }
+    }
+    
+    return this.state.baseInput;
+  }
+  
+  /**
+   * Count retries in current context chain
+   */
+  private countRetriesInContextChain(stage: number): number {
+    if (this.state.activeContexts.length === 0) {
+      return 0;
+    }
+    
+    // For each active context, check if it's retrying this stage
+    let count = 0;
+    for (const context of this.state.activeContexts) {
+      if (context.retryingStage === stage) {
+        // Count how many times this stage has been executed within this context
+        // by looking for STAGE_START events with this context's ID
+        // BUT: exclude the very last one since that's the current execution
+        let contextStarts = 0;
+        for (const event of this.state.events) {
+          if (event.type === 'STAGE_START' && 
+              event.stage === stage &&
+              event.contextId === context.id) {
+            contextStarts++;
+          }
+        }
+        // Subtract 1 because the current STAGE_START was already recorded
+        count += Math.max(0, contextStarts - 1);
+      }
+    }
+    
+    return count;
+  }
+  
+  /**
+   * Count global retries for a stage across all contexts
+   */
+  private countGlobalRetriesForStage(stage: number): number {
+    let count = 0;
+    for (const event of this.state.events) {
+      if (event.type === 'STAGE_RETRY_REQUEST' && event.targetStage === stage) {
+        count++;
+      }
+    }
+    return count;
   }
 
   /**
-   * Build context for a stage execution - ALL DERIVED FROM EVENTS
+   * Build context for a stage execution - Enhanced with retry context info
    */
   private buildStageContext(stage: number): StageContext {
     const events = this.state.events;
     
     // Build previousOutputs: outputs from stages 0..stage-1
-    // considering invalidation from retries
     const previousOutputs: string[] = [];
     for (let s = 0; s < stage; s++) {
-      // Find the boundary that affects THIS specific stage s
-      const boundary = EventQuery.lastRetryIndexAffectingStage(events, s);
-      const output = EventQuery.lastOkAfter(events, s, boundary);
-      // Only add outputs that actually exist (were successful)
-      if (output !== undefined) {
-        previousOutputs.push(output);
-      } else {
-        previousOutputs.push(''); // Default for missing outputs
+      // Find the most recent success for this stage
+      let found = false;
+      for (let i = events.length - 1; i >= 0; i--) {
+        const event = events[i];
+        if (event.type === 'STAGE_SUCCESS' && event.stage === s) {
+          previousOutputs.push(event.output);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        previousOutputs.push(''); // No output yet for this stage
       }
     }
     
-    // Get this stage's history (all successful outputs)
+    // Get this stage's history (all successful outputs from this stage)
     const stageHistory = EventQuery.okOutputsForStage(events, stage);
     
-    // Count attempts for this specific stage
-    const attempt = EventQuery.countSelfRetries(events, stage) + 1;
+    // Count global attempts for this stage (across all contexts)
+    const globalStageRetries = this.countGlobalRetriesForStage(stage);
+    const attempt = globalStageRetries + 1;
     
-    // Count global attempts
-    const globalAttempt = EventQuery.countTotalRetries(events) + 1;
+    // Count retries in current context chain
+    const contextAttempt = this.countRetriesInContextChain(stage) + 1;
+    
+    // Count total retries across all stages
+    let totalRetries = 0;
+    for (const event of events) {
+      if (event.type === 'STAGE_RETRY_REQUEST') {
+        totalRetries++;
+      }
+    }
+    const globalAttempt = totalRetries + 1;
+    
+    // Get active contexts for debugging
+    const activeContexts = this.state.activeContexts.map(c => ({
+      id: c.id,
+      requesting: c.requestingStage,
+      retrying: c.retryingStage
+    }));
 
     return {
       stage: stage + 1,  // 1-indexed for display
       attempt,
+      contextAttempt,
       history: stageHistory,
       previousOutputs,
       globalAttempt,
@@ -374,7 +615,8 @@ export class PipelineStateMachine {
       outputs: {
         0: this.state.baseInput,
         ...Object.fromEntries(previousOutputs.map((out, i) => [i + 1, out]))
-      }
+      },
+      activeContexts
     };
   }
 

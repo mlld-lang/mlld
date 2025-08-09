@@ -30,9 +30,12 @@ export class PipelineExecutor {
   async execute(initialInput: string): Promise<string> {
     // Start the pipeline
     let nextStep = this.stateMachine.transition({ type: 'START', input: initialInput });
+    let iteration = 0;
 
     // Process steps until complete
     while (nextStep.type === 'EXECUTE_STAGE') {
+      iteration++;
+      
       const command = this.pipeline[nextStep.stage];
       const result = await this.executeStage(
         command,
@@ -45,8 +48,13 @@ export class PipelineExecutor {
         type: 'STAGE_RESULT', 
         result 
       });
+      
+      // Safety check for infinite loops
+      if (iteration > 100) {
+        throw new Error('Pipeline exceeded 100 iterations');
+      }
     }
-
+    
     // Handle final state
     switch (nextStep.type) {
       case 'COMPLETE':
@@ -104,8 +112,11 @@ export class PipelineExecutor {
       
       // Check for retry signal
       if (this.isRetrySignal(output)) {
+        console.log('🔄 RETRY SIGNAL DETECTED:', { output, stage: context.stage });
         const from = this.parseRetryScope(output);
         return { type: 'retry', reason: 'Stage requested retry', from };
+      } else {
+        console.log('🚫 NO RETRY SIGNAL:', { output: String(output).substring(0, 30), stage: context.stage });
       }
 
       // Empty output terminates pipeline
