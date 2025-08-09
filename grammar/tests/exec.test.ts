@@ -40,12 +40,14 @@ describe('Exec directive', () => {
       expect(load.pipes[1].transform).toBe('upper');
     });
 
-    test('templates do not accept spaced tail pipelines', async () => {
+    test('templates accept spaced tail pipelines', async () => {
       const content = '/var @t = `hello` | @upper';
       const { ast } = await parse(content);
       const dir = ast[0];
-      // Spaced tail pipeline after templates is ignored; condensed form would be allowed
-      expect(dir.values.withClause?.pipeline).toBeUndefined();
+      // Spaced tail pipeline after templates should work like any other expression
+      expect(dir.values.withClause?.pipeline).toBeDefined();
+      expect(dir.values.withClause.pipeline.length).toBe(1);
+      expect(dir.values.withClause.pipeline[0].rawIdentifier).toBe('upper');
       expect(dir.meta.wrapperType).toBe('backtick');
     });
   });

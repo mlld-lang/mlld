@@ -445,10 +445,24 @@ export async function executePipeline(
        * GOTCHA: The output is always stringified, even if the function returned
        * an object or array - serialization happens at stage boundaries.
        */
-      currentOutput = result;
+      // Ensure result is a string for next pipeline stage
+      if (typeof result === 'string') {
+        currentOutput = result;
+      } else if (result && typeof result === 'object') {
+        // Check if this looks like a LoadContentResult object
+        if ('content' in result && 'filename' in result && typeof result.content === 'string') {
+          currentOutput = result.content;
+        } else {
+          // For other objects, use JSON stringification
+          currentOutput = JSON.stringify(result);
+        }
+      } else {
+        // For other types (numbers, booleans, null), convert to string
+        currentOutput = String(result);
+      }
       
       // Store this stage's output in pipeline state
-      pipelineState.previousOutputs.push(result);
+      pipelineState.previousOutputs.push(currentOutput);
       
       // Clear attempt counters for this stage when successful
       pipelineState.attemptCounts.delete(i);

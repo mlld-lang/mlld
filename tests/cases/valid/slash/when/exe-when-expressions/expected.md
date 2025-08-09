@@ -27,6 +27,12 @@ Unknown operation
 ## Exe with pipeline modifiers
 
 Formatted output:
-{"name":"Test","value":42}
-{"name":"Test","value":42}
+{
+  "name": "Test",
+  "value": 42
+}
+{
+  "name": "Test",
+  "value": 42
+}
 just text

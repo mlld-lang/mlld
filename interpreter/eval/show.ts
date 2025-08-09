@@ -720,6 +720,39 @@ export async function evaluateShow(
   
   // Output directives always end with a newline
   // This is the interpreter's responsibility, not the grammar's
+  // Final safety: ensure content is a string and pretty-print JSON when possible
+  if (typeof content !== 'string') {
+    try {
+      const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+      if (isLoadContentResult(content)) {
+        content = content.content;
+      } else if (isLoadContentResultArray(content)) {
+        content = content.map(item => item.content).join('\n\n');
+      } else if (Array.isArray(content)) {
+        content = JSONFormatter.stringify(content, { pretty: true });
+      } else if (content !== null && content !== undefined) {
+        content = JSONFormatter.stringify(content, { pretty: true });
+      } else {
+        content = '';
+      }
+    } catch {
+      content = String(content);
+    }
+  } else if (typeof content === 'string') {
+    // Check if content is a JSON string that should be pretty-printed
+    try {
+      // Only attempt to parse if it looks like JSON (starts with { or [)
+      const trimmed = content.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        const parsed = JSON.parse(content);
+        content = JSONFormatter.stringify(parsed, { pretty: true });
+      }
+    } catch {
+      // Not valid JSON, keep original string
+    }
+  }
+
   if (!content.endsWith('\n')) {
     content += '\n';
   }

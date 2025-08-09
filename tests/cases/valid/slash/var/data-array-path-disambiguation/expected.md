@@ -9,9 +9,7 @@
 ]
 ## Single exec invocation is array
 
-[
-  "12:00"
-]
+["12:00"]
 ## Single nested array is array
 
 [

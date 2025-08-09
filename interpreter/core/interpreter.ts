@@ -1355,9 +1355,30 @@ export async function applyCondensedPipes(
           // Handle executable variables as transforms
           const { evaluateExecInvocation } = await import('../eval/exec-invocation');
           // Create a Text node for the pipeline input value
+          // Handle LoadContentResult objects properly - check for LoadContentResult structure
+          let stringValue: string;
+          
+          if (typeof result === 'string') {
+            stringValue = result;
+          } else if (result && typeof result === 'object') {
+            // Check if this looks like a LoadContentResult object (has content and filename)
+            if ('content' in result && 'filename' in result && typeof result.content === 'string') {
+              // Use the content property from LoadContentResult
+              stringValue = result.content;
+            } else if ('toString' in result && typeof result.toString === 'function') {
+              // Try toString() method
+              stringValue = result.toString();
+            } else {
+              // Fall back to JSON stringification
+              stringValue = JSON.stringify(result);
+            }
+          } else {
+            stringValue = JSON.stringify(result);
+          }
+          
           const inputTextNode = {
             type: 'Text',
-            content: String(result)
+            content: stringValue
           };
           // Create an ExecInvocation node to execute the transform
           const execInvocationNode = {

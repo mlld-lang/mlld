@@ -7,18 +7,14 @@ This test verifies that simple variable references work correctly inside /when a
 ## Test 1: Direct /show (baseline - should work)
 Hello from a text variable
 Hello from a template with Hello from a text variable
-{
-  "message": "Hello from data"
-}
+{"message": "Hello from data"}
 ## Test 2: Inside /when actions (currently fails)
 
 Hello from a text variable
 
 Hello from a template with Hello from a text variable
 
-{
-  "message": "Hello from data"
-}
+{"message": "Hello from data"}
 
 ## Test 3: Inside /when first: actions
 
