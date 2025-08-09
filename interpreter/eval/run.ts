@@ -612,7 +612,8 @@ export async function evaluateRun(
         withClause.pipeline,
         env,
         directive.location,
-        format
+        format,
+        false // isRetryable - run command output is not directly retryable
       );
     }
   }

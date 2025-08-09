@@ -12,16 +12,22 @@ export class PipelineExecutor {
   private env: Environment;
   private format?: string;
   private pipeline: PipelineCommand[];
+  private isRetryable: boolean;
+  private sourceFunction?: () => Promise<string>; // Store source function for retries
 
   constructor(
     pipeline: PipelineCommand[],
     env: Environment,
-    format?: string
+    format?: string,
+    isRetryable: boolean = false,
+    sourceFunction?: () => Promise<string>
   ) {
-    this.stateMachine = new PipelineStateMachine(pipeline.length);
+    this.stateMachine = new PipelineStateMachine(pipeline.length, isRetryable);
     this.pipeline = pipeline;
     this.env = env;
     this.format = format;
+    this.isRetryable = isRetryable;
+    this.sourceFunction = sourceFunction;
   }
 
   /**
@@ -104,7 +110,8 @@ export class PipelineExecutor {
         input, 
         context, 
         this.env, 
-        this.format
+        this.format,
+        this.stateMachine.getEvents() // Pass events for global context
       );
       
       // Execute the command

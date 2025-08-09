@@ -410,7 +410,8 @@ export class VariableReferenceEvaluator {
       withClause.pipeline,
       env,
       undefined, // location
-      format
+      format,
+      false // isRetryable - default for data structure evaluation
     );
     
     // Debug logging
@@ -441,7 +442,8 @@ export class VariableReferenceEvaluator {
       withClause.pipeline,
       env,
       undefined, // location
-      format
+      format,
+      false // isRetryable - default for data structure evaluation
     );
   }
 

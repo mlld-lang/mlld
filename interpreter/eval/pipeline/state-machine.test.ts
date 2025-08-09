@@ -62,7 +62,7 @@ describe('PipelineStateMachine - Event Sourced', () => {
 
   describe('Retry behavior', () => {
     it('should handle retry with correct attempt counts', () => {
-      const sm = new PipelineStateMachine(3);
+      const sm = new PipelineStateMachine(3, true); // Mark stage 0 as retryable
       
       sm.transition({ type: 'START', input: 'base' });
       sm.transition({ type: 'STAGE_RESULT', result: { type: 'success', output: 's0' }});
@@ -89,7 +89,7 @@ describe('PipelineStateMachine - Event Sourced', () => {
 
   describe('Cascade retry behavior', () => {
     it('should handle cascade retry from stage 2 to stage 0', () => {
-      const sm = new PipelineStateMachine(4);
+      const sm = new PipelineStateMachine(4, true); // Mark stage 0 as retryable
       
       sm.transition({ type: 'START', input: 'base' });
       sm.transition({ type: 'STAGE_RESULT', result: { type: 'success', output: 's0' }});
@@ -178,7 +178,7 @@ describe('PipelineStateMachine - Event Sourced', () => {
 
   describe('Retry limits', () => {
     it('should enforce per-stage retry limit', () => {
-      const sm = new PipelineStateMachine(2);
+      const sm = new PipelineStateMachine(2, true); // Mark stage 0 as retryable
       
       sm.transition({ type: 'START', input: 'base' });
       
@@ -208,7 +208,7 @@ describe('PipelineStateMachine - Event Sourced', () => {
     });
 
     it('should track retries per stage independently', () => {
-      const sm = new PipelineStateMachine(3);
+      const sm = new PipelineStateMachine(3, true); // Mark stage 0 as retryable
       
       sm.transition({ type: 'START', input: 'base' });
       
@@ -337,7 +337,7 @@ describe('PipelineStateMachine - Event Sourced', () => {
 
   describe('Mixed retry scenarios', () => {
     it('should handle mixed local and cascade retries correctly', () => {
-      const sm = new PipelineStateMachine(4);
+      const sm = new PipelineStateMachine(4, true); // Mark stage 0 as retryable
       
       // Initial execution
       sm.transition({ type: 'START', input: 'base' });

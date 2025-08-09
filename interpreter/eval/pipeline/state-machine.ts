@@ -174,9 +174,11 @@ export class PipelineStateMachine {
   private readonly maxRetriesPerContext = 10;  // Max retries per stage within a context
   private readonly maxGlobalRetriesPerStage = 20; // Global cap per stage across all contexts
   private readonly totalStages: number;
+  private readonly isStage0Retryable: boolean;
 
-  constructor(totalStages: number) {
+  constructor(totalStages: number, isStage0Retryable: boolean = false) {
     this.totalStages = totalStages;
+    this.isStage0Retryable = isStage0Retryable;
     this.state = this.initialState();
   }
 
@@ -358,8 +360,24 @@ export class PipelineStateMachine {
   }
 
   private handleStageRetry(stage: number, reason?: string, fromOverride?: number): NextStep {
-    // Determine target stage (retry the previous stage that provided input)
+    // CORRECT BEHAVIOR: Stage N requests retry of stage N-1 (the stage that provided its input)
+    // No stage can retry itself - there is no self-referential retry mechanism
     const targetStage = fromOverride ?? Math.max(0, stage - 1);
+    
+    // Special case: Stage 0 trying to retry would mean retrying its source
+    // This is only allowed if the source was a function (retryable)
+    if (targetStage === 0 && stage === 1 && !this.isStage0Retryable) {
+      return this.handleAbort(
+        `Cannot retry stage 0: Input is not a function and cannot be retried`
+      );
+    }
+    
+    // Stage 0 cannot retry anything (it has no previous stage)
+    if (stage === 0 && targetStage < 0) {
+      return this.handleAbort(
+        `Stage 0 cannot request retry: No previous stage exists`
+      );
+    }
     
     // Get current context if we're in one
     const currentContext = this.getCurrentContext();

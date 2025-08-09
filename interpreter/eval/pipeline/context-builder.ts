@@ -1,6 +1,6 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
-import type { StageContext } from './state-machine';
+import type { StageContext, PipelineEvent } from './state-machine';
 import { createPipelineInputVariable, createSimpleTextVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
 
@@ -13,6 +13,9 @@ export interface InterfacePipelineContext {
   stage: number;                 // Current stage number (1-indexed)
   [index: number]: string;       // Indexed access to pipeline outputs
   length: number;                // Number of previous outputs
+  all?: {                        // Global accumulator (lazy-evaluated)
+    tries: string[][]            // All attempts across all contexts
+  };
   [name: string]: any;           // Dynamic properties from stage variables
 }
 
@@ -24,7 +27,8 @@ export async function createStageEnvironment(
   input: string,
   context: StageContext,
   env: Environment,
-  format?: string
+  format?: string,
+  events?: ReadonlyArray<PipelineEvent>
 ): Promise<Environment> {
   // Set pipeline context in main environment
   env.setPipelineContext({
@@ -45,7 +49,7 @@ export async function createStageEnvironment(
   await setInputVariable(stageEnv, input, format);
   
   // Set @pipeline / @p variable with context
-  setPipelineVariable(stageEnv, context);
+  setPipelineVariable(stageEnv, context, events);
   
   return stageEnv;
 }
@@ -98,8 +102,8 @@ async function setInputVariable(env: Environment, input: string, format?: string
 /**
  * Set the @pipeline/@p variable in the stage environment
  */
-function setPipelineVariable(env: Environment, context: StageContext): void {
-  const interfaceContext = createInterfacePipelineContext(context);
+function setPipelineVariable(env: Environment, context: StageContext, events?: ReadonlyArray<PipelineEvent>): void {
+  const interfaceContext = createInterfacePipelineContext(context, events);
   
   const inputSource: VariableSource = {
     directive: 'var',
@@ -118,7 +122,7 @@ function setPipelineVariable(env: Environment, context: StageContext): void {
 /**
  * Create clean interface context from stage context
  */
-function createInterfacePipelineContext(context: StageContext): InterfacePipelineContext {
+function createInterfacePipelineContext(context: StageContext, events?: ReadonlyArray<PipelineEvent>): InterfacePipelineContext {
   const interfaceContext: any = {
     // Stage-specific data
     try: context.attempt,
@@ -151,6 +155,49 @@ function createInterfacePipelineContext(context: StageContext): InterfacePipelin
       enumerable: false
     });
   }
+
+  // Add lazy-evaluated @pipeline.all.tries accessor
+  // This accumulates ALL retry attempts across ALL contexts
+  Object.defineProperty(interfaceContext, 'all', {
+    get: () => {
+      if (!events) {
+        return { tries: [] };
+      }
+      
+      // Collect all retry attempts from all contexts
+      const allTries: string[][] = [];
+      const contextTries = new Map<string, string[]>();
+      
+      // Process events to build retry history
+      for (const event of events) {
+        if (event.type === 'STAGE_SUCCESS' && event.contextId) {
+          // Track successful outputs within retry contexts
+          if (!contextTries.has(event.contextId)) {
+            contextTries.set(event.contextId, []);
+          }
+          contextTries.get(event.contextId)!.push(event.output);
+        } else if (event.type === 'STAGE_RETRY_REQUEST') {
+          // When a retry is requested, save the current context's attempts
+          if (event.parentContextId && contextTries.has(event.parentContextId)) {
+            allTries.push([...contextTries.get(event.parentContextId)!]);
+          }
+        }
+      }
+      
+      // Add any remaining context tries
+      for (const tries of contextTries.values()) {
+        if (tries.length > 0) {
+          allTries.push(tries);
+        }
+      }
+      
+      return {
+        tries: allTries
+      };
+    },
+    enumerable: false,
+    configurable: true
+  });
 
   return interfaceContext as InterfacePipelineContext;
 }

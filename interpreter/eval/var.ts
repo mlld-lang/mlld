@@ -111,7 +111,16 @@ export async function evaluateVar(
   
   // Debug: Log the value structure
   if (process.env.MLLD_DEBUG === 'true') {
-    console.log('var.ts - valueNodes structure:', JSON.stringify(valueNodes, null, 2));
+    console.log(`\n=== Processing @${identifier} ===`);
+    if (Array.isArray(valueNodes) && valueNodes.length > 0) {
+      console.log('  Value node type:', valueNodes[0].type);
+      console.log('  Has directive.values.withClause?', !!directive.values?.withClause);
+      console.log('  Has directive.meta.withClause?', !!directive.meta?.withClause);
+      if (directive.values?.withClause || directive.meta?.withClause) {
+        const wc = directive.values?.withClause || directive.meta?.withClause;
+        console.log('  Pipeline:', wc.pipeline?.map((p: any) => p.rawIdentifier).join(' | '));
+      }
+    }
   }
   if (!valueNodes || !Array.isArray(valueNodes) || valueNodes.length === 0) {
     throw new Error('Var directive missing value');
@@ -553,7 +562,12 @@ export async function evaluateVar(
   // Create and store the appropriate variable type
   const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
   const source = createVariableSource(valueNode, directive);
-  const metadata = { definedAt: location };
+  const metadata: any = { definedAt: location };
+  
+  // Mark if value came from a function for pipeline retryability
+  if (valueNode && valueNode.type === 'ExecInvocation') {
+    metadata.isFromFunction = true;
+  }
 
   let variable: Variable;
 
@@ -779,14 +793,8 @@ export async function evaluateVar(
     }
     
   } else if (valueNode.type === 'Literal') {
-    // Literal nodes - create appropriate variable type based on value
-    if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
-      const { createPrimitiveVariable } = await import('@core/types/variable');
-      variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
-    } else {
-      // String literal
-      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
-    }
+    // Literal nodes - DON'T create variable yet, let it fall through to pipeline processing
+    // The variable will be created after checking for pipelines
     
   } else {
     // Text variables - need to determine specific type
@@ -818,10 +826,72 @@ export async function evaluateVar(
     }
   }
 
+  // Check if we should use the new unified pipeline processor (feature flag)
+  const USE_UNIFIED_PIPELINE = process.env.MLLD_UNIFIED_PIPELINE === 'true';
+  
+  if (USE_UNIFIED_PIPELINE) {
+    // Use new unified pipeline processor
+    const { processPipeline } = await import('./pipeline/unified-processor');
+    
+    // Create variable if not already created (for Literal nodes)
+    if (!variable) {
+      if (valueNode && valueNode.type === 'Literal') {
+        if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
+          const { createPrimitiveVariable } = await import('@core/types/variable');
+          variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
+        } else {
+          variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+        }
+      } else {
+        variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+      }
+    }
+    
+    // Process through unified pipeline (handles detection, validation, execution)
+    const result = await processPipeline({
+      value: variable,
+      env,
+      node: valueNode,
+      directive,
+      identifier,
+      location: directive.location
+    });
+    
+    // If pipeline was executed, result will be a string
+    // Create new variable with the result
+    if (typeof result === 'string' && result !== variable.value) {
+      variable = createSimpleTextVariable(identifier, result, source, metadata);
+    }
+    
+    env.setVariable(identifier, variable);
+    return { value: '', env };
+  }
+  
+  // Original implementation (will be removed after testing)
   // Check if the directive has a withClause for pipeline processing
-  if (directive.values?.withClause && directive.values.withClause.pipeline) {
+  // Note: For literals with pipelines, the withClause may be in directive.meta instead of directive.values
+  const withClause = directive.values?.withClause || directive.meta?.withClause;
+  
+  // Create variable if not already created (for Literal nodes that skipped early creation)
+  if (!variable) {
+    if (valueNode && valueNode.type === 'Literal') {
+      // Handle Literal nodes that were deferred
+      if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
+        const { createPrimitiveVariable } = await import('@core/types/variable');
+        variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
+      } else {
+        // String literal
+        variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+      }
+    } else {
+      // Fallback for any other unhandled cases
+      variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
+    }
+  }
+
+  if (withClause && withClause.pipeline) {
     const { executePipeline } = await import('./pipeline');
-    const format = directive.values.withClause.format as string | undefined;
+    const format = withClause.format as string | undefined;
     
     if (process.env.MLLD_DEBUG === 'true') {
       console.log('Processing withClause pipeline for regular variable:', {
@@ -846,7 +916,7 @@ export async function evaluateVar(
     // Execute the pipeline
     const pipelineResult = await executePipeline(
       stringValue,
-      directive.values.withClause.pipeline,
+      withClause.pipeline,
       env,
       directive.location,
       format

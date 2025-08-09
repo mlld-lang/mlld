@@ -28,7 +28,8 @@ export async function applyWithClause(
       withClause.pipeline,
       env,
       undefined, // location
-      format
+      format,
+      false // isRetryable - with-clause doesn't track source function
     );
   }
   
