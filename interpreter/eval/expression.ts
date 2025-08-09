@@ -219,7 +219,7 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
   if (operator === '<') {
     const leftNum = toNumber(leftResult.value);
     const rightNum = toNumber(rightResult.value);
-    console.log('[DEBUG] < comparison:', leftResult.value, '<', rightResult.value, '=', leftNum < rightNum);
+    // console.log('[DEBUG] < comparison:', leftResult.value, '<', rightResult.value, '=', leftNum < rightNum);
     return { value: leftNum < rightNum, env };
   }
   
