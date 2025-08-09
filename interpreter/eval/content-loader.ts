@@ -186,6 +186,17 @@ export async function processContentLoader(node: any, env: Environment): Promise
     // The smart object will handle string conversion when needed
     return result;
   } catch (error: any) {
+    if (process.env.DEBUG_CONTENT_LOADER) {
+      console.log(`ERROR in processContentLoader: ${error.message}`);
+      console.log(`Error stack:`, error.stack);
+    }
+    
+    // If this is a pipeline/transform error, re-throw it directly to preserve the original error
+    if (error.message && error.message.includes('Unknown transform:')) {
+      throw error;
+    }
+    
+    // Otherwise, treat it as a file loading error
     let errorMessage = `Failed to load content: ${pathOrUrl}`;
     
     // Add helpful hint for relative paths

@@ -325,34 +325,35 @@ LoadContentResult objects automatically unwrap to their `.content` property when
 
 ### tldr
 
-The metadata shelf preserves LoadContentResult metadata when arrays are passed through JavaScript functions. When LoadContentResultArray is unwrapped to content strings for JS, the shelf stores the original objects and restores them when matching content returns.
+The metadata shelf preserves LoadContentResult metadata when passed through JavaScript functions. Works automatically for both arrays and single files - exact content matching for arrays, auto-restoration for transformed single files.
 
 ### Principles
 
 - Transparent restoration (JS functions don't need modification)
-- Content-based matching (uses content string as key)
-- Automatic cleanup (shelf clears after each operation)
+- Automatic for arrays (content-based matching)
+- Automatic for single files (metadata reattachment after transformation)
 - Preserves auto-unwrap semantics (JS still receives strings)
 
 ### Details
 
-When LoadContentResult objects pass through JS functions:
-
-1. **Storage Phase**: Before unwrapping, `autoUnwrapLoadContent()` stores LoadContentResult objects on the shelf
-2. **Execution Phase**: JS function receives unwrapped content strings, processes them normally
-3. **Restoration Phase**: When JS returns an array, `metadataShelf.restoreMetadata()` checks each string against the shelf
-4. **Cleanup Phase**: Shelf is cleared to prevent memory leaks
+**Arrays**: Exact content matching - if JS returns same strings, metadata restored
+**Single Files**: Auto-restoration - if JS transforms content, metadata automatically reattached to result
 
 Key components:
-- `interpreter/eval/metadata-shelf.ts` - Core shelf implementation
-- `autoUnwrapLoadContent()` - Entry point for storage
-- `restoreMetadata()` - Restoration logic after JS execution
+- `interpreter/eval/auto-unwrap-manager.ts` - Centralized shelf with AsyncLocalStorage
+- `AutoUnwrapManager.executeWithPreservation()` - Wraps JS execution
+- `MetadataShelf.restoreMetadata()` - Handles both arrays and single files
 
-### Gotchas
+### Pipeline Integration
 
-- Only restores when content strings match exactly
-- Shelf must be cleared after each operation
-- Currently only in exec-invocation.ts (needs integration in exe.ts, run.ts)
+Pipeline stages wrap execution with `executeWithPreservation()` to preserve metadata through transformations:
+
+```typescript
+// Pipeline execution with metadata preservation
+const result = await AutoUnwrapManager.executeWithPreservation(async () => {
+  return await executeCommandVariable(commandVar, args, pipelineEnv, currentOutput);
+});
+```
 
 ## Debugging
 

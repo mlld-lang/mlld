@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unified Template/Quote Grammar**: Consolidated duplicate grammar patterns
 - **Prohibited Implicit Executables in `/when` RHS**: Removed ability to define executables within when actions for cleaner separation
 - **Field access in with-clause pipeline arguments**: Fixed evaluation of field access (e.g., `@p.try`) in `with { pipeline: [...] }` arguments by using multi-field access resolution; resolves "Unknown field access type: undefined" during pipeline execution
+- **LoadContentResult metadata preservation in pipelines**: Metadata (filename, frontmatter, etc.) now automatically preserved when LoadContentResult objects pass through JavaScript transformations in pipelines
+  - Single files: Auto-reattachment of metadata to transformed content
+  - Arrays: Exact content matching restores metadata where possible
+  - Transparent to JS functions - they receive content strings as before
+  - Enables patterns like `<file.md> | @transform` where `@transform` result still has `.filename` property available
 
 ## [2.0.0-rc34]
 

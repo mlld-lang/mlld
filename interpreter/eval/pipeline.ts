@@ -327,14 +327,18 @@ export async function executePipeline(
         }
         
         if (paramNames && paramNames.length > 0) {
-          // Single parameter - pass @INPUT directly
+          // Auto-unwrap LoadContentResult objects before passing to functions
+          const { AutoUnwrapManager } = await import('./auto-unwrap-manager');
+          const unwrappedOutput = AutoUnwrapManager.unwrap(currentOutput);
+          
+          // Single parameter - pass unwrapped input directly
           if (paramNames.length === 1) {
-            args = [{ type: 'Text', content: currentOutput }];
+            args = [{ type: 'Text', content: unwrappedOutput }];
           } 
           // Multiple parameters - try smart JSON destructuring
           else {
             try {
-              const parsed = JSON.parse(currentOutput);
+              const parsed = JSON.parse(unwrappedOutput);
               if (typeof parsed === 'object' && !Array.isArray(parsed)) {
                 // Map JSON object properties to parameters by name
                 args = paramNames.map(name => {
@@ -349,17 +353,35 @@ export async function executePipeline(
                 });
               } else {
                 // Not an object, just pass as first parameter
-                args = [{ type: 'Text', content: currentOutput }];
+                args = [{ type: 'Text', content: unwrappedOutput }];
               }
             } catch {
               // Not JSON, pass as first parameter
-              args = [{ type: 'Text', content: currentOutput }];
+              args = [{ type: 'Text', content: unwrappedOutput }];
             }
           }
         }
       }
       
-      const result = await executeCommandVariable(commandVar, args, pipelineEnv, currentOutput);
+      // Execute pipeline stage with metadata preservation for LoadContentResult objects
+      const { AutoUnwrapManager } = await import('./auto-unwrap-manager');
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        logger.debug('[pipeline] About to execute stage with preservation:', {
+          stage: i + 1,
+          currentOutputType: typeof currentOutput,
+          currentOutputConstructor: currentOutput?.constructor?.name,
+          hasContentProperty: currentOutput && typeof currentOutput === 'object' && 'content' in currentOutput,
+          hasFilenameProperty: currentOutput && typeof currentOutput === 'object' && 'filename' in currentOutput
+        });
+      }
+      
+      const result = await AutoUnwrapManager.executeWithPreservation(async () => {
+        if (process.env.MLLD_DEBUG === 'true') {
+          logger.debug('[pipeline] Inside executeWithPreservation callback');
+        }
+        return await executeCommandVariable(commandVar, args, pipelineEnv, currentOutput);
+      });
       
       if (process.env.MLLD_DEBUG === 'true') {
         logger.debug('Pipeline stage result:', {
@@ -751,7 +773,10 @@ async function executeCommandVariable(
       
       if (isPipelineParam) {
         // First parameter ALWAYS gets the pipeline input (stdinInput)
-        const textValue = stdinInput || '';
+        // Auto-unwrap LoadContentResult objects before parameter binding
+        const { AutoUnwrapManager } = await import('./auto-unwrap-manager');
+        const unwrappedStdin = AutoUnwrapManager.unwrap(stdinInput || '');
+        const textValue = unwrappedStdin || '';
         
         /**
          * Format-aware parameter binding

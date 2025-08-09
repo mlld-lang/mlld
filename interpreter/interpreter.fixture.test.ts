@@ -538,6 +538,20 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // Copy all other files to the virtual filesystem
         const content = fs.readFileSync(sourceFile, 'utf8');
         await fileSystem.writeFile(targetFile, content);
+        
+        // Debug: For pipeline-file-spaced, verify the file is actually written and readable
+        if (sourcePath.includes('pipeline-file-spaced') && entry.name === 'test-pipeline-data.json') {
+          try {
+            const verifyContent = await fileSystem.readFile(targetFile);
+            console.log(`✅ File ${targetFile} written and verified: ${verifyContent.length} bytes`);
+            
+            // Also check if we can list files in the root directory
+            const rootFiles = await fileSystem.readdir('/');
+            console.log(`Root directory files:`, rootFiles);
+          } catch (e) {
+            console.log(`❌ Error verifying file ${targetFile}:`, e.message);
+          }
+        }
       }
     }
   }

@@ -60,7 +60,7 @@ AlligatorWithFields "alligator with field access"
 
 // TEMPLATE WITH PIPELINE - Handles template content (quoted/backtick) followed by pipes
 TemplateWithPipeline "template with pipeline"
-  = template:UnifiedQuoteOrTemplate pipes:CondensedPipeChain {
+  = template:UnifiedQuoteOrTemplate pipes:SpacedOrCondensedPipeChain {
       helpers.debug('TemplateWithPipeline matched', { 
         template: template.wrapperType,
         pipelineCount: pipes.length
@@ -69,7 +69,7 @@ TemplateWithPipeline "template with pipeline"
       // Extract the actual content from the template
       const content = template.content || [helpers.createNode(NodeType.Text, { content: '', location: location() })];
       
-      // Convert condensed pipes to pipeline format
+      // Convert tail pipes (with optional whitespace) to pipeline format
       const pipeline = pipes.map(pipe => ({
         identifier: [helpers.createVariableReferenceNode('varIdentifier', { 
           identifier: pipe.transform 
@@ -103,10 +103,10 @@ AlligatorWithPostPipes "alligator with external pipe chain"
       };
     }
 
-// VARIABLE WITH SPACED PIPES - Allows both "@var | @pipe" and "@var|@pipe" in var RHS
-// Supports optional arguments: | @transform(args)
+// VARIABLE WITH PIPES (outside template contexts)
+// Optional whitespace form that accepts full CommandArgumentList for args
 VariableWithSpacedPipes "variable with flexible pipe syntax"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* firstPipe:(_ pipeStart:("" { return peg$currPos; }) "|" _ "@" transform:BaseIdentifier args:CondensedPipeArgs? { return { transform, args, pipeStart }; })? restPipes:SpacedOrCondensedPipe* {
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* firstPipe:(_ pipeStart:("" { return peg$currPos; }) "|" _ command:PipeCommand { return { command, pipeStart }; })? restPipes:SpacedOrCondensedPipe* {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
@@ -120,9 +120,9 @@ VariableWithSpacedPipes "variable with flexible pipe syntax"
         const startOffset = firstPipe.pipeStart;
         pipes.push({
           type: 'CondensedPipe',
-          transform: firstPipe.transform,
+          transform: firstPipe.command.name,
           hasAt: true,
-          args: firstPipe.args || [],
+          args: firstPipe.command.args || [],
           location: {
             source: loc.source,
             start: { 
@@ -150,14 +150,14 @@ VariableWithSpacedPipes "variable with flexible pipe syntax"
 
 // Flexible pipe pattern for var RHS - allows whitespace and optional args
 SpacedOrCondensedPipe
-  = _ pipeStart:("" { return peg$currPos; }) "|" _ "@" transform:BaseIdentifier args:CondensedPipeArgs? {
+  = _ pipeStart:("" { return peg$currPos; }) "|" _ command:PipeCommand {
       const loc = location();
       const startOffset = pipeStart;
       return {
         type: 'CondensedPipe',
-        transform: transform,
+        transform: command.name,
         hasAt: true,
-        args: args || [],
+        args: command.args || [],
         location: {
           source: loc.source,
           start: { 
@@ -168,6 +168,12 @@ SpacedOrCondensedPipe
           end: loc.end
         }
       };
+    }
+
+// Pipe command syntax for non-template pipelines: @name or @name(args)
+PipeCommand "pipe command"
+  = "@" name:BaseIdentifier args:( _ "(" _ a:CommandArgumentList? _ ")" { return a || []; } )? {
+      return { name, args: args || [] };
     }
 
 // Chain of spaced-or-condensed pipes

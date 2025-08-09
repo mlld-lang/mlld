@@ -25,7 +25,7 @@ No ambiguity with arrays or strings.
 
 // Main alligator expression
 AlligatorExpression "alligator expression"
-  = "<" _ source:AlligatorSource options:AlligatorOptions? _ ">" pipes:CondensedPipeChain? {
+  = "<" _ source:AlligatorSource options:AlligatorOptions? _ ">" pipes:SpacedOrCondensedPipeChain? {
       helpers.debug('AlligatorExpression matched', { source, options, pipes });
       return {
         type: 'load-content',

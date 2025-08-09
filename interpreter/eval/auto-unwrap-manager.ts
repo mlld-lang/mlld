@@ -20,6 +20,7 @@ const asyncLocalStorage = new AsyncLocalStorage<MetadataShelf>();
  */
 class MetadataShelf {
   private shelf: Map<string, LoadContentResult> = new Map();
+  private singleFileMetadata: LoadContentResult | null = null;
   
   /**
    * Store LoadContentResult objects on the shelf before unwrapping
@@ -33,7 +34,9 @@ class MetadataShelf {
         }
       }
     } else if (isLoadContentResult(value)) {
+      // Store both in shelf (for exact matching) and as single file metadata (for auto-restoration)
       this.shelf.set(value.content, value);
+      this.singleFileMetadata = value;
     }
   }
   
@@ -41,28 +44,54 @@ class MetadataShelf {
    * Attempt to restore metadata to returned values from JS functions
    */
   restoreMetadata(value: any): any {
-    // Only restore for arrays
-    if (!Array.isArray(value)) {
-      return value;
-    }
-    
-    // Check if all items are strings that match shelved content
-    const restored: any[] = [];
-    let hasRestorable = false;
-    
-    for (const item of value) {
-      if (typeof item === 'string' && this.shelf.has(item)) {
-        // Found matching content - restore the LoadContentResult
-        restored.push(this.shelf.get(item));
-        hasRestorable = true;
-      } else {
-        // Not restorable - keep as is
-        restored.push(item);
+    // Handle arrays (existing functionality)
+    if (Array.isArray(value)) {
+      // Check if all items are strings that match shelved content
+      const restored: any[] = [];
+      let hasRestorable = false;
+      
+      for (const item of value) {
+        if (typeof item === 'string' && this.shelf.has(item)) {
+          // Found matching content - restore the LoadContentResult
+          restored.push(this.shelf.get(item));
+          hasRestorable = true;
+        } else {
+          // Not restorable - keep as is
+          restored.push(item);
+        }
       }
+      
+      // Only return restored array if we actually restored something
+      return hasRestorable ? restored : value;
     }
     
-    // Only return restored array if we actually restored something
-    return hasRestorable ? restored : value;
+    // Handle single values (new functionality)
+    if (typeof value === 'string' && this.singleFileMetadata) {
+      // Check for exact match first
+      if (this.shelf.has(value)) {
+        return this.shelf.get(value);
+      }
+      
+      // Auto-restore for transformed single file content
+      // Create a new LoadContentResult with the transformed content but original metadata
+      const original = this.singleFileMetadata;
+      const restored = {
+        ...original,
+        content: value  // Use the transformed content
+      };
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[MetadataShelf] Auto-restoring single file metadata:', {
+          originalContent: original.content.substring(0, 50) + '...',
+          newContent: value.substring(0, 50) + '...',
+          filename: original.filename
+        });
+      }
+      
+      return restored;
+    }
+    
+    return value;
   }
   
   /**
@@ -70,6 +99,7 @@ class MetadataShelf {
    */
   clear(): void {
     this.shelf.clear();
+    this.singleFileMetadata = null;
   }
 }
 

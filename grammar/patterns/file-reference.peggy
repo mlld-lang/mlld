@@ -19,7 +19,7 @@ Files without extensions can still be used outside interpolation contexts
 
 // Main file reference pattern for interpolation contexts
 FileReferenceInterpolation "file reference interpolation"
-  = "<" _ content:FileReferenceContent _ ">" fields:FileFieldChain? pipes:CondensedPipeChain? {
+  = "<" _ content:FileReferenceContent _ ">" fields:FileFieldChain? pipes:TemplatePipeChain? {
       // Extract the raw string from the content
       let contentStr;
       if (content.raw) {
@@ -47,7 +47,7 @@ FileReferenceInterpolation "file reference interpolation"
       // Create file reference node
       return helpers.createFileReferenceNode(content, fields, pipes, location());
     }
-  / "<" _ ">" fields:FileFieldChain? pipes:CondensedPipeChain? {
+  / "<" _ ">" fields:FileFieldChain? pipes:TemplatePipeChain? {
       // Special <> placeholder for 'as' contexts
       return helpers.createFileReferenceNode(
         { type: 'placeholder', raw: '' },
@@ -62,21 +62,19 @@ FileReferenceContent "file reference content"
   = AlligatorUnquotedPath   // Reuse from alligator.peggy
   / AlligatorQuotedPath     // Handles "paths with spaces"
 
-// Condensed pipe syntax (no whitespace allowed)
-CondensedPipe "condensed pipe"
-  = pipeStart:("" { return peg$currPos; }) "|" "@" name:BaseIdentifier args:CondensedPipeArgs? {
-      // Calculate precise location for the pipe starting from |
+// Template pipes (no arguments) for interpolation contexts
+TemplatePipe "template pipe (no args)"
+  = pipeStart:("" { return peg$currPos; }) "|" "@" name:BaseIdentifier {
       const loc = location();
       const startOffset = pipeStart;
-      
-      return { 
+      return {
         type: 'CondensedPipe',
         transform: name,
         hasAt: true,
-        args: args || [],
+        args: [],
         location: {
           source: loc.source,
-          start: { 
+          start: {
             offset: startOffset,
             line: loc.start.line,
             column: loc.start.column - (loc.start.offset - startOffset)
@@ -85,33 +83,17 @@ CondensedPipe "condensed pipe"
         }
       };
     }
-
-// Optional arguments for pipes
-CondensedPipeArgs
-  = "(" _ args:PipeArgList _ ")" { return args; }
-
-// Pipe argument list
-PipeArgList
-  = first:PipeArg rest:(_ "," _ arg:PipeArg { return arg; })* {
-      return [first, ...rest];
-    }
-
-// Individual pipe argument - can be various types
-PipeArg
-  = StringLiteral
-  / NumberLiteral  
-  / "@" varName:BaseIdentifier { return { type: 'variable', name: varName }; }
 
 // Spaced or condensed pipe (interpolation contexts allow condensed only; var RHS may add spaced variant)
 SpacedOrCondensedFilePipe
-  = HWS pipeStart:("" { return peg$currPos; }) "|" HWS "@" name:BaseIdentifier args:CondensedPipeArgs? {
+  = HWS pipeStart:("" { return peg$currPos; }) "|" HWS "@" name:BaseIdentifier {
       const loc = location();
       const startOffset = pipeStart;
       return { 
         type: 'CondensedPipe',
         transform: name,
         hasAt: true,
-        args: args || [],
+        args: [],
         location: {
           source: loc.source,
           start: { 
@@ -124,9 +106,9 @@ SpacedOrCondensedFilePipe
       };
     }
 
-// Chain of condensed pipes (kept as canonical inside interpolation contexts)
-CondensedPipeChain "pipe chain"
-  = pipes:CondensedPipe+ { return pipes; }
+// Chain of template pipes (no args) inside interpolation contexts
+TemplatePipeChain "template pipe chain"
+  = pipes:TemplatePipe+ { return pipes; }
 
 // Field access chain for file references
 FileFieldChain "field chain"

@@ -167,6 +167,18 @@ if (commandVar?.metadata?.isBuiltinTransformer) {
 3. **@CSV / @csv** - Converts JSON arrays to CSV format
 4. **@MD / @md** - Formats markdown using prettier
 
+### LoadContentResult Metadata Preservation
+
+Pipeline stages automatically preserve LoadContentResult metadata through JavaScript transformations:
+
+```mlld
+# Metadata (filename, frontmatter) preserved even after transformation
+/var @result = <doc.md> | @uppercase | @addFooter
+# @result still has .filename, .fm properties available
+```
+
+**Implementation**: Pipeline execution wraps JS functions with `AutoUnwrapManager.executeWithPreservation()` - arrays use exact content matching, single files get metadata auto-reattached to transformed content.
+
 ## Pipeline Context and Retry (v2.0.0-rc35+)
 
 The pipeline execution system tracks context information and supports retry mechanisms for sophisticated pipeline control flow.

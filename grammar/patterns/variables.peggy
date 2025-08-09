@@ -141,7 +141,7 @@ VariableReferenceWithTail "variable reference with tail modifiers"
 
 // Variable with condensed pipes for interpolation contexts
 VariableWithPipes "variable with optional pipes"
-  = varRef:VariableNoTail pipes:CondensedPipeChain? {
+  = varRef:VariableNoTail pipes:TemplatePipeChain? {
       if (pipes && pipes.length > 0) {
         // Add pipes to the variable node
         return {
@@ -155,7 +155,7 @@ VariableWithPipes "variable with optional pipes"
 // Template-specific variable pattern that doesn't check for tail modifiers
 // Used in template contexts where keywords like "with" should be treated as literal text
 TemplateVariableReference "variable reference in template context"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* pipes:CondensedPipeChain? {
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* pipes:TemplatePipeChain? {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
