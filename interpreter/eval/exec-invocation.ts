@@ -305,11 +305,8 @@ export async function evaluateExecInvocation(
             
             // Apply withClause transformations if present
             if (node.withClause) {
-              // Check if we should use the new unified pipeline processor (feature flag)
-              const USE_UNIFIED_PIPELINE = process.env.MLLD_UNIFIED_PIPELINE === 'true';
-              
-              if (USE_UNIFIED_PIPELINE && node.withClause.pipeline) {
-                // Use new unified pipeline processor for pipeline part
+              if (node.withClause.pipeline) {
+                // Use unified pipeline processor for pipeline part
                 const { processPipeline } = await import('./pipeline/unified-processor');
                 const pipelineResult = await processPipeline({
                   value: String(result),
@@ -320,7 +317,6 @@ export async function evaluateExecInvocation(
                 // Still need to handle other withClause features (trust, needs)
                 return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
               } else {
-                // Original handling
                 return applyWithClause(String(result), node.withClause, env);
               }
             }
@@ -355,11 +351,8 @@ export async function evaluateExecInvocation(
     
     // Apply withClause transformations if present
     if (node.withClause) {
-      // Check if we should use the new unified pipeline processor (feature flag)
-      const USE_UNIFIED_PIPELINE = process.env.MLLD_UNIFIED_PIPELINE === 'true';
-      
-      if (USE_UNIFIED_PIPELINE && node.withClause.pipeline) {
-        // Use new unified pipeline processor for pipeline part
+      if (node.withClause.pipeline) {
+        // Use unified pipeline processor for pipeline part
         const { processPipeline } = await import('./pipeline/unified-processor');
         const pipelineResult = await processPipeline({
           value: String(result),
@@ -370,7 +363,6 @@ export async function evaluateExecInvocation(
         // Still need to handle other withClause features (trust, needs)
         return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
       } else {
-        // Original handling
         return applyWithClause(String(result), node.withClause, env);
       }
     }
@@ -1056,11 +1048,8 @@ export async function evaluateExecInvocation(
   
   // Apply withClause transformations if present
   if (node.withClause) {
-    // Check if we should use the new unified pipeline processor (feature flag)
-    const USE_UNIFIED_PIPELINE = process.env.MLLD_UNIFIED_PIPELINE === 'true';
-    
-    if (USE_UNIFIED_PIPELINE && node.withClause.pipeline) {
-      // Use new unified pipeline processor for pipeline part
+    if (node.withClause.pipeline) {
+      // Use unified pipeline processor for pipeline part
       const { processPipeline } = await import('./pipeline/unified-processor');
       const pipelineResult = await processPipeline({
         value: result,
@@ -1072,7 +1061,7 @@ export async function evaluateExecInvocation(
       const stringResult = typeof pipelineResult === 'string' ? pipelineResult : JSON.stringify(pipelineResult);
       return applyWithClause(stringResult, { ...node.withClause, pipeline: undefined }, env);
     } else {
-      // Original handling - applyWithClause expects a string input
+      // applyWithClause expects a string input
       const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
       return applyWithClause(stringResult, node.withClause, env);
     }

@@ -491,24 +491,16 @@ export async function evaluateVar(
     
     // Apply pipeline if present
     if (varWithTail.withClause && varWithTail.withClause.pipeline) {
-      const { executePipeline } = await import('./pipeline');
-      const format = varWithTail.withClause.format as string | undefined;
+      const { processPipeline } = await import('./pipeline/unified-processor');
       
-      // Result should already be properly resolved based on context
-      // If we had field access, it's already extracted by accessFields
-      // If we didn't have field access and have pipeline, we used PipelineInput context
-      
-      // Convert result to string for pipeline - WHY: Pipelines operate on string content
-      // and transform it through various text processing operations
-      const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
-      
-      result = await executePipeline(
-        stringResult,
-        varWithTail.withClause.pipeline,
+      // Process through unified pipeline
+      result = await processPipeline({
+        value: result,
         env,
-        directive.location,
-        format
-      );
+        node: varWithTail,
+        identifier: varWithTail.identifier,
+        location: directive.location
+      });
     }
     
     resolvedValue = result;
@@ -826,106 +818,39 @@ export async function evaluateVar(
     }
   }
 
-  // Check if we should use the new unified pipeline processor (feature flag)
-  const USE_UNIFIED_PIPELINE = process.env.MLLD_UNIFIED_PIPELINE === 'true';
+  // Use unified pipeline processor
+  const { processPipeline } = await import('./pipeline/unified-processor');
   
-  if (USE_UNIFIED_PIPELINE) {
-    // Use new unified pipeline processor
-    const { processPipeline } = await import('./pipeline/unified-processor');
-    
-    // Create variable if not already created (for Literal nodes)
-    if (!variable) {
-      if (valueNode && valueNode.type === 'Literal') {
-        if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
-          const { createPrimitiveVariable } = await import('@core/types/variable');
-          variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
-        } else {
-          variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
-        }
-      } else {
-        variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
-      }
-    }
-    
-    // Process through unified pipeline (handles detection, validation, execution)
-    const result = await processPipeline({
-      value: variable,
-      env,
-      node: valueNode,
-      directive,
-      identifier,
-      location: directive.location
-    });
-    
-    // If pipeline was executed, result will be a string
-    // Create new variable with the result
-    if (typeof result === 'string' && result !== variable.value) {
-      variable = createSimpleTextVariable(identifier, result, source, metadata);
-    }
-    
-    env.setVariable(identifier, variable);
-    return { value: '', env };
-  }
-  
-  // Original implementation (will be removed after testing)
-  // Check if the directive has a withClause for pipeline processing
-  // Note: For literals with pipelines, the withClause may be in directive.meta instead of directive.values
-  const withClause = directive.values?.withClause || directive.meta?.withClause;
-  
-  // Create variable if not already created (for Literal nodes that skipped early creation)
+  // Create variable if not already created (for Literal nodes)
   if (!variable) {
     if (valueNode && valueNode.type === 'Literal') {
-      // Handle Literal nodes that were deferred
       if (typeof resolvedValue === 'boolean' || typeof resolvedValue === 'number' || resolvedValue === null) {
         const { createPrimitiveVariable } = await import('@core/types/variable');
         variable = createPrimitiveVariable(identifier, resolvedValue, source, metadata);
       } else {
-        // String literal
         variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
       }
     } else {
-      // Fallback for any other unhandled cases
       variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
     }
   }
-
-  if (withClause && withClause.pipeline) {
-    const { executePipeline } = await import('./pipeline');
-    const format = withClause.format as string | undefined;
-    
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('Processing withClause pipeline for regular variable:', {
-        identifier,
-        variableType: variable.type,
-        valueType: typeof variable.value,
-        hasText: variable.value && typeof variable.value === 'object' && 'text' in variable.value,
-        valueKeys: variable.value && typeof variable.value === 'object' ? Object.keys(variable.value) : [],
-        valuePreview: typeof variable.value === 'string' ? variable.value.substring(0, 50) : 'not a string',
-        value: variable.value
-      });
-    }
-    
-    // Extract Variable value for pipeline input - WHY: Pipelines require raw string values
-    // to transform through text processing operations
-    const { resolveValue: resolveForPipeline, ResolutionContext: ResCtx } = await import('../utils/variable-resolution');
-    const extractedValue = await resolveForPipeline(variable, env, ResCtx.PipelineInput);
-    
-    // Convert to string for pipeline processing
-    const stringValue = typeof extractedValue === 'string' ? extractedValue : JSON.stringify(extractedValue);
-    
-    // Execute the pipeline
-    const pipelineResult = await executePipeline(
-      stringValue,
-      withClause.pipeline,
-      env,
-      directive.location,
-      format
-    );
-    
-    // Update the variable with the pipeline result
-    variable = createSimpleTextVariable(identifier, pipelineResult, source, metadata);
+  
+  // Process through unified pipeline (handles detection, validation, execution)
+  const result = await processPipeline({
+    value: variable,
+    env,
+    node: valueNode,
+    directive,
+    identifier,
+    location: directive.location
+  });
+  
+  // If pipeline was executed, result will be a string
+  // Create new variable with the result
+  if (typeof result === 'string' && result !== variable.value) {
+    variable = createSimpleTextVariable(identifier, result, source, metadata);
   }
-
+  
   env.setVariable(identifier, variable);
   
   // Debug logging for primitive values

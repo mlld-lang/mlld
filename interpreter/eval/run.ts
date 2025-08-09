@@ -606,33 +606,17 @@ export async function evaluateRun(
     
     // Apply pipeline transformations if specified
     if (withClause.pipeline && withClause.pipeline.length > 0) {
-      // Check if we should use the new unified pipeline processor (feature flag)
-      const USE_UNIFIED_PIPELINE = process.env.MLLD_UNIFIED_PIPELINE === 'true';
-      
-      if (USE_UNIFIED_PIPELINE) {
-        // Use new unified pipeline processor
-        const { processPipeline } = await import('./pipeline/unified-processor');
-        output = await processPipeline({
-          value: output,
-          env,
-          directive,
-          pipeline: withClause.pipeline,
-          format: withClause.format as string | undefined,
-          isRetryable: false, // run command output is not directly retryable
-          location: directive.location
-        });
-      } else {
-        // Original pipeline handling
-        const format = withClause.format as string | undefined;
-        output = await executePipeline(
-          output,
-          withClause.pipeline,
-          env,
-          directive.location,
-          format,
-          false // isRetryable - run command output is not directly retryable
-        );
-      }
+      // Use unified pipeline processor
+      const { processPipeline } = await import('./pipeline/unified-processor');
+      output = await processPipeline({
+        value: output,
+        env,
+        directive,
+        pipeline: withClause.pipeline,
+        format: withClause.format as string | undefined,
+        isRetryable: false, // run command output is not directly retryable
+        location: directive.location
+      });
     }
   }
   

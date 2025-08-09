@@ -236,22 +236,14 @@ export class VariableReferenceEvaluator {
     
     // Apply pipeline if present
     if (value.withClause && value.withClause.pipeline) {
-      // Check if we should use the new unified pipeline processor (feature flag)
-      const USE_UNIFIED_PIPELINE = process.env.MLLD_UNIFIED_PIPELINE === 'true';
-      
-      if (USE_UNIFIED_PIPELINE) {
-        // Use new unified pipeline processor
-        const { processPipeline } = await import('../../eval/pipeline/unified-processor');
-        result = await processPipeline({
-          value: result,
-          env,
-          node: value,
-          identifier: varRef.identifier
-        });
-      } else {
-        // Original pipeline handling
-        result = await this.executePipeline(result, value.withClause, env);
-      }
+      // Use unified pipeline processor
+      const { processPipeline } = await import('../../eval/pipeline/unified-processor');
+      result = await processPipeline({
+        value: result,
+        env,
+        node: value,
+        identifier: varRef.identifier
+      });
     }
     
     // Debug logging
@@ -328,9 +320,6 @@ export class VariableReferenceEvaluator {
     // If the ExecInvocation has a pipeline, we need to handle it here
     // to ensure proper data type handling
     if (value.withClause && value.withClause.pipeline) {
-      // Check if we should use the new unified pipeline processor (feature flag)
-      const USE_UNIFIED_PIPELINE = process.env.MLLD_UNIFIED_PIPELINE === 'true';
-      
       // Create a copy without the withClause to avoid double execution
       const nodeWithoutPipeline = {
         ...value,
@@ -339,58 +328,31 @@ export class VariableReferenceEvaluator {
       
       const result = await evaluateExecInvocation(nodeWithoutPipeline as any, env);
       
-      if (USE_UNIFIED_PIPELINE) {
-        // Use new unified pipeline processor
-        const { processPipeline } = await import('../../eval/pipeline/unified-processor');
-        const pipelineResult = await processPipeline({
-          value: result.value,
-          env,
-          node: value,
-          identifier: value.identifier
+      // Use unified pipeline processor
+      const { processPipeline } = await import('../../eval/pipeline/unified-processor');
+      const pipelineResult = await processPipeline({
+        value: result.value,
+        env,
+        node: value,
+        identifier: value.identifier
+      });
+      
+      // Debug logging
+      if (process.env.MLLD_DEBUG === 'true') {
+        logger.debug('ExecInvocation pipeline result:', {
+          pipelineResult,
+          pipelineResultType: typeof pipelineResult,
+          isPipelineInput: !!(pipelineResult && typeof pipelineResult === 'object' && 'text' in pipelineResult)
         });
-        
-        // Debug logging
-        if (process.env.MLLD_DEBUG === 'true') {
-          logger.debug('ExecInvocation pipeline result:', {
-            pipelineResult,
-            pipelineResultType: typeof pipelineResult,
-            isPipelineInput: !!(pipelineResult && typeof pipelineResult === 'object' && 'text' in pipelineResult)
-          });
-        }
-        
-        // Try to parse the pipeline result back to maintain type consistency
-        try {
-          const parsed = JSON.parse(pipelineResult);
-          return parsed;
-        } catch {
-          // If JSON parsing fails, return the string as-is
-          return pipelineResult;
-        }
-      } else {
-        // Original pipeline handling
-        // Get the string representation of the result for the pipeline
-        const stringResult = typeof result.value === 'string' ? result.value : JSON.stringify(result.value);
-        
-        // Execute the pipeline
-        const pipelineResult = await this.executePipelineFromString(stringResult, value.withClause, env);
-        
-        // Debug logging
-        if (process.env.MLLD_DEBUG === 'true') {
-          logger.debug('ExecInvocation pipeline result:', {
-            pipelineResult,
-            pipelineResultType: typeof pipelineResult,
-            isPipelineInput: !!(pipelineResult && typeof pipelineResult === 'object' && 'text' in pipelineResult)
-          });
-        }
-        
-        // Try to parse the pipeline result back to maintain type consistency
-        try {
-          const parsed = JSON.parse(pipelineResult);
-          return parsed;
-        } catch {
-          // If JSON parsing fails, return the string as-is
-          return pipelineResult;
-        }
+      }
+      
+      // Try to parse the pipeline result back to maintain type consistency
+      try {
+        const parsed = JSON.parse(pipelineResult);
+        return parsed;
+      } catch {
+        // If JSON parsing fails, return the string as-is
+        return pipelineResult;
       }
     }
     
@@ -434,65 +396,6 @@ export class VariableReferenceEvaluator {
     }
     
     return result;
-  }
-
-  /**
-   * Executes a pipeline with the given result and with clause
-   */
-  private async executePipeline(result: any, withClause: any, env: Environment): Promise<any> {
-    const { executePipeline } = await import('../../eval/pipeline');
-    
-    // Extract format from with clause if specified
-    const format = withClause.format as string | undefined;
-    
-    // Debug logging
-    if (process.env.MLLD_DEBUG === 'true') {
-      logger.debug('Before pipeline:', { result, stringified: String(result), format });
-    }
-    
-    // Convert result to string properly - JSON.stringify for objects/arrays
-    const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
-    
-    const pipelineResult = await executePipeline(
-      stringResult,
-      withClause.pipeline,
-      env,
-      undefined, // location
-      format,
-      false // isRetryable - default for data structure evaluation
-    );
-    
-    // Debug logging
-    if (process.env.MLLD_DEBUG === 'true') {
-      logger.debug('After pipeline:', { 
-        pipelineResult,
-        pipelineResultType: typeof pipelineResult,
-        pipelineResultIsNull: pipelineResult === null,
-        pipelineResultIsUndefined: pipelineResult === undefined
-      });
-    }
-    
-    return pipelineResult;
-  }
-
-  /**
-   * Executes a pipeline from a string result
-   */
-  private async executePipelineFromString(stringResult: string, withClause: any, env: Environment): Promise<any> {
-    const { executePipeline } = await import('../../eval/pipeline');
-    
-    // Extract format from with clause if specified
-    const format = withClause.format as string | undefined;
-    
-    // Execute the pipeline with the stringified result and format
-    return await executePipeline(
-      stringResult,
-      withClause.pipeline,
-      env,
-      undefined, // location
-      format,
-      false // isRetryable - default for data structure evaluation
-    );
   }
 
   /**
