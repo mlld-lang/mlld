@@ -20,11 +20,10 @@ CommandReference "command reference"
       };
     }
 
-// Legacy argument patterns removed - using UnifiedArgumentList directly
+// All argument patterns now use UnifiedArgumentList directly
 
-// Temporary compatibility wrappers
+// Temporary compatibility wrapper - still used by other files
 CommandArgumentList "command arguments list" = UnifiedArgumentListItems
-CommandArgument "command argument" = UnifiedArgument
 
 
 // Nested function call in command arguments

@@ -91,21 +91,4 @@ UnifiedArgument "unified argument"
 // CONTEXT VALIDATION AND COERCION
 // -------------------------------------------------------------
 
-// Context-aware argument validation - will be used by adapters
-ValidatedArgumentList
-  = args:UnifiedArgumentList {
-      return args;
-    }
-
-// Context-aware argument coercion - will be used by adapters
-CoercedArgumentList
-  = args:UnifiedArgumentList {
-      return args;
-    }
-
-// -------------------------------------------------------------
-// LEGACY COMPATIBILITY PATTERNS - To be removed during Phase 4
-// -------------------------------------------------------------
-
-// Note: Original patterns like RunCodeArguments still exist in their source files.
-// They will be replaced with adapters in Phase 3, then deleted in Phase 4.
+// Consolidation complete - all patterns now use UnifiedArgumentList directly

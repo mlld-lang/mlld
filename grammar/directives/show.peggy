@@ -703,8 +703,7 @@ AsNewTitle
 
 // Helper rule for template invocation arguments
 // Using standard list pattern from patterns/lists.peggy
-// Legacy patterns - to be removed in Phase 4
-// Temporary compatibility wrappers
+// Compatibility wrappers - still used in some patterns
 TemplateArgumentList = UnifiedArgumentListItems
 TemplateArgument = UnifiedArgument
 
