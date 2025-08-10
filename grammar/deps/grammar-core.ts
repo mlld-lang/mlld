@@ -1199,5 +1199,27 @@ export const helpers = {
       meta: { implicit: false },
       location
     })];
+  },
+
+  /**
+   * Helper functions for expression context detection
+   */
+  isSimpleCondition(expr: any): boolean {
+    return expr.type === 'VariableReference' || 
+           expr.type === 'Literal' ||
+           (expr.type === 'UnaryExpression' && expr.operator === '!');
+  },
+
+  extractConditionVariables(expr: any): string[] {
+    const variables: string[] = [];
+    function traverse(node: any) {
+      if (node.type === 'VariableReference') {
+        variables.push(node.name || node.identifier);
+      } else if (node.left) traverse(node.left);
+      if (node.right) traverse(node.right);
+      if (node.operand) traverse(node.operand);
+    }
+    traverse(expr);
+    return [...new Set(variables)];
   }
 };

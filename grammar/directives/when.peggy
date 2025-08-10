@@ -341,7 +341,7 @@ WhenModifier
 
 // Simple condition for @when simple form - supports full expressions
 WhenSimpleCondition
-  = expr:Expression {
+  = expr:WhenConditionAdapter {
       // Wrap in array for consistency with existing code
       return [expr];
     }
@@ -393,7 +393,7 @@ NonNegatedSimpleCondition
 
 // Condition expression - supports full expressions with operators
 WhenConditionExpression
-  = expr:Expression {
+  = expr:WhenConditionAdapter {
       // Wrap in array for consistency
       return [expr];
     }
