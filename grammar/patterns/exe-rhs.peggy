@@ -157,7 +157,7 @@ ExeTemplatePattern "exe template pattern"
 
 // Section pattern for exe context - handles [@file # section] [as @newheader]
 ExeSectionPattern "exe section pattern"
-  = "[" _ pathVar:VariableNoTail _ "#" _ section:SectionIdentifier _ "]" rename:ExecAsNewTitle? {
+  = "[" _ pathVar:UnifiedVariableNoTail _ "#" _ section:SectionIdentifier _ "]" rename:ExecAsNewTitle? {
       return {
         type: 'exeSection',
         values: {
@@ -248,7 +248,7 @@ ResolverPathPattern
 
 // ExecResolverPayload - optional payload syntax: { @variable }
 ExecResolverPayload
-  = _ "{" _ varRef:VariableNoTail _ "}" {
+  = _ "{" _ varRef:UnifiedVariableNoTail _ "}" {
       return [varRef];
     }
 
@@ -257,7 +257,7 @@ ExecAsNewTitle
   = _ "as" _ title:LiteralContent {
       return title;
     }
-  / _ "as" _ varRef:VariableNoTail {
+  / _ "as" _ varRef:UnifiedVariableNoTail {
       return [varRef];
     }
 

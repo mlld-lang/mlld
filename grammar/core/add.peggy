@@ -49,11 +49,11 @@ AddTemplateCore
     }
 
 // -------------------------------------------------------------
-// ADD VARIABLE CORE - Core variable reference logic
+// ADD VARIABLE CORE - Now uses unified variable system directly
 // -------------------------------------------------------------
 
 AddVariableCore
-  = "@" varRef:AtVar {
+  = "@" varRef:UnifiedAtVar {
       helpers.debug('AddVariableCore matched variable', { varRef });
       
       return {

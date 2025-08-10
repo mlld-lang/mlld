@@ -48,14 +48,32 @@ export async function evaluateShow(
   let content = '';
   
   if (directive.subtype === 'showVariable') {
-    // Handle variable reference
-    const variableNodes = directive.values?.variable;
-    if (!variableNodes || variableNodes.length === 0) {
-      throw new Error('Add variable directive missing variable reference');
-    }
+    // Handle variable reference - supports both unified AST and legacy structure
+    let variableNode: any;
+    let varName: string;
     
-    const variableNode = variableNodes[0];
-    const varName = variableNode.identifier;
+    if (directive.values?.invocation) {
+      // New unified AST structure
+      const invocationNode = directive.values.invocation;
+      if (!invocationNode || invocationNode.type !== 'VariableReference') {
+        throw new Error('Show variable directive missing variable reference');
+      }
+      variableNode = invocationNode;
+      varName = invocationNode.identifier;
+    } else if (directive.values?.variable) {
+      // Legacy structure (for backwards compatibility during transition)
+      const legacyVariable = directive.values.variable;
+      if (!legacyVariable || !Array.isArray(legacyVariable) || legacyVariable.length === 0) {
+        throw new Error('Show variable directive missing variable reference');
+      }
+      variableNode = legacyVariable[0];
+      if (!variableNode || variableNode.type !== 'VariableReference') {
+        throw new Error('Show variable directive missing variable reference');
+      }
+      varName = variableNode.identifier;
+    } else {
+      throw new Error('Show variable directive missing variable reference');
+    }
     
     // Get variable from environment
     const variable = env.getVariable(varName);

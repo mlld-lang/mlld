@@ -510,7 +510,7 @@ ImportItem
 
 // Path parts for import context - allows @var interpolation
 ImportPathParts
-  = parts:(VariableNoTail / PathTextSegment / PathSeparator)* {
+  = parts:(UnifiedVariableNoTail / PathTextSegment / PathSeparator)* {
       return parts;
     }
 

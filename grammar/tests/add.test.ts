@@ -227,10 +227,10 @@ describe('Add Directive', () => {
     expect(directiveNode.kind).toBe('show');
     expect(directiveNode.subtype).toBe('showVariable');
     
-    // Check values structure
-    expect(directiveNode.values).toHaveProperty('variable');
-    expect(Array.isArray(directiveNode.values.variable)).toBe(true);
-    expect(directiveNode.values.variable[0].identifier).toBe('content');
+    // Check values structure - now uses invocation instead of variable
+    expect(directiveNode.values).toHaveProperty('invocation');
+    expect(directiveNode.values.invocation).toBeDefined();
+    expect(directiveNode.values.invocation.identifier).toBe('content');
   });
   
   test('Variable add with headerLevel and underHeader', async () => {
@@ -245,13 +245,13 @@ describe('Add Directive', () => {
     expect(directiveNode.kind).toBe('show');
     expect(directiveNode.subtype).toBe('showVariable');
     
-    // Check values structure
-    expect(directiveNode.values).toHaveProperty('variable');
+    // Check values structure - now uses invocation instead of variable
+    expect(directiveNode.values).toHaveProperty('invocation');
     expect(directiveNode.values).toHaveProperty('headerLevel');
     expect(directiveNode.values).toHaveProperty('underHeader');
     
-    // Check values content
-    expect(directiveNode.values.variable[0].identifier).toBe('document');
+    // Check values content - now uses invocation instead of variable
+    expect(directiveNode.values.invocation.identifier).toBe('document');
     expect(directiveNode.values.headerLevel[0].value).toBe(2);
     expect(directiveNode.values.underHeader[0].content).toBe('Documentation');
     

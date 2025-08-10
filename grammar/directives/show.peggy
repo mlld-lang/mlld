@@ -658,14 +658,8 @@ AddDirectiveRef
       };
     }
 
-// Helper rule for variable references in show directive
-ShowVariableReference
-  = id:BaseIdentifier accessElements:AnyFieldAccess* {
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id,
-        ...(accessElements.length > 0 ? { fields: accessElements } : {})
-      }, location());
-    }
+// Variable references in show directive now use unified core directly
+ShowVariableReference = UnifiedAtVar
 
 // Helper rule for quoted content
 QuotedContent

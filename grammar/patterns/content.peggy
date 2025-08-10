@@ -71,7 +71,7 @@ SemanticSectionContent "Semantic section content"
 
 // Parts that make up a path
 PathParts "Path component parts"
-  = parts:(SpecialVariable / Variable / PathTextSegment / PathSeparator)* {
+  = parts:(SpecialVariable / UnifiedVariable / PathTextSegment / PathSeparator)* {
       return parts;
     }
 
@@ -85,7 +85,7 @@ SectionName "Section name"
 
 // SEMANTIC: Command bracket content - knows it's parsing a shell command
 SemanticCommandBracketContent "Semantic command content with @var interpolation"
-  = '[' parts:(SpecialVariable / VariableNoTail / QuotedCommandString / CommandTextContent)* ']' {
+  = '[' parts:(SpecialVariable / UnifiedVariableNoTail / QuotedCommandString / CommandTextContent)* ']' {
       // Return only the content within brackets, not the brackets themselves
       return parts;
     }
@@ -114,7 +114,7 @@ QuotedCommandString "Quoted string in command"
 
 // Double quoted content - allows @var interpolation
 DoubleQuotedCommandContent
-  = parts:(SpecialVariable / Variable / DoubleQuotedText)* {
+  = parts:(SpecialVariable / UnifiedVariable / DoubleQuotedText)* {
       // Flatten to string preserving variable references
       return parts.map(p => {
         if (p.type === NodeType.VariableReference) {
@@ -307,7 +307,7 @@ UnquotedPathPart
 
 // Variable reference in unquoted paths - use unified pattern
 UnquotedPathVar
-  = VariableNoTail
+  = UnifiedVariableNoTail
 
 // Text segment for unquoted paths - handles @ when not a valid variable
 UnquotedPathText "Unquoted path text"
@@ -318,7 +318,7 @@ UnquotedPathText "Unquoted path text"
 
 // Unquoted command with @var interpolation (no delimiters)
 UnquotedCommand "Unquoted command with @var interpolation"
-  = parts:(AtVar / BaseTextSegment)+ {
+  = parts:(UnifiedAtVar / BaseTextSegment)+ {
       return parts;
     }
 

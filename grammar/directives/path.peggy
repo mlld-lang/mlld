@@ -164,7 +164,7 @@ SlashPath
 
 // Path parts for path assignment - allows @var interpolation
 PathAssignmentParts
-  = parts:(VariableNoTail / PathTextSegment / PathSeparator)* {
+  = parts:(UnifiedVariableNoTail / PathTextSegment / PathSeparator)* {
       return parts;
     }
 

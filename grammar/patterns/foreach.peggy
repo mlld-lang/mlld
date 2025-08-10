@@ -38,7 +38,7 @@ ForeachCommandExpression
 // List of array arguments separated by commas
 // Each array will be iterated over, creating cartesian product for multiple arrays
 ForeachArrayArgumentList
-  = first:VariableNoTail rest:(_ "," _ arr:VariableNoTail { return arr; })* {
+  = first:UnifiedVariableNoTail rest:(_ "," _ arr:UnifiedVariableNoTail { return arr; })* {
       return [first].concat(rest || []);
     }
 

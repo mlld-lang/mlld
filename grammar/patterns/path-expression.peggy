@@ -125,7 +125,7 @@ URLSegment "URL segment"
 // Section identifier - supports both literal names and variable references
 // Used in: UnifiedSectionPath for dynamic section extraction
 SectionIdentifier "Section name or variable reference"
-  = VariableNoTail
+  = UnifiedVariableNoTail
   / '"' content:$(!'"' .)* '"' {  // Double-quoted section names
       return helpers.createNode(NodeType.Text, { 
         content: content, 

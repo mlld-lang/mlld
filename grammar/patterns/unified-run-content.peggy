@@ -239,7 +239,7 @@ UnifiedCommandParts
 
 // Command tokens - complete units (quoted strings, variables, words)
 UnifiedCommandToken
-  = VariableNoTail               // Variables first (unified pattern)
+  = UnifiedVariableNoTail               // Variables first (unified pattern)
   / UnifiedCommandQuotedString   // Complete quoted strings
   / UnifiedCommandWord           // Unquoted words with spaces
   / UnifiedCommandSpace          // Explicit spaces between tokens
@@ -291,7 +291,7 @@ UnifiedCommandQuotedString
 
 // Content inside double quotes - allows variables and file references but no operator checks  
 UnifiedDoubleQuotedContent
-  = varRef:VariableNoTail {
+  = varRef:UnifiedVariableNoTail {
       // Variable interpolation inside double quotes - return the unified pattern result
       return varRef;
     }

@@ -117,14 +117,8 @@ FilterValue
   / BooleanLiteral
   / AtVarInFilter  // Variable reference in filter context
 
-// Simple variable reference in filter context (no context check needed)
-AtVarInFilter
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* {
-      return helpers.createVariableReferenceNode('varIdentifier', {
-        identifier: id,
-        ...(fields.length > 0 ? { fields: fields } : {})
-      }, location());
-    }
+// Variable reference in filter context now uses unified core directly
+AtVarInFilter = UnifiedAtVar
 
 // Keep existing array index patterns
 ExistingArrayIndex
