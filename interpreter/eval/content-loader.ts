@@ -10,7 +10,7 @@ import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
 import type { ArrayVariable, Variable } from '@core/types/variable/VariableTypes';
 import { createRenamedContentVariable, createLoadContentResultVariable, extractVariableValue } from '@interpreter/utils/variable-migration';
-import { applyCondensedPipes } from '@interpreter/core/interpreter';
+import { processPipeline } from './pipeline/unified-processor';
 
 /**
  * Check if a path contains glob patterns
@@ -91,7 +91,11 @@ export async function processContentLoader(node: any, env: Environment): Promise
         
         // Apply pipes if present
         if (hasPipes) {
-          return await applyCondensedPipes(sectionContent, pipes, env);
+          return await processPipeline({
+            value: sectionContent,
+            env,
+            node: { pipes }
+          });
         }
         
         // For URLs with sections, return plain string (backward compatibility)
@@ -110,7 +114,11 @@ export async function processContentLoader(node: any, env: Environment): Promise
       // Apply pipes if present
       if (hasPipes) {
         // For LoadContentResult objects, apply pipes to the content
-        const pipedContent = await applyCondensedPipes(urlResult.content, pipes, env);
+        const pipedContent = await processPipeline({
+          value: urlResult.content,
+          env,
+          node: { pipes }
+        });
         // Return a new result with piped content
         return new LoadContentResultURLImpl({
           content: pipedContent,
@@ -138,7 +146,11 @@ export async function processContentLoader(node: any, env: Environment): Promise
         // For arrays of results, apply pipes to each result's content
         const pipedResults = await Promise.all(
           results.map(async (result) => {
-            const pipedContent = await applyCondensedPipes(result.content, pipes, env);
+            const pipedContent = await processPipeline({
+              value: result.content,
+              env,
+              node: { pipes }
+            });
             return new LoadContentResultImpl({
               content: pipedContent,
               filename: result.filename,
@@ -167,10 +179,18 @@ export async function processContentLoader(node: any, env: Environment): Promise
     if (hasPipes) {
       // Check if result is a string (from section extraction) or LoadContentResult
       if (typeof result === 'string') {
-        return await applyCondensedPipes(result, pipes, env);
+        return await processPipeline({
+          value: result,
+          env,
+          node: { pipes }
+        });
       } else {
         // For LoadContentResult objects, apply pipes to the content
-        const pipedContent = await applyCondensedPipes(result.content, pipes, env);
+        const pipedContent = await processPipeline({
+          value: result.content,
+          env,
+          node: { pipes }
+        });
         // Return a new result with piped content
         return new LoadContentResultImpl({
           content: pipedContent,

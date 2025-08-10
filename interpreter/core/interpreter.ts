@@ -973,12 +973,26 @@ export async function interpolate(
           valueStr: typeof value === 'object' ? JSON.stringify(value).substring(0, 100) : String(value).substring(0, 100),
           pipes: node.pipes.map((p: any) => p.name || p.transform)
         });
-        value = await applyCondensedPipes(value, node.pipes, env);
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[INTERPOLATE] After pipes:', { 
-            valueType: typeof value,
-            valueStr: typeof value === 'object' ? JSON.stringify(value) : value
+        try {
+          // Use the unified pipeline processor instead of applyCondensedPipes
+          const { processPipeline } = await import('../eval/pipeline/unified-processor');
+          value = await processPipeline({
+            value,
+            env,
+            node,
+            identifier: node.identifier
           });
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.log('[INTERPOLATE] After pipes:', { 
+              valueType: typeof value,
+              valueStr: typeof value === 'object' ? JSON.stringify(value) : value
+            });
+          }
+        } catch (error) {
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.error('[INTERPOLATE] Error in pipes:', error);
+          }
+          throw error;
         }
         // If pipes have already converted to string, use it directly
         if (typeof value === 'string') {
@@ -1327,7 +1341,15 @@ async function processFileFields(
   
   // Apply pipes
   if (pipes && pipes.length > 0) {
-    result = await applyCondensedPipes(result, pipes, env);
+    // Use unified pipeline processor instead of applyCondensedPipes
+    const { processPipeline } = await import('../eval/pipeline/unified-processor');
+    // Create a node object with the pipes for the processor
+    const nodeWithPipes = { pipes };
+    result = await processPipeline({
+      value: result,
+      env,
+      node: nodeWithPipes
+    });
     // Pipes already handle conversion to string format, so return as-is
     return String(result);
   }
@@ -1344,6 +1366,13 @@ export async function applyCondensedPipes(
   pipes: CondensedPipe[],
   env: Environment
 ): Promise<any> {
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('[applyCondensedPipes] ENTERED with:', {
+      valueType: typeof value,
+      pipesCount: pipes?.length,
+      firstPipe: pipes?.[0]?.name || pipes?.[0]?.transform
+    });
+  }
   let result = value;
   
   for (const pipe of pipes) {
@@ -1414,10 +1443,23 @@ export async function applyCondensedPipes(
               args: [inputTextNode, ...(pipe.args || [])]
             }
           };
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.log('[applyCondensedPipes] Calling exec with:', {
+              pipeName,
+              inputContent: inputTextNode.content.substring(0, 100)
+            });
+          }
           const execResult = await evaluateExecInvocation(
             execInvocationNode as any,
             env
           );
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.log('[applyCondensedPipes] Exec result:', {
+              pipeName,
+              resultType: typeof execResult.value,
+              resultValue: String(execResult.value).substring(0, 100)
+            });
+          }
           result = execResult.value;
         } else {
           throw new Error(`@${pipeName} is not a valid transform function`);
