@@ -100,7 +100,7 @@ export function createTransformerVariable(
     codeTemplate: [{ type: 'Text', content: '// Built-in transformer' }],
     language: 'javascript',
     paramNames: ['input'],
-    sourceDirective: 'builtin'
+    sourceDirective: 'exec'
   };
 
   return {

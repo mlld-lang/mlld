@@ -966,13 +966,13 @@ export async function interpolate(
       
       // Apply condensed pipes if present
       if (node.pipes && node.pipes.length > 0) {
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[INTERPOLATE] Before pipes:', { 
-            valueType: typeof value,
-            valueStr: typeof value === 'object' ? JSON.stringify(value) : value,
-            pipes: node.pipes.map((p: any) => p.name || p.transform)
-          });
-        }
+        console.log('[INTERPOLATE] Before applyCondensedPipes:', { 
+          valueType: typeof value,
+          isObject: typeof value === 'object',
+          valueKeys: typeof value === 'object' && value !== null ? Object.keys(value) : 'N/A',
+          valueStr: typeof value === 'object' ? JSON.stringify(value).substring(0, 100) : String(value).substring(0, 100),
+          pipes: node.pipes.map((p: any) => p.name || p.transform)
+        });
         value = await applyCondensedPipes(value, node.pipes, env);
         if (process.env.MLLD_DEBUG === 'true') {
           console.log('[INTERPOLATE] After pipes:', { 
@@ -1375,13 +1375,8 @@ export async function applyCondensedPipes(
       if (typeof transform === 'function') {
         result = await transform(result, ...(pipe.args || []));
       } else if (transform && typeof transform === 'object') {
-        // Check for builtin transformer
-        if (transform.metadata?.isBuiltinTransformer && transform.metadata?.transformerImplementation) {
-          const impl = transform.metadata.transformerImplementation;
-          // Convert the value to string - handle objects properly
-          const stringValue = typeof result === 'string' ? result : JSON.stringify(result);
-          result = await impl(stringValue);
-        } else if (transform.type === 'executable' || '__executable' in transform) {
+        // All transformers (including builtins) are now regular executables
+        if (transform.type === 'executable' || '__executable' in transform) {
           // Handle executable variables as transforms
           const { evaluateExecInvocation } = await import('../eval/exec-invocation');
           // Create a Text node for the pipeline input value
