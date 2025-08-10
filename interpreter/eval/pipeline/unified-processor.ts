@@ -156,11 +156,32 @@ async function prepareInput(
     const { resolveValue, ResolutionContext } = await import('@interpreter/utils/variable-resolution');
     const extracted = await resolveValue(value as Variable, env, ResolutionContext.PipelineInput);
     
+    // Check if the extracted value is a LoadContentResult
+    const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+    if (isLoadContentResult(extracted)) {
+      // For LoadContentResult, use the content property (this is what should be processed)
+      // The metadata will be preserved via the AutoUnwrapManager shelf
+      return extracted.content;
+    }
+    if (isLoadContentResultArray(extracted)) {
+      // For arrays, join the contents
+      return extracted.content; // This uses the custom getter that concatenates
+    }
+    
     // Convert to string for pipeline
     if (typeof extracted === 'string') {
       return extracted;
     }
     return JSON.stringify(extracted);
+  }
+  
+  // Check if direct value is LoadContentResult (shouldn't happen but be safe)
+  const { isLoadContentResult, isLoadContentResultArray } = await import('@core/types/load-content');
+  if (isLoadContentResult(value)) {
+    return value.content;
+  }
+  if (isLoadContentResultArray(value)) {
+    return value.content;
   }
   
   // Direct value - convert to string
