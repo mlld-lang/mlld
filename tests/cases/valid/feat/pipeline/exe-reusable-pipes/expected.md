@@ -6,9 +6,11 @@ BOB
 
 HIHIHIHI
 
-[{
-  "NAME": "TEST"
-}]
+[
+  {
+    "NAME": "TEST"
+  }
+]
 
 MESSAGE: INPUT
 MESSAGE: DIRECT

@@ -966,7 +966,26 @@ export async function interpolate(
       
       // Apply condensed pipes if present
       if (node.pipes && node.pipes.length > 0) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('[INTERPOLATE] Before pipes:', { 
+            valueType: typeof value,
+            valueStr: typeof value === 'object' ? JSON.stringify(value) : value,
+            pipes: node.pipes.map((p: any) => p.name || p.transform)
+          });
+        }
         value = await applyCondensedPipes(value, node.pipes, env);
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.log('[INTERPOLATE] After pipes:', { 
+            valueType: typeof value,
+            valueStr: typeof value === 'object' ? JSON.stringify(value) : value
+          });
+        }
+        // If pipes have already converted to string, use it directly
+        if (typeof value === 'string') {
+          const strategy = EscapingStrategyFactory.getStrategy(context);
+          parts.push(strategy.escape(value));
+          continue;
+        }
       }
       
       // Convert final value to string
@@ -1338,6 +1357,17 @@ export async function applyCondensedPipes(
     const transform = env.getTransform?.(pipeName) || env.getVariable(pipeName);
     if (!transform) {
       throw new Error(`Unknown transform: @${pipeName}`);
+    }
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('[applyCondensedPipes] Processing pipe:', {
+        pipeName,
+        transformType: typeof transform,
+        isBuiltin: transform?.metadata?.isBuiltinTransformer,
+        hasImpl: !!transform?.metadata?.transformerImplementation,
+        inputType: typeof result,
+        inputValue: typeof result === 'object' ? JSON.stringify(result).substring(0, 100) : result
+      });
     }
     
     try {

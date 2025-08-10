@@ -839,15 +839,24 @@ export async function evaluateVar(
     }
   }
   
-  // Process through unified pipeline (handles detection, validation, execution)
-  const result = await processPipeline({
-    value: variable,
-    env,
-    node: valueNode,
-    directive,
-    identifier,
-    location: directive.location
-  });
+  // Skip pipeline processing if:
+  // 1. This is an ExecInvocation with a withClause (already processed by evaluateExecInvocation)
+  // 2. This is a VariableReference with pipes (already processed above around line 406)
+  let result = variable;
+  const skipPipeline = (valueNode && valueNode.type === 'ExecInvocation' && valueNode.withClause) ||
+                       (valueNode && valueNode.type === 'VariableReference' && valueNode.pipes);
+  
+  if (!skipPipeline) {
+    // Process through unified pipeline (handles detection, validation, execution)
+    result = await processPipeline({
+      value: variable,
+      env,
+      node: valueNode,
+      directive,
+      identifier,
+      location: directive.location
+    });
+  }
   
   // If pipeline was executed, result will be a string
   // Create new variable with the result

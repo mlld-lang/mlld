@@ -122,8 +122,6 @@ export class PipelineExecutor {
         console.log('🔄 RETRY SIGNAL DETECTED:', { output, stage: context.stage });
         const from = this.parseRetryScope(output);
         return { type: 'retry', reason: 'Stage requested retry', from };
-      } else {
-        console.log('🚫 NO RETRY SIGNAL:', { output: String(output).substring(0, 30), stage: context.stage });
       }
 
       // Empty output terminates pipeline

@@ -38,7 +38,7 @@
 /show @test4
 
 >> Test 5: Reuse pipes across different contexts
-/exe @process(data) = js { return data }
+/exe @process(value) = js { return value }
 /var @test5a = @process("input") | @formatMessage
 /var @test5b = "direct" | @formatMessage
 /show @test5a
