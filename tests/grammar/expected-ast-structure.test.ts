@@ -240,8 +240,8 @@ describe('Expected AST Structure - Complex Structures', () => {
       expect(normalized.items[1]).toHaveProperty('content');
       expect(normalized.items[1]).toHaveProperty('wrapperType', 'doubleQuote');
       expect(Array.isArray(normalized.items[1].content)).toBe(true);
-      expect(normalized.items[1].content[0]).toHaveProperty('type', 'Text');
-      expect(normalized.items[1].content[0]).toHaveProperty('content', 'text');
+      expect(normalized.items[1].content[0]).toHaveProperty('type', 'Literal');
+      expect(normalized.items[1].content[0]).toHaveProperty('value', 'text');
       expect(normalized.items[3]).toBe(true);
       expect(normalized.items[4]).toBe(null);
       

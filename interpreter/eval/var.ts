@@ -512,21 +512,20 @@ export async function evaluateVar(
   } else if (valueNode && (valueNode.type === 'BinaryExpression' || valueNode.type === 'TernaryExpression' || valueNode.type === 'UnaryExpression')) {
     // Handle expression nodes
     if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] var.ts: Evaluating expression node:', {
+      console.log('[DEBUG] var.ts: Evaluating unified expression node:', {
         type: valueNode.type,
         operator: (valueNode as any).operator
       });
     }
-    const { evaluateExpression } = await import('./expression');
-    const result = await evaluateExpression(valueNode, env, { isExpression: true });
+    const { evaluateUnifiedExpression } = await import('./expressions');
+    const result = await evaluateUnifiedExpression(valueNode, env);
     if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] var.ts: Expression result:', {
-        value: result.value,
-        type: typeof result.value,
-        isVariable: result.value && typeof result.value === 'object' && 'type' in result.value
+      console.log('[DEBUG] var.ts: Unified expression result:', {
+        value: result,
+        type: typeof result
       });
     }
-    resolvedValue = result.value;
+    resolvedValue = result;
     
   } else if (valueNode && valueNode.type === 'ForExpression') {
     // Handle for expressions: for @item in @collection => expression

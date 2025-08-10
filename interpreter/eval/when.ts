@@ -602,17 +602,16 @@ export async function evaluateCondition(
   if (condition.length === 1) {
     const node = condition[0];
     if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
-      const { evaluateExpression } = await import('./expression');
-      const result = await evaluateExpression(node as any, env, { isExpression: true });
+      const { evaluateUnifiedExpression } = await import('./expressions');
+      const result = await evaluateUnifiedExpression(node as any, env);
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('[DEBUG] Expression evaluation result:', {
+        console.log('[DEBUG] Unified expression evaluation result:', {
           nodeType: node.type,
-          resultValue: result.value,
-          resultType: typeof result.value,
-          isVariable: result.value && typeof result.value === 'object' && 'type' in result.value
+          resultValue: result,
+          resultType: typeof result
         });
       }
-      return isTruthy(result.value);
+      return isTruthy(result);
     }
   }
   
