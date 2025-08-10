@@ -27,14 +27,30 @@ UnifiedQuote "Unified quote pattern"
 UnifiedDoubleQuote "Double quoted string with interpolation"
   = '"' parts:(SpecialVariable / FileReferenceInterpolation / TemplateVariableReference / UnifiedDoubleQuotedText)* '"' {
       helpers.debug('UnifiedQuote: DoubleQuote matched', { parts });
-      // Handle empty string case - create Text node with empty content
+      
+      // If it's a plain string (no interpolation), create a Literal node for directive contexts
+      if (parts.length === 1 && parts[0].type === 'Text') {
+        // Single text segment - this is a plain string literal
+        const content = [helpers.createNode('Literal', { 
+          value: parts[0].content, 
+          valueType: 'string',
+          location: location() 
+        })];
+        return {
+          content: content,
+          wrapperType: 'doubleQuote',
+          hasInterpolation: false
+        };
+      }
+      
+      // Handle empty string case - create Literal node with empty content
       const content = parts.length === 0 
-        ? [helpers.createNode(NodeType.Text, { content: '', location: location() })]
+        ? [helpers.createNode('Literal', { value: '', valueType: 'string', location: location() })]
         : parts;
       return {
         content: content,
         wrapperType: 'doubleQuote',
-        hasInterpolation: true
+        hasInterpolation: parts.length > 1 || (parts.length === 1 && parts[0].type !== 'Text')
       };
     }
 
@@ -43,7 +59,11 @@ UnifiedSingleQuote "Single quoted literal string"
   = "'" content:EscapedSingleStringContent "'" { 
       helpers.debug('UnifiedQuote: SingleQuote matched', { content });
       return {
-        content: [helpers.createNode(NodeType.Text, { content, location: location() })],
+        content: [helpers.createNode('Literal', { 
+          value: content, 
+          valueType: 'string',
+          location: location() 
+        })],
         wrapperType: 'singleQuote',
         hasInterpolation: false
       };
@@ -53,6 +73,33 @@ UnifiedSingleQuote "Single quoted literal string"
 UnifiedBacktick "Backtick string with interpolation"
   = '`' content:UnifiedBacktickInterpolation* '`' {
       helpers.debug('UnifiedQuote: Backtick matched', { content });
+      
+      // If it's a plain string (single Text node), create a Literal for directive contexts
+      if (content.length === 1 && content[0].type === 'Text') {
+        return {
+          content: [helpers.createNode('Literal', { 
+            value: content[0].content, 
+            valueType: 'string',
+            location: location() 
+          })],
+          wrapperType: 'backtick',
+          hasInterpolation: false
+        };
+      }
+      
+      // Empty backticks should also be a Literal
+      if (content.length === 0) {
+        return {
+          content: [helpers.createNode('Literal', { 
+            value: '', 
+            valueType: 'string',
+            location: location() 
+          })],
+          wrapperType: 'backtick',
+          hasInterpolation: false
+        };
+      }
+      
       return {
         content: content,
         wrapperType: 'backtick',

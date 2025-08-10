@@ -10,7 +10,7 @@ VarRHSContent "var assignment value"
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
-  / TemplateWithPipeline        // Template content with pipeline support
+  / TemplateWithPipeline        // Template content with pipeline support - MUST come before PrimitiveValue
   / ArrayLiteral                // Arrays: [1, 2, 3] - MUST come before templates to handle [[nested]]
   / DataObjectLiteral           // Use data-context object parsing for proper typing
   / UnifiedQuoteOrTemplate      // Unified quotes and templates (moved after arrays)
@@ -20,7 +20,7 @@ VarRHSContent "var assignment value"
   / VariableWithSpacedPipes     // Variable references @var with spaced or unspaced pipes
   / VariableReferenceWithTail   // Variable references @var with optional tail modifiers
   / NestedDirective             // Nested directives @run, etc.
-  / PrimitiveValue              // Direct primitives: 42, true, false, null
+  / PrimitiveValue              // Direct primitives: 42, true, false, null, and strings WITHOUT pipes
 
 // Expression that definitely has an operator (to avoid matching simple variables)
 ExpressionWithOperator

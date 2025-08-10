@@ -404,15 +404,19 @@ export async function evaluateVar(
     
     // Apply condensed pipes if present (e.g., @var|@transform)
     if (valueNode.pipes && valueNode.pipes.length > 0) {
-      const { applyCondensedPipes } = await import('../core/interpreter');
-      /**
-       * Extract Variable value for pipeline processing
-       * WHY: Pipeline stages need raw values because they perform text transformations
-       *      on content, not Variable metadata
-       */
-      const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
-      const pipelineInput = await resolveValue(resolvedValue, env, ResolutionContext.PipelineInput);
-      resolvedValue = await applyCondensedPipes(pipelineInput, valueNode.pipes, env);
+      // Use unified pipeline processor for condensed pipes
+      const { processPipeline } = await import('./pipeline/unified-processor');
+      
+      // Process through unified pipeline (handles condensed pipe conversion)
+      const result = await processPipeline({
+        value: resolvedValue,
+        env,
+        node: valueNode,
+        identifier,
+        location: directive.location
+      });
+      
+      resolvedValue = result;
     }
     
   } else if (Array.isArray(valueNode)) {
