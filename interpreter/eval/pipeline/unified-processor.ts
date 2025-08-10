@@ -65,6 +65,15 @@ export async function processPipeline(
   } else {
     // Auto-detect from node/directive
     detected = detectPipeline(node, directive);
+    if (process.env.MLLD_DEBUG === 'true' && identifier) {
+      console.log('[processPipeline] Detection result:', {
+        identifier,
+        nodeType: node?.type,
+        hasDetected: !!detected,
+        source: detected?.source,
+        pipelineLength: detected?.pipeline?.length
+      });
+    }
   }
   
   // No pipeline - return value as-is

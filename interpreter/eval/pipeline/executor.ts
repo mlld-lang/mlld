@@ -194,6 +194,9 @@ export class PipelineExecutor {
       // Evaluate the argument
       if (typeof arg === 'string') {
         evaluatedArgs.push({ type: 'Text', content: arg });
+      } else if (typeof arg === 'number' || typeof arg === 'boolean' || arg === null) {
+        // Handle primitive values (numbers, booleans, null)
+        evaluatedArgs.push({ type: 'Text', content: String(arg) });
       } else if (arg && typeof arg === 'object') {
         const evaluatedArg = await this.evaluateArgumentNode(arg, env);
         evaluatedArgs.push(evaluatedArg);

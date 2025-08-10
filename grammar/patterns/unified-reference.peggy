@@ -22,6 +22,13 @@ UnifiedReferenceNoTail "unified reference without tail support"
   / SimpleExecNoTail         // @func(args) - no tail
   / VariableNoTail           // @var.field - no tail
 
+// Special pattern for use inside pipeline contexts
+// This allows function arguments but prevents capturing tail modifiers
+UnifiedReferenceForPipeline "unified reference for pipeline commands"
+  = FieldAccessExecForPipeline    // @obj.method(args) - no tail capture
+  / SimpleExecForPipeline         // @func(args) - no tail capture
+  / VariableForPipeline           // @var.field - no tail capture
+
 // =============================================================================
 // FIELD ACCESS EXEC PATTERN (Champion #1)
 // =============================================================================
@@ -133,6 +140,71 @@ SimpleExecNoTail "simple exec invocation without tail"
         commandRef: ref,
         withClause: null
       };
+    }
+
+// =============================================================================
+// PIPELINE-SPECIFIC PATTERNS (No tail capture for use in pipeline contexts)
+// =============================================================================
+
+FieldAccessExecForPipeline "field access exec for pipeline"
+  = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" {
+      // Same as FieldAccessExecNoTail but without the negative lookahead
+      const lastField = fields[fields.length - 1];
+      const methodName = lastField.value;
+      
+      const objectFields = fields.slice(0, -1);
+      const objectRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        ...(objectFields.length > 0 ? { fields: objectFields } : {})
+      }, location());
+      
+      const fullPathRef = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: id,
+        fields: fields
+      }, location());
+      
+      const ref = {
+        name: methodName,
+        identifier: [fullPathRef],
+        args: args || [],
+        isCommandReference: true,
+        objectReference: objectRef
+      };
+      
+      return {
+        type: 'ExecInvocation',
+        commandRef: ref,
+        withClause: null
+      };
+    }
+
+SimpleExecForPipeline "simple exec for pipeline"
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" {
+      // Same as SimpleExecNoTail but without the negative lookahead
+      const ref = {
+        name,
+        identifier: [helpers.createVariableReferenceNode('varIdentifier', {
+          identifier: name
+        }, location())],
+        args: args || [],
+        isCommandReference: true
+      };
+      
+      return {
+        type: 'ExecInvocation',
+        commandRef: ref,
+        withClause: null
+      };
+    }
+
+VariableForPipeline "variable reference for pipeline"
+  = "@" id:BaseIdentifier !"(" fields:AnyFieldAccess* {
+      // Same as VariableNoTail but without the negative lookahead
+      const normalizedId = helpers.normalizePathVar(id);
+      return helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: normalizedId,
+        ...(fields.length > 0 ? { fields: fields } : {})
+      }, location());
     }
 
 // =============================================================================

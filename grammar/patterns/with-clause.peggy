@@ -62,11 +62,12 @@ PipelineCommandList
     }
 
 // Single pipeline command (command reference with @input support)
+// Uses UnifiedReferenceForPipeline to prevent nested pipelines
 PipelineCommand
-  = ref:UnifiedReferenceNoTail {
+  = ref:UnifiedReferenceForPipeline {
       helpers.debug('PipelineCommand matched unified reference', { ref });
       
-      // Handle both ExecInvocation and VariableReference types from unified patterns
+      // Handle ExecInvocation, VariableReferenceWithTail, and VariableReference types
       if (ref.type === 'ExecInvocation') {
         return {
           identifier: ref.commandRef.identifier,
@@ -77,6 +78,17 @@ PipelineCommand
             arg.type === NodeType.Text ? arg.content : 
             arg.type === NodeType.VariableReference ? '@' + arg.identifier : ''
           ) : []
+        };
+      } else if (ref.type === 'VariableReferenceWithTail') {
+        // Variable with tail modifiers - should not happen in pipeline context
+        // Extract just the variable part and ignore the tail
+        const variable = ref.variable;
+        return {
+          identifier: [variable],
+          args: [],
+          fields: variable.fields || [],
+          rawIdentifier: variable.identifier,
+          rawArgs: []
         };
       } else {
         // Plain variable reference
