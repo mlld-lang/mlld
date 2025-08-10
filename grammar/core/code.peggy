@@ -137,8 +137,11 @@ RunLanguageCodeCore
 
 // This pattern is used by run.peggy where arguments can appear after the language
 RunLanguageCodeWithArgs
-  = language:RunCodeLanguage _ args:RunCodeArguments _ code:UnifiedCodeBrackets {
-      helpers.debug('RunLanguageCodeWithArgs matched', { language, args, code });
+  = language:RunCodeLanguage _ argList:UnifiedArgumentList _ code:UnifiedCodeBrackets {
+      helpers.debug('RunLanguageCodeWithArgs matched', { language, argList, code });
+      
+      // Extract arguments from unified argument list
+      const args = argList.arguments || [];
       
       // Create language node
       const langNode = helpers.createNode(NodeType.Text, { content: language, location: location() });
@@ -150,7 +153,7 @@ RunLanguageCodeWithArgs
       // Build values and raw objects
       const values = {
         lang: [langNode],
-        args: args || [],
+        args,
         code: [codeNode]
       };
       
@@ -203,19 +206,4 @@ RunCodeLanguage
       return language;
     }
 
-// Optional arguments for code blocks
-RunCodeArguments
-  = "(" _ args:RunArgumentList? _ ")" {
-      return args || [];
-    }
-
-RunArgumentList
-  = first:RunArgument rest:(_ "," _ arg:RunArgument { return arg; })* {
-      return [first, ...rest];
-    }
-
-RunArgument
-  = varRef:VariableNoTail {
-      // For /run, we need actual variable references (@var), not parameter names
-      return varRef;
-    }
+// Legacy argument patterns removed - using UnifiedArgumentList directly where needed

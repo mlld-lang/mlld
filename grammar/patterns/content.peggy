@@ -138,14 +138,17 @@ SingleQuotedCommandContent
 
 // Function call in backtick template
 BacktickExecInvocation
-  = "@" name:BaseIdentifier &"(" args:CommandArgs {
-      helpers.debug('BacktickExecInvocation matched', { name, args });
+  = "@" name:BaseIdentifier &"(" argList:UnifiedArgumentList {
+      helpers.debug('BacktickExecInvocation matched', { name, argList });
+      
+      // Extract arguments from unified argument list
+      const args = argList.arguments || [];
       
       // Create an exec invocation node
       const commandRef = {
         name,
         identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
-        args: args || [],
+        args,
         isCommandReference: true
       };
       

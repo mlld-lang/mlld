@@ -703,18 +703,10 @@ AsNewTitle
 
 // Helper rule for template invocation arguments
 // Using standard list pattern from patterns/lists.peggy
-TemplateArgumentList
-  = first:TemplateArgument rest:(CommaSpace arg:TemplateArgument { return arg; })* {
-      return [first, ...rest];
-    }
-
-TemplateArgument
-  = str:QuotedStringContent {
-      return { type: 'string', value: str };
-    }
-  / "@" varRef:ShowVariableReference {
-      return { type: 'variable', value: varRef };
-    }
+// Legacy patterns - to be removed in Phase 4
+// Temporary compatibility wrappers
+TemplateArgumentList = UnifiedArgumentListItems
+TemplateArgument = UnifiedArgument
 
 // Helper for quoted strings in template arguments
 QuotedStringContent

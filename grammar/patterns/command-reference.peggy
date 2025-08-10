@@ -6,68 +6,40 @@
 // Shared command reference pattern
 // Matches: commandName(arg1, arg2, @var)
 CommandReference "command reference"
-  = name:BaseIdentifier _ args:CommandArgs? {
-      helpers.debug('CommandReference matched', { name, args });
+  = name:BaseIdentifier _ argList:UnifiedArgumentList? {
+      helpers.debug('CommandReference matched', { name, argList });
+      
+      // Extract arguments from unified argument list
+      const args = argList ? (argList.arguments || []) : [];
+      
       return {
         name,
         identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
-        args: args || [],
+        args,
         isCommandReference: true
       };
     }
 
-// Arguments for command references
-CommandArgs "command arguments"
-  = "(" _ args:CommandArgumentList? _ ")" {
-      return args || [];
-    }
+// Legacy argument patterns removed - using UnifiedArgumentList directly
 
-CommandArgumentList "command arguments list"
-  = first:CommandArgument rest:(_ "," _ arg:CommandArgument { return arg; })* {
-      // Filter out null arguments (from empty raw arguments)
-      const args = [first, ...rest].filter(arg => arg !== null);
-      return args;
-    }
-
-CommandArgument "command argument"
-  = CommandTemplateArgument     // Template arguments ::...::
-  / BacktickTemplateArgument    // Backtick templates `...`
-  / NestedExecInvocation       // Nested function calls @func(args)
-  / DataObjectLiteral           // Object literals: {"key": "value"}
-  / ArrayLiteral                // Arrays: [1, 2, 3]
-  / AlligatorExpression         // File loading: <file.md>
-  / str:DataString {
-      // Create a Text node directly
-      // Handle both simple strings and interpolated content
-      if (typeof str === 'string') {
-        return helpers.createNode(NodeType.Text, {
-          content: str,
-          location: location()
-        });
-      } else if (str.needsInterpolation) {
-        // Return the parts for runtime interpolation
-        return str.parts;
-      }
-    }
-  / varRef:VariableNoTail {  // Use unified variable pattern for command context
-      // Return the VariableReference directly
-      return varRef;
-    }
-  / PrimitiveValue       // Direct primitives: 42, true, false, null
-  / EscapedArgument      // Escaped characters in unquoted arguments
-  / RawArgument          // Fallback for unquoted arguments
+// Temporary compatibility wrappers
+CommandArgumentList "command arguments list" = UnifiedArgumentListItems
+CommandArgument "command argument" = UnifiedArgument
 
 
 // Nested function call in command arguments
 NestedExecInvocation "nested exec invocation"
-  = "@" name:BaseIdentifier args:CommandArgs {
-      helpers.debug('NestedExecInvocation matched', { name, args });
+  = "@" name:BaseIdentifier argList:UnifiedArgumentList {
+      helpers.debug('NestedExecInvocation matched', { name, argList });
+      
+      // Extract arguments from unified argument list
+      const args = argList.arguments || [];
       
       // Create a command reference
       const ref = {
         name,
         identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
-        args: args || [],
+        args,
         isCommandReference: true
       };
       

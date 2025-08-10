@@ -242,27 +242,4 @@ SlashOutput
 // This provides consistent output source handling across all directive contexts
 
 
-// Arguments for templates/commands
-OutputArguments
-  = "(" _ args:OutputArgumentList? _ ")" {
-      return args || [];
-    }
-
-// Argument list
-OutputArgumentList
-  = first:OutputArgument rest:(CommaSpace arg:OutputArgument { return arg; })* {
-      return [first, ...rest];
-    }
-
-// Individual argument
-OutputArgument
-  = str:DataString {
-      return helpers.createNode(NodeType.Text, { content: str, location: location() });
-    }
-  / varRef:Variable {
-      return varRef;
-    }
-  / val:$([^,)]+) {
-      // Plain value (raw argument)
-      return helpers.createNode(NodeType.Text, { content: val.trim(), location: location() });
-    }
+// Legacy argument patterns removed - use UnifiedArgumentList directly where needed

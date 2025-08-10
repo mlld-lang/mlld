@@ -127,14 +127,17 @@ UnifiedBacktickInterpolation "Backtick interpolation content"
 
 // Function call in backtick template
 UnifiedBacktickExecInvocation
-  = "@" name:BaseIdentifier &"(" args:CommandArgs {
-      helpers.debug('UnifiedBacktickExecInvocation matched', { name, args });
+  = "@" name:BaseIdentifier &"(" argList:UnifiedArgumentList {
+      helpers.debug('UnifiedBacktickExecInvocation matched', { name, argList });
+      
+      // Extract arguments from unified argument list
+      const args = argList.arguments || [];
       
       // Create an exec invocation node
       const commandRef = {
         name,
         identifier: [helpers.createNode(NodeType.Text, { content: name, location: location() })],
-        args: args || [],
+        args,
         isCommandReference: true
       };
       

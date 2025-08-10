@@ -419,33 +419,5 @@ RunDirectiveRef
 // -------------------------------------------------------------
 
 
-// Arguments for command references
-RunCommandArguments
-  = "(" _ args:RunCommandArgumentList? _ ")" {
-      return args || [];
-    }
-
-// Using standard list pattern from patterns/lists.peggy
-RunCommandArgumentList
-  = first:RunCommandArgument rest:(CommaSpace arg:RunCommandArgument { return arg; })* {
-      return [first, ...rest];
-    }
-
-RunCommandArgument
-  = str:StringLiteral {
-      // Create a Text node directly
-      return helpers.createNode(NodeType.Text, { content: str, location: location() });
-    }
-  / varRef:SpecialVariable {
-      // Special variables like @INPUT work without context
-      return varRef;
-    }
-  / varRef:VariableNoTail {
-      // Direct variable reference without context check for arguments
-      return varRef;
-    }
-  / val:$([^,)]+) {
-      // Plain value - create a Text node directly
-      return helpers.createNode(NodeType.Text, { content: val.trim(), location: location() });
-    }
+// Legacy patterns removed - use UnifiedArgumentList directly where needed
 
