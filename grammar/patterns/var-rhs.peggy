@@ -25,9 +25,13 @@ VarRHSContent "var assignment value"
 // Expression that definitely has an operator (to avoid matching simple variables)
 ExpressionWithOperator
   = &{
-      // Look ahead to see if there's an operator somewhere
+      // Look ahead to see if there's an operator somewhere IN THE CURRENT DIRECTIVE
+      // Stop at: newline, next directive (/), or comment (>>)
       const rest = input.substring(peg$currPos);
-      return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?|!))|(\s*\?\s*[^:]+\s*:)/.test(rest);
+      // Only look within the current line/directive context
+      const endOfContext = rest.search(/[\n\r]|(?:^|\s)\/\w+|(?:^|\s)>>/);
+      const contextToSearch = endOfContext === -1 ? rest : rest.substring(0, endOfContext);
+      return /(\s*(&&|\|\||==|!=|<=|>=|<|>|\?|!))|(\s*\?\s*[^:]+\s*:)/.test(contextToSearch);
     }
     expr:Expression {
       return expr;
@@ -59,6 +63,8 @@ AlligatorWithFields "alligator with field access"
     }
 
 // TEMPLATE WITH PIPELINE - Handles template content (quoted/backtick) followed by pipes
+// Note: We use HWS (horizontal whitespace) before the first pipe to prevent matching
+// pipes on the next line unless they're intentionally continued
 TemplateWithPipeline "template with pipeline"
   = template:UnifiedQuoteOrTemplate pipes:SpacedOrCondensedPipeChain {
       helpers.debug('TemplateWithPipeline matched', { 
