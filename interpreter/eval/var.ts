@@ -841,9 +841,11 @@ export async function evaluateVar(
   // Skip pipeline processing if:
   // 1. This is an ExecInvocation with a withClause (already processed by evaluateExecInvocation)
   // 2. This is a VariableReference with pipes (already processed above around line 406)
+  // 3. This is a load-content node with pipes (already processed by content-loader)
   let result = variable;
   const skipPipeline = (valueNode && valueNode.type === 'ExecInvocation' && valueNode.withClause) ||
-                       (valueNode && valueNode.type === 'VariableReference' && valueNode.pipes);
+                       (valueNode && valueNode.type === 'VariableReference' && valueNode.pipes) ||
+                       (valueNode && valueNode.type === 'load-content' && valueNode.pipes);
   
   if (!skipPipeline) {
     // Process through unified pipeline (handles detection, validation, execution)
