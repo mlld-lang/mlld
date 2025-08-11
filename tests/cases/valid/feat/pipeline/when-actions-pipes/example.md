@@ -10,7 +10,7 @@
 /when @status == "active" => /show @message | @toUpper
 
 >> Test 2: When with multiple conditions and piped actions
-/var @level = 5
+/var @level = 6
 /when first [
   @level > 10 => show "high" | @toUpper | @addPrefix
   @level > 5 => show "medium" | @toUpper

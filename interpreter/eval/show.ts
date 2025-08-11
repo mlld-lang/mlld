@@ -67,10 +67,17 @@ export async function evaluateShow(
         throw new Error('Show variable directive missing variable reference');
       }
       variableNode = legacyVariable[0];
-      if (!variableNode || variableNode.type !== 'VariableReference') {
+      
+      // Handle both VariableReference and VariableReferenceWithTail
+      if (variableNode.type === 'VariableReferenceWithTail') {
+        // Extract the actual variable reference and handle pipeline later
+        varName = variableNode.variable.identifier;
+        // The pipeline will be handled through variableNode.withClause.pipeline
+      } else if (variableNode.type === 'VariableReference') {
+        varName = variableNode.identifier;
+      } else {
         throw new Error('Show variable directive missing variable reference');
       }
-      varName = variableNode.identifier;
     } else {
       throw new Error('Show variable directive missing variable reference');
     }
@@ -310,6 +317,12 @@ export async function evaluateShow(
     } else {
       // Handle null/undefined
       content = '';
+    }
+    
+    // Handle pipeline from VariableReferenceWithTail if present
+    if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
+      const { executePipeline } = await import('./pipeline');
+      content = await executePipeline(content, variableNode.withClause.pipeline, env);
     }
     
     

@@ -565,7 +565,8 @@ WhenActionDirective
         kind: 'show',
         subtype: subtype,
         values: { 
-          [isExecInvocation ? 'execInvocation' : 'variable']: invocation
+          // CRITICAL: Must wrap in array for consistency with show.peggy
+          [isExecInvocation ? 'execInvocation' : 'variable']: isExecInvocation ? invocation : [invocation]
         },
         raw: { 
           [isExecInvocation ? 'execInvocation' : 'variable']: rawValue
@@ -586,6 +587,7 @@ WhenActionDirective
       return [helpers.createNode(NodeType.Directive, {
         kind: 'show',
         subtype: 'showTemplate',
+        source: 'template',  // CRITICAL: Must set source field for showTemplate
         values: values,
         raw: raw,
         meta: meta,
@@ -989,6 +991,7 @@ WhenImplicitRichContent
       return [helpers.createNode(NodeType.Directive, {
         kind: 'show',
         subtype: 'showTemplate',
+        source: 'template',  // CRITICAL: Must set source field for showTemplate
         values: template.values,
         raw: template.raw,
         meta: {
