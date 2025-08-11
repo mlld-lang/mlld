@@ -365,17 +365,61 @@ export class PipelineStateMachine {
     const targetStage = fromOverride ?? Math.max(0, stage - 1);
     
     // Special case: Stage 0 trying to retry would mean retrying its source
-    // This is only allowed if the source was a function (retryable)
-    if (targetStage === 0 && stage === 1 && !this.isStage0Retryable) {
+    // When stage 0 requests retry, it means retrying itself (re-executing source function)
+    if (stage === 0 && targetStage === 0) {
+      if (!this.isStage0Retryable) {
+        return this.handleAbort(
+          `Stage 0 cannot retry: Input is not a function and cannot be retried`
+        );
+      }
+      
+      // Check retry limits for stage 0 self-retry
+      const globalRetries = this.state.globalStageRetryCount.get(0) || 0;
+      if (globalRetries >= this.maxGlobalRetriesPerStage) {
+        return this.handleAbort(
+          `Stage 0 exceeded global retry limit (${this.maxGlobalRetriesPerStage})`
+        );
+      }
+      
+      // For stage 0 self-retry, use a special "root" context and track retries there
+      const rootContextId = 'root';
+      const rootRetries = this.countRetriesForStageInContext(0, rootContextId);
+      if (rootRetries >= this.maxRetriesPerContext) {
+        return this.handleAbort(
+          `Stage 0 exceeded retry limit (${this.maxRetriesPerContext})`
+        );
+      }
+      
+      // Increment retry counts
+      this.incrementRetryCount(rootContextId, 0);
+      this.state.globalStageRetryCount.set(0, globalRetries + 1);
+      
+      // Record retry event
+      this.recordEvent({
+        type: 'STAGE_RETRY_REQUEST',
+        requestingStage: 0,
+        targetStage: 0,
+        contextId: rootContextId
+      });
+      
+      // Re-execute stage 0
+      this.recordEvent({
+        type: 'STAGE_START',
+        stage: 0,
+        input: this.state.baseInput,
+        contextId: rootContextId
+      });
+      
+      return {
+        type: 'EXECUTE_STAGE',
+        stage: 0,
+        input: this.state.baseInput,
+        context: this.buildStageContext(0)
+      };
+    } else if (targetStage === 0 && stage === 1 && !this.isStage0Retryable) {
+      // Stage 1 trying to retry stage 0 when it's not retryable
       return this.handleAbort(
         `Cannot retry stage 0: Input is not a function and cannot be retried`
-      );
-    }
-    
-    // Stage 0 cannot retry anything (it has no previous stage)
-    if (stage === 0 && targetStage < 0) {
-      return this.handleAbort(
-        `Stage 0 cannot request retry: No previous stage exists`
       );
     }
     
@@ -400,11 +444,14 @@ export class PipelineStateMachine {
       );
     }
     
-    // Check per-context retry limit for target stage
-    const contextRetries = this.countRetriesForStageInContext(targetStage, newContextId);
-    if (contextRetries >= this.maxRetriesPerContext) {
+    // Check per-context retry limit
+    // We need to check how many times the REQUESTING stage has retried in its context
+    // (not the target stage in the new context, which would always be 0)
+    const currentContextId = currentContext?.id || 'root';
+    const requestingStageRetries = this.countRetriesForStageInContext(stage, currentContextId);
+    if (requestingStageRetries >= this.maxRetriesPerContext) {
       return this.handleAbort(
-        `Stage ${targetStage} exceeded retry limit in context ${newContextId}`
+        `Stage ${stage} exceeded retry limit in context ${currentContextId}`
       );
     }
     
@@ -421,7 +468,9 @@ export class PipelineStateMachine {
     this.state.activeContexts.push(newContext);
     
     // Increment retry counts
-    this.incrementRetryCount(newContextId, targetStage);
+    // Increment the requesting stage's count in the current context
+    this.incrementRetryCount(currentContextId, stage);
+    // Also track global retries for the target stage
     this.state.globalStageRetryCount.set(targetStage, globalRetries + 1);
     
     // Calculate input for retry
@@ -596,8 +645,22 @@ export class PipelineStateMachine {
       }
     }
     
-    // Get this stage's history (all successful outputs from this stage)
-    const stageHistory = EventQuery.okOutputsForStage(events, stage);
+    // Get this stage's history IN CURRENT CONTEXT ONLY
+    // This ensures @pipeline.tries is context-local
+    const currentContext = this.getCurrentContext();
+    const contextId = currentContext?.id;
+    const stageHistory: string[] = [];
+    
+    if (contextId) {
+      // Only include outputs from current context
+      for (const event of events) {
+        if (event.type === 'STAGE_SUCCESS' && 
+            event.stage === stage && 
+            event.contextId === contextId) {
+          stageHistory.push(event.output);
+        }
+      }
+    }
     
     // Count global attempts for this stage (across all contexts)
     const globalStageRetries = this.countGlobalRetriesForStage(stage);

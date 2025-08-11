@@ -43,6 +43,10 @@ export interface VariableMetadata extends Record<string, any> {
   isPipelineInput?: boolean;
   pipelineStage?: number;
   
+  // Retryability tracking for pipelines
+  isRetryable?: boolean; // true if variable came from function execution
+  sourceFunction?: any;  // Reference to the original function for re-execution
+  
   // Array-specific metadata
   arrayType?: 'renamed-content' | 'load-content-result' | 'regular';
   joinSeparator?: string; // '\n\n' for special arrays

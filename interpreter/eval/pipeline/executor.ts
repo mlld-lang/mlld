@@ -42,10 +42,22 @@ export class PipelineExecutor {
     while (nextStep.type === 'EXECUTE_STAGE') {
       iteration++;
       
+      // Special handling for stage 0 retry - re-execute source function
+      let stageInput = nextStep.input;
+      if (nextStep.stage === 0 && nextStep.context.contextAttempt > 1) {
+        if (this.sourceFunction) {
+          // Re-execute the source function to get fresh input
+          stageInput = await this.sourceFunction();
+        } else if (!this.isRetryable) {
+          // This shouldn't happen as state machine should check, but be safe
+          throw new Error('Cannot retry stage 0: Input is not a function and cannot be retried');
+        }
+      }
+      
       const command = this.pipeline[nextStep.stage];
       const result = await this.executeStage(
         command,
-        nextStep.input,
+        stageInput,
         nextStep.context
       );
 

@@ -87,6 +87,31 @@ export async function processPipeline(
   // Prepare input value for pipeline
   const input = await prepareInput(value, env);
   
+  // Create source function for retrying stage 0 if applicable
+  let sourceFunction: (() => Promise<string>) | undefined;
+  if (detected.isRetryable && value?.metadata?.sourceFunction) {
+    // Create a function that re-executes the source AST node
+    const sourceNode = value.metadata.sourceFunction;
+    sourceFunction = async () => {
+      // Re-evaluate the source node to get fresh input
+      if (sourceNode.type === 'ExecInvocation') {
+        const { evaluateExecInvocation } = await import('../exec-invocation');
+        const result = await evaluateExecInvocation(sourceNode, env);
+        return String(result.value);
+      } else if (sourceNode.type === 'command') {
+        const { evaluateCommand } = await import('../run');
+        const result = await evaluateCommand(sourceNode, env);
+        return String(result.value);
+      } else if (sourceNode.type === 'code') {
+        const { evaluateCodeExecution } = await import('../code-execution');
+        const result = await evaluateCodeExecution(sourceNode, env);
+        return String(result.value);
+      }
+      // Fallback - return original input
+      return input;
+    };
+  }
+  
   // Execute pipeline
   try {
     const result = await executePipeline(
@@ -95,7 +120,8 @@ export async function processPipeline(
       env,
       context.location,
       detected.format,
-      detected.isRetryable
+      detected.isRetryable,
+      sourceFunction
     );
     
     // TODO: Type preservation - convert string result back to appropriate type

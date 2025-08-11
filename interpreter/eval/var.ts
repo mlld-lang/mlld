@@ -560,8 +560,13 @@ export async function evaluateVar(
   const metadata: any = { definedAt: location };
   
   // Mark if value came from a function for pipeline retryability
-  if (valueNode && valueNode.type === 'ExecInvocation') {
-    metadata.isFromFunction = true;
+  if (valueNode && (
+    valueNode.type === 'ExecInvocation' || 
+    valueNode.type === 'command' || 
+    valueNode.type === 'code'
+  )) {
+    metadata.isRetryable = true;
+    metadata.sourceFunction = valueNode; // Store the AST node for re-execution
   }
 
   let variable: Variable;
@@ -855,7 +860,8 @@ export async function evaluateVar(
       node: valueNode,
       directive,
       identifier,
-      location: directive.location
+      location: directive.location,
+      isRetryable: variable.metadata?.isRetryable || false
     });
   }
   

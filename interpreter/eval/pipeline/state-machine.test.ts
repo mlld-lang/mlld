@@ -180,31 +180,31 @@ describe('PipelineStateMachine - Event Sourced', () => {
     it('should enforce per-stage retry limit', () => {
       const sm = new PipelineStateMachine(2, true); // Mark stage 0 as retryable
       
-      sm.transition({ type: 'START', input: 'base' });
+      // Start pipeline
+      const start = sm.transition({ type: 'START', input: 'base' });
+      expect(start.type).toBe('EXECUTE_STAGE');
+      expect(start.stage).toBe(0);
       
-      // Stage 0 would retry itself - needs special handling
-      // For now, test it hits limit when retrying itself
-      // This will fail until we add special stage 0 handling
-      for (let i = 0; i < 10; i++) {
+      // Stage 0 keeps retrying itself (simulating function re-execution)
+      let aborted = false;
+      for (let i = 0; i < 15; i++) { // Try more than limit
         const next = sm.transition({ 
           type: 'STAGE_RESULT', 
           result: { type: 'retry' }
         });
-        if (next.type === 'EXECUTE_STAGE') {
-          expect(next.context.attempt).toBe(i + 2);
+        
+        if (next.type === 'ABORT') {
+          // Should hit retry limit eventually
+          aborted = true;
+          expect(next.reason).toContain('exceeded retry limit');
+          break;
+        } else if (next.type === 'EXECUTE_STAGE') {
+          // Still retrying
+          expect(next.stage).toBe(0); // Should be retrying stage 0
         }
       }
       
-      // Should eventually hit retry limit
-      // Note: this test may need adjustment based on stage 0 retry semantics
-      const finalState = sm.getStatus();
-      if (finalState === 'FAILED') {
-        // Expected if we hit retry limit
-        expect(finalState).toBe('FAILED');
-      } else {
-        // Mark as needs investigation
-        expect(finalState).toMatch(/FAILED|RUNNING/);
-      }
+      expect(aborted).toBe(true);
     });
 
     it('should track retries per stage independently', () => {
@@ -224,17 +224,17 @@ describe('PipelineStateMachine - Event Sourced', () => {
       // Stage 1 finally succeeds
       sm.transition({ type: 'STAGE_RESULT', result: { type: 'success', output: 's1' }});
       
-      // Stage 2 retries stage 1 up to 10 times
-      for (let i = 0; i < 10; i++) {
+      // Stage 2 retries stage 1 up to limit
+      for (let i = 0; i < 11; i++) { // Try 11 times (10 is the limit)
         const next = sm.transition({ type: 'STAGE_RESULT', result: { type: 'retry' }});
-        if (i < 9) {
+        if (i < 10) {
           expect(next.type).toBe('EXECUTE_STAGE');
           // Stage 1 succeeds each time
           sm.transition({ type: 'STAGE_RESULT', result: { type: 'success', output: `s1-v${i+2}` }});
         } else {
           // 11th retry should fail (per-context limit)
           expect(next.type).toBe('ABORT');
-          expect(next.reason).toContain('exceeded retry limit in context');
+          expect(next.reason).toContain('exceeded retry limit');
         }
       }
     });
@@ -315,7 +315,7 @@ describe('PipelineStateMachine - Event Sourced', () => {
     });
 
     it('should record STAGE_START on retry', () => {
-      const sm = new PipelineStateMachine(2);
+      const sm = new PipelineStateMachine(2, true); // Mark stage 0 as retryable
       
       sm.transition({ type: 'START', input: 'base' });
       sm.transition({ type: 'STAGE_RESULT', result: { type: 'retry' }});
@@ -332,6 +332,7 @@ describe('PipelineStateMachine - Event Sourced', () => {
       expect(stageStarts[1].type).toBe('STAGE_START');
       expect(stageStarts[1].stage).toBe(0);
       expect(stageStarts[1].input).toBe('base');
+      expect(stageStarts[1].contextId).toBe('root'); // Stage 0 uses 'root' context
     });
   });
 
