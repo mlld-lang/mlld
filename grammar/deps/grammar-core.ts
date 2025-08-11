@@ -1221,5 +1221,25 @@ export const helpers = {
     }
     traverse(expr);
     return [...new Set(variables)];
+  },
+
+  /**
+   * Unified pipeline processing helper
+   * Consolidates pipeline handling across directive contexts
+   */
+  processPipelineEnding(values: any, raw: any, meta: any, ending: any): void {
+    // Add pipeline from ending if present
+    if (ending.tail) {
+      values.pipeline = ending.tail.pipeline;
+      raw.pipeline = ending.tail.pipeline.map((cmd: any) => 
+        `@${cmd.rawIdentifier || cmd.name || cmd}`
+      ).join(' | ');
+      meta.hasPipeline = true;
+    }
+    
+    // Add comment from ending if present
+    if (ending.comment) {
+      meta.comment = ending.comment;
+    }
   }
 };

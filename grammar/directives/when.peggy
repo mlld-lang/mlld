@@ -574,26 +574,14 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "/"? "show" _ template:TemplateCore ending:TailModifiers? {
-      // Use the same abstraction as /show directive, including pipeline support
-      const values = {
-        ...template.values
-      };
+  / "/"? "show" _ template:TemplateCore ending:StandardDirectiveEnding {
+      // Use the same abstraction and pipeline handling as standalone /show directives
+      const values = { ...template.values };
+      const raw = { ...template.raw };
+      const meta = { ...template.meta };
       
-      const raw = {
-        ...template.raw
-      };
-      
-      const meta = {
-        ...template.meta
-      };
-      
-      // Add pipeline from ending if present
-      if (ending) {
-        values.pipeline = ending.pipeline;
-        raw.pipeline = ending.pipeline.map(cmd => `@${cmd.rawIdentifier || cmd.name || cmd}`).join(' | ');
-        meta.hasPipeline = true;
-      }
+      // Apply unified pipeline processing (consolidates with show.peggy)
+      helpers.processPipelineEnding(values, raw, meta, ending);
       
       return [helpers.createNode(NodeType.Directive, {
         kind: 'show',

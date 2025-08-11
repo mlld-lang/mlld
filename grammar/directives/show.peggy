@@ -222,17 +222,8 @@ SlashShow
         ...helpers.createSecurityMeta(securityOptions)
       };
       
-      // Add comment from ending if present
-      if (ending.comment) {
-        meta.comment = ending.comment;
-      }
-      
-      // Add pipeline from ending if present
-      if (ending.tail) {
-        values.pipeline = ending.tail.pipeline;
-        raw.pipeline = ending.tail.pipeline.map(cmd => `@${cmd.rawIdentifier || cmd.name || cmd}`).join(' | ');
-        meta.hasPipeline = true;
-      }
+      // Apply unified pipeline processing (consolidates with when.peggy)
+      helpers.processPipelineEnding(values, raw, meta, ending);
       
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
