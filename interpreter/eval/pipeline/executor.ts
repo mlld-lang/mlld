@@ -14,26 +14,43 @@ export class PipelineExecutor {
   private pipeline: PipelineCommand[];
   private isRetryable: boolean;
   private sourceFunction?: () => Promise<string>; // Store source function for retries
+  private hasSyntheticSource: boolean;
+  private sourceExecutedOnce: boolean = false; // Track if source has been executed once
+  private initialInput: string = ''; // Store initial input for synthetic source
 
   constructor(
     pipeline: PipelineCommand[],
     env: Environment,
     format?: string,
     isRetryable: boolean = false,
-    sourceFunction?: () => Promise<string>
+    sourceFunction?: () => Promise<string>,
+    hasSyntheticSource: boolean = false
   ) {
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[PipelineExecutor] Constructor:', {
+        pipelineLength: pipeline.length,
+        pipelineStages: pipeline.map(p => p.rawIdentifier || 'unknown'),
+        isRetryable,
+        hasSourceFunction: !!sourceFunction,
+        hasSyntheticSource
+      });
+    }
     this.stateMachine = new PipelineStateMachine(pipeline.length, isRetryable);
     this.pipeline = pipeline;
     this.env = env;
     this.format = format;
     this.isRetryable = isRetryable;
     this.sourceFunction = sourceFunction;
+    this.hasSyntheticSource = hasSyntheticSource;
   }
 
   /**
    * Execute the pipeline
    */
   async execute(initialInput: string): Promise<string> {
+    // Store initial input for synthetic source stage
+    this.initialInput = initialInput;
+    
     // Start the pipeline
     let nextStep = this.stateMachine.transition({ type: 'START', input: initialInput });
     let iteration = 0;
@@ -42,24 +59,27 @@ export class PipelineExecutor {
     while (nextStep.type === 'EXECUTE_STAGE') {
       iteration++;
       
-      // Special handling for stage 0 retry - re-execute source function
-      let stageInput = nextStep.input;
-      if (nextStep.stage === 0 && nextStep.context.contextAttempt > 1) {
-        if (this.sourceFunction) {
-          // Re-execute the source function to get fresh input
-          stageInput = await this.sourceFunction();
-        } else if (!this.isRetryable) {
-          // This shouldn't happen as state machine should check, but be safe
-          throw new Error('Cannot retry stage 0: Input is not a function and cannot be retried');
-        }
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[PipelineExecutor] Execute stage:', {
+          stage: nextStep.stage,
+          contextId: nextStep.context.contextId,
+          contextAttempt: nextStep.context.contextAttempt,
+          inputLength: nextStep.input?.length,
+          commandId: this.pipeline[nextStep.stage]?.rawIdentifier
+        });
       }
       
       const command = this.pipeline[nextStep.stage];
       const result = await this.executeStage(
         command,
-        stageInput,
+        nextStep.input,
         nextStep.context
       );
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        const ev = this.stateMachine.getEvents().slice(-1)[0];
+        console.error('[PipelineExecutor] last event:', ev);
+      }
 
       // Let state machine decide next step
       nextStep = this.stateMachine.transition({ 
@@ -123,7 +143,8 @@ export class PipelineExecutor {
         context, 
         this.env, 
         this.format,
-        this.stateMachine.getEvents() // Pass events for global context
+        this.stateMachine.getEvents(), // Pass events for global context
+        this.hasSyntheticSource
       );
       
       // Execute the command
@@ -158,6 +179,37 @@ export class PipelineExecutor {
     input: string,
     stageEnv: Environment
   ): Promise<string> {
+    // Special handling for synthetic __source__ stage
+    if (command.rawIdentifier === '__source__') {
+      const firstTime = !this.sourceExecutedOnce;
+      this.sourceExecutedOnce = true;
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[PipelineExecutor] Executing __source__ stage:', {
+          firstTime,
+          hasSourceFunction: !!this.sourceFunction,
+          isRetryable: this.isRetryable
+        });
+      }
+      
+      if (firstTime) {
+        // First execution - return the already-computed initial input
+        return this.initialInput;
+      }
+      
+      // Retry execution - need to call source function
+      if (!this.sourceFunction) {
+        throw new Error('Cannot retry stage 0: Input is not a function and cannot be retried');
+      }
+      
+      // Re-execute the source function to get fresh input
+      const fresh = await this.sourceFunction();
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[PipelineExecutor] Source function returned fresh input:', fresh);
+      }
+      return fresh;
+    }
+    
     // Resolve the command reference
     const commandVar = await this.resolveCommandReference(command, stageEnv);
     

@@ -21,7 +21,10 @@
   * => "quality-control-failed"
 ]
 
+# Create a retryable source
+/exe @getTestData() = "test-data"
+
 # Test retry mechanism in when expressions
-/var @result = "test-data" with { pipeline: [@scoreGenerator(@p.try), @validateScore, @qualityControl] }
+/var @result = @getTestData() with { pipeline: [@scoreGenerator(@p.try), @validateScore, @qualityControl] }
 
 /show @result

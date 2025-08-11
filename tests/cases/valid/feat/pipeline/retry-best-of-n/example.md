@@ -34,7 +34,10 @@
   * => @selectBest(@input, @p)
 ]
 
+# Create a retryable source
+/exe @getPrompt() = "prompt"
+
 # Test best-of-N pattern: generate 5 variations and select the best
-/var @result = "prompt" with { pipeline: [@generateVariation(@p), @collectFiveAttempts] }
+/var @result = @getPrompt() with { pipeline: [@generateVariation(@p), @collectFiveAttempts] }
 
 /show @result

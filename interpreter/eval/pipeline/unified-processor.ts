@@ -65,13 +65,18 @@ export async function processPipeline(
   } else {
     // Auto-detect from node/directive
     detected = detectPipeline(node, directive);
+    // Allow explicit override of retryability
+    if (detected && context.isRetryable !== undefined) {
+      detected.isRetryable = context.isRetryable;
+    }
     if (process.env.MLLD_DEBUG === 'true' && identifier) {
       console.log('[processPipeline] Detection result:', {
         identifier,
         nodeType: node?.type,
         hasDetected: !!detected,
         source: detected?.source,
-        pipelineLength: detected?.pipeline?.length
+        pipelineLength: detected?.pipeline?.length,
+        isRetryable: detected?.isRetryable
       });
     }
   }
@@ -81,8 +86,33 @@ export async function processPipeline(
     return value;
   }
   
-  // Validate pipeline functions exist
-  await validatePipeline(detected.pipeline, env, identifier);
+  // Create synthetic source stage if we have a retryable source
+  const SOURCE_STAGE: PipelineCommand = {
+    rawIdentifier: '__source__',
+    identifier: [],
+    args: [],
+    fields: [],
+    rawArgs: []
+  };
+  
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.error('[processPipeline] Checking for synthetic source:', {
+      isRetryable: detected.isRetryable,
+      hasValue: !!value,
+      hasMetadata: !!(value && typeof value === 'object' && 'metadata' in value && value.metadata),
+      hasSourceFunction: !!(value && typeof value === 'object' && 'metadata' in value && value.metadata && value.metadata.sourceFunction),
+      valueType: value && typeof value === 'object' && 'type' in value ? value.type : typeof value
+    });
+  }
+  
+  // Normalize pipeline - prepend source stage if retryable
+  const normalizedPipeline = detected.isRetryable && value?.metadata?.sourceFunction
+    ? [SOURCE_STAGE, ...detected.pipeline]
+    : detected.pipeline;
+  
+  // Validate pipeline functions exist (skip __source__ stage)
+  const pipelineToValidate = normalizedPipeline.filter(cmd => cmd.rawIdentifier !== '__source__');
+  await validatePipeline(pipelineToValidate, env, identifier);
   
   // Prepare input value for pipeline
   const input = await prepareInput(value, env);
@@ -112,16 +142,20 @@ export async function processPipeline(
     };
   }
   
-  // Execute pipeline
+  // Store whether we added a synthetic source stage for context adjustment
+  const hasSyntheticSource = normalizedPipeline[0]?.rawIdentifier === '__source__';
+  
+  // Execute pipeline with normalized stages
   try {
     const result = await executePipeline(
       input,
-      detected.pipeline,
+      normalizedPipeline,
       env,
       context.location,
       detected.format,
       detected.isRetryable,
-      sourceFunction
+      sourceFunction,
+      hasSyntheticSource
     );
     
     // TODO: Type preservation - convert string result back to appropriate type
@@ -185,6 +219,14 @@ async function prepareInput(
   value: any,
   env: Environment
 ): Promise<string> {
+  // If it's a wrapped value with metadata (from ExecInvocation with pipeline)
+  if (value && typeof value === 'object' && 'value' in value && 'metadata' in value) {
+    // Extract the actual value, but keep the metadata for sourceFunction
+    const actualValue = value.value;
+    // Recursively prepare the actual value
+    return prepareInput(actualValue, env);
+  }
+  
   // If it's a Variable, extract the value
   if (value && typeof value === 'object' && 'type' in value && 'value' in value) {
     // This is a Variable - extract its value

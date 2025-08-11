@@ -26,7 +26,10 @@ All stages: [${Array.from({length: pipeline.length}, (_, i) => pipeline[i + 1]).
 Current: ${input}`;
 }
 
+# Create a retryable source
+/exe @getOriginalData() = "original-data"
+
 # Test that pipeline context is preserved across all stages including retries
-/var @result = "original-data"|@addMetadata|@contextChecker(@p)|@retryOnce|@finalCheck(@p)
+/var @result = @getOriginalData()|@addMetadata|@contextChecker(@p)|@retryOnce|@finalCheck(@p)
 
 /show @result

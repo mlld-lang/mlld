@@ -16,7 +16,10 @@
 
 /exe @finalStage(input) = `final: @input (stage @pipeline.stage)`
 
+# Create a retryable source
+/exe @getInitial() = "initial"
+
 # Test retry behavior across multiple pipeline stages
-/var @result = "initial"|@stageOne|@retryStageOne|@stageTwo|@retryStageTwo|@finalStage
+/var @result = @getInitial()|@stageOne|@retryStageOne|@stageTwo|@retryStageTwo|@finalStage
 
 /show @result

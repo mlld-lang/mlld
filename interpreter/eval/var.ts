@@ -129,6 +129,16 @@ export async function evaluateVar(
   // For templates with multiple nodes (e.g., ::text {{var}}::), we need the whole array
   const valueNode = valueNodes.length === 1 ? valueNodes[0] : valueNodes;
 
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.error('[var.ts] Extracted valueNode:', {
+      identifier,
+      type: valueNode?.type,
+      isArray: Array.isArray(valueNode),
+      hasWithClause: !!(valueNode?.withClause),
+      hasPipeline: !!(valueNode?.withClause?.pipeline)
+    });
+  }
+
   // Type-based routing based on the AST structure
   let resolvedValue: any;
   const templateAst: any = null; // Store AST for templates that need lazy interpolation
@@ -453,6 +463,12 @@ export async function evaluateVar(
     
   } else if (valueNode && valueNode.type === 'ExecInvocation') {
     // Handle exec function invocations: @getConfig(), @transform(@data)
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[var.ts] Processing ExecInvocation:', {
+        hasWithClause: !!valueNode.withClause,
+        hasPipeline: !!(valueNode.withClause?.pipeline)
+      });
+    }
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(valueNode, env);
     resolvedValue = result.value;
@@ -853,6 +869,16 @@ export async function evaluateVar(
                        (valueNode && valueNode.type === 'load-content' && valueNode.pipes);
   
   if (!skipPipeline) {
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[var.ts] Calling processPipeline:', {
+        identifier,
+        variableType: variable.type,
+        hasMetadata: !!variable.metadata,
+        isRetryable: variable.metadata?.isRetryable || false,
+        hasSourceFunction: !!(variable.metadata?.sourceFunction),
+        sourceNodeType: variable.metadata?.sourceFunction?.type
+      });
+    }
     // Process through unified pipeline (handles detection, validation, execution)
     result = await processPipeline({
       value: variable,

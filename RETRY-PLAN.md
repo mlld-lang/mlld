@@ -1,122 +1,188 @@
-# Retry Implementation Plan
+# Retry Implementation Plan - REVISED
 
 ## Current Status
 - Pipeline consolidation: ✅ Complete
-- Phase 1 (Core Retry Logic): ✅ Complete
+- Phase 1 (Core Retry Logic): ✅ Complete  
 - Phase 2 (Context Scoping): ✅ Complete
-- Phase 3 (Test Updates): 🔄 In Progress
-  - State machine tests: ✅ All passing
-  - Pipeline retry tests: ❌ 9 tests failing (need test case updates)
+- Phase 3 (Test Updates): ✅ Complete (tests updated to use retryable sources)
+- Phase 4 (Source Function Bug): ❌ **Critical Issue Found**
+  - Source functions not being re-executed on retry
+  - Root cause: Pipeline architecture treats source as external to pipeline
+- Phase 5 (Synthetic Stage Solution): 🚧 **In Progress**
 
-## Implementation Completed
+## Problem Analysis
 
-### 1. Stage 0 Retryability Check ✅
-When stage 1 requests retry of stage 0, the system now:
-- Checks if stage 0's input is retryable (came from a function)
-- If retryable: Re-executes the source function
-- If not retryable: Throws error "Input is not a function and cannot be retried"
+### The Core Issue
+When we have `@getInput() | @testRetry`:
+- Pipeline has only ONE stage: `@testRetry` (stage 0)
+- `@getInput()` executes BEFORE pipeline starts (provides initial input)
+- When `@testRetry` returns 'retry', it needs to retry the input generation
+- BUT: Input generation isn't a pipeline stage, so retry mechanism doesn't work
 
-**Examples:**
-```mlld
-# RETRYABLE - @claude() is a function call
-/var @answer = @claude("explain quantum mechanics")
-/var @new = @answer | @review | @crosscheck
-
-# NOT RETRYABLE - literal string value
-/var @answer = "The capital of France is Paris"
-/var @new = @answer | @review | @crosscheck
+### Current (Broken) Architecture
+```
+[External: @getInput()] → [Pipeline: @testRetry]
+                           └─ Returns 'retry'
+                           └─ Needs to re-execute external source (FAILS)
 ```
 
-### 2. Context-Scoped Pipeline Variables ✅
-The `@pipeline` object is now scoped to the current retry context:
-- `@pipeline.try` - Current attempt number within this context
-- `@pipeline.tries` - Array of previous attempts within this context (context-local)
-- `@pipeline.all.tries` - Lazy-evaluated accumulator of ALL retry attempts across ALL contexts
+### Why It Fails
+1. State machine doesn't push retry context for "stage 0 self-retry"
+2. `contextAttempt` stays at 1 forever
+3. Executor's condition `if (contextAttempt > 1)` never triggers
+4. Source function never gets called again
 
-### 3. Variable Provenance Tracking ✅
-Variables now have metadata to track their source:
-- Added `isRetryable` flag to variable metadata
-- Set to `true` when variable comes from function execution (ExecInvocation, command, code)
-- Set to `false` for literal values
-- Metadata is passed through to pipeline executor with source function reference
+## Chosen Solution: Synthetic Source Stage
 
-## Files Modified
+Based on architectural analysis, we're implementing the **synthetic stage approach** which normalizes all pipelines to include the source as a real stage.
 
-### Pipeline Executor (`interpreter/eval/pipeline/executor.ts`) ✅
-- Added retryability check for stage 0
-- Stores original function reference for re-execution
-- Re-executes source function when stage 0 is retried
-- Clear error handling for non-retryable inputs
+### New Architecture
+```
+[Pipeline: @__source__ | @testRetry]
+           ↑ stage 0     ↑ stage 1
+           └─ Returns fresh input on retry
+```
 
-### State Machine (`interpreter/eval/pipeline/state-machine.ts`) ✅
-- Added special handling for stage 0 self-retry
-- Tracks retryability of initial input
-- Uses "root" context for stage 0 self-retries
-- Proper retry limit enforcement for all scenarios
+### Benefits
+1. **Eliminates ALL special cases** - Every retry is just "retry previous stage"
+2. **Fixes the bug directly** - Normal retry → normal context push → sourceFunction executes
+3. **Simplifies codebase** - Deletes special-case branches, not adds them
+4. **Better debugging** - Clear event traces with no hidden "pre-pipeline" work
+5. **Minimal code changes** - Compile-time transformation, reuses all existing infrastructure
 
-### Context Builder (`interpreter/eval/pipeline/context-builder.ts`) ✅
-- Implemented `@pipeline.all.tries` with lazy evaluation
-- Context-local `@pipeline.tries` (only attempts from current context)
-- Properly accumulates retry history across all contexts
+## Implementation Plan
 
-### Variable System (`core/types/variable/VariableTypes.ts`) ✅
-- Added `isRetryable` and `sourceFunction` metadata fields
-- Set in `interpreter/eval/var.ts` based on variable source
-- Metadata preserved through pipeline transformations
+### Phase 1: Add Synthetic Source Stage 🚧
+**File: `interpreter/eval/pipeline/unified-processor.ts`**
+```typescript
+// Create synthetic source stage
+const SOURCE_STAGE: PipelineCommand = {
+  rawIdentifier: '__source__',
+  identifier: [],
+  args: [],
+  fields: [],
+  rawArgs: []
+};
 
-## Test Updates
+// Prepend to pipeline when we have a retryable source
+const normalizedPipeline = detected.isRetryable 
+  ? [SOURCE_STAGE, ...detected.pipeline] 
+  : detected.pipeline;
+```
 
-### Tests Updated and Passing ✅
-- ✅ All state machine tests (12 tests)
-  - Retry limit enforcement
-  - Context tracking
-  - Event recording
-  - Cascade retry scenarios
+### Phase 2: Update Executor to Handle `@__source__` 🚧
+**File: `interpreter/eval/pipeline/executor.ts`**
+```typescript
+// In executeStage, before normal command resolution:
+if (command.rawIdentifier === '__source__') {
+  const firstTime = !this.sourceExecutedOnce;
+  this.sourceExecutedOnce = true;
+  
+  if (firstTime) {
+    return { type: 'success', output: this.initialInput };
+  }
+  
+  if (!this.isRetryable) {
+    throw new Error('Cannot retry stage 0: Input is not a function and cannot be retried');
+  }
+  
+  const fresh = await this.sourceFunction();
+  return { type: 'success', output: fresh };
+}
+```
 
-### Tests Requiring Test Case Updates ❌
+### Phase 3: Clean Up State Machine 🚧
+**File: `interpreter/eval/pipeline/state-machine.ts`**
+- DELETE the special "stage 0 self-retry" branch
+- DELETE the "root context" hack
+- Keep normal retry logic which now handles everything
 
-#### Pipeline Retry Tests (9 tests failing)
-These tests are failing because they use literal values as pipeline inputs, which are not retryable:
-- `pipeline-retry-basic` - Uses literal "success" which cannot be retried
-- `pipeline-retry-attempt-tracking` - Uses literal string input
-- `pipeline-retry-best-of-n` - Uses literal input
-- `pipeline-retry-complex-logic` - Uses literal input
-- `pipeline-retry-conditional-fallback` - Uses literal input
-- `pipeline-retry-when-expression` - Uses literal input
-- `pipeline-multi-stage-retry` - Uses literal input
-- `pipeline-context-preservation` - Context scoping test
-- `file-reference-interpolation` - Unrelated to retry, needs investigation
+### Phase 4: Adjust User-Facing Context 🚧
+**File: `interpreter/eval/pipeline/context-builder.ts`**
+- When `hasSourceStage` is true:
+  - `@pipeline.stage` = actual stage - 1 (hide synthetic stage)
+  - `@pipeline.length` = actual length - 1
+  - `@pipeline[0]` = still the base input (not @__source__ output)
+  - Filter out stage 0 from `previousOutputs`
 
-**Current Behavior**: When these tests run, they correctly produce error messages like:
-- "Stage 0 cannot retry: Input is not a function and cannot be retried" (stage 0 self-retry)
-- "Cannot retry stage 0: Input is not a function and cannot be retried" (stage 1 retrying stage 0)
+### Phase 5: Update Tests 🚧
+- All existing retry tests should pass WITHOUT modification
+- Add tests for the synthetic stage behavior
+- Add debug tracing tests
 
-**Solution**: Update test cases to:
-1. Use retryable sources (`@exe` functions, `run` commands, `code` blocks) for tests that need retry to work
-2. Add separate tests that verify the error messages when trying to retry non-retryable sources
-3. Test a variety of retryable source types to ensure comprehensive coverage
+## Debugging Strategy
 
-## Summary of Changes
+### Add Pipeline Trace
+```typescript
+// Set PIPELINE_TRACE=1 for debug output:
+┌─ plan: __source__ → testRetry
+├─ s0 start (attempt 1) mode=initial   output="success"
+├─ s0 ok    output="success"
+├─ s1 start (attempt 1) input="success"
+├─ s1 retry request → retry s0
+├─ s0 start (attempt 2) mode=fresh     output="success-new"
+├─ s0 ok    output="success-new"
+├─ s1 start (attempt 2) input="success-new"
+└─ s1 ok    output="3"
+```
 
-### What Was Implemented
-1. **Retryability Tracking** - Variables now track whether they came from functions vs literals
-2. **Stage 0 Retry Logic** - Stage 0 can retry itself if source was a function
-3. **Context-Local Tries** - `@pipeline.tries` is now scoped to current retry context
-4. **Global Accumulator** - `@pipeline.all.tries` provides access to all retry attempts
-5. **State Machine Updates** - Proper handling of stage 0 self-retry with retry limits
+### Enhanced Source Stage Tracing
+Show whether `@__source__` is returning the initial cached value or executing the source function:
+- `mode=initial` - First execution, returning the already-computed initial input (no double execution)
+- `mode=fresh` - Retry execution, calling sourceFunction() for new input
+- `mode=literal` - Non-retryable literal, would throw error if retried
 
-### Remaining Work
-1. **Update Test Cases** - Pipeline retry tests need to be updated to test realistic scenarios:
-   - Use function sources (`@exe` invocations, `run` commands, `code` blocks) as pipeline inputs
-   - Test both retryable sources (functions) and non-retryable sources (literals) 
-   - Verify proper error messages when attempting to retry non-retryable inputs
-   - Include variety of valid retryable sources to ensure comprehensive coverage
-2. **Documentation** - Update docs to explain the retry behavior and limitations
+This makes it crystal clear when the source function is actually being called vs returning cached input.
 
-## Key Principles
+## Test Status
 
-1. **No self-retry**: No stage can retry itself
-2. **Upstream retry only**: Stage N can only retry stage N-1
-3. **Stage 0 conditional**: Stage 0 can only be retried if source is a function
-4. **Context isolation**: Each retry context maintains its own try/tries
-5. **Global tracking**: Global accumulator available via @pipeline.all.tries
+### Already Updated ✅
+All test files have been updated to use retryable sources:
+- `pipeline-retry-basic` → Uses `@getInput()` function
+- `pipeline-retry-attempt-tracking` → Uses `@getBase()` function  
+- `pipeline-retry-best-of-n` → Uses `@getPrompt()` function
+- `pipeline-retry-complex-logic` → Uses `@getData()` function
+- `pipeline-retry-conditional-fallback` → Uses `@getSeed()` function
+- `pipeline-retry-when-expression` → Uses `@getTestData()` function
+- `pipeline-multi-stage-retry` → Uses `@getInitial()` function
+- `pipeline-context-preservation` → Uses `@getOriginalData()` function
+
+### Expected Behavior After Fix
+With synthetic source stage, all tests should pass because:
+1. Source functions will be real pipeline stages
+2. Retry will work through normal mechanism
+3. No special cases needed
+
+## Key Design Decisions
+
+### Why Synthetic Stage Over Separate Abstractions
+After architectural analysis, we chose the synthetic stage approach over creating separate `PipelineSource` and `PipelineStage` abstractions because:
+
+1. **Sources ARE functionally stages** - They produce output, can fail, need retry
+2. **Simpler implementation** - Compile-time transformation vs major refactoring
+3. **Deletes complexity** - Removes special cases rather than adding abstractions
+4. **Leverages existing infrastructure** - All retry logic just works
+5. **Better debugging** - Uniform event traces with no hidden inputs
+
+### Implementation Principles
+
+1. **Normalize at compile time** - Transform pipelines before execution
+2. **Hide from users** - Synthetic stage is internal implementation detail
+3. **Preserve semantics** - User-facing `@pipeline` object unchanged
+4. **Delete special cases** - No more "stage 0 self-retry" branches
+5. **Uniform retry model** - Every retry is "retry previous stage"
+
+## Timeline
+
+- **Week 1**: Implement synthetic stage in unified-processor
+- **Week 2**: Update executor and clean up state machine
+- **Week 3**: Adjust context builder for user-facing compatibility
+- **Week 4**: Complete testing and documentation
+
+## Success Criteria
+
+1. All pipeline retry tests pass without modification
+2. Source functions re-execute on retry
+3. Special-case code deleted from state machine
+4. Debug traces show clear stage progression
+5. No user-visible API changes

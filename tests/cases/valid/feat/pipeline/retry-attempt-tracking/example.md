@@ -1,5 +1,8 @@
 # Retry Attempt Tracking Test
 
+# Create a retryable source
+/exe @getBase() = "base"
+
 /exe @generateAttempt(input, pipeline) = `attempt-@pipeline.try: @input`
 
 /exe @collectAttempts(input, pipeline) = `current: @input, history: [@pipeline.tries], try: @pipeline.try`
@@ -10,6 +13,6 @@
 ]
 
 # Test that @pipeline.tries collects all retry attempts
-/var @result = "base" with { pipeline: [@generateAttempt(@p), @retryCollector(@p), @collectAttempts(@p)] }
+/var @result = @getBase() with { pipeline: [@generateAttempt(@p), @retryCollector(@p), @collectAttempts(@p)] }
 
 /show @result

@@ -18,6 +18,7 @@ export { PipelineExecutor } from './executor';
  * @param format - Optional format specification for pipeline input
  * @param isRetryable - Whether the initial input is retryable (came from a function)
  * @param sourceFunction - Optional function to re-execute for stage 0 retries
+ * @param hasSyntheticSource - Whether the pipeline has a synthetic __source__ stage at position 0
  */
 export async function executePipeline(
   baseOutput: string,
@@ -26,8 +27,9 @@ export async function executePipeline(
   location?: any,
   format?: string,
   isRetryable: boolean = false,
-  sourceFunction?: () => Promise<string>
+  sourceFunction?: () => Promise<string>,
+  hasSyntheticSource: boolean = false
 ): Promise<string> {
-  const executor = new PipelineExecutor(pipeline, env, format, isRetryable, sourceFunction);
+  const executor = new PipelineExecutor(pipeline, env, format, isRetryable, sourceFunction, hasSyntheticSource);
   return await executor.execute(baseOutput);
 }

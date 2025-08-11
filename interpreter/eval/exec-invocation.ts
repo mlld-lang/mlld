@@ -68,6 +68,15 @@ export async function evaluateExecInvocation(
   node: ExecInvocation,
   env: Environment
 ): Promise<EvalResult> {
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.error('[evaluateExecInvocation] Entry:', {
+      hasCommandRef: !!node.commandRef,
+      hasWithClause: !!node.withClause,
+      hasPipeline: !!(node.withClause?.pipeline),
+      pipelineLength: node.withClause?.pipeline?.length
+    });
+  }
+  
   if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
     logger.debug('evaluateExecInvocation called with:', { commandRef: node.commandRef });
   }
@@ -1049,17 +1058,63 @@ export async function evaluateExecInvocation(
   // Apply withClause transformations if present
   if (node.withClause) {
     if (node.withClause.pipeline) {
-      // Use unified pipeline processor for pipeline part
-      const { processPipeline } = await import('./pipeline/unified-processor');
-      const pipelineResult = await processPipeline({
-        value: result,
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[exec-invocation] Handling pipeline:', {
+          pipelineLength: node.withClause.pipeline.length,
+          stages: node.withClause.pipeline.map((p: any) => p.rawIdentifier || 'unknown')
+        });
+      }
+      
+      // When an ExecInvocation has a pipeline, we need to create a special pipeline
+      // where the ExecInvocation itself becomes stage 0, retryable
+      const { executePipeline } = await import('./pipeline');
+      
+      // Create a source function that re-executes this ExecInvocation (without the pipeline)
+      const sourceFunction = async () => {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[exec-invocation] sourceFunction called - re-executing ExecInvocation');
+        }
+        // Re-execute this same ExecInvocation but without the pipeline
+        const nodeWithoutPipeline = { ...node, withClause: undefined };
+        const freshResult = await evaluateExecInvocation(nodeWithoutPipeline, env);
+        return typeof freshResult.value === 'string' ? freshResult.value : JSON.stringify(freshResult.value);
+      };
+      
+      // Create synthetic source stage for retryable pipeline
+      const SOURCE_STAGE = {
+        rawIdentifier: '__source__',
+        identifier: [],
+        args: [],
+        fields: [],
+        rawArgs: []
+      };
+      
+      // Prepend synthetic source stage to the pipeline
+      const normalizedPipeline = [SOURCE_STAGE, ...node.withClause.pipeline];
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[exec-invocation] Creating pipeline with synthetic source:', {
+          originalLength: node.withClause.pipeline.length,
+          normalizedLength: normalizedPipeline.length,
+          stages: normalizedPipeline.map((p: any) => p.rawIdentifier || 'unknown')
+        });
+      }
+      
+      // Execute the pipeline with the ExecInvocation result as initial input
+      // Mark it as retryable with the source function
+      const pipelineResult = await executePipeline(
+        typeof result === 'string' ? result : JSON.stringify(result),
+        normalizedPipeline,
         env,
-        node,
-        identifier: node.identifier
-      });
+        node.location,
+        node.withClause.format,
+        true,  // isRetryable
+        sourceFunction,
+        true   // hasSyntheticSource
+      );
+      
       // Still need to handle other withClause features (trust, needs)
-      const stringResult = typeof pipelineResult === 'string' ? pipelineResult : JSON.stringify(pipelineResult);
-      return applyWithClause(stringResult, { ...node.withClause, pipeline: undefined }, env);
+      return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
     } else {
       // applyWithClause expects a string input
       const stringResult = typeof result === 'string' ? result : JSON.stringify(result);

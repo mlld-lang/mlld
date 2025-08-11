@@ -34,7 +34,10 @@
   * => @bestOfAttempts(@input, @pipeline.tries)
 ]
 
+# Create a retryable source
+/exe @getData() = "test-data"
+
 # Test complex retry logic with attempt selection
-/var @result = "test-data" with { pipeline: [@qualityScorer(@p.try), @adaptiveRetry] }
+/var @result = @getData() with { pipeline: [@qualityScorer(@p.try), @adaptiveRetry] }
 
 /show @result

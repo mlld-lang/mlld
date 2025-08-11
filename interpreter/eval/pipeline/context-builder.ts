@@ -28,12 +28,21 @@ export async function createStageEnvironment(
   context: StageContext,
   env: Environment,
   format?: string,
-  events?: ReadonlyArray<PipelineEvent>
+  events?: ReadonlyArray<PipelineEvent>,
+  hasSyntheticSource: boolean = false
 ): Promise<Environment> {
+  // Adjust stage number if we have a synthetic source (hide it from user)
+  const userVisibleStage = hasSyntheticSource && context.stage > 0 
+    ? context.stage - 1 
+    : context.stage;
+  const userVisibleTotalStages = hasSyntheticSource 
+    ? context.totalStages - 1 
+    : context.totalStages;
+    
   // Set pipeline context in main environment
   env.setPipelineContext({
-    stage: context.stage,
-    totalStages: context.totalStages,
+    stage: userVisibleStage,
+    totalStages: userVisibleTotalStages,
     currentCommand: command.rawIdentifier,
     input: input,
     previousOutputs: context.previousOutputs,
@@ -49,7 +58,7 @@ export async function createStageEnvironment(
   await setInputVariable(stageEnv, input, format);
   
   // Set @pipeline / @p variable with context
-  setPipelineVariable(stageEnv, context, events);
+  setPipelineVariable(stageEnv, context, events, hasSyntheticSource);
   
   return stageEnv;
 }
@@ -102,8 +111,8 @@ async function setInputVariable(env: Environment, input: string, format?: string
 /**
  * Set the @pipeline/@p variable in the stage environment
  */
-function setPipelineVariable(env: Environment, context: StageContext, events?: ReadonlyArray<PipelineEvent>): void {
-  const interfaceContext = createInterfacePipelineContext(context, events);
+function setPipelineVariable(env: Environment, context: StageContext, events?: ReadonlyArray<PipelineEvent>, hasSyntheticSource: boolean = false): void {
+  const interfaceContext = createInterfacePipelineContext(context, events, hasSyntheticSource);
   
   const inputSource: VariableSource = {
     directive: 'var',
@@ -122,36 +131,59 @@ function setPipelineVariable(env: Environment, context: StageContext, events?: R
 /**
  * Create clean interface context from stage context
  */
-function createInterfacePipelineContext(context: StageContext, events?: ReadonlyArray<PipelineEvent>): InterfacePipelineContext {
+function createInterfacePipelineContext(context: StageContext, events?: ReadonlyArray<PipelineEvent>, hasSyntheticSource: boolean = false): InterfacePipelineContext {
+  // Adjust stage number and outputs if we have a synthetic source
+  const userVisibleStage = hasSyntheticSource && context.stage > 0 
+    ? context.stage - 1 
+    : context.stage;
+    
+  // Filter out synthetic source output from previousOutputs if present
+  const userVisibleOutputs = hasSyntheticSource && context.previousOutputs.length > 0
+    ? context.previousOutputs.slice(1) // Skip first output (from __source__)
+    : context.previousOutputs;
+    
+  // Create outputs object without the synthetic source stage
+  const outputs: any = {};
+  if (hasSyntheticSource) {
+    // Shift indices down by 1 to hide synthetic source
+    Object.entries(context.outputs).forEach(([key, value]) => {
+      const index = parseInt(key);
+      if (!isNaN(index) && index > 0) {
+        outputs[index - 1] = value;
+      }
+    });
+  } else {
+    Object.assign(outputs, context.outputs);
+  }
+  
   const interfaceContext: any = {
     // Stage-specific data
     try: context.attempt,
     tries: context.history,
-    stage: context.stage,
+    stage: userVisibleStage,
     
     // Pipeline data access
-    length: context.previousOutputs.length,
+    length: userVisibleOutputs.length,
     
     // Array-style access to outputs
-    ...context.outputs
+    ...outputs
   };
 
   // Add negative indexing support
-  const outputs = context.previousOutputs;
   Object.defineProperty(interfaceContext, -1, {
-    get: () => outputs[outputs.length - 1],
+    get: () => userVisibleOutputs[userVisibleOutputs.length - 1],
     enumerable: false
   });
 
   Object.defineProperty(interfaceContext, -2, {
-    get: () => outputs[outputs.length - 2],
+    get: () => userVisibleOutputs[userVisibleOutputs.length - 2],
     enumerable: false
   });
 
   // Add more negative indices as needed
-  for (let i = 3; i <= Math.max(10, outputs.length); i++) {
+  for (let i = 3; i <= Math.max(10, userVisibleOutputs.length); i++) {
     Object.defineProperty(interfaceContext, -i, {
-      get: () => outputs[outputs.length - i],
+      get: () => userVisibleOutputs[userVisibleOutputs.length - i],
       enumerable: false
     });
   }

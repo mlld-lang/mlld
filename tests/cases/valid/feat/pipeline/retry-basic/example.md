@@ -1,11 +1,13 @@
 # Basic Retry Test
 
+# Test basic retry mechanism
+/exe @getInput() = "success"
+
 /exe @testRetry(input) = when: [
   @pipeline.try < 3 => retry
   * => @pipeline.try
 ]
-
-# Test basic retry mechanism  
-/var @result = "success"|@testRetry
+  
+/var @result = @getInput() | @testRetry
 
 /show @result

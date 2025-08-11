@@ -25,7 +25,10 @@
   * => "fallback: using default JSON structure"
 ]
 
+# Create a retryable source
+/exe @getSeed() = "seed-data"
+
 # Test conditional retry with fallback after max attempts
-/var @result = "seed-data" with { pipeline: [@jsonGenerator(@p.try), @validateJSON, @retryUntilValidJSON] }
+/var @result = @getSeed() with { pipeline: [@jsonGenerator(@p.try), @validateJSON, @retryUntilValidJSON] }
 
 /show @result
