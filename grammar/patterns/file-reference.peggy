@@ -19,7 +19,17 @@ Files without extensions can still be used outside interpolation contexts
 
 // Main file reference pattern for interpolation contexts
 FileReferenceInterpolation "file reference interpolation"
-  = "<" _ content:FileReferenceContent _ ">" fields:FileFieldChain? pipes:TemplatePipeChain? {
+  = "<" &{
+      // Semantic lookahead: validate BEFORE attempting to parse content
+      // Extract content between < and > without consuming it
+      const rest = input.substring(peg$currPos);
+      const closingIndex = rest.indexOf('>');
+      if (closingIndex === -1) return false; // No closing >
+      
+      const content = rest.substring(0, closingIndex).trim();
+      // Use same validation as helpers.isFileReferenceContent: must contain . * or @
+      return /[.*@]/.test(content);
+    } _ content:FileReferenceContent _ ">" fields:FileFieldChain? pipes:TemplatePipeChain? {
       // Extract the raw string from the content
       let contentStr;
       if (content.raw) {

@@ -165,7 +165,7 @@ UnifiedDoubleQuotedText
 UnifiedDoubleQuotedChar
   = StringEscapeSequence  // Handle \n, \t, etc.
   / EscapeSequence       // Handle \@, \", etc.
-  / !["@<\n\r] char:. { return char; }  // Exclude < to trigger FileReferenceInterpolation
+  / !["@\n\r] char:. { return char; }  // Allow < characters, rely on semantic lookahead
 
 // -------------------------------------------------------------
 // DEPENDENCIES (defined elsewhere but referenced here)
