@@ -119,6 +119,9 @@ UnifiedBacktickInterpolation "Backtick interpolation content"
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
+  / "<" chars:(!">" char:. { return char; })* ">" { // Literal angle brackets (fallback for non-file references)
+      return helpers.createNode(NodeType.Text, { content: '<' + chars.join('') + '>', location: location() });
+    }
   / UnifiedBacktickTextSegment       // Plain text
 
 // -------------------------------------------------------------

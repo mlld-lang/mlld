@@ -1106,6 +1106,10 @@ export const helpers = {
    * Files without extensions can be used outside interpolation contexts
    */
   isFileReferenceContent(content: string): boolean {
+    // Exclude HTML comments like <!-- ... -->
+    if (content.trim().startsWith('!')) {
+      return false;
+    }
     // Check if content contains file indicators: . * @
     return /[.*@]/.test(content);
   },

@@ -27,6 +27,8 @@ FileReferenceInterpolation "file reference interpolation"
       if (closingIndex === -1) return false; // No closing >
       
       const content = rest.substring(0, closingIndex).trim();
+      // Exclude HTML comments like <!-- ... -->
+      if (content.startsWith('!')) return false;
       // Use same validation as helpers.isFileReferenceContent: must contain . * or @
       return /[.*@]/.test(content);
     } _ content:FileReferenceContent _ ">" fields:FileFieldChain? pipes:TemplatePipeChain? {
