@@ -13,11 +13,11 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 /show `Name from JSON: @name`
 
 ### Array access
-/var @firstEmail = `<test-data.json>.users[0].email`
+/var @firstEmail = <test-data.json>.users[0].email
 /show `First user email: @firstEmail`
 
 ### Nested field access
-/var @city = `<test-data.json>.users[1].address.city`
+/var @city = <test-data.json>.users[1].address.city
 /show `Second user city: @city`
 
 ## Variable Substitution in Paths
@@ -25,22 +25,22 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 /var @extension = "txt"
 /var @filename = "test-content"
 >> Note: Variable interpolation in file paths not yet implemented
->> /var @dynamicContent = `<@filename.@extension>`
+>> /var @dynamicContent = <@filename.@extension>
 /var @dynamicContent = "placeholder for dynamic file loading"
 /show `Dynamic file: @dynamicContent`
 
 ## Pipe Transformations
 
 ### Single pipe
-/var @formatted = `<test-data.json>|@json`
+/var @formatted = <test-data.json>|@json
 /show `Formatted JSON: @formatted`
 
 ### Multiple pipes
-/var @xmlData = `<test-data.json>|@json|@xml`
+/var @xmlData = <test-data.json>|@json|@xml
 /show `JSON to XML: @xmlData`
 
 ### Pipes with field access
-/var @userData = `<test-data.json>.users[0]|@json`
+/var @userData = <test-data.json>.users[0]|@json
 /show `User data formatted: @userData`
 
 ## Variable Pipes
@@ -56,7 +56,8 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 ## Complex Scenarios
 
 ### Nested templates
-/var @template = `User @name from <test-data.json>.name lives in <test-data.json>.users[0].address.city`
+/var @location = <test-data.json>.users[0].address.city
+/var @template = `User @name from <test-data.json>.name lives in @location`
 /show @template
 
 ### In double quotes
@@ -73,21 +74,21 @@ This comprehensive test suite verifies all aspects of file reference interpolati
 ## Error Cases
 
 ### Missing file
-/var @missing = `<nonexistent.txt>`
+/var @missing = <nonexistent.txt>
 /show `Missing file: @missing`
 
 ### Invalid field
-/var @invalidField = `<test-data.json>.nonexistent.field`
+/var @invalidField = <test-data.json>.nonexistent.field
 /show `Invalid field: @invalidField`
 
 ## Special Characters
 
 ### File with spaces
-/var @spaced = `<file with spaces.txt>`
+/var @spaced = <file with spaces.txt>
 /show `Spaced filename: @spaced`
 
 ### Special characters in path
-/var @special = `<data/special-@chars!.txt>`
+/var @special = <data/special-@chars!.txt>
 /show `Special chars: @special`
 
 ## Template Contexts

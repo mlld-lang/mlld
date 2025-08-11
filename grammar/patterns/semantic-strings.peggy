@@ -7,6 +7,9 @@ DataString "Data Context String"
   = "'" content:EscapedSingleStringContent "'" { return content; }
   / '"' parts:(SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DoubleQuotedText)* '"' {
       // In data context, we need to evaluate interpolation immediately
+      if (parts.length === 0) {
+        return "";  // Empty string
+      }
       if (parts.length === 1 && parts[0].type === 'Text') {
         return parts[0].content;
       }
@@ -27,6 +30,9 @@ ExpressionString "Expression Context String"
       return helpers.createNode('Literal', { value: content, valueType: 'string', location: location() });
     }
   / '"' parts:(SpecialVariable / FileReferenceInterpolation / VariableWithPipes / DoubleQuotedText)* '"' {
+      if (parts.length === 0) {
+        return helpers.createNode('Literal', { value: "", valueType: 'string', location: location() });
+      }
       if (parts.length === 1 && parts[0].type === 'Text') {
         return helpers.createNode('Literal', { value: parts[0].content, valueType: 'string', location: location() });
       }
