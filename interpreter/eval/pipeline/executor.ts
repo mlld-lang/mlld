@@ -76,11 +76,6 @@ export class PipelineExecutor {
         nextStep.context
       );
       
-      if (process.env.MLLD_DEBUG === 'true') {
-        const ev = this.stateMachine.getEvents().slice(-1)[0];
-        console.error('[PipelineExecutor] last event:', ev);
-      }
-
       // Let state machine decide next step
       nextStep = this.stateMachine.transition({ 
         type: 'STAGE_RESULT', 
