@@ -14,10 +14,15 @@ export async function formatMarkdown(content: string): Promise<string> {
     const TRAILING_SPACE_MARKER = '⟪MLLD_TRAILING_SPACE⟫';
     const JSON_BLOCK_MARKER = '⟪MLLD_JSON_BLOCK_';
     const JSON_BLOCK_END = '⟫';
+    const ASTERISK_MARKER = '⟪MLLD_ASTERISK⟫';
     
-    // Find and protect multiline JSON blocks
+    // Find and protect multiline JSON blocks and asterisks
     const jsonBlocks: string[] = [];
     let protectedContent = content;
+    
+    // Protect asterisks in plain text content to prevent Prettier from escaping them
+    // This is especially important for comments and literal text that should not be treated as markdown
+    protectedContent = protectedContent.replace(/\*/g, ASTERISK_MARKER);
     
     // Match JSON that spans multiple lines (has newlines inside)
     // Look for opening brace followed by content with newlines, then closing brace
@@ -69,6 +74,9 @@ export async function formatMarkdown(content: string): Promise<string> {
       const marker = `${JSON_BLOCK_MARKER}${index}${JSON_BLOCK_END}`;
       restoredContent = restoredContent.replace(marker, block);
     });
+    
+    // Restore asterisks
+    restoredContent = restoredContent.replace(new RegExp(ASTERISK_MARKER, 'g'), '*');
     
     // Restore trailing spaces
     const formattedLines = restoredContent.split('\n');
@@ -126,10 +134,14 @@ export async function formatMarkdownWithOptions(
     const TRAILING_SPACE_MARKER = '⟪MLLD_TRAILING_SPACE⟫';
     const JSON_BLOCK_MARKER = '⟪MLLD_JSON_BLOCK_';
     const JSON_BLOCK_END = '⟫';
+    const ASTERISK_MARKER = '⟪MLLD_ASTERISK⟫';
     
-    // Find and protect multiline JSON blocks
+    // Find and protect multiline JSON blocks and asterisks
     const jsonBlocks: string[] = [];
     let protectedContent = content;
+    
+    // Protect asterisks in plain text content to prevent Prettier from escaping them
+    protectedContent = protectedContent.replace(/\*/g, ASTERISK_MARKER);
     
     // Match JSON that spans multiple lines (has newlines inside)
     // Look for opening brace followed by content with newlines, then closing brace
@@ -175,6 +187,9 @@ export async function formatMarkdownWithOptions(
       const marker = `${JSON_BLOCK_MARKER}${index}${JSON_BLOCK_END}`;
       restoredContent = restoredContent.replace(marker, block);
     });
+    
+    // Restore asterisks
+    restoredContent = restoredContent.replace(new RegExp(ASTERISK_MARKER, 'g'), '*');
     
     // Restore trailing spaces
     const formattedLines = restoredContent.split('\n');
