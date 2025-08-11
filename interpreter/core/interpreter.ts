@@ -1300,22 +1300,13 @@ async function processFileFields(
   const { isLoadContentResult } = await import('@core/types/load-content');
   let result: any = content;
   
-  // Extract content from LoadContentResult
+  // Keep LoadContentResult intact for field access, only extract content if no fields to access
   if (isLoadContentResult(result)) {
-    result = result.content;
-    
-    // Try to parse JSON if it looks like JSON and we have fields to access
-    if (fields && fields.length > 0 && typeof result === 'string') {
-      const trimmed = result.trim();
-      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
-          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-        try {
-          result = JSON.parse(trimmed);
-        } catch (e) {
-          // Not valid JSON, keep as string
-        }
-      }
+    if (!fields || fields.length === 0) {
+      // No field access needed, extract content
+      result = result.content;
     }
+    // If we have fields to access, keep the full LoadContentResult object so we can access .fm, .json, etc.
   }
   
   // Process field access
