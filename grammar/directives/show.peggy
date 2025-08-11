@@ -227,6 +227,13 @@ SlashShow
         meta.comment = ending.comment;
       }
       
+      // Add pipeline from ending if present
+      if (ending.tail) {
+        values.pipeline = ending.tail.pipeline;
+        raw.pipeline = ending.tail.pipeline.map(cmd => `@${cmd.rawIdentifier || cmd.name || cmd}`).join(' | ');
+        meta.hasPipeline = true;
+      }
+      
       return helpers.createStructuredDirective(
         DirectiveKind.show, 
         'showTemplate', 

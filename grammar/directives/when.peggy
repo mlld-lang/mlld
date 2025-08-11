@@ -574,14 +574,33 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "/"? "show" _ template:TemplateCore {
-      // Use the same abstraction as /show directive
+  / "/"? "show" _ template:TemplateCore ending:TailModifiers? {
+      // Use the same abstraction as /show directive, including pipeline support
+      const values = {
+        ...template.values
+      };
+      
+      const raw = {
+        ...template.raw
+      };
+      
+      const meta = {
+        ...template.meta
+      };
+      
+      // Add pipeline from ending if present
+      if (ending) {
+        values.pipeline = ending.pipeline;
+        raw.pipeline = ending.pipeline.map(cmd => `@${cmd.rawIdentifier || cmd.name || cmd}`).join(' | ');
+        meta.hasPipeline = true;
+      }
+      
       return [helpers.createNode(NodeType.Directive, {
         kind: 'show',
         subtype: 'showTemplate',
-        values: template.values,
-        raw: template.raw,
-        meta: template.meta,
+        values: values,
+        raw: raw,
+        meta: meta,
         location: location()
       })];
     }

@@ -450,6 +450,11 @@ export async function evaluateShow(
     // Interpolate the template
     content = await interpolate(templateNodes, env);
     
+    // Handle pipeline if present
+    if (directive.values?.pipeline) {
+      const { executePipeline } = await import('./pipeline');
+      content = await executePipeline(content, directive.values.pipeline, env);
+    }
     
     // Template normalization is now handled in the grammar at parse time
     
