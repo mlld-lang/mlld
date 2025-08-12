@@ -16,12 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Output history: `@pipeline.length` indicates number of completed stages
   - Attempt history: `@pipeline.tries` array contains all retry attempts for current stage
 
-- **Pipeline Retry Mechanism**: The `retry` keyword enables stage re-execution in pipelines
-  - Functions return `retry` to signal pipeline should re-execute current stage
-  - Maximum 10 retries per stage prevents infinite loops
-  - Works in when expressions: `/exe @validator(input) = when: [@isValid(@input) => @input, @pipeline.try < 3 => retry, * => null]`
-  - Context validation ensures `retry` only works within pipeline execution
-  - Attempt outputs stored in `@pipeline.tries` for best-of-N selection patterns
+- **Pipeline Retry Mechanism**: The `retry` keyword enables automatic re-execution of pipeline stages
+  - Return `retry` from functions to re-execute the previous pipeline stage
+  - Access attempt number via `@pipeline.try` (starts at 1, increments with each retry)
+  - Guard retries with conditions to prevent infinite loops: `@pipeline.try < 3 => retry`
+  - All retry attempts stored in `@pipeline.tries` array for best-of-N selection patterns
+  - Each retry context limited to 10 attempts, with global limit of 20 retries per stage
+  - Works seamlessly with `/exe` functions using `when` expressions for validation logic
+  - Example: `/exe @validate() = when: [@isValid(@_) => @_, @pipeline.try < 3 => retry, * => null]`
+  - Simplified architecture: Only the immediately previous stage can be retried (no nested retries)
 
 - **Issue #342 – Pipeline whitespace and stacked pipes**:
   - Outside templates/quotes, pipelines now support spaced and multi-line stacked forms for variables and `<file>` values

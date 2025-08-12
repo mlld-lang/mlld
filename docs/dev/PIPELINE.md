@@ -1,6 +1,21 @@
+---
+updated: 2025-01-13
+tags: #arch, #pipeline, #retry, #interpreter
+related-docs: PIPELINE-ARCHITECTURE.md, RETRY-PLAN.md, docs/slash/var.md
+related-code: interpreter/eval/pipeline/*.ts, interpreter/eval/when-expression.ts
+related-types: core/types { PipelineState, RetryContext, PipelineInput }
+---
+
 # Pipeline Architecture in mlld
 
-This guide consolidates the key implementation details of mlld's pipeline and flow control features: `foreach`, `@when`, and `with` clauses. These features work together to create powerful data processing pipelines.
+## tldr
+
+mlld's pipeline system enables composable data transformations with automatic retry capabilities. Key features:
+- **Pipeline operator** (`|`) chains transformations
+- **Retry mechanism** allows stages to retry previous stages
+- **Context variables** (`@pipeline`, `@p`) provide execution state
+- **Format support** for JSON, CSV, XML parsing
+- **No nested retries** - simplified single-context model
 
 ## Overview
 
@@ -179,19 +194,42 @@ Pipeline stages automatically preserve LoadContentResult metadata through JavaSc
 
 **Implementation**: Pipeline execution wraps JS functions with `AutoUnwrapManager.executeWithPreservation()` - arrays use exact content matching, single files get metadata auto-reattached to transformed content.
 
-## Pipeline Context and Retry (v2.0.0-rc35+)
+## Pipeline Retry Architecture (v2.0.0+)
 
-The pipeline execution system tracks context information and supports retry mechanisms for sophisticated pipeline control flow.
+The pipeline retry system enables automatic retry of failed or invalid pipeline steps through a simplified state machine architecture.
 
-### Pipeline State Structure
+### Core Principles
+
+1. **No Self-Retry**: No stage can retry itself
+2. **Upstream Retry Only**: Stage N can only request retry of stage N-1  
+3. **Stage 0 Conditional**: Stage 0 can only be retried if its source is a function
+4. **Context Isolation**: Each retry pattern gets its own context
+5. **Single Active Context**: Only one retry context active at a time (no nested retries)
+
+### State Machine Architecture
 
 ```typescript
 interface PipelineState {
-  previousOutputs: string[];              // Outputs from completed stages
-  attemptCounts: Map<number, number>;     // Retry attempts per stage
-  attemptHistory: Map<number, string[]>;  // All attempts per stage
-  stageVariables: Map<string, any>;       // Named variables from for loops
-  currentStageIndex: number;              // Current stage being executed
+  status: 'IDLE' | 'RUNNING' | 'RETRYING' | 'COMPLETED' | 'FAILED';
+  currentStage: number;
+  currentInput: string;
+  baseInput: string;
+  events: PipelineEvent[];
+  
+  // Simplified retry tracking
+  activeRetryContext?: RetryContext;  // Just one active context
+  globalStageRetryCount: Map<number, number>;   // Global safety limit
+  
+  // For @pipeline.retries.all accumulation
+  allRetryHistory: Map<string, string[]>;       // contextId → all outputs
+}
+
+interface RetryContext {
+  id: string;                    // Unique context ID
+  requestingStage: number;       // Stage requesting retry
+  retryingStage: number;         // Stage being retried
+  attemptNumber: number;         // Current attempt (1-based)
+  allAttempts: string[];         // All outputs from retry attempts
 }
 ```
 
@@ -206,14 +244,19 @@ The `@pipeline` variable provides access to pipeline execution state:
 @pipeline[-1]     # Output of previous stage
 @pipeline[-2]     # Output two stages back
 
-# Retry and attempt tracking
-@pipeline.try     # Current attempt number (1, 2, 3...)
-@pipeline.tries   # Array of all attempt outputs for current stage
+# Retry and attempt tracking (context-local)
+@pipeline.try     # Current attempt within active retry context (1, 2, 3...)
+@pipeline.tries   # Array of previous attempts within active retry context
+
+# Global retry history
+@pipeline.retries.all  # All attempts from ALL retry contexts
 
 # Stage information
 @pipeline.stage   # Current stage number (1-based)
 @pipeline.length  # Number of completed stages
 ```
+
+**Critical**: `try` and `tries` are **local to the retry context**. Stages outside the active retry context see `try: 1` and `tries: []`. This is by design - each stage starts fresh unless part of an active retry.
 
 #### Syntactic Sugar: @p Alias
 
@@ -240,34 +283,64 @@ In pipeline contexts, `@p` is available as a shorter alias for `@pipeline`:
 
 ### Retry Mechanism
 
-Functions can return the `retry` keyword to re-execute the current pipeline stage:
+Functions can return the `retry` keyword to re-execute the **previous** pipeline stage:
 
 ```mlld
 /exe @validator(input) = when: [
   @isValid(@input) => @input
-  @pipeline.try < 3 => retry
+  @pipeline.try < 3 => retry    # Retries the previous stage, not current
   * => null
 ]
 
 /var @result = @input | @transform | @validator | @process
+#                        ↑            ↑
+#                   Gets retried  Requests retry
 ```
 
 #### How Retry Works
 
-1. **Signal Detection**: When a function returns `retry`, the pipeline executor detects this signal
-2. **Attempt Tracking**: The current output is stored in `@pipeline.tries` array
-3. **Counter Increment**: `@pipeline.try` increments from 1 to 2, 3, etc.
-4. **Stage Re-execution**: The pipeline re-executes the current stage with the same input
-5. **Safety Limit**: After 10 attempts, an error is thrown to prevent infinite loops
+When stage N returns `retry`, it requests retry of stage N-1:
 
-#### Implementation Details
+1. **Context Check**: System checks for existing retry context with same pattern
+2. **Context Reuse**: If exists, reuses context and increments attempt counter
+3. **Context Creation**: If not, creates new retry context
+4. **Limit Check**: Verifies both per-context (10) and global per-stage (20) limits
+5. **Stage Re-execution**: Re-executes stage N-1 with its original input
+6. **Pipeline Continuation**: Continues from stage N-1 forward
+7. **Context Cleanup**: Clears context when requesting stage completes
 
-The retry mechanism is implemented through:
+#### Retry Limits
 
-1. **Grammar Support**: `retry` keyword parsed as Literal with `valueType: 'retry'`
-2. **Context Validation**: Interpreter validates pipeline context before allowing retry
-3. **State Management**: Pipeline maintains attempt counts and history per stage
-4. **Signal Propagation**: Retry signals pass through when expressions unchanged
+Two independent limits prevent infinite loops:
+
+1. **Per-Context Limit** (10): Maximum retries within a single context
+2. **Global Per-Stage Limit** (20): Total retries for any stage across all contexts
+
+#### Stage 0 Retryability
+
+Stage 0 is special - it has no previous stage. When stage 1 requests retry of stage 0:
+- If stage 0's input came from a function → Re-execute the function
+- If stage 0's input is a literal value → Throw error
+
+```mlld
+# Retryable (function source)
+/var @answer = @claude("explain quantum mechanics")
+/var @result = @answer | @review | @validate
+# @review can retry @answer because @claude() is a function
+
+# Not Retryable (literal source)
+/var @answer = "The capital of France is Paris"
+/var @result = @answer | @review | @validate
+# @review CANNOT retry @answer - will throw error
+```
+
+#### Why No Nested Retries?
+
+Nested retries are not supported because they represent pathological cases. In pipeline A → B → C, if C retries B and then B requests retry of A:
+- B receives the SAME input from A that it got before
+- B's logic hasn't changed
+- There's no legitimate reason for B to suddenly retry A
+- This indicates non-deterministic or poorly designed functions
 
 ### Example Patterns
 
@@ -276,7 +349,7 @@ The retry mechanism is implemented through:
 ```mlld
 /exe @requireValid(response) = when: [
   @response.valid => @response
-  @pipeline.try < 5 => retry
+  @pipeline.try < 5 => retry    # Retries @generate stage
   * => throw "Invalid after 5 attempts"
 ]
 
@@ -288,24 +361,93 @@ The retry mechanism is implemented through:
 ```mlld
 /exe @selectBest(input) = when: [
   @input.score > 8 => @input
-  @pipeline.try < 3 => retry
+  @pipeline.try < 3 => retry    # Retries @claude stage
   * => @selectHighestScore(@pipeline.tries)
 ]
 
 /var @result = @prompt | @claude | @selectBest
 ```
 
-#### Variation Generation
+#### Context Behavior Example
 
 ```mlld
-/exe @generateVariations(input) = when: [
-  @pipeline.try < 5 => retry
-  * => @pipeline.tries
+/exe @stage1(input) = `s1: @input`
+/exe @stage2(input) = when: [
+  @pipeline.try < 3 => retry    # Retry stage 1
+  * => @input
 ]
+/exe @stage3(input) = `s3: @input, try: @pipeline.try`
 
-/var @variations = @prompt | @model | @generateVariations
-# Returns array of 5 different responses
+/var @result = @getData() | @stage1 | @stage2 | @stage3
 ```
+
+Execution flow:
+1. Stage 1 executes (try: 1)
+2. Stage 2 executes (try: 1), returns retry
+3. Stage 1 re-executes (try: 1, fresh context for stage 1)
+4. Stage 2 re-executes (try: 2, within retry context)
+5. Stage 2 returns retry again
+6. Stage 1 re-executes (try: 2, within retry context)
+7. Stage 2 re-executes (try: 3, within retry context)
+8. Stage 2 succeeds, returns input
+9. **Stage 3 executes (try: 1, NEW context)** ← Stage 3 is NOT part of the retry context
+
+## Critical Gotchas and Debugging
+
+### Critical Invariants
+
+1. **Always Use VariableFactory for System Variables**
+```typescript
+// ❌ WRONG - Hand-rolled Variable-like object
+return {
+  type: 'object',
+  name: 'pipeline',
+  value: contextData,
+  metadata: { isPipelineContext: true }
+};
+
+// ✅ CORRECT - Use VariableFactory
+return createObjectVariable(
+  'pipeline',
+  contextData,
+  false, // isComplex
+  source,
+  { isPipelineContext: true, isSystem: true }
+);
+```
+**Why**: Hand-rolled Variables violate type contracts and cause field access failures.
+
+2. **Synthetic Source Stage (`@__source__`)**
+When a pipeline has a retryable source (function), a synthetic stage is added internally. This affects stage numbering in debug output.
+
+3. **Context Lifecycle**
+Context should be cleared when the REQUESTING stage completes, not the retrying stage.
+
+### Debugging Techniques
+
+```bash
+# Full pipeline debug output
+MLLD_DEBUG=true npm test <test-name>
+
+# Specific debug flags
+DEBUG_EXEC=true      # Execution details
+DEBUG_WHEN=true      # When expression evaluation
+DEBUG_PIPELINE=true  # Pipeline-specific debugging
+```
+
+### Common Failure Patterns
+
+1. **"Field not found in object" Errors**
+   - **Cause**: Variable not created through factory
+   - **Fix**: Use proper Variable factories for all system variables
+
+2. **Retry Attempts Stuck at 1**
+   - **Cause**: Context popped too early or wrong attempt counter used
+   - **Fix**: Ensure context lifecycle is correct
+
+3. **Global Retry Limit Hit Immediately**
+   - **Cause**: Double-counting retries or context not being created properly
+   - **Fix**: Check retry counting logic
 
 ## Pipeline Format Feature (v1.4.10+)
 
