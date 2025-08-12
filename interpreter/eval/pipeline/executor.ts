@@ -354,6 +354,17 @@ export class PipelineExecutor {
         value = fieldResult;
       }
 
+      // Special handling for pipeline context - preserve as object
+      // Check if this is the pipeline context or a field access on it
+      const isPipelineContext = (arg.identifier === 'pipeline' || arg.identifier === 'p') 
+        && variable.metadata?.isPipelineContext;
+      
+      if (isPipelineContext && typeof value === 'object') {
+        // Return the raw object for pipeline context
+        console.log('🔵 Returning raw pipeline context:', value);
+        return value;
+      }
+
       return {
         type: 'Text',
         content: typeof value === 'object' ? JSON.stringify(value) : String(value)
