@@ -93,6 +93,18 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
   
   const leftResult = await evaluateUnifiedExpression(node.left, env);
   
+  // Deep debug for left value to understand structure
+  console.log('🔬 LEFT VALUE DEBUG:', {
+    raw: leftResult,
+    type: typeof leftResult,
+    isNumber: typeof leftResult === 'number',
+    constructor: leftResult?.constructor?.name,
+    valueOf: leftResult?.valueOf?.(),
+    isVariable: leftResult && typeof leftResult === 'object' && 'value' in leftResult,
+    extractedValue: leftResult?.value,
+    jsonStringify: JSON.stringify(leftResult)
+  });
+  
   // Short-circuit evaluation for logical operators  
   if (operator === '&&') {
     const leftTruthy = isTruthy(leftResult);
@@ -117,6 +129,16 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
   }
   
   const rightResult = await evaluateUnifiedExpression(node.right, env);
+  
+  // Deep debug for right value
+  console.log('🔬 RIGHT VALUE DEBUG:', {
+    raw: rightResult,
+    type: typeof rightResult,
+    isNumber: typeof rightResult === 'number',
+    constructor: rightResult?.constructor?.name,
+    valueOf: rightResult?.valueOf?.(),
+    jsonStringify: JSON.stringify(rightResult)
+  });
   
   if (process.env.MLLD_DEBUG === 'true') {
     console.log('[DEBUG] About to switch on operator:', {
@@ -148,7 +170,18 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
       const regex = new RegExp(String(rightResult));
       return regex.test(String(leftResult));
     case '<':
-      return toNumber(leftResult) < toNumber(rightResult);
+      const leftNum = toNumber(leftResult);
+      const rightNum = toNumber(rightResult);
+      const ltResult = leftNum < rightNum;
+      console.log('🔬 < COMPARISON DEBUG:', {
+        leftOriginal: leftResult,
+        rightOriginal: rightResult,
+        leftConverted: leftNum,
+        rightConverted: rightNum,
+        result: ltResult,
+        comparison: `${leftNum} < ${rightNum} = ${ltResult}`
+      });
+      return ltResult;
     case '>':
       return toNumber(leftResult) > toNumber(rightResult);
     case '<=':

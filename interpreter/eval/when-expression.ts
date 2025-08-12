@@ -71,8 +71,22 @@ export async function evaluateWhenExpression(
     const pair = node.conditions[i];
     
     try {
+      // Debug: What condition are we evaluating?
+      console.log('🔎 EVALUATING CONDITION:', {
+        index: i,
+        conditionType: pair.condition?.type,
+        isWildcard: pair.condition?.type === 'wildcard',
+        pipelineVar: env.getVariable('pipeline')?.value
+      });
+      
       // Evaluate the condition
       const conditionResult = await evaluateCondition(pair.condition, env);
+      
+      console.log('✅ CONDITION RESULT:', {
+        index: i,
+        result: conditionResult,
+        willMatch: !!conditionResult
+      });
       
       if (process.env.DEBUG_WHEN) {
         logger.debug('WhenExpression condition result:', { 
@@ -170,6 +184,13 @@ export async function evaluateWhenExpression(
         }
       }
     } catch (conditionError) {
+      // DEBUG: Show what error occurred
+      console.log('❌ CONDITION ERROR:', {
+        index: i,
+        error: conditionError.message,
+        stack: conditionError.stack
+      });
+      
       // Collect condition errors but continue evaluating
       errors.push(new MlldWhenExpressionError(
         `Error evaluating condition ${i + 1}: ${conditionError.message}`,

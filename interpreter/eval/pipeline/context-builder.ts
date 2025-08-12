@@ -32,8 +32,14 @@ export async function createStageEnvironment(
   hasSyntheticSource: boolean = false
 ): Promise<Environment> {
   // Adjust stage number if we have a synthetic source (hide it from user)
-  const userVisibleStage = hasSyntheticSource && context.stage > 0 
-    ? context.stage - 1 
+  // The state machine provides 1-indexed stages, so:
+  // - Without synthetic: stage 0 → 1, stage 1 → 2, etc.
+  // - With synthetic: __source__ (0) → 1, first user stage → 2
+  // For synthetic source, we hide stage 0 completely:
+  // - __source__ (internal 0, context.stage 1) → hidden, but if shown would be 0
+  // - testRetry (internal 1, context.stage 2) → show as stage 1
+  const userVisibleStage = hasSyntheticSource && command.rawIdentifier !== '__source__'
+    ? context.stage - 1  // Subtract 1 for real stages to account for hidden __source__
     : context.stage;
   const userVisibleTotalStages = hasSyntheticSource 
     ? context.totalStages - 1 
@@ -155,6 +161,16 @@ function createInterfacePipelineContext(context: StageContext, events?: Readonly
   } else {
     Object.assign(outputs, context.outputs);
   }
+  
+  console.log('📊 PIPELINE CONTEXT:', {
+    internalStage: context.stage,
+    userVisibleStage,
+    attempt: context.attempt,
+    contextAttempt: context.contextAttempt,
+    hasSyntheticSource,
+    history: context.history,
+    historyLength: context.history.length
+  });
   
   const interfaceContext: any = {
     // Stage-specific data

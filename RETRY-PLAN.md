@@ -8,7 +8,20 @@
 - Phase 4 (Source Function Bug): ❌ **Critical Issue Found**
   - Source functions not being re-executed on retry
   - Root cause: Pipeline architecture treats source as external to pipeline
-- Phase 5 (Synthetic Stage Solution): 🚧 **In Progress**
+- Phase 5 (Synthetic Stage Solution): ⚠️ **Blocked by When Expression Bug**
+
+## NEW CRITICAL ISSUE DISCOVERED
+**When expression condition evaluation fails for `@pipeline` context variables**
+
+### Evidence
+- Literal comparisons work: `1 < 3` → true ✅
+- Regular variable comparisons work: `@x < 3` (x=1) → true ✅  
+- Pipeline context comparisons FAIL: `@pipeline.try < 3` (try=1) → false ❌
+
+### Impact
+- Retry signal never sent (when expression returns wrong value)
+- Blocks all retry functionality testing
+- Must be fixed before synthetic stage solution can be validated
 
 ## Problem Analysis
 
@@ -52,7 +65,20 @@ Based on architectural analysis, we're implementing the **synthetic stage approa
 
 ## Implementation Plan
 
-### Phase 1: Add Synthetic Source Stage 🚧
+### Phase 0: Fix When Expression Bug 🔴 **URGENT**
+**Issue**: `@pipeline.try < 3` evaluates incorrectly even when `@pipeline.try = 1`
+
+**Investigation Needed**:
+1. Check how `@pipeline` is resolved in condition context
+2. Debug operator comparison with nested object properties
+3. Verify AST structure for condition nodes (missing type field)
+
+**Files to investigate**:
+- `interpreter/eval/when.ts` → evaluateCondition()
+- `interpreter/eval/expressions.ts` → operator evaluation
+- `interpreter/eval/when-expression.ts` → condition handling
+
+### Phase 1: Add Synthetic Source Stage ✅ **IMPLEMENTED**
 **File: `interpreter/eval/pipeline/unified-processor.ts`**
 ```typescript
 // Create synthetic source stage
@@ -70,7 +96,7 @@ const normalizedPipeline = detected.isRetryable
   : detected.pipeline;
 ```
 
-### Phase 2: Update Executor to Handle `@__source__` 🚧
+### Phase 2: Update Executor to Handle `@__source__` ✅ **IMPLEMENTED**
 **File: `interpreter/eval/pipeline/executor.ts`**
 ```typescript
 // In executeStage, before normal command resolution:
@@ -91,21 +117,24 @@ if (command.rawIdentifier === '__source__') {
 }
 ```
 
-### Phase 3: Clean Up State Machine 🚧
+### Phase 3: Clean Up State Machine ⏸️ **PENDING**
 **File: `interpreter/eval/pipeline/state-machine.ts`**
 - DELETE the special "stage 0 self-retry" branch
 - DELETE the "root context" hack
 - Keep normal retry logic which now handles everything
+- **STATUS**: Waiting for when expression fix before cleanup
 
-### Phase 4: Adjust User-Facing Context 🚧
+### Phase 4: Adjust User-Facing Context ✅ **PARTIALLY IMPLEMENTED**
 **File: `interpreter/eval/pipeline/context-builder.ts`**
-- When `hasSourceStage` is true:
-  - `@pipeline.stage` = actual stage - 1 (hide synthetic stage)
-  - `@pipeline.length` = actual length - 1
-  - `@pipeline[0]` = still the base input (not @__source__ output)
-  - Filter out stage 0 from `previousOutputs`
+- When `hasSyntheticSource` is true:
+  - `@pipeline.stage` = actual stage - 1 (hide synthetic stage) ✅
+  - `@pipeline.length` = actual length - 1 ✅
+  - `@pipeline[0]` = still the base input (not @__source__ output) ✅
+  - Filter out stage 0 from `previousOutputs` ✅
 
-### Phase 5: Update Tests 🚧
+**Issue Found**: Stage numbering complexity with 1-indexed contexts
+
+### Phase 5: Update Tests ⏸️ **BLOCKED**
 - All existing retry tests should pass WITHOUT modification
 - Add tests for the synthetic stage behavior
 - Add debug tracing tests
@@ -172,17 +201,25 @@ After architectural analysis, we chose the synthetic stage approach over creatin
 4. **Delete special cases** - No more "stage 0 self-retry" branches
 5. **Uniform retry model** - Every retry is "retry previous stage"
 
-## Timeline
+## Revised Timeline
 
-- **Week 1**: Implement synthetic stage in unified-processor
-- **Week 2**: Update executor and clean up state machine
-- **Week 3**: Adjust context builder for user-facing compatibility
+- **Immediate**: Fix when expression bug (blocking everything)
+- **Week 1**: ~~Implement synthetic stage in unified-processor~~ ✅ DONE
+- **Week 2**: ~~Update executor~~ ✅ and clean up state machine
+- **Week 3**: ~~Adjust context builder for user-facing compatibility~~ ✅ DONE
 - **Week 4**: Complete testing and documentation
 
 ## Success Criteria
 
-1. All pipeline retry tests pass without modification
-2. Source functions re-execute on retry
-3. Special-case code deleted from state machine
-4. Debug traces show clear stage progression
-5. No user-visible API changes
+1. ❌ All pipeline retry tests pass without modification (blocked by when bug)
+2. ⚠️ Source functions re-execute on retry (implemented but can't verify)
+3. ⏸️ Special-case code deleted from state machine (pending)
+4. ✅ Debug traces show clear stage progression (working)
+5. ✅ No user-visible API changes (maintained)
+
+## Next Immediate Actions
+
+1. **Fix when expression bug** - This is blocking everything
+2. **Verify retry flow works** - Once when expressions return 'retry'
+3. **Clean up state machine** - Remove unnecessary complexity
+4. **Run full test suite** - Ensure no regressions

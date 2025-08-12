@@ -51,6 +51,12 @@ export class PipelineExecutor {
     // Store initial input for synthetic source stage
     this.initialInput = initialInput;
     
+    console.log('🚀 PIPELINE START:', {
+      stages: this.pipeline.map(p => p.rawIdentifier),
+      hasSyntheticSource: this.hasSyntheticSource,
+      isRetryable: this.isRetryable
+    });
+    
     // Start the pipeline
     let nextStep = this.stateMachine.transition({ type: 'START', input: initialInput });
     let iteration = 0;
@@ -58,6 +64,14 @@ export class PipelineExecutor {
     // Process steps until complete
     while (nextStep.type === 'EXECUTE_STAGE') {
       iteration++;
+      
+      console.log(`\n📍 ITERATION ${iteration}:`, {
+        stage: nextStep.stage,
+        stageId: this.pipeline[nextStep.stage]?.rawIdentifier,
+        contextAttempt: nextStep.context.contextAttempt,
+        attempt: nextStep.context.attempt,
+        contextId: nextStep.context.contextId
+      });
       
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[PipelineExecutor] Execute stage:', {
@@ -76,10 +90,22 @@ export class PipelineExecutor {
         nextStep.context
       );
       
+      console.log('📤 STAGE RESULT:', {
+        resultType: result.type,
+        isRetry: result.type === 'retry',
+        output: result.type === 'success' ? result.output?.substring(0, 50) : undefined
+      });
+      
       // Let state machine decide next step
       nextStep = this.stateMachine.transition({ 
         type: 'STAGE_RESULT', 
         result 
+      });
+      
+      console.log('📥 NEXT STEP:', {
+        type: nextStep.type,
+        nextStage: nextStep.type === 'EXECUTE_STAGE' ? nextStep.stage : undefined,
+        nextStageId: nextStep.type === 'EXECUTE_STAGE' ? this.pipeline[nextStep.stage]?.rawIdentifier : undefined
       });
       
       // Safety check for infinite loops
@@ -145,9 +171,23 @@ export class PipelineExecutor {
       // Execute the command
       const output = await this.executeCommand(command, input, stageEnv);
       
+      // DEBUG: What did the command return?
+      console.log('🎯 STAGE OUTPUT:', {
+        stage: context.stage,
+        stageId: command.rawIdentifier,
+        output,
+        isRetry: this.isRetrySignal(output),
+        outputType: typeof output,
+        outputValue: output
+      });
+      
       // Check for retry signal
       if (this.isRetrySignal(output)) {
-        console.log('🔄 RETRY SIGNAL DETECTED:', { output, stage: context.stage });
+        console.log('🔄 RETRY DETECTED:', {
+          stage: context.stage,
+          output,
+          willRetryFrom: context.stage === 0 ? 0 : context.stage - 1
+        });
         const from = this.parseRetryScope(output);
         return { type: 'retry', reason: 'Stage requested retry', from };
       }
@@ -365,7 +405,20 @@ export class PipelineExecutor {
   }
 
   private isRetrySignal(output: any): boolean {
-    return output === 'retry' || (output && output.value === 'retry');
+    const isRetry = output === 'retry' || 
+      (output && typeof output === 'object' && output.value === 'retry');
+    
+    console.log('🔍 RETRY CHECK:', {
+      output,
+      outputType: typeof output,
+      isString: typeof output === 'string',
+      equalsRetry: output === 'retry',
+      hasValueProperty: output && typeof output === 'object' && 'value' in output,
+      valueEqualsRetry: output && typeof output === 'object' && output.value === 'retry',
+      result: isRetry
+    });
+    
+    return isRetry;
   }
 
   private parseRetryScope(output: any): number | undefined {

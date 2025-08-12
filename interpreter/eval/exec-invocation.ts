@@ -717,7 +717,14 @@ export async function evaluateExecInvocation(
       const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
       result = whenResult.value;
       
-      // console.log('🎯 EXEC-INVOCATION RESULT:', String(result));
+      // DEBUG: What is the when expression actually returning?
+      console.log('🔍 WHEN RESULT:', {
+        commandName,
+        result,
+        isRetryString: result === 'retry',
+        resultType: typeof result,
+        pipelineTry: execEnv.getVariable('pipeline')?.value?.try
+      });
     } else if (definition.language === 'mlld-for') {
       // Special handling for mlld-for expressions
       const forExprNode = definition.codeTemplate[0];
