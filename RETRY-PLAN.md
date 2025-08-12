@@ -4,19 +4,21 @@
 
 The pipeline retry mechanism has been successfully simplified and deployed. The architecture transition is complete, with all core functionality working correctly.
 
-**Status**: ✅ Architecture Transition Complete - Simplified Implementation Deployed
+**Status**: ✅ COMPLETE - Simplified Implementation Fully Deployed and Tested
 
 **Key Achievement**: Successfully removed support for nested retries, resulting in a cleaner, more maintainable architecture while preserving all necessary functionality.
 
 **Key Insight**: Nested retries are pathological - in pipeline A→B→C, if C retries B, B gets the same input from A and has no legitimate reason to retry A.
 
-### Current State
+### Current State (2025-01-13 - Session 5)
 - ✅ **All 9 retry fixture tests passing**
 - ✅ **Simplified architecture fully deployed** (old complex implementation removed)
 - ✅ **Documentation updated** to reflect new model
 - ✅ **Feature flag removed** - simplified is now the only implementation
-- ⚠️ **State machine unit tests need replacing** (old tests expect nested retry behavior)
-- 📝 **Minor cleanup needed** for debug statements
+- ✅ **State machine unit tests replaced** - 24 new tests all passing
+- ✅ **Old recursive tests deleted** - removed state-machine-recursive.test.ts
+- ✅ **EventQuery removed** - cleaned up exports
+- 📝 **Minor cleanup needed** for debug statements (low priority)
 
 ## Progress Update (2025-01-13)
 
@@ -61,6 +63,22 @@ The pipeline retry mechanism has been successfully simplified and deployed. The 
 - ✅ **Cleaned up debug logging** - wrapped verbose logging behind `MLLD_DEBUG` flag
 - ✅ **Removed backward compatibility** - no shims or stubs needed
 
+### Session 5 Progress (2025-01-13 - State Machine Tests)
+- ✅ **Created new state machine tests** - Comprehensive suite of 24 tests for simplified model
+  - Basic pipeline execution (2 tests)
+  - Retry mechanism (2 tests)
+  - Context management (4 tests)
+  - Stage 0 retryability (2 tests)
+  - Retry limits (3 tests)
+  - Pipeline context variables (4 tests)
+  - Event recording (2 tests)
+  - Edge cases (3 tests)
+  - Error handling (2 tests)
+- ✅ **All state machine tests passing** - 24/24 tests pass
+- ✅ **Deleted old recursive tests** - Removed `state-machine-recursive.test.ts` (no longer applicable)
+- ✅ **Fixed EventQuery export** - Removed non-existent export from pipeline/index.ts
+- ✅ **Verified build** - Project builds successfully without errors
+
 ### Key Discovery
 **The simplified implementation is working correctly after bug fixes.** Key learnings:
 1. **Context attempt tracking**: Must distinguish between context attempts and stage attempts
@@ -81,9 +99,9 @@ The pipeline retry mechanism has been successfully simplified and deployed. The 
 - [x] Update all imports throughout codebase
 - [x] Run full test suite to ensure nothing breaks
 
-### 2. State Machine Test Updates (Priority)
-- [ ] Delete old state machine tests that expect nested retry behavior
-- [ ] Write new state machine unit tests from scratch for simplified model:
+### 2. ✅ State Machine Test Updates (COMPLETED)
+- [x] Delete old state machine tests that expect nested retry behavior
+- [x] Write new state machine unit tests from scratch for simplified model:
   - Test context reuse (same pattern reuses context)
   - Test independent contexts (different patterns get new context)
   - Test `@pipeline.tries` accumulation within context
@@ -299,11 +317,14 @@ npm test interpreter/eval/pipeline/state-machine*.test.ts
 - [x] Remove feature flag (MLLD_USE_SIMPLIFIED_RETRY)
 - [x] All retry fixture tests passing (9/9)
 
-### 🔄 Remaining
-- [ ] State machine unit test updates (5 tests need rewriting)
-- [ ] Remove EventQuery compatibility stub
-- [ ] Clean up debug statements throughout codebase
-- [ ] Add tests for context reuse behavior
+### ✅ Completed (Session 5)
+- [x] State machine unit test updates (replaced with 24 new tests)
+- [x] Remove EventQuery compatibility stub (removed from exports)
+- [x] Delete old recursive state machine tests
+
+### 🔄 Remaining (Low Priority)
+- [ ] Clean up debug statements throughout codebase (cosmetic)
+- [ ] Archive RETRY-DEBUG-REPORT.md as historical reference
 
 ### Nice to Have
 - [ ] Performance improvements documented

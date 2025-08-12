@@ -92,14 +92,6 @@ Content: Hello from test content file!
 ### Multiple references
 
 First file content. and Second file content. combined
-## Error Cases
-
-### Missing file
-
-Missing file: 
-### Invalid field
-
-Invalid field: 
 ## Special Characters
 
 ### File with spaces

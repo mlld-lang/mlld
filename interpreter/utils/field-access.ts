@@ -102,12 +102,24 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
       
       // Handle LoadContentResult objects - access metadata properties
       if (isLoadContentResult(rawValue)) {
-        // Try to access the property - getters will be invoked
-        const result = (rawValue as any)[name];
-        if (result !== undefined) {
-          accessedValue = result;
-          break;
+        // First check if it's a metadata property that exists directly on LoadContentResult
+        if (name in rawValue) {
+          const result = (rawValue as any)[name];
+          if (result !== undefined) {
+            accessedValue = result;
+            break;
+          }
         }
+        
+        // For JSON files, try to access properties in the parsed JSON
+        if (rawValue.json !== undefined) {
+          const jsonData = rawValue.json;
+          if (jsonData && typeof jsonData === 'object' && name in jsonData) {
+            accessedValue = jsonData[name];
+            break;
+          }
+        }
+        
         throw new Error(`Field "${name}" not found in LoadContentResult`);
       }
       

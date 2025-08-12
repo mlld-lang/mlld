@@ -4,7 +4,7 @@ import { PipelineExecutor } from './executor';
 
 // Re-export types
 export type * from './types';
-export { PipelineStateMachine, EventQuery } from './state-machine';
+export { PipelineStateMachine } from './state-machine';
 export { PipelineExecutor } from './executor';
 
 /**
