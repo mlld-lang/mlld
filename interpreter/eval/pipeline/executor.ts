@@ -1,14 +1,21 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand } from '@core/types';
+
+// Feature flag for simplified retry implementation
+const USE_SIMPLIFIED_RETRY = process.env.MLLD_USE_SIMPLIFIED_RETRY === 'true';
+
+// Import appropriate implementation based on feature flag
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
+import { SimplifiedPipelineStateMachine } from './state-machine-simplified';
 import { createStageEnvironment } from './context-builder';
+import { createSimplifiedStageEnvironment } from './context-builder-simplified';
 import { MlldCommandExecutionError } from '@core/errors';
 
 /**
  * Pipeline Executor - Handles actual execution using state machine
  */
 export class PipelineExecutor {
-  private stateMachine: PipelineStateMachine;
+  private stateMachine: PipelineStateMachine | SimplifiedPipelineStateMachine;
   private env: Environment;
   private format?: string;
   private pipeline: PipelineCommand[];
@@ -17,6 +24,7 @@ export class PipelineExecutor {
   private hasSyntheticSource: boolean;
   private sourceExecutedOnce: boolean = false; // Track if source has been executed once
   private initialInput: string = ''; // Store initial input for synthetic source
+  private allRetryHistory: Map<string, string[]> = new Map(); // For simplified implementation
 
   constructor(
     pipeline: PipelineCommand[],
@@ -28,6 +36,7 @@ export class PipelineExecutor {
   ) {
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Constructor:', {
+        useSimplified: USE_SIMPLIFIED_RETRY,
         pipelineLength: pipeline.length,
         pipelineStages: pipeline.map(p => p.rawIdentifier || 'unknown'),
         isRetryable,
@@ -35,7 +44,11 @@ export class PipelineExecutor {
         hasSyntheticSource
       });
     }
-    this.stateMachine = new PipelineStateMachine(pipeline.length, isRetryable);
+    
+    // Use appropriate state machine based on feature flag
+    this.stateMachine = USE_SIMPLIFIED_RETRY 
+      ? new SimplifiedPipelineStateMachine(pipeline.length, isRetryable)
+      : new PipelineStateMachine(pipeline.length, isRetryable);
     this.pipeline = pipeline;
     this.env = env;
     this.format = format;
@@ -102,6 +115,11 @@ export class PipelineExecutor {
         result 
       });
       
+      // Update retry history for simplified implementation
+      if (USE_SIMPLIFIED_RETRY && this.stateMachine instanceof SimplifiedPipelineStateMachine) {
+        this.allRetryHistory = this.stateMachine.getAllRetryHistory();
+      }
+      
       console.log('📥 NEXT STEP:', {
         type: nextStep.type,
         nextStage: nextStep.type === 'EXECUTE_STAGE' ? nextStep.stage : undefined,
@@ -157,16 +175,27 @@ export class PipelineExecutor {
     context: StageContext
   ): Promise<StageResult> {
     try {
-      // Set up execution environment
-      const stageEnv = await createStageEnvironment(
-        command, 
-        input, 
-        context, 
-        this.env, 
-        this.format,
-        this.stateMachine.getEvents(), // Pass events for global context
-        this.hasSyntheticSource
-      );
+      // Set up execution environment using appropriate context builder
+      const stageEnv = USE_SIMPLIFIED_RETRY
+        ? await createSimplifiedStageEnvironment(
+            command, 
+            input, 
+            context, 
+            this.env, 
+            this.format,
+            this.stateMachine.getEvents(),
+            this.hasSyntheticSource,
+            this.allRetryHistory  // Pass retry history for simplified implementation
+          )
+        : await createStageEnvironment(
+            command, 
+            input, 
+            context, 
+            this.env, 
+            this.format,
+            this.stateMachine.getEvents(),
+            this.hasSyntheticSource
+          );
       
       // Execute the command
       const output = await this.executeCommand(command, input, stageEnv);
