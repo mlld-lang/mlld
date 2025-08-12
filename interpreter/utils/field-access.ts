@@ -273,14 +273,16 @@ export function accessFields(
   let path = options?.parentPath || [];
   let parentVar = isVariable(value) ? value : undefined;
   
+  const shouldPreserveContext = options?.preserveContext !== false;
+  
   for (const field of fields) {
     const result = accessField(current, field, {
-      preserveContext: true,
+      preserveContext: shouldPreserveContext,
       parentPath: path,
       returnUndefinedForMissing: options?.returnUndefinedForMissing
     });
     
-    if (options?.preserveContext) {
+    if (shouldPreserveContext) {
       // Update tracking variables
       current = (result as FieldAccessResult).value;
       path = (result as FieldAccessResult).accessPath;
@@ -295,7 +297,7 @@ export function accessFields(
     }
   }
   
-  if (options?.preserveContext) {
+  if (shouldPreserveContext) {
     return {
       value: current,
       parentVariable: parentVar,

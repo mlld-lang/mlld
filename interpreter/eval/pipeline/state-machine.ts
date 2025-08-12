@@ -432,15 +432,46 @@ export class PipelineStateMachine {
     // Get current context if we're in one
     const currentContext = this.getCurrentContext();
     
-    // Create new retry context
-    const newContextId = this.generateContextId();
-    const newContext: RetryContext = {
-      id: newContextId,
-      requestingStage: stage,
-      retryingStage: targetStage,
-      attemptNumber: 1,
-      parentContextId: currentContext?.id
-    };
+    // Check if we already have an active context for this retry pattern
+    // Since we don't need nested retries, we should only have one active context
+    let existingContext: RetryContext | undefined;
+    if (this.state.activeContexts.length > 0) {
+      const lastContext = this.state.activeContexts[this.state.activeContexts.length - 1];
+      if (lastContext.requestingStage === stage && lastContext.retryingStage === targetStage) {
+        existingContext = lastContext;
+      }
+    }
+    
+    let retryContext: RetryContext;
+    let contextId: string;
+    
+    if (existingContext) {
+      // Reuse existing context and increment attempt
+      existingContext.attemptNumber++;
+      retryContext = existingContext;
+      contextId = existingContext.id;
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error(`[StateMachine] Reusing retry context ${contextId}, attempt ${existingContext.attemptNumber}`);
+      }
+    } else {
+      // Create new retry context
+      contextId = this.generateContextId();
+      retryContext = {
+        id: contextId,
+        requestingStage: stage,
+        retryingStage: targetStage,
+        attemptNumber: 1,
+        parentContextId: currentContext?.id
+      };
+      
+      // Push new context onto stack
+      this.state.activeContexts.push(retryContext);
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error(`[StateMachine] Creating new retry context ${contextId}`);
+      }
+    }
     
     // Check global retry limit for target stage
     const globalRetries = this.state.globalStageRetryCount.get(targetStage) || 0;
@@ -451,11 +482,8 @@ export class PipelineStateMachine {
     }
     
     // Check per-context retry limit
-    // We need to check how many times the REQUESTING stage has retried in its context
-    // (not the target stage in the new context, which would always be 0)
-    const currentContextId = currentContext?.id || 'root';
-    const requestingStageRetries = this.countRetriesForStageInContext(stage, currentContextId);
-    if (requestingStageRetries >= this.maxRetriesPerContext) {
+    const currentContextId = retryContext.id;
+    if (retryContext.attemptNumber > this.maxRetriesPerContext) {
       return this.handleAbort(
         `Stage ${stage} exceeded retry limit in context ${currentContextId}`
       );
@@ -466,18 +494,20 @@ export class PipelineStateMachine {
       type: 'STAGE_RETRY_REQUEST',
       requestingStage: stage,
       targetStage,
-      contextId: newContextId,
+      contextId: contextId,
       parentContextId: currentContext?.id
     });
-    
-    // Push new context onto stack
-    this.state.activeContexts.push(newContext);
     
     // Increment retry counts
     // Increment the requesting stage's count in the current context
     this.incrementRetryCount(currentContextId, stage);
     // Also track global retries for the target stage
-    this.state.globalStageRetryCount.set(targetStage, globalRetries + 1);
+    const newGlobalCount = globalRetries + 1;
+    this.state.globalStageRetryCount.set(targetStage, newGlobalCount);
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error(`[StateMachine] Global retry count for stage ${targetStage}: ${newGlobalCount}`);
+    }
     
     // Calculate input for retry
     const retryInput = this.getInputForStage(targetStage);
@@ -487,12 +517,12 @@ export class PipelineStateMachine {
     this.state.currentStage = targetStage;
     this.state.currentInput = retryInput;
     
-    // Record stage start in new context
+    // Record stage start in retry context
     this.recordEvent({
       type: 'STAGE_START',
       stage: targetStage,
       input: retryInput,
-      contextId: newContextId
+      contextId: contextId
     });
     
     return {
@@ -591,35 +621,15 @@ export class PipelineStateMachine {
       return 0;
     }
     
-    // Count attempts for this stage across all active contexts where it's involved
-    let count = 0;
+    // Find the context where this stage is being retried
     for (const context of this.state.activeContexts) {
-      // A stage is involved in a retry context if:
-      // 1. It's the stage being retried (retryingStage)
-      // 2. It's the stage that requested the retry (requestingStage)
-      // When a stage requests a retry, it will be re-executed after the retry completes
-      if (context.retryingStage === stage || context.requestingStage === stage) {
-        // Count how many times this stage has been executed within this context
-        // by looking for STAGE_START events with this context's ID
-        let contextStarts = 0;
-        for (const event of this.state.events) {
-          if (event.type === 'STAGE_START' && 
-              event.stage === stage &&
-              event.contextId === context.id) {
-            contextStarts++;
-          }
-        }
-        // If this is the requesting stage, we count all starts in this context
-        // If this is the retrying stage, subtract 1 for the current execution
-        if (context.requestingStage === stage) {
-          count += contextStarts;
-        } else {
-          count += Math.max(0, contextStarts - 1);
-        }
+      if (context.retryingStage === stage) {
+        // Return the attempt number minus 1 (since attemptNumber is 1-based)
+        return context.attemptNumber - 1;
       }
     }
     
-    return count;
+    return 0;
   }
   
   /**
@@ -686,12 +696,13 @@ export class PipelineStateMachine {
     
     // Debug context counting
     if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[StateMachine] Building context for stage', stage, {
+      console.error(`[StateMachine] buildStageContext for stage ${stage}:`, {
         activeContexts: this.state.activeContexts.length,
         contextRetries,
         contextAttempt,
         globalStageRetries,
-        attempt
+        attempt,
+        currentContext: this.state.activeContexts[this.state.activeContexts.length - 1]
       });
     }
     
