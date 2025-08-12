@@ -259,6 +259,152 @@ Unrecoverable errors include:
 3. **Stage 0 Assumptions**: Tests assuming stage 0 can always retry
 4. **Limit Configuration**: Tests hitting limits with legitimate retry patterns
 
+## Critical Gotchas and Debugging Guide
+
+### Critical Invariants (MUST Follow)
+
+#### 1. **Always Use VariableFactory for System Variables**
+```typescript
+// ❌ WRONG - Hand-rolled Variable-like object
+return {
+  type: 'object',
+  name: 'pipeline',
+  value: contextData,
+  metadata: { isPipelineContext: true }
+};
+
+// ✅ CORRECT - Use VariableFactory
+return createObjectVariable(
+  'pipeline',
+  contextData,
+  false, // isComplex
+  source,
+  { isPipelineContext: true, isSystem: true }
+);
+```
+
+**Why this matters**: Hand-rolled Variables violate type contracts and cause mysterious field access failures. This single issue can cascade into:
+- Field access errors ("Field 'try' not found")
+- When conditions evaluating incorrectly
+- Retry signals not being sent
+- Hours of debugging across multiple layers
+
+#### 2. **Synthetic Source Stage (`@__source__`)**
+When a pipeline has a retryable source (function), a synthetic stage is added:
+```mlld
+# User writes:
+/var @result = @getData() | @transform
+
+# Internally becomes:
+/var @result = @__source__ | @transform
+# Where @__source__ returns @getData() on first run, re-executes on retry
+```
+
+**Impact**:
+- Stage numbering shifts (user's stage 0 is internal stage 1)
+- Context tracking must account for hidden stage
+- Debug output shows different stage numbers than user expects
+
+#### 3. **Context Lifecycle and Popping**
+```typescript
+// Context should be popped when REQUESTING stage completes, not retrying stage
+if (currentContext && stage === currentContext.requestingStage) {
+  // Pop context - requesting stage completed successfully
+  this.state.activeContexts.pop();
+}
+```
+
+**Common mistake**: Popping context when retrying stage completes causes:
+- Context disappears before requesting stage can use it
+- `@pipeline.try` stuck at 1
+- Retry limits hit immediately
+
+### Debugging Techniques
+
+#### 1. **Enable Debug Output**
+```bash
+# Full pipeline debug output
+MLLD_DEBUG=true npm test <test-name>
+
+# Specific debug flags
+DEBUG_EXEC=true      # Execution details
+DEBUG_WHEN=true      # When expression evaluation
+DEBUG_FOR=true       # For loop execution
+DEBUG_PIPELINE=true  # Pipeline-specific debugging
+```
+
+#### 2. **Understanding Stage Numbers**
+```
+User View:           @getData() | @transform | @validate
+                         ↓           ↓            ↓
+Internal (no retry): stage 0      stage 1     stage 2
+
+Internal (retryable): @__source__ | @transform | @validate
+                         ↓            ↓            ↓
+                      stage 0      stage 1     stage 2
+                    (synthetic)   (user's 0)  (user's 1)
+```
+
+#### 3. **Tracking Retry Context Flow**
+Look for these patterns in debug output:
+```
+🔄 RETRY DETECTED: { stage: 2, output: 'retry', willRetryFrom: 1 }
+[StateMachine] handleStageRetry: {
+  requestingStage: 1,    // Who's asking for retry
+  targetStage: 0,        // Who will be retried
+  activeContexts: 0      // Current context depth
+}
+```
+
+### Common Failure Patterns
+
+#### 1. **"Field not found in object" Errors**
+**Symptom**: `@pipeline.try` or other fields fail to resolve
+**Cause**: Variable not created through factory
+**Fix**: Use proper Variable factories for all system variables
+
+#### 2. **Retry Attempts Stuck at 1**
+**Symptom**: `@pipeline.try` always equals 1
+**Causes**:
+- Context popped too early
+- Wrong field used (`context.attempt` vs `context.contextAttempt`)
+- `countRetriesInContextChain` not counting requesting stage
+
+#### 3. **Global Retry Limit Hit Immediately**
+**Symptom**: "Stage X exceeded global retry limit (20)"
+**Causes**:
+- Double-counting retries with synthetic source
+- Context not being created properly
+- Increment happening in wrong place
+
+#### 4. **Pipeline Context Not Available in Functions**
+**Symptom**: `@p` or `@pipeline` undefined in function calls
+**Causes**:
+- Context not being passed as parameter correctly
+- Parameter binding issues with pipeline functions
+
+### Architecture Decision Rationale
+
+#### Why Synthetic Source Stage?
+- **Problem**: Stage 0 needs to be retryable when source is a function
+- **Alternative considered**: Separate abstractions for sources vs stages
+- **Decision**: Normalize all pipelines to have source as stage 0
+- **Benefits**: Uniform retry logic, no special cases
+- **Trade-off**: Hidden complexity in stage numbering
+
+#### Why Requesting vs Retrying Stage Distinction?
+- **Problem**: Need to track which stage initiated retry and which is being retried
+- **Purpose**: Proper context management and attempt counting
+- **Complexity**: Both stages need tracking for attempt counts
+- **Key insight**: Requesting stage also gets re-executed after retry
+
+### Testing Gotchas
+
+1. **Whitespace in Expected Output**: Many tests fail due to trailing spaces or extra newlines
+2. **Global State Between Tests**: Ensure state machine is properly reset
+3. **Synthetic Source Visibility**: Tests may see different stage numbers than expected
+4. **Context Timing**: Verify contexts are active when expected
+
 ## Future Enhancements
 
 ### Planned Improvements
@@ -268,6 +414,7 @@ Unrecoverable errors include:
 3. **Partial Success**: Allow stages to return partial results
 4. **Retry Metadata**: Pass retry reason/context to retried stage
 5. **Observability**: Better logging and debugging for retry chains
+6. **Contract Validation**: Runtime checks for Variable creation invariants
 
 ### Under Consideration
 
