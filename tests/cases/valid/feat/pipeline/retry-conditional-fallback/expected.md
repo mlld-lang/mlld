@@ -1,5 +1,7 @@
-# Test conditional retry with fallback after max attempts
-
 # Conditional Retry with Fallback Test
 
-valid-json: {"valid": "json"}
+# Create a retryable source
+
+# Test conditional retry with fallback after max attempts
+
+fallback: using default JSON structure

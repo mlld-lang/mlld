@@ -7,7 +7,7 @@
   @pipeline.try < 3 => retry
   * => @pipeline.try
 ]
-  
+ 
 /var @result = @getInput() | @testRetry
 
 /show @result

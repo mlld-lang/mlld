@@ -1,5 +1,7 @@
-# Test retry mechanism in when expressions
-
 # Retry in When Expression Test
 
-high-quality
+# Create a retryable source
+
+# Test retry mechanism in when expressions
+
+quality-control-failed
