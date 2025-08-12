@@ -224,10 +224,16 @@ export async function evaluateShow(
           }
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = accessField(value, resolvedField, { preserveContext: true });
+          const fieldResult = await accessField(value, resolvedField, { 
+            preserveContext: true,
+            env 
+          });
           value = (fieldResult as any).value;
         } else {
-          const fieldResult = accessField(value, field, { preserveContext: true });
+          const fieldResult = await accessField(value, field, { 
+            preserveContext: true,
+            env 
+          });
           value = (fieldResult as any).value;
         }
         if (value === undefined) break;

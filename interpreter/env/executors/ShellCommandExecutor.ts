@@ -60,10 +60,10 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     try {
       safeCommand = CommandUtils.validateAndParseCommand(command);
     } catch (error: unknown) {
-      // If validation fails, it's likely due to a banned operator
+      // Pass through the validation error with its detailed message
       const message = error instanceof Error ? error.message : String(error);
       throw new MlldCommandExecutionError(
-        `Invalid command: ${message}`,
+        message, // Use the full error message from CommandUtils
         context?.sourceLocation,
         {
           command,

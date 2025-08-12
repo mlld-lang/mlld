@@ -169,10 +169,16 @@ export class VariableReferenceEvaluator {
           const indexValue = await extract(indexVar, env);
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = accessField(result, resolvedField, { preserveContext: true });
+          const fieldResult = await accessField(result, resolvedField, { 
+            preserveContext: true,
+            env 
+          });
           result = (fieldResult as any).value;
         } else {
-          const fieldResult = accessField(result, field, { preserveContext: true });
+          const fieldResult = await accessField(result, field, { 
+            preserveContext: true,
+            env 
+          });
           result = (fieldResult as any).value;
         }
       }
@@ -241,7 +247,10 @@ export class VariableReferenceEvaluator {
       }
       
       const { accessFields } = await import('../../utils/field-access');
-      const fieldResult = accessFields(result, varRef.fields, { preserveContext: true });
+      const fieldResult = await accessFields(result, varRef.fields, { 
+        preserveContext: true,
+        env 
+      });
       result = fieldResult.value;
     }
     
@@ -321,10 +330,16 @@ export class VariableReferenceEvaluator {
           const indexValue = await extract(indexVar, env);
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = accessField(result, resolvedField, { preserveContext: true });
+          const fieldResult = await accessField(result, resolvedField, { 
+            preserveContext: true,
+            env 
+          });
           result = (fieldResult as any).value;
         } else {
-          const fieldResult = accessField(result, field, { preserveContext: true });
+          const fieldResult = await accessField(result, field, { 
+            preserveContext: true,
+            env 
+          });
           result = (fieldResult as any).value;
         }
       }

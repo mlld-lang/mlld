@@ -491,15 +491,17 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           const indexValue = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
           // Create a new field with the resolved value
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-          const fieldResult = accessField(resolvedValue, resolvedField, { 
+          const fieldResult = await accessField(resolvedValue, resolvedField, { 
             preserveContext: true,
-            returnUndefinedForMissing: context?.isCondition
+            returnUndefinedForMissing: context?.isCondition,
+            env
           });
           resolvedValue = (fieldResult as any).value;
         } else {
-          const fieldResult = accessField(resolvedValue, field, { 
+          const fieldResult = await accessField(resolvedValue, field, { 
             preserveContext: true,
-            returnUndefinedForMissing: context?.isCondition
+            returnUndefinedForMissing: context?.isCondition,
+            env
           });
           resolvedValue = (fieldResult as any).value;
         }
@@ -939,10 +941,16 @@ export async function interpolate(
             const indexValue = await resolveVal(indexVar, env, ResCtx2.StringInterpolation);
             // Create a new field with the resolved value
             const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
-            const fieldResult = accessField(value, resolvedField, { preserveContext: true });
+            const fieldResult = await accessField(value, resolvedField, { 
+              preserveContext: true,
+              env 
+            });
             value = (fieldResult as any).value;
           } else {
-            const fieldResult = accessField(value, field, { preserveContext: true });
+            const fieldResult = await accessField(value, field, { 
+              preserveContext: true,
+              env 
+            });
             value = (fieldResult as any).value;
           }
           
@@ -1315,7 +1323,10 @@ async function processFileFields(
     const { accessField } = await import('../utils/field-access');
     for (const field of fields) {
       try {
-        const fieldResult = accessField(result, field, { preserveContext: true });
+        const fieldResult = await accessField(result, field, { 
+          preserveContext: true,
+          env 
+        });
         result = (fieldResult as any).value;
         if (result === undefined) {
           // Warning to stderr

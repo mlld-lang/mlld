@@ -6,6 +6,8 @@ import { FieldAccessNode } from '@core/types/primitives';
 import { isLoadContentResult, isLoadContentResultURL, isLoadContentResultArray } from '@core/types/load-content';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from './variable-resolution';
+import { ArrayOperationsHandler } from './array-operations';
+import { Environment } from '@interpreter/env/Environment';
 
 /**
  * Result of field access that preserves context
@@ -31,17 +33,21 @@ export interface FieldAccessOptions {
   parentPath?: string[];
   /** Whether to return undefined for missing fields instead of throwing */
   returnUndefinedForMissing?: boolean;
+  /** Environment for async operations like filters */
+  env?: Environment;
 }
 
 /**
  * Access a field on an object or array.
  * Handles dot notation (object.field), numeric fields (obj.123), 
- * array indexing (array[0]), and string indexing (obj["key"])
+ * array indexing (array[0]), string indexing (obj["key"]),
+ * array slicing (array[0:5]), and array filtering (array[?field>100])
  * 
  * Phase 2: Handle normalized AST objects
  * Phase 5: Consolidated with enhanced field access for Variable preservation
+ * Phase 6: Added array operations (slice and filter)
  */
-export function accessField(value: any, field: FieldAccessNode, options?: FieldAccessOptions): any | FieldAccessResult {
+export async function accessField(value: any, field: FieldAccessNode, options?: FieldAccessOptions): Promise<any | FieldAccessResult> {
   // CRITICAL: Variable metadata properties whitelist
   // Only these properties access the Variable itself, not its value
   const VARIABLE_METADATA_PROPS = ['type', 'isComplex', 'source', 'metadata'];
@@ -267,6 +273,22 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
       break;
     }
     
+    case 'arraySlice':
+    case 'arrayFilter': {
+      // Handle array operations (slice and filter)
+      const arrayOps = new ArrayOperationsHandler();
+      
+      // Use the full value (including Variable wrapper if present) for array operations
+      // This allows the handler to properly extract and preserve metadata
+      const env = options?.env;
+      if (!env && field.type === 'arrayFilter') {
+        throw new Error('Environment required for array filter operations');
+      }
+      
+      accessedValue = await arrayOps.handle(value, field, env!);
+      break;
+    }
+    
     default:
       throw new Error(`Unknown field access type: ${(field as any).type}`);
   }
@@ -291,11 +313,11 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
 /**
  * Access multiple fields in sequence, preserving context
  */
-export function accessFields(
+export async function accessFields(
   value: any,
   fields: FieldAccessNode[],
   options?: FieldAccessOptions
-): any | FieldAccessResult {
+): Promise<any | FieldAccessResult> {
   let current = value;
   let path = options?.parentPath || [];
   let parentVar = isVariable(value) ? value : undefined;
@@ -303,10 +325,11 @@ export function accessFields(
   const shouldPreserveContext = options?.preserveContext !== false;
   
   for (const field of fields) {
-    const result = accessField(current, field, {
+    const result = await accessField(current, field, {
       preserveContext: shouldPreserveContext,
       parentPath: path,
-      returnUndefinedForMissing: options?.returnUndefinedForMissing
+      returnUndefinedForMissing: options?.returnUndefinedForMissing,
+      env: options?.env
     });
     
     if (shouldPreserveContext) {

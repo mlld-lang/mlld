@@ -128,7 +128,10 @@ export async function evaluateDataValue(
       const { accessField } = await import('../utils/field-access');
       // Apply each field access in sequence
       for (const field of value.fields) {
-        const fieldResult = accessField(result, field, { preserveContext: true });
+        const fieldResult = await accessField(result, field, { 
+          preserveContext: true,
+          env 
+        });
         result = (fieldResult as any).value;
       }
     }

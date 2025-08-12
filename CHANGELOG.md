@@ -6,7 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [2.0.0-rc35] (unrelease)
+## [2.0.0-rc36] 
+
+### Added
+- **Array Slice Operations**: Native array slicing syntax for extracting subsets of arrays
+  - Basic slicing: `@array[0:5]` extracts items from index 0 to 5 (exclusive)
+  - Negative indices: `@array[-3:]` gets last 3 items, `@array[:-1]` gets all except last
+  - Open-ended slices: `@array[2:]` from index 2 to end, `@array[:3]` from start to index 3
+  - Works with all array types including LoadContentResult arrays from glob patterns
+  - Preserves metadata through slice operations (e.g., `<*.md>[0:5]` maintains file metadata)
+  - Grammar foundation laid for future filter operations (`@array[?field>value]` syntax reserved)
+
+### Fixed
+- **Shell Command Validation**: Replaced buggy regex-based shell operator detection with proper `shell-quote` library
+  - Fixed false positives where legitimate `>` characters in content were incorrectly flagged as dangerous redirects
+  - Pipes (`|`) continue to work correctly for command chaining
+  - Removed overly restrictive blocking of redirect operators (`>`, `>>`, `<`) since they only affect local files
+  - Dangerous operators (`&&`, `||`, `;`, `&`) remain blocked to prevent command injection and zombie processes
+  - Improved error messages now show the rejected command and suggest using `/run sh { ... }` for less restrictive execution
+  - Resolves issues with multiline content containing angle brackets being rejected
+
+## [2.0.0-rc35]
 
 ### Added
 - **Pipeline Context Variable**: The `@pipeline` context variable provides access to pipeline execution state

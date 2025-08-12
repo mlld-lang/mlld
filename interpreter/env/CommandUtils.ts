@@ -1,3 +1,5 @@
+import * as shellQuote from 'shell-quote';
+
 /**
  * CommandUtils provides utilities for command validation, parsing, and enhancement.
  * These are pure utility functions with no state dependencies.
@@ -7,40 +9,59 @@ export class CommandUtils {
   /**
    * Validate and parse command for security
    * Blocks dangerous shell operators that could be used maliciously
+   * Uses shell-quote library for accurate operator detection
    */
   static validateAndParseCommand(command: string): string {
-    // Create a version of the command with quoted sections removed for operator checking
-    let checkCommand = command;
+    // Use shell-quote to parse the command and detect operators
+    const parsed = shellQuote.parse(command);
     
-    // Remove single-quoted strings (no interpolation, so safe to remove entirely)
-    checkCommand = checkCommand.replace(/'[^']*'/g, '');
+    // List of allowed operators (pipes are OK for command chaining)
+    const allowedOperators = new Set(['|']);
     
-    // Remove double-quoted strings (they may have interpolation but operators inside are literal)
-    checkCommand = checkCommand.replace(/"[^"]*"/g, '');
+    // List of banned operators that could be dangerous
+    const bannedOperators = new Set([
+      '&&',  // AND operator
+      '||',  // OR operator
+      ';',   // Command separator
+      // '>',   // Output redirect - Allowed: just writes to local files
+      // '>>',  // Append redirect - Allowed: just appends to local files  
+      // '<',   // Input redirect - Allowed: just reads from local files
+      '&'    // Background execution - Still dangerous (zombie processes)
+    ]);
     
-    // Also handle escaped characters - they're literal
-    checkCommand = checkCommand.replace(/\\./g, '');
-    
-    // Check for dangerous operators only in the unquoted parts
-    const dangerousPatterns = [
-      /&&/, // AND operator
-      /\|\|/, // OR operator (but single | is allowed for piping) 
-      /;/, // Semicolon
-      />\s*[^>]/, // Single redirect
-      />>/,  // Append redirect
-      /<(?![=<])/, // Input redirect (not <= or <<)
-      /&(?![&>])/ // Background (not && or &>)
-    ];
-    
-    for (const pattern of dangerousPatterns) {
-      if (pattern.test(checkCommand)) {
-        throw new Error(`Command contains banned shell operator`);
+    // Check for dangerous operators
+    for (const token of parsed) {
+      if (typeof token === 'object' && 'op' in token) {
+        const operator = token.op;
+        if (bannedOperators.has(operator)) {
+          // Create a helpful error message with the actual command and operator
+          const operatorDescriptions: Record<string, string> = {
+            '&&': 'AND operator (&&)',
+            '||': 'OR operator (||)',
+            ';': 'semicolon (;)',
+            '&': 'background execution (&)'
+          };
+          
+          const description = operatorDescriptions[operator] || `operator (${operator})`;
+          
+          // Build a detailed error message
+          const errorMessage = [
+            `Shell ${description} is not allowed in /run commands`,
+            '',
+            'Command rejected:',
+            `  ${command}`,
+            '',
+            `The ${description} character is not allowed in the /run context.`,
+            'Use a full shell command with /run sh { ... } for less restrictive execution,',
+            'or split into separate /run commands.'
+          ].join('\n');
+          
+          throw new Error(errorMessage);
+        }
       }
     }
     
-    // For now, just return the command as-is since it passed validation
-    // The shell-quote library was causing issues with over-escaping
-    // The grammar should have already caught most dangerous operators
+    // Command passed validation, return as-is
     return command;
   }
 

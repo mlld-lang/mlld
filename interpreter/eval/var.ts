@@ -378,14 +378,18 @@ export async function evaluateVar(
       // No need to extract again - field access will handle extraction if needed
       
       // Use enhanced field access to preserve context
-      const fieldResult = accessField(resolvedVar, valueNode.fields[0], { preserveContext: true });
+      const fieldResult = await accessField(resolvedVar, valueNode.fields[0], { 
+        preserveContext: true,
+        env 
+      });
       let currentResult = fieldResult as any;
       
       // Apply remaining fields if any
       for (let i = 1; i < valueNode.fields.length; i++) {
-        currentResult = accessField(currentResult.value, valueNode.fields[i], { 
+        currentResult = await accessField(currentResult.value, valueNode.fields[i], { 
           preserveContext: true, 
-          parentPath: currentResult.accessPath 
+          parentPath: currentResult.accessPath,
+          env 
         });
       }
       
@@ -505,7 +509,10 @@ export async function evaluateVar(
     // Apply field access if present
     if (varWithTail.variable.fields && varWithTail.variable.fields.length > 0) {
       // Use enhanced field access to track context
-      const fieldResult = accessFields(resolvedVar, varWithTail.variable.fields, { preserveContext: true });
+      const fieldResult = await accessFields(resolvedVar, varWithTail.variable.fields, { 
+        preserveContext: true,
+        env 
+      });
       result = (fieldResult as any).value;
     }
     
