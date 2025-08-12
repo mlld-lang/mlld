@@ -33,26 +33,35 @@ The core retry mechanism is **working correctly**. We can now focus on edge case
 - ✅ Retry signals are detected and processed
 - ✅ Basic retry tests functionally work
 
-## Remaining Issues (Edge Cases)
+## Critical Architecture Discovery (2025-01-13)
 
-### 1. Pipeline Context as Function Parameter
-**Problem**: When `@p` or `@p.try` is passed as a function argument, it may not work correctly
-- Example: `@qualityScorer(@p.try)` gets undefined or wrong values
-- Affects tests: `pipeline-retry-complex-logic`, `pipeline-retry-attempt-tracking`
+### Nested Retries Are Unnecessary!
+After deep analysis, we discovered that **nested retry contexts solve a problem that doesn't exist**. In a pipeline `A → B → C`:
+- When C retries B, B gets the SAME input from A it had before
+- There's no legitimate reason for B to suddenly need to retry A
+- The only scenarios where this would happen are pathological (random behavior, time-based logic that should have been checked initially)
 
-### 2. Global Retry Limit (20) Being Hit
-**Problem**: Some tests exceed the global retry limit unexpectedly
-- May be double-counting with synthetic source stage
-- Affects tests: `pipeline-retry-attempt-tracking`
+### The Real Bug: Context Reuse
+The system was creating a NEW retry context for each retry request instead of reusing existing contexts:
+- Stage 2 retries Stage 1: Create context with `attemptNumber: 1`
+- Stage 2 retries Stage 1 again: Create ANOTHER context with `attemptNumber: 1` (WRONG!)
+- This caused `@pipeline.try` to stay at 1 and hit global retry limits
 
-### 3. Multi-Stage Retry Patterns
-**Problem**: Complex multi-stage retry scenarios not working as expected
-- Affects tests: `pipeline-multi-stage-retry`, `pipeline-context-preservation`
+**Fix Implemented**: Check for existing context with same requesting/retrying stages and increment its attempt counter.
 
-### 4. Output Formatting
-**Problem**: Extra whitespace/blank lines in output
-- Functionally correct but formatting differs from expected
-- Affects multiple tests
+## Remaining Issues (Now Understood)
+
+### 1. Pipeline Context Parameter Passing ✅ PARTIALLY FIXED
+**Fixed**: Field access for `@p.try` now works correctly
+**Remaining**: Context still accumulates due to architecture expecting nested retries
+
+### 2. Global Retry Limit Being Hit ✅ ROOT CAUSE FOUND
+**Cause**: Creating new contexts instead of reusing them
+**Status**: Fixed with context reuse implementation
+
+### 3. Architecture Overly Complex
+**Problem**: Designed for nested retries that shouldn't exist
+**Solution**: Simplify to single active retry context (see Architecture Simplification below)
 
 ## Pragmatic Next Steps
 
@@ -224,9 +233,49 @@ The complexity we encountered wasn't due to bad architecture but a single contra
 3. **Fail fast and loudly** - Contract violations should throw immediately, not fail mysteriously
 4. **Document gotchas** - Critical invariants need to be documented and tested
 
+## Proposed Architecture Simplification
+
+### Current (Overly Complex for Nested Retries)
+```typescript
+interface RetryContext {
+  id: string;
+  requestingStage: number;
+  retryingStage: number;
+  attemptNumber: number;
+  parentContextId?: string;  // For nesting - NOT NEEDED!
+}
+activeContexts: RetryContext[];  // Stack of contexts - unnecessary complexity
+```
+
+### Proposed (Simple, Single Context)
+```typescript
+interface RetryContext {
+  id: string;
+  requestingStage: number;
+  retryingStage: number;
+  attemptNumber: number;
+  attempts: string[];  // Collect outputs from each attempt
+}
+activeRetryContext?: RetryContext;  // Just one at a time!
+```
+
+### Benefits of Simplification
+1. **Eliminates context stack complexity** - No more pushing/popping
+2. **Clear retry semantics** - One retry pattern active at a time
+3. **Simpler attempt tracking** - `@pipeline.try` directly from context
+4. **Easier to debug** - No nested context confusion
+5. **Maintains all useful features** - Still tracks attempts, collects history
+
+### Implementation Strategy
+**IMPORTANT**: The next session should begin with careful architecture design before implementation:
+1. Document the simplified state machine states and transitions
+2. Define clear rules for context creation, reuse, and clearing
+3. Ensure backward compatibility with existing tests
+4. Plan migration path from current architecture
+
 ## Next Immediate Actions
 
-1. **Fix `@p` parameter passing** - Investigate why pipeline context isn't passed correctly as function argument
-2. **Debug global retry counting** - Add logging to understand why limit is hit
-3. **Update state machine tests** - Adjust for new context lifecycle
-4. **Document remaining edge cases** - Create issues for each failing test pattern
+1. **NEXT SESSION: Design simplified architecture** - Create detailed design doc before coding
+2. **Continue with context reuse fix** - Current fix works but architecture needs simplification
+3. **Update state machine tests** - Adjust for context reuse behavior
+4. **Document test failures** - Create issues for each pattern

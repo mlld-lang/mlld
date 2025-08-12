@@ -450,10 +450,6 @@ export class PipelineStateMachine {
       existingContext.attemptNumber++;
       retryContext = existingContext;
       contextId = existingContext.id;
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error(`[StateMachine] Reusing retry context ${contextId}, attempt ${existingContext.attemptNumber}`);
-      }
     } else {
       // Create new retry context
       contextId = this.generateContextId();
@@ -467,10 +463,6 @@ export class PipelineStateMachine {
       
       // Push new context onto stack
       this.state.activeContexts.push(retryContext);
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error(`[StateMachine] Creating new retry context ${contextId}`);
-      }
     }
     
     // Check global retry limit for target stage
@@ -504,10 +496,6 @@ export class PipelineStateMachine {
     // Also track global retries for the target stage
     const newGlobalCount = globalRetries + 1;
     this.state.globalStageRetryCount.set(targetStage, newGlobalCount);
-    
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error(`[StateMachine] Global retry count for stage ${targetStage}: ${newGlobalCount}`);
-    }
     
     // Calculate input for retry
     const retryInput = this.getInputForStage(targetStage);
@@ -693,18 +681,6 @@ export class PipelineStateMachine {
     // Count retries in current context chain
     const contextRetries = this.countRetriesInContextChain(stage);
     const contextAttempt = contextRetries + 1;
-    
-    // Debug context counting
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error(`[StateMachine] buildStageContext for stage ${stage}:`, {
-        activeContexts: this.state.activeContexts.length,
-        contextRetries,
-        contextAttempt,
-        globalStageRetries,
-        attempt,
-        currentContext: this.state.activeContexts[this.state.activeContexts.length - 1]
-      });
-    }
     
     // Count total retries across all stages
     let totalRetries = 0;

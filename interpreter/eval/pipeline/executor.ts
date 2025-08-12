@@ -322,17 +322,6 @@ export class PipelineExecutor {
       if (arg.fields && arg.fields.length > 0) {
         const { accessFields } = await import('../../utils/field-access');
         const fieldResult = await accessFields(value, arg.fields, { preserveContext: false });
-        
-        // Debug logging for pipeline context arguments  
-        if (process.env.MLLD_DEBUG === 'true' && arg.identifier === 'p') {
-          console.error('[PipelineExecutor] @p field access result:', {
-            identifier: arg.identifier,
-            fields: arg.fields,
-            fieldResult,
-            fieldResultType: typeof fieldResult
-          });
-        }
-        
         value = fieldResult;
       }
 
