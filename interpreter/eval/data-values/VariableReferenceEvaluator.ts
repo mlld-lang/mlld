@@ -229,6 +229,17 @@ export class VariableReferenceEvaluator {
     
     // Apply field access if present
     if (varRef.fields && varRef.fields.length > 0) {
+      // DEBUG: Log what we're about to access  
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.log('🔍 BEFORE FIELD ACCESS (VariableReferenceWithTail):', {
+          variableIdentifier: varRef.identifier,
+          fields: varRef.fields,
+          resultType: typeof result,
+          resultKeys: typeof result === 'object' && result !== null ? Object.keys(result) : 'N/A',
+          resultValue: result
+        });
+      }
+      
       const { accessFields } = await import('../../utils/field-access');
       const fieldResult = accessFields(result, varRef.fields, { preserveContext: true });
       result = fieldResult.value;
@@ -277,6 +288,17 @@ export class VariableReferenceEvaluator {
     
     // Extract value using new type guards
     let result = await this.extractVariableValue(variable, env);
+    
+    // DEBUG: Log what we extracted
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('🔍 EXTRACTED VARIABLE VALUE:', {
+        variableIdentifier: value.identifier,
+        variableType: variable.type,
+        resultType: typeof result,
+        resultKeys: typeof result === 'object' && result !== null ? Object.keys(result) : 'N/A',
+        resultValue: result
+      });
+    }
     
     // Apply field access if present
     if (value.fields && value.fields.length > 0) {

@@ -1,7 +1,7 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import type { StageContext, PipelineEvent } from './state-machine';
-import { createPipelineInputVariable, createSimpleTextVariable } from '@core/types/variable';
+import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
 
 /**
@@ -254,14 +254,16 @@ function createInterfacePipelineContext(context: StageContext, events?: Readonly
  * Create pipeline context variable wrapper
  */
 function createPipelineContextVariable(name: string, context: any, source: VariableSource): any {
-  return {
-    type: 'object',
+  // Use the proper factory to create an ObjectVariable
+  // This ensures it has the same structure as regular object variables
+  return createObjectVariable(
     name,
-    value: context,
-    metadata: {
+    context,
+    false, // isComplex - pipeline context is not complex (no embedded directives)
+    source,
+    {
       isPipelineContext: true,
-      source,
       isSystem: true
     }
-  };
+  );
 }

@@ -8,14 +8,14 @@ import { isEqual, toNumber, isTruthy } from './expression';
  * Handles: BinaryExpression, UnaryExpression, TernaryExpression, ArrayFilterExpression, ArraySliceExpression, Literal nodes
  */
 export async function evaluateUnifiedExpression(node: any, env: Environment): Promise<any> {
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.log('[DEBUG] evaluateUnifiedExpression called with:', {
-      nodeType: node.type,
-      operator: node.operator,
-      hasLeft: !!node.left,
-      hasRight: !!node.right
-    });
-  }
+  // Temporary unconditional debug to trace the issue
+  console.log('[DEBUG] evaluateUnifiedExpression called with:', {
+    nodeType: node?.type,
+    operator: node?.operator,
+    hasLeft: !!node?.left,
+    hasRight: !!node?.right,
+    nodeKeys: node ? Object.keys(node) : 'null/undefined'
+  });
 
   try {
     switch (node.type) {
@@ -34,7 +34,19 @@ export async function evaluateUnifiedExpression(node: any, env: Environment): Pr
       case 'VariableReference':
         // Delegate variable references to the standard evaluator
         try {
+          // DEBUG: Log what we're about to evaluate
+          console.log('🔍 EVALUATING VARIABLE REFERENCE IN EXPRESSION:', {
+            identifier: node.identifier,
+            hasFields: !!node.fields,
+            fields: node.fields,
+            nodeStructure: Object.keys(node)
+          });
           const varResult = await evaluate(node, env);
+          console.log('🔍 VARIABLE REFERENCE RESULT:', {
+            success: true,
+            value: varResult.value,
+            valueType: typeof varResult.value
+          });
           return varResult.value;
         } catch (error) {
           // Handle undefined variables gracefully for backward compatibility
@@ -56,12 +68,24 @@ export async function evaluateUnifiedExpression(node: any, env: Environment): Pr
       default:
         // For all other node types, delegate to the standard evaluator
         if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[DEBUG] Delegating node type to standard evaluator:', node.type);
+          console.log('[DEBUG] Delegating node type to standard evaluator:', {
+            nodeType: node.type,
+            nodeKeys: Object.keys(node),
+            node: JSON.stringify(node, null, 2)
+          });
         }
         const result = await evaluate(node, env);
         return result.value;
     }
   } catch (error) {
+    // DEBUG: Log what failed
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.log('❌ EXPRESSION EVALUATION ERROR:', {
+        nodeType: node.type,
+        node: JSON.stringify(node, null, 2),
+        error: error.message
+      });
+    }
     throw new MlldDirectiveError(
       `Expression evaluation failed: ${error.message}`,
       'UnifiedExpression',
@@ -88,6 +112,16 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
       operatorType: typeof operator,
       leftType: node.left.type,
       rightType: node.right.type
+    });
+  }
+  
+  // DEBUG: Log what we're evaluating
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.log('🔬 BINARY EXPRESSION NODES:', {
+      leftType: node.left?.type,
+      rightType: node.right?.type,
+      left: JSON.stringify(node.left, null, 2),
+      right: JSON.stringify(node.right, null, 2)
     });
   }
   

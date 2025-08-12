@@ -73,6 +73,18 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
   const rawValue = isVariable(value) ? value.value : value;
   const fieldValue = field.value;
   
+  // DEBUG: Log what we're working with
+  if (process.env.MLLD_DEBUG === 'true' && String(fieldValue) === 'try') {
+    console.log('🔍 FIELD ACCESS PRE-CHECK:', {
+      isVar: isVariable(value),
+      rawValueType: typeof rawValue,
+      rawValueKeys: Object.keys(rawValue || {}),
+      rawValueTypeField: rawValue?.type,
+      rawValuePropertiesField: rawValue?.properties,
+      hasProperties: rawValue?.properties && typeof rawValue.properties === 'object'
+    });
+  }
+  
   // Perform the actual field access
   let accessedValue: any;
   const fieldName = String(fieldValue);
@@ -115,8 +127,8 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
         throw new Error(`Field "${name}" not found in LoadContentResultArray`);
       }
       
-      // Handle normalized AST objects
-      if (rawValue.type === 'object' && rawValue.properties) {
+      // Handle normalized AST objects (must have both type and properties)
+      if (rawValue.type === 'object' && rawValue.properties && typeof rawValue.properties === 'object') {
         // Access the properties object for normalized AST objects
         if (!(name in rawValue.properties)) {
           if (options?.returnUndefinedForMissing) {
@@ -129,7 +141,18 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
         break;
       }
       
-      // Handle regular objects
+      // DEBUG: Log what we're checking
+      if (process.env.MLLD_DEBUG === 'true' && name === 'try') {
+        console.log('🔍 FIELD ACCESS DEBUG:', {
+          fieldName: name,
+          rawValueType: typeof rawValue,
+          rawValueKeys: Object.keys(rawValue || {}),
+          hasField: name in rawValue,
+          fieldValue: rawValue?.[name]
+        });
+      }
+      
+      // Handle regular objects (including Variables with type: 'object')
       if (!(name in rawValue)) {
         if (options?.returnUndefinedForMissing) {
           accessedValue = undefined;
@@ -150,8 +173,8 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
         throw new Error(`Cannot access numeric field "${numKey}" on non-object value`);
       }
       
-      // Handle normalized AST objects
-      if (rawValue.type === 'object' && rawValue.properties) {
+      // Handle normalized AST objects (must have both type and properties)
+      if (rawValue.type === 'object' && rawValue.properties && typeof rawValue.properties === 'object') {
         if (!(numKey in rawValue.properties)) {
           if (options?.returnUndefinedForMissing) {
             accessedValue = undefined;
@@ -195,8 +218,8 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
         // Try object access with numeric key as fallback
         const numKey = String(fieldValue);
         if (typeof rawValue === 'object' && rawValue !== null) {
-          // Handle normalized AST objects
-          if (rawValue.type === 'object' && rawValue.properties) {
+          // Handle normalized AST objects (must have both type and properties)
+          if (rawValue.type === 'object' && rawValue.properties && typeof rawValue.properties === 'object') {
             if (numKey in rawValue.properties) {
               accessedValue = rawValue.properties[numKey];
               break;
