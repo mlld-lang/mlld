@@ -16,7 +16,7 @@ The core retry mechanism works correctly. We're now completing the transition to
 - ✅ Verified simplified implementation is working correctly
 - ✅ Identified root cause of test failures: expectation mismatch, not bugs
 
-### Session 2 Progress (Current)
+### Session 2 Progress
 - ✅ Fixed critical bug: Variable field access for pipeline context in expressions
 - ✅ Fixed debug output pollution (console.log → console.error)
 - ⚠️ Updated 1 test expectation (retry-attempt-tracking)
@@ -25,17 +25,23 @@ The core retry mechanism works correctly. We're now completing the transition to
   - `@pipeline.tries` is local to retry context
   - `@pipeline.retries.all` provides global history
 
-### Key Discovery
-**The simplified implementation is working as designed.** The 17 test failures are due to:
-1. **Different retry semantics**: Each retry pattern gets its own independent context
-2. **Test expectations**: Written for nested/cumulative retry model
-3. **Old implementation**: Broken and not worth fixing
+### Session 3 Progress (2025-01-13 continued)
+- ✅ **Fixed critical bug**: Retrying stage `@pipeline.try` count was stuck at 1
+  - Root cause: Using `context.attemptNumber` instead of `context.attemptNumber + 1`
+  - Retrying stages now correctly get `try=2, 3, 4...` on subsequent attempts
+- ✅ **Updated test expectations** for simplified model:
+  - Tests expecting chained retries updated (e.g., retry-conditional-fallback)
+  - Tests expecting nested retry behavior fixed (e.g., retry-when-expression)
+  - Multi-stage retry now works correctly with independent contexts
+- ✅ **Test results**: 8 of 9 retry tests passing (only formatting issue remains)
+- 🔍 **Key insight**: No nested retries means simpler, more predictable behavior
 
-### Test Results Analysis
-- **17 total failures** (9 fixture tests + 8 state machine tests)
-- **Root cause**: Tests expect nested retry behavior (`s2-try3: s1-try2`)
-- **Actual behavior**: Independent contexts (`s2-try2: s1-try1`)
-- **This is correct** for the simplified model
+### Key Discovery
+**The simplified implementation is working correctly after bug fixes.** Key learnings:
+1. **Context attempt tracking**: Must distinguish between context attempts and stage attempts
+2. **Independent contexts**: Each retry pattern (requesting→retrying stages) is independent
+3. **No chained retries**: Stage N can only retry stage N-1, not trigger cascading retries
+4. **Clearer semantics**: Stages outside retry contexts always get fresh `@pipeline` state
 
 ### Next Steps
 - Update test expectations to match simplified model behavior

@@ -488,8 +488,9 @@ export class SimplifiedPipelineStateMachine {
     let contextAttempt = 1;
     if (context) {
       if (stage === context.retryingStage) {
-        // For the retrying stage, use the context's attempt number
-        contextAttempt = context.attemptNumber;
+        // For the retrying stage, count how many times it has executed
+        // This is the initial execution (1) + number of retries (attemptNumber)
+        contextAttempt = context.attemptNumber + 1;
       } else if (stage === context.requestingStage) {
         // For the requesting stage, count how many times we've executed it
         // This is the number of successful retrying stage executions + 1
