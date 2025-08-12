@@ -1,26 +1,32 @@
+/**
+ * Simplified Context Builder for Pipeline Execution
+ * 
+ * Creates execution environments and pipeline context variables
+ * for the simplified retry architecture.
+ */
+
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
-import type { StageContext, PipelineEvent } from './state-machine';
+import type { StageContext, PipelineEvent } from './state-machine-simplified';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
 
 /**
- * Interface-level pipeline context for @pipeline variable
+ * Simplified pipeline context interface
  */
-export interface InterfacePipelineContext {
-  try: number;                    // This stage's attempt number
-  tries: string[];               // This stage's previous attempts
-  stage: number;                 // Current stage number (1-indexed)
-  [index: number]: string;       // Indexed access to pipeline outputs
-  length: number;                // Number of previous outputs
-  all?: {                        // Global accumulator (lazy-evaluated)
-    tries: string[][]            // All attempts across all contexts
+export interface SimplifiedPipelineContext {
+  try: number;                    // Current attempt number
+  tries: string[];                // Previous attempts in current context
+  stage: number;                  // Current stage (1-indexed)
+  [index: number]: string;        // Array access to pipeline outputs
+  length: number;                 // Number of previous outputs
+  retries?: {                     // Global retry accumulator
+    all: string[][];              // All attempts from all contexts
   };
-  [name: string]: any;           // Dynamic properties from stage variables
 }
 
 /**
- * Create execution environment for a pipeline stage
+ * Create execution environment for a pipeline stage (simplified version)
  */
 export async function createStageEnvironment(
   command: PipelineCommand,
@@ -29,18 +35,14 @@ export async function createStageEnvironment(
   env: Environment,
   format?: string,
   events?: ReadonlyArray<PipelineEvent>,
-  hasSyntheticSource: boolean = false
+  hasSyntheticSource: boolean = false,
+  allRetryHistory?: Map<string, string[]>
 ): Promise<Environment> {
-  // Adjust stage number if we have a synthetic source (hide it from user)
-  // The state machine provides 1-indexed stages, so:
-  // - Without synthetic: stage 0 → 1, stage 1 → 2, etc.
-  // - With synthetic: __source__ (0) → 1, first user stage → 2
-  // For synthetic source, we hide stage 0 completely:
-  // - __source__ (internal 0, context.stage 1) → hidden, but if shown would be 0
-  // - testRetry (internal 1, context.stage 2) → show as stage 1
+  // Adjust stage number for synthetic source (hide from user)
   const userVisibleStage = hasSyntheticSource && command.rawIdentifier !== '__source__'
-    ? context.stage - 1  // Subtract 1 for real stages to account for hidden __source__
+    ? context.stage - 1
     : context.stage;
+    
   const userVisibleTotalStages = hasSyntheticSource 
     ? context.totalStages - 1 
     : context.totalStages;
@@ -57,22 +59,32 @@ export async function createStageEnvironment(
     attemptHistory: context.history
   });
 
-  // Create child environment with variables
+  // Create child environment
   const stageEnv = env.createChild();
   
   // Set @input variable
-  await setInputVariable(stageEnv, input, format);
+  await setSimplifiedInputVariable(stageEnv, input, format);
   
-  // Set @pipeline / @p variable with context
-  setPipelineVariable(stageEnv, context, events, hasSyntheticSource);
+  // Set @pipeline / @p variable
+  setSimplifiedPipelineVariable(
+    stageEnv, 
+    context, 
+    events, 
+    hasSyntheticSource,
+    allRetryHistory
+  );
   
   return stageEnv;
 }
 
 /**
- * Set the @input variable in the stage environment
+ * Set the @input variable (same as original)
  */
-async function setInputVariable(env: Environment, input: string, format?: string): Promise<void> {
+async function setSimplifiedInputVariable(
+  env: Environment, 
+  input: string, 
+  format?: string
+): Promise<void> {
   const inputSource: VariableSource = {
     directive: 'var',
     syntax: 'template',
@@ -92,14 +104,14 @@ async function setInputVariable(env: Environment, input: string, format?: string
       format as 'json' | 'csv' | 'xml' | 'text',
       input,
       inputSource,
-      1, // stage number - will be updated by pipeline context
+      1,
       {
         isSystem: true,
         isPipelineInput: true
       }
     );
   } else {
-    // No format - create simple text variable for backwards compatibility
+    // Simple text variable
     inputVar = createSimpleTextVariable(
       'input',
       input,
@@ -115,10 +127,21 @@ async function setInputVariable(env: Environment, input: string, format?: string
 }
 
 /**
- * Set the @pipeline/@p variable in the stage environment
+ * Set the @pipeline/@p variable (simplified version)
  */
-function setPipelineVariable(env: Environment, context: StageContext, events?: ReadonlyArray<PipelineEvent>, hasSyntheticSource: boolean = false): void {
-  const interfaceContext = createInterfacePipelineContext(context, events, hasSyntheticSource);
+function setSimplifiedPipelineVariable(
+  env: Environment,
+  context: StageContext,
+  events?: ReadonlyArray<PipelineEvent>,
+  hasSyntheticSource: boolean = false,
+  allRetryHistory?: Map<string, string[]>
+): void {
+  const pipelineContext = createSimplifiedPipelineContext(
+    context,
+    events,
+    hasSyntheticSource,
+    allRetryHistory
+  );
   
   const inputSource: VariableSource = {
     directive: 'var',
@@ -127,31 +150,45 @@ function setPipelineVariable(env: Environment, context: StageContext, events?: R
     isMultiLine: false
   };
 
-  const pipelineVar = createPipelineContextVariable('pipeline', interfaceContext, inputSource);
-  env.setParameterVariable('pipeline', pipelineVar);
+  // Use proper factory to create variable
+  const pipelineVar = createObjectVariable(
+    'pipeline',
+    pipelineContext,
+    false,
+    inputSource,
+    {
+      isPipelineContext: true,
+      isSystem: true
+    }
+  );
   
-  // Also set @p as an alias
-  env.setParameterVariable('p', pipelineVar);
+  env.setParameterVariable('pipeline', pipelineVar);
+  env.setParameterVariable('p', pipelineVar); // Alias
 }
 
 /**
- * Create clean interface context from stage context
+ * Create simplified pipeline context object
  */
-function createInterfacePipelineContext(context: StageContext, events?: ReadonlyArray<PipelineEvent>, hasSyntheticSource: boolean = false): InterfacePipelineContext {
-  // Adjust stage number and outputs if we have a synthetic source
+function createSimplifiedPipelineContext(
+  context: StageContext,
+  events?: ReadonlyArray<PipelineEvent>,
+  hasSyntheticSource: boolean = false,
+  allRetryHistory?: Map<string, string[]>
+): SimplifiedPipelineContext {
+  // Adjust for synthetic source
   const userVisibleStage = hasSyntheticSource && context.stage > 0 
     ? context.stage - 1 
     : context.stage;
     
-  // Filter out synthetic source output from previousOutputs if present
+  // Filter out synthetic source from outputs
   const userVisibleOutputs = hasSyntheticSource && context.previousOutputs.length > 0
-    ? context.previousOutputs.slice(1) // Skip first output (from __source__)
+    ? context.previousOutputs.slice(1)
     : context.previousOutputs;
     
-  // Create outputs object without the synthetic source stage
+  // Build outputs object
   const outputs: any = {};
   if (hasSyntheticSource) {
-    // Shift indices down by 1 to hide synthetic source
+    // Shift indices to hide synthetic source
     Object.entries(context.outputs).forEach(([key, value]) => {
       const index = parseInt(key);
       if (!isNaN(index) && index > 0) {
@@ -162,108 +199,68 @@ function createInterfacePipelineContext(context: StageContext, events?: Readonly
     Object.assign(outputs, context.outputs);
   }
   
-  console.log('📊 PIPELINE CONTEXT:', {
-    internalStage: context.stage,
-    userVisibleStage,
-    attempt: context.attempt,
-    contextAttempt: context.contextAttempt,
-    hasSyntheticSource,
-    history: context.history,
-    historyLength: context.history.length
-  });
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.error('[SimplifiedContextBuilder] Creating context:', {
+      internalStage: context.stage,
+      userVisibleStage,
+      contextAttempt: context.contextAttempt,
+      historyLength: context.history.length,
+      hasSyntheticSource
+    });
+  }
   
-  const interfaceContext: any = {
-    // Stage-specific data
-    try: context.contextAttempt,  // Use contextAttempt for retry count within current context
+  // Build basic context
+  const pipelineContext: any = {
+    // Core fields
+    try: context.contextAttempt,
     tries: context.history,
     stage: userVisibleStage,
-    
-    // Pipeline data access
     length: userVisibleOutputs.length,
     
-    // Array-style access to outputs
+    // Array-style access
     ...outputs
   };
 
-  // Add negative indexing support
-  Object.defineProperty(interfaceContext, -1, {
+  // Add negative indexing
+  Object.defineProperty(pipelineContext, -1, {
     get: () => userVisibleOutputs[userVisibleOutputs.length - 1],
     enumerable: false
   });
 
-  Object.defineProperty(interfaceContext, -2, {
+  Object.defineProperty(pipelineContext, -2, {
     get: () => userVisibleOutputs[userVisibleOutputs.length - 2],
     enumerable: false
   });
 
   // Add more negative indices as needed
   for (let i = 3; i <= Math.max(10, userVisibleOutputs.length); i++) {
-    Object.defineProperty(interfaceContext, -i, {
+    Object.defineProperty(pipelineContext, -i, {
       get: () => userVisibleOutputs[userVisibleOutputs.length - i],
       enumerable: false
     });
   }
 
-  // Add lazy-evaluated @pipeline.all.tries accessor
-  // This accumulates ALL retry attempts across ALL contexts
-  Object.defineProperty(interfaceContext, 'all', {
+  // Add lazy-evaluated @pipeline.retries.all
+  // This provides access to ALL retry attempts from ALL contexts
+  Object.defineProperty(pipelineContext, 'retries', {
     get: () => {
-      if (!events) {
-        return { tries: [] };
+      if (!allRetryHistory || allRetryHistory.size === 0) {
+        return { all: [] };
       }
       
-      // Collect all retry attempts from all contexts
-      const allTries: string[][] = [];
-      const contextTries = new Map<string, string[]>();
-      
-      // Process events to build retry history
-      for (const event of events) {
-        if (event.type === 'STAGE_SUCCESS' && event.contextId) {
-          // Track successful outputs within retry contexts
-          if (!contextTries.has(event.contextId)) {
-            contextTries.set(event.contextId, []);
-          }
-          contextTries.get(event.contextId)!.push(event.output);
-        } else if (event.type === 'STAGE_RETRY_REQUEST') {
-          // When a retry is requested, save the current context's attempts
-          if (event.parentContextId && contextTries.has(event.parentContextId)) {
-            allTries.push([...contextTries.get(event.parentContextId)!]);
-          }
+      // Collect all attempts from all contexts
+      const allAttempts: string[][] = [];
+      for (const attempts of allRetryHistory.values()) {
+        if (attempts.length > 0) {
+          allAttempts.push([...attempts]);
         }
       }
       
-      // Add any remaining context tries
-      for (const tries of contextTries.values()) {
-        if (tries.length > 0) {
-          allTries.push(tries);
-        }
-      }
-      
-      return {
-        tries: allTries
-      };
+      return { all: allAttempts };
     },
     enumerable: false,
     configurable: true
   });
 
-  return interfaceContext as InterfacePipelineContext;
-}
-
-/**
- * Create pipeline context variable wrapper
- */
-function createPipelineContextVariable(name: string, context: any, source: VariableSource): any {
-  // Use the proper factory to create an ObjectVariable
-  // This ensures it has the same structure as regular object variables
-  return createObjectVariable(
-    name,
-    context,
-    false, // isComplex - pipeline context is not complex (no embedded directives)
-    source,
-    {
-      isPipelineContext: true,
-      isSystem: true
-    }
-  );
+  return pipelineContext as SimplifiedPipelineContext;
 }

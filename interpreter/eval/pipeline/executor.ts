@@ -1,21 +1,16 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand } from '@core/types';
 
-// Feature flag for simplified retry implementation
-const USE_SIMPLIFIED_RETRY = process.env.MLLD_USE_SIMPLIFIED_RETRY === 'true';
-
-// Import appropriate implementation based on feature flag
+// Import pipeline implementation
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
-import { SimplifiedPipelineStateMachine } from './state-machine-simplified';
 import { createStageEnvironment } from './context-builder';
-import { createSimplifiedStageEnvironment } from './context-builder-simplified';
 import { MlldCommandExecutionError } from '@core/errors';
 
 /**
  * Pipeline Executor - Handles actual execution using state machine
  */
 export class PipelineExecutor {
-  private stateMachine: PipelineStateMachine | SimplifiedPipelineStateMachine;
+  private stateMachine: PipelineStateMachine;
   private env: Environment;
   private format?: string;
   private pipeline: PipelineCommand[];
@@ -24,7 +19,7 @@ export class PipelineExecutor {
   private hasSyntheticSource: boolean;
   private sourceExecutedOnce: boolean = false; // Track if source has been executed once
   private initialInput: string = ''; // Store initial input for synthetic source
-  private allRetryHistory: Map<string, string[]> = new Map(); // For simplified implementation
+  private allRetryHistory: Map<string, string[]> = new Map();
 
   constructor(
     pipeline: PipelineCommand[],
@@ -36,7 +31,6 @@ export class PipelineExecutor {
   ) {
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Constructor:', {
-        useSimplified: USE_SIMPLIFIED_RETRY,
         pipelineLength: pipeline.length,
         pipelineStages: pipeline.map(p => p.rawIdentifier || 'unknown'),
         isRetryable,
@@ -45,10 +39,8 @@ export class PipelineExecutor {
       });
     }
     
-    // Use appropriate state machine based on feature flag
-    this.stateMachine = USE_SIMPLIFIED_RETRY 
-      ? new SimplifiedPipelineStateMachine(pipeline.length, isRetryable)
-      : new PipelineStateMachine(pipeline.length, isRetryable);
+    // Use simplified state machine
+    this.stateMachine = new PipelineStateMachine(pipeline.length, isRetryable);
     this.pipeline = pipeline;
     this.env = env;
     this.format = format;
@@ -64,11 +56,13 @@ export class PipelineExecutor {
     // Store initial input for synthetic source stage
     this.initialInput = initialInput;
     
-    console.error('🚀 PIPELINE START:', {
-      stages: this.pipeline.map(p => p.rawIdentifier),
-      hasSyntheticSource: this.hasSyntheticSource,
-      isRetryable: this.isRetryable
-    });
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[PipelineExecutor] Pipeline start:', {
+        stages: this.pipeline.map(p => p.rawIdentifier),
+        hasSyntheticSource: this.hasSyntheticSource,
+        isRetryable: this.isRetryable
+      });
+    }
     
     // Start the pipeline
     let nextStep = this.stateMachine.transition({ type: 'START', input: initialInput });
@@ -78,13 +72,13 @@ export class PipelineExecutor {
     while (nextStep.type === 'EXECUTE_STAGE') {
       iteration++;
       
-      console.error(`\n📍 ITERATION ${iteration}:`, {
-        stage: nextStep.stage,
-        stageId: this.pipeline[nextStep.stage]?.rawIdentifier,
-        contextAttempt: nextStep.context.contextAttempt,
-        attempt: nextStep.context.attempt,
-        contextId: nextStep.context.contextId
-      });
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error(`[PipelineExecutor] Iteration ${iteration}:`, {
+          stage: nextStep.stage,
+          stageId: this.pipeline[nextStep.stage]?.rawIdentifier,
+          contextAttempt: nextStep.context.contextAttempt
+        });
+      }
       
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[PipelineExecutor] Execute stage:', {
@@ -103,11 +97,12 @@ export class PipelineExecutor {
         nextStep.context
       );
       
-      console.error('📤 STAGE RESULT:', {
-        resultType: result.type,
-        isRetry: result.type === 'retry',
-        output: result.type === 'success' ? result.output?.substring(0, 50) : undefined
-      });
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[PipelineExecutor] Stage result:', {
+          resultType: result.type,
+          isRetry: result.type === 'retry'
+        });
+      }
       
       // Let state machine decide next step
       nextStep = this.stateMachine.transition({ 
@@ -115,16 +110,15 @@ export class PipelineExecutor {
         result 
       });
       
-      // Update retry history for simplified implementation
-      if (USE_SIMPLIFIED_RETRY && this.stateMachine instanceof SimplifiedPipelineStateMachine) {
-        this.allRetryHistory = this.stateMachine.getAllRetryHistory();
-      }
+      // Update retry history
+      this.allRetryHistory = this.stateMachine.getAllRetryHistory();
       
-      console.error('📥 NEXT STEP:', {
-        type: nextStep.type,
-        nextStage: nextStep.type === 'EXECUTE_STAGE' ? nextStep.stage : undefined,
-        nextStageId: nextStep.type === 'EXECUTE_STAGE' ? this.pipeline[nextStep.stage]?.rawIdentifier : undefined
-      });
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[PipelineExecutor] Next step:', {
+          type: nextStep.type,
+          nextStage: nextStep.type === 'EXECUTE_STAGE' ? nextStep.stage : undefined
+        });
+      }
       
       // Safety check for infinite loops
       if (iteration > 100) {
@@ -175,48 +169,34 @@ export class PipelineExecutor {
     context: StageContext
   ): Promise<StageResult> {
     try {
-      // Set up execution environment using appropriate context builder
-      const stageEnv = USE_SIMPLIFIED_RETRY
-        ? await createSimplifiedStageEnvironment(
-            command, 
-            input, 
-            context, 
-            this.env, 
-            this.format,
-            this.stateMachine.getEvents(),
-            this.hasSyntheticSource,
-            this.allRetryHistory  // Pass retry history for simplified implementation
-          )
-        : await createStageEnvironment(
-            command, 
-            input, 
-            context, 
-            this.env, 
-            this.format,
-            this.stateMachine.getEvents(),
-            this.hasSyntheticSource
-          );
+      // Set up execution environment
+      const stageEnv = await createStageEnvironment(
+        command, 
+        input, 
+        context, 
+        this.env, 
+        this.format,
+        this.stateMachine.getEvents(),
+        this.hasSyntheticSource,
+        this.allRetryHistory
+      );
       
       // Execute the command
       const output = await this.executeCommand(command, input, stageEnv);
       
-      // DEBUG: What did the command return?
-      console.error('🎯 STAGE OUTPUT:', {
-        stage: context.stage,
-        stageId: command.rawIdentifier,
-        output,
-        isRetry: this.isRetrySignal(output),
-        outputType: typeof output,
-        outputValue: output
-      });
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[PipelineExecutor] Stage output:', {
+          stage: context.stage,
+          output: typeof output === 'string' ? output.substring(0, 50) : output,
+          isRetry: this.isRetrySignal(output)
+        });
+      }
       
       // Check for retry signal
       if (this.isRetrySignal(output)) {
-        console.error('🔄 RETRY DETECTED:', {
-          stage: context.stage,
-          output,
-          willRetryFrom: context.stage === 0 ? 0 : context.stage - 1
-        });
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[PipelineExecutor] Retry detected at stage', context.stage);
+        }
         const from = this.parseRetryScope(output);
         return { type: 'retry', reason: 'Stage requested retry', from };
       }
@@ -361,7 +341,9 @@ export class PipelineExecutor {
       
       if (isPipelineContext && typeof value === 'object') {
         // Return the raw object for pipeline context
-        console.error('🔵 Returning raw pipeline context:', value);
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[PipelineExecutor] Returning raw pipeline context');
+        }
         return value;
       }
 
@@ -449,15 +431,12 @@ export class PipelineExecutor {
     const isRetry = output === 'retry' || 
       (output && typeof output === 'object' && output.value === 'retry');
     
-    console.error('🔍 RETRY CHECK:', {
-      output,
-      outputType: typeof output,
-      isString: typeof output === 'string',
-      equalsRetry: output === 'retry',
-      hasValueProperty: output && typeof output === 'object' && 'value' in output,
-      valueEqualsRetry: output && typeof output === 'object' && output.value === 'retry',
-      result: isRetry
-    });
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[PipelineExecutor] Retry check:', {
+        output,
+        result: isRetry
+      });
+    }
     
     return isRetry;
   }

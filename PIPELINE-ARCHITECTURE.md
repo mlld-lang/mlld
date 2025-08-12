@@ -2,7 +2,7 @@
 
 ## Overview
 
-The mlld pipeline system enables composable data transformations through a chain of functions, with sophisticated retry capabilities for handling transient failures. This document describes the architecture, state machine, and retry mechanisms.
+The mlld pipeline system enables composable data transformations through a chain of functions, with retry capabilities for handling transient failures. This document describes the simplified architecture, state machine, and retry mechanisms.
 
 ## Core Concepts
 
@@ -26,7 +26,7 @@ Each stage:
 2. **Upstream Retry Only**: Stage N can only request retry of stage N-1
 3. **Stage 0 Conditional**: Stage 0 can only be retried if its source is a function
 4. **Context Isolation**: Each retry context maintains its own state
-5. **Recursive Retries**: Retries can trigger more retries (nested contexts)
+5. **Single Active Context**: Only one retry context is active at a time (no nested retries)
 
 ## State Machine Architecture
 
@@ -34,7 +34,7 @@ Each stage:
 
 #### 1. Pipeline State Machine (`state-machine.ts`)
 
-Manages pipeline execution state through an event-sourced architecture:
+Manages pipeline execution state through a simplified event-sourced architecture:
 
 ```typescript
 interface PipelineState {
@@ -44,24 +44,26 @@ interface PipelineState {
   baseInput: string;
   events: PipelineEvent[];
   
-  // Retry context management
-  activeContexts: RetryContext[];
-  contextRetryCount: Map<string, Map<number, number>>;
-  globalStageRetryCount: Map<number, number>;
+  // Simplified retry tracking
+  activeRetryContext?: RetryContext;  // Just one active context
+  globalStageRetryCount: Map<number, number>;   // Global safety limit
+  
+  // For @pipeline.retries.all accumulation
+  allRetryHistory: Map<string, string[]>;       // contextId → all outputs
 }
 ```
 
 #### 2. Retry Context
 
-Tracks nested retry requests:
+Tracks retry requests (single active context):
 
 ```typescript
 interface RetryContext {
   id: string;                    // Unique context ID
-  requestingStage: number;       // Stage requesting retry (e.g., C)
-  retryingStage: number;         // Stage being retried (e.g., B)
-  attemptNumber: number;         // Attempt within this context
-  parentContextId?: string;      // Parent context if nested
+  requestingStage: number;       // Stage requesting retry
+  retryingStage: number;         // Stage being retried
+  attemptNumber: number;         // Current attempt (1-based)
+  allAttempts: string[];         // All outputs from retry attempts
 }
 ```
 
@@ -84,43 +86,55 @@ Two independent limits prevent infinite loops:
 1. **Per-Context Limit** (10): Maximum retries within a single context
 2. **Global Per-Stage Limit** (20): Total retries for any stage across all contexts
 
-## Recursive Retry Mechanism
+## Simplified Retry Mechanism
 
 ### How It Works
 
 When stage N requests retry of stage N-1:
 
-1. Create new retry context
-2. Check retry limits (both per-context and global)
-3. Push context onto active context stack
-4. Re-execute stage N-1 with original input
-5. Continue pipeline from stage N-1
+1. Check if existing context for this retry pattern
+2. If yes: reuse and increment attempt counter
+3. If no: create new retry context
+4. Check retry limits (both per-context and global)
+5. Re-execute stage N-1 with original input
+6. Continue pipeline from stage N-1
+7. Clear context when requesting stage completes
 
-### Nested Retry Example
+### Retry Example
 
 Pipeline: A → B → C → D
 
 1. Initial execution: A(base) → B(a1) → C(b1) → D(c1)
 2. D requests retry of C (creates context ctx1)
-3. C executes with b1
-4. C requests retry of B (creates context ctx2, parent: ctx1)
-5. B executes with a1
-6. B requests retry of A (creates context ctx3, parent: ctx2)
-7. A executes with base
-8. Success chain unwinds: A → B → C → D
+3. C re-executes with b1
+4. C succeeds with c2
+5. D re-executes with c2
+6. D completes → context ctx1 is cleared
 
-### Context Stack Management
+### Why No Nested Retries?
+
+In the simplified model, nested retries are not supported because they represent pathological cases:
+
+If C is retried by D and then C requests retry of B:
+- B would receive the SAME input from A that it got before
+- B's logic hasn't changed
+- There's no legitimate reason for B to suddenly retry A
+- This would indicate non-deterministic or poorly designed functions
+
+### Context Management
 
 ```
-Active Contexts Stack:
-[
-  { id: "ctx1", requesting: 3, retrying: 2 },  // D retrying C
-  { id: "ctx2", requesting: 2, retrying: 1 },  // C retrying B
-  { id: "ctx3", requesting: 1, retrying: 0 }   // B retrying A
-]
+// Single active context at a time
+activeRetryContext: {
+  id: "ctx1",
+  requestingStage: 3,  // D requesting
+  retryingStage: 2,    // C being retried  
+  attemptNumber: 2,    // Second attempt
+  allAttempts: ["c1"]  // Previous outputs
+}
 ```
 
-When a stage succeeds and its requesting stage equals the top context's requesting stage, the context is popped from the stack.
+The context is cleared when the requesting stage completes successfully.
 
 ## Stage 0 Retryability
 
@@ -286,18 +300,18 @@ Unrecoverable errors include:
 ### Test Patterns
 
 1. **Basic Retry**: Test single-level retry behavior
-2. **Nested Retries**: Test recursive retry contexts
+2. **Context Reuse**: Test that same retry pattern reuses context
 3. **Limit Testing**: Verify both per-context and global limits
 4. **Stage 0 Retryability**: Test function vs literal sources
 5. **Context Isolation**: Verify try/tries stay context-local
-6. **Global Accumulation**: Test @pipeline.global.tries
+6. **Global Accumulation**: Test @pipeline.retries.all
 
 ### Common Issues
 
 1. **Infinite Loops**: Without proper limits, retries can loop forever
-2. **Context Leakage**: Ensure contexts don't affect each other
+2. **Context Isolation**: Stages outside retry context get fresh @pipeline state
 3. **Stage 0 Assumptions**: Tests assuming stage 0 can always retry
-4. **Limit Configuration**: Tests hitting limits with legitimate retry patterns
+4. **Context Reuse**: Same retry pattern should reuse existing context, not create new
 
 ## Critical Gotchas and Debugging Guide
 
