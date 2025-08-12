@@ -235,7 +235,7 @@ export async function executeCommandVariable(
           paramValue = argValue;
         } else if (typeof argValue === 'object' && !argValue.type && !argValue.content) {
           // Raw object (like pipeline context passed as @p)
-          console.log('🟢 Received raw object argument:', argValue);
+          console.error('🟢 Received raw object argument:', argValue);
           paramValue = argValue;
         } else if (argValue.type === 'Text' && argValue.content !== undefined) {
           paramValue = argValue.content;

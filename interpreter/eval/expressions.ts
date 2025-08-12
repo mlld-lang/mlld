@@ -9,7 +9,7 @@ import { isEqual, toNumber, isTruthy } from './expression';
  */
 export async function evaluateUnifiedExpression(node: any, env: Environment): Promise<any> {
   // Temporary unconditional debug to trace the issue
-  console.log('[DEBUG] evaluateUnifiedExpression called with:', {
+  console.error('[DEBUG] evaluateUnifiedExpression called with:', {
     nodeType: node?.type,
     operator: node?.operator,
     hasLeft: !!node?.left,
@@ -35,14 +35,14 @@ export async function evaluateUnifiedExpression(node: any, env: Environment): Pr
         // Delegate variable references to the standard evaluator
         try {
           // DEBUG: Log what we're about to evaluate
-          console.log('🔍 EVALUATING VARIABLE REFERENCE IN EXPRESSION:', {
+          console.error('🔍 EVALUATING VARIABLE REFERENCE IN EXPRESSION:', {
             identifier: node.identifier,
             hasFields: !!node.fields,
             fields: node.fields,
             nodeStructure: Object.keys(node)
           });
           const varResult = await evaluate(node, env);
-          console.log('🔍 VARIABLE REFERENCE RESULT:', {
+          console.error('🔍 VARIABLE REFERENCE RESULT:', {
             success: true,
             value: varResult.value,
             valueType: typeof varResult.value
@@ -52,7 +52,7 @@ export async function evaluateUnifiedExpression(node: any, env: Environment): Pr
           // Handle undefined variables gracefully for backward compatibility
           if (error.message && error.message.includes('Variable not found')) {
             if (process.env.MLLD_DEBUG === 'true') {
-              console.log('[DEBUG] Variable not found, returning undefined:', node.identifier);
+              console.error('[DEBUG] Variable not found, returning undefined:', node.identifier);
             }
             return undefined;
           }
@@ -68,7 +68,7 @@ export async function evaluateUnifiedExpression(node: any, env: Environment): Pr
       default:
         // For all other node types, delegate to the standard evaluator
         if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[DEBUG] Delegating node type to standard evaluator:', {
+          console.error('[DEBUG] Delegating node type to standard evaluator:', {
             nodeType: node.type,
             nodeKeys: Object.keys(node),
             node: JSON.stringify(node, null, 2)
@@ -80,7 +80,7 @@ export async function evaluateUnifiedExpression(node: any, env: Environment): Pr
   } catch (error) {
     // DEBUG: Log what failed
     if (process.env.MLLD_DEBUG === 'true') {
-      console.log('❌ EXPRESSION EVALUATION ERROR:', {
+      console.error('❌ EXPRESSION EVALUATION ERROR:', {
         nodeType: node.type,
         node: JSON.stringify(node, null, 2),
         error: error.message
@@ -106,7 +106,7 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
   }
   
   if (process.env.MLLD_DEBUG === 'true') {
-    console.log('[DEBUG] evaluateBinaryExpression called with:', {
+    console.error('[DEBUG] evaluateBinaryExpression called with:', {
       operator: operator,
       originalOperator: node.operator,
       operatorType: typeof operator,
@@ -117,7 +117,7 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
   
   // DEBUG: Log what we're evaluating
   if (process.env.MLLD_DEBUG === 'true') {
-    console.log('🔬 BINARY EXPRESSION NODES:', {
+    console.error('🔬 BINARY EXPRESSION NODES:', {
       leftType: node.left?.type,
       rightType: node.right?.type,
       left: JSON.stringify(node.left, null, 2),
@@ -128,7 +128,7 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
   const leftResult = await evaluateUnifiedExpression(node.left, env);
   
   // Deep debug for left value to understand structure
-  console.log('🔬 LEFT VALUE DEBUG:', {
+  console.error('🔬 LEFT VALUE DEBUG:', {
     raw: leftResult,
     type: typeof leftResult,
     isNumber: typeof leftResult === 'number',
@@ -165,7 +165,7 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
   const rightResult = await evaluateUnifiedExpression(node.right, env);
   
   // Deep debug for right value
-  console.log('🔬 RIGHT VALUE DEBUG:', {
+  console.error('🔬 RIGHT VALUE DEBUG:', {
     raw: rightResult,
     type: typeof rightResult,
     isNumber: typeof rightResult === 'number',
@@ -175,7 +175,7 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
   });
   
   if (process.env.MLLD_DEBUG === 'true') {
-    console.log('[DEBUG] About to switch on operator:', {
+    console.error('[DEBUG] About to switch on operator:', {
       operator: operator,
       originalOperator: node.operator,
       operatorStringified: JSON.stringify(operator),
@@ -188,7 +188,7 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
     case '==':
       const equal = isEqual(leftResult, rightResult);
       if (process.env.MLLD_DEBUG === 'true') {
-        console.log('[DEBUG] == comparison details:', {
+        console.error('[DEBUG] == comparison details:', {
           left: leftResult,
           leftType: typeof leftResult,
           right: rightResult, 
@@ -207,7 +207,7 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
       const leftNum = toNumber(leftResult);
       const rightNum = toNumber(rightResult);
       const ltResult = leftNum < rightNum;
-      console.log('🔬 < COMPARISON DEBUG:', {
+      console.error('🔬 < COMPARISON DEBUG:', {
         leftOriginal: leftResult,
         rightOriginal: rightResult,
         leftConverted: leftNum,

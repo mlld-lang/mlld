@@ -28,7 +28,7 @@ export async function evaluateWhenExpression(
   env: Environment,
   context?: EvaluationContext
 ): Promise<EvalResult> {
-  // console.log('🚨 WHEN-EXPRESSION EVALUATOR CALLED');
+  // console.error('🚨 WHEN-EXPRESSION EVALUATOR CALLED');
   
   const errors: Error[] = [];
   
@@ -72,7 +72,7 @@ export async function evaluateWhenExpression(
     
     try {
       // Debug: What condition are we evaluating?
-      console.log('🔎 EVALUATING CONDITION:', {
+      console.error('🔎 EVALUATING CONDITION:', {
         index: i,
         conditionType: pair.condition?.type,
         isWildcard: pair.condition?.type === 'wildcard',
@@ -82,7 +82,7 @@ export async function evaluateWhenExpression(
       // Evaluate the condition
       const conditionResult = await evaluateCondition(pair.condition, env);
       
-      console.log('✅ CONDITION RESULT:', {
+      console.error('✅ CONDITION RESULT:', {
         index: i,
         result: conditionResult,
         willMatch: !!conditionResult
@@ -124,7 +124,7 @@ export async function evaluateWhenExpression(
           let value = actionResult.value;
           
           // Debug: What did we get back?
-          // console.log('🔍 WHEN-EXPRESSION action result:', {
+          // console.error('🔍 WHEN-EXPRESSION action result:', {
           //   valueType: typeof value,
           //   valuePreview: String(value).substring(0, 50),
           //   actionKind: Array.isArray(pair.action) && pair.action[0] ? pair.action[0].kind : 'unknown'
@@ -185,7 +185,7 @@ export async function evaluateWhenExpression(
       }
     } catch (conditionError) {
       // DEBUG: Show what error occurred
-      console.log('❌ CONDITION ERROR:', {
+      console.error('❌ CONDITION ERROR:', {
         index: i,
         error: conditionError.message,
         stack: conditionError.stack

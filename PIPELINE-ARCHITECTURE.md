@@ -156,34 +156,74 @@ The pipeline executor must:
 
 ## Pipeline Context Variables
 
+### Context Scope and Lifecycle
+
+**Critical Concept**: Pipeline context is scoped to the retry pattern, not the entire pipeline.
+
+In the simplified model:
+- Each retry context is independent (no nested retries)
+- Stages **within** a retry context share context state
+- Stages **outside** a retry context get fresh context
+- Context is cleared when the requesting stage completes
+
 ### Local Context (`@pipeline` / `@p`)
 
 Each stage receives a pipeline context object:
 
 ```javascript
 @pipeline = {
-  try: 2,                        // Current attempt (within context)
-  tries: ["attempt1"],           // Previous attempts (within context)
-  stage: 1,                      // Current stage number (1-indexed)
+  try: 2,                        // Current attempt (within active retry context)
+  tries: ["attempt1"],           // Previous attempts (within active retry context)
+  stage: 1,                      // Current stage number (1-indexed, user-visible)
   0: "base",                     // Stage 0 input
   1: "stage0_output",           // Stage 1 input
   // ... array-style access to all previous outputs
 }
 ```
 
-### Global Context (`@pipeline.global`)
+**Important**: 
+- `try` and `tries` are **local to the retry context**
+- Stages outside the retry loop see `try: 1` and `tries: []`
+- This is by design - each stage starts fresh unless part of an active retry
 
-Lazy-evaluated accumulator across ALL contexts:
+### Global Context (`@pipeline.retries.all`)
+
+For accessing retry history across all contexts:
 
 ```javascript
-@pipeline.global = {
-  tries: [                       // All attempts across all contexts
-    ["ctx1_attempt1", "ctx1_attempt2"],
-    ["ctx2_attempt1"],
-    // ...
+@pipeline.retries = {
+  all: [                         // All attempts from ALL retry contexts
+    ["attempt1", "attempt2"],    // Context 1 attempts
+    ["attempt1", "attempt2", "attempt3"], // Context 2 attempts
   ]
 }
 ```
+
+### Example: Context Behavior
+
+```mlld
+/exe @stage1(input) = `s1: @input`
+/exe @stage2(input) = when: [
+  @pipeline.try < 3 => retry    # Retry stage 1
+  * => @input
+]
+/exe @stage3(input) = `s3: @input, try: @pipeline.try, history: [@pipeline.tries]`
+
+/var @result = @getData() | @stage1 | @stage2 | @stage3
+```
+
+Execution flow:
+1. Stage 1 executes (try: 1)
+2. Stage 2 executes (try: 1), returns retry
+3. Stage 1 re-executes (try: 1, fresh context for stage 1)
+4. Stage 2 re-executes (try: 2, within retry context)
+5. Stage 2 returns retry again
+6. Stage 1 re-executes (try: 2, within retry context)
+7. Stage 2 re-executes (try: 3, within retry context)
+8. Stage 2 succeeds, returns input
+9. **Stage 3 executes (try: 1, tries: [], NEW context)** ← Key point!
+
+Stage 3 is NOT part of the retry context between stages 1-2, so it gets a fresh context.
 
 ## Execution Flow
 

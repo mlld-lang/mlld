@@ -127,6 +127,21 @@ export function accessField(value: any, field: FieldAccessNode, options?: FieldA
         throw new Error(`Field "${name}" not found in LoadContentResultArray`);
       }
       
+      // Handle Variable objects with type 'object' and value field
+      if (rawValue.type === 'object' && rawValue.value && !rawValue.properties) {
+        // This is a Variable object, access fields in the value
+        const actualValue = rawValue.value;
+        if (!(name in actualValue)) {
+          if (options?.returnUndefinedForMissing) {
+            accessedValue = undefined;
+            break;
+          }
+          throw new Error(`Field "${name}" not found in object`);
+        }
+        accessedValue = actualValue[name];
+        break;
+      }
+      
       // Handle normalized AST objects (must have both type and properties)
       if (rawValue.type === 'object' && rawValue.properties && typeof rawValue.properties === 'object') {
         // Access the properties object for normalized AST objects

@@ -64,7 +64,7 @@ export class PipelineExecutor {
     // Store initial input for synthetic source stage
     this.initialInput = initialInput;
     
-    console.log('🚀 PIPELINE START:', {
+    console.error('🚀 PIPELINE START:', {
       stages: this.pipeline.map(p => p.rawIdentifier),
       hasSyntheticSource: this.hasSyntheticSource,
       isRetryable: this.isRetryable
@@ -78,7 +78,7 @@ export class PipelineExecutor {
     while (nextStep.type === 'EXECUTE_STAGE') {
       iteration++;
       
-      console.log(`\n📍 ITERATION ${iteration}:`, {
+      console.error(`\n📍 ITERATION ${iteration}:`, {
         stage: nextStep.stage,
         stageId: this.pipeline[nextStep.stage]?.rawIdentifier,
         contextAttempt: nextStep.context.contextAttempt,
@@ -103,7 +103,7 @@ export class PipelineExecutor {
         nextStep.context
       );
       
-      console.log('📤 STAGE RESULT:', {
+      console.error('📤 STAGE RESULT:', {
         resultType: result.type,
         isRetry: result.type === 'retry',
         output: result.type === 'success' ? result.output?.substring(0, 50) : undefined
@@ -120,7 +120,7 @@ export class PipelineExecutor {
         this.allRetryHistory = this.stateMachine.getAllRetryHistory();
       }
       
-      console.log('📥 NEXT STEP:', {
+      console.error('📥 NEXT STEP:', {
         type: nextStep.type,
         nextStage: nextStep.type === 'EXECUTE_STAGE' ? nextStep.stage : undefined,
         nextStageId: nextStep.type === 'EXECUTE_STAGE' ? this.pipeline[nextStep.stage]?.rawIdentifier : undefined
@@ -201,7 +201,7 @@ export class PipelineExecutor {
       const output = await this.executeCommand(command, input, stageEnv);
       
       // DEBUG: What did the command return?
-      console.log('🎯 STAGE OUTPUT:', {
+      console.error('🎯 STAGE OUTPUT:', {
         stage: context.stage,
         stageId: command.rawIdentifier,
         output,
@@ -212,7 +212,7 @@ export class PipelineExecutor {
       
       // Check for retry signal
       if (this.isRetrySignal(output)) {
-        console.log('🔄 RETRY DETECTED:', {
+        console.error('🔄 RETRY DETECTED:', {
           stage: context.stage,
           output,
           willRetryFrom: context.stage === 0 ? 0 : context.stage - 1
@@ -361,7 +361,7 @@ export class PipelineExecutor {
       
       if (isPipelineContext && typeof value === 'object') {
         // Return the raw object for pipeline context
-        console.log('🔵 Returning raw pipeline context:', value);
+        console.error('🔵 Returning raw pipeline context:', value);
         return value;
       }
 
@@ -449,7 +449,7 @@ export class PipelineExecutor {
     const isRetry = output === 'retry' || 
       (output && typeof output === 'object' && output.value === 'retry');
     
-    console.log('🔍 RETRY CHECK:', {
+    console.error('🔍 RETRY CHECK:', {
       output,
       outputType: typeof output,
       isString: typeof output === 'string',
