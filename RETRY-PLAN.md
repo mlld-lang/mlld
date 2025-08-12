@@ -8,6 +8,19 @@ The core retry mechanism works correctly. We're now completing the transition to
 
 **Key Insight**: Nested retries are pathological - in pipeline A→B→C, if C retries B, B gets the same input from A and has no legitimate reason to retry A.
 
+## Progress Update (2025-01-13)
+
+### Today's Achievements
+- ✅ Evaluated and categorized all retry tests for adaptation
+- ✅ Fixed pipeline context parameter passing (`@p` now works as function argument)
+- ✅ Updated documentation with comprehensive implementation plan
+- 🔍 Identified context attempt tracking bug in simplified state machine
+
+### Next Session Focus
+- Fix the `contextAttempt` tracking bug
+- Run full test suite with fixes
+- Begin updating test expectations
+
 ## Current Architecture Status
 
 ### ✅ What's Working
@@ -17,8 +30,11 @@ The core retry mechanism works correctly. We're now completing the transition to
 - Context reuse for same retry pattern
 - Basic retry signal detection
 
+### ✅ Recently Fixed
+- **Pipeline context parameter passing** - Objects like `@p` now pass correctly as function arguments
+
 ### ⚠️ Issues to Fix
-1. **Pipeline context parameter passing** - `@p.try` not working as function argument
+1. **Context attempt tracking bug** - `contextAttempt` not incrementing correctly for retrying stages
 2. **Test failures** - 19 tests failing with simplified implementation
 3. **Architecture cleanup** - Remove old complex implementation
 
@@ -26,17 +42,32 @@ The core retry mechanism works correctly. We're now completing the transition to
 
 ### Phase 1: Fix Critical Issues (Current)
 
-#### 1.1 Pipeline Context Parameter Passing
+#### 1.1 ✅ Pipeline Context Parameter Passing (FIXED)
 **Issue**: `@pipeline.try` (or `@p.try`) not working when passed as function arguments
 
-**Investigation**:
-- Check argument binding in `executor.ts`
-- Verify if context is serialized vs passed by reference
-- Test both `@pipeline` and `@p` alias behavior
+**Root Cause**: Pipeline context was being converted to JSON string instead of preserved as object
 
-**Files to examine**:
-- `interpreter/eval/pipeline/executor.ts`
-- `interpreter/eval/pipeline/context-builder.ts`
+**Solution Implemented**:
+- Modified `executor.ts` to preserve raw objects for pipeline context
+- Updated `command-execution.ts` to handle raw object arguments
+- Pipeline context now passes correctly as live object reference
+
+#### 1.2 Context Attempt Tracking Bug (NEW)
+**Issue**: `contextAttempt` stays at 1 for retrying stages even though retry is happening
+
+**Symptoms**:
+- `@pipeline.try` shows 1 for showAttempt stage on all retries
+- `@pipeline.try` increments correctly for retryThreeTimes stage
+- Context IS being reused (attemptNumber increments) but not reflected in stage context
+
+**Root Cause**: In `state-machine-simplified.ts`, the `buildStageContext` method uses:
+```typescript
+contextAttempt = context.attemptNumber;  // Only if stage is requesting or retrying
+```
+But this doesn't account for proper attempt tracking when a stage is being retried.
+
+**Files to fix**:
+- `interpreter/eval/pipeline/state-machine-simplified.ts` - Fix attempt tracking logic
 
 #### 1.2 Test Evaluation & Adaptation
 
@@ -153,7 +184,8 @@ npm test interpreter/eval/pipeline/state-machine*.test.ts
 
 ### Must Have
 - [ ] All retry tests passing
-- [ ] `@p.try` parameter passing working
+- [x] `@p.try` parameter passing working
+- [ ] Context attempt tracking fixed
 - [ ] Context reuse verified
 - [ ] `@pipeline.retries.all` accumulation correct
 - [ ] Nested retry error detection
@@ -166,10 +198,11 @@ npm test interpreter/eval/pipeline/state-machine*.test.ts
 
 ## Timeline
 
-1. **Immediate**: Fix `@p.try` parameter passing
-2. **Next**: Run and categorize test failures  
-3. **Then**: Fix bugs and update test expectations
-4. **Finally**: Remove old implementation and update docs
+1. **✅ Complete**: Fix `@p.try` parameter passing
+2. **Current**: Fix context attempt tracking bug
+3. **Next**: Run and categorize test failures  
+4. **Then**: Update test expectations for single context model
+5. **Finally**: Remove old implementation and update docs
 
 ## Key Files
 

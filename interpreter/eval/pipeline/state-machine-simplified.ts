@@ -484,11 +484,16 @@ export class SimplifiedPipelineStateMachine {
       stageHistory.push(...context.allAttempts);
     }
     
-    // Count attempts
+    // Count attempts - properly track for both requesting and retrying stages
     let contextAttempt = 1;
     if (context) {
-      if (stage === context.requestingStage || stage === context.retryingStage) {
+      if (stage === context.retryingStage) {
+        // For the retrying stage, use the context's attempt number
         contextAttempt = context.attemptNumber;
+      } else if (stage === context.requestingStage) {
+        // For the requesting stage, count how many times we've executed it
+        // This is the number of successful retrying stage executions + 1
+        contextAttempt = context.allAttempts.length + 1;
       }
       
       if (process.env.MLLD_DEBUG === 'true') {
@@ -497,6 +502,7 @@ export class SimplifiedPipelineStateMachine {
           requestingStage: context.requestingStage,
           retryingStage: context.retryingStage,
           attemptNumber: context.attemptNumber,
+          allAttemptsLength: context.allAttempts.length,
           willUseAttempt: stage === context.requestingStage || stage === context.retryingStage,
           contextAttempt
         });
