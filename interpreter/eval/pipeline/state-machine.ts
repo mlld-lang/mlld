@@ -294,32 +294,19 @@ export class PipelineStateMachine {
       return { type: 'COMPLETE', output: '' };
     }
     
-    // Check if this completes a retry context
-    if (currentContext && stage === currentContext.requestingStage - 1) {
-      // We've successfully completed the retry requested by the context
-      this.state.activeContexts.pop();
-      
-      // Continue from the requesting stage with the retry output
+    // Check if we just completed the retrying stage in a retry context
+    if (currentContext && stage === currentContext.retryingStage) {
+      // The retrying stage has completed - now re-execute the requesting stage
       const nextStage = currentContext.requestingStage;
-      
-      // Check if we're at the end
-      if (nextStage >= this.totalStages) {
-        this.state.status = 'COMPLETED';
-        this.recordEvent({ type: 'PIPELINE_COMPLETE', output });
-        return { type: 'COMPLETE', output };
-      }
       
       this.state.currentStage = nextStage;
       this.state.currentInput = output;
-      
-      // Get parent context for the stage start event
-      const parentContext = this.getCurrentContext();
       
       this.recordEvent({ 
         type: 'STAGE_START', 
         stage: nextStage, 
         input: output,
-        contextId: parentContext?.id
+        contextId: currentContext.id
       });
       
       return {
@@ -328,6 +315,14 @@ export class PipelineStateMachine {
         input: output,
         context: this.buildStageContext(nextStage)
       };
+    }
+    
+    // Check if this completes a retry context
+    // The context should be popped when the REQUESTING stage completes successfully
+    if (currentContext && stage === currentContext.requestingStage) {
+      // The requesting stage has completed successfully without requesting another retry
+      // Pop the context and continue normally
+      this.state.activeContexts.pop();
     }
 
     // Normal progression to next stage
@@ -363,6 +358,17 @@ export class PipelineStateMachine {
     // CORRECT BEHAVIOR: Stage N requests retry of stage N-1 (the stage that provided its input)
     // No stage can retry itself - there is no self-referential retry mechanism
     const targetStage = fromOverride ?? Math.max(0, stage - 1);
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[StateMachine] handleStageRetry:', {
+        requestingStage: stage,
+        targetStage,
+        fromOverride,
+        isStage0Retryable: this.isStage0Retryable,
+        activeContexts: this.state.activeContexts.length,
+        willTakeSpecialCase: stage === 0 && targetStage === 0
+      });
+    }
     
     // Special case: Stage 0 trying to retry would mean retrying its source
     // When stage 0 requests retry, it means retrying itself (re-executing source function)
@@ -585,13 +591,16 @@ export class PipelineStateMachine {
       return 0;
     }
     
-    // For each active context, check if it's retrying this stage
+    // Count attempts for this stage across all active contexts where it's involved
     let count = 0;
     for (const context of this.state.activeContexts) {
-      if (context.retryingStage === stage) {
+      // A stage is involved in a retry context if:
+      // 1. It's the stage being retried (retryingStage)
+      // 2. It's the stage that requested the retry (requestingStage)
+      // When a stage requests a retry, it will be re-executed after the retry completes
+      if (context.retryingStage === stage || context.requestingStage === stage) {
         // Count how many times this stage has been executed within this context
         // by looking for STAGE_START events with this context's ID
-        // BUT: exclude the very last one since that's the current execution
         let contextStarts = 0;
         for (const event of this.state.events) {
           if (event.type === 'STAGE_START' && 
@@ -600,8 +609,13 @@ export class PipelineStateMachine {
             contextStarts++;
           }
         }
-        // Subtract 1 because the current STAGE_START was already recorded
-        count += Math.max(0, contextStarts - 1);
+        // If this is the requesting stage, we count all starts in this context
+        // If this is the retrying stage, subtract 1 for the current execution
+        if (context.requestingStage === stage) {
+          count += contextStarts;
+        } else {
+          count += Math.max(0, contextStarts - 1);
+        }
       }
     }
     
@@ -667,7 +681,19 @@ export class PipelineStateMachine {
     const attempt = globalStageRetries + 1;
     
     // Count retries in current context chain
-    const contextAttempt = this.countRetriesInContextChain(stage) + 1;
+    const contextRetries = this.countRetriesInContextChain(stage);
+    const contextAttempt = contextRetries + 1;
+    
+    // Debug context counting
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[StateMachine] Building context for stage', stage, {
+        activeContexts: this.state.activeContexts.length,
+        contextRetries,
+        contextAttempt,
+        globalStageRetries,
+        attempt
+      });
+    }
     
     // Count total retries across all stages
     let totalRetries = 0;

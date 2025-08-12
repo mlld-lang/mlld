@@ -174,7 +174,7 @@ function createInterfacePipelineContext(context: StageContext, events?: Readonly
   
   const interfaceContext: any = {
     // Stage-specific data
-    try: context.attempt,
+    try: context.contextAttempt,  // Use contextAttempt for retry count within current context
     tries: context.history,
     stage: userVisibleStage,
     
