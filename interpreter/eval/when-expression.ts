@@ -32,6 +32,14 @@ export async function evaluateWhenExpression(
   
   const errors: Error[] = [];
   
+  // Check if we have a "first" modifier (stop after first match)
+  const isFirstMode = node.meta?.modifier === 'first';
+  
+  // Track results from all matching conditions (for bare when)
+  let lastMatchValue: any = null;
+  let hasMatch = false;
+  let accumulatedEnv = env;
+  
   // Empty conditions array - return null
   if (node.conditions.length === 0) {
     return { value: null, env };
@@ -98,9 +106,11 @@ export async function evaluateWhenExpression(
       
       if (conditionResult) {
         // Condition matched - evaluate the action
+        hasMatch = true;
+        
         if (!pair.action || pair.action.length === 0) {
-          // No action for this condition - return null
-          return { value: null, env };
+          // No action for this condition - continue to next
+          continue;
         }
         
         try {
@@ -118,7 +128,7 @@ export async function evaluateWhenExpression(
           // IMPORTANT SCOPING RULE:
           // - /when (directive) uses global scope semantics (handled elsewhere)
           // - when: [...] in /exe uses LOCAL scope – evaluate actions in a child env
-          const actionEnv = env.createChild();
+          const actionEnv = accumulatedEnv.createChild();
           const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
           
           let value = actionResult.value;
@@ -173,8 +183,21 @@ export async function evaluateWhenExpression(
             value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
           }
           
-          // Return value with parent env to prevent leaking local assignments
-          return { value, env };
+          // In "first" mode, return immediately after first match
+          if (isFirstMode) {
+            return { value, env: actionEnv };
+          }
+          
+          // For bare when, save the value and continue evaluating
+          lastMatchValue = value;
+          
+          // Merge nodes from the action environment into accumulated environment
+          const childNodes = actionEnv.getNodes();
+          for (const node of childNodes) {
+            accumulatedEnv.addNode(node);
+          }
+          
+          // Continue to evaluate other matching conditions
         } catch (actionError) {
           throw new MlldWhenExpressionError(
             `Error evaluating action for condition ${i + 1}: ${actionError.message}`,
@@ -200,6 +223,11 @@ export async function evaluateWhenExpression(
     }
   }
   
+  // If we had any matches, return the last match value with accumulated environment
+  if (hasMatch) {
+    return { value: lastMatchValue, env: accumulatedEnv };
+  }
+  
   // If we collected errors and no condition matched, report them
   if (errors.length > 0) {
     throw new MlldWhenExpressionError(
@@ -210,7 +238,7 @@ export async function evaluateWhenExpression(
   }
   
   // No conditions matched - return null
-  return { value: null, env };
+  return { value: null, env: accumulatedEnv };
 }
 
 /**

@@ -28,7 +28,8 @@
 SlashOutput
   // Support for simple quoted path syntax without source - MUST come first to avoid OutputLiteral matching
   // BUT don't match if followed by bracket (that's the literal+bracket syntax)
-  = DirectiveContext "/output" _ path:DataString !(_ "[") {
+  // AND don't match if followed by "to" (that's the enhanced syntax)
+  = DirectiveContext "/output" _ path:DataString !(_ "[") !(_ "to") {
       helpers.debug('SlashOutput quoted path without source matched', { path });
       
       const values = {
@@ -102,7 +103,8 @@ SlashOutput
   // REMOVED: Legacy bracket syntax - use quoted paths instead
   // Support for quoted path syntax with source (legacy) - for syntax like: /output @var "file.txt"
   // BUT don't match if followed by bracket (that would be invalid syntax anyway)
-  / DirectiveContext "/output" _ source:OutputSource _ path:DataString !(_ "[") {
+  // AND don't match if followed by "to" (that's the enhanced syntax)
+  / DirectiveContext "/output" _ source:OutputSource _ path:DataString !(_ "[") !(_ "to") {
       helpers.debug('SlashOutput quoted path with source matched', { source, path });
       
       const values = {

@@ -1,6 +1,6 @@
 {
   "name": "mlld",
-  "version": "2.0.0-rc38",
+  "version": "2.0.0-rc39",
   "description": "mlld: a modular prompt scripting language",
   "type": "module",
   "main": "dist/index.cjs",
@@ -50,7 +50,7 @@
     "build:python": "node lib/mlld-python/scripts/sync-version.js",
     "build:wasm": "node ./scripts/copy-wasm-files.js",
     "build:direct": "npm run build:version && npm run build:errors && npm run build:grammar && tsup && npm run build:python && npm run build:wasm",
-    "build": "node ./scripts/build-wrapper.js",
+    "build": "node ./scripts/build-wrapper.js && npm run sync:mlldx",
     "ast:direct": "npm run build:grammar:core && node ./scripts/ast-output.js",
     "ast": "node ./scripts/ast-wrapper.js",
     "ast:debug": "DEBUG_MLLD_GRAMMAR=1 npm run ast --",

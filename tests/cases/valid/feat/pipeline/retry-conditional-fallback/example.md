@@ -19,7 +19,7 @@
   return attempts[attempt - 1] || '{"fallback": "json"}';
 }
 
-/exe @retryUntilValidJSON(input) = when: [
+/exe @retryUntilValidJSON(input) = when first [
   @input.includes("valid-json") => @input
   @pipeline.try < 4 => retry
   * => "fallback: using default JSON structure"

@@ -2,14 +2,14 @@
 
 /exe @stageOne(input) = `s1-try@pipeline.try: @input`
 
-/exe @retryStageOne(input) = when: [
+/exe @retryStageOne(input) = when first [
   @pipeline.try >= 2 => @input
   * => retry
 ]
 
 /exe @stageTwo(input) = `s2-try@pipeline.try: @input`
 
-/exe @retryStageTwo(input) = when: [
+/exe @retryStageTwo(input) = when first [
   @pipeline.try >= 3 => @input
   * => retry
 ]

@@ -7,7 +7,7 @@
 
 /exe @collectAttempts(input, pipeline) = `current: @input, history: [@pipeline.tries], try: @pipeline.try`
 
-/exe @retryCollector(input, pipeline) = when: [
+/exe @retryCollector(input, pipeline) = when first [
   @pipeline.try >= 3 => @input
   * => retry
 ]

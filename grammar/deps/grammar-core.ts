@@ -1159,7 +1159,7 @@ export const helpers = {
   /**
    * Creates a WhenExpression node for RHS when expressions
    */
-  createWhenExpression(conditions: any[], withClause: any, location: any) {
+  createWhenExpression(conditions: any[], withClause: any, location: any, modifier: string | null = null) {
     return this.createNode(NodeType.WhenExpression, {
       conditions: conditions,
       withClause: withClause || null,
@@ -1167,7 +1167,8 @@ export const helpers = {
         conditionCount: conditions.length,
         isValueReturning: true,
         evaluationType: 'expression',
-        hasTailModifiers: !!withClause
+        hasTailModifiers: !!withClause,
+        modifier: modifier
       },
       location
     });

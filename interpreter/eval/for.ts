@@ -105,11 +105,12 @@ export async function evaluateForDirective(
           variable: varName,
           currentValue: DebugUtils.truncateValue(value, typeof value, 50),
           currentKey: key,
-          hasKey: key !== null && typeof key === 'string'
+          hasKey: key !== null && typeof key === 'string',
+          actionAvailable: directive.values.action ? directive.values.action.length : 'null'
         });
       }
       
-      const childEnv = env.createChildEnvironment();
+      let childEnv = env.createChildEnvironment();
       // Preserve Variable wrappers when setting iteration variable
       const iterationVar = ensureVariable(varName, value);
       childEnv.setVariable(varName, iterationVar);
@@ -122,19 +123,49 @@ export async function evaluateForDirective(
 
       // Evaluate action in child environment
       // Handle action which might be an array of nodes (following /when pattern)
+      // IMPORTANT: Get a fresh reference to the action nodes for each iteration
+      // to avoid any potential mutation issues
       const actionNodes = directive.values.action;
       let actionResult: any = { value: undefined, env: childEnv };
       
       // Debug: Log action evaluation
-      if (debugEnabled && actionNodes.length > 0) {
+      if (debugEnabled) {
         console.error('[DEBUG_FOR] Evaluating for loop action:', {
-          actionType: actionNodes[0].type,
-          actionCount: actionNodes.length
+          actionType: actionNodes && actionNodes.length > 0 ? actionNodes[0].type : 'none',
+          actionCount: actionNodes ? actionNodes.length : 0,
+          iterationNumber: i + 1
         });
       }
       
       for (const actionNode of actionNodes) {
-        actionResult = await evaluate(actionNode, childEnv);
+        // Debug: Log what we're about to evaluate
+        if (debugEnabled) {
+          console.error('[DEBUG_FOR] About to evaluate action node:', {
+            type: actionNode.type,
+            kind: actionNode.kind,
+            subtype: actionNode.subtype
+          });
+        }
+        try {
+          actionResult = await evaluate(actionNode, childEnv);
+          // Debug: Log evaluation result
+          if (debugEnabled) {
+            console.error('[DEBUG_FOR] Action evaluation result:', {
+              hasValue: actionResult.value !== undefined,
+              valueType: typeof actionResult.value,
+              value: actionResult.value
+            });
+          }
+          // Update childEnv to the result environment to capture any changes
+          if (actionResult.env) {
+            childEnv = actionResult.env;
+          }
+        } catch (error) {
+          if (debugEnabled) {
+            console.error('[DEBUG_FOR] Error evaluating action:', error);
+          }
+          throw error;
+        }
       }
       
       // Transfer output nodes from child to parent environment

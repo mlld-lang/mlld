@@ -39,7 +39,8 @@ import { logger } from '@core/utils/logger';
  */
 export async function evaluateShow(
   directive: DirectiveNode,
-  env: Environment
+  env: Environment,
+  context?: any
 ): Promise<EvalResult> {
   
   if (process.env.MLLD_DEBUG === 'true') {
@@ -806,8 +807,13 @@ export async function evaluateShow(
     content
   };
   
-  // Add the replacement node to environment
-  env.addNode(replacementNode);
+  // Only add the node if we're NOT in an expression context
+  // In expression context (like when expressions in exe), the value is returned
+  // and the calling code decides what to do with it
+  if (!context?.isExpression) {
+    // Add the replacement node to environment
+    env.addNode(replacementNode);
+  }
   
   // Return the content
   return { value: content, env };

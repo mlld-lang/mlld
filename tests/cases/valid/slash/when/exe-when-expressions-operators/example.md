@@ -14,7 +14,7 @@ Testing when expressions combined with operators in exe definitions.
 }
 
 ## Exe with operator-based conditions
-/exe @validateUser(email, age, country) = when: [
+/exe @validateUser(email, age, country) = when first [
   !@isValidEmail(@email) => "Invalid email format"
   @age < 13 => "Too young to register"
   @age >= 13 && @age < 18 && @country != "US" => "Parental consent required"
@@ -29,7 +29,7 @@ User validation:
 /show @validateUser('teen@example.com', 15, "US")
 
 ## Exe with complex access logic
-/exe @getAccessLevel(userRole, department, isActive, hasTraining) = when: [
+/exe @getAccessLevel(userRole, department, isActive, hasTraining) = when first [
   !@isActive => "inactive account"
   @userRole == "admin" && @hasTraining => "full admin access"
   @userRole == "admin" && !@hasTraining => "admin - training required"
@@ -48,7 +48,7 @@ Access level checks:
 /show @getAccessLevel("user", "Sales", false, true)
 
 ## Exe with ternary in actions
-/exe @formatStatus(code, verbose) = when: [
+/exe @formatStatus(code, verbose) = when first [
   @code == 200 => @verbose ? "OK - Request successful" : "OK"
   @code == 404 => @verbose ? "Not Found - Resource does not exist" : "Not Found"
   @code >= 500 => @verbose ? "Server Error - Internal problem" : "Server Error"
@@ -63,7 +63,7 @@ Status formatting:
 /show @formatStatus(401, false)
 
 ## Exe with field access and comparisons
-/exe @validateConfig(config, environment) = when: [
+/exe @validateConfig(config, environment) = when first [
   @config == null => "missing configuration"
   @config.version != "2.0" => "unsupported version"
   @environment == "production" && @config.debug == true => "debug mode not allowed in production"
@@ -79,7 +79,7 @@ Configuration validation:
 /show @validateConfig(@devConfig, "development")
 
 ## Exe combining multiple operators
-/exe @checkAccess(role, department, timeOfDay, isEmergency) = when: [
+/exe @checkAccess(role, department, timeOfDay, isEmergency) = when first [
   @isEmergency && (@role == "admin" || @role == "security") => "emergency access granted"
   @role == "admin" => "full access"
   @role == "manager" && @department == "IT" && (@timeOfDay >= 6 && @timeOfDay <= 22) => "department access"
@@ -96,7 +96,7 @@ Access control:
 /show @checkAccess("security", "Sales", 20, true)
 
 ## Exe with null coalescing patterns
-/exe @getUserName(user, fallbackName) = when: [
+/exe @getUserName(user, fallbackName) = when first [
   @user == null => @fallbackName
   @user.name != null => @user.name
   @user.email != null => @user.email
@@ -113,7 +113,7 @@ Name resolution:
 /show @getUserName(@user3, "Guest")
 
 ## Parentheses changing precedence
-/exe @evaluateRisk(score, override, verified, premium) = when: [
+/exe @evaluateRisk(score, override, verified, premium) = when first [
   @override && (@verified || @premium) => "override approved"
   @score > 80 || (@score > 60 && @premium) => "low risk"
   @score > 40 && (@verified || @override) => "medium risk"

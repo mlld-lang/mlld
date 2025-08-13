@@ -1,7 +1,7 @@
 # Wildcard (*) in exe when expressions
 
 ## Define function with wildcard default
-/exe @handler(input) = when: [
+/exe @handler(input) = when first [
   @input == "hello" => "Hi there!"
   @input == "bye" => "Goodbye!"
   * => "Default response"
@@ -13,7 +13,7 @@
 /show @handler("unknown")
 
 ## Wildcard as first condition (catch-all)
-/exe @alwaysDefault() = when: [
+/exe @alwaysDefault() = when first [
   * => "Always returns this"
   true => "Never reached"
   false => "Also never reached"

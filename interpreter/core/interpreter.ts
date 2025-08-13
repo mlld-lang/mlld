@@ -295,7 +295,7 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   }
   
   if (isDirective(node)) {
-    return evaluateDirective(node, env);
+    return evaluateDirective(node, env, context);
   }
   
   if (isText(node)) {

@@ -3,7 +3,7 @@
 Testing when expressions as values in exe assignments.
 
 ## Basic exe when expression
-/exe @greet(name) = when: [
+/exe @greet(name) = when first [
   @name == "World" => "Hello, World!"
   @name == "Friend" => "Hey there, Friend!"
   true => "Welcome!"
@@ -16,7 +16,7 @@ Greetings:
 
 ## Exe with language/env conditions
 /var @lang = "es"
-/exe @getMessage(type) = when: [
+/exe @getMessage(type) = when first [
   @lang == "es" && @type == "greeting" => "¡Hola!"
   @lang == "es" && @type == "farewell" => "¡Adiós!"
   @lang == "fr" && @type == "greeting" => "Bonjour!"
@@ -38,7 +38,7 @@ Define arithmetic operations as separate functions:
 /exe @multiply(a, b) = js { return a * b }
 /exe @divide(a, b) = js { return a / b }
 
-/exe @calculate(op, a, b) = when: [
+/exe @calculate(op, a, b) = when first [
   @op == "add" => @add(@a, @b)
   @op == "multiply" => @multiply(@a, @b)
   @op == "divide" && @b != 0 => @divide(@a, @b)
@@ -54,7 +54,7 @@ Calculations:
 /show @calculate("subtract", 10, 3)
 
 ## Exe with pipeline modifiers
-/exe @format(type, data) = when: [
+/exe @format(type, data) = when first [
   @type == "json" => @data | @json
   @type == "pretty" => @data | @json
   true => @data

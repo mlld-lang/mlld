@@ -274,15 +274,11 @@ WhenExpression "when expression"
   = "when" _ modifier:WhenExprModifier? _ ":"? _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
       helpers.debug('WhenExpression matched', { 
         conditionCount: conditions.length,
-        hasTailModifiers: !!tail
+        hasTailModifiers: !!tail,
+        modifier: modifier
       });
       
-      const node = helpers.createWhenExpression(conditions, tail, location());
-      if (modifier) {
-        node.meta = node.meta || {};
-        node.meta.modifier = modifier;
-      }
-      return node;
+      return helpers.createWhenExpression(conditions, tail, location(), modifier);
     }
   // Error recovery patterns
   / "when" _ WhenExprModifier? _ ":"? _ "[" _ &{

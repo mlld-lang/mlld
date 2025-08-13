@@ -90,7 +90,8 @@ function extractTraceInfo(directive: DirectiveNode): {
  */
 export async function evaluateDirective(
   directive: DirectiveNode,
-  env: Environment
+  env: Environment,
+  context?: any
 ): Promise<EvalResult> {
   // Extract trace info and push to stack
   const traceInfo = extractTraceInfo(directive);
@@ -123,7 +124,7 @@ export async function evaluateDirective(
       return await evaluateVar(directive, env);
       
     case 'show':
-      return await evaluateShow(directive, env);
+      return await evaluateShow(directive, env, context);
       
     case 'exe':
       return await evaluateExe(directive, env);

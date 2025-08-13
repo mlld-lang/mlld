@@ -14,7 +14,7 @@ Length: ${pipeline.length}
 Try: ${pipeline.try}`;
 }
 
-/exe @retryOnce(input) = when: [
+/exe @retryOnce(input) = when first [
   @pipeline.try >= 2 => @input
   * => retry
 ]

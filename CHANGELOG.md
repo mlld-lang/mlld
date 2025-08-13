@@ -5,6 +5,26 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc39]
+### Fixed
+- **When expression behavior**: Bare `when` expressions now correctly evaluate ALL matching conditions
+  - Previously, `when [...]` in `/exe` functions incorrectly stopped at the first match (switch-like behavior)
+  - Now properly evaluates all conditions and returns the last matching value
+  - Added support for `when first [...]` modifier for explicit switch-case semantics
+  - Fixed doubled output from `/show` directives in for loops with when expressions
+  - Side effects (show, output directives) inside when expressions now execute correctly
+
+### Changed
+- **When expression semantics**: Clear distinction between bare `when` and `when first`
+  - `when [...]` - Evaluates ALL matching conditions, returns last value
+  - `when first [...]` - Stops at first match (classic switch behavior)
+  - Updated 11 test files that expected switch-like behavior to use `when first`
+  - Grammar now properly supports `when first` modifier in `/exe` expressions
+
+### Added
+- **Test coverage for when expressions**: New test demonstrating bare `when` evaluates all conditions
+  - `tests/cases/valid/slash/when/exe-when-all-matches/` shows the difference between `when` and `when first`
+
 ## [2.0.0-rc38]
 ### Added
 - Error enhancement system for JS errors

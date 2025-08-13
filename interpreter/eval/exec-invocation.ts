@@ -392,7 +392,7 @@ export async function evaluateExecInvocation(
   }
   
   // Create a child environment for parameter substitution
-  const execEnv = env.createChild();
+  let execEnv = env.createChild();
   
   // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
@@ -716,15 +716,8 @@ export async function evaluateExecInvocation(
       const { evaluateWhenExpression } = await import('./when-expression');
       const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
       result = whenResult.value;
-      
-      // DEBUG: What is the when expression actually returning?
-      console.log('🔍 WHEN RESULT:', {
-        commandName,
-        result,
-        isRetryString: result === 'retry',
-        resultType: typeof result,
-        pipelineTry: execEnv.getVariable('pipeline')?.value?.try
-      });
+      // Update execEnv to the result which contains merged nodes
+      execEnv = whenResult.env;
     } else if (definition.language === 'mlld-for') {
       // Special handling for mlld-for expressions
       const forExprNode = definition.codeTemplate[0];
@@ -1144,7 +1137,7 @@ export async function evaluateExecInvocation(
       const pipelineResult = await executePipeline(
         typeof result === 'string' ? result : JSON.stringify(result),
         normalizedPipeline,
-        env,
+        execEnv,  // Use execEnv which has merged nodes
         node.location,
         node.withClause.format,
         true,  // isRetryable
@@ -1153,17 +1146,17 @@ export async function evaluateExecInvocation(
       );
       
       // Still need to handle other withClause features (trust, needs)
-      return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
+      return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, execEnv);
     } else {
       // applyWithClause expects a string input
       const stringResult = typeof result === 'string' ? result : JSON.stringify(result);
-      return applyWithClause(stringResult, node.withClause, env);
+      return applyWithClause(stringResult, node.withClause, execEnv);
     }
   }
   
   return {
     value: result,
-    env,
+    env: execEnv,  // Return execEnv which contains merged nodes from when expressions
     // For stdout, convert the parsed value back to string for backward compatibility
     // but preserve the actual value in the value field for truthiness checks
     stdout: typeof result === 'string' ? result : 
