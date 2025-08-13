@@ -239,12 +239,19 @@ export async function evaluateForExpression(
         }
         
         // Handle wrapped content structure (similar to for directive actions)
+        // Don't unwrap templates with interpolation - they need to be evaluated as a whole
         let nodesToEvaluate = expr.expression;
-        if (expr.expression.length === 1 && expr.expression[0].content && expr.expression[0].wrapperType) {
-          // Unwrap the content
+        
+        // Only unwrap if it's NOT a template requiring interpolation
+        // Templates with hasInterpolation flag should be passed intact to evaluate()
+        if (expr.expression.length === 1 && 
+            expr.expression[0].content && 
+            expr.expression[0].wrapperType &&
+            !expr.expression[0].hasInterpolation) {
+          // Only unwrap non-interpolated content
           nodesToEvaluate = expr.expression[0].content;
           if (process.env.DEBUG_FOR) {
-            console.error('[DEBUG_FOR] Unwrapped to:', JSON.stringify(nodesToEvaluate, null, 2));
+            console.error('[DEBUG_FOR] Unwrapped non-interpolated content:', JSON.stringify(nodesToEvaluate, null, 2));
           }
         }
         

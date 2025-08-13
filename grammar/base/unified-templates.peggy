@@ -131,7 +131,7 @@ UnifiedBraceInterpolation "Brace interpolation"
 
 // @var style interpolation for double colons
 UnifiedAtInterpolation "At-sign interpolation"
-  = UnifiedBacktickExecInvocation      // @func(args)
+  = UnifiedExecInvocation      // @func(args)
   / FileReferenceInterpolation   // <file.md>
   / TemplateVariableReference   // @var - NO tail modifier constraints
   / "@" !BaseIdentifier char:. { // @ followed by non-identifier

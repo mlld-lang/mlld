@@ -23,9 +23,9 @@ UnifiedQuote "Unified quote pattern"
   / UnifiedSingleQuote
   / UnifiedBacktick
 
-// Double quotes with @var interpolation
+// Double quotes with @var and @func() interpolation
 UnifiedDoubleQuote "Double quoted string with interpolation"
-  = '"' parts:(SpecialVariable / FileReferenceInterpolation / TemplateVariableReference / UnifiedDoubleQuotedText)* '"' {
+  = '"' parts:(SpecialVariable / UnifiedInterpolationContent / UnifiedDoubleQuotedText)* '"' {
       helpers.debug('UnifiedQuote: DoubleQuote matched', { parts });
       
       // If it's a plain string (no interpolation), create a Literal node for directive contexts
@@ -111,11 +111,16 @@ UnifiedBacktick "Backtick string with interpolation"
 // INTERPOLATION CONTENT PATTERNS
 // -------------------------------------------------------------
 
+// Shared interpolation pattern for both double quotes and backticks
+// Supports @var, @func(args), and <file.md>
+UnifiedInterpolationContent "Shared interpolation content"
+  = UnifiedExecInvocation        // @func(args) - must come before variable
+  / FileReferenceInterpolation   // <file.md> references with fields/pipes
+  / TemplateVariableReference    // @var - NO tail modifier constraints
+
 // Content inside backtick templates - supports @var and @func(args) and <file.md>
 UnifiedBacktickInterpolation "Backtick interpolation content"
-  = UnifiedBacktickExecInvocation    // @func(args) - must come before variable
-  / FileReferenceInterpolation // <file.md> references with fields/pipes
-  / TemplateVariableReference // @var - NO tail modifier constraints
+  = UnifiedInterpolationContent      // Use shared interpolation
   / "@" !BaseIdentifier char:. {     // @ followed by non-identifier (like @:)
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
@@ -128,10 +133,10 @@ UnifiedBacktickInterpolation "Backtick interpolation content"
 // SUPPORTING PATTERNS (from content.peggy)
 // -------------------------------------------------------------
 
-// Function call in backtick template
-UnifiedBacktickExecInvocation
+// Function call in interpolation contexts (shared by backticks and double quotes)
+UnifiedExecInvocation
   = "@" name:BaseIdentifier &"(" argList:UnifiedArgumentList {
-      helpers.debug('UnifiedBacktickExecInvocation matched', { name, argList });
+      helpers.debug('UnifiedExecInvocation matched', { name, argList });
       
       // Extract arguments from unified argument list
       const args = argList.arguments || [];

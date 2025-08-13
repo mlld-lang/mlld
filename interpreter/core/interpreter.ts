@@ -509,6 +509,16 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
       }
     }
     
+    // Apply condensed pipes if present (same as in interpolate)
+    if (node.pipes && node.pipes.length > 0) {
+      const { processPipeline } = await import('../eval/pipeline/unified-processor');
+      resolvedValue = await processPipeline({
+        value: resolvedValue,
+        env,
+        node,
+        identifier: node.identifier
+      });
+    }
     
     return { value: resolvedValue, env };
   }

@@ -1,5 +1,7 @@
+# For Loop with Pipeline
+
 [
-"ALICE",
-"BOB",
-"CHARLIE"
+  "ALICE",
+  "BOB",
+  "CHARLIE"
 ]
