@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Side effects (show, output directives) inside when expressions now execute correctly
 
 ### Changed
+- **No longer supporting `/` on RHS**: 
+  - Previously mlld allowed slashes in directives on the right side (`=> /show` or `= /run` etc)
+  - Removed to emphasize the `/` is purposeful meaning "start of line interpreted as mlld"
+  - Now if you use `/` on RHS, you get an educational error explaining the `/` is only for start of line
 - **When expression semantics**: Clear distinction between bare `when` and `when first`
   - `when [...]` - Evaluates ALL matching conditions, returns last value
   - `when first [...]` - Stops at first match (classic switch behavior)

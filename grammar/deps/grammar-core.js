@@ -127,75 +127,13 @@ export const helpers = {
         return true;
     },
     /**
-     * Determines if the current position is within a right-hand side (RHS) expression
-     * RHS contexts are after assignment operators (=, :) in directive bodies
+     * DEPRECATED: RHS slashes are no longer supported
+     * Keeping for reference but this should not be used
+     * @deprecated
      */
     isRHSContext(input, pos) {
-        // If at the start of input, can't be RHS
-        if (pos === 0)
-            return false;
-        // Search backward for assignment indicators
-        let i = pos - 1;
-        let inString = false;
-        let stringChar = null;
-        let foundEquals = false;
-        while (i >= 0) {
-            const char = input[i];
-            // Handle string context
-            if ((char === '"' || char === '\'') && (i === 0 || input[i - 1] !== '\\')) {
-                if (!inString) {
-                    inString = true;
-                    stringChar = char;
-                }
-                else if (char === stringChar) {
-                    inString = false;
-                    stringChar = null;
-                }
-            }
-            // Only consider equals/colon outside of strings
-            if (!inString) {
-                // If we find an assignment operator
-                if (char === '=' || char === ':') {
-                    foundEquals = true;
-                    break;
-                }
-                // If we hit a semi-colon or line break before finding an assignment,
-                // we're likely in a new statement/line
-                if (char === ';' || char === '\n') {
-                    return false;
-                }
-            }
-            i--;
-        }
-        // If we found an equals sign, check if it's part of a directive assignment
-        if (foundEquals) {
-            // Look for directive on LHS
-            let j = i - 1;
-            // Skip whitespace
-            while (j >= 0 && ' \t\r'.includes(input[j])) {
-                j--;
-            }
-            // Collect potential directive name
-            let name = '';
-            while (j >= 0 && /[a-zA-Z0-9_]/.test(input[j])) {
-                name = input[j] + name;
-                j--;
-            }
-            // Check for / symbol indicating directive
-            if (j >= 0 && input[j] === '/') {
-                // Valid assignment directives that can have nested directives in RHS
-                const validAssignmentDirectives = ['exec', 'text', 'data', 'run'];
-                if (validAssignmentDirectives.includes(name)) {
-                    // Check if the / is at logical line start (to confirm it's a directive)
-                    if (this.isLogicalLineStart(input, j)) {
-                        return true;
-                    }
-                }
-            }
-            // Not a directive assignment
-            return false;
-        }
-        return false;
+        return false; // RHS slashes are no longer supported
+        // Original implementation commented out - RHS slashes no longer supported
     },
     /**
      * Determines if the current position represents plain text context
@@ -204,8 +142,7 @@ export const helpers = {
     isPlainTextContext(input, pos) {
         // If it's not any of the special contexts, it's plain text
         return !this.isSlashDirectiveContext(input, pos) &&
-            !this.isAtVariableContext(input, pos) &&
-            !this.isRHSContext(input, pos);
+            !this.isAtVariableContext(input, pos);
     },
     /**
      * Determines if the current position is within a run code block context
@@ -1059,7 +996,7 @@ export const helpers = {
             (n.raw && n.raw.includes('\n')));
     },
     /**
-     * Creates a WhenExpression node for RHS when expressions
+     * Creates a WhenExpression node for when expressions (used in /var assignments)
      */
     createWhenExpression(conditions, withClause, location, modifier = null) {
         return this.createNode(NodeType.WhenExpression, {

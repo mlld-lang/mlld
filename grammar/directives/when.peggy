@@ -42,10 +42,10 @@ SlashWhen
       }
       return false;
     } {
-      helpers.mlldError("Invalid /when syntax. The 'any:' modifier requires a block action after the conditions.\\n" +
-            "Individual actions are not allowed with 'any:'.\\n\\n" +
-            "Incorrect: /when @var any: [@cond1 => action1, @cond2 => action2]\\n" +
-            "Correct:   /when @var any: [@cond1, @cond2] => /show \"Any matched\"", "=>", location());
+      helpers.mlldError("Invalid /when syntax. The 'any' modifier requires a block action after the conditions.\\n" +
+            "Individual actions are not allowed with 'any'.\\n\\n" +
+            "Incorrect: /when @var any [@cond1 => action1, @cond2 => action2]\\n" +
+            "Correct:   /when @var any [@cond1, @cond2] => /show \"Any matched\"", "=>", location());
     }
   / WhenBlockForm
   // Bare block form with modifier: /when <modifier>: [...] => <action>
@@ -125,10 +125,10 @@ SlashWhen
       
       return hasIndividualActions && hasBlockAction;
     } {
-      helpers.mlldError("Invalid /when syntax. The 'all:' modifier cannot have both individual actions and a block action.\\n" +
+      helpers.mlldError("Invalid /when syntax. The 'all' modifier cannot have both individual actions and a block action.\\n" +
             "Use either:\\n" +
-            "  /when @var all: [@cond1 => action1, @cond2 => action2]  (individual actions)\\n" +
-            "  /when @var all: [@cond1, @cond2] => /show \"All matched\"  (block action)", "]", location());
+            "  /when @var all [@cond1 => action1, @cond2 => action2]  (individual actions)\\n" +
+            "  /when @var all [@cond1, @cond2] => /show \"All matched\"  (block action)", "]", location());
     }
   // Error recovery: Unclosed brackets in block form
   / DirectiveContext "/when" _ variable:("@" id:BaseIdentifier { return id; })? _ modifier:WhenModifier? _ ":"? _ "[" _ &{
@@ -157,16 +157,16 @@ SlashWhen
     modifier:BaseIdentifier &{ return modifier !== "first" && modifier !== "all" && modifier !== "any"; } _ ":"? _ "[" {
       helpers.mlldError("Invalid /when modifier: '" + modifier + "'. Valid modifiers are: 'first', 'all', 'any'.\\n" +
             "Examples:\\n" +
-            "  /when @var first: [...] => action\\n" +
-            "  /when @var all: [...] => action\\n" +
-            "  /when @var any: [...] => action", "modifier", location());
+            "  /when @var first [...] => action\\n" +
+            "  /when @var all [...] => action\\n" +
+            "  /when @var any [...] => action", "modifier", location());
     }
   // Error recovery: Generic catch-all
   / DirectiveContext "/when" {
       helpers.mlldError("Invalid /when syntax. Valid forms:\\n" +
             "  /when @condition => action          (simple form)\\n" +
-            "  /when @variable: [...]              (switch form)\\n" +
-            "  /when @var first: [...] => action   (block form with modifier)\\n" +
+            "  /when @variable [...]              (switch form)\\n" +
+            "  /when @var first [...] => action   (block form with modifier)\\n" +
             "  /when [...] => action               (bare block form)", "@", location());
     }
 
@@ -503,7 +503,7 @@ WhenBlockAction
 
 // Single directive as action - simplified inline directives
 WhenActionDirective
-  = "/"? "output" _ source:WhenOutputSource? _ "to" _ target:WhenOutputTarget {
+  = "output" _ source:WhenOutputSource? _ "to" _ target:WhenOutputTarget {
       helpers.debug('WhenActionDirective: Enhanced output matched!');
       // Enhanced output syntax in when actions (FIRST to match before bracket syntax)
       const values = {
@@ -539,7 +539,7 @@ WhenActionDirective
       })];
     }
   // show with simple variable reference (MUST come before exec invocation)
-  / "/"? "show" _ varRef:VariableNoTail {
+  / "show" _ varRef:VariableNoTail {
       // show with simple variable
       return [helpers.createNode(NodeType.Directive, {
         kind: 'show',
@@ -555,7 +555,7 @@ WhenActionDirective
       })];
     }
   // show with unified reference (function call with parentheses or tail modifiers)
-  / "/"? "show" _ invocation:UnifiedReferenceWithTail {
+  / "show" _ invocation:UnifiedReferenceWithTail {
       // show with unified reference (exec invocation or variable)
       const isExecInvocation = invocation.type === 'ExecInvocation';
       const subtype = isExecInvocation ? 'showExecInvocation' : 'showVariable';
@@ -575,7 +575,7 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "/"? "show" _ template:TemplateCore ending:StandardDirectiveEnding {
+  / "show" _ template:TemplateCore ending:StandardDirectiveEnding {
       // Use the same abstraction and pipeline handling as standalone /show directives
       const values = { ...template.values };
       const raw = { ...template.raw };
@@ -594,7 +594,7 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "/"? "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
+  / "var" _ "@" id:BaseIdentifier _ "=" _ value:VarRHSContent {
       // Support full range of var assignments in when actions
       const idNode = helpers.createVariableReferenceNode('identifier', { identifier: id }, location());
       
@@ -694,7 +694,7 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "/"? "run" _ invocation:UnifiedReferenceWithTail {
+  / "run" _ invocation:UnifiedReferenceWithTail {
       // run with unified reference (exec invocation or variable)
       const isExecInvocation = invocation.type === 'ExecInvocation';
       const subtype = isExecInvocation ? 'runExecReference' : 'runVariable';
@@ -715,7 +715,7 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "/"? "run" _ command:UnifiedCommandBrackets {
+  / "run" _ command:UnifiedCommandBrackets {
       // Use the same abstraction as /run directive
       return [helpers.createNode(NodeType.Directive, {
         kind: 'run',
@@ -726,7 +726,7 @@ WhenActionDirective
         location: location()
       })];
     }
-  / "/"? "output" _ source:WhenOutputSource? _ "[" path:WhenPathText "]" {
+  / "output" _ source:WhenOutputSource? _ "[" path:WhenPathText "]" {
       helpers.debug('WhenActionDirective: Bracket output matched');
       // Bracket output syntax in when actions
       const values = {
@@ -1066,7 +1066,7 @@ WhenImplicitExecDefinitionError
         `Instead of:\n` +
         `  /when @condition => @${name}() = ...\n\n` +
         `Use a separate /exe directive:\n` +
-        `  /exe @${name}() = when: [@condition => ..., * => default]\n\n` +
+        `  /exe @${name}() = when [@condition => ..., * => default]\n\n` +
         `This keeps executable definitions at the top level where they belong.`,
         "/exe",
         location()

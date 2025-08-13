@@ -38,16 +38,16 @@
 
 ## Expressions in /when
 
-/when @isProduction && !@debugMode => /show "Production mode"
-/when @user.role == "admin" || @user.role == "moderator" => /show "Has privileges"
-/when @count > 0 && @count < 100 => /show "In range"
-/when !@isLoggedIn => /show "Please log in"
+/when @isProduction && !@debugMode => show "Production mode"
+/when @user.role == "admin" || @user.role == "moderator" => show "Has privileges"
+/when @count > 0 && @count < 100 => show "In range"
+/when !@isLoggedIn => show "Please log in"
 
 ## Complex Expressions
 
 /var @result = (@a && @b) || (!@c && @d) ? @option1 : @option2
 /show @result
-/when (@status == "active" || @override) && !@suspended => /run @process()
+/when (@status == "active" || @override) && !@suspended => run @process()
 
 ## Expression Precedence Test
 

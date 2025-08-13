@@ -8,10 +8,10 @@
 /var @isActive = false
 
 >> Test 1: When all with piped action
-/when all [@isValid @hasPermission] => /show "all conditions met" | @toUpper | @addBrackets
+/when all [@isValid @hasPermission] => show "all conditions met" | @toUpper | @addBrackets
 
 >> Test 2: When any with piped action  
-/when any [@isActive @hasPermission] => /show "at least one true" | @toUpper
+/when any [@isActive @hasPermission] => show "at least one true" | @toUpper
 
 >> Test 3: When all with implicit var and pipes
 /var @data = "process"

@@ -296,7 +296,7 @@ RunCommandValue
 
 // Code execution in object context  
 CodeExecutionValue
-  = "/"? lang:VarCodeLanguage _ "{" _ code:CodeBlockContent _ "}" {
+  = lang:VarCodeLanguage _ "{" _ code:CodeBlockContent _ "}" {
       return {
         type: 'code',
         language: lang,
@@ -313,7 +313,7 @@ PropertyKey
 
 // Nested directive like @run
 NestedDirective
-  = "@"? "/"? "run" _ lang:VarCodeLanguage _ "{" _ code:CodeBlockContent _ "}" {
+  = "@"? "run" _ lang:VarCodeLanguage _ "{" _ code:CodeBlockContent _ "}" {
       // Inline code execution
       return {
         type: 'nestedDirective',
@@ -322,7 +322,7 @@ NestedDirective
         code: code
       };
     }
-  / "@"? "/"? "run" _ "[" _ cmd:CommandContent _ "]" {
+  / "@"? "run" _ "[" _ cmd:CommandContent _ "]" {
       // Command execution
       return {
         type: 'nestedDirective', 
@@ -341,7 +341,7 @@ CommandContent
 
 // Code execution patterns (language + code without @run prefix)
 CodeExecution "code execution"
-  = "/"? "run" _ lang:VarCodeLanguage _ "{" _ content:CodeBlockContent _ "}" {
+  = "run" _ lang:VarCodeLanguage _ "{" _ content:CodeBlockContent _ "}" {
       // Language-specific code execution (js, python, etc.)
       return {
         type: 'code',
@@ -350,7 +350,7 @@ CodeExecution "code execution"
         hasRunKeyword: true
       };
     }
-  / "/"? "run" _ content:UnifiedCommandBrackets {
+  / "run" _ content:UnifiedCommandBrackets {
       // Shell command - use proper command parsing
       return {
         type: 'command',
@@ -394,11 +394,11 @@ CodeChar
 VarWhenError
   = "when" _ ":" _ "[" {
       helpers.mlldError(
-        "when: expressions are not allowed in /var assignments.\n\n" +
+        "when expressions are not allowed in /var assignments.\n\n" +
         "Instead of:\n" +
-        "  /var @result = when: [@condition => value, ...]\n\n" +
+        "  /var @result = when [@condition => value, ...]\n\n" +
         "Use:\n" +
-        "  /exe @result() = when: [@condition => value, ...]",
+        "  /exe @result() = when [@condition => value, ...]",
         "/exe",
         location()
       );

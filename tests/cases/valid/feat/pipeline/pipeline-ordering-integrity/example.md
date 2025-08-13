@@ -90,7 +90,7 @@
 /show @test12
 
 >> Test 13: Command execution pipeline
-/var @test13 = /run {echo "CMD"} | @append("S1") | @append("S2") | @append("S3")
+/var @test13 = run {echo "CMD"} | @append("S1") | @append("S2") | @append("S3")
 /show @test13
 
 >> Test 14: Multiple argument functions maintaining order

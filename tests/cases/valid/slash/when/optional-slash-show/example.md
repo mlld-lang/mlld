@@ -2,4 +2,4 @@
 /var @message = "Hello with slash!"
 
 # Test /when with /show (optional slash)
-/when @condition => /show `Message: @message`
+/when @condition => show `Message: @message`

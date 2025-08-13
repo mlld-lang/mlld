@@ -46,7 +46,7 @@ ForSingleAction "for action"
       return [nestedFor];
     }
   // Special handling for /output directive with full source support via shared patterns
-  / "/"? "output" _ source:OutputSource? _ "to" _ target:OutputTarget {
+  / "output" _ source:OutputSource? _ "to" _ target:OutputTarget {
       const values = {
         target: target
       };
@@ -79,7 +79,7 @@ ForSingleAction "for action"
       })];
     }
   // Generic handling for other directives (with optional /)
-  / "/"? directive:("show" / "var") _ content:VarRHSContent {
+  / directive:("show" / "var") _ content:VarRHSContent {
       return helpers.createForActionNode(directive, content, location());
     }
   / invocation:UnifiedReferenceWithTail {

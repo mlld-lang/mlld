@@ -19,14 +19,13 @@ This test verifies URL content conversion features.
 
 ## Show conversions if available
 
-/when @html_page.text => /show "Text version (first 100 chars):"
-/when @html_page.text => /show `@{@html_page.text.substring(0, 100)}...`
+/when @html_page.text => show "Text version (first 100 chars):"
+/when @html_page.text => show `@{@html_page.text.substring(0, 100)}...`
 
-/when @html_page.md => /show "Markdown version available"
+/when @html_page.md => show "Markdown version available"
 
 ## Load a markdown URL directly
 
 /var @md_page = <https://raw.githubusercontent.com/example/repo/main/README.md>
 
 ### Markdown files should not have HTML property
-/show `Markdown has no HTML: @{typeof @md_page.html === 'undefined'}`

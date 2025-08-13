@@ -11,5 +11,4 @@
 /show "Exactly at 1500: @exactlyAtLimit"
 
 >> Practical usage
-/when @tokens > @warningThreshold => /show "Warning: High token usage!"
-/when @tokens >= @maxTokens => /show "Error: Token limit exceeded!"
+/when @tokens > @warningThreshold => show "Warning: High token usage!"

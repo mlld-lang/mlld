@@ -164,7 +164,7 @@ describe('Location Tracking', () => {
   
   describe('Complex expressions', () => {
     it('should track locations in when expressions', () => {
-      const input = '/when @score > 90 => /show `Excellent!`';
+      const input = '/when @score > 90 => show `Excellent!`';
       const ast = parse(input);
       
       walkAST(ast, (node, path) => {
@@ -218,7 +218,7 @@ describe('Location Tracking', () => {
 /import { utils } from @company/shared
 /var @name = "Alice"
 /var @greeting = \`Hello @name, welcome to @place!\`
-/when @score > 80 => /show @greeting
+/when @score > 80 => show @greeting
 /exe @process(data) = js {
   return data.map(d => d.value * 2);
 }

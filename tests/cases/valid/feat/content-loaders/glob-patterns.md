@@ -9,7 +9,7 @@ Test glob patterns for loading multiple files with metadata.
 
 ## Show First File Info
 
-/when @docs.length > 0 => /show `First file: @docs.0.filename (@docs.0.tokest estimated tokens)`
+/when @docs.length > 0 => show `First file: @docs.0.filename (@docs.0.tokest estimated tokens)`
 
 ## Recursive Glob Pattern
 
@@ -50,4 +50,3 @@ Test glob patterns for loading multiple files with metadata.
 /var @filtered = foreach @doc(@largeDocs) {
   /when @doc.tokest > 2000 => @doc
 }
-/show `Found @filtered.length large documents (>2000 tokens)`

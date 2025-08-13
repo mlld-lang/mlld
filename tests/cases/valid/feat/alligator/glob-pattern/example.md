@@ -12,5 +12,4 @@ This test verifies glob pattern support in alligator syntax.
 
 ## Access metadata from first file
 
-/when @mdFiles => /show `First file: @mdFiles[0].filename`
-/when @mdFiles => /show `First file path: @mdFiles[0].relative`
+/when @mdFiles => show `First file: @mdFiles[0].filename`

@@ -59,105 +59,16 @@ RunCodeBlockContext "Run-style code block context"
   = &{
       const pos = offset();
       
-      // Check if we're at a code block pattern following a language identifier
-      // This requires looking back to see if we have a valid language pattern
-      // and forward to see if we have a code block pattern
-      
-      // First determine if we're in an RHS context
-      const isRHS = helpers.isRHSContext(input, pos);
-      
-      // Then check if we're preceded by "/run" or in a context that expects 
-      // a language + code block pattern
-      let isInRunContext = false;
-      
-      // Look backward for "/run" pattern if in RHS context
-      if (isRHS) {
-        // Search backward for "/run" indicator within reasonable bounds
-        // This is a simplified check - a more comprehensive implementation
-        // would match the exact pattern for "/run" in different contexts
-        let i = pos - 1;
-        let seenSlashSymbol = false;
-        let potentialRunKeyword = '';
-        
-        // Skip whitespace
-        while (i >= 0 && ' \t\r\n'.includes(input[i])) {
-          i--;
-        }
-        
-        // Collect potential keyword and check for / symbol
-        while (i >= 0 && /[a-zA-Z]/.test(input[i])) {
-          potentialRunKeyword = input[i] + potentialRunKeyword;
-          i--;
-        }
-        
-        // Check for / symbol
-        if (i >= 0 && input[i] === '/') {
-          seenSlashSymbol = true;
-        }
-        
-        // If we've seen /run, we're in a run code block context
-        if (seenSlashSymbol && potentialRunKeyword === 'run') {
-          isInRunContext = true;
-        }
-      }
-      
-      return isInRunContext || helpers.isInRunCodeBlockContext(input, pos);
+      // RHS slashes are no longer supported
+      // We only check for run code block context in LHS directives
+      return helpers.isInRunCodeBlockContext(input, pos);
     }
 
 // Specialized RHS context for exec directive that handles /run reference
 ExecRunRHSContext "Exec /run right-hand side context"
   = &{
-      const pos = offset();
-      
-      // Check both RHS context and the presence of /run pattern
-      if (!helpers.isRHSContext(input, pos)) {
-        return false;
-      }
-      
-      // Look backward for "/exec" to confirm we're in an exec directive
-      let isInExecDirective = false;
-      let i = pos - 1;
-      
-      // This is a simplified check - would need a more robust pattern 
-      // matching in a full implementation
-      let foundEquals = false;
-      let foundExec = false;
-      
-      // First find equals sign
-      while (i >= 0 && !foundEquals) {
-        if (input[i] === '=') {
-          foundEquals = true;
-        } else if (input[i] === '\n') {
-          // If we hit a newline before equals, we're not in the right context
-          return false;
-        }
-        i--;
-      }
-      
-      if (foundEquals) {
-        // Then look for exec
-        // Skip whitespace before equals
-        i--;
-        while (i >= 0 && ' \t\r'.includes(input[i])) {
-          i--;
-        }
-        
-        // Collect potential keyword
-        let keyword = '';
-        while (i >= 0 && /[a-zA-Z]/.test(input[i])) {
-          keyword = input[i] + keyword;
-          i--;
-        }
-        
-        // Check for / symbol
-        if (i >= 0 && input[i] === '/') {
-          if (keyword === 'exec') {
-            isInExecDirective = true;
-          }
-        }
-      }
-      
-      return isInExecDirective;
+      // RHS slashes are no longer supported
+      return false;
     }
 
 // Detects if we're looking at a path pattern starting with @variable

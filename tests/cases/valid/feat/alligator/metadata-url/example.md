@@ -15,8 +15,9 @@ This test verifies that URLs loaded with alligator syntax include rich metadata.
 
 ## Show title if available
 
-/when @page.title => /show `Title: @page.title`
+/when @page.title => show `Title: @page.title`
 
 ## Default content behavior
 
 /show @page
+

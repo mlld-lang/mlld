@@ -11,6 +11,5 @@
 
 /exe @validate(answer, retries) = when: [
   @isjson(@answer) => @answer
-  !@isjson(@answer) => /show `Invalid JSON`
-  * => /show `Error`
-]
+  !@isjson(@answer) => show `Invalid JSON`
+  * => show `Error`

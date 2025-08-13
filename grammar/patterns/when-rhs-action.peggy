@@ -229,9 +229,9 @@ WhenRHSExeDefinitionError
         `Executable definitions are not allowed in when RHS contexts.\n\n` +
         `Instead of:\n` +
         `  /when @condition => @${name}() = ...\n` +
-        `  /var @result = when: [@condition => @${name}() = ...]\n\n` +
+        `  /var @result = when [@condition => @${name}() = ...]\n\n` +
         `Use:\n` +
-        `  /exe @${name}() = when: [@condition => ..., * => default]`,
+        `  /exe @${name}() = when [@condition => ..., * => default]`,
         "/exe",
         location()
       );

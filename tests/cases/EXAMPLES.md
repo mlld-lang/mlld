@@ -136,9 +136,8 @@ This should fail because:
 
 /exe @validate(answer, retries) = when: [
   @isjson(@answer) => @answer
-  !@isjson(@answer) => /show `Invalid JSON`
-  * => /show `Error`
-]
+  !@isjson(@answer) => show `Invalid JSON`
+  * => show `Error`
 ```
 
 ### Invalid Comment in array literal
@@ -244,9 +243,8 @@ description: Using slash prefix in when action
 # Incorrect slash in when action
 
 /exe @test(p) = when [
-  @p.try < 3 => /show "Retrying..."
+  @p.try < 3 => show "Retrying..."
   * => @p
-]
 ```
 
 ### Invalid Var nested fields

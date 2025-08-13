@@ -5,7 +5,6 @@
 ExeRHSContent "exe assignment value"
   = WhenExpression              // when: [...] expressions for conditional execution
   / ForExpression               // for @var in @collection => expression
-  / ExeSlashRunPattern          // /run {command} or /run js {code} - optional slash syntax
   / ExeRunCommandPattern        // run {command} - explicit run command syntax
   / ExeCodePattern              // js {code} - language-specific code blocks
   / ExeEnvironmentDeclaration   // { helper1, helper2 } - environment setup (must come before command)
@@ -43,43 +42,6 @@ ExeExecInvocationPattern "exe exec invocation"
         },
         subtype: 'exeCommand',
         source: 'invocation'
-      };
-    }
-
-// Slash run pattern for exe context - handles "/run {command}" or "/run js {code}" syntax
-ExeSlashRunPattern "exe slash run pattern"
-  = "/run" _ langCode:RunLanguageCodeCore {
-      // /run js {code} pattern
-      return {
-        subtype: 'exeCode',
-        source: 'code',
-        values: {
-          lang: langCode.values.lang,
-          args: langCode.values.args,
-          code: langCode.values.code
-        },
-        raw: {
-          lang: langCode.raw.lang,
-          args: langCode.raw.args,
-          code: langCode.raw.code
-        },
-        meta: langCode.meta
-      };
-    }
-  / "/run" _ content:UnifiedCommandBrackets {
-      // /run {command} pattern
-      return {
-        subtype: 'exeCommand',
-        source: 'command',
-        values: {
-          command: content.values.command,
-          commandBases: content.values.commandBases
-        },
-        raw: {
-          command: content.raw.command,
-          commandBases: content.raw.commandBases
-        },
-        meta: content.meta
       };
     }
 
@@ -292,7 +254,7 @@ WhenExpression "when expression"
     }
   / "when" _ WhenExprModifier? _ ":"? _ {
       helpers.mlldError(
-        `Missing condition list in when expression. Expected: when: [condition => value, ...]`,
+        `Missing condition list in when expression. Expected: when [condition => value, ...]`,
         "[",
         location()
       );
