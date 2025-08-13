@@ -1,0 +1,5 @@
+[
+"Hello, Alice!",
+"Hello, Bob!",
+"Hello, Charlie!"
+]

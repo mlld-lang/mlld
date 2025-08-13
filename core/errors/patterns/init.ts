@@ -1,5 +1,6 @@
 import { enhanceParseError as enhanceParseErrorImpl } from './parse-errors.generated.js';
-import { MlldParseError } from '@core/errors';
+import { enhanceJSError as enhanceJSErrorImpl } from './js-errors.generated.js';
+import { MlldParseError, MlldCommandExecutionError } from '@core/errors';
 import type { PeggyError } from './types';
 
 /**
@@ -28,4 +29,23 @@ export async function enhanceParseError(
   
   // Use the compiled enhancer - it always returns an error (never null)
   return enhanceParseErrorImpl(error, source, filePath);
+}
+
+/**
+ * Enhance a JavaScript/Node execution error using patterns
+ * Returns enhanced error details or null if no pattern matches
+ */
+export function enhanceJSError(
+  error: Error,
+  code: string,
+  params?: Record<string, any>,
+  metadata?: Record<string, any>
+): { message: string; pattern: string } | null {
+  try {
+    const enhanced = enhanceJSErrorImpl(error, code, params, metadata);
+    return enhanced;
+  } catch {
+    // If enhancement fails, return null
+    return null;
+  }
 }

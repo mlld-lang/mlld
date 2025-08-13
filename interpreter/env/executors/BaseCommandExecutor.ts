@@ -94,13 +94,19 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
     } catch (error: unknown) {
       const duration = Date.now() - startTime;
       
-      // Create standardized error handling
-      const commandError = this.createCommandExecutionError(
-        error,
-        command,
-        duration,
-        context
-      );
+      // If it's already an MlldCommandExecutionError, preserve it
+      let commandError: MlldCommandExecutionError;
+      if (error instanceof MlldCommandExecutionError) {
+        commandError = error;
+      } else {
+        // Create standardized error handling
+        commandError = this.createCommandExecutionError(
+          error,
+          command,
+          duration,
+          context
+        );
+      }
       
       // Collect error if in continue mode or if collectErrors is enabled
       if (errorBehavior === 'continue' || finalOptions.collectErrors) {

@@ -3,6 +3,7 @@ import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import { createMlldHelpers } from '../variable-proxy';
 import { resolveShadowEnvironment } from '../../eval/helpers/shadowEnvResolver';
+import { enhanceJSError } from '@core/errors/patterns/init';
 
 export interface ShadowEnvironment {
   /**
@@ -132,16 +133,12 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       // Check if code contains await to determine if we need an async function
       const hasAwait = code.includes('await');
       let fn: Function;
-      try {
-        if (hasAwait) {
-          // Create an async function using the AsyncFunction constructor
-          const AsyncFunction = (async function () {}).constructor as any;
-          fn = new AsyncFunction(...allParamNames, functionBody);
-        } else {
-          fn = new Function(...allParamNames, functionBody);
-        }
-      } catch (syntaxError) {
-        throw syntaxError;
+      if (hasAwait) {
+        // Create an async function using the AsyncFunction constructor
+        const AsyncFunction = (async function () {}).constructor as any;
+        fn = new AsyncFunction(...allParamNames, functionBody);
+      } else {
+        fn = new Function(...allParamNames, functionBody);
       }
 
       // Execute the function
@@ -187,8 +184,21 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
       };
     } catch (error) {
       const duration = Date.now() - startTime;
+      
+      // Try to enhance the error with patterns
+      const enhanced = enhanceJSError(
+        error as Error,
+        code,
+        params,
+        { language: 'js' }
+      );
+      
+      // Use enhanced message if available
+      const errorMessage = enhanced?.message || 
+        (error instanceof Error ? error.message : 'JavaScript execution failed');
+      
       const codeError = new MlldCommandExecutionError(
-        error instanceof Error ? error.message : 'JavaScript execution failed',
+        errorMessage,
         undefined, // sourceLocation
         {
           command: 'js',

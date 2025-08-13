@@ -8,6 +8,7 @@ import { MlldCommandExecutionError } from '@core/errors';
 import type { NodeShadowEnvironment } from '../NodeShadowEnvironment';
 import { prepareParamsForShadow, createMlldHelpers } from '../variable-proxy';
 import { resolveShadowEnvironment } from '../../eval/helpers/shadowEnvResolver';
+import { enhanceJSError } from '@core/errors/patterns/init';
 
 export interface NodeShadowEnvironmentProvider {
   /**
@@ -126,9 +127,20 @@ export class NodeExecutor extends BaseCommandExecutor {
         originalError = errorMessage.replace('Node shadow environment error: ', '');
       }
       
+      // Try to enhance the error with patterns
+      const enhanced = enhanceJSError(
+        error as Error,
+        code,
+        params,
+        { language: 'node' }
+      );
+      
+      // Use enhanced message if available
+      const finalMessage = enhanced?.message || `Node.js error: ${originalError}`;
+      
       // Create a proper MlldError for Node.js errors
       throw new MlldCommandExecutionError(
-        `Node.js error: ${originalError}`,
+        finalMessage,
         context?.sourceLocation,
         {
           command: `node code execution`,

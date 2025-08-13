@@ -1,0 +1,5 @@
+[
+"ALICE",
+"BOB",
+"CHARLIE"
+]
