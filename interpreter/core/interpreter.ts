@@ -556,6 +556,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     return { value: result, env };
   }
   
+  // Handle data value nodes from the grammar (arrays and objects)
+  if (node.type === 'array' || node.type === 'object') {
+    // These are data value nodes that need to be evaluated
+    const result = await evaluateDataValue(node, env);
+    return { value: result, env };
+  }
   
   // If we get here, it's an unknown node type
   throw new Error(`Unknown node type: ${node.type}`);

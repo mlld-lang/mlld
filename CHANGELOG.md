@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [2.0.0-rc37]
+
+### Added
+- **Nested For Loops**: The `/for` directive now supports nesting for multi-dimensional iteration
+  - Nest multiple for loops: `/for @x in @outer => for @y in @inner => show "@x-@y"`
+  - Unlimited nesting depth: Can chain any number of for loops together
+  - Each nested loop maintains its own scope with access to parent variables
+  - Works with all for loop features: arrays, objects (with `_key` access), and expressions
+  - Example triple nesting: `/for @x in ["A", "B"] => for @y in [1, 2] => for @z in ["X", "Y"] => show "@x-@y-@z"`
+  - Enables complex iteration patterns for data processing and code review automation
+
+### Fixed
+- **Array Literal Evaluation**: Fixed interpreter to properly handle array literal nodes from grammar
+  - Objects with `type: 'array'` from the grammar are now correctly evaluated as arrays
+  - Enables literal arrays in for loops: `/for @x in [1, 2, 3]` now works properly
+
 ## [2.0.0-rc36] 
 
 ### Added

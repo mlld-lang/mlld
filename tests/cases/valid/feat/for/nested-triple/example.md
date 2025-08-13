@@ -1,0 +1,3 @@
+# Triple Nested For Loop
+
+/for @x in ["red", "blue"] => for @y in [1, 2] => for @z in ["a", "b"] => show "@x-@y-@z"

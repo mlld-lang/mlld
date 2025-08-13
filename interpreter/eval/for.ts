@@ -58,7 +58,12 @@ export async function evaluateForDirective(
 
   try {
     // Evaluate source collection
-    const sourceResult = await evaluate(directive.values.source, env);
+    // The source is an array containing the actual source node
+    const sourceNode = Array.isArray(directive.values.source) 
+      ? directive.values.source[0] 
+      : directive.values.source;
+    
+    const sourceResult = await evaluate(sourceNode, env);
     const sourceValue = sourceResult.value;
     const iterable = toIterable(sourceValue);
 

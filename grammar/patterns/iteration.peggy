@@ -16,8 +16,37 @@ ForIterationPattern "for iteration pattern"
 
 // Single action for for loops - simpler than WhenAction
 ForSingleAction "for action"
+  // Support nested for directive (without slash) - creates a nested ForDirective
+  = "for" _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction {
+      helpers.debug('Nested for directive matched', { pattern, action });
+      
+      // Create a nested ForDirective node (not ForExpression)
+      const nestedFor = helpers.createStructuredDirective(
+        'for',
+        'for',
+        {
+          variable: [pattern.variable],
+          source: pattern.source,
+          action: Array.isArray(action) ? action : [action]
+        },
+        {
+          variable: pattern.variable.identifier,
+          source: pattern.source,
+          action: action
+        },
+        {
+          hasVariables: true,
+          actionType: 'single',
+          isNested: true
+        },
+        location()
+      );
+      
+      // Return as array for consistency with other actions
+      return [nestedFor];
+    }
   // Special handling for /output directive with full source support via shared patterns
-  = "/"? "output" _ source:OutputSource? _ "to" _ target:OutputTarget {
+  / "/"? "output" _ source:OutputSource? _ "to" _ target:OutputTarget {
       const values = {
         target: target
       };

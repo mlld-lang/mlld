@@ -41,7 +41,7 @@ The `/for` directive provides simple iteration with two forms:
 ```
 
 Key characteristics:
-- Single action per iteration (no block syntax)
+- Single action per iteration (no block syntax, but actions can be nested for loops)
 - Child environment per iteration with Variable preservation
 - Object iteration exposes keys via `@var_key` pattern
 - ForExpression returns ArrayVariable with metadata
