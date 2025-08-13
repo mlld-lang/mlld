@@ -932,21 +932,53 @@ export async function evaluateExecInvocation(
       throw new MlldInterpreterError(`Referenced command not found: ${refName}`);
     }
     
-    // Create a new invocation node for the referenced command
-    const refInvocation: ExecInvocation = {
-      type: 'ExecInvocation',
-      commandRef: {
-        identifier: refName,
-        args: evaluatedArgs.map(arg => ({
-          type: 'Text',
-          content: arg
-        }))
+    // The commandArgs contains the original AST nodes for how to call the referenced command
+    // We need to evaluate these nodes with the current invocation's parameters bound
+    if (definition.commandArgs && definition.commandArgs.length > 0) {
+      // Evaluate the commandArgs in the execEnv (which has the parameters bound)
+      // This will resolve things like @greet(@name) where @name is a parameter
+      const { evaluate } = await import('../core/interpreter');
+      const evalResult = await evaluate(definition.commandArgs, execEnv);
+      
+      // Extract the result value
+      let refArgs: any[] = [];
+      if (evalResult && evalResult.value !== undefined) {
+        // If it's a single value, wrap it in an array
+        refArgs = Array.isArray(evalResult.value) ? evalResult.value : [evalResult.value];
       }
-    };
-    
-    // Recursively evaluate the referenced command
-    const refResult = await evaluateExecInvocation(refInvocation, env);
-    result = refResult.value as string;
+      
+      // Create a new invocation node for the referenced command with the evaluated args
+      const refInvocation: ExecInvocation = {
+        type: 'ExecInvocation',
+        commandRef: {
+          identifier: refName,
+          args: refArgs.map(arg => ({
+            type: 'Text',
+            content: String(arg)
+          }))
+        }
+      };
+      
+      // Recursively evaluate the referenced command
+      const refResult = await evaluateExecInvocation(refInvocation, env);
+      result = refResult.value as string;
+    } else {
+      // No commandArgs means just pass through the current invocation's args
+      const refInvocation: ExecInvocation = {
+        type: 'ExecInvocation',
+        commandRef: {
+          identifier: refName,
+          args: evaluatedArgs.map(arg => ({
+            type: 'Text',
+            content: arg
+          }))
+        }
+      };
+      
+      // Recursively evaluate the referenced command
+      const refResult = await evaluateExecInvocation(refInvocation, env);
+      result = refResult.value as string;
+    }
   }
   // Handle section executables
   else if (isSectionExecutable(definition)) {

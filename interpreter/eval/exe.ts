@@ -197,7 +197,10 @@ export async function evaluateExe(
     const commandRef = directive.values?.commandRef;
     if (commandRef) {
       // This is a reference to another exec command
-      const refName = await interpolate(commandRef, env);
+      // commandRef is an object with name and identifier properties
+      const refName = typeof commandRef === 'object' && commandRef.name 
+        ? commandRef.name 
+        : await interpolate(commandRef, env);
       const args = directive.values?.args || [];
       
       // Get parameter names if any

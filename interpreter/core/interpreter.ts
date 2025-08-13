@@ -572,6 +572,29 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     const result = await evaluateDataValue(node, env);
     return { value: result, env };
   }
+
+  // Handle command nodes (from run {command} in expressions)
+  if (node.type === 'command') {
+    // Reuse the same logic as in lazy-eval.ts
+    let commandStr: string;
+    if (typeof node.command === 'string') {
+      commandStr = node.command || '';
+    } else if (Array.isArray(node.command)) {
+      // Interpolate the command array
+      commandStr = await interpolate(node.command, env) || '';
+    } else {
+      commandStr = '';
+    }
+    
+    // Execute command if it has the run keyword
+    if (node.hasRunKeyword) {
+      const result = await env.executeCommand(commandStr);
+      return { value: result, env };
+    }
+    
+    // Command without run keyword - return as-is (shouldn't happen in practice)
+    return { value: commandStr, env };
+  }
   
   // If we get here, it's an unknown node type
   throw new Error(`Unknown node type: ${node.type}`);
