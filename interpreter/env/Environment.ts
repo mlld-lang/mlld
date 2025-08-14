@@ -38,6 +38,7 @@ import { ImportResolver, type IImportResolver, type ImportResolverDependencies, 
 import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
+import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 
 
 /**
@@ -136,19 +137,24 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     timeout: 30000 // 30 seconds
   };
   
+  // Effect handler for immediate output
+  private effectHandler: EffectHandler;
+  
   // Constructor overloads
   constructor(
     fileSystem: IFileSystemService,
     pathService: IPathService,
     basePathOrContext: string | PathContext,
-    parent?: Environment
+    parent?: Environment,
+    effectHandler?: EffectHandler
   );
   
   constructor(
     private fileSystem: IFileSystemService,
     private pathService: IPathService,
     basePathOrContext: string | PathContext,
-    parent?: Environment
+    parent?: Environment,
+    effectHandler?: EffectHandler
   ) {
     // Handle both legacy basePath and new PathContext
     if (typeof basePathOrContext === 'string') {
@@ -165,6 +171,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       });
     }
     this.parent = parent;
+    
+    // Initialize effect handler: use provided, inherit from parent, or create default
+    this.effectHandler = effectHandler || parent?.effectHandler || new DefaultEffectHandler();
     
     // Inherit reserved names from parent environment
     if (parent) {
@@ -864,6 +873,50 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     return this.nodes;
   }
   
+  // --- Effect Management ---
+  
+  /**
+   * Emit an effect immediately rather than storing as a node.
+   * This enables immediate output during for loops and pipelines.
+   */
+  emitEffect(
+    type: 'doc' | 'stdout' | 'stderr' | 'both' | 'file',
+    content: string,
+    options?: {
+      path?: string;
+      source?: SourceLocation;
+      metadata?: any;
+    }
+  ): void {
+    if (!this.effectHandler) {
+      console.error('[WARNING] No effect handler available!');
+      return;
+    }
+    
+    // Always emit effects (handler decides whether to actually output)
+    this.effectHandler.handleEffect({
+      type,
+      content,
+      path: options?.path,
+      source: options?.source,
+      metadata: options?.metadata
+    });
+  }
+  
+  /**
+   * Get the current effect handler (mainly for testing).
+   */
+  getEffectHandler(): EffectHandler {
+    return this.effectHandler;
+  }
+  
+  /**
+   * Set a custom effect handler (mainly for testing).
+   */
+  setEffectHandler(handler: EffectHandler): void {
+    this.effectHandler = handler;
+  }
+  
   // --- Shadow Environment Management ---
   
   /**
@@ -1201,7 +1254,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.fileSystem,
       this.pathService,
       childContext,
-      this
+      this,
+      this.effectHandler  // Share the same effect handler
     );
     // Track the current node count so we know which nodes are new in the child
     child.initialNodeCount = this.nodes.length;
@@ -1591,7 +1645,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this.fileSystem,
       this.pathService,
       childContext,
-      this
+      this,
+      this.effectHandler  // Share the same effect handler
     );
     // Share import stack with parent via ImportResolver
     child.importResolver = this.importResolver.createChildResolver();

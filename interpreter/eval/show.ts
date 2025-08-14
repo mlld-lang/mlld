@@ -1,4 +1,4 @@
-import type { DirectiveNode, TextNode } from '@core/types';
+import type { DirectiveNode } from '@core/types';
 import type { Variable } from '@core/types/variable';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
@@ -741,6 +741,85 @@ export async function evaluateShow(
       content = applyHeaderTransform(content, newTitle);
     }
     
+  } else if (directive.subtype === 'showCommand') {
+    // Handle command execution for display: /show {echo "test"}
+    const commandNodes = directive.values?.command;
+    if (!commandNodes) {
+      throw new Error('Show command directive missing command');
+    }
+    
+    // Import necessary dependencies for command execution
+    const { InterpolationContext } = await import('../core/interpolation-context');
+    
+    // Interpolate command (resolve variables) with shell command context
+    const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
+    
+    // Execute the command and capture output for display
+    const executionContext = {
+      sourceLocation: directive.location,
+      directiveNode: directive,
+      filePath: env.getCurrentFilePath(),
+      directiveType: 'show'  // Mark as show for context
+    };
+    
+    // Execute command and get output
+    content = await env.executeCommand(command, undefined, executionContext);
+    
+  } else if (directive.subtype === 'showCode') {
+    // Handle code execution for display: /show js {console.log("test")}
+    const codeNodes = directive.values?.code;
+    const langNodes = directive.values?.lang;
+    
+    if (!codeNodes || !langNodes) {
+      throw new Error('Show code directive missing code or language');
+    }
+    
+    // Inline helper functions (same as in run.ts)
+    function extractRawTextContent(nodes: any[]): string {
+      const parts: string[] = [];
+      for (const node of nodes) {
+        if (node.type === 'Text') {
+          parts.push(node.content || '');
+        } else if (node.type === 'Newline') {
+          parts.push('\n');
+        } else {
+          parts.push(String((node as any).value || (node as any).content || ''));
+        }
+      }
+      const rawContent = parts.join('');
+      return rawContent.replace(/^\n/, '');
+    }
+    
+    function dedentCommonIndent(src: string): string {
+      const lines = src.replace(/\r\n/g, '\n').split('\n');
+      let minIndent: number | null = null;
+      for (const line of lines) {
+        if (line.trim().length === 0) continue;
+        const match = line.match(/^[ \t]*/);
+        const indent = match ? match[0].length : 0;
+        if (minIndent === null || indent < minIndent) minIndent = indent;
+        if (minIndent === 0) break;
+      }
+      if (!minIndent) return src;
+      return lines.map(l => (l.trim().length === 0 ? '' : l.slice(minIndent!))).join('\n');
+    }
+    
+    // Get language and code content
+    const lang = extractRawTextContent(langNodes);
+    const code = dedentCommonIndent(extractRawTextContent(codeNodes));
+    
+    // Execute code and capture output for display
+    const executionContext = {
+      sourceLocation: directive.location,
+      directiveNode: directive,
+      filePath: env.getCurrentFilePath(),
+      directiveType: 'show'  // Mark as show for context
+    };
+    
+    // Execute code using the unified executeCode method
+    // Note: executeCode handles all language types internally
+    content = await env.executeCode(code, lang, {}, executionContext);
+    
   } else if (directive.subtype === 'show' && directive.values?.content) {
     // Handle simple show directive with content (used in for loops)
     let templateNodes = directive.values.content;
@@ -800,17 +879,8 @@ export async function evaluateShow(
     content += '\n';
   }
   
-  // Create replacement text node
-  const replacementNode: TextNode = {
-    type: 'Text',
-    nodeId: `${directive.nodeId}-content`,
-    content
-  };
-  
-  // Always add the node to environment, even in expression context
-  // This ensures that show directives in exe+when blocks produce output immediately
-  // even when called from for expressions or pipelines
-  env.addNode(replacementNode);
+  // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
+  env.emitEffect('both', content, { source: directive.location });
   
   // Return the content
   return { value: content, env };

@@ -168,42 +168,25 @@ export async function evaluateForDirective(
         }
       }
       
-      // Transfer output nodes from child to parent environment
-      const childNodes = childEnv.getNodes();
-      for (const node of childNodes) {
-        env.addNode(node);
-      }
+      // No need to transfer nodes - effects are emitted immediately to the shared handler
       
       // Debug: Log iteration completion
       if (debugEnabled) {
         console.error(`[DEBUG_FOR] For loop iteration ${i + 1} completed:`, {
-          outputNodes: childNodes.length,
           hasExecOutput: actionResult.value !== undefined && actionResult.value !== null
         });
       }
       
       // If the action was a bare exec invocation that produced output,
-      // we need to add it as a text node (similar to how /run works)
+      // emit it as an effect instead of creating a node
       if (directive.values.action.length === 1 && 
           directive.values.action[0].type === 'ExecInvocation' &&
           actionResult.value !== undefined && actionResult.value !== null) {
-        // Create nodes for the command output and interpolate safely
-        const outputNodes = [{ 
-          type: 'Text' as const, 
-          content: String(actionResult.value),
-          nodeId: `${directive.nodeId}-output-${i}`
-        }];
-        
-        // Use interpolate with Template context for safe text handling
-        const safeContent = await interpolate(outputNodes, childEnv, InterpolationContext.Template);
-        
-        const textNode = {
-          type: 'Text' as const,
-          nodeId: `${directive.nodeId}-exec-output-${i}`,
-          content: safeContent + '\n', // Always add newline after each output
-          location: directive.values.action[0].location
-        };
-        env.addNode(textNode);
+        // Emit the exec output as a 'both' effect (shows on stdout and adds to document)
+        const outputContent = String(actionResult.value) + '\n';
+        env.emitEffect('both', outputContent, { 
+          source: directive.values.action[0].location 
+        });
       }
       i++;
     }
@@ -232,7 +215,7 @@ export async function evaluateForExpression(
   const varName = expr.variable.identifier;
 
   // Evaluate source collection
-  const sourceResult = await evaluate(expr.source, env);
+  const sourceResult = await evaluate(expr.source, env, { isExpression: true });
   const sourceValue = sourceResult.value;
   const iterable = toIterable(sourceValue);
 
@@ -287,7 +270,7 @@ export async function evaluateForExpression(
         }
         
         // Evaluate all nodes
-        const result = await evaluate(nodesToEvaluate, childEnv);
+        const result = await evaluate(nodesToEvaluate, childEnv, { isExpression: true });
         if (process.env.DEBUG_FOR) {
           console.error('[DEBUG_FOR] Result:', result);
         }
@@ -297,12 +280,7 @@ export async function evaluateForExpression(
           childEnv = result.env;
         }
         
-        // Transfer output nodes from child to parent environment
-        // This ensures effects like 'show' in exe+when blocks execute immediately
-        const childNodes = childEnv.getNodes();
-        for (const node of childNodes) {
-          env.addNode(node);
-        }
+        // No need to transfer nodes - effects are emitted immediately to the shared handler
         
         // Extract the actual value from Variables
         if (isVariable(result.value)) {

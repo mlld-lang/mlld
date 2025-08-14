@@ -80,7 +80,7 @@ function parseXML(text: string): any {
  */
 export function createPipelineInput(text: string, format: string = 'json'): PipelineInput {
   if (process.env.MLLD_DEBUG === 'true') {
-    console.log('createPipelineInput called with:', {
+    console.error('createPipelineInput called with:', {
       textType: typeof text,
       textLength: typeof text === 'string' ? text.length : 'N/A',
       format: format,
@@ -103,14 +103,14 @@ export function createPipelineInput(text: string, format: string = 'json'): Pipe
           if (this._parsed === undefined) {
             try {
               if (process.env.MLLD_DEBUG === 'true') {
-                console.log('JSON getter called');
-                console.log('this:', this);
-                console.log('this.text exists:', 'text' in this);
-                console.log('this.text value:', this.text);
-                console.log('Text type:', typeof this.text);
+                console.error('JSON getter called');
+                console.error('this:', this);
+                console.error('this.text exists:', 'text' in this);
+                console.error('this.text value:', this.text);
+                console.error('Text type:', typeof this.text);
                 if (this.text) {
-                  console.log('Text length:', this.text.length);
-                  console.log('First 200 chars:', this.text.substring(0, 200));
+                  console.error('Text length:', this.text.length);
+                  console.error('First 200 chars:', this.text.substring(0, 200));
                 }
               }
               

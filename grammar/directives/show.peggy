@@ -22,10 +22,93 @@ It can be used in these forms:
 
 // Primary /show directive with all variants
 SlashShow
+  // Command execution syntax: /show {echo "test"}
+  = DirectiveContext "/show" _ security:(SecurityOptions _)? content:UnifiedCommandBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
+      // Command syntax for display: /show {command}
+      const securityOptions = security ? security[0] : null;
+      helpers.debug('SlashShow matched command for display', { content, securityOptions, tail });
+      
+      const meta = {
+        ...content.meta,
+        executionMode: 'display',  // Key difference from /run
+        executionType: 'command',
+        isExecutionContent: true,
+        ...helpers.createSecurityMeta(securityOptions)
+      };
+      
+      // Apply unified pipeline processing
+      helpers.processPipelineEnding(content.values, content.raw, meta, ending);
+      
+      // Add withClause from tail if present
+      if (tail) {
+        content.values.withClause = tail;
+        content.raw.withClause = tail;
+        meta.withClause = tail;
+      }
+      
+      return helpers.createStructuredDirective(
+        DirectiveKind.show,
+        'showCommand',
+        content.values,
+        content.raw,
+        meta,
+        location(),
+        'command'
+      );
+    }
+  // Code execution syntax: /show js {console.log("test")}
+  / DirectiveContext "/show" _ lang:RunCodeLanguage _ content:UnifiedCodeBrackets tail:TailModifiers? ending:StandardDirectiveEnding {
+      // Code syntax for display: /show language {code}
+      helpers.debug('SlashShow matched code for display', { lang, content });
+      
+      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
+      const codeNode = helpers.createNode(NodeType.Text, { content: content.content, location: location() });
+      
+      const values = {
+        lang: [langNode],
+        args: [],
+        code: [codeNode]
+      };
+      
+      const raw = {
+        lang: lang,
+        args: [],
+        code: content.content
+      };
+      
+      const meta = {
+        isMultiLine: content.isMultiLine,
+        language: lang,
+        hasVariables: false,
+        executionMode: 'display',  // Key difference from /run
+        executionType: 'code',
+        isExecutionContent: true
+      };
+      
+      // Apply unified pipeline processing
+      helpers.processPipelineEnding(values, raw, meta, ending);
+      
+      // Add withClause from tail if present
+      if (tail) {
+        values.withClause = tail;
+        raw.withClause = tail;
+        meta.withClause = tail;
+      }
+      
+      return helpers.createStructuredDirective(
+        DirectiveKind.show,
+        'showCode',
+        values,
+        raw,
+        meta,
+        location(),
+        'code'
+      );
+    }
   // REMOVED: Foreach section expression - superseded by file reference interpolation
   // Migration: Use /show <*.md # section> as "template" instead
   // Foreach command expression: /show foreach @command(@arrays)
-  = DirectiveContext "/show" _ expr:ForeachCommandExpression ending:StandardDirectiveEnding {
+  / DirectiveContext "/show" _ expr:ForeachCommandExpression ending:StandardDirectiveEnding {
       helpers.debug('SlashShow matched foreach expression', { expr, ending });
       
       // Extract the inner value from the ForeachCommandExpression

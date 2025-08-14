@@ -339,7 +339,7 @@ WhenModifier
 // CONDITION EXPRESSIONS
 // -------------------------------------------------------------
 
-// Simple condition for @when simple form - supports full expressions
+// Simple condition for @when simple form - uses unified expressions
 WhenSimpleCondition
   = expr:WhenConditionAdapter {
       // Wrap in array for consistency with existing code
@@ -391,7 +391,7 @@ NonNegatedSimpleCondition
       })];
     }
 
-// Condition expression - supports full expressions with operators
+// Condition expression - uses unified expressions with when-specific formatting
 WhenConditionExpression
   = expr:WhenConditionAdapter {
       // Wrap in array for consistency
@@ -843,8 +843,58 @@ WhenOutputTarget
 WhenImplicitAction
   = WhenImplicitVarAssignment
   / WhenImplicitFunctionCall
+  / WhenImplicitShowWithPipeline  // NEW: Support show with pipeline syntax
   / WhenImplicitRichContent
   / WhenImplicitExecDefinitionError  // Error recovery for removed exec definitions
+
+// Implicit show with pipeline support: show "text" | @func
+WhenImplicitShowWithPipeline
+  = "show" _ template:TemplateCore tail:TailModifiers? {
+      // Handle show with template content and optional pipeline
+      let meta = {
+        ...template.meta,
+        implicit: true
+      };
+      
+      // If there's a pipeline tail modifier, use the existing template with tail pattern
+      if (tail && tail.pipeline) {
+        // Create a VariableReferenceWithTail structure that matches expected patterns
+        const templateWithTail = {
+          type: 'VariableReferenceWithTail',
+          variable: {
+            type: 'TemplateVariable', // Use a virtual template variable 
+            identifier: '__template__', // Virtual identifier for templates
+            content: template.values.content,
+            location: location()
+          },
+          withClause: tail,
+          location: location()
+        };
+        
+        return [helpers.createNode(NodeType.Directive, {
+          kind: 'show',
+          subtype: 'showVariable',
+          values: { 
+            variable: templateWithTail
+          },
+          raw: { 
+            variable: helpers.reconstructRawString(template.values.content)
+          },
+          meta: meta,
+          location: location()
+        })];
+      } else {
+        // No pipeline, use regular template
+        return [helpers.createNode(NodeType.Directive, {
+          kind: 'show',
+          subtype: 'showTemplate',
+          values: template.values,
+          raw: template.raw,
+          meta: meta,
+          location: location()
+        })];
+      }
+    }
 
 // Implicit var assignment: @x = "value"
 WhenImplicitVarAssignment

@@ -275,23 +275,38 @@ export async function interpret(
     await env.displayCollectedErrors();
   }
   
-  // Get the final nodes from environment
-  const nodes = env.getNodes();
+  // Get the document from the effect handler
+  const effectHandler = env.getEffectHandler();
+  let output: string;
   
-  if (process.env.DEBUG_WHEN) {
-    console.log('Final nodes count:', nodes.length);
-    nodes.forEach((node, i) => {
-      console.log(`Node ${i}:`, node.type, node.type === 'Text' ? node.content : '');
+  if (effectHandler && typeof effectHandler.getDocument === 'function') {
+    // Get the accumulated document from the effect handler
+    output = effectHandler.getDocument();
+    
+    // Apply markdown formatting if requested
+    if (options.useMarkdownFormatter !== false && options.format === 'markdown') {
+      const { formatMarkdown } = await import('./utils/markdown-formatter');
+      output = await formatMarkdown(output);
+    }
+  } else {
+    // Fallback to old node-based system if effect handler doesn't have getDocument
+    const nodes = env.getNodes();
+    
+    if (process.env.DEBUG_WHEN) {
+      console.log('Final nodes count:', nodes.length);
+      nodes.forEach((node, i) => {
+        console.log(`Node ${i}:`, node.type, node.type === 'Text' ? node.content : '');
+      });
+    }
+    
+    // Format the output
+    output = await formatOutput(nodes, {
+      format: options.format || 'markdown',
+      variables: env.getAllVariables(),
+      useMarkdownFormatter: options.useMarkdownFormatter,
+      normalizeBlankLines: options.normalizeBlankLines
     });
   }
-  
-  // Format the output
-  const output = await formatOutput(nodes, {
-    format: options.format || 'markdown',
-    variables: env.getAllVariables(),
-    useMarkdownFormatter: options.useMarkdownFormatter,
-    normalizeBlankLines: options.normalizeBlankLines
-  });
   
   // Call captureEnvironment callback if provided
   if (options.captureEnvironment) {

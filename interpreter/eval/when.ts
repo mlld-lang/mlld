@@ -673,6 +673,19 @@ export async function evaluateCondition(
       firstNodeType: condition[0]?.type
     });
   }
+
+  // Handle new WhenCondition wrapper nodes from unified expressions
+  if (condition.length === 1 && condition[0].type === 'WhenCondition') {
+    const whenCondition = condition[0] as any;
+    const expression = whenCondition.expression;
+    
+    // Evaluate the wrapped expression
+    const result = await evaluateCondition([expression], env, variableName);
+    
+    // Apply negation if specified in the wrapper
+    return whenCondition.negated ? !result : result;
+  }
+  
   // Check if this is a negation node (UnaryExpression with operator '!')
   if (condition.length === 1 && condition[0].type === 'UnaryExpression') {
     const unaryNode = condition[0] as any;

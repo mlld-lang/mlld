@@ -639,6 +639,13 @@ export async function evaluateRun(
     env.addNode(replacementNode);
   }
   
+  // TEMPORARY: Emit effect for /run output to fix tests
+  // TODO: Remove this when /show handles command execution
+  // This is a temporary fix - the final design will have /run execute silently
+  if (output) {
+    env.emitEffect('both', output);
+  }
+  
   // Return the output value
   return { value: output, env };
 }

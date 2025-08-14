@@ -177,6 +177,24 @@ async function evaluateOutputSource(
   switch (sourceType) {
     case 'literal':
       // @output "text content" to target
+      
+      // Check if the source is an array of nodes
+      if (Array.isArray(directive.values.source)) {
+        // Check if it contains a single Text node with interpolation needed
+        if (directive.values.source.length === 1 && 
+            directive.values.source[0].type === 'Text' &&
+            directive.values.source[0].content?.needsInterpolation) {
+          // Interpolate the parts directly
+          const { interpolate } = await import('../core/interpreter');
+          const interpolated = await interpolate(directive.values.source[0].content.parts, env);
+          return interpolated;
+        }
+        // Otherwise interpolate the array itself
+        const { interpolate } = await import('../core/interpreter');
+        const interpolated = await interpolate(directive.values.source, env);
+        return interpolated;
+      }
+      
       const literalResult = await evaluateDataValue(directive.values.source, env);
       return String(literalResult);
       
@@ -586,6 +604,12 @@ async function outputToFile(
   
   // Write the file
   await fileSystem.writeFile(targetPath, content);
+  
+  // Also emit a file effect for tracking/logging purposes
+  env.emitEffect('file', content, { 
+    path: targetPath,
+    source: directive.location 
+  });
 }
 
 /**
@@ -597,9 +621,11 @@ async function outputToStream(
   env: Environment
 ): Promise<void> {
   if (target.stream === 'stdout') {
-    console.log(content);
+    // Use effect type 'stdout' - outputs to stdout only, bypasses document
+    env.emitEffect('stdout', content + '\n');
   } else if (target.stream === 'stderr') {
-    console.error(content);
+    // Use effect type 'stderr' - outputs to stderr only
+    env.emitEffect('stderr', content + '\n');
   }
 }
 

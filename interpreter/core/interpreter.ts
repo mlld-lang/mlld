@@ -214,10 +214,9 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
         lastValue = result.value;
         lastResult = result;
         
-        // Add ALL nodes to output to preserve document structure
-        // Directives that produce output (like @add) will add their own nodes
-        // Everything else gets added as-is
-        if (!isDirective(n)) {
+        // Emit effects for non-directive nodes to preserve document structure
+        // Skip effect emission when evaluating expressions (they're not document content)
+        if (!isDirective(n) && !context?.isExpression) {
           // Skip inline comments (lines starting with >> or <<)
           if (isText(n) && n.content.trimStart().match(/^(>>|<<)/)) {
             continue;
@@ -227,7 +226,23 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             logger.debug('Skipping comment node:', { content: n.content });
             continue;
           }
-          env.addNode(n);
+          // Emit a 'doc' effect for non-directive nodes (only goes to document, not stdout)
+          if (isText(n)) {
+            env.emitEffect('doc', n.content);
+          } else if (isNewline(n)) {
+            env.emitEffect('doc', '\n');
+          } else if (isCodeFence(n)) {
+            env.emitEffect('doc', n.content);
+          } else if (isMlldRunBlock(n) && !n.error) {
+            // MlldRunBlock content is evaluated, not emitted directly
+            // The evaluation will emit its own effects
+          } else if ('wrapperType' in n && 'content' in n) {
+            // Template structures are intermediate nodes, not document content
+            // They get evaluated but shouldn't be emitted as effects
+          } else {
+            // For other node types, emit their content as 'doc' effect
+            env.emitEffect('doc', JSON.stringify(n));
+          }
         }
       }
     } else {
@@ -237,10 +252,9 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
         lastValue = result.value;
         lastResult = result;
         
-        // Add ALL nodes to output to preserve document structure
-        // Directives that produce output (like @add) will add their own nodes
-        // Everything else gets added as-is
-        if (!isDirective(n)) {
+        // Emit effects for non-directive nodes to preserve document structure
+        // Skip effect emission when evaluating expressions (they're not document content)
+        if (!isDirective(n) && !context?.isExpression) {
           // Skip inline comments (lines starting with >> or <<)
           if (isText(n) && n.content.trimStart().match(/^(>>|<<)/)) {
             continue;
@@ -250,7 +264,23 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             logger.debug('Skipping comment node:', { content: n.content });
             continue;
           }
-          env.addNode(n);
+          // Emit a 'doc' effect for non-directive nodes (only goes to document, not stdout)
+          if (isText(n)) {
+            env.emitEffect('doc', n.content);
+          } else if (isNewline(n)) {
+            env.emitEffect('doc', '\n');
+          } else if (isCodeFence(n)) {
+            env.emitEffect('doc', n.content);
+          } else if (isMlldRunBlock(n) && !n.error) {
+            // MlldRunBlock content is evaluated, not emitted directly
+            // The evaluation will emit its own effects
+          } else if ('wrapperType' in n && 'content' in n) {
+            // Template structures are intermediate nodes, not document content
+            // They get evaluated but shouldn't be emitted as effects
+          } else {
+            // For other node types, emit their content as 'doc' effect
+            env.emitEffect('doc', JSON.stringify(n));
+          }
         }
       }
     }
@@ -321,7 +351,8 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   }
   
   if (isCodeFence(node)) {
-    // Code fence nodes are already added by the array processing logic
+    // Emit code fence content as 'doc' effect
+    env.emitEffect('doc', node.content);
     return { value: node.content, env };
   }
   
@@ -329,12 +360,8 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     // Handle mlld-run blocks by evaluating their content
     if (node.error) {
       // If there was a parse error, output it as text
-      const errorTextNode: TextNode = {
-        type: 'Text',
-        nodeId: `${node.nodeId}-error`,
-        content: `Error in mlld-run block: ${node.error}`
-      };
-      env.addNode(errorTextNode);
+      // Emit error as a 'doc' effect
+      env.emitEffect('doc', `Error in mlld-run block: ${node.error}`);
       return { value: node.error, env };
     }
     
@@ -611,9 +638,9 @@ async function evaluateDocument(doc: DocumentNode, env: Environment): Promise<Ev
     const result = await evaluate(child, env, context);
     lastValue = result.value;
     
-    // Add text nodes to output
+    // Emit text nodes as 'doc' effects
     if (isText(child)) {
-      env.addNode(child);
+      env.emitEffect('doc', child.content);
     }
     // VariableReference nodes are handled consistently through interpolate()
   }
@@ -1013,13 +1040,15 @@ export async function interpolate(
       
       // Apply condensed pipes if present
       if (node.pipes && node.pipes.length > 0) {
-        console.log('[INTERPOLATE] Before applyCondensedPipes:', { 
-          valueType: typeof value,
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[INTERPOLATE] Before applyCondensedPipes:', { 
+            valueType: typeof value,
           isObject: typeof value === 'object',
           valueKeys: typeof value === 'object' && value !== null ? Object.keys(value) : 'N/A',
           valueStr: typeof value === 'object' ? JSON.stringify(value).substring(0, 100) : String(value).substring(0, 100),
           pipes: node.pipes.map((p: any) => p.name || p.transform)
-        });
+          });
+        }
         try {
           // Use the unified pipeline processor instead of applyCondensedPipes
           const { processPipeline } = await import('../eval/pipeline/unified-processor');
@@ -1030,7 +1059,7 @@ export async function interpolate(
             identifier: node.identifier
           });
           if (process.env.MLLD_DEBUG === 'true') {
-            console.log('[INTERPOLATE] After pipes:', { 
+            console.error('[INTERPOLATE] After pipes:', { 
               valueType: typeof value,
               valueStr: typeof value === 'object' ? JSON.stringify(value) : value
             });
@@ -1106,7 +1135,7 @@ export async function interpolate(
         
         // Debug logging
         if (process.env.MLLD_DEBUG === 'true') {
-          console.log('[INTERPOLATE] Array value check:', {
+          console.error('[INTERPOLATE] Array value check:', {
             isArray: Array.isArray(value),
             length: value.length,
             hasVariable: '__variable' in value,

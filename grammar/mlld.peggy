@@ -9,6 +9,47 @@
     options.rhsDirectiveType = '';
     options.afterDirectiveType = '';
   }
+  
+  // Helper functions for unified expressions
+  function isSimpleCondition(expr) {
+    return expr.type === 'VariableReference' || 
+           expr.type === 'Literal' ||
+           (expr.type === 'UnaryExpression' && expr.operator === '!' && 
+            isSimpleCondition(expr.operand));
+  }
+
+  function isComparisonOperator(op) {
+    return ['==', '!=', '~=', '<', '>', '<=', '>='].includes(op);
+  }
+
+  function extractConditionVariables(expr) {
+    const variables = [];
+    function traverse(node) {
+      if (!node) return;
+      
+      if (node.type === 'VariableReference') {
+        variables.push(node.name);
+      } else if (node.type === 'ExecutableReference') {
+        variables.push(node.name);
+      }
+      
+      // Traverse binary expressions
+      if (node.left) traverse(node.left);
+      if (node.right) traverse(node.right);
+      
+      // Traverse unary expressions
+      if (node.operand) traverse(node.operand);
+      if (node.argument) traverse(node.argument);
+      
+      // Traverse ternary expressions
+      if (node.condition) traverse(node.condition);
+      if (node.trueBranch) traverse(node.trueBranch);
+      if (node.falseBranch) traverse(node.falseBranch);
+    }
+    
+    traverse(expr);
+    return [...new Set(variables)];
+  }
 }
 
 // -------------------------------------------------------------------------

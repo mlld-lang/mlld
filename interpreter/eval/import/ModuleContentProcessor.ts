@@ -56,6 +56,11 @@ export class ModuleContentProcessor {
         return this.processJSONContent(parseResult, directive, resolvedPath);
       }
 
+      // Check if this is plain text content (not mlld)
+      if (parseResult.isPlainText) {
+        return this.processPlainTextContent(resolvedPath);
+      }
+
       // Process mlld content
       return this.processMLLDContent(parseResult, resolvedPath, isURL);
     } finally {
@@ -91,6 +96,11 @@ export class ModuleContentProcessor {
       // Check if this is a JSON file (special handling)
       if (ref.endsWith('.json')) {
         return this.processJSONContent(parseResult, directive, ref);
+      }
+
+      // Check if this is plain text content (not mlld)
+      if (parseResult.isPlainText) {
+        return this.processPlainTextContent(ref);
       }
 
       // Process mlld content
@@ -140,6 +150,13 @@ export class ModuleContentProcessor {
       }
     }
 
+    // Only parse .mld and .md files as mlld content
+    // All other files (like .txt) should be treated as plain text
+    if (!resolvedPath.endsWith('.mld') && !resolvedPath.endsWith('.md')) {
+      // Return a marker indicating this is plain text content
+      return { isPlainText: true, content };
+    }
+
     // Handle section extraction if specified
     let processedContent = content;
     const sectionNodes = directive.values?.section;
@@ -159,6 +176,26 @@ export class ModuleContentProcessor {
     }
 
     return parseResult;
+  }
+
+  /**
+   * Process plain text content (non-mlld files like .txt)
+   */
+  private async processPlainTextContent(
+    resolvedPath: string
+  ): Promise<ModuleProcessingResult> {
+    // Plain text files create an empty namespace
+    const moduleObject: Record<string, any> = {};
+
+    // Create a dummy child environment for consistency
+    const childEnv = this.env.createChild(path.dirname(resolvedPath));
+    childEnv.setCurrentFilePath(resolvedPath);
+
+    return {
+      moduleObject,
+      frontmatter: null,
+      childEnvironment: childEnv
+    };
   }
 
   /**
