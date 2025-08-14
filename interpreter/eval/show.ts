@@ -64,18 +64,39 @@ export async function evaluateShow(
     } else if (directive.values?.variable) {
       // Legacy structure (for backwards compatibility during transition)
       const legacyVariable = directive.values.variable;
-      if (!legacyVariable || !Array.isArray(legacyVariable) || legacyVariable.length === 0) {
+      
+      // Handle both array and single object formats
+      if (!legacyVariable) {
         throw new Error('Show variable directive missing variable reference');
       }
-      variableNode = legacyVariable[0];
+      
+      // When used in when actions, variable might be a single object instead of an array
+      if (Array.isArray(legacyVariable)) {
+        if (legacyVariable.length === 0) {
+          throw new Error('Show variable directive missing variable reference');
+        }
+        variableNode = legacyVariable[0];
+      } else {
+        // Single object format (e.g., from when actions)
+        variableNode = legacyVariable;
+      }
       
       // Handle both VariableReference and VariableReferenceWithTail
       if (variableNode.type === 'VariableReferenceWithTail') {
         // Extract the actual variable reference and handle pipeline later
-        varName = variableNode.variable.identifier;
+        const innerVar = variableNode.variable;
+        if (innerVar.type === 'TemplateVariable') {
+          // Handle template literals like show "high" | @toUpper
+          varName = innerVar.identifier; // Will be __template__
+        } else {
+          varName = innerVar.identifier;
+        }
         // The pipeline will be handled through variableNode.withClause.pipeline
       } else if (variableNode.type === 'VariableReference') {
         varName = variableNode.identifier;
+      } else if (variableNode.type === 'TemplateVariable') {
+        // Handle direct template literals
+        varName = variableNode.identifier; // Will be __template__
       } else {
         throw new Error('Show variable directive missing variable reference');
       }
@@ -83,20 +104,50 @@ export async function evaluateShow(
       throw new Error('Show variable directive missing variable reference');
     }
     
-    // Get variable from environment
-    const variable = env.getVariable(varName);
-    if (!variable) {
-      throw new Error(`Variable not found: ${varName}`);
-    }
-    
-    
-    // Get the base value using type-safe approach
+    // Get variable from environment or handle template literals
+    let variable: any;
     let value: any;
     let originalValue: any; // Keep track of the original value before evaluation
     let isForeachSection = false; // Track if this came from a foreach-section
     
-    // Handle all variable types using the new type guards
-    if (isTextLike(variable)) {
+    // Handle template literals (show "string" syntax)
+    if (varName === '__template__') {
+      // This is a template literal like show "high"
+      // The content is in the TemplateVariable node
+      let templateContent: any;
+      
+      if (variableNode.type === 'VariableReferenceWithTail' && variableNode.variable.type === 'TemplateVariable') {
+        templateContent = variableNode.variable.content;
+      } else if (variableNode.type === 'TemplateVariable') {
+        templateContent = variableNode.content;
+      }
+      
+      // Evaluate the template content (it's an array of AST nodes)
+      if (templateContent) {
+        // For literal strings, the content is typically a single Literal node
+        if (Array.isArray(templateContent) && templateContent.length === 1 && templateContent[0].type === 'Literal') {
+          value = templateContent[0].value;
+        } else {
+          // More complex template - evaluate it
+          const result = await evaluate(templateContent, env);
+          value = result.value;
+        }
+      } else {
+        value = '';
+      }
+      
+      // Skip the variable type checking below since we already have the value
+    } else {
+      // Normal variable reference
+      variable = env.getVariable(varName);
+      if (!variable) {
+        throw new Error(`Variable not found: ${varName}`);
+      }
+    }
+    
+    // Handle all variable types using the new type guards (skip if we already have a value from template literal)
+    if (value === undefined && variable) {
+      if (isTextLike(variable)) {
       // All text-producing types: simple, interpolated, template, file, section, command result
       value = variable.value;
       
@@ -196,6 +247,7 @@ export async function evaluateShow(
     } else {
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
     }
+    } // Close the if (value === undefined && variable) block
     
     // Debug logging for LoadContentResult
     if (process.env.MLLD_DEBUG === 'true' && variable) {
