@@ -249,7 +249,7 @@ export async function evaluateForExpression(
 
   // Collect results from each iteration
   for (const [key, value] of iterable) {
-    const childEnv = env.createChildEnvironment();
+    let childEnv = env.createChildEnvironment();
     // Preserve Variable wrappers when setting iteration variable
     const iterationVar = ensureVariable(varName, value);
     childEnv.setVariable(varName, iterationVar);
@@ -290,6 +290,18 @@ export async function evaluateForExpression(
         const result = await evaluate(nodesToEvaluate, childEnv);
         if (process.env.DEBUG_FOR) {
           console.error('[DEBUG_FOR] Result:', result);
+        }
+        
+        // Update childEnv if evaluate returned an updated environment
+        if (result.env) {
+          childEnv = result.env;
+        }
+        
+        // Transfer output nodes from child to parent environment
+        // This ensures effects like 'show' in exe+when blocks execute immediately
+        const childNodes = childEnv.getNodes();
+        for (const node of childNodes) {
+          env.addNode(node);
         }
         
         // Extract the actual value from Variables

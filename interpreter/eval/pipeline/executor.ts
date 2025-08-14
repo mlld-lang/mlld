@@ -184,11 +184,19 @@ export class PipelineExecutor {
       // Execute the command
       const output = await this.executeCommand(command, input, stageEnv);
       
+      // Merge nodes from stage environment back to parent
+      // This ensures effects like 'show' in exe+when blocks execute immediately
+      const stageNodes = stageEnv.getNodes();
+      for (const node of stageNodes) {
+        this.env.addNode(node);
+      }
+      
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[PipelineExecutor] Stage output:', {
           stage: context.stage,
           output: typeof output === 'string' ? output.substring(0, 50) : output,
-          isRetry: this.isRetrySignal(output)
+          isRetry: this.isRetrySignal(output),
+          nodesAdded: stageNodes.length
         });
       }
       

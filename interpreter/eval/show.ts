@@ -807,13 +807,10 @@ export async function evaluateShow(
     content
   };
   
-  // Only add the node if we're NOT in an expression context
-  // In expression context (like when expressions in exe), the value is returned
-  // and the calling code decides what to do with it
-  if (!context?.isExpression) {
-    // Add the replacement node to environment
-    env.addNode(replacementNode);
-  }
+  // Always add the node to environment, even in expression context
+  // This ensures that show directives in exe+when blocks produce output immediately
+  // even when called from for expressions or pipelines
+  env.addNode(replacementNode);
   
   // Return the content
   return { value: content, env };
