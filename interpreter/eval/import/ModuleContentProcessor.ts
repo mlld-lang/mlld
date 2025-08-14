@@ -378,7 +378,9 @@ export class ModuleContentProcessor {
     resolvedPath: string
   ): Promise<any> {
     try {
-      return await evaluate(ast, childEnv);
+      // Pass isExpression: true to prevent markdown content from being emitted as effects
+      // Imports should only process directives and create variables, not emit document content
+      return await evaluate(ast, childEnv, { isExpression: true });
     } catch (error) {
       throw new Error(
         `Error evaluating imported file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`

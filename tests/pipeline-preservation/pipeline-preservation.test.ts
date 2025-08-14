@@ -231,7 +231,7 @@ Bob,25,LA\`
 /show @results`;
 
       const result = await interpret(input, { fileSystem, pathService });
-      expect(result.trim()).toBe('[\n20,\n40\n]');
+      expect(result.trim()).toBe('[\n  20,\n  40\n]');
     });
   });
 

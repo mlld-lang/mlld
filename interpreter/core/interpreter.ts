@@ -241,7 +241,10 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             // They get evaluated but shouldn't be emitted as effects
           } else {
             // For other node types, emit their content as 'doc' effect
-            env.emitEffect('doc', JSON.stringify(n));
+            // Skip other node types - they're AST nodes, not document content
+            // This includes ExecInvocation, VariableReference, Literal, etc.
+            // These are intermediate representations that get evaluated but not emitted
+            logger.debug('Skipping non-document node type:', { type: (n as any).type });
           }
         }
       }
@@ -279,7 +282,10 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             // They get evaluated but shouldn't be emitted as effects
           } else {
             // For other node types, emit their content as 'doc' effect
-            env.emitEffect('doc', JSON.stringify(n));
+            // Skip other node types - they're AST nodes, not document content
+            // This includes ExecInvocation, VariableReference, Literal, etc.
+            // These are intermediate representations that get evaluated but not emitted
+            logger.debug('Skipping non-document node type:', { type: (n as any).type });
           }
         }
       }
