@@ -90,6 +90,7 @@ UnifiedAtomicExpression
         location: location()
       });
     }
+  / NoneLiteral  // NoneLiteral already returns a properly formatted Literal node
 
 // Array operations for advanced filtering and manipulation
 UnifiedArrayOperation

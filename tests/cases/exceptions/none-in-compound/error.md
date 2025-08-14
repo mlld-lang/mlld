@@ -1,0 +1,1 @@
+The 'none' keyword cannot be used in compound expressions with operators

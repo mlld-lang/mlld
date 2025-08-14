@@ -134,6 +134,9 @@ async function evaluateWhenMatch(
   node: WhenMatchNode,
   env: Environment
 ): Promise<EvalResult> {
+  // Validate none placement
+  validateNonePlacement(node.values.conditions);
+  
   // Evaluate the expression once without producing output
   // For simple text nodes, extract the value directly
   let expressionValue: any;
@@ -147,9 +150,16 @@ async function evaluateWhenMatch(
   // Create a child environment for the switch block
   const childEnv = env.createChild();
   
+  // Track if any non-none condition matched
+  let anyNonNoneMatched = false;
+  
   try {
-    // Check each condition value against the expression result
+    // First pass: Check each non-none condition value against the expression result
     for (const pair of node.values.conditions) {
+      // Skip none conditions in first pass
+      if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
+        continue;
+      }
       // Check if this is a negation node
       let isNegated = false;
       let actualCondition = pair.condition;
@@ -186,17 +196,39 @@ async function evaluateWhenMatch(
         matches = !matches;
       }
       
-      if (matches && pair.action) {
-        // Handle action which might be an array of nodes
-        const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
-        for (const actionNode of actionNodes) {
-          await evaluate(actionNode, childEnv);
+      if (matches) {
+        anyNonNoneMatched = true;
+        if (pair.action) {
+          // Handle action which might be an array of nodes
+          const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
+          for (const actionNode of actionNodes) {
+            await evaluate(actionNode, childEnv);
+          }
+          // Merge child environment nodes back to parent
+          env.mergeChild(childEnv);
+          // For @when, we don't want to propagate the action's output value to the document
+          // The action should have already done what it needs to do (like @output writing to a file)
+          return { value: '', env };
         }
-        // Merge child environment nodes back to parent
-        env.mergeChild(childEnv);
-        // For @when, we don't want to propagate the action's output value to the document
-        // The action should have already done what it needs to do (like @output writing to a file)
-        return { value: '', env };
+      }
+    }
+    
+    // Second pass: Handle none conditions if no non-none conditions matched
+    if (!anyNonNoneMatched) {
+      for (const pair of node.values.conditions) {
+        // Only process none conditions in second pass
+        if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
+          if (pair.action) {
+            // Handle action which might be an array of nodes
+            const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
+            for (const actionNode of actionNodes) {
+              await evaluate(actionNode, childEnv);
+            }
+            // Merge child environment nodes back to parent
+            env.mergeChild(childEnv);
+            return { value: '', env };
+          }
+        }
       }
     }
     
@@ -348,6 +380,9 @@ async function evaluateFirstMatch(
   variableName?: string,
   expressionNodes?: BaseMlldNode[]
 ): Promise<EvalResult> {
+  // Validate none placement
+  validateNonePlacement(conditions);
+  
   // If we have expression nodes, evaluate them to get the value to compare against
   let expressionValue: any;
   if (expressionNodes && expressionNodes.length > 0) {
@@ -369,7 +404,25 @@ async function evaluateFirstMatch(
     }
   }
   
+  // Track if any non-none condition matched
+  let anyNonNoneMatched = false;
+  
   for (const pair of conditions) {
+    // Check if this is a none condition
+    if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
+      // For 'first' mode, none acts as a default case
+      if (!anyNonNoneMatched) {
+        // Execute the action for 'none'
+        if (pair.action) {
+          const actionNodes = Array.isArray(pair.action) ? pair.action : [pair.action];
+          for (const actionNode of actionNodes) {
+            await evaluate(actionNode, env);
+          }
+        }
+        return { value: '', env };
+      }
+      continue;
+    }
     let matches = false;
     
     if (expressionValue !== undefined) {
@@ -415,6 +468,7 @@ async function evaluateFirstMatch(
     }
     
     if (matches) {
+      anyNonNoneMatched = true;
       if (pair.action) {
         const result = await evaluate(pair.action, env);
         // The action has already added its output nodes during evaluation
@@ -446,6 +500,9 @@ async function evaluateAllMatches(
   variableName?: string,
   blockAction?: BaseMlldNode[]
 ): Promise<EvalResult> {
+  // Validate none placement
+  validateNonePlacement(conditions);
+  
   // If we have a block action, check if ALL conditions are true first
   if (blockAction) {
     // Check for invalid syntax: all: with block action cannot have individual actions
@@ -460,6 +517,11 @@ async function evaluateAllMatches(
     let allMatch = true;
     
     for (const pair of conditions) {
+      // Skip none conditions in all: block mode
+      if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
+        continue;
+      }
+      
       const conditionResult = await evaluateCondition(pair.condition, env, variableName);
       
       if (!conditionResult) {
@@ -488,14 +550,39 @@ async function evaluateAllMatches(
   
   // Otherwise, execute individual actions for each true condition
   const results: string[] = [];
+  let anyNonNoneMatched = false;
   
+  // First pass: evaluate non-none conditions
   for (const pair of conditions) {
+    // Skip none conditions in first pass
+    if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
+      continue;
+    }
+    
     const conditionResult = await evaluateCondition(pair.condition, env, variableName);
     
-    if (conditionResult && pair.action) {
-      const actionResult = await evaluate(pair.action, env);
-      if (actionResult.value) {
-        results.push(String(actionResult.value));
+    if (conditionResult) {
+      anyNonNoneMatched = true;
+      if (pair.action) {
+        const actionResult = await evaluate(pair.action, env);
+        if (actionResult.value) {
+          results.push(String(actionResult.value));
+        }
+      }
+    }
+  }
+  
+  // Second pass: evaluate none conditions if no non-none matched
+  if (!anyNonNoneMatched) {
+    for (const pair of conditions) {
+      // Only process none conditions in second pass
+      if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
+        if (pair.action) {
+          const actionResult = await evaluate(pair.action, env);
+          if (actionResult.value) {
+            results.push(String(actionResult.value));
+          }
+        }
       }
     }
   }
@@ -877,4 +964,43 @@ function isTruthy(value: any): boolean {
   
   // Default to true for other types
   return true;
+}
+
+/**
+ * Check if a condition is the 'none' literal
+ */
+function isNoneCondition(condition: any): boolean {
+  return condition?.type === 'Literal' && condition?.valueType === 'none';
+}
+
+/**
+ * Validate that 'none' conditions are placed correctly in a when block
+ */
+function validateNonePlacement(conditions: any[]): void {
+  let foundNone = false;
+  let foundWildcard = false;
+  
+  for (let i = 0; i < conditions.length; i++) {
+    const condition = conditions[i].condition || conditions[i];
+    
+    if (isNoneCondition(condition)) {
+      foundNone = true;
+    } else if (condition?.type === 'Literal' && condition?.valueType === 'wildcard') {
+      foundWildcard = true;
+      if (foundNone) {
+        // * after none is technically valid but makes none unreachable
+        continue;
+      }
+    } else if (foundNone) {
+      throw new Error(
+        'The "none" keyword can only appear as the last condition(s) in a when block'
+      );
+    }
+    
+    if (foundWildcard && isNoneCondition(condition)) {
+      throw new Error(
+        'The "none" keyword cannot appear after "*" (wildcard) as it would never be reached'
+      );
+    }
+  }
 }

@@ -43,6 +43,16 @@ NullLiteral "Null Literal"
 WildcardLiteral "Wildcard Literal"
   = "*" { return "*"; }
 
+// None literal - matches when no prior conditions in when block have matched
+NoneLiteral "none literal"
+  = "none" ![a-zA-Z0-9_] {
+      return helpers.createNode('Literal', {
+        value: 'none',
+        valueType: 'none',
+        location: location()
+      });
+    }
+
 // Retry literal - signals pipeline retry
 RetryLiteral "Retry Literal"
   = "retry" { 

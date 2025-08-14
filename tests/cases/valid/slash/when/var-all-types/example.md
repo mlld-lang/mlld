@@ -8,43 +8,43 @@
 /var @condition2 = "false"
 /var @dataType = "object"
 
-# Test string literal assignment
-/when @condition1 => var @text = "simple string"
+# Test string literal assignment (implicit /var)
+/when @condition1 => @text = "simple string"
 /show `Text: @text`
 
 # Test template assignment
-/when @condition1 => var @template = `Hello from template with @text`
+/when @condition1 => @template = `Hello from template with @text`
 /show `Template: @template`
 
 # Test variable reference assignment
-/when @condition1 => var @copy = @text
+/when @condition1 => @copy = @text
 /show `Copy: @copy`
 
 # Test function call assignment
-/when @condition1 => var @transformed = @transform(@text)
+/when @condition1 => @transformed = @transform(@text)
 /show `Transformed: @transformed`
 
 # Test object assignment via function
-/when @condition1 => var @objectData = @getObject()
+/when @condition1 => @objectData = @getObject()
 /show `Object status: @objectData.status`
 /show `Object count: @objectData.count`
 
 # Test array assignment via function
-/when @condition1 => var @arrayData = @getArray()
+/when @condition1 => @arrayData = @getArray()
 /show `Array data: @arrayData`
 
-# Test in switch form with mixed types
-/when @dataType: [
-  "object" => var @result = @getObject()
-  "array" => var @result = @getArray()
-  "string" => var @result = "fallback"
+# Test in when first with mixed types
+/when first [
+  @dataType == "object" => @result = @getObject()
+  @dataType == "array" => @result = @getArray()
+  * => @result = "fallback"
 ]
 /show `Switch result: @result.status`
 
 # Test command execution assignment
-/when @condition1 => var @commandResult = run {echo "Hello from command"}
+/when @condition1 => @commandResult = run {echo "Hello from command"}
 /show `Command: @commandResult`
 
 # Test nested function calls
-/when @condition1 => var @nested = @transform(@transform("data"))
+/when @condition1 => @nested = @transform(@transform("data"))
 /show `Nested: @nested`

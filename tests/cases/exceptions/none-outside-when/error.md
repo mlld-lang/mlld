@@ -1,0 +1,1 @@
+The 'none' keyword can only be used as a condition within /when directives

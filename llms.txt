@@ -240,44 +240,90 @@ Path: <>.relative
 >> Note: <> only works in 'as' templates, not elsewhere
 ```
 
-### 10. Conditional Logic with /when and Operators
+### 10. Conditional Logic with /when
 
-/when is mlld's decision-making directive with operator support. It's a routing table with expression evaluation.
+/when is mlld's decision-making directive with operator support. It evaluates conditions and executes actions.
 
-**Quick Reference:**
-- **`/when @var: [...]`** - Evaluates ALL conditions independently, fires action for each true condition
-- **`/when @var first: [...]`** - Classic switch (stops at first match)
-- **`/when @var all: [...] => action`** - Executes action if ALL conditions are true
-- **`/when @var any: [...] => action`** - Executes action if ANY condition is true
+**Forms:**
+- **`/when [...]`** - Bare form: evaluates ALL matching conditions, executes each action
+- **`/when first [...]`** - Switch form: stops at first matching condition  
+- **`/when @condition => action`** - Simple form: single condition check
 
+**Block Syntax:**
 ```mlld
->> Simple routing with operators
-/when @score > 90 => /show `Excellent!`
-/when @isAdmin && @isActive => /show `Admin panel`
-/when !@isLocked => /show `Resource available`
-
->> Complex expressions with parentheses
-/when (@role == "admin" || @role == "mod") && @active => /show `Privileged user`
-
->> Switch-style with operator conditions
-/when @request first: [
-  @method == "GET" && @path == "/users" => /show `List users`
-  @method == "POST" && @path == "/users" => /show `Create user`
-  @method == "DELETE" => /show `Delete resource`
+>> Bare form - ALL matching conditions execute
+/when [
+  @score > 90 => show "Excellent!"
+  @score > 70 => show "Good job!"
+  @isBonus => show "Bonus earned!"
 ]
 
->> Implicit actions (cleaner syntax)
-/when @env == "production" => @config = "prod.json"      # Implicit /var
-/when @needsSetup => @initialize()                       # Implicit /run
-/when @task == "build" => @output = @compile(@source)   # Implicit /exe
+>> Switch form - stops at first match
+/when first [
+  @role == "admin" => show "Admin panel"
+  @role == "user" => show "User dashboard"
+  * => show "Guest access"
+]
 
->> Bare form: ALL matching conditions execute
-/when @features: [
-  @hasAuth => @enableLogin()            # Implicit /run
-  @hasChat => @chatModule = "enabled"   # Implicit /var
-  @hasVideo => /import { video } from @company/video  # Explicit
+>> One action per line - repeat conditions for multiple actions
+/when [
+  @isProduction && @hasChanges => show "Deploying to production..."
+  @isProduction && @hasChanges => @backupDatabase()
+  @isProduction && @hasChanges => @deploy()
+  @isProduction && @hasChanges => @notifyTeam()
 ]
 ```
+
+**Simple Form with Operators:**
+```mlld
+>> Single conditions
+/when @score > 90 => show "Excellent!"
+/when @isAdmin && @isActive => show "Admin panel"
+/when !@isLocked => show "Resource available"
+
+>> Complex expressions with parentheses
+/when (@role == "admin" || @role == "mod") && @active => show "Privileged user"
+```
+
+**Special Conditions:**
+- **`*`** - Wildcard that always matches (catch-all)
+- **`none`** - Matches when no other conditions have matched (must be last)
+
+```mlld
+/when first [
+  @status == "active" => show "Active"
+  @status == "pending" => show "Pending"
+  * => show "Unknown status"
+]
+
+/when [
+  @hasFeatureA => @enableA()
+  @hasFeatureB => @enableB()
+  none => show "No features enabled"
+]
+
+>> Multiple actions for wildcard or none - repeat them
+/when [
+  @hasData => @processData()
+  * => show "No data to process"
+  * => @logEmpty()
+  * => @useDefaults()
+]
+
+/when [
+  @isValid => @process()
+  none => show "Invalid input"
+  none => @logError()
+]
+```
+
+**Important Notes:**
+- No RHS slashes: use `show` not `/show`, `@func()` not `/run @func()`
+- Implicit variable assignment: `@condition => @var = "value"` (no `/var` needed)
+- Only one action per line (repeat conditions for multiple actions - this is encouraged for clarity)
+- Multiple `*` or `none` conditions are allowed and encouraged for multiple fallback actions
+- `none` cannot appear after `*` (would be unreachable - causes error)
+- Conditions in blocks must be on separate lines (no comma separation)
 
 ### 11. Iteration with foreach and for
 
@@ -533,13 +579,20 @@ The unified `/var` directive creates variables with types inferred from syntax:
 
 ```mlld
 >> Simple condition
-/when @isProduction => /deploy() trust always
+/when @isProduction => @deploy()
 
->> Multiple conditions
-/when @env first: [
-  "prod" => /show "⚠️ Production Environment"
-  "dev" => /show "🔧 Development Environment"
-  _ => /show "Unknown environment"
+>> Multiple conditions with switch semantics
+/when first [
+  @env == "prod" => show "⚠️ Production Environment"
+  @env == "dev" => show "🔧 Development Environment"
+  * => show "Unknown environment"
+]
+
+>> Bare form - all matching conditions execute
+/when [
+  @needsBackup => @backupData()
+  @needsCleanup => @cleanTempFiles()
+  @needsReport => @generateReport()
 ]
 ```
 

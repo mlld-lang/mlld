@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Grammar now properly supports `when first` modifier in `/exe` expressions
 
 ### Added
+- **None keyword for /when blocks**: New `none` keyword that matches when no other conditions have matched
+  - Provides semantic fallback: `/when [ @x > 5 => show "high", none => show "default" ]`
+  - Multiple `none` conditions allowed at end of block: all execute in bare `/when`, first executes in `/when first`
+  - Works in `/exe` when expressions: `/exe @handler() = when: [ @valid => @value, none => "fallback" ]`
+  - Must appear as the last condition(s) in a when block (validated at parse time)
+  - Cannot appear after wildcard `*` (would be unreachable)
+  - Clearer than using `*` or complex negations like `!(@a || @b || @c)`
 - **Test coverage for when expressions**: New test demonstrating bare `when` evaluates all conditions
   - `tests/cases/valid/slash/when/exe-when-all-matches/` shows the difference between `when` and `when first`
 

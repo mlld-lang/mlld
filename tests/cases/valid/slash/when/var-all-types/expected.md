@@ -1,6 +1,6 @@
 # Test /when with var assignments of all types
 
-# Test string literal assignment
+# Test string literal assignment (implicit /var)
 
 Text: simple string
 # Test template assignment
@@ -19,8 +19,7 @@ Object count: 42
 # Test array assignment via function
 
 Array data: ["one","two","three"]
-# Test in switch form with mixed types
-
+# Test in when first with mixed types
 Switch result: ok
 # Test command execution assignment
 

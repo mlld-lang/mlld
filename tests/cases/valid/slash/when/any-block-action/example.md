@@ -1,10 +1,6 @@
-/var @isAdmin = ""
-/var @isModerator = "true"
-/var @isVerified = ""
+/var @isAdmin = false
+/var @isModerator = true
+/var @isVerified = false
 
-# any: with block action - executes if ANY condition matches
-/when any: [
-  @isAdmin
-  @isModerator
-  @isVerified
-] => show "Access granted"
+# Test when at least one condition is true
+/when @isAdmin || @isModerator || @isVerified => show "Access granted"

@@ -30,6 +30,10 @@ export async function evaluateUnifiedExpression(node: any, env: Environment): Pr
       case 'ArraySliceExpression':
         return await evaluateArraySliceExpression(node, env);
       case 'Literal':
+        // Handle none literal (only valid in when context)
+        if (node.valueType === 'none') {
+          throw new Error('The "none" keyword can only be used as a condition in /when directives');
+        }
         return node.value;
       case 'VariableReference':
         // Delegate variable references to the standard evaluator

@@ -15,6 +15,47 @@ import { evaluateCondition } from './when';
 import { logger } from '@core/utils/logger';
 
 /**
+ * Check if a condition is the 'none' literal
+ */
+function isNoneCondition(condition: any): boolean {
+  return condition?.type === 'Literal' && condition?.valueType === 'none';
+}
+
+/**
+ * Validate that 'none' conditions are placed correctly in a when block
+ */
+function validateNonePlacement(conditions: WhenConditionPair[]): void {
+  let foundNone = false;
+  let foundWildcard = false;
+  
+  for (let i = 0; i < conditions.length; i++) {
+    const condition = conditions[i].condition;
+    
+    if (isNoneCondition(condition)) {
+      foundNone = true;
+    } else if (condition?.type === 'Literal' && condition?.valueType === 'wildcard') {
+      foundWildcard = true;
+      if (foundNone) {
+        // * after none is technically valid but makes none unreachable
+        continue;
+      }
+    } else if (foundNone) {
+      throw new MlldWhenExpressionError(
+        'The "none" keyword can only appear as the last condition(s) in a when block',
+        condition.location
+      );
+    }
+    
+    if (foundWildcard && isNoneCondition(condition)) {
+      throw new MlldWhenExpressionError(
+        'The "none" keyword cannot appear after "*" (wildcard) as it would never be reached',
+        condition.location
+      );
+    }
+  }
+}
+
+/**
  * Evaluates a when expression node to return a value.
  * 
  * Key differences from directive /when:
@@ -30,6 +71,9 @@ export async function evaluateWhenExpression(
 ): Promise<EvalResult> {
   // console.error('🚨 WHEN-EXPRESSION EVALUATOR CALLED');
   
+  // Validate none placement
+  validateNonePlacement(node.conditions);
+  
   const errors: Error[] = [];
   
   // Check if we have a "first" modifier (stop after first match)
@@ -38,6 +82,8 @@ export async function evaluateWhenExpression(
   // Track results from all matching conditions (for bare when)
   let lastMatchValue: any = null;
   let hasMatch = false;
+  let hasNonNoneMatch = false;
+  let lastNoneValue: any = null;
   let accumulatedEnv = env;
   
   // Empty conditions array - return null
@@ -74,9 +120,15 @@ export async function evaluateWhenExpression(
     }
   }
   
-  // Evaluate conditions in order (first-match semantics)
+  // First pass: Evaluate non-none conditions in order
   for (let i = 0; i < node.conditions.length; i++) {
     const pair = node.conditions[i];
+    
+    // Check if this is a none condition
+    if (isNoneCondition(pair.condition)) {
+      // Skip none conditions in first pass
+      continue;
+    }
     
     try {
       // Debug: What condition are we evaluating?
@@ -107,6 +159,7 @@ export async function evaluateWhenExpression(
       if (conditionResult) {
         // Condition matched - evaluate the action
         hasMatch = true;
+        hasNonNoneMatch = true;
         
         if (!pair.action || pair.action.length === 0) {
           // No action for this condition - continue to next
@@ -220,6 +273,62 @@ export async function evaluateWhenExpression(
         node.location,
         { conditionIndex: i, phase: 'condition', originalError: conditionError }
       ));
+    }
+  }
+  
+  // Second pass: Evaluate none conditions if no non-none conditions matched
+  if (!hasNonNoneMatch) {
+    for (let i = 0; i < node.conditions.length; i++) {
+      const pair = node.conditions[i];
+      
+      // Only process none conditions in second pass
+      if (!isNoneCondition(pair.condition)) {
+        continue;
+      }
+      
+      if (!pair.action || pair.action.length === 0) {
+        // No action for this none condition - continue to next
+        continue;
+      }
+      
+      try {
+        // Evaluate the action for none condition
+        const actionEnv = accumulatedEnv.createChild();
+        const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
+        
+        let value = actionResult.value;
+        
+        // Apply tail modifiers if present
+        if (node.withClause && node.withClause.pipes) {
+          value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
+        }
+        
+        // In "first" mode, return immediately after first none match
+        if (isFirstMode) {
+          return { value, env: actionEnv };
+        }
+        
+        // For bare when, save the none value and continue
+        lastNoneValue = value;
+        hasMatch = true;
+        
+        // Merge nodes from the action environment into accumulated environment
+        const childNodes = actionEnv.getNodes();
+        for (const node of childNodes) {
+          accumulatedEnv.addNode(node);
+        }
+      } catch (actionError) {
+        throw new MlldWhenExpressionError(
+          `Error evaluating none action for condition ${i + 1}: ${actionError.message}`,
+          node.location,
+          { conditionIndex: i, phase: 'action', originalError: actionError }
+        );
+      }
+    }
+    
+    // If we had none matches, use the last none value
+    if (lastNoneValue !== null) {
+      lastMatchValue = lastNoneValue;
     }
   }
   

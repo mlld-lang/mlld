@@ -2,17 +2,31 @@
 
 Testing when expressions as values in exe assignments.
 
-## Basic exe when expression
+## Basic exe when expression with when first
 /exe @greet(name) = when first [
   @name == "World" => "Hello, World!"
   @name == "Friend" => "Hey there, Friend!"
-  true => "Welcome!"
+  * => "Welcome!"
 ]
 
 Greetings:
 /show @greet("World")
 /show @greet("Friend")
 /show @greet("Alice")
+
+## Exe when first with none fallback
+/exe @statusHandler(code) = when first [
+  @code == 200 => "Success"
+  @code == 404 => "Not Found"
+  @code == 500 => "Server Error"
+  none => "Unknown Status Code"
+]
+
+Testing status codes:
+/show @statusHandler(200)
+/show @statusHandler(404)
+/show @statusHandler(403)
+/show @statusHandler(999)
 
 ## Exe with language/env conditions
 /var @lang = "es"
@@ -23,13 +37,29 @@ Greetings:
   @lang == "fr" && @type == "farewell" => "Au revoir!"
   @type == "greeting" => "Hello!"
   @type == "farewell" => "Goodbye!"
-  true => "Unknown message type"
+  * => "Unknown message type"
 ]
 
 Messages:
 /show @getMessage("greeting")
 /show @getMessage("farewell")
 /show @getMessage("other")
+
+## Exe with bare when (evaluates all, returns last match)
+/exe @classifyNumber(n) = when [
+  @n < 0 => "negative"
+  @n == 0 => "zero"
+  @n > 0 && @n < 10 => "small positive"
+  @n >= 10 && @n < 100 => "medium positive"
+  @n >= 100 => "large positive"
+  none => "not a number"
+]
+
+>> Last matching value is returned for bare when
+/show @classifyNumber(5)
+/show @classifyNumber(50)
+/show @classifyNumber(-10)
+/show @classifyNumber(150)
 
 ## Exe with code execution based on conditions
 

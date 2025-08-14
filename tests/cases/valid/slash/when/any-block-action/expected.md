@@ -1,2 +1,2 @@
-# any: with block action - executes if ANY condition matches
+# Test when at least one condition is true
 Access granted

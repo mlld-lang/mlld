@@ -1,0 +1,1 @@
+The 'none' keyword must be the last condition(s) in a when block

@@ -1,0 +1,1 @@
+The 'none' keyword cannot appear after a wildcard (*) as it would never execute
