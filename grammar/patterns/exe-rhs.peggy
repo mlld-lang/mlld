@@ -4,7 +4,7 @@
 
 ExeRHSContent "exe assignment value"
   = WhenExpression              // when: [...] expressions for conditional execution
-  / ForExpression               // for @var in @collection => expression
+  / ForExpressionExe            // for @var in @collection => action (exe-specific with directive support)
   / ExeRunCommandPattern        // run {command} - explicit run command syntax
   / ExeCodePattern              // js {code} - language-specific code blocks
   / ExeEnvironmentDeclaration   // { helper1, helper2 } - environment setup (must come before command)
@@ -279,3 +279,32 @@ WhenExpressionConditionPair
 // Actions in when expressions - for /exe context, supports both side effects and return values
 WhenExpressionAction
   = WhenRHSAction  // Use the unified pattern that supports show, output, var assignment, and values
+
+// -------------------------------------------------------------
+// FOR EXPRESSION - Iteration with directive action support for executable assignments
+// -------------------------------------------------------------
+
+// FOR EXPRESSION - Exe-specific version that supports directive actions
+// Used by: ExeRHSContent
+// Purpose: Allow for @var in @collection => action where action can be a directive
+ForExpressionExe "for expression with actions"
+  = "for" _ pattern:ForIterationPattern _ "=>" _ action:WhenRHSAction {
+      helpers.debug('ForExpressionExe matched', { pattern, action });
+      
+      return helpers.createForExpression(
+        pattern.variable,
+        pattern.source, 
+        action,  // Note: accepts WhenRHSAction instead of VarRHSContent
+        location()
+      );
+    }
+  // Error recovery
+  / "for" _ "@" id:BaseIdentifier _ "in" _ source:VarRHSContent _ !"=>" {
+      helpers.mlldError("Missing '=>' in for expression. Expected: for @var in @collection => action", "=>", location());
+    }
+  / "for" _ "@" id:BaseIdentifier _ !"in" {
+      helpers.mlldError("Missing 'in' in for expression. Expected: for @var in @collection => action", "in", location());
+    }
+  / "for" _ !"each" _ !"@" {
+      helpers.mlldError("Invalid for expression syntax. Expected: for @var in @collection => action", "@", location());
+    }
