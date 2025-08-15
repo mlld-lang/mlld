@@ -36,6 +36,7 @@ export interface CommandRefExecutable extends BaseExecutable {
   type: 'commandRef';
   commandRef: string;
   commandArgs?: MlldNode[];
+  withClause?: any; // Pipeline information from the original directive
   sourceDirective: 'exec';
 }
 

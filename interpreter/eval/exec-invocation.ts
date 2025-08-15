@@ -928,16 +928,18 @@ export async function evaluateExecInvocation(
     // The commandArgs contains the original AST nodes for how to call the referenced command
     // We need to evaluate these nodes with the current invocation's parameters bound
     if (definition.commandArgs && definition.commandArgs.length > 0) {
-      // Evaluate the commandArgs in the execEnv (which has the parameters bound)
-      // This will resolve things like @greet(@name) where @name is a parameter
-      const { evaluate } = await import('../core/interpreter');
-      const evalResult = await evaluate(definition.commandArgs, execEnv);
-      
-      // Extract the result value
+      // Evaluate each arg individually since they are VariableReference nodes
       let refArgs: any[] = [];
-      if (evalResult && evalResult.value !== undefined) {
-        // If it's a single value, wrap it in an array
-        refArgs = Array.isArray(evalResult.value) ? evalResult.value : [evalResult.value];
+      const { evaluate } = await import('../core/interpreter');
+      
+      for (const argNode of definition.commandArgs) {
+        // Evaluate the individual argument node
+        const argResult = await evaluate(argNode, execEnv, { isExpression: true });
+        
+        // Extract the actual value
+        if (argResult && argResult.value !== undefined) {
+          refArgs.push(argResult.value);
+        }
       }
       
       // Create a new invocation node for the referenced command with the evaluated args
@@ -947,9 +949,11 @@ export async function evaluateExecInvocation(
           identifier: refName,
           args: refArgs.map(arg => ({
             type: 'Text',
-            content: String(arg)
+            content: typeof arg === 'string' ? arg : JSON.stringify(arg)
           }))
-        }
+        },
+        // Pass along the pipeline if present
+        ...(definition.withClause ? { withClause: definition.withClause } : {})
       };
       
       // Recursively evaluate the referenced command
@@ -965,7 +969,9 @@ export async function evaluateExecInvocation(
             type: 'Text',
             content: arg
           }))
-        }
+        },
+        // Pass along the pipeline if present
+        ...(definition.withClause ? { withClause: definition.withClause } : {})
       };
       
       // Recursively evaluate the referenced command
@@ -1107,8 +1113,9 @@ export async function evaluateExecInvocation(
           console.error('[exec-invocation] sourceFunction called - re-executing ExecInvocation');
         }
         // Re-execute this same ExecInvocation but without the pipeline
+        // IMPORTANT: Use execEnv not env, so the function parameters are available
         const nodeWithoutPipeline = { ...node, withClause: undefined };
-        const freshResult = await evaluateExecInvocation(nodeWithoutPipeline, env);
+        const freshResult = await evaluateExecInvocation(nodeWithoutPipeline, execEnv);
         return typeof freshResult.value === 'string' ? freshResult.value : JSON.stringify(freshResult.value);
       };
       

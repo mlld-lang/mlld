@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added support for `when first [...]` modifier for explicit switch-case semantics
   - Fixed doubled output from `/show` directives in for loops with when expressions
   - Side effects (show, output directives) inside when expressions now execute correctly
+- **Field access in /output directive source**: Fixed field access not working when outputting object fields
+  - `/output @data.content to "file.txt"` now correctly outputs just the field value, not the entire object
 
 ### Changed
 - **No longer supporting `/` on RHS**: 

@@ -34,3 +34,28 @@ execution within /var assignments, not buffered until completion.
 /var @tracked = for @x in ["A", "B", "C"] => @track(@x)
 
 /show "End tracking test"
+
+## Direct pipeline in var-for expression
+
+/exe @stage1(x) = when [
+  * => show "Stage1: @x"
+  * => "s1-@x"
+]
+
+/exe @stage2(x) = when [
+  * => show "Stage2: @x"
+  * => "s2-@x"
+]
+
+/exe @stage3(x) = when [
+  * => show "Stage3: @x"
+  * => "s3-@x"
+]
+
+/show "Start direct pipeline test"
+
+>> This is the exact one-line syntax: var + for + direct pipeline
+/var @pipelined = for @item in ["P", "Q"] => @stage1(@item) | @stage2 | @stage3
+
+/show "End direct pipeline test"
+/for @p in @pipelined => show "Pipeline result: @p"

@@ -177,26 +177,18 @@ async function evaluateOutputSource(
   switch (sourceType) {
     case 'literal':
       // @output "text content" to target
+      // Handle unified quote/template content
+      const source = directive.values.source;
       
-      // Check if the source is an array of nodes
-      if (Array.isArray(directive.values.source)) {
-        // Check if it contains a single Text node with interpolation needed
-        if (directive.values.source.length === 1 && 
-            directive.values.source[0].type === 'Text' &&
-            directive.values.source[0].content?.needsInterpolation) {
-          // Interpolate the parts directly
-          const { interpolate } = await import('../core/interpreter');
-          const interpolated = await interpolate(directive.values.source[0].content.parts, env);
-          return interpolated;
-        }
-        // Otherwise interpolate the array itself
+      // All literal sources should now be arrays of nodes from UnifiedQuoteOrTemplate
+      if (Array.isArray(source)) {
         const { interpolate } = await import('../core/interpreter');
-        const interpolated = await interpolate(directive.values.source, env);
-        return interpolated;
+        return await interpolate(source, env);
       }
       
-      const literalResult = await evaluateDataValue(directive.values.source, env);
-      return String(literalResult);
+      // Fallback for any unexpected format
+      console.warn('Unexpected literal source format:', source);
+      return String(source);
       
     case 'variable':
       return await evaluateVariableSource(directive, env);

@@ -131,22 +131,8 @@ export async function evaluateWhenExpression(
     }
     
     try {
-      // Debug: What condition are we evaluating?
-      console.error('🔎 EVALUATING CONDITION:', {
-        index: i,
-        conditionType: pair.condition?.type,
-        isWildcard: pair.condition?.type === 'wildcard',
-        pipelineVar: env.getVariable('pipeline')?.value
-      });
-      
       // Evaluate the condition
       const conditionResult = await evaluateCondition(pair.condition, env);
-      
-      console.error('✅ CONDITION RESULT:', {
-        index: i,
-        result: conditionResult,
-        willMatch: !!conditionResult
-      });
       
       if (process.env.DEBUG_WHEN) {
         logger.debug('WhenExpression condition result:', { 

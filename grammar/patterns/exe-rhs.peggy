@@ -12,36 +12,90 @@ ExeRHSContent "exe assignment value"
   / ExeTemplatePattern          // [[...]] and `...` - template executables
   / ExeSectionPattern           // [@file # section] - section extraction
   / ExeResolverPattern          // @resolver/path - resolver patterns
-  / ExeExecInvocationPattern    // @func(args) - function calls with parameters
-  / ExeCommandReference         // @otherCmd - command references
+  / ExeUnifiedReference         // @func(args) and @otherCmd - unified reference with pipeline support
 
 // -------------------------------------------------------------
 // EXE-SPECIFIC RHS PATTERNS
 // -------------------------------------------------------------
 
-// Exe exec invocation pattern - wraps SimpleExec for exe context
-ExeExecInvocationPattern "exe exec invocation"
-  = invocation:SimpleExec {
-      // Transform SimpleExec result to exe context structure
+// Unified reference pattern for exe context - handles @func(args), @var, and pipelines
+ExeUnifiedReference "exe unified reference"
+  = invocation:UnifiedReferenceWithTail {
+      helpers.debug('ExeUnifiedReference matched', { invocation });
+      
+      // Handle ExecInvocation type (function calls with optional pipeline)
+      if (invocation.type === 'ExecInvocation') {
+        return {
+          type: 'exeExecInvocation',
+          values: {
+            commandRef: invocation.commandRef,
+            args: invocation.commandRef.args || [],
+            ...(invocation.withClause ? { withClause: invocation.withClause } : {})
+          },
+          raw: {
+            commandRef: invocation.commandRef.name,
+            args: (invocation.commandRef.args || []).map(arg => 
+              arg.type === 'Text' ? arg.content : 
+              arg.type === 'VariableReference' ? '@' + arg.identifier : ''
+            ),
+            ...(invocation.withClause?.pipeline ? {
+              pipeline: invocation.withClause.pipeline.map(cmd => 
+                `@${cmd.rawIdentifier || cmd.name || cmd}`
+              ).join(' | ')
+            } : {})
+          },
+          meta: {
+            isExecInvocation: true,
+            parameterCount: (invocation.commandRef.args || []).length,
+            hasPipeline: !!(invocation.withClause?.pipeline)
+          },
+          subtype: 'exeCommand',
+          source: 'invocation'
+        };
+      }
+      
+      // Handle VariableReferenceWithTail type (variable with optional pipeline)
+      if (invocation.type === 'VariableReferenceWithTail') {
+        const variable = invocation.variable;
+        const withClause = invocation.withClause;
+        
+        return {
+          type: 'exeCommandRef',
+          values: {
+            commandRef: [variable],
+            ...(withClause ? { withClause } : {})
+          },
+          raw: {
+            commandRef: variable.identifier,
+            ...(withClause?.pipeline ? {
+              pipeline: withClause.pipeline.map(cmd => 
+                `@${cmd.rawIdentifier || cmd.name || cmd}`
+              ).join(' | ')
+            } : {})
+          },
+          meta: {
+            isCommandRef: true,
+            hasPipeline: !!(withClause?.pipeline)
+          },
+          subtype: 'exeCommand',
+          source: 'reference'
+        };
+      }
+      
+      // Handle plain VariableReference (no tail modifiers)
       return {
-        type: 'exeExecInvocation',
+        type: 'exeCommandRef',
         values: {
-          commandRef: invocation.commandRef,
-          args: invocation.commandRef.args || []
+          commandRef: [invocation]
         },
         raw: {
-          commandRef: invocation.commandRef.name,
-          args: (invocation.commandRef.args || []).map(arg => 
-            arg.type === 'Text' ? arg.content : 
-            arg.type === 'VariableReference' ? '@' + arg.identifier : ''
-          )
+          commandRef: invocation.identifier
         },
         meta: {
-          isExecInvocation: true,
-          parameterCount: (invocation.commandRef.args || []).length
+          isCommandRef: true
         },
         subtype: 'exeCommand',
-        source: 'invocation'
+        source: 'reference'
       };
     }
 
@@ -161,24 +215,6 @@ ExeResolverPattern "exe resolver pattern"
       };
     }
 
-// Command reference for exe context - handles @otherCmd
-ExeCommandReference "exe command reference"
-  = "@" commandRef:BaseIdentifier !("/" / "(" / ".") {
-      return {
-        type: 'exeCommandRef',
-        values: {
-          commandRef: [helpers.createVariableReferenceNode('varIdentifier', { identifier: commandRef }, location())]
-        },
-        raw: {
-          commandRef: commandRef
-        },
-        meta: {
-          isCommandRef: true
-        },
-        subtype: 'exeCommand',
-        source: 'reference'
-      };
-    }
 
 // Environment declaration for exe context - handles { helper1, helper2 }
 ExeEnvironmentDeclaration "exe environment declaration"

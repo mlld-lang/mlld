@@ -212,11 +212,9 @@ describe('Import Pattern: Mixed Types', () => {
 /exe @func(x) = js { return "Hello " + x; }`
       },
       expectedOutput: `string value
-
 42
 true
 value
-
 Hello test`
     });
     

@@ -8,15 +8,6 @@ import { isEqual, toNumber, isTruthy } from './expression';
  * Handles: BinaryExpression, UnaryExpression, TernaryExpression, ArrayFilterExpression, ArraySliceExpression, Literal nodes
  */
 export async function evaluateUnifiedExpression(node: any, env: Environment): Promise<any> {
-  // Temporary unconditional debug to trace the issue
-  console.error('[DEBUG] evaluateUnifiedExpression called with:', {
-    nodeType: node?.type,
-    operator: node?.operator,
-    hasLeft: !!node?.left,
-    hasRight: !!node?.right,
-    nodeKeys: node ? Object.keys(node) : 'null/undefined'
-  });
-
   try {
     switch (node.type) {
       case 'BinaryExpression':
@@ -38,19 +29,7 @@ export async function evaluateUnifiedExpression(node: any, env: Environment): Pr
       case 'VariableReference':
         // Delegate variable references to the standard evaluator
         try {
-          // DEBUG: Log what we're about to evaluate
-          console.error('🔍 EVALUATING VARIABLE REFERENCE IN EXPRESSION:', {
-            identifier: node.identifier,
-            hasFields: !!node.fields,
-            fields: node.fields,
-            nodeStructure: Object.keys(node)
-          });
           const varResult = await evaluate(node, env);
-          console.error('🔍 VARIABLE REFERENCE RESULT:', {
-            success: true,
-            value: varResult.value,
-            valueType: typeof varResult.value
-          });
           return varResult.value;
         } catch (error) {
           // Handle undefined variables gracefully for backward compatibility
@@ -131,18 +110,6 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
   
   const leftResult = await evaluateUnifiedExpression(node.left, env);
   
-  // Deep debug for left value to understand structure
-  console.error('🔬 LEFT VALUE DEBUG:', {
-    raw: leftResult,
-    type: typeof leftResult,
-    isNumber: typeof leftResult === 'number',
-    constructor: leftResult?.constructor?.name,
-    valueOf: leftResult?.valueOf?.(),
-    isVariable: leftResult && typeof leftResult === 'object' && 'value' in leftResult,
-    extractedValue: leftResult?.value,
-    jsonStringify: JSON.stringify(leftResult)
-  });
-  
   // Short-circuit evaluation for logical operators  
   if (operator === '&&') {
     const leftTruthy = isTruthy(leftResult);
@@ -167,16 +134,6 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
   }
   
   const rightResult = await evaluateUnifiedExpression(node.right, env);
-  
-  // Deep debug for right value
-  console.error('🔬 RIGHT VALUE DEBUG:', {
-    raw: rightResult,
-    type: typeof rightResult,
-    isNumber: typeof rightResult === 'number',
-    constructor: rightResult?.constructor?.name,
-    valueOf: rightResult?.valueOf?.(),
-    jsonStringify: JSON.stringify(rightResult)
-  });
   
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[DEBUG] About to switch on operator:', {
@@ -211,14 +168,6 @@ async function evaluateBinaryExpression(node: any, env: Environment): Promise<an
       const leftNum = toNumber(leftResult);
       const rightNum = toNumber(rightResult);
       const ltResult = leftNum < rightNum;
-      console.error('🔬 < COMPARISON DEBUG:', {
-        leftOriginal: leftResult,
-        rightOriginal: rightResult,
-        leftConverted: leftNum,
-        rightConverted: rightNum,
-        result: ltResult,
-        comparison: `${leftNum} < ${rightNum} = ${ltResult}`
-      });
       return ltResult;
     case '>':
       return toNumber(leftResult) > toNumber(rightResult);

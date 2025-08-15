@@ -5,7 +5,7 @@ import type { ExecutableDefinition, CommandExecutable, CommandRefExecutable, Cod
 import { interpolate } from '../core/interpreter';
 import { astLocationToSourceLocation } from '@core/types';
 import { createExecutableVariable, createSimpleTextVariable, type VariableSource } from '@core/types/variable';
-import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError';
+// import { ExecParameterConflictError } from '@core/errors/ExecParameterConflictError'; // Removed - parameter shadowing is allowed
 import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadowEnvResolver';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { logger } from '@core/utils/logger';
@@ -35,37 +35,8 @@ function extractParamNames(params: any[]): string[] {
   }).filter(Boolean);
 }
 
-/**
- * Check if any parameter names conflict with existing variables.
- * WHY: Parameter names shadow parent variables during execution, so we need to
- * warn users about potential confusion when a parameter has the same name as
- * an existing variable they might expect to access.
- * GOTCHA: This only checks the current environment, not parent scopes. Parameters
- * CAN shadow parent variables - this is by design for proper scoping.
- * CONTEXT: Called before creating executable definitions to provide early feedback
- * about naming conflicts.
- * Throws ExecParameterConflictError if a conflict is found.
- */
-function checkParameterConflicts(
-  paramNames: string[],
-  execName: string,
-  execLocation: any,
-  env: Environment
-): void {
-  for (const paramName of paramNames) {
-    if (env.hasVariable(paramName)) {
-      const existingVar = env.getVariable(paramName);
-      if (existingVar && existingVar.metadata?.definedAt) {
-        throw new ExecParameterConflictError(
-          paramName,
-          execName,
-          existingVar.metadata.definedAt,
-          astLocationToSourceLocation(execLocation, env.getCurrentFilePath())
-        );
-      }
-    }
-  }
-}
+// Parameter conflict checking removed - parameters are allowed to shadow outer scope variables
+// This is consistent with standard function parameter behavior and mlld's immutability model
 
 /**
  * Evaluate @exec directives.
@@ -207,14 +178,15 @@ export async function evaluateExe(
       const params = directive.values?.params || [];
       const paramNames = extractParamNames(params);
       
-      // Check for parameter conflicts
-      checkParameterConflicts(paramNames, identifier, directive.location, env);
+      // Parameters are allowed to shadow outer scope variables
       
-      // Store the reference definition
+      // Store the reference definition with optional pipeline
+      const withClause = directive.values?.withClause;
       executableDef = {
         type: 'commandRef',
         commandRef: refName,
         commandArgs: args,
+        withClause,
         paramNames,
         sourceDirective: 'exec'
       } satisfies CommandRefExecutable;
@@ -231,8 +203,7 @@ export async function evaluateExe(
       const params = directive.values?.params || [];
       const paramNames = extractParamNames(params);
       
-      // Check for parameter conflicts
-      checkParameterConflicts(paramNames, identifier, directive.location, env);
+      // Parameters are allowed to shadow outer scope variables
       
       // Store the command template (not interpolated yet)
       executableDef = {
@@ -261,8 +232,7 @@ export async function evaluateExe(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
-    // Check for parameter conflicts
-    checkParameterConflicts(paramNames, identifier, directive.location, env);
+    // Parameters are allowed to shadow outer scope variables
     
     // Language is stored in meta, not raw
     const language = directive.meta?.language || 'javascript';
@@ -290,8 +260,7 @@ export async function evaluateExe(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
-    // Check for parameter conflicts
-    checkParameterConflicts(paramNames, identifier, directive.location, env);
+    // Parameters are allowed to shadow outer scope variables
     
     // Get payload nodes if present
     const payloadNodes = directive.values?.payload;
@@ -332,8 +301,7 @@ export async function evaluateExe(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
-    // Check for parameter conflicts
-    checkParameterConflicts(paramNames, identifier, directive.location, env);
+    // Parameters are allowed to shadow outer scope variables
     
     // Create template executable definition
     executableDef = {
@@ -355,8 +323,7 @@ export async function evaluateExe(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
-    // Check for parameter conflicts
-    checkParameterConflicts(paramNames, identifier, directive.location, env);
+    // Parameters are allowed to shadow outer scope variables
     
     // Get rename nodes if present
     const renameNodes = directive.values?.rename;
@@ -387,8 +354,7 @@ export async function evaluateExe(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
-    // Check for parameter conflicts
-    checkParameterConflicts(paramNames, identifier, directive.location, env);
+    // Parameters are allowed to shadow outer scope variables
     
     if (process.env.DEBUG_EXEC) {
       logger.debug('Creating exe when expression:', { 
@@ -424,8 +390,7 @@ export async function evaluateExe(
     const params = directive.values?.params || [];
     const paramNames = extractParamNames(params);
     
-    // Check for parameter conflicts
-    checkParameterConflicts(paramNames, identifier, directive.location, env);
+    // Parameters are allowed to shadow outer scope variables
     
     if (process.env.DEBUG_EXEC) {
       logger.debug('Creating exe for expression:', { 

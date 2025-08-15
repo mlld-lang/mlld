@@ -18,3 +18,13 @@ This test ensures that function parameters can shadow variables in the parent sc
 /show `Local date1: @date1`
 /show `Local date2: @date2`
 
+>> Test case where variables are defined BEFORE the exe (GitHub issue #352)
+/var @file_set = { "name": "OuterFile", "size": 1000 }
+/exe @processFile(file_set) = js {
+  return `Processing file: ${file_set.name} (${file_set.size} bytes)`;
+}
+/show @processFile({ "name": "InnerFile", "size": 500 })
+
+>> Verify outer variable is unchanged
+/show `Original file_set: @file_set.name (@file_set.size bytes)`
+

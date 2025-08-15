@@ -63,7 +63,8 @@ OutputVariable
         // Plain variable reference
         values = {
           identifier: [ref],
-          args: []
+          args: [],
+          ...(ref.fields && ref.fields.length > 0 ? { fields: ref.fields } : {})
         };
         raw = {
           identifier: ref.identifier,
@@ -120,13 +121,17 @@ OutputCommand
       };
     }
 
-// Literal text output
+// Literal text output - now supports all quote types and templates with interpolation
 OutputLiteral
-  = str:DataString {
+  = source:UnifiedQuoteOrTemplate {
       return {
         type: 'literal',
         subtype: 'outputLiteral',
-        values: [helpers.createNode(NodeType.Text, { content: str, location: location() })],
-        raw: str
+        values: source.content,  // Array of nodes ready for interpolation
+        raw: source,
+        meta: {
+          wrapperType: source.wrapperType,
+          hasInterpolation: source.hasInterpolation || false
+        }
       };
     }
