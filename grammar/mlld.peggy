@@ -204,6 +204,7 @@ Directive
     dir:(
       SlashVar      // NEW: Var directives (unified variable assignment)
     / SlashShow     // NEW: Show directives (content display) - replaces AtAdd
+    / SlashLog      // NEW: Log directives (syntactic sugar for /output to stdout)
     / SlashExe      // NEW: Exe directives (define commands/code) - replaces AtExec
     / SlashFor      // For directives (iteration)
     / SlashRun      // Run directives (commands, code)

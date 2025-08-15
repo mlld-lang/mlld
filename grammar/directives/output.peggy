@@ -29,8 +29,8 @@ SlashOutput
   // Support for simple quoted path syntax without source - MUST come first to avoid OutputLiteral matching
   // BUT don't match if followed by bracket (that's the literal+bracket syntax)
   // AND don't match if followed by "to" (that's the enhanced syntax)
-  = DirectiveContext "/output" _ path:DataString !(_ "[") !(_ "to") {
-      helpers.debug('SlashOutput quoted path without source matched', { path });
+  = DirectiveContext "/output" _ path:DataString !(_ "[") !(_ "to") ending:StandardDirectiveEnding {
+      helpers.debug('SlashOutput quoted path without source matched', { path, ending });
       
       const values = {
         target: {
@@ -51,6 +51,9 @@ SlashOutput
         legacy: true
       };
       
+      // Apply unified pipeline processing
+      helpers.processPipelineEnding(values, raw, meta, ending);
+      
       return helpers.createStructuredDirective(
         'output',
         'outputDocument',
@@ -61,8 +64,8 @@ SlashOutput
       );
     }
   // Main enhanced syntax with 'to' keyword
-  / DirectiveContext "/output" _ source:OutputSource _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
-      helpers.debug('SlashOutput enhanced syntax matched', { source, target, format });
+  / DirectiveContext "/output" _ source:OutputSource _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+      helpers.debug('SlashOutput enhanced syntax matched', { source, target, format, ending });
       
       const values = {
         source: source.values,
@@ -80,6 +83,9 @@ SlashOutput
         hasSource: true,
         ...(format ? { format, explicitFormat: true } : {})
       };
+      
+      // Apply unified pipeline processing
+      helpers.processPipelineEnding(values, raw, meta, ending);
       
       // Determine subtype based on target type
       let subtype = 'outputFile';  // default
@@ -104,8 +110,8 @@ SlashOutput
   // Support for quoted path syntax with source (legacy) - for syntax like: /output @var "file.txt"
   // BUT don't match if followed by bracket (that would be invalid syntax anyway)
   // AND don't match if followed by "to" (that's the enhanced syntax)
-  / DirectiveContext "/output" _ source:OutputSource _ path:DataString !(_ "[") !(_ "to") {
-      helpers.debug('SlashOutput quoted path with source matched', { source, path });
+  / DirectiveContext "/output" _ source:OutputSource _ path:DataString !(_ "[") !(_ "to") ending:StandardDirectiveEnding {
+      helpers.debug('SlashOutput quoted path with source matched', { source, path, ending });
       
       const values = {
         source: source.values,
@@ -129,6 +135,9 @@ SlashOutput
         quoted: true
       };
       
+      // Apply unified pipeline processing
+      helpers.processPipelineEnding(values, raw, meta, ending);
+      
       return helpers.createStructuredDirective(
         'output',
         'outputFile',
@@ -140,8 +149,8 @@ SlashOutput
     }
   // REMOVED: Legacy bracket syntax without source - use quoted paths instead
   // New enhanced syntax for document output
-  / DirectiveContext "/output" _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? {
-      helpers.debug('SlashOutput enhanced syntax without source matched', { target, format });
+  / DirectiveContext "/output" _ "to" _ target:OutputTarget format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+      helpers.debug('SlashOutput enhanced syntax without source matched', { target, format, ending });
       
       const values = {
         target: target
@@ -156,6 +165,9 @@ SlashOutput
         hasSource: false,
         ...(format ? { format, explicitFormat: true } : {})
       };
+      
+      // Apply unified pipeline processing
+      helpers.processPipelineEnding(values, raw, meta, ending);
       
       // Determine subtype based on target type
       let subtype = 'outputDocument';
@@ -237,6 +249,114 @@ SlashOutput
   // Error: Generic /output syntax error (catch-all)
   / DirectiveContext "/output" {
       helpers.mlldError("Invalid /output syntax. Expected: /output @variable to \"path\", /output \"path\", or /output @variable to stdout/stderr/env. Note: String literals cannot be used as output sources. To output text content, first assign it to a variable: /var @content = \"your text\", then use: /output @content to \"file.txt\"", "@", location());
+    }
+
+// -------------------------------------------------------------
+// LOG DIRECTIVE - Syntactic sugar for /output to stdout
+// -------------------------------------------------------------
+// Implementation: Produces exact same AST as /output @x to stdout
+// Issue: https://github.com/mlld-lang/mlld/issues/357
+
+SlashLog
+  // Log with source - /log @variable or /log @template(args)
+  = DirectiveContext "/log" _ source:OutputSource format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+      helpers.debug('SlashLog with source matched', { source, format, ending });
+      
+      // Create stdout target automatically
+      const stdoutTarget = {
+        type: 'stream',
+        stream: 'stdout',
+        raw: 'stdout'
+      };
+      
+      // Create exact same AST structure as /output @x to stdout
+      const values = {
+        source: source.values,
+        target: stdoutTarget
+      };
+      
+      const raw = {
+        source: source.raw,
+        target: 'stdout'
+      };
+      
+      const meta = {
+        sourceType: source.type,
+        targetType: 'stream',
+        hasSource: true,
+        isLogSugar: true,  // Mark for debugging/tracing
+        ...(format ? { format, explicitFormat: true } : {})
+      };
+      
+      // Apply unified pipeline processing
+      helpers.processPipelineEnding(values, raw, meta, ending);
+      
+      return helpers.createStructuredDirective(
+        'output',  // CRITICAL: Use 'output' kind, not 'log'
+        'outputStream',
+        values,
+        raw,
+        meta,
+        location()
+      );
+    }
+  // Document output variant (no source) - /log
+  / DirectiveContext "/log" format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
+      helpers.debug('SlashLog without source matched', { format, ending });
+      
+      const stdoutTarget = {
+        type: 'stream',
+        stream: 'stdout',
+        raw: 'stdout'
+      };
+      
+      const values = {
+        target: stdoutTarget
+      };
+      
+      const raw = {
+        target: 'stdout'
+      };
+      
+      const meta = {
+        targetType: 'stream',
+        hasSource: false,
+        isLogSugar: true,
+        ...(format ? { format, explicitFormat: true } : {})
+      };
+      
+      // Apply unified pipeline processing
+      helpers.processPipelineEnding(values, raw, meta, ending);
+      
+      return helpers.createStructuredDirective(
+        'output',
+        'outputStream',
+        values,
+        raw,
+        meta,
+        location()
+      );
+    }
+    
+  // Error Recovery Rules for /log directive
+  // -----------------------------------------
+  
+  // Error: Missing content after /log
+  / DirectiveContext "/log" _ &(LineTerminator / EOF) {
+      helpers.mlldError("Missing content in /log directive. Expected variable or content to log.", "@", location());
+    }
+    
+  // Error: Invalid @ usage
+  / DirectiveContext "/log" _ "@" &{
+      const nextChar = input[peg$currPos];
+      return !/[a-zA-Z_]/.test(nextChar);
+    } {
+      helpers.mlldError("Invalid variable reference in /log directive. Variable names must start with a letter or underscore.", "identifier", location());
+    }
+    
+  // Error: Generic /log syntax error (catch-all)
+  / DirectiveContext "/log" {
+      helpers.mlldError("Invalid /log syntax. Expected: /log @variable or /log (for document output). /log is syntactic sugar for /output to stdout.", "@", location());
     }
 
 // Output source types

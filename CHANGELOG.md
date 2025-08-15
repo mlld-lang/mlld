@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [2.0.0-rc39]
+### Added
+- **`/log` directive**: New syntactic sugar for `/output to stdout` for more concise console output (#357)
+
 ### Fixed
 - **When expression behavior**: Bare `when` expressions now correctly evaluate ALL matching conditions
   - Previously, `when [...]` in `/exe` functions incorrectly stopped at the first match (switch-like behavior)

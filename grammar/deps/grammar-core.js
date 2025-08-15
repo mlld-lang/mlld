@@ -86,7 +86,8 @@ export const helpers = {
         if (!isAtLineStart)
             return false;
         // Check if it's followed by a valid directive keyword
-        const directiveKeywords = Object.keys(DirectiveKind);
+        // Include 'log' as a special case since it's syntactic sugar for 'output'
+        const directiveKeywords = [...Object.keys(DirectiveKind), 'log'];
         const afterSlashPos = pos + 1;
         // Look ahead to see if a directive keyword follows
         for (const keyword of directiveKeywords) {
