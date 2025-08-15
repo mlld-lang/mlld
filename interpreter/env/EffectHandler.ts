@@ -21,6 +21,7 @@ export interface Effect {
 export interface EffectHandler {
   handleEffect(effect: Effect): void;
   getDocument?(): string;  // Optional method to get accumulated document
+  isStreamingEnabled?(): boolean;  // Optional method to check if streaming is active
 }
 
 /**
@@ -32,10 +33,10 @@ export class DefaultEffectHandler implements EffectHandler {
   private streamingEnabled: boolean;
 
   constructor(options: { streaming?: boolean } = {}) {
-    // Enable streaming via environment variable or option
-    this.streamingEnabled = options.streaming || 
-                           process.env.MLLD_STREAMING === 'true' ||
-                           process.env.MLLD_IMMEDIATE_EFFECTS === 'true';
+    // Streaming is enabled by default, can be disabled via env var or option
+    this.streamingEnabled = options.streaming !== false && 
+                           process.env.MLLD_STREAMING !== 'false' &&
+                           process.env.MLLD_NO_STREAMING !== 'true';
   }
 
   handleEffect(effect: Effect): void {
@@ -82,6 +83,10 @@ export class DefaultEffectHandler implements EffectHandler {
     return this.documentBuffer
       .join('')
       .replace(/\n{3,}/g, '\n\n');  // Max 2 consecutive newlines
+  }
+
+  isStreamingEnabled(): boolean {
+    return this.streamingEnabled;
   }
 }
 

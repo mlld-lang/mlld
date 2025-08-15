@@ -81,7 +81,7 @@ export class FileProcessor {
       interpretEnvironment = env;
 
       // Handle output
-      await this.handleOutput(result, cliOptions, environment, hasExplicitOutput);
+      await this.handleOutput(result, cliOptions, environment, hasExplicitOutput, interpretEnvironment);
       
       // Clean up environment to prevent event loop from staying alive
       if (interpretEnvironment && 'cleanup' in interpretEnvironment) {
@@ -242,7 +242,8 @@ export class FileProcessor {
     result: string, 
     options: CLIOptions, 
     environment: ProcessingEnvironment,
-    hasExplicitOutput: boolean
+    hasExplicitOutput: boolean,
+    interpretEnvironment?: any
   ): Promise<void> {
     const stdout = options.stdout || (!options.output);
     
@@ -258,8 +259,12 @@ export class FileProcessor {
       throw new Error('Input and output files cannot be the same.');
     }
 
-    // Output handling - skip default output if @output was used (unless explicitly requested)
-    if (stdout) {
+    // Check if streaming was enabled - if so, skip final output since it was already streamed
+    const effectHandler = interpretEnvironment?.getEffectHandler?.();
+    const isStreaming = effectHandler?.isStreamingEnabled?.() ?? false;
+    
+    // Output handling - skip if streaming already output everything
+    if (stdout && !isStreaming) {
       console.log(result);
     } else if (outputPath && (!hasExplicitOutput || options.output)) {
       const { outputPath: finalPath, shouldOverwrite } = await this.userInteraction.confirmOverwrite(outputPath);

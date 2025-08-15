@@ -308,7 +308,8 @@ export async function evaluateWhenExpression(
       try {
         // Evaluate the action for none condition
         const actionEnv = accumulatedEnv.createChild();
-        const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
+        // FIXED: Removed isExpression: true to allow effects (like /show) to propagate
+        const actionResult = await evaluate(pair.action, actionEnv, context);
         
         let value = actionResult.value;
         
