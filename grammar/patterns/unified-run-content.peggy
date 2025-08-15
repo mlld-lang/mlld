@@ -186,15 +186,15 @@ ShellCommandLineContent
         } else if (!inQuote) {
           // Check for banned operators
           if (char === '&' && next === '&') {
-            helpers.mlldError(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+            helpers.mlldError(`Shell operator AND (&&) is not allowed in simple mlld shell commands {..} but allowed in /run sh {..} which is more permissive`);
           } else if (char === '|' && next === '|') {
-            helpers.mlldError(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+            helpers.mlldError(`Shell operator OR (||) is not allowed in simple mlld shell commands {..} but allowed in /run sh {..} which is more permissive.`);
           } else if (char === ';') {
-            helpers.mlldError(`Shell operator semicolon (;) is not allowed in mlld. Use separate @run commands.`);
+            helpers.mlldError(`Shell operator semicolon (;) is not allowed in simple mlld commands {..} but you might have been trying to write javascript, which requires /run js {..} or /run node {..}`);
           } else if (char === '>' && next === '>') {
-            helpers.mlldError(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
+            helpers.mlldError(`>> Comments and shell append operator (>>) are not allowed inside simple mlld commands {..}. If you were trying to write a comment, you'll need to do that outside arguments and brackets. If you wanted to use append in a shell command, you can run this inside /run sh {..} which is more permissive.`);
           } else if (char === '>' || char === '<') {
-            helpers.mlldError(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+            helpers.mlldError(`Shell redirection operators are not allowed in simple mlld commands. You may have been trying to do something else though. Check syntax references.`);
           } else if (char === '&' && next !== '&' && next !== '>') {
             helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);
           } else {
@@ -354,22 +354,22 @@ UnifiedCommandWordChar
       // Check for banned operators (skip if escaped)
       if (!isEscaped) {
         if (ahead.startsWith('&&')) {
-          helpers.mlldError(`Shell operator AND (&&) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+          helpers.mlldError(`Shell operator AND (&&) is not allowed in simple mlld shell commands {..} but allowed in /run sh {..} which is more permissive`);
         }
         if (ahead.startsWith('||')) {
-          helpers.mlldError(`Shell operator OR (||) is not allowed in mlld. Use separate @run commands or @when for control flow.`);
+          helpers.mlldError(`Shell operator OR (||) is not allowed in simple mlld shell commands {..} but allowed in /run sh {..} which is more permissive.`);
         }
         if (ahead.startsWith('>>')) {
-          helpers.mlldError(`Shell append operator (>>) is not allowed in mlld. Use @output directive for file operations.`);
+          helpers.mlldError(`>> Comments and shell append operator (>>) are not allowed inside simple mlld commands {..}. If you were trying to write a comment, you'll need to do that outside arguments and brackets. If you wanted to use append in a shell command, you can run this inside /run sh {..} which is more permissive.`);
         }
         if (char === ';') {
           helpers.mlldError(`Shell operator semicolon (;) is not allowed in mlld commands. Use @run sh [(script)] for shell scripts or separate @run commands.`);
         }
         if (char === '>' && input[pos + 1] !== '>') {
-          helpers.mlldError(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+          helpers.mlldError(`Shell redirection operators are not allowed in simple mlld commands. You may have been trying to do something else though. Check syntax references.`);
         }
         if (char === '<') {
-          helpers.mlldError(`Shell redirection operators are not allowed in mlld. Use @output directive for file operations.`);
+          helpers.mlldError(`Shell redirection operators are not allowed in simple mlld commands. You may have been trying to do something else though. Check syntax references.`);
         }
         if (char === '&' && input[pos + 1] !== '&' && input[pos + 1] !== '>') {
           helpers.mlldError(`Background execution (&) is not allowed in mlld. All commands run synchronously.`);

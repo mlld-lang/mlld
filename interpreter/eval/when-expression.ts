@@ -182,9 +182,23 @@ export async function evaluateWhenExpression(
           // - /when (directive) uses global scope semantics (handled elsewhere)
           // - when: [...] in /exe uses LOCAL scope – evaluate actions in a child env
           const actionEnv = accumulatedEnv.createChild();
-          const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
+          // FIXED: Removed isExpression: true to allow effects (like /show) to propagate
+          // Effects should work the same everywhere - no special suppression in when expressions
+          const actionResult = await evaluate(pair.action, actionEnv, context);
           
           let value = actionResult.value;
+          
+          // Extract Variable values if needed (but keep effects working)
+          if (value && typeof value === 'object' && 'type' in value) {
+            // This looks like a Variable object - extract its value
+            const { extractVariableValue } = await import('../utils/variable-resolution');
+            try {
+              value = await extractVariableValue(value, actionEnv);
+            } catch (e) {
+              // If extraction fails, keep the original value
+              logger.debug('Could not extract variable value in when expression:', e);
+            }
+          }
           
           // Debug: What did we get back?
           // console.error('🔍 WHEN-EXPRESSION action result:', {
