@@ -26,6 +26,9 @@ export interface IVariableManager {
   // Initialization
   initializeReservedVariables(): void;
   
+  // Cleanup
+  clearAllVariables(): void;
+  
   // Context access
   getVariables(): Map<string, Variable>;
 }
@@ -493,5 +496,12 @@ export class VariableManager implements IVariableManager {
            VariableTypeGuards.isExecutable(variable) ||
            VariableTypeGuards.isPipelineInput(variable) ||
            VariableTypeGuards.isPrimitive(variable);
+  }
+
+  /**
+   * Clear all variables for test isolation
+   */
+  clearAllVariables(): void {
+    this.variables.clear();
   }
 }

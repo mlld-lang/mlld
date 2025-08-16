@@ -74,6 +74,7 @@ export async function processMlld(content: string, options?: ProcessOptions): Pr
     pathService,
     normalizeBlankLines: options?.normalizeBlankLines,
     useMarkdownFormatter: options?.useMarkdownFormatter
+    // Note: Environment cleanup is now automatic in interpret() when environment is not returned
   });
 
   return result;

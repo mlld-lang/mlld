@@ -321,6 +321,15 @@ export async function interpret(
     };
   }
   
+  // Clean up environment resources if not being returned
+  // This ensures VM contexts and shadow environments are properly cleaned up
+  try {
+    env.cleanup();
+  } catch (error) {
+    // Log cleanup errors but don't fail the main operation
+    console.warn('Environment cleanup warning:', error);
+  }
+  
   return output;
 }
 
