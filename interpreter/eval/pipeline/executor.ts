@@ -205,6 +205,7 @@ export class PipelineExecutor {
           await this.executeBuiltinEffect(effect, input, stageEnv);
         } catch (effectError) {
           // Effects are best-effort - log but don't fail
+          // This is intentional to prevent side-effects from breaking pipelines
           console.error('[PipelineExecutor] Effect execution failed:', effectError);
         }
       }
@@ -273,6 +274,7 @@ export class PipelineExecutor {
       const inputVar = createObjectVariable(
         'input',
         parsed,
+        false,  // isComplex = false (already evaluated object)
         {
           directive: 'var',
           syntax: 'data',
@@ -651,6 +653,8 @@ export class PipelineExecutor {
           const value = await extractVariableValue(variable, env);
           return typeof value === 'string' ? value : JSON.stringify(value);
         }
+        // Return literal variable reference if not found
+        // This matches the behavior of template interpolation
         return `@${arg.identifier}`;
       }
 

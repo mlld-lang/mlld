@@ -25,7 +25,7 @@ UnifiedQuote "Unified quote pattern"
 
 // Double quotes with @var and @func() interpolation
 UnifiedDoubleQuote "Double quoted string with interpolation"
-  = '"' parts:(SpecialVariable / UnifiedInterpolationContent / UnifiedDoubleQuotedText)* '"' {
+  = '"' parts:(UnifiedInterpolationContent / UnifiedDoubleQuotedText)* '"' {
       helpers.debug('UnifiedQuote: DoubleQuote matched', { parts });
       
       // If it's a plain string (no interpolation), create a Literal node for directive contexts
