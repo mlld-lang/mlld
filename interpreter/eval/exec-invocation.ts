@@ -1132,12 +1132,32 @@ export async function evaluateExecInvocation(
           const allVars = execEnv.getAllVariables();
           for (const [name, variable] of allVars) {
             if (name !== 'p' && name !== 'pipeline') {
-              freshEnv.setVariable(name, variable);
+              freshEnv.setParameterVariable(name, variable);
             }
           }
           
           // Get CURRENT pipeline context (not the captured one)
-          const currentContext = env.getPipelineContext();
+          // The pipeline executor sets context on its environment, but our captured env
+          // might not have access to it. Try multiple strategies:
+          
+          // 1. Check the original captured env
+          let currentContext = env.getPipelineContext();
+          
+          // 2. Check execEnv which might have been updated by pipeline
+          if (!currentContext && execEnv !== env) {
+            currentContext = execEnv.getPipelineContext();
+          }
+          
+          // 3. For test environments, check parent chain if getParent exists
+          if (!currentContext && typeof (env as any).getParent === 'function') {
+            let parentEnv = (env as any).getParent();
+            while (parentEnv && !currentContext) {
+              currentContext = parentEnv.getPipelineContext ? parentEnv.getPipelineContext() : null;
+              parentEnv = typeof (parentEnv as any).getParent === 'function' ? 
+                          (parentEnv as any).getParent() : null;
+            }
+          }
+          
           if (currentContext) {
             if (process.env.MLLD_DEBUG === 'true') {
               console.error('[exec-invocation] Using fresh pipeline context:', {

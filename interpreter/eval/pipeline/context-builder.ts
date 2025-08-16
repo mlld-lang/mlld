@@ -7,7 +7,7 @@
 
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
-import type { StageContext, PipelineEvent } from './state-machine-simplified';
+import type { StageContext, PipelineEvent } from './state-machine';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
 
@@ -44,6 +44,14 @@ export async function createStageEnvironment(
   const userVisibleTotalStages = context.totalStages;
     
   // Set pipeline context in main environment
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.error('[SimplifiedContextBuilder] setPipelineContext:', {
+      stage: userVisibleStage,
+      contextAttempt: context.contextAttempt,
+      historyLength: context.history.length
+    });
+  }
+  
   env.setPipelineContext({
     stage: userVisibleStage,
     totalStages: userVisibleTotalStages,
@@ -51,8 +59,8 @@ export async function createStageEnvironment(
     input: input,
     previousOutputs: context.previousOutputs,
     format: format,
-    attemptCount: context.attempt,
-    attemptHistory: context.history
+    try: context.contextAttempt,
+    tries: context.history
   });
 
   // Create child environment

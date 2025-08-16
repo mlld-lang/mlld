@@ -416,6 +416,16 @@ export class PipelineExecutor {
       }
       
       // Re-execute the source function to get fresh input
+      // Pass the current pipeline context to the source function
+      // This ensures the source can access the updated @p context on retry
+      
+      // The source function needs access to the current pipeline context
+      // Set it on the environment before calling the source
+      const currentContext = stageEnv.getPipelineContext();
+      if (currentContext && this.env) {
+        this.env.setPipelineContext(currentContext);
+      }
+      
       const fresh = await this.sourceFunction();
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[PipelineExecutor] Source function returned fresh input:', fresh);

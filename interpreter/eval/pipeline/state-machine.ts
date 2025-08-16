@@ -488,26 +488,42 @@ export class PipelineStateMachine {
     let contextAttempt = 1;
     if (context) {
       if (stage === context.retryingStage) {
-        // For the retrying stage, count how many times it has executed
-        // This is the initial execution (1) + number of retries (attemptNumber)
+        // For the retrying stage, attemptNumber represents the retry count
+        // Add 1 to account for the initial execution before any retries
         contextAttempt = context.attemptNumber + 1;
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[SimplifiedStateMachine] Stage is retrying stage, using attemptNumber + 1:', {
+            stage,
+            retryingStage: context.retryingStage,
+            attemptNumber: context.attemptNumber,
+            contextAttempt
+          });
+        }
       } else if (stage === context.requestingStage) {
-        // For the requesting stage, count how many times we've executed it
-        // This is the number of successful retrying stage executions + 1
-        contextAttempt = context.allAttempts.length + 1;
+        // For the requesting stage, it also needs the +1 adjustment
+        // It executes initially (attempt 1), then after each retry
+        contextAttempt = context.attemptNumber + 1;
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[SimplifiedStateMachine] Stage is requesting stage, using attemptNumber + 1:', {
+            stage,
+            requestingStage: context.requestingStage,
+            attemptNumber: context.attemptNumber,
+            contextAttempt
+          });
+        }
       }
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[SimplifiedStateMachine] buildStageContext attempt:', {
-          stage,
-          requestingStage: context.requestingStage,
-          retryingStage: context.retryingStage,
-          attemptNumber: context.attemptNumber,
-          allAttemptsLength: context.allAttempts.length,
-          willUseAttempt: stage === context.requestingStage || stage === context.retryingStage,
-          contextAttempt
-        });
-      }
+    }
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[SimplifiedStateMachine] buildStageContext attempt:', {
+        stage,
+        requestingStage: context?.requestingStage,
+        retryingStage: context?.retryingStage,
+        attemptNumber: context?.attemptNumber,
+        allAttemptsLength: context?.allAttempts.length,
+        willUseAttempt: context && (stage === context.requestingStage || stage === context.retryingStage),
+        contextAttempt
+      });
     }
     
     // Global attempt count for this stage

@@ -84,6 +84,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     input: any;
     previousOutputs: string[];
     format?: string;
+    try?: number;
+    tries?: string[];
   };
   
   // Output management properties
@@ -677,6 +679,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     input: any;
     previousOutputs: string[];
     format?: string;
+    try?: number;
+    tries?: string[];
   }): void {
     this.pipelineContext = context;
   }
