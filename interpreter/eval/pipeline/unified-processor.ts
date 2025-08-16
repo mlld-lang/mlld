@@ -88,7 +88,7 @@ export async function processPipeline(
   
   // Create synthetic source stage if we have a retryable source
   const SOURCE_STAGE: PipelineCommand = {
-    rawIdentifier: '__source__',
+    rawIdentifier: 'source',
     identifier: [],
     args: [],
     fields: [],
@@ -110,8 +110,8 @@ export async function processPipeline(
     ? [SOURCE_STAGE, ...detected.pipeline]
     : detected.pipeline;
   
-  // Validate pipeline functions exist (skip __source__ stage)
-  const pipelineToValidate = normalizedPipeline.filter(cmd => cmd.rawIdentifier !== '__source__');
+  // Validate pipeline functions exist (skip source stage)
+  const pipelineToValidate = normalizedPipeline.filter(cmd => cmd.rawIdentifier !== 'source');
   await validatePipeline(pipelineToValidate, env, identifier);
   
   // Prepare input value for pipeline
@@ -143,7 +143,7 @@ export async function processPipeline(
   }
   
   // Store whether we added a synthetic source stage for context adjustment
-  const hasSyntheticSource = normalizedPipeline[0]?.rawIdentifier === '__source__';
+  const hasSyntheticSource = normalizedPipeline[0]?.rawIdentifier === 'source';
   
   // Execute pipeline with normalized stages
   try {

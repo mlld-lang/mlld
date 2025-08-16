@@ -5,6 +5,7 @@ import type { PipelineCommand } from '@core/types';
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
 import { createStageEnvironment } from './context-builder';
 import { MlldCommandExecutionError } from '@core/errors';
+import { preprocessPipeline, type LogicalStage, type PreprocessedPipeline } from './preprocessor';
 
 /**
  * Pipeline Executor - Handles actual execution using state machine
@@ -13,7 +14,9 @@ export class PipelineExecutor {
   private stateMachine: PipelineStateMachine;
   private env: Environment;
   private format?: string;
-  private pipeline: PipelineCommand[];
+  private pipeline: PipelineCommand[];  // Keep original for compatibility
+  private preprocessed: PreprocessedPipeline;  // NEW
+  private logicalStages: LogicalStage[];  // NEW
   private isRetryable: boolean;
   private sourceFunction?: () => Promise<string>; // Store source function for retries
   private hasSyntheticSource: boolean;
@@ -30,23 +33,39 @@ export class PipelineExecutor {
     hasSyntheticSource: boolean = false
   ) {
     if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[PipelineExecutor] Constructor:', {
-        pipelineLength: pipeline.length,
-        pipelineStages: pipeline.map(p => p.rawIdentifier || 'unknown'),
+      console.error('[PipelineExecutor] Constructor (with preprocessing):', {
+        originalPipelineLength: pipeline.length,
         isRetryable,
         hasSourceFunction: !!sourceFunction,
         hasSyntheticSource
       });
     }
     
-    // Use simplified state machine
-    this.stateMachine = new PipelineStateMachine(pipeline.length, isRetryable);
-    this.pipeline = pipeline;
+    // Preprocess pipeline to extract effects
+    this.preprocessed = preprocessPipeline(pipeline, isRetryable, sourceFunction);
+    this.logicalStages = this.preprocessed.logicalStages;
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[PipelineExecutor] After preprocessing:', {
+        logicalStagesCount: this.logicalStages.length,
+        totalBuiltins: this.preprocessed.totalBuiltins,
+        hasLeadingBuiltins: this.preprocessed.hasLeadingBuiltins,
+        requiresSyntheticSource: this.preprocessed.requiresSyntheticSource
+      });
+    }
+    
+    // Use logical stage count for state machine
+    this.stateMachine = new PipelineStateMachine(
+      this.logicalStages.length,
+      isRetryable || this.preprocessed.requiresSyntheticSource
+    );
+    
+    this.pipeline = pipeline;  // Keep original for debugging
     this.env = env;
     this.format = format;
     this.isRetryable = isRetryable;
     this.sourceFunction = sourceFunction;
-    this.hasSyntheticSource = hasSyntheticSource;
+    this.hasSyntheticSource = hasSyntheticSource || this.preprocessed.requiresSyntheticSource;
   }
 
   /**
@@ -57,10 +76,11 @@ export class PipelineExecutor {
     this.initialInput = initialInput;
     
     if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[PipelineExecutor] Pipeline start:', {
-        stages: this.pipeline.map(p => p.rawIdentifier),
-        hasSyntheticSource: this.hasSyntheticSource,
-        isRetryable: this.isRetryable
+      console.error('[PipelineExecutor] Starting execution:', {
+        logicalStages: this.logicalStages.map(s => ({
+          stage: s.command.rawIdentifier,
+          effects: s.effects.map(e => (e as any).command || e.rawIdentifier || 'unknown')
+        }))
       });
     }
     
@@ -72,27 +92,19 @@ export class PipelineExecutor {
     while (nextStep.type === 'EXECUTE_STAGE') {
       iteration++;
       
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error(`[PipelineExecutor] Iteration ${iteration}:`, {
-          stage: nextStep.stage,
-          stageId: this.pipeline[nextStep.stage]?.rawIdentifier,
-          contextAttempt: nextStep.context.contextAttempt
-        });
-      }
+      const logicalStage = this.logicalStages[nextStep.stage];
       
       if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[PipelineExecutor] Execute stage:', {
-          stage: nextStep.stage,
-          contextId: nextStep.context.contextId,
+        console.error(`[PipelineExecutor] Executing logical stage ${nextStep.stage}:`, {
+          command: logicalStage.command.rawIdentifier,
+          effectsCount: logicalStage.effects.length,
           contextAttempt: nextStep.context.contextAttempt,
-          inputLength: nextStep.input?.length,
-          commandId: this.pipeline[nextStep.stage]?.rawIdentifier
+          input: nextStep.input?.substring(0, 50)
         });
       }
       
-      const command = this.pipeline[nextStep.stage];
-      const result = await this.executeStage(
-        command,
+      const result = await this.executeLogicalStage(
+        logicalStage,
         nextStep.input,
         nextStep.context
       );
@@ -136,7 +148,7 @@ export class PipelineExecutor {
           `Pipeline failed at stage ${nextStep.stage + 1}: ${nextStep.error.message}`,
           undefined,
           {
-            command: this.pipeline[nextStep.stage]?.rawIdentifier || 'unknown',
+            command: this.logicalStages[nextStep.stage]?.command.rawIdentifier || 'unknown',
             exitCode: 1,
             duration: 0,
             workingDirectory: process.cwd()
@@ -161,7 +173,152 @@ export class PipelineExecutor {
   }
 
   /**
-   * Execute a single stage
+   * Execute a logical stage (command + effects)
+   */
+  private async executeLogicalStage(
+    logicalStage: LogicalStage,
+    input: string,
+    context: StageContext
+  ): Promise<StageResult> {
+    try {
+      // Set up execution environment
+      const stageEnv = await createStageEnvironment(
+        logicalStage.command, 
+        input, 
+        context, 
+        this.env, 
+        this.format,
+        this.stateMachine.getEvents(),
+        this.hasSyntheticSource,
+        this.allRetryHistory
+      );
+      
+      // Execute preceding effects (before stage, with current input)
+      for (const effect of logicalStage.effects) {
+        try {
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.error('[PipelineExecutor] Executing preceding effect:', {
+              command: (effect as any).command || effect.rawIdentifier,
+              inputLength: input.length
+            });
+          }
+          await this.executeBuiltinEffect(effect, input, stageEnv);
+        } catch (effectError) {
+          // Effects are best-effort - log but don't fail
+          console.error('[PipelineExecutor] Effect execution failed:', effectError);
+        }
+      }
+      
+      // Execute the command
+      let output: string;
+      
+      if (logicalStage.isImplicitIdentity) {
+        // Identity stage - just pass through
+        output = input;
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[PipelineExecutor] Implicit identity stage, passing through input');
+        }
+      } else {
+        // Normal command execution
+        output = await this.executeCommand(logicalStage.command, input, stageEnv);
+      }
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[PipelineExecutor] Stage output:', {
+          stage: context.stage,
+          output: typeof output === 'string' ? output.substring(0, 50) : output,
+          isRetry: this.isRetrySignal(output)
+        });
+      }
+      
+      // Check for retry signal (from command, not effects)
+      if (this.isRetrySignal(output)) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[PipelineExecutor] Retry detected at logical stage', context.stage);
+        }
+        const from = this.parseRetryScope(output);
+        return { type: 'retry', reason: 'Stage requested retry', from };
+      }
+
+      // Empty output terminates pipeline
+      if (!output || output.trim() === '') {
+        return { type: 'success', output: '' };
+      }
+
+      return { type: 'success', output: this.normalizeOutput(output) };
+
+    } catch (error) {
+      return { type: 'error', error: error as Error };
+    } finally {
+      this.env.clearPipelineContext();
+    }
+  }
+
+  /**
+   * Execute a builtin command as an effect
+   */
+  private async executeBuiltinEffect(
+    effect: PipelineCommand,
+    input: string,
+    env: Environment
+  ): Promise<void> {
+    // Create a child environment for the builtin to properly set @input
+    const builtinEnv = env.createChild();
+    
+    // Try to parse input as JSON for field access support
+    try {
+      const parsed = JSON.parse(input);
+      // If it's valid JSON, set @input as an object variable
+      const { createObjectVariable } = await import('@core/types/variable');
+      const inputVar = createObjectVariable(
+        'input',
+        parsed,
+        {
+          directive: 'var',
+          syntax: 'data',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          isSystem: true,
+          isPipelineInput: true
+        }
+      );
+      builtinEnv.setVariable('input', inputVar);
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[executeBuiltinEffect] Set @input as object:', parsed);
+      }
+    } catch {
+      // Not JSON or parse failed - set as text variable
+      const { createSimpleTextVariable } = await import('@core/types/variable');
+      const inputVar = createSimpleTextVariable(
+        'input',
+        input,
+        {
+          directive: 'var',
+          syntax: 'template',
+          hasInterpolation: false,
+          isMultiLine: false
+        },
+        {
+          isSystem: true,
+          isPipelineInput: true
+        }
+      );
+      builtinEnv.setVariable('input', inputVar);
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[executeBuiltinEffect] Set @input as text:', input);
+      }
+    }
+    
+    // Use existing executeBuiltinCommand but ignore the return value
+    await this.executeBuiltinCommand(effect, input, builtinEnv);
+  }
+
+  /**
+   * Execute a single stage (DEPRECATED - kept for backwards compatibility)
    */
   private async executeStage(
     command: PipelineCommand,
@@ -225,13 +382,19 @@ export class PipelineExecutor {
     input: string,
     stageEnv: Environment
   ): Promise<string> {
-    // Special handling for synthetic __source__ stage
-    if (command.rawIdentifier === '__source__') {
+    /**
+     * Special handling for synthetic source stage
+     * WHY: Enables retry of pipeline sources. When stage 2 says "retry", it goes back
+     *      to stage 1 (source) which can re-execute the original function.
+     * GOTCHA: First time returns cached result, subsequent times re-execute function
+     * CONTEXT: Only exists when pipeline starts with retryable function
+     */
+    if (command.rawIdentifier === 'source') {
       const firstTime = !this.sourceExecutedOnce;
       this.sourceExecutedOnce = true;
       
       if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[PipelineExecutor] Executing __source__ stage:', {
+        console.error('[PipelineExecutor] Executing source stage:', {
           firstTime,
           hasSourceFunction: !!this.sourceFunction,
           isRetryable: this.isRetryable
@@ -240,12 +403,16 @@ export class PipelineExecutor {
       
       if (firstTime) {
         // First execution - return the already-computed initial input
+        // WHY: The function was already executed to get the pipeline input,
+        //      no need to execute it twice on the first pass
         return this.initialInput;
       }
       
       // Retry execution - need to call source function
       if (!this.sourceFunction) {
-        throw new Error('Cannot retry stage 0: Input is not a function and cannot be retried');
+        // SECURITY: Prevents retry of non-retryable sources like literals
+        //           which could lead to inconsistent behavior
+        throw new Error('Cannot retry stage 1 (source): Input is not a function and cannot be retried');
       }
       
       // Re-execute the source function to get fresh input
@@ -491,15 +658,8 @@ export class PipelineExecutor {
       return await interpolate([arg], env);
     };
 
-    // Mark this stage as non-retryable in pipeline context
-    const pipelineContext = env.getPipelineContext();
-    if (pipelineContext) {
-      env.setPipelineContext({
-        ...pipelineContext,
-        isPassThrough: true,  // Mark as pass-through
-        nonRetryable: true    // Mark as non-retryable
-      });
-    }
+    // Note: Builtin commands are pass-through stages that emit effects
+    // but return input unchanged. They don't affect retry logic.
 
     // Execute the builtin command based on type
     switch (command.command) {

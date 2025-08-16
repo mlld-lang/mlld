@@ -294,13 +294,13 @@ export class PipelineStateMachine {
     // Special case: Stage 0 self-retry (synthetic source retrying itself)
     if (stage === 0 && targetStage === 0) {
       if (!this.isStage0Retryable) {
-        return this.handleAbort('Stage 0 cannot retry: Input is not a function');
+        return this.handleAbort('Stage 1 cannot retry: Input is not a function');
       }
       
       // Use simplified retry tracking for stage 0
       const globalRetries = this.state.globalStageRetryCount.get(0) || 0;
       if (globalRetries >= this.maxGlobalRetriesPerStage) {
-        return this.handleAbort(`Stage 0 exceeded global retry limit (${this.maxGlobalRetriesPerStage})`);
+        return this.handleAbort(`Stage 1 exceeded global retry limit (${this.maxGlobalRetriesPerStage})`);
       }
       
       // Increment global count
@@ -393,7 +393,7 @@ export class PipelineStateMachine {
     const globalRetries = this.state.globalStageRetryCount.get(targetStage) || 0;
     if (globalRetries >= this.maxGlobalRetriesPerStage) {
       return this.handleAbort(
-        `Stage ${targetStage} exceeded global retry limit (${this.maxGlobalRetriesPerStage})`
+        `Stage ${targetStage + 1} exceeded global retry limit (${this.maxGlobalRetriesPerStage})`
       );
     }
     

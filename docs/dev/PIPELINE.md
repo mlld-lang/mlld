@@ -419,8 +419,22 @@ return createObjectVariable(
 ```
 **Why**: Hand-rolled Variables violate type contracts and cause field access failures.
 
-2. **Synthetic Source Stage (`@__source__`)**
-When a pipeline has a retryable source (function), a synthetic stage is added internally. This affects stage numbering in debug output.
+2. **Synthetic Source Stage (`__source__`)**
+
+The synthetic source is a hidden stage 0 that enables retry semantics for pipeline sources.
+
+**When it's added**: When a pipeline starts with a retryable function (e.g., `@generate() | @validate`)
+
+**What it does**:
+- First execution: Returns the already-computed initial value from the function
+- On retry: Re-executes the source function to get fresh data
+- For non-retryable sources (literals, variables): Throws error if retry is attempted
+
+**Why it exists**: Enables uniform retry semantics. When `@validate` says `retry`, it goes back one step to `__source__`, which re-runs `@generate()`. Without this, retryable vs non-retryable sources would need different handling.
+
+**Key principle**: `retry` means "send the soup back to the kitchen" - retry the thing that sent me this input, not restart from the beginning.
+
+**Stage numbering impact**: User-visible stages start at 1, hiding the synthetic stage 0 from view.
 
 3. **Context Lifecycle**
 Context should be cleared when the REQUESTING stage completes, not the retrying stage.

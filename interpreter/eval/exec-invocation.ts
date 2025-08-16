@@ -1107,21 +1107,66 @@ export async function evaluateExecInvocation(
       // where the ExecInvocation itself becomes stage 0, retryable
       const { executePipeline } = await import('./pipeline');
       
+      // Check if any arguments reference pipeline context
+      const usesPipelineContext = args.some((arg: any) => 
+        arg && typeof arg === 'object' && arg.type === 'VariableReference' && 
+        (arg.identifier === 'p' || arg.identifier === 'pipeline')
+      );
+      
       // Create a source function that re-executes this ExecInvocation (without the pipeline)
       const sourceFunction = async () => {
         if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[exec-invocation] sourceFunction called - re-executing ExecInvocation');
+          console.error('[exec-invocation] sourceFunction called - re-executing ExecInvocation', {
+            usesPipelineContext,
+            originalArgs: args.map((a: any) => a?.type === 'VariableReference' ? `@${a.identifier}` : 'other')
+          });
         }
+        
+        let evalEnv = execEnv;
+        
+        if (usesPipelineContext) {
+          // Create fresh environment with current pipeline context
+          const freshEnv = env.createChild();
+          
+          // Copy non-pipeline parameters from original execution
+          const allVars = execEnv.getAllVariables();
+          for (const [name, variable] of allVars) {
+            if (name !== 'p' && name !== 'pipeline') {
+              freshEnv.setVariable(name, variable);
+            }
+          }
+          
+          // Get CURRENT pipeline context (not the captured one)
+          const currentContext = env.getPipelineContext();
+          if (currentContext) {
+            if (process.env.MLLD_DEBUG === 'true') {
+              console.error('[exec-invocation] Using fresh pipeline context:', {
+                try: currentContext.try,
+                stage: currentContext.stage,
+                contextKeys: Object.keys(currentContext)
+              });
+            }
+            const { createObjectVariable } = await import('@core/types/variable');
+            const pipelineVar = createObjectVariable('p', currentContext, false, undefined, { 
+              isPipelineContext: true,
+              isSystem: true 
+            });
+            freshEnv.setVariable('p', pipelineVar);
+            freshEnv.setVariable('pipeline', pipelineVar);
+          }
+          
+          evalEnv = freshEnv;
+        }
+        
         // Re-execute this same ExecInvocation but without the pipeline
-        // IMPORTANT: Use execEnv not env, so the function parameters are available
         const nodeWithoutPipeline = { ...node, withClause: undefined };
-        const freshResult = await evaluateExecInvocation(nodeWithoutPipeline, execEnv);
+        const freshResult = await evaluateExecInvocation(nodeWithoutPipeline, evalEnv);
         return typeof freshResult.value === 'string' ? freshResult.value : JSON.stringify(freshResult.value);
       };
       
       // Create synthetic source stage for retryable pipeline
       const SOURCE_STAGE = {
-        rawIdentifier: '__source__',
+        rawIdentifier: 'source',
         identifier: [],
         args: [],
         fields: [],

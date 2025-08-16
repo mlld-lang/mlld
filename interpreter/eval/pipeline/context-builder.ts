@@ -38,14 +38,10 @@ export async function createStageEnvironment(
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>
 ): Promise<Environment> {
-  // Adjust stage number for synthetic source (hide from user)
-  const userVisibleStage = hasSyntheticSource && command.rawIdentifier !== '__source__'
-    ? context.stage - 1
-    : context.stage;
-    
-  const userVisibleTotalStages = hasSyntheticSource 
-    ? context.totalStages - 1 
-    : context.totalStages;
+  // Stage numbers are now direct - no adjustment needed
+  // The source is always visible as stage 1
+  const userVisibleStage = context.stage;
+  const userVisibleTotalStages = context.totalStages;
     
   // Set pipeline context in main environment
   env.setPipelineContext({
@@ -175,29 +171,16 @@ function createSimplifiedPipelineContext(
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>
 ): SimplifiedPipelineContext {
-  // Adjust for synthetic source
-  const userVisibleStage = hasSyntheticSource && context.stage > 0 
-    ? context.stage - 1 
-    : context.stage;
+  // Stage numbers are now direct - no adjustment needed
+  // The source is always visible as stage 1
+  const userVisibleStage = context.stage;
     
-  // Filter out synthetic source from outputs
-  const userVisibleOutputs = hasSyntheticSource && context.previousOutputs.length > 0
-    ? context.previousOutputs.slice(1)
-    : context.previousOutputs;
+  // No filtering of outputs - all stages are visible
+  const userVisibleOutputs = context.previousOutputs;
     
-  // Build outputs object
+  // Build outputs object - direct copy, no adjustment
   const outputs: any = {};
-  if (hasSyntheticSource) {
-    // Shift indices to hide synthetic source
-    Object.entries(context.outputs).forEach(([key, value]) => {
-      const index = parseInt(key);
-      if (!isNaN(index) && index > 0) {
-        outputs[index - 1] = value;
-      }
-    });
-  } else {
-    Object.assign(outputs, context.outputs);
-  }
+  Object.assign(outputs, context.outputs);
   
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[SimplifiedContextBuilder] Creating context:', {

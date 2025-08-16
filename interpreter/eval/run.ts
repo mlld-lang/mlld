@@ -608,13 +608,20 @@ export async function evaluateRun(
     if (withClause.pipeline && withClause.pipeline.length > 0) {
       // Use unified pipeline processor
       const { processPipeline } = await import('./pipeline/unified-processor');
+      
+      // Determine if the source is retryable
+      // - runExec (function calls like @claude()) are retryable
+      // - runCommand (shell commands) and runCode (js/node blocks) are also retryable
+      // All run sources should be retryable since they can produce different outputs
+      const isRetryable = true;
+      
       output = await processPipeline({
         value: output,
         env,
         directive,
         pipeline: withClause.pipeline,
         format: withClause.format as string | undefined,
-        isRetryable: false, // run command output is not directly retryable
+        isRetryable,
         location: directive.location
       });
     }
