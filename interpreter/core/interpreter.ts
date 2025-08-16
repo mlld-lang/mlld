@@ -1181,7 +1181,16 @@ export async function interpolate(
           // Each element is escaped individually
           const strategy = EscapingStrategyFactory.getStrategy(context);
           const escapedElements = value.map(elem => {
-            const elemStr = typeof elem === 'string' ? elem : String(elem);
+            let elemStr: string;
+            if (typeof elem === 'string') {
+              elemStr = elem;
+            } else if (typeof elem === 'object' && elem !== null) {
+              // For objects and nested arrays, use JSON.stringify
+              elemStr = JSON.stringify(elem);
+            } else {
+              // For primitives (numbers, booleans, null), use String conversion
+              elemStr = String(elem);
+            }
             return strategy.escape(elemStr);
           });
           stringValue = escapedElements.join(' ');

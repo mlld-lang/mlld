@@ -256,6 +256,11 @@ export class PipelineExecutor {
       return fresh;
     }
     
+    // Handle built-in pipeline commands (show, log, output)
+    if ('type' in command && command.type === 'builtinCommand') {
+      return await this.executeBuiltinCommand(command, input, stageEnv);
+    }
+    
     // Resolve the command reference
     const commandVar = await this.resolveCommandReference(command, stageEnv);
     
@@ -416,6 +421,136 @@ export class PipelineExecutor {
   ): Promise<string> {
     const { executeCommandVariable } = await import('./command-execution');
     return await executeCommandVariable(commandVar, args, env, stdinInput);
+  }
+
+  /**
+   * Execute a built-in pipeline command (show, log, output)
+   * These are pass-through commands that perform side effects but return input unchanged
+   */
+  private async executeBuiltinCommand(
+    command: any, // PipelineBuiltinCommand
+    input: string,
+    env: Environment
+  ): Promise<string> {
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[PipelineExecutor] Executing builtin command:', {
+        command: command.command,
+        hasArgs: !!command.args,
+        hasTarget: !!command.target
+      });
+    }
+
+    // Resolve content for show/log commands
+    const resolveContent = async (arg: any): Promise<string> => {
+      // If no argument, use input
+      if (!arg) return input;
+
+      // Handle @input reference
+      if (arg.type === 'input') return input;
+      
+      // Handle @input.field access
+      if (arg.type === 'inputField') {
+        try {
+          const parsed = JSON.parse(input);
+          let value = parsed;
+          for (const field of arg.fields) {
+            if (field.type === 'field' && typeof value === 'object' && value !== null) {
+              value = value[field.value];
+            } else if (field.type === 'arrayIndex' && Array.isArray(value)) {
+              value = value[field.value];
+            }
+          }
+          return typeof value === 'string' ? value : JSON.stringify(value);
+        } catch {
+          return input; // Fall back to raw input if not JSON
+        }
+      }
+
+      // Handle variables and templates
+      if (arg.type === 'VariableReference') {
+        const variable = env.getVariable(arg.identifier);
+        if (variable) {
+          const { extractVariableValue } = await import('../../utils/variable-resolution');
+          const value = await extractVariableValue(variable, env);
+          return typeof value === 'string' ? value : JSON.stringify(value);
+        }
+        return `@${arg.identifier}`;
+      }
+
+      // Handle string literals
+      if (typeof arg === 'string') return arg;
+      
+      // Handle template structures (from parsed string literals)
+      if (arg && typeof arg === 'object' && arg.content && arg.wrapperType) {
+        const { interpolate } = await import('../../core/interpreter');
+        return await interpolate(arg.content, env);
+      }
+      
+      // Handle other content
+      const { interpolate } = await import('../../core/interpreter');
+      return await interpolate([arg], env);
+    };
+
+    // Mark this stage as non-retryable in pipeline context
+    const pipelineContext = env.getPipelineContext();
+    if (pipelineContext) {
+      env.setPipelineContext({
+        ...pipelineContext,
+        isPassThrough: true,  // Mark as pass-through
+        nonRetryable: true    // Mark as non-retryable
+      });
+    }
+
+    // Execute the builtin command based on type
+    switch (command.command) {
+      case 'show': {
+        const content = command.args && command.args.length > 0 
+          ? await resolveContent(command.args[0])
+          : input;
+        // Emit as 'both' effect (stdout + document)
+        // Add newline to match behavior of regular /show directive
+        env.emitEffect('both', content + '\n');
+        return input; // Pass through unchanged
+      }
+
+      case 'log': {
+        const content = command.args && command.args.length > 0
+          ? await resolveContent(command.args[0])
+          : input;
+        // Emit as 'stderr' effect
+        // Add newline only if content doesn't already end with one
+        const outputContent = content.endsWith('\n') ? content : content + '\n';
+        env.emitEffect('stderr', outputContent);
+        return input; // Pass through unchanged
+      }
+
+      case 'output': {
+        const target = command.target;
+        const outputContent = input.endsWith('\n') ? input : input + '\n';
+        if (!target) {
+          // Default to stdout
+          env.emitEffect('stdout', outputContent);
+        } else if (target.type === 'stream') {
+          if (target.stream === 'stderr') {
+            env.emitEffect('stderr', outputContent);
+          } else {
+            env.emitEffect('stdout', outputContent);
+          }
+        } else if (target.type === 'file') {
+          // Write to file
+          const path = target.path;
+          // Use file system service to write file
+          const fs = await import('fs/promises');
+          await fs.writeFile(path, input, 'utf-8');
+          // Also emit a file effect for tracking
+          env.emitEffect('file', input, { path });
+        }
+        return input; // Pass through unchanged
+      }
+
+      default:
+        throw new Error(`Unknown builtin command: ${command.command}`);
+    }
   }
 
   /**

@@ -184,6 +184,11 @@ async function validatePipeline(
   identifier?: string
 ): Promise<void> {
   for (const cmd of pipeline) {
+    // Skip validation for builtin commands (show, log, output)
+    if ('type' in cmd && cmd.type === 'builtinCommand') {
+      continue;
+    }
+    
     const funcName = cmd.rawIdentifier;
     
     // Check if it's a built-in transformer

@@ -12,8 +12,13 @@ export async function resolveCommandReference(
   command: PipelineCommand,
   env: Environment
 ): Promise<any> {
+  // Skip builtin commands - they don't have identifiers
+  if ('type' in command && command.type === 'builtinCommand') {
+    return null;
+  }
+  
   // The command.identifier is already an array of nodes from the parser
-  if (!command.identifier || command.identifier.length === 0) {
+  if (!('identifier' in command) || !command.identifier || command.identifier.length === 0) {
     return null;
   }
   

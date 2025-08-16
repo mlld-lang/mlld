@@ -16,15 +16,43 @@ export interface WithClause {
 }
 
 /**
- * A pipeline command reference
+ * Output target for pipeline output command
  */
-export interface PipelineCommand {
+export interface OutputTarget {
+  type: 'file' | 'stream';
+  path?: string;  // For file type
+  stream?: 'stdout' | 'stderr';  // For stream type
+  raw: string;  // Raw representation for display
+}
+
+/**
+ * Pipeline builtin command (show, log, output)
+ */
+export interface PipelineBuiltinCommand {
+  type: 'builtinCommand';
+  command: 'show' | 'log' | 'output';
+  args?: any[];  // Arguments for show/log
+  target?: OutputTarget;  // For output command
+  rawIdentifier: string;
+  passThrough: boolean;  // Always true for builtins
+}
+
+/**
+ * Regular pipeline command reference
+ */
+export interface PipelineCommandRef {
+  type?: 'commandRef';  // Optional for backwards compatibility
   identifier: VariableNodeArray;
   args: VariableNodeArray[];
   fields?: any[]; // Field access array
   rawIdentifier: string;
   rawArgs: string[];
 }
+
+/**
+ * A pipeline command - either builtin or reference
+ */
+export type PipelineCommand = PipelineBuiltinCommand | PipelineCommandRef;
 
 /**
  * Dependency map by language

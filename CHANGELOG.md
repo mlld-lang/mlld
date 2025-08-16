@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc39]
 ### Added
 - **`/log` directive**: New syntactic sugar for `/output to stdout` for more concise console output (#357)
+- **Pipeline builtin commands**: `show`, `log`, and `output` directives now work as pass-through pipeline stages (#356)
+  - Pass-through behavior: Commands emit side effects while returning input unchanged for next pipeline stage
+  - Pipeline integration: `| show`, `| log`, `| output` syntax in variable assignments and pipelines
+  - Effect emission: Commands properly emit to stdout, stderr, or files while preserving pipeline flow
+  - Retry compatibility: Builtin commands marked as non-retryable pass-through stages in retry contexts
+  - Example: `/var @result = "data" | show | log "Processing..." | @transform | output`
 
 ### Fixed
 - **When expression behavior**: Bare `when` expressions now correctly evaluate ALL matching conditions

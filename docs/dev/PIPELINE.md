@@ -1,9 +1,9 @@
 ---
-updated: 2025-01-13
-tags: #arch, #pipeline, #retry, #interpreter
-related-docs: PIPELINE-ARCHITECTURE.md, RETRY-PLAN.md, docs/slash/var.md
-related-code: interpreter/eval/pipeline/*.ts, interpreter/eval/when-expression.ts
-related-types: core/types { PipelineState, RetryContext, PipelineInput }
+updated: 2025-01-16
+tags: #arch, #pipeline, #retry, #interpreter, #effects
+related-docs: docs/slash/var.md, docs/slash/show.md, docs/slash/log.md
+related-code: interpreter/eval/pipeline/*.ts, interpreter/eval/when-expression.ts, interpreter/effect-handler.ts
+related-types: core/types { PipelineState, RetryContext, PipelineInput, EffectType }
 ---
 
 # Pipeline Architecture in mlld
@@ -16,6 +16,8 @@ mlld's pipeline system enables composable data transformations with automatic re
 - **Context variables** (`@pipeline`, `@p`) provide execution state
 - **Format support** for JSON, CSV, XML parsing
 - **No nested retries** - simplified single-context model
+- **Effect-based output** - streaming and buffered document generation
+- **Built-in commands** - `/log` for console output, `/show` for display with execution
 
 ## Overview
 
@@ -423,6 +425,16 @@ When a pipeline has a retryable source (function), a synthetic stage is added in
 3. **Context Lifecycle**
 Context should be cleared when the REQUESTING stage completes, not the retrying stage.
 
+4. **Effect Emission Context**
+```typescript
+// CRITICAL: Expression nodes must not emit effects
+if (context?.isExpression) return result;  // Skip effect emission
+
+// CRITICAL: Import evaluation must suppress effects
+await evaluate(importAst, env, { isExpression: true });
+```
+**Why**: Without this, imports emit markdown content as side effects.
+
 ### Debugging Techniques
 
 ```bash
@@ -433,6 +445,8 @@ MLLD_DEBUG=true npm test <test-name>
 DEBUG_EXEC=true      # Execution details
 DEBUG_WHEN=true      # When expression evaluation
 DEBUG_PIPELINE=true  # Pipeline-specific debugging
+DEBUG_FOR=true       # For loop execution
+MLLD_STREAMING=true  # Enable streaming output (see effects immediately)
 ```
 
 ### Common Failure Patterns
@@ -448,6 +462,18 @@ DEBUG_PIPELINE=true  # Pipeline-specific debugging
 3. **Global Retry Limit Hit Immediately**
    - **Cause**: Double-counting retries or context not being created properly
    - **Fix**: Check retry counting logic
+
+4. **AST Nodes Appearing in Output**
+   - **Cause**: Expression nodes being stringified and emitted as effects
+   - **Fix**: Pass `{ isExpression: true }` context for non-document nodes
+
+5. **Import Side Effects**
+   - **Cause**: Module evaluation emitting document effects
+   - **Fix**: Evaluate imports with `{ isExpression: true }` context
+
+6. **Missing Output from `/run`**
+   - **Current**: `/run` temporarily emits effects for backward compatibility
+   - **Future**: Use `/show {command}` for output, `/run` for silent execution
 
 ## Pipeline Format Feature (v1.4.10+)
 
@@ -1084,6 +1110,144 @@ When implementing new pipeline features:
 6. **Test Coverage**: Add grammar, unit, and integration tests
 7. **Documentation**: Update user guides and examples
 
+## Effect-Based Output Architecture (v2.0.0-rc39+)
+
+The pipeline system integrates with mlld's effect-based output architecture, which separates document generation from computation.
+
+### Core Architecture
+
+**EffectHandler** (`interpreter/effect-handler.ts`) manages all output:
+- Maintains document buffer for final markdown generation
+- Handles streaming vs buffered modes
+- Routes effects to appropriate destinations (stdout, stderr, document, files)
+
+**Key Principle**: AST nodes fall into two categories:
+1. **Document nodes** - Emit effects (Text, Newline, CodeFence, directive results)
+2. **Expression nodes** - Evaluated but don't emit (VariableReference, arrays, templates)
+
+The `evaluate()` function uses `isExpression: true` context to distinguish these.
+
+### Effect Types
+
+```typescript
+type EffectType = 'doc' | 'stdout' | 'stderr' | 'both' | 'file';
+```
+
+- **`doc`**: Document content (markdown, text nodes)
+- **`stdout`**: Standard output stream
+- **`stderr`**: Error output stream  
+- **`both`**: Both stdout and document (used by `/show`)
+- **`file`**: File output operations
+
+### Effect Emission Flow
+
+1. **Directives emit effects**: `/show` → `both`, `/output` → appropriate type, `/log` → `stdout`
+2. **Text nodes emit `doc` effects**: Plain text, newlines, code fences
+3. **Expressions don't emit**: Variables, arrays, function calls evaluated but not emitted
+4. **Imports suppress effects**: Modules evaluated with `isExpression: true` to prevent side effects
+
+```typescript
+// In evaluate() function
+if (!context?.isExpression) {
+  if (node.type === 'Text' || node.type === 'Newline' || node.type === 'CodeFence') {
+    env.emitEffect('doc', content);
+  }
+}
+
+// In import evaluation
+const result = await evaluate(ast, moduleEnv, { isExpression: true });
+```
+
+### Streaming Support
+
+```bash
+MLLD_STREAMING=true mlld script.mld  # Output appears immediately
+mlld script.mld                       # Output buffered until end
+```
+
+Without streaming, effects are buffered and output at the end. With streaming, output appears immediately as it's generated.
+
+## Output Directives
+
+### /log Directive (v2.0.0-rc39+)
+
+The `/log` directive is syntactic sugar for `/output to stdout`:
+
+```mlld
+/log "Processing item..."  # Outputs to console only
+/log @result               # Logs variable value to console
+```
+
+Equivalent to:
+```mlld
+/output "Processing item..." to stdout
+/output @result to stdout
+```
+
+### /show with Command Execution (v2.0.0-rc39+)
+
+The `/show` directive now supports command and code execution that displays output:
+
+```mlld
+# Execute command and display output
+/show {echo "Hello World"}
+
+# Execute JavaScript and display result
+/show js {
+  const result = calculateSomething();
+  return result;
+}
+
+# Traditional variable display
+/show @variable
+
+# With pipeline transformations
+/show @data | @json | @pretty
+```
+
+**Key architectural distinction**:
+- `/show {command}` - Executes AND emits 'both' effect (stdout + document)
+- `/run {command}` - Executes silently, captures output for variables only
+- `/run` temporarily emits effects for backward compatibility (will be removed)
+
+### /when with 'none' Keyword (v2.0.0-rc39+)
+
+The `/when` directive now supports a `none` keyword for semantic fallback:
+
+```mlld
+/when [
+  @level > 10 => show "high"
+  @level > 5 => show "medium"
+  none => show "default"  # Executes when no other conditions match
+]
+```
+
+Rules for `none`:
+- Must appear as the last condition(s) in a when block
+- Cannot appear after wildcard `*` (would be unreachable)
+- Multiple `none` conditions allowed at end (all execute in bare `/when`, first in `/when first`)
+- Works in `/exe` when expressions
+
+### When Expression Behavior (v2.0.0-rc39+)
+
+Clear distinction between bare `when` and `when first`:
+
+```mlld
+# Bare when - evaluates ALL matching conditions
+/when [
+  @x > 5 => show "high"    # Executes if true
+  @x > 3 => show "medium"  # Also executes if true
+  @x > 0 => show "low"     # Also executes if true
+]
+
+# When first - stops at first match (switch-like)
+/when first [
+  @x > 5 => show "high"    # Executes and stops if true
+  @x > 3 => show "medium"  # Only if first didn't match
+  @x > 0 => show "low"     # Only if none above matched
+]
+```
+
 ## Summary
 
 mlld's pipeline architecture provides a cohesive system for data processing through:
@@ -1092,5 +1256,7 @@ mlld's pipeline architecture provides a cohesive system for data processing thro
 - **Branching** with @when for conditional flows  
 - **Transformation** with pipelines for data processing
 - **Validation** with dependency checking
+- **Effects** for streaming and buffered output
+- **Output control** with `/log`, `/show`, and `/output` directives
 
 These features share common patterns while maintaining distinct responsibilities, creating a powerful yet understandable system for building complex data pipelines in a declarative way.

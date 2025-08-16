@@ -61,10 +61,14 @@ PipelineCommandList
       return [first, ...rest];
     }
 
-// Single pipeline command (command reference with @input support)
+// Single pipeline command (builtin commands or command reference with @input support)
 // Uses UnifiedReferenceForPipeline to prevent nested pipelines
 PipelineCommand
-  = ref:UnifiedReferenceForPipeline {
+  = builtin:PipelineBuiltinCommand {
+      helpers.debug('PipelineCommand matched built-in', { builtin });
+      return builtin;
+    }
+  / ref:UnifiedReferenceForPipeline {
       helpers.debug('PipelineCommand matched unified reference', { ref });
       
       // Handle ExecInvocation, VariableReferenceWithTail, and VariableReference types

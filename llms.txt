@@ -1083,10 +1083,10 @@ Functions in pipelines can access @pipeline context and use retry mechanism:
 @pipeline.stage   # Current stage number
 @pipeline.length  # Number of completed stages
 
->> Functions can return 'retry' to re-execute current stage
+>> Functions can return 'retry' to request re-execution of the PREVIOUS stage
 /exe @validator(input) = when: [
   @isValid(@input) => @input
-  @pipeline.try < 3 => retry      # Re-execute if less than 3 attempts
+  @pipeline.try < 3 => retry      # "Previous stage, please try again"  
   * => "fallback"
 ]
 
@@ -1094,7 +1094,7 @@ Functions in pipelines can access @pipeline context and use retry mechanism:
 /exe @selectBest(response) = when: [
   @response.score > 8 => @response
   @pipeline.try < 3 => retry
-  * => @selectHighestScore(@pipeline.tries)  # Select from all attempts
+  * => @selectHighestScore(@pipeline.tries)
 ]
 
 /var @result = @prompt | @generate | @selectBest

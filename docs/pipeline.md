@@ -223,7 +223,7 @@ Access pipeline execution state within functions:
 
 ### Retry Mechanism
 
-Functions can return `retry` to re-execute the current pipeline stage:
+Functions can return `retry` to request re-execution of the **previous** pipeline stage:
 
 ```mlld
 /exe @validator(input) = when: [
@@ -233,7 +233,21 @@ Functions can return `retry` to re-execute the current pipeline stage:
 ]
 
 /var @result = @data | @transform | @validator
+#                        ↑            ↑
+#                   Gets retried  Requests retry
 ```
+
+### How Retry Works
+
+Retry is backwards-looking: stage N returns `retry` to re-execute stage N-1.
+
+```mlld
+/var @result = @generate() | @validate | @process
+#                  ↑            ↑          ↑
+#              gets retried   returns retry  sees result
+```
+
+The stage returning `retry` evaluates previous stage output. If unsatisfactory, requests re-execution.
 
 #### Examples
 
@@ -270,12 +284,58 @@ Functions can return `retry` to re-execute the current pipeline stage:
 # Returns array of 5 different responses
 ```
 
+### Context Scope
+
+`@pipeline.try` and `@pipeline.tries` are context-local. Context created when stage first returns `retry`. Context cleared when requesting stage completes.
+
+```mlld
+/exe @stage1(input) = `result: @input`
+/exe @stage2(input) = when first [
+  @pipeline.try < 3 => retry    # creates retry context for stage1
+  * => @input
+]
+/exe @stage3(input) = `final: @input (try: @pipeline.try)`
+
+/var @result = @getData() | @stage1 | @stage2 | @stage3
+```
+
+Execution:
+- Stage1: try=1 (no context)
+- Stage2: try=1 (creates context)
+- Stage1: try=2 (in context) 
+- Stage2: try=2 (in context), succeeds, clears context
+- Stage3: try=1 (new context)
+
+Stages outside retry context see `try: 1, tries: []`.
+
+### Effect Stages
+
+Effect stages (`show`, `log`, `output`) are transparent to retry logic. They pass input unchanged.
+
+```mlld
+# If C requests retry, it retries B (not show)
+/var @result = @generate() | show @input | @validate | @finalize
+#                  ↑                        ↑          
+#              gets retried              requests retry
+```
+
+### Stage 0 Retryability
+
+Stage 0 retryable only if input from function call:
+
+```mlld
+/var @result = @generateData() | @validator    # ✅ retryable
+/var @result = "hello" | @validator            # ❌ error
+```
+
+Functions can produce different outputs; literals cannot.
+
 ### Important Notes
 
 - `retry` only works within pipeline context
 - Maximum 10 retries per stage (hard limit)
-- Attempt outputs stored in `@pipeline.tries`
-- Counters reset when moving to next stage
+- Attempt outputs stored in `@pipeline.tries` (context-local)
+- Context boundaries determine when counters reset
 - Empty output terminates pipeline early
 
 ## See Also

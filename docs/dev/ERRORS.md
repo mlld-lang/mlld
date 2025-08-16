@@ -46,11 +46,10 @@ Both generated files contain:
 
 - **Parse errors**: Enhanced at parse time in `interpreter/index.ts`
 - **JS/Node errors**: Enhanced at execution time in `JavaScriptExecutor` and `NodeExecutor`
-- **Testing**: Errors are validated against expected patterns during regular test runs
 
 ## Principles
 
-- Error messages are part of the specification (tested like features)
+- Error messages are part of the specification
 - Patterns are pure functions with no dependencies
 - Templates define the user-facing messages
 - Everything compiles at build time for performance
@@ -126,11 +125,6 @@ export const pattern = {
     };
   }
 };
-```
-
-#### 3. Write error.md template
-```
-Variables must start with @. Found invalid syntax for '${varName}'
 ```
 
 ### JavaScript/Node Error Patterns
