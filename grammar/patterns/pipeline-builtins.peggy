@@ -48,11 +48,23 @@ LogPipelineCommand
 // -------------------------------------------------------------
 
 OutputPipelineCommand
-  = "output" _ "to" _ target:OutputPipelineTarget {
+  = "output" args:(_ arg:PipelineBuiltinArgument { return arg; })? _ "to" _ target:OutputPipelineTarget {
+      helpers.debug('OutputPipelineCommand matched with source and target', { args, target });
+      return {
+        type: 'builtinCommand',
+        command: 'output',
+        args: args ? [args] : [],
+        target: target,
+        rawIdentifier: args ? `output ${args} to ${target.raw}` : `output to ${target.raw}`,
+        passThrough: true
+      };
+    }
+  / "output" _ "to" _ target:OutputPipelineTarget {
       helpers.debug('OutputPipelineCommand matched with target', { target });
       return {
         type: 'builtinCommand',
         command: 'output',
+        args: [],
         target: target,
         rawIdentifier: `output to ${target.raw}`,
         passThrough: true
@@ -63,6 +75,7 @@ OutputPipelineCommand
       return {
         type: 'builtinCommand',
         command: 'output',
+        args: [],
         target: target,
         rawIdentifier: `output ${target.raw}`,
         passThrough: true
@@ -74,6 +87,7 @@ OutputPipelineCommand
       return {
         type: 'builtinCommand',
         command: 'output',
+        args: [],
         target: { type: 'stream', stream: 'stdout', raw: 'stdout' },
         rawIdentifier: 'output',
         passThrough: true

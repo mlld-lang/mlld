@@ -195,19 +195,14 @@ export class PipelineExecutor {
       
       // Execute preceding effects (before stage, with current input)
       for (const effect of logicalStage.effects) {
-        try {
-          if (process.env.MLLD_DEBUG === 'true') {
-            console.error('[PipelineExecutor] Executing preceding effect:', {
-              command: (effect as any).command || effect.rawIdentifier,
-              inputLength: input.length
-            });
-          }
-          await this.executeBuiltinEffect(effect, input, stageEnv);
-        } catch (effectError) {
-          // Effects are best-effort - log but don't fail
-          // This is intentional to prevent side-effects from breaking pipelines
-          console.error('[PipelineExecutor] Effect execution failed:', effectError);
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[PipelineExecutor] Executing preceding effect:', {
+            command: (effect as any).command || effect.rawIdentifier,
+            inputLength: input.length
+          });
         }
+        // Errors in builtins should fail the pipeline for correctness
+        await this.executeBuiltinEffect(effect, input, stageEnv);
       }
       
       // Execute the command
