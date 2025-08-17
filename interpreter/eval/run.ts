@@ -615,8 +615,32 @@ export async function evaluateRun(
       // All run sources should be retryable since they can produce different outputs
       const isRetryable = true;
       
-      output = await processPipeline({
+      // Create a directive without the pipeline for source re-execution
+      // This prevents infinite recursion when retrying the source
+      const sourceDirective = {
+        ...directive,
+        meta: {
+          ...directive.meta,
+          withClause: undefined  // Remove pipeline from source
+        },
+        values: {
+          ...directive.values,
+          withClause: undefined  // Remove pipeline from source
+        }
+      };
+      
+      // Wrap the output with metadata containing a sourceFunction
+      // This enables proper retry behavior for /run directives with pipelines
+      const wrappedValue = {
+        type: 'wrapped',
         value: output,
+        metadata: {
+          sourceFunction: sourceDirective  // Store directive without pipeline
+        }
+      };
+      
+      output = await processPipeline({
+        value: wrappedValue,
         env,
         directive,
         pipeline: withClause.pipeline,

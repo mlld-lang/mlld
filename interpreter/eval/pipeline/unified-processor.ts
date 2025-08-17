@@ -136,6 +136,11 @@ export async function processPipeline(
         const { evaluateCodeExecution } = await import('../code-execution');
         const result = await evaluateCodeExecution(sourceNode, env);
         return String(result.value);
+      } else if (sourceNode.type === 'Directive') {
+        // Handle run directives that store the entire directive for re-execution
+        const { evaluateRun } = await import('../run');
+        const result = await evaluateRun(sourceNode, env, []);
+        return String(result.value);
       }
       // Fallback - return original input
       return input;
