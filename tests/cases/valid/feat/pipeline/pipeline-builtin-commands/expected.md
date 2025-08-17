@@ -27,6 +27,6 @@ PREFIX:test
 DATA
 ## Test 6: Builtin with @input reference
 
-{"message": "hi"}
+{"message":"hi"}
 
 {"message": "hi"}!
