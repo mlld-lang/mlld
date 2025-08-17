@@ -103,10 +103,8 @@ SlashVar "var directive"
         metaInfo.inferredType = 'computed';
         metaInfo.isExecInvocation = true;
         
-        // Extract and promote the withClause from the ExecInvocation
-        if (value.withClause) {
-          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
-        }
+        // DON'T promote the withClause - let ExecInvocation handle its own pipeline
+        // The interpreter's evaluateExecInvocation expects the pipeline to be on the node
       }
       // Handle code execution (both 'run' keyword and shorthand)
       else if (value && value.type === 'code') {

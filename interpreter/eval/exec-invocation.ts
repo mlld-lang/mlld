@@ -391,11 +391,50 @@ export async function evaluateExecInvocation(
     throw new MlldInterpreterError(`Executable ${commandName} has no definition in metadata`);
   }
   
-  // Create a child environment for parameter substitution
-  let execEnv = env.createChild();
-  
   // Handle command arguments - args were already extracted above
   const params = definition.paramNames || [];
+  
+  // Check if this function will be part of a pipeline and uses pipeline context
+  const usesPipelineContext = node.withClause?.pipeline && args.some((arg: any) => 
+    arg && typeof arg === 'object' && arg.type === 'VariableReference' && 
+    (arg.identifier === 'p' || arg.identifier === 'pipeline')
+  );
+  
+  // Create a child environment for parameter substitution
+  // If pipeline context is needed, set it BEFORE evaluating arguments
+  let execEnv = env.createChild();
+  
+  // If this ExecInvocation uses pipeline context and will be part of a pipeline,
+  // provide a synthetic initial context for the first execution
+  // This must be done BEFORE evaluating arguments so @pipeline/@p resolve correctly
+  if (usesPipelineContext) {
+    const { createObjectVariable } = await import('@core/types/variable');
+    const initialPipelineContext = {
+      try: 1,
+      tries: [],
+      stage: 0,
+      length: 0
+    };
+    
+    // Create the pipeline context variable
+    const pipelineVar = createObjectVariable('pipeline', initialPipelineContext, false, undefined, { 
+      isPipelineContext: true,
+      isSystem: true
+    });
+    
+    // Set in the parent environment (env) so it's available when evaluating arguments
+    // Check if variables already exist to avoid conflicts
+    if (!env.getVariable('pipeline')) {
+      env.setVariable('pipeline', pipelineVar);
+    }
+    if (!env.getVariable('p')) {
+      env.setVariable('p', pipelineVar); // Alias
+    }
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[exec-invocation] Provided synthetic pipeline context for initial execution:', initialPipelineContext);
+    }
+  }
   
   // Evaluate arguments using consistent interpolate() pattern
   const evaluatedArgStrings: string[] = [];
