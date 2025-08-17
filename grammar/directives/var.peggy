@@ -97,6 +97,17 @@ SlashVar "var directive"
         metaInfo.inferredType = 'computed';
         metaInfo.isDataValue = true;
       }
+      // Handle exec invocation (function calls with optional pipelines)
+      else if (value && value.type === 'ExecInvocation') {
+        processedValue = [value];
+        metaInfo.inferredType = 'computed';
+        metaInfo.isExecInvocation = true;
+        
+        // Extract and promote the withClause from the ExecInvocation
+        if (value.withClause) {
+          tail = tail ? Object.assign({}, value.withClause, tail) : value.withClause;
+        }
+      }
       // Handle code execution (both 'run' keyword and shorthand)
       else if (value && value.type === 'code') {
         processedValue = [{
