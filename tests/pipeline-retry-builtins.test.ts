@@ -279,6 +279,7 @@ describe('Pipeline Retry with Builtin Commands', () => {
     it('should fail pipeline on error in builtin effect', async () => {
       const script = `
 /exe @source() = "data"
+/exe @process(input) = js { return input + "-processed"; }
 /var @result = @source() | show @nonexistent | @process
 `;
 

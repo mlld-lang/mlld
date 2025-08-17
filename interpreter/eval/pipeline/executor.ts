@@ -643,14 +643,14 @@ export class PipelineExecutor {
       // Handle variables and templates
       if (arg.type === 'VariableReference') {
         const variable = env.getVariable(arg.identifier);
-        if (variable) {
-          const { extractVariableValue } = await import('../../utils/variable-resolution');
-          const value = await extractVariableValue(variable, env);
-          return typeof value === 'string' ? value : JSON.stringify(value);
+        if (!variable) {
+          // Throw error for undefined variables in builtins
+          // This ensures pipeline fails on errors rather than silently continuing
+          throw new Error(`Variable not found: ${arg.identifier}`);
         }
-        // Return literal variable reference if not found
-        // This matches the behavior of template interpolation
-        return `@${arg.identifier}`;
+        const { extractVariableValue } = await import('../../utils/variable-resolution');
+        const value = await extractVariableValue(variable, env);
+        return typeof value === 'string' ? value : JSON.stringify(value);
       }
 
       // Handle string literals

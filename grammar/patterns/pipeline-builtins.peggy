@@ -104,19 +104,8 @@ PipelineBuiltinArgument
       helpers.debug('PipelineBuiltinArgument matched quote/template', { quote });
       return quote; 
     }
-  / "@input" "." fields:AnyFieldAccess+ { 
-      helpers.debug('PipelineBuiltinArgument matched @input with fields', { fields });
-      return {
-        type: 'inputField',
-        fields: fields
-      };
-    }
-  / "@input" { 
-      helpers.debug('PipelineBuiltinArgument matched @input');
-      return { type: 'input' };
-    }
-  / varRef:AtVar {
-      helpers.debug('PipelineBuiltinArgument matched variable', { varRef });
+  / varRef:UnifiedReferenceForPipeline {
+      helpers.debug('PipelineBuiltinArgument matched unified reference', { varRef });
       return varRef;
     }
 
