@@ -339,13 +339,14 @@ export type { IEvaluator } from './eval/pipeline/executor';
 
 /**
  * Create an evaluator adapter for dependency injection
- * This allows pipeline executor to use evaluateNode without circular dependencies
+ * This allows pipeline executor to use evaluate without circular dependencies
  */
 export function createEvaluatorAdapter(): IEvaluator {
   return {
     evaluate: async (node: any, env: Environment) => {
-      // Use the existing evaluateNode function
-      return evaluateNode(node, env);
+      // Lazy import to avoid circular dependency
+      const { evaluate: evalFunc } = await import('./core/interpreter');
+      return evalFunc(node, env);
     }
   };
 }

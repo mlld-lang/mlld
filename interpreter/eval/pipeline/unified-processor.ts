@@ -129,9 +129,14 @@ export async function processPipeline(
         const result = await evaluateExecInvocation(sourceNode, env);
         return String(result.value);
       } else if (sourceNode.type === 'command') {
-        const { evaluateCommand } = await import('../run');
-        const result = await evaluateCommand(sourceNode, env);
-        return String(result.value);
+        // This is a command executable definition, not a run directive
+        // Execute it as a shell command
+        const { interpolate } = await import('../../core/interpreter');
+        const { InterpolationContext } = await import('../../core/interpolation-context');
+        
+        const command = await interpolate(sourceNode.commandTemplate || sourceNode.nodes || [], env, InterpolationContext.ShellCommand);
+        const result = await env.executeCommand(command);
+        return result;
       } else if (sourceNode.type === 'code') {
         const { evaluateCodeExecution } = await import('../code-execution');
         const result = await evaluateCodeExecution(sourceNode, env);

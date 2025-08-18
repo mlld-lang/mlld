@@ -408,18 +408,99 @@ export class PipelineExecutor {
     input: string,
     stageEnv: Environment
   ): Promise<string> {
-    // Set @input using setParameterVariable to avoid reserved name conflicts
-    stageEnv.setParameterVariable('input', {
-      type: 'simple-text',
-      value: input,
-      metadata: {}
-    });
+    // Don't try to set @input - stageEnv already has it set by createStageEnvironment
     
-    // Execute the command using the injected evaluator
-    const result = await this.evaluator!.evaluate(command, stageEnv);
+    // In universal context, we don't need synthetic source - handle it directly
+    if (command.rawIdentifier === 'source') {
+      // For universal context, the source is just the first retryable function
+      // We can re-execute it using the sourceFunction if available
+      if (this.sourceFunction) {
+        const currentContext = stageEnv.getPipelineContext();
+        if (currentContext && this.env) {
+          this.env.setPipelineContext(currentContext);
+        }
+        const fresh = await this.sourceFunction();
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[executeCommandUniversal] Source function returned:', fresh);
+        }
+        return fresh;
+      }
+      // If no source function, just return the input (non-retryable source)
+      return input;
+    }
     
-    // Normalize the output
-    return this.normalizeOutput(result.value);
+    // Handle built-in pipeline commands (show, log, output) and transformers
+    if ('type' in command && command.type === 'builtinCommand') {
+      return await this.executeBuiltinCommand(command, input, stageEnv);
+    }
+    
+    // First, resolve the command reference to get the actual executable
+    const commandVar = await this.resolveCommandReference(command, stageEnv);
+    
+    if (!commandVar) {
+      throw new Error(`Pipeline command ${command.rawIdentifier} not found`);
+    }
+    
+    // Debug: log what we got from resolveCommandReference
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[executeCommandUniversal] Resolved command:', {
+        rawIdentifier: command.rawIdentifier,
+        commandVarType: typeof commandVar,
+        isVariable: commandVar && typeof commandVar === 'object' && 'type' in commandVar,
+        variableType: commandVar?.type,
+        hasMetadata: !!commandVar?.metadata,
+        hasExecutable: !!commandVar?.metadata?.__executable,
+        commandVarKeys: commandVar && typeof commandVar === 'object' ? Object.keys(commandVar) : []
+      });
+    }
+    
+    // Check if it's an executable variable (function or transformer)
+    // Need to check both metadata.__executable AND type === 'executable'
+    const isExecutable = (commandVar && commandVar.metadata?.__executable) || 
+                         (commandVar && commandVar.type === 'executable');
+    
+    if (isExecutable) {
+      const executable = commandVar.metadata?.__executable || commandVar;
+      
+      // Process arguments if any
+      const args = await this.processArguments(command.args || [], stageEnv);
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[executeCommandUniversal] About to call executeCommandVariable:', {
+          hasCommandVar: !!commandVar,
+          argsLength: args.length,
+          inputLength: input.length,
+          inputPreview: input.substring(0, 50)
+        });
+      }
+      
+      // For pipeline execution, we need to call executeCommandVariable
+      // which handles the proper execution of functions with @input
+      const result = await this.executeCommandVariable(commandVar, args, stageEnv, input);
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[executeCommandUniversal] executeCommandVariable returned:', {
+          resultType: typeof result,
+          resultLength: result?.length,
+          resultPreview: String(result).substring(0, 100)
+        });
+      }
+      
+      // The result is already a string from executeCommandVariable
+      return result;
+    }
+    
+    // If not executable, try to evaluate it as a variable reference
+    // This handles cases where the command is just a variable name
+    if (command.identifier) {
+      const result = await this.evaluator!.evaluate({
+        type: 'VariableReference',
+        identifier: command.rawIdentifier
+      }, stageEnv);
+      return this.normalizeOutput(result.value);
+    }
+    
+    throw new Error(`Pipeline command ${command.rawIdentifier} is not executable`);
   }
   
   /**

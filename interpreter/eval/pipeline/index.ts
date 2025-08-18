@@ -1,6 +1,8 @@
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand } from '@core/types';
 import { PipelineExecutor } from './executor';
+import { USE_UNIVERSAL_CONTEXT } from '@core/feature-flags';
+import { createEvaluatorAdapter } from '../../index';
 
 // Re-export types
 export type * from './types';
@@ -30,6 +32,17 @@ export async function executePipeline(
   sourceFunction?: () => Promise<string>,
   hasSyntheticSource: boolean = false
 ): Promise<string> {
-  const executor = new PipelineExecutor(pipeline, env, format, isRetryable, sourceFunction, hasSyntheticSource);
+  // Wire evaluator through when in universal context mode
+  const evaluator = USE_UNIVERSAL_CONTEXT ? createEvaluatorAdapter() : undefined;
+  
+  const executor = new PipelineExecutor(
+    pipeline, 
+    env, 
+    format, 
+    isRetryable, 
+    sourceFunction, 
+    hasSyntheticSource,
+    evaluator  // Pass the evaluator when available
+  );
   return await executor.execute(baseOutput);
 }
