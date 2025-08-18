@@ -12,6 +12,8 @@ import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import type { CacheManager } from './CacheManager';
 import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
+import { USE_UNIVERSAL_CONTEXT } from '@core/feature-flags';
+import type { UniversalContext } from '@core/universal-context';
 
 export interface IVariableManager {
   // Core variable operations
@@ -46,6 +48,9 @@ export interface VariableManagerDependencies {
   getPathService(): any; // Will be typed more specifically when needed
   getSecurityManager(): any; // Will be typed more specifically when needed
   getBasePath(): string;
+  getFileDirectory(): string;
+  getExecutionDirectory(): string;
+  getUniversalContext?(): UniversalContext | undefined; // Optional for dual-mode
 }
 
 export interface VariableManagerContext {
@@ -151,6 +156,24 @@ export class VariableManager implements IVariableManager {
   }
   
   getVariable(name: string): Variable | undefined {
+    // NEW: Universal context variables in dual-mode
+    if (USE_UNIVERSAL_CONTEXT && this.deps.getUniversalContext) {
+      const context = this.deps.getUniversalContext();
+      
+      // Handle @ctx, @c, @context (but not when looking for regular variables)
+      // Only provide these special variables when explicitly requested
+      if (context && (name === 'ctx' || name === 'context')) {
+        return createObjectVariable('context', context, false);
+      }
+      
+      // Don't provide @c as a variable - it might conflict with parameters
+      // @c should only be available in specific contexts like JavaScript execution
+      
+      // For @pipeline/@p, fall through to normal variable lookup
+      // The pipeline context will be handled by the existing mechanism
+      // until we fully implement the universal pipeline
+    }
+    
     // FAST PATH: Check local variables first (most common case)
     let variable = this.variables.get(name);
     
@@ -503,5 +526,21 @@ export class VariableManager implements IVariableManager {
    */
   clearAllVariables(): void {
     this.variables.clear();
+  }
+  
+  /**
+   * Helper to map universal context to legacy pipeline format for compatibility
+   */
+  private mapContextToLegacyPipeline(ctx: UniversalContext): Variable {
+    return createObjectVariable('pipeline', {
+      stage: ctx.stage,
+      try: ctx.try,
+      tries: ctx.history.map(h => h.output),
+      totalStages: ctx.metadata?.totalStages || 0,
+      currentCommand: ctx.metadata?.currentCommand || '',
+      input: ctx.history[ctx.history.length - 1]?.input || '',
+      previousOutputs: ctx.history.map(h => h.output),
+      format: ctx.metadata?.format
+    }, false);
   }
 }

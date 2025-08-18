@@ -39,6 +39,8 @@ import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
+import { USE_UNIVERSAL_CONTEXT, DEBUG_UNIVERSAL_CONTEXT } from '@core/feature-flags';
+import { UniversalContext, createDefaultContext, createPipelineContext } from '@core/universal-context';
 
 
 /**
@@ -76,7 +78,10 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private shadowEnvs: Map<string, Map<string, any>> = new Map();
   private nodeShadowEnv?: NodeShadowEnvironment; // VM-based Node.js shadow environment
   
-  // Pipeline execution context
+  // NEW: Universal context (always present in new mode)
+  private readonly universalContext?: UniversalContext;
+  
+  // Pipeline execution context (OLD - kept for compatibility)
   private pipelineContext?: {
     stage: number;
     totalStages: number;
@@ -173,6 +178,16 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       });
     }
     this.parent = parent;
+    
+    // Initialize universal context if feature flag is enabled
+    if (USE_UNIVERSAL_CONTEXT) {
+      // Context is passed through parent or created fresh
+      this.universalContext = parent?.universalContext || createDefaultContext();
+      
+      if (DEBUG_UNIVERSAL_CONTEXT) {
+        logger.debug('[Universal Context] Environment created with context:', this.universalContext);
+      }
+    }
     
     // Initialize effect handler: use provided, inherit from parent, or create default
     this.effectHandler = effectHandler || parent?.effectHandler || new DefaultEffectHandler();
@@ -309,7 +324,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getSecurityManager: () => this.securityManager,
       getBasePath: () => this.getProjectRoot(),
       getFileDirectory: () => this.getFileDirectory(),
-      getExecutionDirectory: () => this.getExecutionDirectory()
+      getExecutionDirectory: () => this.getExecutionDirectory(),
+      getUniversalContext: USE_UNIVERSAL_CONTEXT ? () => this.universalContext : undefined
     };
     this.variableManager = new VariableManager(variableManagerDependencies);
     
@@ -711,6 +727,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     
     return undefined;
+  }
+  
+  /**
+   * Get universal context (new mode only)
+   */
+  getUniversalContext(): UniversalContext | undefined {
+    return USE_UNIVERSAL_CONTEXT ? this.universalContext : undefined;
   }
   
   /**
@@ -1232,8 +1255,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * GOTCHA: Shadow environments are NOT inherited - each environment manages its
    * own language-specific functions, preventing cross-scope function pollution.
    * SECURITY: Child isolation prevents variable leakage between execution contexts.
+   * 
+   * @param newBasePath - Optional new base path for the child
+   * @param contextOverrides - Optional context overrides for universal context mode
    */
-  createChild(newBasePath?: string): Environment {
+  createChild(newBasePath?: string, contextOverrides?: Partial<UniversalContext>): Environment {
     let childContext: PathContext | string;
     
     if (this.pathContext) {
@@ -1261,6 +1287,21 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this,
       this.effectHandler  // Share the same effect handler
     );
+    
+    // Handle universal context in dual-mode
+    if (USE_UNIVERSAL_CONTEXT && contextOverrides) {
+      // Create new context with overrides
+      const newContext = Object.freeze({
+        ...this.universalContext!,
+        ...contextOverrides
+      });
+      (child as any).universalContext = newContext;
+      
+      if (DEBUG_UNIVERSAL_CONTEXT) {
+        logger.debug('[Universal Context] Child created with context overrides:', contextOverrides);
+      }
+    }
+    
     // Track the current node count so we know which nodes are new in the child
     child.initialNodeCount = this.nodes.length;
     

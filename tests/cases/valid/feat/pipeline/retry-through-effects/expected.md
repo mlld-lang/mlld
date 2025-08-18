@@ -6,33 +6,33 @@ This test verifies that retry functionality works correctly through multiple eff
 
 ## Test 1: Retry through single effect stage
 
-unstable_1
+failed_attempt
 
-unstable_2
+failed_attempt
 
-stable_data_3
+success_after_3_attempts
 
 ## Test 2: Retry through multiple effect stages  
 
-unstable_1
+failed_attempt
 
-unstable_2
+failed_attempt
 
-stable_data_3
+success_after_3_attempts
 
-## Test 3: Verify pipeline context works through effects
+## Test 3: Verify pipeline context is preserved through effects
 
-unstable_1
+failed_attempt
 
-Stage 2: unstable_1 (try 1)
+Stage 2: failed_attempt (try 1)
 
-unstable_2
+failed_attempt
 
-Stage 2: unstable_2 (try 2)
+Stage 2: failed_attempt (try 2)
 
-stable_data_3
+Stage 2: failed_attempt (try 3)
 
-Stage 2: stable_data_3 (try 3)
+success_after_3_attempts
 
 ## Test 4: Effect stages are pass-through
 

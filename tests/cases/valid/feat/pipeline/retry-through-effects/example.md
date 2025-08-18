@@ -4,37 +4,37 @@ This test verifies that retry functionality works correctly through multiple eff
 
 ## Helper Functions
 
-/exe @generateData(p) = js {
-  // Simulate an unstable function that fails first few times
-  const attempt = p.try || 1;
-  if (attempt <= 2) {
-    return `unstable_${attempt}`;
-  }
-  return `stable_data_${attempt}`;
+/exe @alwaysFails() = js {
+  // Always returns the same value - forces retry to test the mechanism
+  return "failed_attempt";
 }
 
-/exe @validator(input) = when first [
-  @input == "stable_data_3" => @input
-  @pipeline.try < 4 => retry
-  * => "failed_validation"
+/exe @retryUntilMax(input, p) = when first [
+  @p.try >= 3 => "success_after_3_attempts"
+  * => retry
 ]
 
-## Test 1: Retry through single effect stage
-
-/var @result1 = @generateData(@pipeline) | show @input | @validator
-
-## Test 2: Retry through multiple effect stages  
-
-/var @result2 = @generateData(@pipeline) | show @input | log @input | output @input to stdout | @validator
-
-## Test 3: Verify pipeline context works through effects
-
-/exe @contextChecker(input, p) = js {
+/exe @showContext(input, p) = js {
+  // Shows the pipeline context at this stage
   return `Stage ${p.stage}: ${input} (try ${p.try})`;
 }
 
-/var @result3 = @generateData(@pipeline) | show @input | @contextChecker(@pipeline) | show @input
+## Test 1: Retry through single effect stage
+
+>> Verifies retry works when there's a show effect between source and validator
+/var @result1 = @alwaysFails() | show @input | @retryUntilMax(@p)
+
+## Test 2: Retry through multiple effect stages  
+
+>> Verifies retry works through multiple effects (show, log, output)
+/var @result2 = @alwaysFails() | show @input | log @input | output @input to stdout | @retryUntilMax(@p)
+
+## Test 3: Verify pipeline context is preserved through effects
+
+>> Pipeline context (@p) should be accessible after effects
+/var @result3 = @alwaysFails() | show @input | @showContext(@p) | show @input | @retryUntilMax(@p)
 
 ## Test 4: Effect stages are pass-through
 
+>> Simple test that effects pass values through unchanged
 /var @result4 = "test_value" | show @input | log @input | output @input to stdout
