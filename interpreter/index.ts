@@ -335,4 +335,18 @@ export async function interpret(
 
 // Re-export key types for convenience
 export { Environment } from './env/Environment';
+export type { IEvaluator } from './eval/pipeline/executor';
+
+/**
+ * Create an evaluator adapter for dependency injection
+ * This allows pipeline executor to use evaluateNode without circular dependencies
+ */
+export function createEvaluatorAdapter(): IEvaluator {
+  return {
+    evaluate: async (node: any, env: Environment) => {
+      // Use the existing evaluateNode function
+      return evaluateNode(node, env);
+    }
+  };
+}
 export type { EvalResult } from './core/interpreter';

@@ -6,6 +6,15 @@ import { PipelineStateMachine, type StageContext, type StageResult } from './sta
 import { createStageEnvironment } from './context-builder';
 import { MlldCommandExecutionError } from '@core/errors';
 import { preprocessPipeline, type LogicalStage, type PreprocessedPipeline } from './preprocessor';
+import { USE_UNIVERSAL_CONTEXT } from '@core/feature-flags';
+
+/**
+ * Evaluator interface for dependency injection
+ * This allows us to inject the evaluate function without circular dependencies
+ */
+export interface IEvaluator {
+  evaluate(node: any, env: Environment): Promise<{ value: any; env: Environment }>;
+}
 
 /**
  * Pipeline Executor - Handles actual execution using state machine
@@ -23,6 +32,7 @@ export class PipelineExecutor {
   private sourceExecutedOnce: boolean = false; // Track if source has been executed once
   private initialInput: string = ''; // Store initial input for synthetic source
   private allRetryHistory: Map<string, string[]> = new Map();
+  private evaluator?: IEvaluator;  // NEW: Optional evaluator for dependency injection
 
   constructor(
     pipeline: PipelineCommand[],
@@ -30,7 +40,8 @@ export class PipelineExecutor {
     format?: string,
     isRetryable: boolean = false,
     sourceFunction?: () => Promise<string>,
-    hasSyntheticSource: boolean = false
+    hasSyntheticSource: boolean = false,
+    evaluator?: IEvaluator  // NEW: Optional injection point
   ) {
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Constructor (with preprocessing):', {
@@ -66,6 +77,7 @@ export class PipelineExecutor {
     this.isRetryable = isRetryable;
     this.sourceFunction = sourceFunction;
     this.hasSyntheticSource = hasSyntheticSource || this.preprocessed.requiresSyntheticSource;
+    this.evaluator = evaluator;  // Store the injected evaluator
   }
 
   /**
@@ -375,6 +387,45 @@ export class PipelineExecutor {
    * Execute a pipeline command
    */
   private async executeCommand(
+    command: PipelineCommand,
+    input: string,
+    stageEnv: Environment
+  ): Promise<string> {
+    // NEW PATH: Use injected evaluator when available in universal context mode
+    if (USE_UNIVERSAL_CONTEXT && this.evaluator) {
+      return this.executeCommandUniversal(command, input, stageEnv);
+    }
+    
+    // OLD PATH: Continue with existing implementation
+    return this.executeCommandLegacy(command, input, stageEnv);
+  }
+  
+  /**
+   * Execute command using injected evaluator (universal context path)
+   */
+  private async executeCommandUniversal(
+    command: PipelineCommand,
+    input: string,
+    stageEnv: Environment
+  ): Promise<string> {
+    // Set @input using setParameterVariable to avoid reserved name conflicts
+    stageEnv.setParameterVariable('input', {
+      type: 'simple-text',
+      value: input,
+      metadata: {}
+    });
+    
+    // Execute the command using the injected evaluator
+    const result = await this.evaluator!.evaluate(command, stageEnv);
+    
+    // Normalize the output
+    return this.normalizeOutput(result.value);
+  }
+  
+  /**
+   * Legacy execution path (existing implementation)
+   */
+  private async executeCommandLegacy(
     command: PipelineCommand,
     input: string,
     stageEnv: Environment
