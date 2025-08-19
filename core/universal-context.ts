@@ -7,11 +7,20 @@
  * - Context is NEVER modified, only replaced
  */
 
+export enum ExecutionMode {
+  PRIMARY = 'primary',        // Normal execution
+  RETRY_PREP = 'retry-prep',  // Building retry context (don't emit effects)
+  RETRY = 'retry'             // Actual retry execution
+}
+
 export interface UniversalContext {
   // Execution flow (owned by State Machine)
   stage: number;        // 0 for non-pipeline, 1+ for pipeline stages
   try: number;          // Attempt number (1-based)
   isPipeline: boolean;  // Whether this is pipeline execution
+  
+  // Execution mode - determines whether effects should be emitted
+  executionMode: ExecutionMode;
   
   // History (owned by State Machine)
   history: Array<{
@@ -48,6 +57,7 @@ export function createDefaultContext(overrides?: Partial<UniversalContext>): Uni
     stage: 0,
     try: 1,
     isPipeline: false,
+    executionMode: ExecutionMode.PRIMARY,
     history: [],
     ...overrides
   });
@@ -60,12 +70,14 @@ export function createPipelineContext(
   stage: number,
   attempt: number,
   history: UniversalContext['history'],
-  metadata?: UniversalContext['metadata']
+  metadata?: UniversalContext['metadata'],
+  executionMode: ExecutionMode = ExecutionMode.PRIMARY
 ): UniversalContext {
   return Object.freeze({
     stage,
     try: attempt,
     isPipeline: true,
+    executionMode,
     history,
     metadata
   });
