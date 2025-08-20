@@ -118,24 +118,33 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       }
       const executableNode = createExecutableNode(executableDef);
       
-      // 4. Process arguments and create execution environment
-      if (process.env.DEBUG_EXEC) {
-        console.error('[evaluate] Processing arguments, count:', args.length);
-      }
-      const processedArgs = await this.processArguments(args, env);
-      if (process.env.DEBUG_EXEC) {
-        console.error('[evaluate] Processed args:', processedArgs);
-      }
-      
-      // Store evaluated args for CommandRef passthrough
-      this.currentEvaluatedArgs = processedArgs;
-      
+      // 4. Create execution context early for pipeline variables
       const parentContext = evaluator?.getContext?.();
       const execContext = this.contextManager.createExecContext(
         parentContext,
         executableDef,
         commandName
       );
+      
+      // 4a. If pipeline is present, create pipeline variables BEFORE evaluating arguments
+      // This allows arguments to reference @p or @pipeline
+      let argEvalEnv = env;
+      if (node.withClause?.pipeline && execContext) {
+        argEvalEnv = env.createChild();
+        this.contextManager.createPipelineVariables(execContext, argEvalEnv);
+      }
+      
+      // 4b. Process arguments with pipeline-aware environment
+      if (process.env.DEBUG_EXEC) {
+        console.error('[evaluate] Processing arguments, count:', args.length);
+      }
+      const processedArgs = await this.processArguments(args, argEvalEnv);
+      if (process.env.DEBUG_EXEC) {
+        console.error('[evaluate] Processed args:', processedArgs);
+      }
+      
+      // Store evaluated args for CommandRef passthrough
+      this.currentEvaluatedArgs = processedArgs;
       
       if (process.env.DEBUG_EXEC) {
         console.error('[evaluate] Creating execution environment...');
@@ -314,7 +323,8 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     }
     
     // Perform interpolation - command template is an array of nodes
-    const command = await interpolate(commandTemplate, env, InterpolationContext.Default);
+    // Use ShellCommand context for proper escaping of metacharacters
+    const command = await interpolate(commandTemplate, env, InterpolationContext.ShellCommand);
     
     if (process.env.DEBUG_EXEC) {
       console.error('[visitCommand] Interpolated command:', command);
@@ -776,6 +786,16 @@ export class ExecInvocationEvaluator implements ExecVisitor {
           processed.push(arg.content || '');
         } else if (arg.type === 'Number') {
           processed.push(arg.value);
+        } else if (arg.type === 'FileReference') {
+          // Handle FileReference nodes (alligator syntax)
+          const { evaluate } = await import('@interpreter/core/interpreter');
+          const result = await evaluate(arg, env);
+          processed.push(result.value);
+        } else if (arg.type === 'Object' || arg.type === 'Array') {
+          // Handle Object and Array literal nodes
+          const { evaluate } = await import('@interpreter/core/interpreter');
+          const result = await evaluate(arg, env);
+          processed.push(result.value);
         } else {
           // For other AST nodes, evaluate them
           const { evaluate } = await import('@interpreter/core/interpreter');
