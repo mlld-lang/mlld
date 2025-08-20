@@ -374,15 +374,12 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     }
     
     // Evaluate mlld-when expression
-    const { evaluateWhenExpression } = await import('@interpreter/eval/when');
+    const { evaluateWhenExpression } = await import('@interpreter/eval/when-expression');
     
-    // Create a child environment for when evaluation
-    const whenEnv = env.createChild();
-    const result = await evaluateWhenExpression(whenExpr, whenEnv);
+    // Pass environment directly like old implementation
+    const result = await evaluateWhenExpression(whenExpr, env);
     
-    // Merge the child environment back
-    env.mergeChild(whenEnv);
-    
+    // Return the result which includes both value and updated environment
     return result;
   }
   
@@ -418,16 +415,19 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     }
     
     // Handle mlld-for with shadow environments
-    const { evaluateForeachCommand } = await import('@interpreter/eval/foreach');
+    const { evaluateForExpression } = await import('@interpreter/eval/for');
     
     // Create shadow for iteration
     const forEnv = env.createChild();
     
-    // evaluateForeachCommand expects the ForExpression and environment
-    const result = await evaluateForeachCommand(forExpr, forEnv);
+    // evaluateForExpression expects the ForExpression AST node and environment
+    const result = await evaluateForExpression(forExpr, forEnv);
     
-    // The result from evaluateForeachCommand is already an EvalResult
-    return result;
+    // evaluateForExpression returns an ArrayVariable, wrap it in EvalResult
+    return {
+      value: result,
+      env: forEnv
+    };
   }
   
   /**
