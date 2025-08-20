@@ -9,8 +9,9 @@ import {
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 
 /**
- * Factory for creating and preserving variable types
- * Consolidates the various variable creation patterns scattered throughout exec-invocation
+ * Factory for creating and preserving Variable types
+ * Consolidates 5 Variable creation patterns with type preservation
+ * Critical for maintaining metadata through parameter binding
  */
 export class VariableFactory {
   /**

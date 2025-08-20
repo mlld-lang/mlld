@@ -4,12 +4,14 @@ import type { EvalResult } from '@interpreter/core/interpreter';
 import type { IEvaluator } from '@core/universal-context';
 
 /**
- * Strategy interface for executing different types of executable definitions
- * Each strategy handles a specific execution type (template, code, command, etc.)
+ * Base strategy for execution types
+ * Each strategy handles one execution pattern (template/code/command/etc)
+ * Strategies are composable and independently testable
  */
 export interface ExecutionStrategy {
   /**
-   * Check if this strategy can handle the given executable
+   * Determines if this strategy handles the given executable type
+   * Return true to claim execution, false to pass to next strategy
    */
   canHandle(executable: ExecutableDefinition): boolean;
   

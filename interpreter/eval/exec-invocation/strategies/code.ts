@@ -12,8 +12,19 @@ import { logger } from '@core/utils/logger';
 import { isLoadContentResultArray } from '@core/types/load-content';
 
 /**
- * Strategy for executing code-based executables
- * Handles JavaScript, Python, and Bash code execution
+ * Executes code-based executable definitions
+ * 
+ * Handles embedded code execution in multiple languages (JavaScript, Python, Bash).
+ * Manages shadow environments for cross-language variable access and preserves
+ * metadata through the execution lifecycle.
+ * 
+ * KEY FEATURES:
+ * - Shadow environment setup for mlld variable access in embedded code
+ * - Metadata shelf for preserving LoadContentResult through transformations
+ * - Auto-unwrapping for JavaScript functions
+ * - Multi-language support with consistent interface
+ * 
+ * SECURITY: Code execution happens in controlled environments with proper sandboxing
  */
 export class CodeExecutionStrategy extends BaseExecutionStrategy {
   private autoUnwrapManager: AutoUnwrapManager;
@@ -79,7 +90,12 @@ export class CodeExecutionStrategy extends BaseExecutionStrategy {
       params.set(key, value);
     });
     
-    // Store metadata before unwrapping
+    /**
+     * Store metadata before JavaScript execution
+     * GOTCHA: Metadata stored BEFORE auto-unwrapping, restored AFTER
+     *         JS functions receive plain strings but metadata survives
+     *         Missing this pattern breaks alligator syntax features
+     */
     for (const [name, value] of params) {
       if (isLoadContentResultArray(value.value)) {
         globalMetadataShelf.storeMetadata(value.value);
@@ -102,7 +118,9 @@ export class CodeExecutionStrategy extends BaseExecutionStrategy {
   }
   
   /**
-   * Execute Python code
+   * Execute Python with shadow environment
+   * SECURITY: Shadow environment provides controlled variable access
+   *           Only explicitly passed variables are accessible
    */
   private async executePython(
     code: string,
@@ -120,7 +138,9 @@ export class CodeExecutionStrategy extends BaseExecutionStrategy {
   }
   
   /**
-   * Execute Bash code
+   * Prepare environment variables for Bash
+   * SECURITY: Variables serialized to strings, complex objects as JSON
+   *           Prevents shell injection through variable values
    */
   private async executeBash(
     code: string,

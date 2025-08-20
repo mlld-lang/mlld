@@ -18,8 +18,10 @@ import { SectionExecutionStrategy } from './section';
 import { ResolverExecutionStrategy } from './resolver';
 
 /**
- * Create and register all standard execution strategies
- * Order matters - first matching strategy wins
+ * Create execution strategies in priority order
+ * GOTCHA: First matching strategy wins
+ *         WhenExecutionStrategy must precede CodeExecutionStrategy
+ *         TemplateExecutionStrategy is catch-all (goes last)
  */
 export function createStandardStrategies(): ExecutionStrategy[] {
   return [

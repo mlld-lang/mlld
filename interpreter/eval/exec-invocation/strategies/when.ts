@@ -7,8 +7,16 @@ import { BaseExecutionStrategy } from './base';
 import { logger } from '@core/utils/logger';
 
 /**
- * Strategy for executing mlld-when executables
- * Handles conditional execution with WhenExpression
+ * Executes when-expression-based conditionals
+ * 
+ * Handles mlld's conditional execution patterns including:
+ * - Simple conditions: @when @x > 5 => @action
+ * - First-match: @when first [@cond1 => @act1, @cond2 => @act2]
+ * - All-match: @when all [@cond1 => @act1, @cond2 => @act2]
+ * - Any-match: @when any [@cond1 => @act1, @cond2 => @act2]
+ * 
+ * EVALUATION: Conditions are evaluated lazily, actions execute only when matched
+ * CONTEXT: When expressions have access to all parent scope variables
  */
 export class WhenExecutionStrategy extends BaseExecutionStrategy {
   canHandle(executable: ExecutableDefinition): boolean {

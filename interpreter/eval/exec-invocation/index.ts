@@ -9,9 +9,9 @@ import { getEvaluator } from './evaluator';
 export { evaluateExecInvocation as evaluateExecInvocationLegacy } from '../exec-invocation';
 
 /**
- * Evaluate an ExecInvocation node
- * Uses refactored implementation if USE_REFACTORED_EXEC is set
- * Falls back to legacy implementation otherwise
+ * Main entry point for exec invocation evaluation
+ * Maintains same signature as legacy for compatibility
+ * Optional evaluator parameter enables universal context features
  */
 export async function evaluateExecInvocation(
   node: ExecInvocation,

@@ -8,23 +8,13 @@ import { createDefaultContext } from '@core/universal-context';
 import { VariableFactory } from './helpers/variable-factory';
 
 /**
- * Context Manager for exec-invocation
- * Handles context flow, retryability, and pipeline integration
- * 
- * This is crucial for pipeline support because it:
- * 1. Creates proper contexts for retryability
- * 2. Manages the source function that pipelines can retry
- * 3. Tracks execution depth and metadata
- * 4. Provides clean separation between exec logic and context management
+ * Manages execution context for retryable operations
+ * WHY: Pipeline sources need to be retryable without knowing who requested retry
+ *      Every executable has context from birth and can access @ctx.try naturally
  */
 export class ExecContextManager {
   /**
    * Creates execution context for an exec invocation
-   * 
-   * UNIVERSAL CONTEXT PHILOSOPHY:
-   * - Everything has context from birth
-   * - Everything is potentially retryable
-   * - Context flows naturally, not through synthetic wrapping
    */
   createExecContext(
     parentContext: UniversalContext | undefined,
@@ -79,11 +69,9 @@ export class ExecContextManager {
   }
   
   /**
-   * Prepares retryable source function for pipeline integration
-   * 
-   * KEY INSIGHT: In universal context, this doesn't create synthetic wrapping!
-   * It just returns a function that re-executes with updated context.
-   * The executable ALREADY has context from birth and can access @p.try naturally.
+   * Creates retryable source function for pipeline integration
+   * WHY: Sources can be retried by pipelines without special awareness
+   *      The executable just re-executes with updated @ctx.try count
    */
   createRetryableSource(
     executable: ExecutableDefinition,
@@ -92,12 +80,13 @@ export class ExecContextManager {
     originalEnv: Environment,
     args: any[]
   ): (() => Promise<string>) {
-    // EVERYTHING is retryable in universal context!
-    // No need to check isRetryable() - that's legacy thinking
-    
-    // Return a source function that re-executes with updated retry context
     return async () => {
-      // Update context for retry (not wrapping, just updating!)
+      /**
+       * Re-execute with retry context
+       * GOTCHA: Fresh environment created but parameters re-bound
+       *         Context variables (@ctx) updated with new try count
+       *         Original arguments preserved across retries
+       */
       const retryContext: UniversalContext = {
         ...context,
         try: (context.try || 1) + 1,  // Increment retry count
@@ -113,12 +102,11 @@ export class ExecContextManager {
       // Create fresh environment with retry context
       const retryEnv = originalEnv.createChild();
       
-      // Set the retry context - the executable can access @p.try naturally!
       if ('setUniversalContext' in retryEnv && typeof retryEnv.setUniversalContext === 'function') {
         retryEnv.setUniversalContext(retryContext);
       }
       
-      // Create pipeline variables so exec can access @p.try
+      // Create pipeline variables so exec can access @ctx.try
       this.createPipelineVariables(retryContext, retryEnv);
       
       // Re-bind parameters for retry with proper context
@@ -130,21 +118,21 @@ export class ExecContextManager {
         }
       });
       
-      // Re-execute with retry context - NO WRAPPING!
-      // The executable naturally has access to @p.try through context
       const result = await evaluator.executeWithStrategy(executable, retryEnv);
       return String(result.value);
     };
   }
   
   /**
-   * Creates pipeline context variables (@p and @pipeline)
+   * Creates context variables for universal context access
+   * @ctx is the primary variable, @p/@pipeline are legacy aliases
+   * Legacy aliases will be removed after test migration
    */
   createPipelineVariables(
     context: UniversalContext,
     env: Environment
   ): void {
-    const pipelineObj = {
+    const contextObj = {
       try: context.try || 1,
       stage: context.stage || 0,
       value: context.value,
@@ -152,29 +140,21 @@ export class ExecContextManager {
       metadata: context.metadata
     };
     
-    // Create pipeline context variables
+    // Create context variable
     const { createObjectVariable } = require('@core/types/variable');
-    const pipelineVar = createObjectVariable('p', pipelineObj, false, undefined, {
+    const contextVar = createObjectVariable('ctx', contextObj, false, undefined, {
       isPipelineContext: true,
       isSystem: true
     });
     
-    env.setVariable('p', pipelineVar);
-    env.setVariable('pipeline', pipelineVar);
+    // Primary context variable
+    env.setVariable('ctx', contextVar);
+    
+    // Legacy aliases - will be deprecated after test migration
+    env.setVariable('p', contextVar);
+    env.setVariable('pipeline', contextVar);
   }
   
-  /**
-   * Universal Context Philosophy: EVERYTHING is retryable
-   * 
-   * This eliminates entire classes of detection logic:
-   * - Static strings are retryable (return same value)
-   * - Variables are retryable (return same value)
-   * - Functions are retryable (might return different values)
-   * - Commands are retryable (will return different values)
-   * 
-   * The pipeline doesn't need to "know" what's retryable - it just
-   * retries and lets the source decide what to return.
-   */
   
   /**
    * Merges execution result with context

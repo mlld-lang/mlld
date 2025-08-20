@@ -10,8 +10,14 @@ import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import { logger } from '@core/utils/logger';
 
 /**
- * Strategy for executing template-based executables
- * Handles string interpolation with @variable syntax
+ * Executes template-based executable definitions
+ * 
+ * Handles string templates with interpolation of @variable references.
+ * Templates can be simple strings or complex multi-line text with embedded
+ * variable references that get resolved at execution time.
+ * 
+ * INTERPOLATION: Supports both simple (@var) and complex (@var.field) references
+ * CONTEXT: Templates execute with access to all parent scope variables
  */
 export class TemplateExecutionStrategy extends BaseExecutionStrategy {
   canHandle(executable: ExecutableDefinition): boolean {

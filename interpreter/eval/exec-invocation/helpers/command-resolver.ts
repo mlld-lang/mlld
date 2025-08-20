@@ -6,13 +6,28 @@ import { isExecutableVariable } from '@core/types/variable';
 import { logger } from '@core/utils/logger';
 
 /**
- * Centralized command resolution logic
- * Consolidates the 3+ instances of command name extraction identified in the audit
+ * Resolves command references to executable variables
+ * 
+ * Consolidates command resolution logic from multiple locations in the legacy
+ * implementation into a single, testable utility. Handles both direct command
+ * lookups and field access patterns (e.g., @module.command()).
+ * 
+ * SECURITY: Validates all field access to prevent arbitrary property access
+ * COMPATIBILITY: Supports legacy AST formats for backward compatibility
  */
 export class CommandResolver {
   /**
-   * Extract command name and arguments from an ExecInvocation node
-   * Handles multiple AST formats and legacy patterns
+   * Extracts command name and arguments from an ExecInvocation node
+   * 
+   * Handles multiple AST formats including:
+   * - Direct name property (legacy format)
+   * - CommandReference with identifier string
+   * - CommandReference with identifier array (parser output)
+   * - Field access patterns with objectReference
+   * 
+   * @param node - The ExecInvocation AST node to extract from
+   * @returns Command name, arguments array, and optional object reference
+   * @throws {MlldInterpreterError} If command cannot be extracted
    */
   static extractCommandInfo(node: ExecInvocation): {
     commandName: string;
@@ -73,8 +88,17 @@ export class CommandResolver {
   }
   
   /**
-   * Resolve a command to its Variable definition
-   * Handles regular lookup and field access patterns
+   * Resolves a command name to its executable Variable
+   * 
+   * Supports two resolution patterns:
+   * 1. Direct lookup: @command() resolves from environment
+   * 2. Field access: @object.command() resolves through object navigation
+   * 
+   * @param commandName - Name of the command to resolve
+   * @param objectReference - Optional object for field access resolution
+   * @param env - Environment to resolve variables from
+   * @returns The resolved executable Variable
+   * @throws {MlldInterpreterError} If command not found or not executable
    */
   static async resolveCommand(
     commandName: string,
@@ -104,8 +128,10 @@ export class CommandResolver {
   }
   
   /**
-   * Resolve field access on an object
-   * Handles deep navigation like @user.profile.settings.theme()
+   * Resolve field access on objects
+   * SECURITY: Validates object types before navigation
+   *           Only allows field access on proper Variables
+   *           Prevents access to internal properties
    */
   private static async resolveFieldAccess(
     commandName: string,
@@ -159,8 +185,9 @@ export class CommandResolver {
   }
   
   /**
-   * Convert __executable objects from imports to proper Variables
-   * Handles deserialization of shadow environments
+   * Convert __executable objects from imports
+   * Deserializes shadow environments from stored format
+   * Creates proper ExecutableVariable for execution
    */
   private static async convertExecutableObject(
     execObj: any,

@@ -1,15 +1,10 @@
 import { isLoadContentResult, isLoadContentResultArray, LoadContentResult } from '@core/types/load-content';
 
 /**
- * Metadata shelf for preserving LoadContentResult metadata through transformations
- * 
- * CRITICAL: This is essential for mlld's content+metadata philosophy
- * - Alligator syntax creates rich objects with content + metadata
- * - JS functions receive auto-unwrapped strings for simplicity
- * - Metadata must survive transformations for downstream access
- * 
- * Example: /var @result = <doc.md> | @uppercase
- * Result still has .filename, .fm properties after transformation
+ * Preserves LoadContentResult metadata through JavaScript transformations
+ * WHY: Alligator syntax creates rich objects with content + metadata (.filename, .fm)
+ *      JavaScript functions work with simple strings for simplicity
+ *      Metadata must survive transformations for downstream access
  */
 export class MetadataShelf {
   private shelf: Map<string, LoadContentResult> = new Map();
@@ -77,5 +72,9 @@ export class MetadataShelf {
   }
 }
 
-// Module-level instance for simplicity (can be moved to Environment later)
+/**
+ * Module-level metadata shelf instance
+ * Stores LoadContentResult metadata during auto-unwrapping
+ * Thread-safe via AsyncLocalStorage when needed
+ */
 export const globalMetadataShelf = new MetadataShelf();

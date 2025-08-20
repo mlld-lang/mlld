@@ -13,7 +13,7 @@ related-types: core/types { PipelineState, RetryContext, PipelineInput, EffectTy
 mlld's pipeline system enables composable data transformations with automatic retry capabilities. Key features:
 - **Pipeline operator** (`|`) chains transformations
 - **Retry mechanism** allows stages to retry previous stages
-- **Context variables** (`@pipeline`, `@p`) provide execution state
+- **Context variables** (`@ctx`, with `@p`/`@pipeline` as deprecated aliases) provide execution state
 - **Format support** for JSON, CSV, XML parsing
 - **No nested retries** - simplified single-context model
 - **Effect-based output** - streaming and buffered document generation
@@ -28,6 +28,59 @@ mlld's pipeline architecture consists of three complementary features:
 3. **`with` clauses** - Pipeline transformations and dependency management
 
 Together, they enable complex data flows while maintaining mlld's declarative philosophy.
+
+## Universal Context Architecture
+
+mlld implements a universal context model where every value has execution context from birth. This eliminates the need for synthetic source stages and ensures everything is retryable from its original creation point.
+
+### Core Principles
+
+1. **Context from Birth** - Every value carries its creation context
+2. **Everything Retryable** - All operations can be retried from their origin
+3. **No Synthetic Wrapping** - Pipeline inputs are never artificially wrapped
+4. **Direct Source Access** - Retry mechanisms have direct access to original sources
+
+### Context Variable (`@ctx`)
+
+The primary context variable `@ctx` (with deprecated aliases `@p` and `@pipeline`) provides:
+- Access to the current pipeline input
+- Retry context for pipeline stages
+- Execution metadata and state
+
+```mlld
+/exe @transform(input) = js {
+  // @ctx available as pipeline context
+  console.log("Processing:", input);
+  return input.toUpperCase();
+}
+
+/var @result = "hello" | @transform
+# @ctx is "hello" inside @transform
+```
+
+### Implementation
+
+The universal context is managed by the Context Manager in the exec-invocation refactor:
+
+```typescript
+// interpreter/eval/exec-invocation/context-manager.ts
+export class ContextManager {
+  static setupContext(env: Environment, value: any): void {
+    // Primary context variable
+    env.setVariable('ctx', value);
+    // Legacy aliases for compatibility
+    env.setVariable('p', value);
+    env.setVariable('pipeline', value);
+  }
+}
+```
+
+### Benefits
+
+1. **Simplified Retry Logic** - No need to unwrap synthetic sources
+2. **Cleaner Semantics** - Pipeline input is exactly what was provided
+3. **Better Error Context** - Errors point to actual source locations
+4. **Reduced Complexity** - No special cases for synthetic vs natural sources
 
 ## Shared Architecture Patterns
 
@@ -235,37 +288,40 @@ interface RetryContext {
 }
 ```
 
-### @pipeline Context Variable
+### @ctx Context Variable
 
-The `@pipeline` variable provides access to pipeline execution state:
+The `@ctx` variable provides access to universal execution context:
 
 ```mlld
 # Array indexing for stage outputs
-@pipeline[0]      # Input to the pipeline
-@pipeline[1]      # Output of first stage
-@pipeline[-1]     # Output of previous stage
-@pipeline[-2]     # Output two stages back
+@ctx[0]      # Input to the pipeline
+@ctx[1]      # Output of first stage
+@ctx[-1]     # Output of previous stage
+@ctx[-2]     # Output two stages back
 
-# Retry and attempt tracking (context-local)
-@pipeline.try     # Current attempt within active retry context (1, 2, 3...)
-@pipeline.tries   # Array of previous attempts within active retry context
+# Retry and attempt tracking
+@ctx.try     # Current attempt number (1, 2, 3...)
+@ctx.tries   # Array of previous attempts
 
 # Global retry history
-@pipeline.retries.all  # All attempts from ALL retry contexts
+@ctx.retries.all  # All attempts from ALL retry contexts
 
 # Stage information
-@pipeline.stage   # Current stage number (1-based)
-@pipeline.length  # Number of completed stages
+@ctx.stage   # Current stage number (1-based)
+@ctx.length  # Number of completed stages
 ```
 
-**Critical**: `try` and `tries` are **local to the retry context**. Stages outside the active retry context see `try: 1` and `tries: []`. This is by design - each stage starts fresh unless part of an active retry.
+With universal context, every executable has context from birth. The `@ctx` variable is always available and updates naturally as execution progresses.
 
-#### Syntactic Sugar: @p Alias
+#### Legacy Aliases: @p and @pipeline
 
-In pipeline contexts, `@p` is available as a shorter alias for `@pipeline`:
+For compatibility, `@p` and `@pipeline` remain as aliases for `@ctx`. These will be deprecated once tests are migrated:
 
 ```mlld
-# These are equivalent:
+# Primary (use this):
+/var @result = "data"|@validator(@ctx)
+
+# Legacy aliases (deprecated):
 /var @result = "data"|@validator(@pipeline)
 /var @result = "data"|@validator(@p)
 
@@ -274,13 +330,13 @@ In pipeline contexts, `@p` is available as a shorter alias for `@pipeline`:
   @try < 3 => retry
   * => @input
 ]
-/var @result = "data"|@checker(@p.try)
+/var @result = "data"|@checker(@ctx.try)
 
 # Pass entire context to JavaScript functions:
 /exe @analyzer(input, ctx) = js {
   return `Stage ${ctx.stage}: ${input} (attempt ${ctx.try})`;
 }
-/var @result = "data"|@analyzer(@p)
+/var @result = "data"|@analyzer(@ctx)
 ```
 
 ### Retry Mechanism
@@ -290,7 +346,7 @@ Functions can return the `retry` keyword to re-execute the **previous** pipeline
 ```mlld
 /exe @validator(input) = when: [
   @isValid(@input) => @input
-  @pipeline.try < 3 => retry    # Retries the previous stage, not current
+  @ctx.try < 3 => retry    # Retries the previous stage, not current
   * => null
 ]
 
@@ -320,21 +376,21 @@ Two independent limits prevent infinite loops:
 
 #### Stage 0 Retryability
 
-Stage 0 is special - it has no previous stage. When stage 1 requests retry of stage 0:
-- If stage 0's input came from a function → Re-execute the function
-- If stage 0's input is a literal value → Throw error
+With universal context, everything is retryable from birth. When stage 1 requests retry of stage 0:
 
 ```mlld
-# Retryable (function source)
+# Function source - re-executes
 /var @answer = @claude("explain quantum mechanics")
 /var @result = @answer | @review | @validate
-# @review can retry @answer because @claude() is a function
+# @review retries @claude() which generates new output
 
-# Not Retryable (literal source)
+# Literal source - returns same value
 /var @answer = "The capital of France is Paris"
 /var @result = @answer | @review | @validate
-# @review CANNOT retry @answer - will throw error
+# @review retries @answer which returns the same literal
 ```
+
+Everything has context and is retryable. Functions may return different values on retry; literals return the same value.
 
 #### Why No Nested Retries?
 
@@ -363,8 +419,8 @@ Nested retries are not supported because they represent pathological cases. In p
 ```mlld
 /exe @selectBest(input) = when: [
   @input.score > 8 => @input
-  @pipeline.try < 3 => retry    # Retries @claude stage
-  * => @selectHighestScore(@pipeline.tries)
+  @ctx.try < 3 => retry    # Retries @claude stage
+  * => @selectHighestScore(@ctx.tries)
 ]
 
 /var @result = @prompt | @claude | @selectBest
@@ -375,10 +431,10 @@ Nested retries are not supported because they represent pathological cases. In p
 ```mlld
 /exe @stage1(input) = `s1: @input`
 /exe @stage2(input) = when: [
-  @pipeline.try < 3 => retry    # Retry stage 1
+  @ctx.try < 3 => retry    # Retry stage 1
   * => @input
 ]
-/exe @stage3(input) = `s3: @input, try: @pipeline.try`
+/exe @stage3(input) = `s3: @input, try: @ctx.try`
 
 /var @result = @getData() | @stage1 | @stage2 | @stage3
 ```
@@ -419,24 +475,7 @@ return createObjectVariable(
 ```
 **Why**: Hand-rolled Variables violate type contracts and cause field access failures.
 
-2. **Synthetic Source Stage (`__source__`)**
-
-The synthetic source is a hidden stage 0 that enables retry semantics for pipeline sources.
-
-**When it's added**: When a pipeline starts with a retryable function (e.g., `@generate() | @validate`)
-
-**What it does**:
-- First execution: Returns the already-computed initial value from the function
-- On retry: Re-executes the source function to get fresh data
-- For non-retryable sources (literals, variables): Throws error if retry is attempted
-
-**Why it exists**: Enables uniform retry semantics. When `@validate` says `retry`, it goes back one step to `__source__`, which re-runs `@generate()`. Without this, retryable vs non-retryable sources would need different handling.
-
-**Key principle**: `retry` means "send the soup back to the kitchen" - retry the thing that sent me this input, not restart from the beginning.
-
-**Stage numbering impact**: User-visible stages start at 1, hiding the synthetic stage 0 from view.
-
-3. **Context Lifecycle**
+2. **Context Lifecycle**
 Context should be cleared when the REQUESTING stage completes, not the retrying stage.
 
 4. **Effect Emission Context**

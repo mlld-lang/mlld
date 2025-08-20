@@ -3,12 +3,32 @@ import type { ShadowEnvironmentCapture } from '@interpreter/env/types/ShadowEnvi
 import { prepareValueForShadow } from '@interpreter/env/variable-proxy';
 
 /**
- * Centralized management of shadow environments for code execution
- * Handles serialization, deserialization, and creation of shadow environments
+ * Manages shadow environments for cross-language execution
+ * 
+ * Shadow environments enable mlld functions to be called from within embedded
+ * code blocks (JavaScript, Python, Bash). They capture the lexical scope at
+ * function definition time and make it available during execution.
+ * 
+ * KEY FEATURES:
+ * - Captures environment at definition time (lexical scoping)
+ * - Serializes for storage in ExecutableVariables
+ * - Deserializes from multiple formats (Map, Array, Object)
+ * - Applies captured environments to execution contexts
+ * 
+ * SERIALIZATION: Supports multiple formats for compatibility with imports
+ * and different storage mechanisms (JSON, module exports, etc.)
  */
 export class ShadowEnvironmentManager {
   /**
-   * Prepare a shadow environment for serialization
+   * Prepares a shadow environment for serialization
+   * 
+   * Captures the current environment state for a specific language and
+   * converts it to a serializable format. Used when defining functions
+   * that may be called from embedded code.
+   * 
+   * @param env - Environment to capture from
+   * @param language - Target language (js, python, bash)
+   * @returns Serialized shadow environment ready for storage
    */
   static prepare(env: Environment, language: string): SerializedShadow {
     const shadowCapture = env.captureShadowEnvironment(language);
@@ -32,7 +52,15 @@ export class ShadowEnvironmentManager {
   }
   
   /**
-   * Deserialize shadow environments from storage
+   * Deserializes shadow environments from storage formats
+   * 
+   * Handles multiple serialization formats for compatibility:
+   * - Map instances (already deserialized)
+   * - Array format: [[key, value], ...] from JSON
+   * - Object format: {key: value, ...} from module exports
+   * 
+   * @param shadowEnvs - Serialized shadow environments by language
+   * @returns Deserialized shadow environment captures
    */
   static deserialize(
     shadowEnvs: Record<string, any>
@@ -80,7 +108,13 @@ export class ShadowEnvironmentManager {
   }
   
   /**
-   * Apply captured shadow environments to an environment
+   * Applies captured shadow environments to an execution environment
+   * 
+   * Used during function execution to make captured variables available
+   * to embedded code blocks. Each language gets its own shadow environment.
+   * 
+   * @param env - Environment to apply shadows to
+   * @param capturedEnvs - Previously captured shadow environments
    */
   static applyCaptured(
     env: Environment,

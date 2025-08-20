@@ -19,8 +19,20 @@ import { applyWithClause } from '../with-clause';
 import { AutoUnwrapManager } from '../auto-unwrap-manager';
 
 /**
- * Refactored ExecInvocation evaluator using strategy pattern
- * Consolidates patterns identified in EXEC-INVOC.md audit
+ * Evaluates exec invocations using the strategy pattern
+ * 
+ * Refactored from a 1400-line monolithic function to a clean, maintainable
+ * architecture. Delegates execution to specialized strategies based on the
+ * executable type (template, code, command, when, for, etc.)
+ * 
+ * KEY IMPROVEMENTS:
+ * - Strategy pattern for different execution types
+ * - Centralized helper utilities (CommandResolver, VariableFactory, etc.)
+ * - Universal context support for retry capabilities
+ * - Clean separation of concerns
+ * 
+ * COMPATIBILITY: Maintains 100% backward compatibility with legacy implementation
+ * FEATURE FLAG: Controlled by USE_REFACTORED_EXEC environment variable
  */
 export class ExecInvocationEvaluator {
   private strategies: ExecutionStrategy[] = [];
@@ -42,7 +54,19 @@ export class ExecInvocationEvaluator {
   }
   
   /**
-   * Main evaluation entry point
+   * Evaluates an exec invocation node
+   * 
+   * Main entry point that:
+   * 1. Resolves the command to its executable definition
+   * 2. Handles pipeline integration if present
+   * 3. Delegates to appropriate strategy for execution
+   * 4. Manages auto-unwrapping for JS functions
+   * 
+   * @param node - ExecInvocation AST node to evaluate
+   * @param env - Current execution environment
+   * @param evaluator - Optional universal context evaluator
+   * @returns The execution result
+   * @throws {MlldInterpreterError} If command not found or execution fails
    */
   async evaluate(
     node: ExecInvocation,
@@ -69,7 +93,11 @@ export class ExecInvocationEvaluator {
         env
       );
       
-      // Step 3: Handle special cases
+      /**
+       * Check for special cases before strategy execution
+       * Handles @typeof transformer which needs Variable metadata access
+       * Other transformers proceed through normal strategy execution
+       */
       const specialResult = await this.handleSpecialCases(
         commandVariable,
         args,
@@ -130,13 +158,20 @@ export class ExecInvocationEvaluator {
       return result;
       
     } finally {
-      // Always clear metadata shelf after execution
+      /**
+       * Clear metadata shelf after execution
+       * CONTEXT: Metadata shelf preserves LoadContentResult through transformations
+       *          Must be cleared to prevent leaking between invocations
+       */
       globalMetadataShelf.clear();
     }
   }
   
   /**
-   * Handle special cases like @typeof transformer
+   * Special handling for @typeof transformer
+   * WHY: @typeof needs access to Variable metadata, not just the value
+   *      Provides rich type info (directive source, property counts)
+   *      Only transformer that needs Variable object access
    */
   private async handleSpecialCases(
     commandVariable: Variable,
@@ -432,8 +467,9 @@ export class ExecInvocationEvaluator {
   }
   
   /**
-   * Execute with pipeline
-   * Creates a retryable source function and executes through pipeline
+   * Execute with pipeline and retry support
+   * CONTEXT: Everything is retryable, no special detection needed
+   *          Source function re-executes with incremented @ctx.try
    */
   private async executeWithPipeline(
     node: ExecInvocation,
