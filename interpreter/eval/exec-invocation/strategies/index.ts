@@ -1,4 +1,5 @@
-export { ExecutionStrategy, BaseExecutionStrategy } from './base';
+export type { ExecutionStrategy } from './base';
+export { BaseExecutionStrategy } from './base';
 export { TemplateExecutionStrategy } from './template';
 export { CommandExecutionStrategy } from './command';
 export { CodeExecutionStrategy } from './code';
@@ -8,6 +9,7 @@ export { TransformerExecutionStrategy } from './transformer';
 export { SectionExecutionStrategy } from './section';
 export { ResolverExecutionStrategy } from './resolver';
 
+import type { ExecutionStrategy } from './base';
 import { TemplateExecutionStrategy } from './template';
 import { CommandExecutionStrategy } from './command';
 import { CodeExecutionStrategy } from './code';

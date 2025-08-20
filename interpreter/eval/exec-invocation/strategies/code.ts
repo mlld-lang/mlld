@@ -27,12 +27,6 @@ import { isLoadContentResultArray } from '@core/types/load-content';
  * SECURITY: Code execution happens in controlled environments with proper sandboxing
  */
 export class CodeExecutionStrategy extends BaseExecutionStrategy {
-  private autoUnwrapManager: AutoUnwrapManager;
-  
-  constructor() {
-    super();
-    this.autoUnwrapManager = new AutoUnwrapManager();
-  }
   
   canHandle(executable: ExecutableDefinition): boolean {
     return isCodeExecutable(executable);
@@ -103,7 +97,13 @@ export class CodeExecutionStrategy extends BaseExecutionStrategy {
     }
     
     // Auto-unwrap parameters for JS execution
-    const unwrappedParams = await this.autoUnwrapManager.unwrapForJavaScript(params, env);
+    const unwrappedParams = new Map<string, any>();
+    for (const [name, variable] of params) {
+      const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+      const value = await extractVariableValue(variable, env);
+      const unwrappedValue = AutoUnwrapManager.unwrap(value);
+      unwrappedParams.set(name, unwrappedValue);
+    }
     
     // Execute JavaScript code
     const result = await env.executeJavaScript(code, unwrappedParams);

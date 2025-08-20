@@ -5,13 +5,14 @@ import type { IEvaluator } from '@core/universal-context';
 
 import { getEvaluator } from './evaluator';
 
-// Re-export the legacy implementation
-export { evaluateExecInvocation as evaluateExecInvocationLegacy } from '../exec-invocation';
-
 /**
- * Main entry point for exec invocation evaluation
- * Maintains same signature as legacy for compatibility
- * Optional evaluator parameter enables universal context features
+ * Evaluate an ExecInvocation node
+ * Executes a previously defined exec command with arguments
+ * 
+ * @param node - The ExecInvocation AST node to evaluate
+ * @param env - The environment containing variables and exec definitions
+ * @param evaluator - Optional universal context evaluator for advanced features
+ * @returns Promise resolving to the execution result with value and environment
  */
 export async function evaluateExecInvocation(
   node: ExecInvocation,
@@ -20,14 +21,24 @@ export async function evaluateExecInvocation(
 ): Promise<EvalResult> {
   // Check for feature flag
   if (process.env.USE_REFACTORED_EXEC === 'true') {
-    // Use refactored implementation
     const refactoredEvaluator = getEvaluator();
     return await refactoredEvaluator.evaluate(node, env, evaluator);
   }
   
-  // Fall back to legacy implementation
-  const { evaluateExecInvocation: legacyEval } = await import('../exec-invocation');
-  return await legacyEval(node, env);
+  // Try to use legacy implementation if it exists
+  try {
+    // Use .js extension to ensure we're looking for the file, not the directory
+    const legacy = await import('../exec-invocation.js').catch(() => null);
+    if (legacy && legacy.evaluateExecInvocation) {
+      return await legacy.evaluateExecInvocation(node, env);
+    }
+  } catch (e) {
+    // Legacy doesn't exist, fall through to use refactored
+  }
+  
+  // If no legacy available, use refactored implementation
+  const refactoredEvaluator = getEvaluator();
+  return await refactoredEvaluator.evaluate(node, env, evaluator);
 }
 
 // Export helpers for testing

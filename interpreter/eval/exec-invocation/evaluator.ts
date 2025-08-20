@@ -10,13 +10,12 @@ import { VariableFactory } from './helpers/variable-factory';
 import { ShadowEnvironmentManager } from './helpers/shadow-manager';
 import { globalMetadataShelf } from './helpers/metadata-shelf';
 import { ExecContextManager } from './context-manager';
-import { ExecutionStrategy } from './strategies/base';
+import type { ExecutionStrategy } from './strategies/base';
 import { createStandardStrategies } from './strategies';
 
 import { MlldInterpreterError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { applyWithClause } from '../with-clause';
-import { AutoUnwrapManager } from '../auto-unwrap-manager';
 
 /**
  * Evaluates exec invocations using the strategy pattern
@@ -36,11 +35,9 @@ import { AutoUnwrapManager } from '../auto-unwrap-manager';
  */
 export class ExecInvocationEvaluator {
   private strategies: ExecutionStrategy[] = [];
-  private autoUnwrapManager: AutoUnwrapManager;
   private contextManager: ExecContextManager;
   
   constructor() {
-    this.autoUnwrapManager = new AutoUnwrapManager();
     this.contextManager = new ExecContextManager();
     this.initializeStrategies();
   }
