@@ -5,65 +5,63 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import type { Variable } from '@core/types/variable';
 import type { IEvaluator } from '@core/universal-context';
 
+import { ExecVisitor, ExecutableNode } from './visitor';
+import { createExecutableNode } from './nodes';
 import { CommandResolver } from './helpers/command-resolver';
 import { VariableFactory } from './helpers/variable-factory';
 import { ShadowEnvironmentManager } from './helpers/shadow-manager';
 import { globalMetadataShelf } from './helpers/metadata-shelf';
 import { ExecContextManager } from './context-manager';
-import type { ExecutionStrategy } from './strategies/base';
-import { createStandardStrategies } from './strategies';
 
 import { MlldInterpreterError } from '@core/errors';
 import { logger } from '@core/utils/logger';
 import { applyWithClause } from '../with-clause';
+import { interpolate } from '@interpreter/core/interpreter';
+import { InterpolationContext } from '@interpreter/core/interpolation-context';
+import { 
+  isTemplateExecutable, 
+  isCodeExecutable, 
+  isCommandExecutable,
+  isCommandRefExecutable,
+  isSectionExecutable,
+  isResolverExecutable
+} from '@core/types/executable';
+import { AutoUnwrapManager } from '../auto-unwrap-manager';
+import { isLoadContentResultArray } from '@core/types/load-content';
 
 /**
- * Evaluates exec invocations using the strategy pattern
+ * Evaluates exec invocations using the Visitor pattern
  * 
- * Refactored from a 1400-line monolithic function to a clean, maintainable
- * architecture. Delegates execution to specialized strategies based on the
- * executable type (template, code, command, when, for, etc.)
+ * Refactored from Strategy pattern to Visitor pattern to enable natural
+ * recursion for CommandRef nodes without circular imports.
  * 
- * KEY IMPROVEMENTS:
- * - Strategy pattern for different execution types
- * - Centralized helper utilities (CommandResolver, VariableFactory, etc.)
+ * KEY FEATURES:
+ * - Visitor pattern with double dispatch
+ * - Natural recursion for CommandRef (THE FIX!)
+ * - Preserves all helper utilities from previous refactor
  * - Universal context support for retry capabilities
- * - Clean separation of concerns
+ * - Effect-aware execution (exec returns values, directives emit effects)
  * 
- * COMPATIBILITY: Maintains 100% backward compatibility with legacy implementation
- * FEATURE FLAG: Controlled by USE_REFACTORED_EXEC environment variable
+ * ARCHITECTURE: Implements ExecVisitor interface with one method per execution type
  */
-export class ExecInvocationEvaluator {
-  private strategies: ExecutionStrategy[] = [];
+export class ExecInvocationEvaluator implements ExecVisitor {
+  // Keep all existing helpers - they're well-designed!
   private contextManager: ExecContextManager;
+  private commandResolver: CommandResolver;
+  private variableFactory: VariableFactory;
+  private shadowManager: ShadowEnvironmentManager;
+  private autoUnwrapManager: AutoUnwrapManager;
   
   constructor() {
     this.contextManager = new ExecContextManager();
-    this.initializeStrategies();
+    this.commandResolver = new CommandResolver();
+    this.variableFactory = new VariableFactory();
+    this.shadowManager = new ShadowEnvironmentManager();
+    this.autoUnwrapManager = new AutoUnwrapManager();
   }
   
   /**
-   * Initialize execution strategies
-   * Order matters - first matching strategy wins
-   */
-  private initializeStrategies(): void {
-    this.strategies = createStandardStrategies();
-  }
-  
-  /**
-   * Evaluates an exec invocation node
-   * 
-   * Main entry point that:
-   * 1. Resolves the command to its executable definition
-   * 2. Handles pipeline integration if present
-   * 3. Delegates to appropriate strategy for execution
-   * 4. Manages auto-unwrapping for JS functions
-   * 
-   * @param node - ExecInvocation AST node to evaluate
-   * @param env - Current execution environment
-   * @param evaluator - Optional universal context evaluator
-   * @returns The execution result
-   * @throws {MlldInterpreterError} If command not found or execution fails
+   * Main evaluation entry point - orchestrates the visitor pattern
    */
   async evaluate(
     node: ExecInvocation,
@@ -80,37 +78,31 @@ export class ExecInvocationEvaluator {
         });
       }
       
-      // Step 1: Extract command information
-      const { commandName, args, objectReference } = CommandResolver.extractCommandInfo(node);
+      // 1. Extract and resolve command
+      const { commandName, args, objectReference } = 
+        CommandResolver.extractCommandInfo(node);
       
-      // Step 2: Resolve the command variable
       const commandVariable = await CommandResolver.resolveCommand(
         commandName,
         objectReference,
         env
       );
       
-      /**
-       * Check for special cases before strategy execution
-       * Handles @typeof transformer which needs Variable metadata access
-       * Other transformers proceed through normal strategy execution
-       */
+      // 2. Handle special cases (@typeof needs Variable metadata)
       const specialResult = await this.handleSpecialCases(
         commandVariable,
         args,
         env
       );
-      if (specialResult) {
-        return specialResult;
-      }
+      if (specialResult) return specialResult;
       
-      // Step 4: Extract executable definition
+      // 3. Extract executable and convert to visitable node
       const executableDef = this.extractExecutableDefinition(commandVariable);
+      const executableNode = createExecutableNode(executableDef);
       
-      // Step 5: Process arguments
+      // 4. Process arguments and create execution environment
       const processedArgs = await this.processArguments(args, env);
       
-      // Step 6: Create execution context
       const parentContext = evaluator?.getContext?.();
       const execContext = this.contextManager.createExecContext(
         parentContext,
@@ -118,7 +110,6 @@ export class ExecInvocationEvaluator {
         commandName
       );
       
-      // Step 7: Create execution environment with parameters and context
       const execEnv = await this.createExecutionEnvironment(
         env,
         commandVariable,
@@ -128,11 +119,11 @@ export class ExecInvocationEvaluator {
         execContext
       );
       
-      // Step 8: Handle pipeline execution if present
-      if (node.withClause?.pipeline && node.withClause.pipeline.length > 0) {
+      // 5. Handle pipeline if present (with universal context)
+      if (node.withClause?.pipeline?.length > 0) {
         return await this.executeWithPipeline(
           node,
-          executableDef,
+          executableNode,
           execEnv,
           processedArgs,
           execContext,
@@ -140,14 +131,10 @@ export class ExecInvocationEvaluator {
         );
       }
       
-      // Step 9: Execute using appropriate strategy
-      const result = await this.executeWithStrategy(
-        executableDef,
-        execEnv,
-        evaluator
-      );
+      // 6. Execute via visitor pattern (double dispatch)
+      const result = await executableNode.accept(this, execEnv);
       
-      // Step 10: Apply with-clause if present (non-pipeline parts)
+      // 7. Apply non-pipeline withClause features
       if (node.withClause) {
         return await applyWithClause(result, node.withClause, execEnv);
       }
@@ -155,20 +142,301 @@ export class ExecInvocationEvaluator {
       return result;
       
     } finally {
-      /**
-       * Clear metadata shelf after execution
-       * CONTEXT: Metadata shelf preserves LoadContentResult through transformations
-       *          Must be cleared to prevent leaking between invocations
-       */
+      // Always clear metadata shelf after execution
       globalMetadataShelf.clear();
     }
   }
   
+  // ============================================================================
+  // VISITOR METHODS - One per execution type
+  // ============================================================================
+  
   /**
-   * Special handling for @typeof transformer
-   * WHY: @typeof needs access to Variable metadata, not just the value
-   *      Provides rich type info (directive source, property counts)
-   *      Only transformer that needs Variable object access
+   * Visit template executable - String interpolation
+   */
+  async visitTemplate(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+    if (!isTemplateExecutable(node)) {
+      throw new Error('Invalid node type for visitTemplate');
+    }
+    
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('Executing template', {
+        template: node.template?.substring(0, 100),
+        hasInterpolation: node.syntaxInfo?.hasInterpolation
+      });
+    }
+    
+    const context = new InterpolationContext(env, {
+      autoExecute: true,
+      preserveUndefined: false
+    });
+    
+    const interpolated = await interpolate(node.template || '', context);
+    
+    // Normalize line endings for multi-line templates
+    const result = node.syntaxInfo?.isMultiLine 
+      ? interpolated.replace(/\r\n/g, '\n')
+      : interpolated;
+    
+    return { value: result, env };
+  }
+  
+  /**
+   * Visit code executable - JS/Python/Bash execution with shadow environments
+   */
+  async visitCode(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+    if (!isCodeExecutable(node)) {
+      throw new Error('Invalid node type for visitCode');
+    }
+    
+    const language = node.language?.toLowerCase();
+    const code = node.template || '';
+    
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('Executing code', {
+        language,
+        codeLength: code.length,
+        codePreview: code.substring(0, 100)
+      });
+    }
+    
+    // Handle language-specific execution
+    switch (language) {
+      case 'javascript':
+      case 'js':
+        return await this.executeJavaScript(code, env);
+      
+      case 'python':
+      case 'py':
+        return await this.executePython(code, env);
+      
+      case 'bash':
+      case 'sh':
+        return await this.executeBash(code, env);
+      
+      default:
+        throw new Error(`Unsupported code language: ${language}`);
+    }
+  }
+  
+  /**
+   * Visit command executable - Shell command execution
+   */
+  async visitCommand(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+    if (!isCommandExecutable(node)) {
+      throw new Error('Invalid node type for visitCommand');
+    }
+    
+    const commandTemplate = node.template || '';
+    
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('Executing command', {
+        template: commandTemplate.substring(0, 100),
+        hasInterpolation: node.syntaxInfo?.hasInterpolation
+      });
+    }
+    
+    // Perform interpolation if needed
+    let command: string;
+    if (node.syntaxInfo?.hasInterpolation !== false) {
+      const context = new InterpolationContext(env, {
+        autoExecute: true,
+        preserveUndefined: false
+      });
+      command = await interpolate(commandTemplate, context);
+    } else {
+      command = commandTemplate;
+    }
+    
+    // Execute the command
+    const result = await env.executeCommand(command);
+    
+    return {
+      value: result.stdout || '',
+      env
+    };
+  }
+  
+  /**
+   * Visit commandRef executable - Recursive exec invocation
+   * THE KEY FIX: Natural recursion without circular imports!
+   */
+  async visitCommandRef(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+    if (!isCommandRefExecutable(node)) {
+      throw new Error('Invalid node type for visitCommandRef');
+    }
+    
+    const cmdRef = node.commandRef;
+    if (!cmdRef) {
+      throw new Error('CommandRef node missing commandRef');
+    }
+    
+    // Build ExecInvocation for recursion
+    const refInvocation: ExecInvocation = {
+      type: 'ExecInvocation',
+      commandRef: cmdRef
+    };
+    
+    // NATURAL RECURSION - No circular imports!
+    // The visitor can call back to evaluate() on the same instance
+    return this.evaluate(refInvocation, env);
+  }
+  
+  /**
+   * Visit when executable - Conditional control flow
+   */
+  async visitWhen(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+    // Check for whenExpression
+    const whenExpr = (node as any).whenExpression;
+    if (!whenExpr) {
+      throw new Error('When node missing whenExpression');
+    }
+    
+    if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
+      logger.debug('Executing when expression', {
+        hasConditions: !!whenExpr.conditions,
+        conditionCount: whenExpr.conditions?.length
+      });
+    }
+    
+    // Evaluate mlld-when expression
+    const { evaluateWhenExpression } = await import('@interpreter/eval/when');
+    
+    // Create a child environment for when evaluation
+    const whenEnv = env.createChild();
+    const result = await evaluateWhenExpression(whenExpr, whenEnv);
+    
+    // Merge the child environment back
+    env.mergeChild(whenEnv);
+    
+    return result;
+  }
+  
+  /**
+   * Visit for executable - Iteration with shadow environments
+   */
+  async visitFor(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+    // Check for forExpression
+    const forExpr = (node as any).forExpression;
+    if (!forExpr) {
+      throw new Error('For node missing forExpression');
+    }
+    
+    if (process.env.DEBUG_FOR || process.env.DEBUG_EXEC) {
+      logger.debug('Executing for expression', {
+        itemName: forExpr.itemName,
+        hasAction: !!forExpr.action
+      });
+    }
+    
+    // Handle mlld-for with shadow environments
+    const { evaluateForExpression } = await import('@interpreter/eval/foreach');
+    
+    // Create shadow for iteration
+    const forEnv = env.createChild();
+    const result = await evaluateForExpression(forExpr, forEnv);
+    
+    // Merge back results
+    env.mergeChild(forEnv);
+    
+    return result;
+  }
+  
+  /**
+   * Visit transformer executable - Built-in pure functions
+   */
+  async visitTransformer(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+    const transformerNode = node as any;
+    
+    if (!transformerNode.transformerImplementation) {
+      throw new Error('Transformer node missing implementation');
+    }
+    
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('Executing transformer', {
+        name: transformerNode.name
+      });
+    }
+    
+    // Get the transformer implementation
+    const impl = transformerNode.transformerImplementation;
+    
+    // Get arguments from environment
+    const args: any[] = [];
+    
+    // Check for common parameter names used by transformers
+    const paramNames = ['value', 'input', 'data', 'arg', 'param'];
+    for (const name of paramNames) {
+      const variable = env.getVariable(name);
+      if (variable) {
+        const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+        const value = await extractVariableValue(variable, env);
+        args.push(value);
+      }
+    }
+    
+    // Execute the transformer
+    const result = await impl(...args);
+    
+    return {
+      value: result,
+      env
+    };
+  }
+  
+  /**
+   * Visit section executable - File section extraction
+   */
+  async visitSection(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+    if (!isSectionExecutable(node)) {
+      throw new Error('Invalid node type for visitSection');
+    }
+    
+    if (!node.sectionSelector) {
+      throw new Error('Section node missing sectionSelector');
+    }
+    
+    const selector = node.sectionSelector;
+    
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('Executing section selector', {
+        file: selector.file,
+        section: selector.section
+      });
+    }
+    
+    // Extract the section content
+    const { extractSection } = await import('@interpreter/eval/show');
+    const content = await extractSection(
+      selector.file,
+      selector.section,
+      env
+    );
+    
+    return {
+      value: content,
+      env
+    };
+  }
+  
+  /**
+   * Visit resolver executable - Module resolution
+   */
+  async visitResolver(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+    if (!isResolverExecutable(node)) {
+      throw new Error('Invalid node type for visitResolver');
+    }
+    
+    // Module resolution - currently stub
+    throw new MlldInterpreterError('Resolver executables not yet implemented');
+  }
+  
+  // ============================================================================
+  // HELPER METHODS - Reused from previous refactor
+  // ============================================================================
+  
+  /**
+   * Handle special cases like @typeof transformer
    */
   private async handleSpecialCases(
     commandVariable: Variable,
@@ -188,7 +456,6 @@ export class ExecInvocationEvaluator {
       }
       
       // Other transformers can be handled normally
-      // This will be moved to TransformerStrategy in Phase 2
       const processedArgs = await this.processArguments(args, env);
       const result = await impl(...processedArgs);
       return { value: result, env };
@@ -199,7 +466,6 @@ export class ExecInvocationEvaluator {
   
   /**
    * Handle @typeof transformer special case
-   * Needs access to Variable object metadata, not just value
    */
   private async handleTypeofTransformer(
     args: any[],
@@ -283,10 +549,7 @@ export class ExecInvocationEvaluator {
       forExpression: execVar.forExpression,
       sectionSelector: execVar.sectionSelector,
       resolverInfo: execVar.resolverInfo,
-      commandRef: execVar.commandRef,
-      commandArgs: execVar.commandArgs,
-      withClause: execVar.withClause,
-      sourceDirective: execVar.sourceDirective
+      commandRef: execVar.commandRef
     } as ExecutableDefinition;
   }
   
@@ -349,8 +612,6 @@ export class ExecInvocationEvaluator {
         args,
         env
       );
-      // Store the original args for command reference passthrough
-      execEnv.setVariable('__exec_args__', args);
     } else {
       // Fallback to manual binding
       execEnv = env.createChild();
@@ -364,9 +625,6 @@ export class ExecInvocationEvaluator {
         const paramVar = VariableFactory.createParameter(paramName, value);
         execEnv.setVariable(paramName, paramVar);
       }
-      
-      // Store the original args for command reference passthrough
-      execEnv.setVariable('__exec_args__', args);
     }
     
     // Apply captured shadow environments if present
@@ -381,10 +639,7 @@ export class ExecInvocationEvaluator {
     if (withClause?.pipeline) {
       // If we have execContext, use context manager for pipeline variables
       if (execContext) {
-        await this.contextManager.createPipelineVariables(execContext, execEnv);
-      } else {
-        // Fallback to old method
-        execEnv = await this.createPipelineContext(execEnv, withClause);
+        this.contextManager.createPipelineVariables(execContext, execEnv);
       }
     }
     
@@ -392,94 +647,11 @@ export class ExecInvocationEvaluator {
   }
   
   /**
-   * Create pipeline context for execution
-   * This will be simplified with universal context
-   */
-  private async createPipelineContext(
-    env: Environment,
-    withClause: WithClause
-  ): Promise<Environment> {
-    if (!withClause.pipeline || withClause.pipeline.length === 0) {
-      return env;
-    }
-    
-    // Check if we need synthetic pipeline context
-    // This happens when exec functions reference @p or @pipeline
-    const needsSyntheticContext = await this.checkForPipelineReferences(env);
-    
-    if (needsSyntheticContext) {
-      // Create synthetic pipeline context
-      const syntheticContext = {
-        try: 1,
-        stage: 0,
-        value: undefined
-      };
-      
-      const { createObjectVariable } = await import('@core/types/variable');
-      const pipelineVar = createObjectVariable('p', syntheticContext, false, undefined, {
-        isPipelineContext: true,
-        isSystem: true
-      });
-      
-      env.setVariable('p', pipelineVar);
-      env.setVariable('pipeline', pipelineVar);
-    }
-    
-    return env;
-  }
-  
-  /**
-   * Check if any variables reference pipeline context
-   */
-  private async checkForPipelineReferences(env: Environment): Promise<boolean> {
-    // Check all variables for @p or @pipeline references
-    const allVars = env.getAllVariables();
-    
-    for (const [name, variable] of allVars) {
-      if (variable.type === 'executable') {
-        const execVar = variable as any;
-        const template = execVar.template || '';
-        
-        // Check for @p. or @pipeline. references
-        if (template.includes('@p.') || template.includes('@pipeline.')) {
-          return true;
-        }
-      }
-    }
-    
-    return false;
-  }
-  
-  /**
-   * Execute using the appropriate strategy
-   */
-  private async executeWithStrategy(
-    executableDef: ExecutableDefinition,
-    env: Environment,
-    evaluator?: IEvaluator
-  ): Promise<EvalResult> {
-    // Find matching strategy
-    for (const strategy of this.strategies) {
-      if (strategy.canHandle(executableDef)) {
-        return await strategy.execute(executableDef, env, evaluator);
-      }
-    }
-    
-    // No matching strategy - fallback to basic execution
-    // This will be replaced once strategies are implemented
-    throw new MlldInterpreterError(
-      `No execution strategy found for type: ${executableDef.type}`
-    );
-  }
-  
-  /**
-   * Execute with pipeline and retry support
-   * CONTEXT: Everything is retryable, no special detection needed
-   *          Source function re-executes with incremented @ctx.try
+   * Execute with pipeline
    */
   private async executeWithPipeline(
     node: ExecInvocation,
-    executableDef: ExecutableDefinition,
+    executableNode: ExecutableNode,
     env: Environment,
     args: any[],
     execContext: any,
@@ -493,9 +665,8 @@ export class ExecInvocationEvaluator {
     const { executePipeline } = await import('@interpreter/eval/pipeline/unified-processor');
     
     // Use context manager to create retryable source
-    // In universal context, EVERYTHING is retryable from birth
     const retryableSource = this.contextManager.createRetryableSource(
-      executableDef,
+      executableNode.getDefinition(),
       execContext,
       this,
       env,
@@ -503,30 +674,23 @@ export class ExecInvocationEvaluator {
     );
     
     // NO SYNTHETIC SOURCE NEEDED WITH UNIVERSAL CONTEXT!
-    // Everything already has context from birth
     const normalizedPipeline = node.withClause.pipeline;
     
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[ExecInvocationEvaluator] Universal Context Pipeline:', {
         hasRetryableSource: !!retryableSource,
         pipelineLength: normalizedPipeline.length,
-        stages: normalizedPipeline.map((p: any) => p.rawIdentifier || 'unknown'),
-        contextInfo: {
-          execDepth: execContext.metadata?.execDepth,
-          execName: execContext.metadata?.execName,
-          isPipeline: execContext.isPipeline
-        }
+        stages: normalizedPipeline.map((p: any) => p.rawIdentifier || 'unknown')
       });
     }
     
     // Get initial value from first execution
-    const initialResult = await this.executeWithStrategy(executableDef, env, evaluator);
+    const initialResult = await executableNode.accept(this, env);
     const initialValue = typeof initialResult.value === 'string'
       ? initialResult.value
       : JSON.stringify(initialResult.value);
     
     // Execute the pipeline with universal context
-    // Everything is retryable, NO synthetic source needed
     const pipelineResult = await executePipeline(
       initialValue,
       normalizedPipeline,
@@ -534,7 +698,7 @@ export class ExecInvocationEvaluator {
       node.location,
       node.withClause.format,
       true,  // isRetryable - ALWAYS true in universal context
-      retryableSource,  // The source function that re-executes with context
+      retryableSource,
       false  // hasSyntheticSource - ALWAYS false with universal context!
     );
     
@@ -548,10 +712,93 @@ export class ExecInvocationEvaluator {
   }
   
   /**
-   * Register a strategy
+   * Execute JavaScript code
    */
-  registerStrategy(strategy: ExecutionStrategy): void {
-    this.strategies.push(strategy);
+  private async executeJavaScript(
+    code: string,
+    env: Environment
+  ): Promise<EvalResult> {
+    // Prepare parameters for auto-unwrapping
+    const params = new Map<string, any>();
+    env.getAllVariables().forEach((value, key) => {
+      params.set(key, value);
+    });
+    
+    // Store metadata before unwrapping
+    for (const [name, value] of params) {
+      if (isLoadContentResultArray(value.value)) {
+        globalMetadataShelf.storeMetadata(value.value);
+      }
+    }
+    
+    // Auto-unwrap parameters for JS execution
+    const unwrappedParams = await this.autoUnwrapManager.unwrapForJavaScript(params, env);
+    
+    // Execute JavaScript code
+    const result = await env.executeJavaScript(code, unwrappedParams);
+    
+    // Restore metadata if needed
+    if (Array.isArray(result)) {
+      const restored = globalMetadataShelf.restoreMetadata(result);
+      return { value: restored, env };
+    }
+    
+    return { value: result, env };
+  }
+  
+  /**
+   * Execute Python code
+   */
+  private async executePython(
+    code: string,
+    env: Environment
+  ): Promise<EvalResult> {
+    // Capture shadow environment for Python
+    const shadowEnv = ShadowEnvironmentManager.prepare(env, 'python');
+    
+    // Execute Python code with shadow environment
+    const result = await env.executePython(code, {
+      variables: shadowEnv.variables
+    });
+    
+    return { value: result.output || '', env };
+  }
+  
+  /**
+   * Execute Bash code
+   */
+  private async executeBash(
+    code: string,
+    env: Environment
+  ): Promise<EvalResult> {
+    // Prepare environment variables for Bash
+    const envVars: Record<string, string> = {};
+    
+    env.getAllVariables().forEach((variable, name) => {
+      // Convert variables to string representation for Bash
+      const value = variable.value;
+      if (typeof value === 'string') {
+        envVars[name] = value;
+      } else if (typeof value === 'number' || typeof value === 'boolean') {
+        envVars[name] = String(value);
+      } else if (value && typeof value === 'object') {
+        try {
+          envVars[name] = JSON.stringify(value);
+        } catch {
+          // Skip variables that can't be serialized
+        }
+      }
+    });
+    
+    // Execute Bash script
+    const result = await env.executeCommand(code, {
+      env: envVars
+    });
+    
+    return {
+      value: result.stdout || '',
+      env
+    };
   }
 }
 

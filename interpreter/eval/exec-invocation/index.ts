@@ -30,8 +30,9 @@ export { VariableFactory } from './helpers/variable-factory';
 export { ShadowEnvironmentManager } from './helpers/shadow-manager';
 export { MetadataShelf, globalMetadataShelf } from './helpers/metadata-shelf';
 
-// Export strategies for testing
-export * from './strategies';
+// Export visitor pattern components
+export { ExecVisitor, ExecutableNode } from './visitor';
+export { createExecutableNode } from './nodes';
 
 // Export evaluator for direct access if needed
 export { ExecInvocationEvaluator, getEvaluator } from './evaluator';
