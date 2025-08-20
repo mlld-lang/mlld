@@ -66,7 +66,7 @@ export class ExecContextManager {
           ...paramVar.metadata,
           isParameter: true
         };
-        execEnv.setVariable(paramName, paramVar);
+        execEnv.setParameterVariable(paramName, paramVar);
       }
     });
     
@@ -119,7 +119,7 @@ export class ExecContextManager {
       params.forEach((paramName: string, i: number) => {
         if (i < args.length) {
           const paramVar = VariableFactory.createParameter(paramName, args[i]);
-          retryEnv.setVariable(paramName, paramVar);
+          retryEnv.setParameterVariable(paramName, paramVar);
         }
       });
       
