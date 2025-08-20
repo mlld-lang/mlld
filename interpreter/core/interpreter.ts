@@ -629,6 +629,13 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     return { value: commandStr, env };
   }
   
+  // Handle FileReference nodes (alligator syntax <file.txt>)
+  if (node.type === 'FileReference') {
+    const { processContentLoader } = await import('../eval/content-loader');
+    const result = await processContentLoader(node, env);
+    return { value: result, env };
+  }
+  
   // If we get here, it's an unknown node type
   throw new Error(`Unknown node type: ${node.type}`);
 }

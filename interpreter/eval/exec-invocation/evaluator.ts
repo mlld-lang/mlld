@@ -330,8 +330,33 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       console.error('[visitCommand] Interpolated command:', command);
     }
     
-    // Execute the command - returns a string, not an object
-    const result = await env.executeCommand(command);
+    // Prepare environment variables for shell command - only bound parameters
+    const envVars: Record<string, string> = {};
+    
+    // Get all variables from the environment that are marked as parameters
+    const allVars = env.getAllVariables();
+    for (const [name, variable] of allVars) {
+      if (variable.metadata?.isParameter) {
+        // Convert variables to string representation for shell
+        const value = variable.value;
+        if (typeof value === 'string') {
+          envVars[name] = value;
+        } else if (typeof value === 'number' || typeof value === 'boolean') {
+          envVars[name] = String(value);
+        } else if (value && typeof value === 'object') {
+          try {
+            envVars[name] = JSON.stringify(value);
+          } catch {
+            // Skip variables that can't be serialized
+          }
+        }
+      }
+    }
+    
+    // Execute the command with environment variables
+    const result = await env.executeCommand(command, {
+      env: envVars
+    });
     
     if (process.env.DEBUG_EXEC) {
       console.error('[visitCommand] Command result:', result);
@@ -661,7 +686,8 @@ export class ExecInvocationEvaluator implements ExecVisitor {
           }
         } else if (varObj.type === 'executable') {
           const execType = (varObj as any).executableType || 'unknown';
-          typeInfo = `executable (${execType})`;
+          const sourceDirective = (varObj as any).sourceDirective || 'exec';
+          typeInfo = `executable (${execType} from /${sourceDirective})`;
         }
         
         return { value: typeInfo, env };
@@ -1043,7 +1069,19 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Execute Node code using executeCode
     const result = await env.executeCode(code, 'node', params);
     
-    // executeCode returns a string directly
+    // Handle the result - it could be an object, not just a string
+    // If it's a JSON string that looks like an object, try to parse it
+    if (typeof result === 'string' && result.startsWith('{') && result.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(result);
+        return { value: parsed, env };
+      } catch {
+        // If parsing fails, return as string
+        return { value: result || '', env };
+      }
+    }
+    
+    // Return the result as-is (could be object or string)
     return { value: result || '', env };
   }
   
