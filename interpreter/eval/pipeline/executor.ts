@@ -13,7 +13,8 @@ import { USE_UNIVERSAL_CONTEXT } from '@core/feature-flags';
  * This allows us to inject the evaluate function without circular dependencies
  */
 export interface IEvaluator {
-  evaluate(node: any, env: Environment): Promise<{ value: any; env: Environment }>;
+  evaluate(node: any, env: Environment, context?: any): Promise<{ value: any; env: Environment }>;
+  getContext?(): any;  // Optional method to get current context
 }
 
 /**

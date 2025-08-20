@@ -10,7 +10,7 @@ import type { ExecVisitor, ExecutableNode } from '../visitor';
 abstract class BaseExecutableNode implements ExecutableNode {
   constructor(protected readonly definition: ExecutableDefinition) {}
   
-  abstract accept(visitor: ExecVisitor, env: Environment): Promise<EvalResult>;
+  abstract accept(visitor: ExecVisitor, env: Environment, context?: any): Promise<EvalResult>;
   
   getDefinition(): ExecutableDefinition {
     return this.definition;
@@ -21,8 +21,8 @@ abstract class BaseExecutableNode implements ExecutableNode {
  * Template executable node - String interpolation
  */
 export class TemplateExecutableNode extends BaseExecutableNode {
-  accept(visitor: ExecVisitor, env: Environment): Promise<EvalResult> {
-    return visitor.visitTemplate(this.definition, env);
+  accept(visitor: ExecVisitor, env: Environment, context?: any): Promise<EvalResult> {
+    return visitor.visitTemplate(this.definition, env, context);
   }
 }
 
@@ -30,8 +30,8 @@ export class TemplateExecutableNode extends BaseExecutableNode {
  * Code executable node - JS/Python/Bash execution
  */
 export class CodeExecutableNode extends BaseExecutableNode {
-  accept(visitor: ExecVisitor, env: Environment): Promise<EvalResult> {
-    return visitor.visitCode(this.definition, env);
+  accept(visitor: ExecVisitor, env: Environment, context?: any): Promise<EvalResult> {
+    return visitor.visitCode(this.definition, env, context);
   }
 }
 
@@ -39,8 +39,8 @@ export class CodeExecutableNode extends BaseExecutableNode {
  * Command executable node - Shell command execution
  */
 export class CommandExecutableNode extends BaseExecutableNode {
-  accept(visitor: ExecVisitor, env: Environment): Promise<EvalResult> {
-    return visitor.visitCommand(this.definition, env);
+  accept(visitor: ExecVisitor, env: Environment, context?: any): Promise<EvalResult> {
+    return visitor.visitCommand(this.definition, env, context);
   }
 }
 
@@ -49,8 +49,8 @@ export class CommandExecutableNode extends BaseExecutableNode {
  * THE KEY NODE: Enables natural recursion through visitor pattern
  */
 export class CommandRefExecutableNode extends BaseExecutableNode {
-  accept(visitor: ExecVisitor, env: Environment): Promise<EvalResult> {
-    return visitor.visitCommandRef(this.definition, env);
+  accept(visitor: ExecVisitor, env: Environment, context?: any): Promise<EvalResult> {
+    return visitor.visitCommandRef(this.definition, env, context);
   }
 }
 
@@ -58,8 +58,8 @@ export class CommandRefExecutableNode extends BaseExecutableNode {
  * When executable node - Conditional control flow
  */
 export class WhenExecutableNode extends BaseExecutableNode {
-  accept(visitor: ExecVisitor, env: Environment): Promise<EvalResult> {
-    return visitor.visitWhen(this.definition, env);
+  accept(visitor: ExecVisitor, env: Environment, context?: any): Promise<EvalResult> {
+    return visitor.visitWhen(this.definition, env, context);
   }
 }
 
@@ -67,8 +67,8 @@ export class WhenExecutableNode extends BaseExecutableNode {
  * For executable node - Iteration with shadow environments
  */
 export class ForExecutableNode extends BaseExecutableNode {
-  accept(visitor: ExecVisitor, env: Environment): Promise<EvalResult> {
-    return visitor.visitFor(this.definition, env);
+  accept(visitor: ExecVisitor, env: Environment, context?: any): Promise<EvalResult> {
+    return visitor.visitFor(this.definition, env, context);
   }
 }
 
@@ -76,8 +76,8 @@ export class ForExecutableNode extends BaseExecutableNode {
  * Transformer executable node - Built-in pure functions
  */
 export class TransformerExecutableNode extends BaseExecutableNode {
-  accept(visitor: ExecVisitor, env: Environment): Promise<EvalResult> {
-    return visitor.visitTransformer(this.definition, env);
+  accept(visitor: ExecVisitor, env: Environment, context?: any): Promise<EvalResult> {
+    return visitor.visitTransformer(this.definition, env, context);
   }
 }
 
@@ -85,8 +85,8 @@ export class TransformerExecutableNode extends BaseExecutableNode {
  * Section executable node - File section extraction
  */
 export class SectionExecutableNode extends BaseExecutableNode {
-  accept(visitor: ExecVisitor, env: Environment): Promise<EvalResult> {
-    return visitor.visitSection(this.definition, env);
+  accept(visitor: ExecVisitor, env: Environment, context?: any): Promise<EvalResult> {
+    return visitor.visitSection(this.definition, env, context);
   }
 }
 
@@ -94,8 +94,8 @@ export class SectionExecutableNode extends BaseExecutableNode {
  * Resolver executable node - Module resolution
  */
 export class ResolverExecutableNode extends BaseExecutableNode {
-  accept(visitor: ExecVisitor, env: Environment): Promise<EvalResult> {
-    return visitor.visitResolver(this.definition, env);
+  accept(visitor: ExecVisitor, env: Environment, context?: any): Promise<EvalResult> {
+    return visitor.visitResolver(this.definition, env, context);
   }
 }
 

@@ -23,11 +23,16 @@ export class ExecContextManager {
   ): UniversalContext {
     const baseContext = parentContext || createDefaultContext();
     
+    // If parent context is from a pipeline, preserve pipeline state
+    const isPipeline = parentContext?.isPipeline || false;
+    const stage = isPipeline ? (parentContext?.stage || 0) : 0;
+    const tryCount = parentContext?.try || 1;
+    
     return {
       ...baseContext,
-      stage: 0,  // Exec functions start at stage 0
-      isPipeline: false,  // Not yet part of pipeline (will be true on retry)
-      try: baseContext.try || 1,  // Inherit retry count or start at 1
+      stage,  // Preserve stage if from pipeline, else 0
+      isPipeline,  // Preserve pipeline state
+      try: tryCount,  // Inherit retry count or start at 1
       metadata: {
         ...baseContext.metadata,
         execDepth: (baseContext.metadata?.execDepth || 0) + 1,
@@ -156,7 +161,8 @@ export class ExecContextManager {
         }
       });
       
-      const result = await evaluator.executeWithStrategy(executable, retryEnv);
+      // Use evaluate method instead of executeWithStrategy
+      const result = await evaluator.evaluate(executable, retryEnv, retryContext);
       return String(result.value);
     };
   }

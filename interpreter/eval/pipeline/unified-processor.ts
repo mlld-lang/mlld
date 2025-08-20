@@ -126,7 +126,16 @@ export async function processPipeline(
       // Re-evaluate the source node to get fresh input
       if (sourceNode.type === 'ExecInvocation') {
         const { evaluateExecInvocation } = await import('../exec-invocation');
-        const result = await evaluateExecInvocation(sourceNode, env);
+        // CRITICAL: Pass pipeline context to exec invocation
+        // Get pipeline context from environment
+        const pipelineCtx = env.getPipelineContext();
+        const context = pipelineCtx ? {
+          stage: pipelineCtx.stage || 0,
+          try: pipelineCtx.try || 1,
+          isPipeline: true,
+          tries: pipelineCtx.tries || []
+        } : undefined;
+        const result = await evaluateExecInvocation(sourceNode, env, context);
         return String(result.value);
       } else if (sourceNode.type === 'command') {
         // This is a command executable definition, not a run directive

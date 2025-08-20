@@ -13,19 +13,19 @@ import type { ExecutableDefinition } from '@core/types/executable';
  */
 export interface ExecVisitor {
   // Core execution types
-  visitTemplate(node: ExecutableDefinition, env: Environment): Promise<EvalResult>;
-  visitCode(node: ExecutableDefinition, env: Environment): Promise<EvalResult>;
-  visitCommand(node: ExecutableDefinition, env: Environment): Promise<EvalResult>;
-  visitCommandRef(node: ExecutableDefinition, env: Environment): Promise<EvalResult>;
+  visitTemplate(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult>;
+  visitCode(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult>;
+  visitCommand(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult>;
+  visitCommandRef(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult>;
   
   // Control flow
-  visitWhen(node: ExecutableDefinition, env: Environment): Promise<EvalResult>;
-  visitFor(node: ExecutableDefinition, env: Environment): Promise<EvalResult>;
+  visitWhen(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult>;
+  visitFor(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult>;
   
   // Special types
-  visitTransformer(node: ExecutableDefinition, env: Environment): Promise<EvalResult>;
-  visitSection(node: ExecutableDefinition, env: Environment): Promise<EvalResult>;
-  visitResolver(node: ExecutableDefinition, env: Environment): Promise<EvalResult>;
+  visitTransformer(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult>;
+  visitSection(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult>;
+  visitResolver(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult>;
 }
 
 /**
@@ -39,7 +39,7 @@ export interface ExecutableNode {
    * @param env The environment for evaluation
    * @returns The evaluation result
    */
-  accept(visitor: ExecVisitor, env: Environment): Promise<EvalResult>;
+  accept(visitor: ExecVisitor, env: Environment, context?: any): Promise<EvalResult>;
   
   /**
    * Get the underlying executable definition

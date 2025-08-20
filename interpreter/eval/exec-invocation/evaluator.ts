@@ -69,7 +69,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   async evaluate(
     node: ExecInvocation,
     env: Environment,
-    evaluator?: IEvaluator
+    evaluator?: IEvaluator | any  // Allow context as third param or evaluator
   ): Promise<EvalResult> {
     try {
       // Debug logging
@@ -120,7 +120,23 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       const executableNode = createExecutableNode(executableDef);
       
       // 4. Create execution context early for pipeline variables
-      const parentContext = evaluator?.getContext?.();
+      // Handle both old (evaluator) and new (context) parameter formats
+      let parentContext: any;
+      let actualEvaluator: IEvaluator | undefined;
+      
+      // Check if third param is a context object or evaluator
+      if (evaluator && typeof evaluator === 'object') {
+        if ('evaluate' in evaluator && typeof evaluator.evaluate === 'function') {
+          // It's an evaluator
+          actualEvaluator = evaluator as IEvaluator;
+          parentContext = evaluator.getContext?.();
+        } else if ('stage' in evaluator || 'try' in evaluator || 'isPipeline' in evaluator) {
+          // It's a context object
+          parentContext = evaluator;
+          // No evaluator in this case
+        }
+      }
+      
       const execContext = this.contextManager.createExecContext(
         parentContext,
         executableDef,
@@ -170,7 +186,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
           execEnv,
           processedArgs,
           execContext,
-          evaluator
+          actualEvaluator
         );
       }
       
@@ -183,7 +199,8 @@ export class ExecInvocationEvaluator implements ExecVisitor {
           argCount: args.length
         });
       }
-      const result = await executableNode.accept(this, execEnv);
+      // Pass context to visitor for proper pipeline context propagation
+      const result = await executableNode.accept(this, execEnv, parentContext);
       if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
         console.error('[ExecInvocationEvaluator] Result:', {
           hasValue: result.value !== undefined,
@@ -215,7 +232,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   /**
    * Visit template executable - String interpolation
    */
-  async visitTemplate(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+  async visitTemplate(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult> {
     if (!isTemplateExecutable(node)) {
       throw new Error('Invalid node type for visitTemplate');
     }
@@ -249,7 +266,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   /**
    * Visit code executable - JS/Python/Bash execution with shadow environments
    */
-  async visitCode(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+  async visitCode(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult> {
     if (!isCodeExecutable(node)) {
       throw new Error('Invalid node type for visitCode');
     }
@@ -303,7 +320,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   /**
    * Visit command executable - Shell command execution
    */
-  async visitCommand(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+  async visitCommand(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult> {
     if (process.env.DEBUG_EXEC) {
       console.error('[visitCommand] Called with node type:', node.type);
     }
@@ -396,7 +413,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
    * Visit commandRef executable - Recursive exec invocation
    * THE KEY FIX: Natural recursion without circular imports!
    */
-  async visitCommandRef(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+  async visitCommandRef(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult> {
     if (!isCommandRefExecutable(node)) {
       throw new Error('Invalid node type for visitCommandRef');
     }
@@ -456,13 +473,14 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // NATURAL RECURSION - No circular imports!
     // The visitor can call back to evaluate() on the same instance
     // Use parent environment to avoid parameter pollution
-    return this.evaluate(refInvocation, env.parent || env);
+    // CRITICAL: Pass context to maintain pipeline context through recursion
+    return this.evaluate(refInvocation, env.parent || env, context);
   }
   
   /**
    * Visit when executable - Conditional control flow
    */
-  async visitWhen(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+  async visitWhen(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult> {
     // For mlld-when executable, the WhenExpression is in codeTemplate array
     let whenExpr: any;
     
@@ -503,7 +521,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   /**
    * Visit for executable - Iteration with shadow environments
    */
-  async visitFor(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+  async visitFor(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult> {
     // For mlld-for executable, the ForExpression is in codeTemplate array
     let forExpr: any;
     
@@ -547,7 +565,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   /**
    * Visit transformer executable - Built-in pure functions
    */
-  async visitTransformer(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+  async visitTransformer(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult> {
     const transformerNode = node as any;
     
     if (!transformerNode.transformerImplementation) {
@@ -589,7 +607,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   /**
    * Visit section executable - File section extraction
    */
-  async visitSection(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+  async visitSection(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult> {
     if (!isSectionExecutable(node)) {
       throw new Error('Invalid node type for visitSection');
     }
@@ -624,7 +642,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   /**
    * Visit resolver executable - Module resolution
    */
-  async visitResolver(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+  async visitResolver(node: ExecutableDefinition, env: Environment, context?: any): Promise<EvalResult> {
     if (!isResolverExecutable(node)) {
       throw new Error('Invalid node type for visitResolver');
     }
@@ -982,12 +1000,22 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       );
     }
     
-    // Handle pipeline context if needed
-    if (withClause?.pipeline) {
+    // Handle pipeline context
+    // CRITICAL: Create pipeline variables if:
+    // 1. This exec has a pipeline (withClause.pipeline)
+    // 2. OR we're being called FROM a pipeline (execContext.isPipeline)
+    if (withClause?.pipeline || execContext?.isPipeline) {
       // If we have execContext, use context manager for pipeline variables
       if (execContext) {
         this.contextManager.createPipelineVariables(execContext, execEnv);
       }
+    }
+    
+    // Also check if parent environment has pipeline context
+    const parentPipelineCtx = env.getPipelineContext();
+    if (parentPipelineCtx && !withClause?.pipeline) {
+      // We're being called from a pipeline - inherit the context
+      execEnv.setPipelineContext(parentPipelineCtx);
     }
     
     return execEnv;
