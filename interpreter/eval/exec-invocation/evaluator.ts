@@ -84,6 +84,10 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       const { commandName, args, objectReference } = 
         CommandResolver.extractCommandInfo(node);
       
+      if (process.env.DEBUG_EXEC && args.length > 0) {
+        console.error('[evaluate] Raw args:', JSON.stringify(args, null, 2));
+      }
+      
       const commandVariable = await CommandResolver.resolveCommand(
         commandName,
         objectReference,
@@ -729,9 +733,45 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       // Handle Variable references that need evaluation
       if (arg && typeof arg === 'object') {
         if (arg.type === 'VariableReference') {
-          const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
-          const value = await extractVariableValue(arg, env);
-          processed.push(value);
+          const varRef = arg as any;
+          const varName = varRef.identifier;
+          const variable = env.getVariable(varName);
+          
+          if (process.env.DEBUG_EXEC) {
+            console.error('[processArguments] Evaluating VariableReference:', varName, 'fields:', varRef.fields);
+          }
+          
+          if (variable) {
+            // Get the actual value from the variable
+            let value = variable.value;
+            
+            // Handle field access (e.g., @user.name)
+            if (varRef.fields && varRef.fields.length > 0) {
+              // Navigate through nested fields
+              for (const field of varRef.fields) {
+                if (value && typeof value === 'object' && (field.type === 'field' || field.type === 'numericField')) {
+                  // Handle object field access (including numeric fields)
+                  value = value[field.value];
+                } else if (Array.isArray(value) && (field.type === 'index' || field.type === 'arrayIndex')) {
+                  // Handle array index access
+                  const index = parseInt(field.value, 10);
+                  value = isNaN(index) ? undefined : value[index];
+                } else {
+                  // Can't navigate further
+                  value = undefined;
+                  break;
+                }
+              }
+            }
+            
+            if (process.env.DEBUG_EXEC) {
+              console.error('[processArguments] Result:', value);
+            }
+            processed.push(value);
+          } else {
+            // Variable not found
+            processed.push(undefined);
+          }
         } else if (arg.type === 'Text') {
           processed.push(arg.content || '');
         } else if (arg.type === 'Number') {
@@ -897,12 +937,22 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Prepare parameters for auto-unwrapping - only get bound parameters
     const params = new Map<string, any>();
     
-    // Only add the bound parameters for this function call
-    if (this.currentBoundParams) {
-      for (const paramName of this.currentBoundParams) {
-        const variable = env.getVariable(paramName);
-        if (variable) {
-          params.set(paramName, variable);
+    // Get all variables from the environment that are marked as parameters
+    const allVars = env.getAllVariables();
+    
+    if (process.env.DEBUG_EXEC) {
+      console.error('[executeJavaScript] Looking for parameters:', {
+        totalVars: allVars.size,
+        varNames: Array.from(allVars.keys()).slice(0, 10)
+      });
+    }
+    
+    for (const [name, variable] of allVars) {
+      // Check if this is a parameter (marked during parameter binding)
+      if (variable.metadata?.isParameter) {
+        params.set(name, variable);
+        if (process.env.DEBUG_EXEC) {
+          console.error('[executeJavaScript] Found parameter:', name, 'value:', variable.value);
         }
       }
     }
@@ -956,14 +1006,12 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Prepare parameters for Node - only bound parameters
     const params: Record<string, any> = {};
     
-    // Only add the bound parameters for this function call
-    if (this.currentBoundParams) {
-      for (const paramName of this.currentBoundParams) {
-        const variable = env.getVariable(paramName);
-        if (variable) {
-          // Auto-unwrap for Node
-          params[paramName] = AutoUnwrapManager.unwrap(variable.value);
-        }
+    // Get all variables from the environment that are marked as parameters
+    const allVars = env.getAllVariables();
+    for (const [name, variable] of allVars) {
+      if (variable.metadata?.isParameter) {
+        // Auto-unwrap for Node
+        params[name] = AutoUnwrapManager.unwrap(variable.value);
       }
     }
     
@@ -989,14 +1037,12 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Prepare parameters for Python - only bound parameters
     const params: Record<string, any> = {};
     
-    // Only add the bound parameters for this function call
-    if (this.currentBoundParams) {
-      for (const paramName of this.currentBoundParams) {
-        const variable = env.getVariable(paramName);
-        if (variable) {
-          // Auto-unwrap for Python
-          params[paramName] = AutoUnwrapManager.unwrap(variable.value);
-        }
+    // Get all variables from the environment that are marked as parameters
+    const allVars = env.getAllVariables();
+    for (const [name, variable] of allVars) {
+      if (variable.metadata?.isParameter) {
+        // Auto-unwrap for Python
+        params[name] = AutoUnwrapManager.unwrap(variable.value);
       }
     }
     
@@ -1022,23 +1068,21 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Prepare environment variables for Bash - only bound parameters
     const envVars: Record<string, string> = {};
     
-    // Only add the bound parameters for this function call
-    if (this.currentBoundParams) {
-      for (const name of this.currentBoundParams) {
-        const variable = env.getVariable(name);
-        if (variable) {
-          // Convert variables to string representation for Bash
-          const value = variable.value;
-          if (typeof value === 'string') {
-            envVars[name] = value;
-          } else if (typeof value === 'number' || typeof value === 'boolean') {
-            envVars[name] = String(value);
-          } else if (value && typeof value === 'object') {
-            try {
-              envVars[name] = JSON.stringify(value);
-            } catch {
-              // Skip variables that can't be serialized
-            }
+    // Get all variables from the environment that are marked as parameters
+    const allVars = env.getAllVariables();
+    for (const [name, variable] of allVars) {
+      if (variable.metadata?.isParameter) {
+        // Convert variables to string representation for Bash
+        const value = variable.value;
+        if (typeof value === 'string') {
+          envVars[name] = value;
+        } else if (typeof value === 'number' || typeof value === 'boolean') {
+          envVars[name] = String(value);
+        } else if (value && typeof value === 'object') {
+          try {
+            envVars[name] = JSON.stringify(value);
+          } catch {
+            // Skip variables that can't be serialized
           }
         }
       }
