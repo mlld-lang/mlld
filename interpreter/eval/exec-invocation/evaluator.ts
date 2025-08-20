@@ -282,7 +282,11 @@ export class ExecInvocationEvaluator {
       whenExpression: execVar.whenExpression,
       forExpression: execVar.forExpression,
       sectionSelector: execVar.sectionSelector,
-      resolverInfo: execVar.resolverInfo
+      resolverInfo: execVar.resolverInfo,
+      commandRef: execVar.commandRef,
+      commandArgs: execVar.commandArgs,
+      withClause: execVar.withClause,
+      sourceDirective: execVar.sourceDirective
     } as ExecutableDefinition;
   }
   
@@ -345,6 +349,8 @@ export class ExecInvocationEvaluator {
         args,
         env
       );
+      // Store the original args for command reference passthrough
+      execEnv.setVariable('__exec_args__', args);
     } else {
       // Fallback to manual binding
       execEnv = env.createChild();
@@ -358,6 +364,9 @@ export class ExecInvocationEvaluator {
         const paramVar = VariableFactory.createParameter(paramName, value);
         execEnv.setVariable(paramName, paramVar);
       }
+      
+      // Store the original args for command reference passthrough
+      execEnv.setVariable('__exec_args__', args);
     }
     
     // Apply captured shadow environments if present
@@ -372,7 +381,7 @@ export class ExecInvocationEvaluator {
     if (withClause?.pipeline) {
       // If we have execContext, use context manager for pipeline variables
       if (execContext) {
-        this.contextManager.createPipelineVariables(execContext, execEnv);
+        await this.contextManager.createPipelineVariables(execContext, execEnv);
       } else {
         // Fallback to old method
         execEnv = await this.createPipelineContext(execEnv, withClause);

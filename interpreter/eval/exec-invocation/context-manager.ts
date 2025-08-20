@@ -107,7 +107,7 @@ export class ExecContextManager {
       }
       
       // Create pipeline variables so exec can access @ctx.try
-      this.createPipelineVariables(retryContext, retryEnv);
+      await this.createPipelineVariables(retryContext, retryEnv);
       
       // Re-bind parameters for retry with proper context
       const params = (executable as any).paramNames || [];
@@ -128,10 +128,10 @@ export class ExecContextManager {
    * @ctx is the primary variable, @p/@pipeline are legacy aliases
    * Legacy aliases will be removed after test migration
    */
-  createPipelineVariables(
+  async createPipelineVariables(
     context: UniversalContext,
     env: Environment
-  ): void {
+  ): Promise<void> {
     const contextObj = {
       try: context.try || 1,
       stage: context.stage || 0,
@@ -141,7 +141,7 @@ export class ExecContextManager {
     };
     
     // Create context variable
-    const { createObjectVariable } = require('@core/types/variable');
+    const { createObjectVariable } = await import('@core/types/variable');
     const contextVar = createObjectVariable('ctx', contextObj, false, undefined, {
       isPipelineContext: true,
       isSystem: true

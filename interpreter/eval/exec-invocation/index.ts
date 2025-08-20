@@ -19,24 +19,7 @@ export async function evaluateExecInvocation(
   env: Environment,
   evaluator?: IEvaluator
 ): Promise<EvalResult> {
-  // Check for feature flag
-  if (process.env.USE_REFACTORED_EXEC === 'true') {
-    const refactoredEvaluator = getEvaluator();
-    return await refactoredEvaluator.evaluate(node, env, evaluator);
-  }
-  
-  // Try to use legacy implementation if it exists
-  try {
-    // Use .js extension to ensure we're looking for the file, not the directory
-    const legacy = await import('../exec-invocation.js').catch(() => null);
-    if (legacy && legacy.evaluateExecInvocation) {
-      return await legacy.evaluateExecInvocation(node, env);
-    }
-  } catch (e) {
-    // Legacy doesn't exist, fall through to use refactored
-  }
-  
-  // If no legacy available, use refactored implementation
+  // ALWAYS use refactored implementation for testing
   const refactoredEvaluator = getEvaluator();
   return await refactoredEvaluator.evaluate(node, env, evaluator);
 }
