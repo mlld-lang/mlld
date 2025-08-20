@@ -18,6 +18,7 @@ import { logger } from '@core/utils/logger';
 import { applyWithClause } from '../with-clause';
 import { interpolate } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
+import { prepareValueForShadow } from '@interpreter/env/variable-proxy';
 import { 
   isTemplateExecutable, 
   isCodeExecutable, 
@@ -1003,35 +1004,57 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       }
     }
     
-    // Store metadata before unwrapping
-    for (const [name, variable] of params) {
+    // Prepare parameters with Variable proxies for JS execution
+    const processedParams: Record<string, any> = {};
+    const variableMetadata: Record<string, any> = {};
+    
+    for (const [key, variable] of params) {
+      // Store metadata shelf for LoadContentResult
       if (isLoadContentResultArray(variable.value)) {
         globalMetadataShelf.storeMetadata(variable.value);
       }
-    }
-    
-    // Auto-unwrap parameters for JS execution using static method
-    const unwrappedParams = {}; 
-    for (const [key, variable] of params) {
-      // Extract the value from the Variable object before unwrapping
-      const value = variable.value;
-      unwrappedParams[key] = AutoUnwrapManager.unwrap(value);
+      
+      // Auto-unwrap LoadContentResult objects
+      const unwrappedValue = AutoUnwrapManager.unwrap(variable.value);
+      if (unwrappedValue !== variable.value) {
+        // Value was unwrapped, create a new variable with unwrapped content
+        const unwrappedVar = {
+          ...variable,
+          value: unwrappedValue,
+          type: Array.isArray(unwrappedValue) ? 'array' : 'text'
+        };
+        processedParams[key] = prepareValueForShadow(unwrappedVar);
+      } else {
+        // Use original Variable with proxy
+        processedParams[key] = prepareValueForShadow(variable);
+      }
+      
+      // Store metadata for primitives that can't be proxied
+      if (variable.value === null || typeof variable.value !== 'object') {
+        variableMetadata[key] = {
+          type: variable.type,
+          subtype: variable.subtype || (variable as any).primitiveType,
+          metadata: variable.metadata,
+          isVariable: true
+        };
+      }
     }
     
     // Add captured shadow environments if present
     if (this.currentCapturedShadowEnvs) {
-      unwrappedParams['__capturedShadowEnvs'] = this.currentCapturedShadowEnvs;
+      processedParams['__capturedShadowEnvs'] = this.currentCapturedShadowEnvs;
     }
     
     if (process.env.DEBUG_EXEC) {
       console.error('[executeJavaScript] Passing params:', {
-        paramKeys: Object.keys(unwrappedParams),
-        hasCapturedShadowEnvs: '__capturedShadowEnvs' in unwrappedParams
+        paramKeys: Object.keys(processedParams),
+        hasCapturedShadowEnvs: '__capturedShadowEnvs' in processedParams,
+        hasMetadata: Object.keys(variableMetadata).length > 0
       });
     }
     
-    // Execute JavaScript code using executeCode
-    const result = await env.executeCode(code, 'javascript', unwrappedParams);
+    // Execute JavaScript code using executeCode - pass both params and metadata
+    const result = await env.executeCode(code, 'javascript', processedParams);
     
     // Restore metadata if needed
     if (Array.isArray(result)) {
