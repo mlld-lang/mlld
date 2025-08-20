@@ -61,6 +61,11 @@ export class ExecContextManager {
     params.forEach((paramName, i) => {
       if (i < args.length) {
         const paramVar = VariableFactory.createParameter(paramName, args[i]);
+        // Mark as parameter to bypass reserved name check
+        paramVar.metadata = {
+          ...paramVar.metadata,
+          isParameter: true
+        };
         execEnv.setVariable(paramName, paramVar);
       }
     });

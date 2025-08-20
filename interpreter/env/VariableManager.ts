@@ -69,9 +69,12 @@ export class VariableManager implements IVariableManager {
   }
   
   setVariable(name: string, variable: Variable): void {
-    // Check if the name is reserved (but allow system variables to be set)
+    // Check if the name is reserved (but allow system variables and parameters to be set)
     const reservedNames = this.deps.getReservedNames();
-    if (reservedNames.has(name) && !variable.metadata?.isReserved && !variable.metadata?.isSystem) {
+    if (reservedNames.has(name) && 
+        !variable.metadata?.isReserved && 
+        !variable.metadata?.isSystem &&
+        !variable.metadata?.isParameter) {
       throw new Error(`Cannot create variable '@${name}': this name is already reserved by the system or a resolver prefix`);
     }
     

@@ -743,6 +743,11 @@ export class ExecInvocationEvaluator implements ExecVisitor {
         
         // Create parameter variable preserving type information
         const paramVar = VariableFactory.createParameter(paramName, value);
+        // Mark as parameter to bypass reserved name check
+        paramVar.metadata = {
+          ...paramVar.metadata,
+          isParameter: true
+        };
         execEnv.setVariable(paramName, paramVar);
       }
     }
