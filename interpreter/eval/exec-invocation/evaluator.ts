@@ -50,14 +50,13 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   private commandResolver: CommandResolver;
   private variableFactory: VariableFactory;
   private shadowManager: ShadowEnvironmentManager;
-  private autoUnwrapManager: AutoUnwrapManager;
+  // AutoUnwrapManager is used statically, no instance needed
   
   constructor() {
     this.contextManager = new ExecContextManager();
     this.commandResolver = new CommandResolver();
     this.variableFactory = new VariableFactory();
     this.shadowManager = new ShadowEnvironmentManager();
-    this.autoUnwrapManager = new AutoUnwrapManager();
   }
   
   /**
@@ -97,11 +96,29 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       if (specialResult) return specialResult;
       
       // 3. Extract executable and convert to visitable node
+      if (process.env.DEBUG_EXEC) {
+        console.error('[evaluate] Extracting executable definition from:', {
+          variableName: commandVariable.name,
+          variableType: commandVariable.type
+        });
+      }
       const executableDef = this.extractExecutableDefinition(commandVariable);
+      if (process.env.DEBUG_EXEC) {
+        console.error('[evaluate] Extracted executable:', {
+          type: executableDef.type,
+          hasParamNames: !!(executableDef as any).paramNames
+        });
+      }
       const executableNode = createExecutableNode(executableDef);
       
       // 4. Process arguments and create execution environment
+      if (process.env.DEBUG_EXEC) {
+        console.error('[evaluate] Processing arguments, count:', args.length);
+      }
       const processedArgs = await this.processArguments(args, env);
+      if (process.env.DEBUG_EXEC) {
+        console.error('[evaluate] Processed args:', processedArgs);
+      }
       
       const parentContext = evaluator?.getContext?.();
       const execContext = this.contextManager.createExecContext(
@@ -110,6 +127,9 @@ export class ExecInvocationEvaluator implements ExecVisitor {
         commandName
       );
       
+      if (process.env.DEBUG_EXEC) {
+        console.error('[evaluate] Creating execution environment...');
+      }
       const execEnv = await this.createExecutionEnvironment(
         env,
         commandVariable,
@@ -118,6 +138,9 @@ export class ExecInvocationEvaluator implements ExecVisitor {
         node.withClause,
         execContext
       );
+      if (process.env.DEBUG_EXEC) {
+        console.error('[evaluate] Created exec env, has pipeline:', !!(node.withClause?.pipeline?.length));
+      }
       
       // 5. Handle pipeline if present (with universal context)
       if (node.withClause?.pipeline?.length > 0) {
@@ -132,7 +155,23 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       }
       
       // 6. Execute via visitor pattern (double dispatch)
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
+        console.error('[ExecInvocationEvaluator] Executing node:', {
+          nodeType: executableDef.type,
+          hasParams: (executableDef as any).paramNames?.length > 0,
+          paramNames: (executableDef as any).paramNames,
+          argCount: args.length
+        });
+      }
       const result = await executableNode.accept(this, execEnv);
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
+        console.error('[ExecInvocationEvaluator] Result:', {
+          hasValue: result.value !== undefined,
+          valueType: typeof result.value,
+          valueLength: typeof result.value === 'string' ? result.value.length : undefined,
+          value: result.value
+        });
+      }
       
       // 7. Apply non-pipeline withClause features
       if (node.withClause) {
@@ -166,12 +205,16 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       });
     }
     
-    const context = new InterpolationContext(env, {
-      autoExecute: true,
-      preserveUndefined: false
-    });
-    
-    const interpolated = await interpolate(node.template || '', context);
+    // Template nodes need simple interpolation  
+    // node.template is already an array of nodes
+    if (process.env.DEBUG_EXEC) {
+      console.error('[visitTemplate] Environment check:', {
+        hasVariables: env.getAllVariables().size > 0,
+        variables: Array.from(env.getAllVariables().keys()),
+        templateLength: node.template?.length
+      });
+    }
+    const interpolated = await interpolate(node.template || [], env, InterpolationContext.Default);
     
     // Normalize line endings for multi-line templates
     const result = node.syntaxInfo?.isMultiLine 
@@ -190,13 +233,25 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     }
     
     const language = node.language?.toLowerCase();
-    const code = node.template || '';
+    // CodeExecutable uses codeTemplate, not template
+    const codeNodes = (node as any).codeTemplate || [];
     
     if (process.env.DEBUG_EXEC) {
-      logger.debug('Executing code', {
+      console.error('[visitCode] Executing code:', {
         language,
-        codeLength: code.length,
-        codePreview: code.substring(0, 100)
+        codeNodesLength: codeNodes.length,
+        firstNodeType: codeNodes[0]?.type
+      });
+    }
+    
+    // Interpolate code nodes to get the actual code string
+    const code = await interpolate(codeNodes, env, InterpolationContext.Default);
+    
+    if (process.env.DEBUG_EXEC) {
+      console.error('[visitCode] Executing code:', {
+        language,
+        code: code.substring(0, 100),
+        envVarCount: env.getAllVariables().size
       });
     }
     
@@ -223,36 +278,41 @@ export class ExecInvocationEvaluator implements ExecVisitor {
    * Visit command executable - Shell command execution
    */
   async visitCommand(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
+    if (process.env.DEBUG_EXEC) {
+      console.error('[visitCommand] Called with node type:', node.type);
+    }
+    
     if (!isCommandExecutable(node)) {
       throw new Error('Invalid node type for visitCommand');
     }
     
-    const commandTemplate = node.template || '';
+    // CommandExecutable uses commandTemplate, not template
+    const commandTemplate = (node as any).commandTemplate || node.template || [];
     
     if (process.env.DEBUG_EXEC) {
-      logger.debug('Executing command', {
-        template: commandTemplate.substring(0, 100),
-        hasInterpolation: node.syntaxInfo?.hasInterpolation
+      console.error('[visitCommand] Executing command:', {
+        templateLength: commandTemplate.length,
+        hasInterpolation: node.syntaxInfo?.hasInterpolation,
+        firstNode: commandTemplate[0]
       });
     }
     
-    // Perform interpolation if needed
-    let command: string;
-    if (node.syntaxInfo?.hasInterpolation !== false) {
-      const context = new InterpolationContext(env, {
-        autoExecute: true,
-        preserveUndefined: false
-      });
-      command = await interpolate(commandTemplate, context);
-    } else {
-      command = commandTemplate;
+    // Perform interpolation - command template is an array of nodes
+    const command = await interpolate(commandTemplate, env, InterpolationContext.Default);
+    
+    if (process.env.DEBUG_EXEC) {
+      console.error('[visitCommand] Interpolated command:', command);
     }
     
-    // Execute the command
+    // Execute the command - returns a string, not an object
     const result = await env.executeCommand(command);
     
+    if (process.env.DEBUG_EXEC) {
+      console.error('[visitCommand] Command result:', result);
+    }
+    
     return {
-      value: result.stdout || '',
+      value: result || '',
       env
     };
   }
@@ -286,10 +346,24 @@ export class ExecInvocationEvaluator implements ExecVisitor {
    * Visit when executable - Conditional control flow
    */
   async visitWhen(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
-    // Check for whenExpression
-    const whenExpr = (node as any).whenExpression;
+    // For mlld-when executable, the WhenExpression is in codeTemplate array
+    let whenExpr: any;
+    
+    if ((node as any).whenExpression) {
+      // Direct whenExpression (shouldn't happen with exec definitions)
+      whenExpr = (node as any).whenExpression;
+    } else if ((node as any).codeTemplate) {
+      // CodeExecutable with language='mlld-when'
+      // The codeTemplate is an array with the WhenExpression as first element
+      const codeTemplate = (node as any).codeTemplate;
+      if (Array.isArray(codeTemplate) && codeTemplate.length > 0) {
+        // Find the WhenExpression node
+        whenExpr = codeTemplate.find((n: any) => n.type === 'WhenExpression') || codeTemplate[0];
+      }
+    }
+    
     if (!whenExpr) {
-      throw new Error('When node missing whenExpression');
+      throw new Error('When node missing WhenExpression');
     }
     
     if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
@@ -316,16 +390,30 @@ export class ExecInvocationEvaluator implements ExecVisitor {
    * Visit for executable - Iteration with shadow environments
    */
   async visitFor(node: ExecutableDefinition, env: Environment): Promise<EvalResult> {
-    // Check for forExpression
-    const forExpr = (node as any).forExpression;
+    // For mlld-for executable, the ForExpression is in codeTemplate array
+    let forExpr: any;
+    
+    if ((node as any).forExpression) {
+      // Direct forExpression (shouldn't happen with exec definitions)
+      forExpr = (node as any).forExpression;
+    } else if ((node as any).codeTemplate) {
+      // CodeExecutable with language='mlld-for'
+      // The codeTemplate is an array with the ForExpression as first element
+      const codeTemplate = (node as any).codeTemplate;
+      if (Array.isArray(codeTemplate) && codeTemplate.length > 0) {
+        // Find the ForExpression node
+        forExpr = codeTemplate.find((n: any) => n.type === 'ForExpression') || codeTemplate[0];
+      }
+    }
+    
     if (!forExpr) {
-      throw new Error('For node missing forExpression');
+      throw new Error('For node missing ForExpression');
     }
     
     if (process.env.DEBUG_FOR || process.env.DEBUG_EXEC) {
       logger.debug('Executing for expression', {
-        itemName: forExpr.itemName,
-        hasAction: !!forExpr.action
+        variable: forExpr.variable?.name,
+        hasExpression: !!forExpr.expression
       });
     }
     
@@ -662,7 +750,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     }
     
     // Import pipeline executor
-    const { executePipeline } = await import('@interpreter/eval/pipeline/unified-processor');
+    const { processPipeline } = await import('@interpreter/eval/pipeline/unified-processor');
     
     // Use context manager to create retryable source
     const retryableSource = this.contextManager.createRetryableSource(
@@ -691,16 +779,18 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       : JSON.stringify(initialResult.value);
     
     // Execute the pipeline with universal context
-    const pipelineResult = await executePipeline(
-      initialValue,
-      normalizedPipeline,
+    const pipelineResult = await processPipeline({
+      value: initialValue,
       env,
-      node.location,
-      node.withClause.format,
-      true,  // isRetryable - ALWAYS true in universal context
+      node,
+      directive: 'exec',
+      identifier: commandName,
+      pipeline: normalizedPipeline,
+      format: node.withClause.format,
+      isRetryable: true,  // ALWAYS true in universal context
       retryableSource,
-      false  // hasSyntheticSource - ALWAYS false with universal context!
-    );
+      hasSyntheticSource: false  // ALWAYS false with universal context!
+    });
     
     // Apply other withClause features (trust, needs)
     if (node.withClause) {
@@ -731,11 +821,14 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       }
     }
     
-    // Auto-unwrap parameters for JS execution
-    const unwrappedParams = await this.autoUnwrapManager.unwrapForJavaScript(params, env);
+    // Auto-unwrap parameters for JS execution using static method
+    const unwrappedParams = {}; 
+    for (const [key, value] of Object.entries(params)) {
+      unwrappedParams[key] = AutoUnwrapManager.unwrap(value);
+    }
     
-    // Execute JavaScript code
-    const result = await env.executeJavaScript(code, unwrappedParams);
+    // Execute JavaScript code using executeCode
+    const result = await env.executeCode(code, 'javascript', unwrappedParams);
     
     // Restore metadata if needed
     if (Array.isArray(result)) {
@@ -756,12 +849,13 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Capture shadow environment for Python
     const shadowEnv = ShadowEnvironmentManager.prepare(env, 'python');
     
-    // Execute Python code with shadow environment
-    const result = await env.executePython(code, {
+    // Execute Python code with shadow environment using executeCode
+    const result = await env.executeCode(code, 'python', {
       variables: shadowEnv.variables
     });
     
-    return { value: result.output || '', env };
+    // executeCode returns a string directly
+    return { value: result || '', env };
   }
   
   /**
@@ -790,13 +884,21 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       }
     });
     
-    // Execute Bash script
+    // Execute Bash script - returns a string
+    if (process.env.DEBUG_EXEC) {
+      console.error('[executeBash] Executing:', { code, envVarCount: Object.keys(envVars).length });
+    }
+    
     const result = await env.executeCommand(code, {
       env: envVars
     });
     
+    if (process.env.DEBUG_EXEC) {
+      console.error('[executeBash] Result:', result);
+    }
+    
     return {
-      value: result.stdout || '',
+      value: result || '',
       env
     };
   }

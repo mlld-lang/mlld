@@ -31,7 +31,7 @@ export { ShadowEnvironmentManager } from './helpers/shadow-manager';
 export { MetadataShelf, globalMetadataShelf } from './helpers/metadata-shelf';
 
 // Export visitor pattern components
-export { ExecVisitor, ExecutableNode } from './visitor';
+export type { ExecVisitor, ExecutableNode } from './visitor';
 export { createExecutableNode } from './nodes';
 
 // Export evaluator for direct access if needed
