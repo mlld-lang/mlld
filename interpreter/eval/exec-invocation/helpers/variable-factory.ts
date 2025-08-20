@@ -41,17 +41,32 @@ export class VariableFactory {
   ): Variable {
     const name = newName || originalVar.name;
     
+    // Preserve ALL the original metadata, including custom properties
+    const metadata = { ...originalVar.metadata } || {};
+    
     switch (originalVar.type) {
       case 'simple-text':
-        return createSimpleTextVariable(name, newValue, {
+        const textVar = createSimpleTextVariable(name, newValue, {
           isInterpolated: (originalVar as any).subtype === 'interpolated-text'
         });
+        // Preserve metadata including custom toString
+        textVar.metadata = metadata;
+        // Preserve custom toString if it exists
+        if (typeof (originalVar as any).toString === 'function') {
+          (textVar as any).toString = (originalVar as any).toString;
+        }
+        return textVar;
       
       case 'object':
-        return createObjectVariable(name, newValue);
+        return createObjectVariable(name, newValue, false, undefined, metadata);
       
       case 'array':
-        return createArrayVariable(name, newValue);
+        const arrayVar = createArrayVariable(name, newValue, false, undefined, metadata);
+        // Preserve custom toString if it exists (e.g., for path arrays)
+        if (typeof (originalVar as any).toString === 'function') {
+          (arrayVar as any).toString = (originalVar as any).toString;
+        }
+        return arrayVar;
       
       case 'primitive':
         const primitiveType = (originalVar as any).primitiveType || typeof newValue;
@@ -80,31 +95,35 @@ export class VariableFactory {
    * Infer the variable type from a value
    */
   private static inferType(name: string, value: any): Variable {
+    // Create a default source for parameters
+    const source = {
+      directive: 'var' as const,
+      syntax: 'reference' as const
+    };
+    
     // Handle LoadContentResult
     if (isLoadContentResult(value) || isLoadContentResultArray(value)) {
       // Preserve as array with metadata
-      return createArrayVariable(name, value);
+      return createArrayVariable(name, value, false, source);
     }
     
     // Handle arrays
     if (Array.isArray(value)) {
-      return createArrayVariable(name, value);
+      return createArrayVariable(name, value, false, source);
     }
     
     // Handle objects
     if (value && typeof value === 'object' && value.constructor === Object) {
-      return createObjectVariable(name, value);
+      return createObjectVariable(name, value, false, source);
     }
     
     // Handle primitives
     if (typeof value === 'boolean' || typeof value === 'number') {
-      return createPrimitiveVariable(name, value, typeof value);
+      return createPrimitiveVariable(name, value, source);
     }
     
     // Default to simple text
-    return createSimpleTextVariable(name, String(value), {
-      isInterpolated: false
-    });
+    return createSimpleTextVariable(name, String(value), source);
   }
   
   /**

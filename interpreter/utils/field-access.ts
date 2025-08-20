@@ -79,6 +79,18 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
   const rawValue = isVariable(value) ? value.value : value;
   const fieldValue = field.value;
   
+  // Debug logging for object field access
+  if (process.env.MLLD_DEBUG === 'true' && field.type === 'field') {
+    console.error('[field-access] Input analysis:', {
+      isVar: isVariable(value),
+      valueType: isVariable(value) ? value.type : typeof value,
+      rawValueType: typeof rawValue,
+      rawValueIsString: typeof rawValue === 'string',
+      rawValueContent: typeof rawValue === 'string' ? rawValue.substring(0, 100) : 'not-a-string',
+      fieldToAccess: String(fieldValue)
+    });
+  }
+  
   // DEBUG: Log what we're working with
   if (process.env.MLLD_DEBUG === 'true' && String(fieldValue) === 'try') {
     console.log('🔍 FIELD ACCESS PRE-CHECK:', {
@@ -149,6 +161,17 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       if (rawValue.type === 'object' && rawValue.value && !rawValue.properties) {
         // This is a Variable object, access fields in the value
         const actualValue = rawValue.value;
+        
+        // Debug logging
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[field-access] Variable object field access:', {
+            fieldName: name,
+            actualValueType: typeof actualValue,
+            actualValueKeys: actualValue ? Object.keys(actualValue) : [],
+            hasField: name in actualValue
+          });
+        }
+        
         if (!(name in actualValue)) {
           if (options?.returnUndefinedForMissing) {
             accessedValue = undefined;

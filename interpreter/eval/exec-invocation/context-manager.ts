@@ -60,7 +60,18 @@ export class ExecContextManager {
     // Bind parameters with proper Variable types
     params.forEach((paramName, i) => {
       if (i < args.length) {
-        const paramVar = VariableFactory.createParameter(paramName, args[i]);
+        const arg = args[i];
+        
+        // Check if the argument is already a Variable
+        let paramVar;
+        if (arg && typeof arg === 'object' && 'type' in arg && 'name' in arg && 'value' in arg) {
+          // It's a Variable - pass it as the third parameter to preserve metadata
+          paramVar = VariableFactory.createParameter(paramName, arg.value, arg);
+        } else {
+          // Raw value - create new Variable
+          paramVar = VariableFactory.createParameter(paramName, arg);
+        }
+        
         // Mark as parameter to bypass reserved name check
         paramVar.metadata = {
           ...paramVar.metadata,
@@ -118,7 +129,23 @@ export class ExecContextManager {
       const params = (executable as any).paramNames || [];
       params.forEach((paramName: string, i: number) => {
         if (i < args.length) {
-          const paramVar = VariableFactory.createParameter(paramName, args[i]);
+          const arg = args[i];
+          
+          // Check if the argument is already a Variable
+          let paramVar;
+          if (arg && typeof arg === 'object' && 'type' in arg && 'name' in arg && 'value' in arg) {
+            // It's a Variable - pass it as the third parameter to preserve metadata
+            paramVar = VariableFactory.createParameter(paramName, arg.value, arg);
+          } else {
+            // Raw value - create new Variable
+            paramVar = VariableFactory.createParameter(paramName, arg);
+          }
+          
+          // Mark as parameter for retry context
+          paramVar.metadata = {
+            ...paramVar.metadata,
+            isParameter: true
+          };
           retryEnv.setParameterVariable(paramName, paramVar);
         }
       });

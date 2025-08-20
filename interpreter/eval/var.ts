@@ -783,6 +783,16 @@ export async function evaluateVar(
     
   } else if (valueNode.type === 'ExecInvocation') {
     // Exec invocations can return any type
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[var.ts] ExecInvocation result:', {
+        identifier,
+        resolvedValueType: typeof resolvedValue,
+        isArray: Array.isArray(resolvedValue),
+        isObject: typeof resolvedValue === 'object',
+        resolvedValue,
+        keys: typeof resolvedValue === 'object' && resolvedValue !== null ? Object.keys(resolvedValue) : []
+      });
+    }
     if (typeof resolvedValue === 'object' && resolvedValue !== null) {
       if (Array.isArray(resolvedValue)) {
         variable = createArrayVariable(identifier, resolvedValue, false, source, metadata);

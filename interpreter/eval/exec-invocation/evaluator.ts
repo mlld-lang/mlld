@@ -779,12 +779,10 @@ export class ExecInvocationEvaluator implements ExecVisitor {
           }
           
           if (variable) {
-            // Get the actual value from the variable
-            let value = variable.value;
-            
             // Handle field access (e.g., @user.name)
             if (varRef.fields && varRef.fields.length > 0) {
-              // Navigate through nested fields
+              // Navigate through nested fields on the value
+              let value = variable.value;
               for (const field of varRef.fields) {
                 if (value && typeof value === 'object' && (field.type === 'field' || field.type === 'numericField')) {
                   // Handle object field access (including numeric fields)
@@ -799,12 +797,18 @@ export class ExecInvocationEvaluator implements ExecVisitor {
                   break;
                 }
               }
+              // When field access is used, we extract the value
+              if (process.env.DEBUG_EXEC) {
+                console.error('[processArguments] Field access result:', value);
+              }
+              processed.push(value);
+            } else {
+              // No field access - preserve the entire Variable
+              if (process.env.DEBUG_EXEC) {
+                console.error('[processArguments] Preserving Variable:', variable.name, 'with metadata:', variable.metadata);
+              }
+              processed.push(variable);
             }
-            
-            if (process.env.DEBUG_EXEC) {
-              console.error('[processArguments] Result:', value);
-            }
-            processed.push(value);
           } else {
             // Variable not found
             processed.push(undefined);
@@ -872,10 +876,18 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       // Bind parameters manually
       for (let i = 0; i < paramNames.length; i++) {
         const paramName = paramNames[i];
-        const value = i < args.length ? args[i] : undefined;
+        const arg = i < args.length ? args[i] : undefined;
         
-        // Create parameter variable preserving type information
-        const paramVar = VariableFactory.createParameter(paramName, value);
+        // Check if the argument is already a Variable
+        let paramVar;
+        if (arg && typeof arg === 'object' && 'type' in arg && 'name' in arg && 'value' in arg) {
+          // It's a Variable - pass it as the third parameter to preserve metadata
+          paramVar = VariableFactory.createParameter(paramName, arg.value, arg);
+        } else {
+          // Raw value - create new Variable
+          paramVar = VariableFactory.createParameter(paramName, arg);
+        }
+        
         // Mark as parameter to bypass reserved name check
         paramVar.metadata = {
           ...paramVar.metadata,
@@ -1054,7 +1066,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     }
     
     // Execute JavaScript code using executeCode - pass both params and metadata
-    const result = await env.executeCode(code, 'javascript', processedParams);
+    const result = await env.executeCode(code, 'javascript', processedParams, variableMetadata);
     
     // Restore metadata if needed
     if (Array.isArray(result)) {
@@ -1072,25 +1084,47 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     code: string,
     env: Environment
   ): Promise<EvalResult> {
-    // Prepare parameters for Node - only bound parameters
-    const params: Record<string, any> = {};
+    // Prepare parameters with Variable proxies for Node
+    const processedParams: Record<string, any> = {};
+    const variableMetadata: Record<string, any> = {};
     
     // Get all variables from the environment that are marked as parameters
     const allVars = env.getAllVariables();
     for (const [name, variable] of allVars) {
       if (variable.metadata?.isParameter) {
-        // Auto-unwrap for Node
-        params[name] = AutoUnwrapManager.unwrap(variable.value);
+        // Auto-unwrap LoadContentResult
+        const unwrappedValue = AutoUnwrapManager.unwrap(variable.value);
+        if (unwrappedValue !== variable.value) {
+          const unwrappedVar = {
+            ...variable,
+            value: unwrappedValue,
+            type: Array.isArray(unwrappedValue) ? 'array' : 'text'
+          };
+          processedParams[name] = prepareValueForShadow(unwrappedVar);
+        } else {
+          // Use original Variable with proxy
+          processedParams[name] = prepareValueForShadow(variable);
+        }
+        
+        // Store metadata for primitives
+        if (variable.value === null || typeof variable.value !== 'object') {
+          variableMetadata[name] = {
+            type: variable.type,
+            subtype: variable.subtype || (variable as any).primitiveType,
+            metadata: variable.metadata,
+            isVariable: true
+          };
+        }
       }
     }
     
     // Add captured shadow environments if present
     if (this.currentCapturedShadowEnvs) {
-      params['__capturedShadowEnvs'] = this.currentCapturedShadowEnvs;
+      processedParams['__capturedShadowEnvs'] = this.currentCapturedShadowEnvs;
     }
     
-    // Execute Node code using executeCode
-    const result = await env.executeCode(code, 'node', params);
+    // Execute Node code using executeCode - pass metadata for primitives
+    const result = await env.executeCode(code, 'node', processedParams, variableMetadata);
     
     // Handle the result - it could be an object, not just a string
     // If it's a JSON string that looks like an object, try to parse it
@@ -1115,25 +1149,47 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     code: string,
     env: Environment
   ): Promise<EvalResult> {
-    // Prepare parameters for Python - only bound parameters
-    const params: Record<string, any> = {};
+    // Prepare parameters with Variable proxies for Python
+    const processedParams: Record<string, any> = {};
+    const variableMetadata: Record<string, any> = {};
     
     // Get all variables from the environment that are marked as parameters
     const allVars = env.getAllVariables();
     for (const [name, variable] of allVars) {
       if (variable.metadata?.isParameter) {
-        // Auto-unwrap for Python
-        params[name] = AutoUnwrapManager.unwrap(variable.value);
+        // Auto-unwrap LoadContentResult
+        const unwrappedValue = AutoUnwrapManager.unwrap(variable.value);
+        if (unwrappedValue !== variable.value) {
+          const unwrappedVar = {
+            ...variable,
+            value: unwrappedValue,
+            type: Array.isArray(unwrappedValue) ? 'array' : 'text'
+          };
+          processedParams[name] = prepareValueForShadow(unwrappedVar);
+        } else {
+          // Use original Variable with proxy
+          processedParams[name] = prepareValueForShadow(variable);
+        }
+        
+        // Store metadata for primitives
+        if (variable.value === null || typeof variable.value !== 'object') {
+          variableMetadata[name] = {
+            type: variable.type,
+            subtype: variable.subtype || (variable as any).primitiveType,
+            metadata: variable.metadata,
+            isVariable: true
+          };
+        }
       }
     }
     
     // Add captured shadow environments if present
     if (this.currentCapturedShadowEnvs) {
-      params['__capturedShadowEnvs'] = this.currentCapturedShadowEnvs;
+      processedParams['__capturedShadowEnvs'] = this.currentCapturedShadowEnvs;
     }
     
-    // Execute Python code using executeCode
-    const result = await env.executeCode(code, 'python', params);
+    // Execute Python code using executeCode - pass metadata for primitives
+    const result = await env.executeCode(code, 'python', processedParams, variableMetadata);
     
     // executeCode returns a string directly
     return { value: result || '', env };
@@ -1153,15 +1209,18 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     const allVars = env.getAllVariables();
     for (const [name, variable] of allVars) {
       if (variable.metadata?.isParameter) {
+        // For Bash, we pass as environment variables (strings only)
+        // Auto-unwrap LoadContentResult for simpler access in bash
+        const unwrappedValue = AutoUnwrapManager.unwrap(variable.value);
+        
         // Convert variables to string representation for Bash
-        const value = variable.value;
-        if (typeof value === 'string') {
-          envVars[name] = value;
-        } else if (typeof value === 'number' || typeof value === 'boolean') {
-          envVars[name] = String(value);
-        } else if (value && typeof value === 'object') {
+        if (typeof unwrappedValue === 'string') {
+          envVars[name] = unwrappedValue;
+        } else if (typeof unwrappedValue === 'number' || typeof unwrappedValue === 'boolean') {
+          envVars[name] = String(unwrappedValue);
+        } else if (unwrappedValue && typeof unwrappedValue === 'object') {
           try {
-            envVars[name] = JSON.stringify(value);
+            envVars[name] = JSON.stringify(unwrappedValue);
           } catch {
             // Skip variables that can't be serialized
           }
