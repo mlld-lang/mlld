@@ -1027,6 +1027,15 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Prepare parameters for auto-unwrapping - only get bound parameters
     const params = new Map<string, any>();
     
+    // First, ensure ALL expected parameters are included (even undefined ones)
+    // This prevents ReferenceError when code checks if a param is undefined
+    if (this.currentBoundParams) {
+      for (const paramName of this.currentBoundParams) {
+        // Initialize with undefined - will be overwritten if actual value exists
+        params.set(paramName, undefined);
+      }
+    }
+    
     // Get all variables from the environment that are marked as parameters
     const allVars = env.getAllVariables();
     
@@ -1137,6 +1146,15 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Prepare parameters with Variable proxies for Node
     const processedParams: Record<string, any> = {};
     const variableMetadata: Record<string, any> = {};
+    
+    // First, ensure ALL expected parameters are included (even undefined ones)
+    // This prevents ReferenceError when code checks if a param is undefined
+    if (this.currentBoundParams) {
+      for (const paramName of this.currentBoundParams) {
+        // Initialize with undefined - will be overwritten if actual value exists
+        processedParams[paramName] = undefined;
+      }
+    }
     
     // Get all variables from the environment that are marked as parameters
     const allVars = env.getAllVariables();
