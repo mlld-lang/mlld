@@ -51,6 +51,8 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   private variableFactory: VariableFactory;
   private shadowManager: ShadowEnvironmentManager;
   // AutoUnwrapManager is used statically, no instance needed
+  private currentCapturedShadowEnvs?: any; // Temporary storage for captured shadow envs
+  private currentBoundParams?: string[]; // Track current function's bound parameters
   
   constructor() {
     this.contextManager = new ExecContextManager();
@@ -181,8 +183,10 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       return result;
       
     } finally {
-      // Always clear metadata shelf after execution
+      // Always clear metadata shelf, captured shadow envs, and bound params after execution
       globalMetadataShelf.clear();
+      this.currentCapturedShadowEnvs = undefined;
+      this.currentBoundParams = undefined;
     }
   }
   
@@ -417,16 +421,13 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Handle mlld-for with shadow environments
     const { evaluateForExpression } = await import('@interpreter/eval/for');
     
-    // Create shadow for iteration
-    const forEnv = env.createChild();
+    // evaluateForExpression handles child environment creation internally for iterations
+    const result = await evaluateForExpression(forExpr, env);
     
-    // evaluateForExpression expects the ForExpression AST node and environment
-    const result = await evaluateForExpression(forExpr, forEnv);
-    
-    // evaluateForExpression returns an ArrayVariable, wrap it in EvalResult
+    // evaluateForExpression returns an ArrayVariable directly
     return {
       value: result,
-      env: forEnv
+      env: env
     };
   }
   
@@ -627,9 +628,9 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     }
     
     // Build ExecutableDefinition from Variable properties
-    return {
+    // Map field names correctly based on executable type
+    const base: any = {
       type: execVar.executableType,
-      template: execVar.template,
       language: execVar.language,
       syntaxInfo: execVar.syntaxInfo,
       body: execVar.body,
@@ -637,8 +638,30 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       forExpression: execVar.forExpression,
       sectionSelector: execVar.sectionSelector,
       resolverInfo: execVar.resolverInfo,
-      commandRef: execVar.commandRef
-    } as ExecutableDefinition;
+      commandRef: execVar.commandRef,
+      commandArgs: execVar.commandArgs,
+      withClause: execVar.withClause
+    };
+    
+    // Map the template/content field based on type
+    switch (execVar.executableType) {
+      case 'template':
+        base.template = execVar.template || execVar.body;
+        break;
+      case 'code':
+        // CodeExecutable uses codeTemplate
+        base.codeTemplate = execVar.codeTemplate || execVar.template || execVar.body;
+        break;
+      case 'command':
+        // CommandExecutable uses commandTemplate
+        base.commandTemplate = execVar.commandTemplate || execVar.template || execVar.body;
+        break;
+      default:
+        // For other types, use template as fallback
+        base.template = execVar.template || execVar.body;
+    }
+    
+    return base as ExecutableDefinition;
   }
   
   /**
@@ -689,6 +712,9 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     const execVar = commandVariable as any;
     const paramNames = execVar.paramNames || [];
     
+    // Store bound parameter names for use by language executors
+    this.currentBoundParams = paramNames;
+    
     // Use context manager to create environment with proper context
     let execEnv: Environment;
     
@@ -717,6 +743,9 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     
     // Apply captured shadow environments if present
     if (commandVariable.metadata?.capturedShadowEnvs) {
+      // Store for later use by language executors
+      this.currentCapturedShadowEnvs = commandVariable.metadata.capturedShadowEnvs;
+      
       ShadowEnvironmentManager.applyCaptured(
         execEnv,
         commandVariable.metadata.capturedShadowEnvs
@@ -808,23 +837,44 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     code: string,
     env: Environment
   ): Promise<EvalResult> {
-    // Prepare parameters for auto-unwrapping
+    // Prepare parameters for auto-unwrapping - only get bound parameters
     const params = new Map<string, any>();
-    env.getAllVariables().forEach((value, key) => {
-      params.set(key, value);
-    });
+    
+    // Only add the bound parameters for this function call
+    if (this.currentBoundParams) {
+      for (const paramName of this.currentBoundParams) {
+        const variable = env.getVariable(paramName);
+        if (variable) {
+          params.set(paramName, variable);
+        }
+      }
+    }
     
     // Store metadata before unwrapping
-    for (const [name, value] of params) {
-      if (isLoadContentResultArray(value.value)) {
-        globalMetadataShelf.storeMetadata(value.value);
+    for (const [name, variable] of params) {
+      if (isLoadContentResultArray(variable.value)) {
+        globalMetadataShelf.storeMetadata(variable.value);
       }
     }
     
     // Auto-unwrap parameters for JS execution using static method
     const unwrappedParams = {}; 
-    for (const [key, value] of Object.entries(params)) {
+    for (const [key, variable] of params) {
+      // Extract the value from the Variable object before unwrapping
+      const value = variable.value;
       unwrappedParams[key] = AutoUnwrapManager.unwrap(value);
+    }
+    
+    // Add captured shadow environments if present
+    if (this.currentCapturedShadowEnvs) {
+      unwrappedParams['__capturedShadowEnvs'] = this.currentCapturedShadowEnvs;
+    }
+    
+    if (process.env.DEBUG_EXEC) {
+      console.error('[executeJavaScript] Passing params:', {
+        paramKeys: Object.keys(unwrappedParams),
+        hasCapturedShadowEnvs: '__capturedShadowEnvs' in unwrappedParams
+      });
     }
     
     // Execute JavaScript code using executeCode
@@ -846,13 +896,27 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     code: string,
     env: Environment
   ): Promise<EvalResult> {
-    // Capture shadow environment for Python
-    const shadowEnv = ShadowEnvironmentManager.prepare(env, 'python');
+    // Prepare parameters for Python - only bound parameters
+    const params: Record<string, any> = {};
     
-    // Execute Python code with shadow environment using executeCode
-    const result = await env.executeCode(code, 'python', {
-      variables: shadowEnv.variables
-    });
+    // Only add the bound parameters for this function call
+    if (this.currentBoundParams) {
+      for (const paramName of this.currentBoundParams) {
+        const variable = env.getVariable(paramName);
+        if (variable) {
+          // Auto-unwrap for Python
+          params[paramName] = AutoUnwrapManager.unwrap(variable.value);
+        }
+      }
+    }
+    
+    // Add captured shadow environments if present
+    if (this.currentCapturedShadowEnvs) {
+      params['__capturedShadowEnvs'] = this.currentCapturedShadowEnvs;
+    }
+    
+    // Execute Python code using executeCode
+    const result = await env.executeCode(code, 'python', params);
     
     // executeCode returns a string directly
     return { value: result || '', env };
@@ -865,24 +929,30 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     code: string,
     env: Environment
   ): Promise<EvalResult> {
-    // Prepare environment variables for Bash
+    // Prepare environment variables for Bash - only bound parameters
     const envVars: Record<string, string> = {};
     
-    env.getAllVariables().forEach((variable, name) => {
-      // Convert variables to string representation for Bash
-      const value = variable.value;
-      if (typeof value === 'string') {
-        envVars[name] = value;
-      } else if (typeof value === 'number' || typeof value === 'boolean') {
-        envVars[name] = String(value);
-      } else if (value && typeof value === 'object') {
-        try {
-          envVars[name] = JSON.stringify(value);
-        } catch {
-          // Skip variables that can't be serialized
+    // Only add the bound parameters for this function call
+    if (this.currentBoundParams) {
+      for (const name of this.currentBoundParams) {
+        const variable = env.getVariable(name);
+        if (variable) {
+          // Convert variables to string representation for Bash
+          const value = variable.value;
+          if (typeof value === 'string') {
+            envVars[name] = value;
+          } else if (typeof value === 'number' || typeof value === 'boolean') {
+            envVars[name] = String(value);
+          } else if (value && typeof value === 'object') {
+            try {
+              envVars[name] = JSON.stringify(value);
+            } catch {
+              // Skip variables that can't be serialized
+            }
+          }
         }
       }
-    });
+    }
     
     // Execute Bash script - returns a string
     if (process.env.DEBUG_EXEC) {
@@ -901,6 +971,17 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       value: result || '',
       env
     };
+  }
+  /**
+   * Execute with strategy - adapter method for context manager
+   * Routes to the visitor pattern execution
+   */
+  async executeWithStrategy(
+    executable: ExecutableDefinition,
+    env: Environment
+  ): Promise<EvalResult> {
+    const executableNode = createExecutableNode(executable);
+    return await executableNode.accept(this, env);
   }
 }
 
