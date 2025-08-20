@@ -142,7 +142,9 @@ export class ExecContextManager {
       stage: context.stage || 0,
       value: context.value,
       retry: context.retry || 1,
-      metadata: context.metadata
+      metadata: context.metadata,
+      tries: [],  // Track retry history for compatibility
+      length: 0   // Pipeline length for compatibility
     };
     
     // Create context variable

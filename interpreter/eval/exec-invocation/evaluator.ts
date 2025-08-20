@@ -53,6 +53,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   // AutoUnwrapManager is used statically, no instance needed
   private currentCapturedShadowEnvs?: any; // Temporary storage for captured shadow envs
   private currentBoundParams?: string[]; // Track current function's bound parameters
+  private currentEvaluatedArgs?: any[]; // Track evaluated args for CommandRef passthrough
   
   constructor() {
     this.contextManager = new ExecContextManager();
@@ -121,6 +122,9 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       if (process.env.DEBUG_EXEC) {
         console.error('[evaluate] Processed args:', processedArgs);
       }
+      
+      // Store evaluated args for CommandRef passthrough
+      this.currentEvaluatedArgs = processedArgs;
       
       const parentContext = evaluator?.getContext?.();
       const execContext = this.contextManager.createExecContext(
@@ -334,20 +338,62 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       throw new Error('Invalid node type for visitCommandRef');
     }
     
-    const cmdRef = node.commandRef;
-    if (!cmdRef) {
+    const refName = node.commandRef;
+    if (!refName) {
       throw new Error('CommandRef node missing commandRef');
     }
     
-    // Build ExecInvocation for recursion
+    // Look up the referenced command
+    const refCommand = env.getVariable(refName);
+    if (!refCommand) {
+      throw new MlldInterpreterError(`Referenced command not found: ${refName}`);
+    }
+    
+    // Build arguments for the recursive invocation
+    let refArgs: any[] = [];
+    
+    // The commandArgs contains the original AST nodes for how to call the referenced command
+    // We need to evaluate these nodes with the current invocation's parameters bound
+    if (node.commandArgs && node.commandArgs.length > 0) {
+      // Evaluate each arg individually since they are VariableReference nodes
+      const { evaluate } = await import('@interpreter/core/interpreter');
+      
+      for (const argNode of node.commandArgs) {
+        // Evaluate the individual argument node
+        const argResult = await evaluate(argNode, env, { isExpression: true });
+        
+        // Extract the actual value
+        if (argResult && argResult.value !== undefined) {
+          refArgs.push(argResult.value);
+        }
+      }
+    } else {
+      // No commandArgs means pass through the current invocation's args
+      // These were stored during evaluate() for this purpose
+      const originalArgs = this.currentEvaluatedArgs;
+      if (originalArgs && originalArgs.length > 0) {
+        refArgs = originalArgs;
+      }
+    }
+    
+    // Create a new invocation node for the referenced command with the evaluated args
     const refInvocation: ExecInvocation = {
       type: 'ExecInvocation',
-      commandRef: cmdRef
+      commandRef: {
+        identifier: refName,
+        args: refArgs.map(arg => ({
+          type: 'Text',
+          content: typeof arg === 'string' ? arg : JSON.stringify(arg)
+        }))
+      },
+      // Pass along the pipeline if present
+      ...(node.withClause ? { withClause: node.withClause } : {})
     };
     
     // NATURAL RECURSION - No circular imports!
     // The visitor can call back to evaluate() on the same instance
-    return this.evaluate(refInvocation, env);
+    // Use parent environment to avoid parameter pollution
+    return this.evaluate(refInvocation, env.parent || env);
   }
   
   /**
@@ -748,7 +794,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
           ...paramVar.metadata,
           isParameter: true
         };
-        execEnv.setVariable(paramName, paramVar);
+        execEnv.setParameterVariable(paramName, paramVar);
       }
     }
     
