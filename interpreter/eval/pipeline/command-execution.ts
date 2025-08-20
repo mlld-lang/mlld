@@ -173,6 +173,51 @@ export async function executeCommandVariable(
   const pipelineCtx = env.getPipelineContext();
   const format = pipelineCtx?.format;
   
+  // CRITICAL: Create pipeline context variables (@p, @pipeline, @ctx) if in pipeline
+  // Only create if not already present (parent env might have them)
+  if (pipelineCtx && !env.getVariable('p')) {
+    // Create the context object similar to what context-builder does
+    const contextObj = {
+      try: pipelineCtx.try || 1,
+      tries: pipelineCtx.tries || [],
+      stage: pipelineCtx.stage || 0,
+      length: pipelineCtx.previousOutputs?.length || 0,
+      // Add array access to previous outputs
+      ...(pipelineCtx.previousOutputs ? 
+        Object.fromEntries(pipelineCtx.previousOutputs.map((v, i) => [i, v])) : {})
+    };
+    
+    // Add negative indexing support
+    if (pipelineCtx.previousOutputs && pipelineCtx.previousOutputs.length > 0) {
+      Object.defineProperty(contextObj, -1, {
+        get: () => pipelineCtx.previousOutputs[pipelineCtx.previousOutputs.length - 1],
+        enumerable: false
+      });
+      Object.defineProperty(contextObj, -2, {
+        get: () => pipelineCtx.previousOutputs[pipelineCtx.previousOutputs.length - 2],
+        enumerable: false
+      });
+    }
+    
+    // Create the variable using the factory
+    const { createObjectVariable } = await import('@core/types/variable');
+    const pipelineVar = createObjectVariable(
+      'pipeline',
+      contextObj,
+      false,
+      undefined,
+      {
+        isPipelineContext: true,
+        isSystem: true
+      }
+    );
+    
+    // Set all three aliases
+    execEnv.setParameterVariable('ctx', pipelineVar);
+    execEnv.setParameterVariable('p', pipelineVar);
+    execEnv.setParameterVariable('pipeline', pipelineVar);
+  }
+  
   // Parameter binding for executable functions
   if (execDef.paramNames) {
     for (let i = 0; i < execDef.paramNames.length; i++) {
