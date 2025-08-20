@@ -46,11 +46,9 @@ export class VariableFactory {
     
     switch (originalVar.type) {
       case 'simple-text':
-        const textVar = createSimpleTextVariable(name, newValue, {
-          isInterpolated: (originalVar as any).subtype === 'interpolated-text'
-        });
-        // Preserve metadata including custom toString
-        textVar.metadata = metadata;
+        // Use original source or create a default one
+        const source = originalVar.source || { directive: 'var' as const, syntax: 'reference' as const };
+        const textVar = createSimpleTextVariable(name, newValue, source, metadata);
         // Preserve custom toString if it exists
         if (typeof (originalVar as any).toString === 'function') {
           (textVar as any).toString = (originalVar as any).toString;
@@ -58,10 +56,14 @@ export class VariableFactory {
         return textVar;
       
       case 'object':
-        return createObjectVariable(name, newValue, false, undefined, metadata);
+        // Use original source or undefined
+        const objSource = originalVar.source || undefined;
+        return createObjectVariable(name, newValue, false, objSource, metadata);
       
       case 'array':
-        const arrayVar = createArrayVariable(name, newValue, false, undefined, metadata);
+        // Use original source or undefined
+        const arrSource = originalVar.source || undefined;
+        const arrayVar = createArrayVariable(name, newValue, false, arrSource, metadata);
         // Preserve custom toString if it exists (e.g., for path arrays)
         if (typeof (originalVar as any).toString === 'function') {
           (arrayVar as any).toString = (originalVar as any).toString;
@@ -70,7 +72,8 @@ export class VariableFactory {
       
       case 'primitive':
         const primitiveType = (originalVar as any).primitiveType || typeof newValue;
-        return createPrimitiveVariable(name, newValue, primitiveType);
+        // Pass metadata directly to createPrimitiveVariable
+        return createPrimitiveVariable(name, newValue, primitiveType, metadata);
       
       case 'executable':
         // For executables, preserve all metadata

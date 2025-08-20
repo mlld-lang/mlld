@@ -355,16 +355,39 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     }
     
     // Execute the command with environment variables
-    const result = await env.executeCommand(command, {
+    const commandOutput = await env.executeCommand(command, {
       env: envVars
     });
     
+    // Try to parse as JSON if it looks like JSON
+    let result: any;
+    if (typeof commandOutput === 'string' && commandOutput.trim()) {
+      const trimmed = commandOutput.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          result = JSON.parse(trimmed);
+        } catch {
+          // Not valid JSON, use as-is
+          result = commandOutput;
+        }
+      } else {
+        result = commandOutput;
+      }
+    } else {
+      result = commandOutput || '';
+    }
+    
     if (process.env.DEBUG_EXEC) {
-      console.error('[visitCommand] Command result:', result);
+      console.error('[visitCommand] Command result:', {
+        originalOutput: commandOutput,
+        parsedResult: result,
+        resultType: typeof result
+      });
     }
     
     return {
-      value: result || '',
+      value: result,
       env
     };
   }
@@ -891,6 +914,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
         // Mark as parameter to bypass reserved name check
         paramVar.metadata = {
           ...paramVar.metadata,
+          isSystem: true,
           isParameter: true
         };
         execEnv.setParameterVariable(paramName, paramVar);
@@ -1068,13 +1092,32 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Execute JavaScript code using executeCode - pass both params and metadata
     const result = await env.executeCode(code, 'javascript', processedParams, variableMetadata);
     
+    // Handle the result - parse JSON if it looks like JSON
+    let processedResult: any;
+    
+    // If the result looks like JSON (from return statement), parse it
+    if (typeof result === 'string' && 
+        (result.startsWith('"') || result.startsWith('{') || result.startsWith('[') || 
+         result === 'null' || result === 'true' || result === 'false' ||
+         /^-?\d+(\.\d+)?$/.test(result))) {
+      try {
+        const parsed = JSON.parse(result);
+        processedResult = parsed;
+      } catch {
+        // Not valid JSON, use as-is
+        processedResult = result;
+      }
+    } else {
+      processedResult = result || '';
+    }
+    
     // Restore metadata if needed
-    if (Array.isArray(result)) {
-      const restored = globalMetadataShelf.restoreMetadata(result);
+    if (Array.isArray(processedResult)) {
+      const restored = globalMetadataShelf.restoreMetadata(processedResult);
       return { value: restored, env };
     }
     
-    return { value: result, env };
+    return { value: processedResult, env };
   }
   
   /**
@@ -1126,13 +1169,47 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Execute Node code using executeCode - pass metadata for primitives
     const result = await env.executeCode(code, 'node', processedParams, variableMetadata);
     
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[executeNode] Result from executeCode:', {
+        resultType: typeof result,
+        isString: typeof result === 'string',
+        resultLength: typeof result === 'string' ? result.length : undefined,
+        startsWithBrace: typeof result === 'string' ? result.startsWith('{') : false,
+        endsWithBrace: typeof result === 'string' ? result.endsWith('}') : false,
+        result
+      });
+    }
+    
     // Handle the result - it could be an object, not just a string
     // If it's a JSON string that looks like an object, try to parse it
     if (typeof result === 'string' && result.startsWith('{') && result.endsWith('}')) {
       try {
         const parsed = JSON.parse(result);
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[executeNode] Successfully parsed JSON:', parsed);
+        }
         return { value: parsed, env };
-      } catch {
+      } catch (e) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[executeNode] Failed to parse JSON:', e);
+        }
+        // If parsing fails, return as string
+        return { value: result || '', env };
+      }
+    }
+    
+    // Also check for arrays
+    if (typeof result === 'string' && result.startsWith('[') && result.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(result);
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[executeNode] Successfully parsed JSON array:', parsed);
+        }
+        return { value: parsed, env };
+      } catch (e) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[executeNode] Failed to parse JSON array:', e);
+        }
         // If parsing fails, return as string
         return { value: result || '', env };
       }
@@ -1191,8 +1268,26 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Execute Python code using executeCode - pass metadata for primitives
     const result = await env.executeCode(code, 'python', processedParams, variableMetadata);
     
-    // executeCode returns a string directly
-    return { value: result || '', env };
+    // Handle the result - parse JSON if it looks like JSON
+    let processedResult: any;
+    
+    // If the result looks like JSON (from return statement), parse it
+    if (typeof result === 'string' && 
+        (result.startsWith('"') || result.startsWith('{') || result.startsWith('[') || 
+         result === 'null' || result === 'true' || result === 'false' ||
+         /^-?\d+(\.\d+)?$/.test(result))) {
+      try {
+        const parsed = JSON.parse(result);
+        processedResult = parsed;
+      } catch {
+        // Not valid JSON, use as-is
+        processedResult = result;
+      }
+    } else {
+      processedResult = result || '';
+    }
+    
+    return { value: processedResult, env };
   }
   
   /**

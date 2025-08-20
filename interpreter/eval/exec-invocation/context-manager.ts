@@ -75,6 +75,7 @@ export class ExecContextManager {
         // Mark as parameter to bypass reserved name check
         paramVar.metadata = {
           ...paramVar.metadata,
+          isSystem: true,
           isParameter: true
         };
         execEnv.setParameterVariable(paramName, paramVar);
@@ -144,6 +145,7 @@ export class ExecContextManager {
           // Mark as parameter for retry context
           paramVar.metadata = {
             ...paramVar.metadata,
+            isSystem: true,
             isParameter: true
           };
           retryEnv.setParameterVariable(paramName, paramVar);
