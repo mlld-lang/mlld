@@ -690,6 +690,8 @@ export class ExecInvocationEvaluator implements ExecVisitor {
         let typeInfo = varObj.type;
         
         // Handle subtypes for different variable types
+        const sourceDirective = (varObj as any).sourceDirective || 'var';
+        
         if (varObj.type === 'simple-text' && 'subtype' in varObj) {
           const subtype = (varObj as any).subtype;
           if (subtype && subtype !== 'simple' && subtype !== 'interpolated-text') {
@@ -712,6 +714,11 @@ export class ExecInvocationEvaluator implements ExecVisitor {
           const execType = (varObj as any).executableType || 'unknown';
           const sourceDirective = (varObj as any).sourceDirective || 'exec';
           typeInfo = `executable (${execType} from /${sourceDirective})`;
+        }
+        
+        // Add source directive info for non-executables
+        if (varObj.type !== 'executable') {
+          typeInfo = `${typeInfo} [from /${sourceDirective}]`;
         }
         
         return { value: typeInfo, env };
@@ -1297,40 +1304,33 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     code: string,
     env: Environment
   ): Promise<EvalResult> {
-    // Prepare environment variables for Bash - only bound parameters
-    const envVars: Record<string, string> = {};
+    // Prepare parameters for Bash - collect bound parameters
+    const processedParams: Record<string, any> = {};
+    const variableMetadata: Record<string, any> = {};
     
     // Get all variables from the environment that are marked as parameters
     const allVars = env.getAllVariables();
     for (const [name, variable] of allVars) {
       if (variable.metadata?.isParameter) {
-        // For Bash, we pass as environment variables (strings only)
-        // Auto-unwrap LoadContentResult for simpler access in bash
-        const unwrappedValue = AutoUnwrapManager.unwrap(variable.value);
+        // Pass the variable value directly - BashExecutor will handle conversion
+        processedParams[name] = variable.value;
         
-        // Convert variables to string representation for Bash
-        if (typeof unwrappedValue === 'string') {
-          envVars[name] = unwrappedValue;
-        } else if (typeof unwrappedValue === 'number' || typeof unwrappedValue === 'boolean') {
-          envVars[name] = String(unwrappedValue);
-        } else if (unwrappedValue && typeof unwrappedValue === 'object') {
-          try {
-            envVars[name] = JSON.stringify(unwrappedValue);
-          } catch {
-            // Skip variables that can't be serialized
-          }
+        // Store metadata for primitives
+        if (variable.type === 'primitive' && 'primitiveType' in variable) {
+          variableMetadata[name] = {
+            primitiveType: (variable as any).primitiveType,
+            isPrimitive: true
+          };
         }
       }
     }
     
-    // Execute Bash script - returns a string
+    // Execute Bash code using executeCode - pass parameters
     if (process.env.DEBUG_EXEC) {
-      console.error('[executeBash] Executing:', { code, envVarCount: Object.keys(envVars).length });
+      console.error('[executeBash] Executing:', { code, paramCount: Object.keys(processedParams).length });
     }
     
-    const result = await env.executeCommand(code, {
-      env: envVars
-    });
+    const result = await env.executeCode(code, 'bash', processedParams, variableMetadata);
     
     if (process.env.DEBUG_EXEC) {
       console.error('[executeBash] Result:', result);
