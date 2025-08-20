@@ -66,6 +66,8 @@ export class ExecContextManager {
         let paramVar;
         if (arg && typeof arg === 'object' && 'type' in arg && 'name' in arg && 'value' in arg) {
           // It's a Variable - pass it as the third parameter to preserve metadata
+          // Note: Complex Variables with AST need to be resolved before this point
+          // The evaluator's processArguments should have already done this
           paramVar = VariableFactory.createParameter(paramName, arg.value, arg);
         } else {
           // Raw value - create new Variable
@@ -136,6 +138,8 @@ export class ExecContextManager {
           let paramVar;
           if (arg && typeof arg === 'object' && 'type' in arg && 'name' in arg && 'value' in arg) {
             // It's a Variable - pass it as the third parameter to preserve metadata
+            // Note: Complex Variables with AST need to be resolved before this point
+            // The evaluator's processArguments should have already done this
             paramVar = VariableFactory.createParameter(paramName, arg.value, arg);
           } else {
             // Raw value - create new Variable

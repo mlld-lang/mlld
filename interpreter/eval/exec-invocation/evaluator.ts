@@ -833,11 +833,28 @@ export class ExecInvocationEvaluator implements ExecVisitor {
               }
               processed.push(value);
             } else {
-              // No field access - preserve the entire Variable
-              if (process.env.DEBUG_EXEC) {
-                console.error('[processArguments] Preserving Variable:', variable.name, 'with metadata:', variable.metadata);
+              // No field access - but check if the Variable is complex and needs resolution
+              if ((variable as any).isComplex && variable.value && typeof variable.value === 'object' && 'type' in variable.value) {
+                // Complex Variable with AST - extract value
+                const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+                const resolvedValue = await extractVariableValue(variable, env);
+                if (process.env.DEBUG_EXEC) {
+                  console.error('[processArguments] Resolved complex Variable:', variable.name, 'to:', resolvedValue);
+                }
+                // Create a new Variable with the resolved value but preserving metadata
+                const resolvedVar = {
+                  ...variable,
+                  value: resolvedValue,
+                  isComplex: false  // Mark as no longer complex since we've resolved it
+                };
+                processed.push(resolvedVar);
+              } else {
+                // No field access - preserve the entire Variable
+                if (process.env.DEBUG_EXEC) {
+                  console.error('[processArguments] Preserving Variable:', variable.name, 'with metadata:', variable.metadata);
+                }
+                processed.push(variable);
               }
-              processed.push(variable);
             }
           } else {
             // Variable not found
@@ -856,6 +873,14 @@ export class ExecInvocationEvaluator implements ExecVisitor {
           // Handle Object and Array literal nodes
           const { evaluate } = await import('@interpreter/core/interpreter');
           const result = await evaluate(arg, env);
+          if (process.env.DEBUG_EXEC) {
+            console.error('[processArguments] Evaluated Object/Array:', {
+              type: arg.type,
+              resultValue: result.value,
+              resultType: typeof result.value,
+              keys: typeof result.value === 'object' && result.value !== null ? Object.keys(result.value) : 'not-object'
+            });
+          }
           processed.push(result.value);
         } else {
           // For other AST nodes, evaluate them
@@ -912,7 +937,25 @@ export class ExecInvocationEvaluator implements ExecVisitor {
         let paramVar;
         if (arg && typeof arg === 'object' && 'type' in arg && 'name' in arg && 'value' in arg) {
           // It's a Variable - pass it as the third parameter to preserve metadata
-          paramVar = VariableFactory.createParameter(paramName, arg.value, arg);
+          if (process.env.DEBUG_EXEC) {
+            console.error('[createExecutionEnvironment] Binding Variable parameter:', {
+              paramName,
+              argType: arg.type,
+              argValue: arg.value,
+              valueType: typeof arg.value,
+              isComplex: (arg as any).isComplex,
+              valueKeys: typeof arg.value === 'object' && arg.value !== null ? Object.keys(arg.value).slice(0, 5) : 'not-object'
+            });
+          }
+          // If the Variable is complex (has AST), we need to extract its actual value
+          if ((arg as any).isComplex && arg.value && typeof arg.value === 'object' && 'type' in arg.value) {
+            // Complex Variable with AST - extract value
+            const { extractVariableValue } = await import('@interpreter/utils/variable-resolution');
+            const resolvedValue = await extractVariableValue(arg, env);
+            paramVar = VariableFactory.createParameter(paramName, resolvedValue, arg);
+          } else {
+            paramVar = VariableFactory.createParameter(paramName, arg.value, arg);
+          }
         } else {
           // Raw value - create new Variable
           paramVar = VariableFactory.createParameter(paramName, arg);
@@ -1061,6 +1104,12 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     const variableMetadata: Record<string, any> = {};
     
     for (const [key, variable] of params) {
+      // Handle case where variable might not have a value property
+      if (!variable || variable.value === undefined) {
+        processedParams[key] = variable;
+        continue;
+      }
+      
       // Store metadata shelf for LoadContentResult
       if (isLoadContentResultArray(variable.value)) {
         globalMetadataShelf.storeMetadata(variable.value);
@@ -1078,6 +1127,15 @@ export class ExecInvocationEvaluator implements ExecVisitor {
         processedParams[key] = prepareValueForShadow(unwrappedVar);
       } else {
         // Use original Variable with proxy
+        if (process.env.DEBUG_EXEC) {
+          console.error('[executeJavaScript] Preparing variable for shadow:', {
+            key,
+            variableType: variable.type,
+            variableValue: variable.value,
+            isObject: typeof variable.value === 'object',
+            objectKeys: typeof variable.value === 'object' && variable.value !== null ? Object.keys(variable.value) : 'not-object'
+          });
+        }
         processedParams[key] = prepareValueForShadow(variable);
       }
       
