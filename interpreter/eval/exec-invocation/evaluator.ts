@@ -265,6 +265,10 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       case 'js':
         return await this.executeJavaScript(code, env);
       
+      case 'node':
+      case 'nodejs':
+        return await this.executeNode(code, env);
+      
       case 'python':
       case 'py':
         return await this.executePython(code, env);
@@ -889,6 +893,39 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     }
     
     return { value: result, env };
+  }
+  
+  /**
+   * Execute Node.js code
+   */
+  private async executeNode(
+    code: string,
+    env: Environment
+  ): Promise<EvalResult> {
+    // Prepare parameters for Node - only bound parameters
+    const params: Record<string, any> = {};
+    
+    // Only add the bound parameters for this function call
+    if (this.currentBoundParams) {
+      for (const paramName of this.currentBoundParams) {
+        const variable = env.getVariable(paramName);
+        if (variable) {
+          // Auto-unwrap for Node
+          params[paramName] = AutoUnwrapManager.unwrap(variable.value);
+        }
+      }
+    }
+    
+    // Add captured shadow environments if present
+    if (this.currentCapturedShadowEnvs) {
+      params['__capturedShadowEnvs'] = this.currentCapturedShadowEnvs;
+    }
+    
+    // Execute Node code using executeCode
+    const result = await env.executeCode(code, 'node', params);
+    
+    // executeCode returns a string directly
+    return { value: result || '', env };
   }
   
   /**
