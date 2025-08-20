@@ -32,7 +32,7 @@ export class VariableImporter {
   /**
    * Serialize shadow environments for export (Maps to objects)
    * WHY: Maps don't serialize to JSON, so we convert them to plain objects
-   * GOTCHA: Function references are preserved directly
+   * NOTE: Function references can't truly be serialized, but we preserve them for in-memory imports
    */
   private serializeShadowEnvs(envs: ShadowEnvironmentCapture): any {
     const result: any = {};
@@ -42,9 +42,13 @@ export class VariableImporter {
         // Convert Map to object
         const obj: Record<string, any> = {};
         for (const [name, func] of shadowMap) {
+          // Store the function reference (works for in-memory imports)
           obj[name] = func;
         }
         result[lang] = obj;
+      } else if (shadowMap) {
+        // Already serialized
+        result[lang] = shadowMap;
       }
     }
     

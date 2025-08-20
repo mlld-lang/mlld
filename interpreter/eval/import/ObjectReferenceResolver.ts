@@ -136,6 +136,9 @@ export class ObjectReferenceResolver {
           obj[name] = func;
         }
         result[lang] = obj;
+      } else if (shadowMap) {
+        // Already serialized
+        result[lang] = shadowMap;
       }
     }
     

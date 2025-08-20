@@ -631,6 +631,8 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Map field names correctly based on executable type
     const base: any = {
       type: execVar.executableType,
+      paramNames: execVar.paramNames || [],  // Add parameter names
+      sourceDirective: execVar.sourceDirective || 'exec',  // Add source directive
       language: execVar.language,
       syntaxInfo: execVar.syntaxInfo,
       body: execVar.body,

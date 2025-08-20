@@ -21,8 +21,19 @@ export function resolveShadowEnvironment(
   // 1. Check captured environment first (lexical scope)
   if (capturedEnvs) {
     const captured = capturedEnvs[normalizedLang as keyof ShadowEnvironmentCapture];
-    if (captured && captured.size > 0) {
-      return captured;
+    if (captured) {
+      // Handle both Map and plain object formats (after import/export)
+      if (captured instanceof Map) {
+        if (captured.size > 0) {
+          return captured;
+        }
+      } else if (typeof captured === 'object') {
+        // Convert plain object to Map
+        const map = new Map(Object.entries(captured));
+        if (map.size > 0) {
+          return map;
+        }
+      }
     }
   }
   
