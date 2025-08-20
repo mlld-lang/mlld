@@ -418,15 +418,15 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     }
     
     // Handle mlld-for with shadow environments
-    const { evaluateForExpression } = await import('@interpreter/eval/foreach');
+    const { evaluateForeachCommand } = await import('@interpreter/eval/foreach');
     
     // Create shadow for iteration
     const forEnv = env.createChild();
-    const result = await evaluateForExpression(forExpr, forEnv);
     
-    // Merge back results
-    env.mergeChild(forEnv);
+    // evaluateForeachCommand expects the ForExpression and environment
+    const result = await evaluateForeachCommand(forExpr, forEnv);
     
+    // The result from evaluateForeachCommand is already an EvalResult
     return result;
   }
   
@@ -784,7 +784,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       env,
       node,
       directive: 'exec',
-      identifier: commandName,
+      identifier: execContext?.metadata?.execName || 'exec',
       pipeline: normalizedPipeline,
       format: node.withClause.format,
       isRetryable: true,  // ALWAYS true in universal context
