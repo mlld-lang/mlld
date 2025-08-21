@@ -20,6 +20,8 @@ export interface RetryContext {
   retryingStage: number;         // Stage being retried
   attemptNumber: number;         // Current attempt (1-based)
   allAttempts: string[];         // All outputs from retry attempts
+  hints: (string | object | null)[];  // Hints from retry directives
+  lastHint?: string | object | null;  // Most recent hint
 }
 
 /**
@@ -67,7 +69,7 @@ export type PipelineAction =
 
 export type StageResult =
   | { type: 'success'; output: string }
-  | { type: 'retry'; reason?: string; from?: number }
+  | { type: 'retry'; reason?: string; from?: number; hint?: any }
   | { type: 'error'; error: Error };
 
 export type NextStep =
@@ -90,6 +92,8 @@ export interface StageContext {
   totalStages: number;
   outputs: Record<number, string>; // Array-style access
   contextId?: string;              // Current retry context ID
+  hint?: string | object | null;  // Hint from last retry (if any)
+  hints?: (string | object | null)[];  // All hints from retry attempts
 }
 
 /**
@@ -189,7 +193,7 @@ export class PipelineStateMachine {
       case 'success':
         return this.handleStageSuccess(stage, result.output);
       case 'retry':
-        return this.handleStageRetry(stage, result.reason, result.from);
+        return this.handleStageRetry(stage, result.reason, result.from, result.hint);
       case 'error':
         return this.handleStageError(stage, result.error);
     }
@@ -276,7 +280,7 @@ export class PipelineStateMachine {
     };
   }
 
-  private handleStageRetry(stage: number, reason?: string, fromOverride?: number): NextStep {
+  private handleStageRetry(stage: number, reason?: string, fromOverride?: number, hint?: any): NextStep {
     const targetStage = fromOverride ?? Math.max(0, stage - 1);
     
     if (process.env.MLLD_DEBUG === 'true') {
@@ -330,8 +334,10 @@ export class PipelineStateMachine {
     if (context && 
         context.requestingStage === stage && 
         context.retryingStage === targetStage) {
-      // Reuse existing context - just increment attempt
+      // Reuse existing context - just increment attempt and add hint
       context.attemptNumber++;
+      context.hints.push(hint ?? null);
+      context.lastHint = hint ?? null;
       isReusingContext = true;
       
       if (process.env.MLLD_DEBUG === 'true') {
@@ -339,7 +345,8 @@ export class PipelineStateMachine {
           contextId: context.id,
           oldAttemptNumber: context.attemptNumber - 1,
           newAttemptNumber: context.attemptNumber,
-          willBecomeContextAttempt: context.attemptNumber + 1
+          willBecomeContextAttempt: context.attemptNumber + 1,
+          hint
         });
       }
     } else {
@@ -351,7 +358,8 @@ export class PipelineStateMachine {
           existingContext: context ? {
             requestingStage: context.requestingStage,
             retryingStage: context.retryingStage
-          } : null
+          } : null,
+          hint
         });
       }
       const contextId = this.generateContextId();
@@ -360,7 +368,9 @@ export class PipelineStateMachine {
         requestingStage: stage,
         retryingStage: targetStage,
         attemptNumber: 1,
-        allAttempts: []
+        allAttempts: [],
+        hints: [hint ?? null],
+        lastHint: hint ?? null
       };
       
       // Save previous context's attempts if it exists
@@ -549,7 +559,9 @@ export class PipelineStateMachine {
         0: this.state.baseInput,
         ...Object.fromEntries(previousOutputs.map((out, i) => [i + 1, out]))
       },
-      contextId: context?.id
+      contextId: context?.id,
+      hint: context?.lastHint,
+      hints: context?.hints
     };
   }
 
