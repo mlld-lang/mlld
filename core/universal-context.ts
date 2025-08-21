@@ -14,30 +14,26 @@ export enum ExecutionMode {
 }
 
 export interface UniversalContext {
-  // Execution flow (owned by State Machine)
-  stage: number;        // 0 for non-pipeline, 1+ for pipeline stages
-  try: number;          // Attempt number (1-based)
-  isPipeline: boolean;  // Whether this is pipeline execution
+  // Core fields (owned by State Machine)
+  try: number;          // Current attempt (1-based): 1 = first try, 2 = first retry, etc.
+  tries: Array<{       // History of attempts for current stage
+    attempt: number;
+    result: "success" | "retry" | "error";
+    hint?: string | object;  // Hint from retry directive
+    output?: any;            // What that attempt produced
+  }>;
+  stage: number;        // Current pipeline stage (0-based internally, 1-based for display)
+  isPipeline: boolean;  // true if executing in a pipeline, false otherwise
+  
+  // Retry communication
+  hint: string | object | null;  // Hint from last retry (if any)
+  lastOutput: any;               // Output from last attempt (if retrying)
+  
+  // Input/output
+  input: any;           // Input to current stage/function
   
   // Execution mode - determines whether effects should be emitted
   executionMode: ExecutionMode;
-  
-  // History (owned by State Machine)
-  history: Array<{
-    stage: number;
-    try: number;
-    input: string;
-    output: string;
-    timestamp: number;
-    duration?: number;
-  }>;
-  
-  // Future: Signals (RFC 349)
-  signal?: {
-    kind: 'PASS' | 'RETRY' | 'FAIL';
-    why?: string;
-    hint?: string;
-  };
   
   // Extensible metadata
   metadata?: {
@@ -54,11 +50,14 @@ export interface UniversalContext {
  */
 export function createDefaultContext(overrides?: Partial<UniversalContext>): UniversalContext {
   return Object.freeze({
-    stage: 0,
     try: 1,
+    tries: [],
+    stage: 0,
     isPipeline: false,
+    hint: null,
+    lastOutput: null,
+    input: null,
     executionMode: ExecutionMode.PRIMARY,
-    history: [],
     ...overrides
   });
 }
@@ -69,43 +68,47 @@ export function createDefaultContext(overrides?: Partial<UniversalContext>): Uni
 export function createPipelineContext(
   stage: number,
   attempt: number,
-  history: UniversalContext['history'],
+  tries: UniversalContext['tries'],
+  hint: string | object | null = null,
+  lastOutput: any = null,
+  input: any = null,
   metadata?: UniversalContext['metadata'],
   executionMode: ExecutionMode = ExecutionMode.PRIMARY
 ): UniversalContext {
   return Object.freeze({
-    stage,
     try: attempt,
+    tries,
+    stage,
     isPipeline: true,
+    hint,
+    lastOutput,
+    input,
     executionMode,
-    history,
     metadata
   });
 }
 
 /**
- * Helper to check if a context indicates retry is needed
+ * Helper to get the last retry hint from tries array
  */
-export function shouldRetry(context: UniversalContext): boolean {
-  return context.signal?.kind === 'RETRY';
+export function getLastHint(context: UniversalContext): string | object | null {
+  if (context.tries.length === 0) return null;
+  const lastTry = context.tries[context.tries.length - 1];
+  return lastTry.hint || null;
 }
 
 /**
- * Helper to get the last successful output from history
+ * Helper to get the last output from tries array
  */
-export function getLastOutput(context: UniversalContext): string | undefined {
-  const lastEntry = context.history[context.history.length - 1];
-  return lastEntry?.output;
+export function getLastOutput(context: UniversalContext): any {
+  if (context.tries.length === 0) return null;
+  const lastTry = context.tries[context.tries.length - 1];
+  return lastTry.output;
 }
 
 /**
- * Helper to count total attempts across all stages
+ * Helper to count total attempts for current stage
  */
 export function getTotalAttempts(context: UniversalContext): number {
-  const attempts = new Map<number, number>();
-  for (const entry of context.history) {
-    const key = entry.stage;
-    attempts.set(key, Math.max(attempts.get(key) || 0, entry.try));
-  }
-  return Array.from(attempts.values()).reduce((sum, count) => sum + count, 0);
+  return context.try;
 }

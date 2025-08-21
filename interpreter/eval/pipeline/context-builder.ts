@@ -1,32 +1,19 @@
 /**
- * Simplified Context Builder for Pipeline Execution
+ * Context Builder for Pipeline Execution
  * 
- * Creates execution environments and pipeline context variables
- * for the simplified retry architecture.
+ * Creates execution environments and @ctx context variable
+ * for the new @ctx architecture.
  */
 
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
 import type { StageContext, PipelineEvent } from './state-machine';
+import type { UniversalContext } from '@core/universal-context';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
 
 /**
- * Simplified pipeline context interface
- */
-export interface SimplifiedPipelineContext {
-  try: number;                    // Current attempt number
-  tries: string[];                // Previous attempts in current context
-  stage: number;                  // Current stage (1-indexed)
-  [index: number]: string;        // Array access to pipeline outputs
-  length: number;                 // Number of previous outputs
-  retries?: {                     // Global retry accumulator
-    all: string[][];              // All attempts from all contexts
-  };
-}
-
-/**
- * Create execution environment for a pipeline stage (simplified version)
+ * Create execution environment for a pipeline stage
  */
 export async function createStageEnvironment(
   command: PipelineCommand,
@@ -45,7 +32,7 @@ export async function createStageEnvironment(
     
   // Set pipeline context in main environment
   if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[SimplifiedContextBuilder] setPipelineContext:', {
+    console.error('[ContextBuilder] setPipelineContext:', {
       stage: userVisibleStage,
       contextAttempt: context.contextAttempt,
       historyLength: context.history.length
@@ -67,12 +54,13 @@ export async function createStageEnvironment(
   const stageEnv = env.createChild();
   
   // Set @input variable
-  await setSimplifiedInputVariable(stageEnv, input, format);
+  await setInputVariable(stageEnv, input, format);
   
-  // Set @pipeline / @p variable
-  setSimplifiedPipelineVariable(
+  // Set @ctx variable
+  setContextVariable(
     stageEnv, 
     context, 
+    input,
     events, 
     hasSyntheticSource,
     allRetryHistory
@@ -82,9 +70,9 @@ export async function createStageEnvironment(
 }
 
 /**
- * Set the @input variable (same as original)
+ * Set the @input variable
  */
-async function setSimplifiedInputVariable(
+async function setInputVariable(
   env: Environment, 
   input: string, 
   format?: string
@@ -131,17 +119,19 @@ async function setSimplifiedInputVariable(
 }
 
 /**
- * Set the @pipeline/@p variable (simplified version)
+ * Set the @ctx variable
  */
-function setSimplifiedPipelineVariable(
+function setContextVariable(
   env: Environment,
   context: StageContext,
+  input: any,
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>
 ): void {
-  const pipelineContext = createSimplifiedPipelineContext(
+  const ctxObject = createContextObject(
     context,
+    input,
     events,
     hasSyntheticSource,
     allRetryHistory
@@ -154,104 +144,66 @@ function setSimplifiedPipelineVariable(
     isMultiLine: false
   };
 
-  // Use proper factory to create variable
-  const pipelineVar = createObjectVariable(
-    'pipeline',
-    pipelineContext,
-    false,
+  // Create @ctx as read-only system variable
+  const ctxVar = createObjectVariable(
+    'ctx',
+    ctxObject,
+    true,  // read-only
     inputSource,
     {
-      isPipelineContext: true,
-      isSystem: true
+      isSystem: true,
+      isContext: true
     }
   );
   
-  env.setParameterVariable('pipeline', pipelineVar);
-  env.setParameterVariable('p', pipelineVar); // Alias
+  env.setParameterVariable('ctx', ctxVar);
 }
 
 /**
- * Create simplified pipeline context object
+ * Create context object for @ctx variable
  */
-function createSimplifiedPipelineContext(
+function createContextObject(
   context: StageContext,
+  input: any,
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>
-): SimplifiedPipelineContext {
-  // Adjust stage numbers for user visibility
-  // Internal stage 0 (source) should appear as stage 1 to users
-  const userVisibleStage = context.stage + 1;
-    
-  // No filtering of outputs - all stages are visible
-  const userVisibleOutputs = context.previousOutputs;
-    
-  // Build outputs object - direct copy, no adjustment
-  const outputs: any = {};
-  Object.assign(outputs, context.outputs);
+): Partial<UniversalContext> {
+  // Build tries array from history
+  const tries = context.history.map((output, index) => ({
+    attempt: index + 1,
+    result: 'retry' as const,  // Previous attempts resulted in retry
+    hint: context.hints?.[index] || undefined,
+    output
+  }));
   
   if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[SimplifiedContextBuilder] Creating context:', {
-      internalStage: context.stage,
-      userVisibleStage,
-      contextAttempt: context.contextAttempt,
-      historyLength: context.history.length,
-      hasSyntheticSource
+    console.error('[ContextBuilder] Creating @ctx:', {
+      stage: context.stage,
+      try: context.contextAttempt,
+      triesCount: tries.length,
+      hint: context.hint,
+      isPipeline: true
     });
   }
   
-  // Build basic context
-  const pipelineContext: any = {
-    // Core fields
+  // Build @ctx object according to spec
+  const ctxObject: Partial<UniversalContext> = {
+    // Core fields (1-based indexing)
     try: context.contextAttempt,
-    tries: context.history,
-    stage: userVisibleStage,
-    length: userVisibleOutputs.length,
+    tries,
+    stage: context.stage,  // Keep 0-based internally
+    isPipeline: true,
     
-    // Array-style access
-    ...outputs
+    // Retry communication
+    hint: context.hint || null,
+    lastOutput: context.history.length > 0 
+      ? context.history[context.history.length - 1] 
+      : null,
+    
+    // Input/output
+    input
   };
 
-  // Add negative indexing
-  Object.defineProperty(pipelineContext, -1, {
-    get: () => userVisibleOutputs[userVisibleOutputs.length - 1],
-    enumerable: false
-  });
-
-  Object.defineProperty(pipelineContext, -2, {
-    get: () => userVisibleOutputs[userVisibleOutputs.length - 2],
-    enumerable: false
-  });
-
-  // Add more negative indices as needed
-  for (let i = 3; i <= Math.max(10, userVisibleOutputs.length); i++) {
-    Object.defineProperty(pipelineContext, -i, {
-      get: () => userVisibleOutputs[userVisibleOutputs.length - i],
-      enumerable: false
-    });
-  }
-
-  // Add lazy-evaluated @pipeline.retries.all
-  // This provides access to ALL retry attempts from ALL contexts
-  Object.defineProperty(pipelineContext, 'retries', {
-    get: () => {
-      if (!allRetryHistory || allRetryHistory.size === 0) {
-        return { all: [] };
-      }
-      
-      // Collect all attempts from all contexts
-      const allAttempts: string[][] = [];
-      for (const attempts of allRetryHistory.values()) {
-        if (attempts.length > 0) {
-          allAttempts.push([...attempts]);
-        }
-      }
-      
-      return { all: allAttempts };
-    },
-    enumerable: false,
-    configurable: true
-  });
-
-  return pipelineContext as SimplifiedPipelineContext;
+  return ctxObject;
 }

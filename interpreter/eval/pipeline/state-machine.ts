@@ -1,14 +1,13 @@
 /**
- * Simplified Pipeline State Machine
+ * Pipeline State Machine
  * 
- * A cleaner implementation that removes support for nested retries,
- * which analysis showed are pathological and shouldn't exist.
+ * Clean implementation that handles pipeline execution and retry logic.
  * 
- * Key simplifications:
- * - Single active retry context (no stack)
+ * Key features:
+ * - Single active retry context (no nested retries)
  * - Context reuse for same retry pattern
- * - No parent context tracking
- * - Clearer semantics
+ * - Retry hints support
+ * - Clear retry semantics
  */
 
 /**
@@ -51,7 +50,7 @@ export interface PipelineState {
   baseInput: string;
   events: PipelineEvent[];
   
-  // Simplified retry tracking
+  // Retry tracking
   activeRetryContext?: RetryContext;  // Just one active context
   globalStageRetryCount: Map<number, number>;   // Global safety limit
   
@@ -80,7 +79,7 @@ export type NextStep =
   | { type: 'INVALID_ACTION' };
 
 /**
- * Simplified Stage Context
+ * Stage Context
  */
 export interface StageContext {
   stage: number;                  // 1-indexed stage number
@@ -97,7 +96,7 @@ export interface StageContext {
 }
 
 /**
- * Simplified Pipeline State Machine
+ * Pipeline State Machine
  */
 export class PipelineStateMachine {
   private state: PipelineState;
@@ -141,7 +140,7 @@ export class PipelineStateMachine {
   }
 
   /**
-   * Get all retry history for simplified implementation
+   * Get all retry history
    */
   getAllRetryHistory(): Map<string, string[]> {
     return new Map(this.state.allRetryHistory);
@@ -284,7 +283,7 @@ export class PipelineStateMachine {
     const targetStage = fromOverride ?? Math.max(0, stage - 1);
     
     if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[SimplifiedStateMachine] handleStageRetry:', {
+      console.error('[StateMachine] handleStageRetry:', {
         requestingStage: stage,
         targetStage,
         hasActiveContext: !!this.state.activeRetryContext,
@@ -341,7 +340,7 @@ export class PipelineStateMachine {
       isReusingContext = true;
       
       if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[SimplifiedStateMachine] Reusing context:', {
+        console.error('[StateMachine] Reusing context:', {
           contextId: context.id,
           oldAttemptNumber: context.attemptNumber - 1,
           newAttemptNumber: context.attemptNumber,
@@ -352,7 +351,7 @@ export class PipelineStateMachine {
     } else {
       // Create new context (replacing any existing one)
       if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[SimplifiedStateMachine] Creating NEW context:', {
+        console.error('[StateMachine] Creating NEW context:', {
           requestingStage: stage,
           targetStage,
           existingContext: context ? {
@@ -384,7 +383,7 @@ export class PipelineStateMachine {
       this.state.activeRetryContext = context;
       
       if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[SimplifiedStateMachine] Created new context:', {
+        console.error('[StateMachine] Created new context:', {
           contextId: context.id,
           requestingStage: stage,
           retryingStage: targetStage
@@ -502,7 +501,7 @@ export class PipelineStateMachine {
         // Add 1 to account for the initial execution before any retries
         contextAttempt = context.attemptNumber + 1;
         if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[SimplifiedStateMachine] Stage is retrying stage, using attemptNumber + 1:', {
+          console.error('[StateMachine] Stage is retrying stage, using attemptNumber + 1:', {
             stage,
             retryingStage: context.retryingStage,
             attemptNumber: context.attemptNumber,
@@ -514,7 +513,7 @@ export class PipelineStateMachine {
         // It executes initially (attempt 1), then after each retry
         contextAttempt = context.attemptNumber + 1;
         if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[SimplifiedStateMachine] Stage is requesting stage, using attemptNumber + 1:', {
+          console.error('[StateMachine] Stage is requesting stage, using attemptNumber + 1:', {
             stage,
             requestingStage: context.requestingStage,
             attemptNumber: context.attemptNumber,
@@ -525,7 +524,7 @@ export class PipelineStateMachine {
     }
     
     if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[SimplifiedStateMachine] buildStageContext attempt:', {
+      console.error('[StateMachine] buildStageContext attempt:', {
         stage,
         requestingStage: context?.requestingStage,
         retryingStage: context?.retryingStage,
