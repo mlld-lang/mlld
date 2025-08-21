@@ -53,15 +53,24 @@ NoneLiteral "none literal"
       });
     }
 
-// Retry literal - signals pipeline retry
-RetryLiteral "Retry Literal"
-  = "retry" { 
-      return helpers.createNode('Literal', { 
-        value: 'retry', 
-        valueType: 'retry',
-        location: location() 
-      }); 
+// Retry action - signals pipeline retry with optional hint
+RetryAction "Retry Action"
+  = "retry" hint:(_ hint:RetryHint { return hint; })? {
+      return helpers.createNode('RetryAction', {
+        hint: hint || null,
+        location: location()
+      });
     }
+
+// Retry hint - reuses existing value patterns for DRY approach
+RetryHint "Retry Hint"
+  = RetryHintValue
+
+// Leverages existing abstractions - no new parsing logic needed!
+RetryHintValue
+  = DataObjectLiteral       // { needed: "path", analysis: @analyze() }
+  / ExecInvocationPattern   // @diagnose(@input)
+  / StringLiteral           // 'Temperature too high'
 
 // -------------------------------------------------------------
 // TIME DURATION LITERALS

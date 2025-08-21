@@ -98,6 +98,12 @@ export interface LiteralNode extends BaseMlldNode {
   valueType?: string;
 }
 
+// Retry action node - signals pipeline retry with optional hint
+export interface RetryActionNode extends BaseMlldNode {
+  type: 'RetryAction';
+  hint?: any; // Can be string, object, ExecInvocation, or null
+}
+
 // Separator nodes
 export interface DotSeparatorNode extends BaseMlldNode {
   type: 'DotSeparator';

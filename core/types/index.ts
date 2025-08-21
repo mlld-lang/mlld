@@ -39,6 +39,7 @@ import {
   CommentNode,
   VariableReferenceNode,
   LiteralNode,
+  RetryActionNode,
   DotSeparatorNode,
   PathSeparatorNode,
   ErrorNode,
@@ -75,6 +76,7 @@ export type MlldNode =
   | CommentNode
   | VariableReferenceNode
   | LiteralNode
+  | RetryActionNode
   | DotSeparatorNode
   | PathSeparatorNode
   | ErrorNode

@@ -7,11 +7,16 @@
 // Main pattern - try error recovery first, then side-effect actions, then pure values
 WhenRHSAction "when RHS action"
   = WhenRHSExeDefinitionError  // Error recovery FIRST - before ExecInvocationPattern can match
+  / WhenRHSRetryAction         // Retry with optional hint - MUST come before other actions
   / WhenRHSShowAction
   / WhenRHSOutputAction  
   / WhenRHSVarAssignment
   / WhenRHSFunctionCall
   / VarRHSContent  // Pure values (fallback)
+
+// Retry action - signals pipeline retry with optional hint
+WhenRHSRetryAction
+  = RetryAction  // Use the RetryAction from literals.peggy directly
 
 // Show action - creates regular show directive node
 WhenRHSShowAction

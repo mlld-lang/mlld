@@ -235,7 +235,6 @@ PrimitiveValue
   / NumberLiteral
   / BooleanLiteral
   / NullLiteral
-  / RetryLiteral           // retry keyword for pipeline control
 
 // Object property values - use data context patterns for proper typing and unwrapping
 ObjectPropertyValue "object property value"
