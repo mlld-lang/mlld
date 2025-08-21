@@ -70,7 +70,8 @@ RetryHint "Retry Hint"
 RetryHintValue
   = DataObjectLiteral       // { needed: "path", analysis: @analyze() }
   / ExecInvocationPattern   // @diagnose(@input)
-  / StringLiteral           // 'Temperature too high'
+  / UnifiedQuoteOrTemplate  // "interpolates @var", `template @var`, 'literal'
+  / StringLiteral           // 'Temperature too high' - kept for backward compat
 
 // -------------------------------------------------------------
 // TIME DURATION LITERALS
