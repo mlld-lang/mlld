@@ -629,11 +629,26 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     return { value: commandStr, env };
   }
   
-  // Handle FileReference nodes (alligator syntax)
+  // Handle FileReference nodes (alligator syntax in interpolation contexts)
   if (node.type === 'FileReference') {
-    const { evaluateLoadContent } = await import('../eval/show');
-    const result = await evaluateLoadContent(node, env);
-    return { value: result, env };
+    // FileReference appears in interpolation contexts
+    // Check if it's actually a load-content node or just a placeholder
+    if (node.source?.type === 'path' || node.source?.type === 'url') {
+      // It's a real file reference, convert to load-content format
+      const loadContentNode = {
+        type: 'load-content',
+        source: node.source,
+        options: node.options,
+        pipes: node.pipes
+      };
+      const { processContentLoader } = await import('../eval/content-loader');
+      const result = await processContentLoader(loadContentNode, env);
+      return { value: result, env };
+    } else {
+      // It's likely just a string that looks like "<something>"
+      // Return it as-is
+      return { value: node.source || '<>', env };
+    }
   }
   
   // If we get here, it's an unknown node type

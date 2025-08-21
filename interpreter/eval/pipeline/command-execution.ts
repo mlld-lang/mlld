@@ -174,8 +174,8 @@ export async function executeCommandVariable(
   const format = pipelineCtx?.format;
   
   // CRITICAL: Create pipeline context variables (@p, @pipeline, @ctx) if in pipeline
-  // Only create if not already present (parent env might have them)
-  if (pipelineCtx && !env.getVariable('p')) {
+  // Only create if not already present (execEnv might inherit them)
+  if (pipelineCtx && !execEnv.getVariable('p')) {
     // Create the context object similar to what context-builder does
     const contextObj = {
       try: pipelineCtx.try || 1,
@@ -382,6 +382,17 @@ export async function executeCommandVariable(
             params[paramName] = paramVar.value;
           }
         }
+      }
+    }
+    
+    // CRITICAL: Add pipeline context variables if they exist
+    // These are not in paramNames but need to be available in JS execution
+    if (pipelineCtx) {
+      const pipelineVar = execEnv.getVariable('pipeline');
+      if (pipelineVar) {
+        params['pipeline'] = pipelineVar.value;
+        params['p'] = pipelineVar.value;
+        params['ctx'] = pipelineVar.value;
       }
     }
     
