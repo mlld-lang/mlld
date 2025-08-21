@@ -38,9 +38,9 @@ export async function createStageEnvironment(
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>
 ): Promise<Environment> {
-  // Stage numbers are now direct - no adjustment needed
-  // The source is always visible as stage 1
-  const userVisibleStage = context.stage;
+  // Adjust stage numbers for user visibility
+  // Internal stage 0 (source) should appear as stage 1 to users
+  const userVisibleStage = context.stage + 1;
   const userVisibleTotalStages = context.totalStages;
     
   // Set pipeline context in main environment
@@ -179,9 +179,9 @@ function createSimplifiedPipelineContext(
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>
 ): SimplifiedPipelineContext {
-  // Stage numbers are now direct - no adjustment needed
-  // The source is always visible as stage 1
-  const userVisibleStage = context.stage;
+  // Adjust stage numbers for user visibility
+  // Internal stage 0 (source) should appear as stage 1 to users
+  const userVisibleStage = context.stage + 1;
     
   // No filtering of outputs - all stages are visible
   const userVisibleOutputs = context.previousOutputs;

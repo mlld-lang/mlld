@@ -291,43 +291,31 @@ export class PipelineStateMachine {
       });
     }
     
-    // Special case: Stage 0 self-retry (synthetic source retrying itself)
+    // NO SELF-RETRY: A stage cannot retry itself
+    // Special case: In a single-stage pipeline (only validator after source),
+    // stage 0 is the validator, and it CAN retry the source (which is implicit)
+    // But in multi-stage pipelines, stage 0 trying to retry stage 0 is invalid
+    if (stage === targetStage && targetStage !== 0) {
+      // A non-source stage trying to retry itself is invalid
+      return this.handleAbort(`Stage ${stage} cannot retry itself`);
+    }
+    
+    // Stage 0 special handling: 
+    // - If there's only 1 stage total, stage 0 is the validator and can retry the source
+    // - If there are multiple stages, stage 0 is the source and cannot self-retry
     if (stage === 0 && targetStage === 0) {
-      if (!this.isStage0Retryable) {
-        return this.handleAbort('Stage 1 cannot retry: Input is not a function');
+      if (this.totalStages === 1) {
+        // Single-stage pipeline: stage 0 is actually the validator
+        // It's trying to retry the implicit source, which is allowed
+        // The retry will be handled by re-executing the source function
+        if (!this.isStage0Retryable) {
+          return this.handleAbort('Cannot retry: Input is not a function');
+        }
+      } else {
+        // Multi-stage pipeline: stage 0 is the source itself
+        // A source cannot retry itself
+        return this.handleAbort('Stage 0 (source) cannot retry itself');
       }
-      
-      // Use simplified retry tracking for stage 0
-      const globalRetries = this.state.globalStageRetryCount.get(0) || 0;
-      if (globalRetries >= this.maxGlobalRetriesPerStage) {
-        return this.handleAbort(`Stage 1 exceeded global retry limit (${this.maxGlobalRetriesPerStage})`);
-      }
-      
-      // Increment global count
-      this.state.globalStageRetryCount.set(0, globalRetries + 1);
-      
-      // Record retry event
-      this.recordEvent({
-        type: 'STAGE_RETRY_REQUEST',
-        requestingStage: 0,
-        targetStage: 0,
-        contextId: 'stage0-self-retry'
-      });
-      
-      // Re-execute stage 0
-      this.recordEvent({
-        type: 'STAGE_START',
-        stage: 0,
-        input: this.state.baseInput,
-        contextId: 'stage0-self-retry'
-      });
-      
-      return {
-        type: 'EXECUTE_STAGE',
-        stage: 0,
-        input: this.state.baseInput,
-        context: this.buildStageContext(0)
-      };
     }
     
     // Check if stage 1 is trying to retry non-retryable stage 0
@@ -349,11 +337,23 @@ export class PipelineStateMachine {
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[SimplifiedStateMachine] Reusing context:', {
           contextId: context.id,
-          attemptNumber: context.attemptNumber
+          oldAttemptNumber: context.attemptNumber - 1,
+          newAttemptNumber: context.attemptNumber,
+          willBecomeContextAttempt: context.attemptNumber + 1
         });
       }
     } else {
       // Create new context (replacing any existing one)
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[SimplifiedStateMachine] Creating NEW context:', {
+          requestingStage: stage,
+          targetStage,
+          existingContext: context ? {
+            requestingStage: context.requestingStage,
+            retryingStage: context.retryingStage
+          } : null
+        });
+      }
       const contextId = this.generateContextId();
       context = {
         id: contextId,

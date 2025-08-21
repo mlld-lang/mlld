@@ -393,10 +393,18 @@ export async function executeCommandVariable(
         params['pipeline'] = pipelineVar.value;
         params['p'] = pipelineVar.value;
         params['ctx'] = pipelineVar.value;
+        // Also add as 'context' for compatibility with JS code that uses context.try
+        params['context'] = pipelineVar.value;
       }
     }
     
     const result = await env.executeCode(code, execDef.language || 'javascript', params);
+    
+    // Check for retry signal BEFORE stringifying
+    if (result && typeof result === 'object' && result.retry === true) {
+      // Return the retry object as-is for proper detection
+      return result;
+    }
     
     // If the function returns a PipelineInput object, extract the text
     if (result && typeof result === 'object' && 'text' in result && 'type' in result) {

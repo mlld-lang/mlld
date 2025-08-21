@@ -5,6 +5,7 @@ import type { ExecutableDefinition } from '@core/types/executable';
 import type { Variable } from '@core/types/variable';
 import type { IEvaluator } from '@core/universal-context';
 
+import { USE_UNIVERSAL_CONTEXT } from '@core/feature-flags';
 import { ExecVisitor, ExecutableNode } from './visitor';
 import { createExecutableNode } from './nodes';
 import { CommandResolver } from './helpers/command-resolver';
@@ -298,7 +299,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     switch (language) {
       case 'javascript':
       case 'js':
-        return await this.executeJavaScript(code, env);
+        return await this.executeJavaScript(code, env, context);
       
       case 'node':
       case 'nodejs':
@@ -820,10 +821,36 @@ export class ExecInvocationEvaluator implements ExecVisitor {
         if (arg.type === 'VariableReference') {
           const varRef = arg as any;
           const varName = varRef.identifier;
-          const variable = env.getVariable(varName);
+          let variable = env.getVariable(varName);
+          
+          // UNIVERSAL CONTEXT: If @p, @pipeline, or @ctx are requested but not found,
+          // provide the universal context (pipeline context if in pipeline, or default)
+          if (!variable && (varName === 'p' || varName === 'pipeline' || varName === 'ctx')) {
+            const pipelineContext = env.getPipelineContext();
+            if (pipelineContext) {
+              // We're in a pipeline - the variable should already exist from context-builder
+              // Try looking in parent environment (stage environment might be a child)
+              variable = env.getVariable(varName);
+              // If still not found, there's a scope issue - don't create duplicate
+              if (!variable && process.env.DEBUG_EXEC) {
+                console.error('[processArguments] WARNING: Pipeline context exists but @p variable not found in scope');
+              }
+            } else if (USE_UNIVERSAL_CONTEXT) {
+              // Not in a pipeline but universal context is enabled - provide default context
+              const defaultContext = {
+                try: 1,
+                tries: [],
+                stage: 0,
+                isPipeline: false
+              };
+              const { VariableFactory } = await import('./helpers/variable-factory');
+              variable = VariableFactory.createParameter(varName, defaultContext);
+              env.setParameterVariable(varName, variable); // Store the variable in environment
+            }
+          }
           
           if (process.env.DEBUG_EXEC) {
-            console.error('[processArguments] Evaluating VariableReference:', varName, 'fields:', varRef.fields);
+            console.error('[processArguments] Evaluating VariableReference:', varName, 'fields:', varRef.fields, 'found:', !!variable);
           }
           
           if (variable) {
@@ -1093,7 +1120,8 @@ export class ExecInvocationEvaluator implements ExecVisitor {
    */
   private async executeJavaScript(
     code: string,
-    env: Environment
+    env: Environment,
+    pipelineContext?: any
   ): Promise<EvalResult> {
     // Prepare parameters for auto-unwrapping - only get bound parameters
     const params = new Map<string, any>();
@@ -1181,6 +1209,23 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Add captured shadow environments if present
     if (this.currentCapturedShadowEnvs) {
       processedParams['__capturedShadowEnvs'] = this.currentCapturedShadowEnvs;
+    }
+    
+    // Add pipeline context if present
+    if (pipelineContext) {
+      processedParams['context'] = pipelineContext;
+      if (process.env.DEBUG_EXEC) {
+        console.error('[executeJavaScript] Adding pipeline context:', pipelineContext);
+      }
+    } else {
+      // Try to get pipeline context from environment
+      const envContext = env.getPipelineContext();
+      if (envContext) {
+        processedParams['context'] = envContext;
+        if (process.env.DEBUG_EXEC) {
+          console.error('[executeJavaScript] Adding env pipeline context:', envContext);
+        }
+      }
     }
     
     if (process.env.DEBUG_EXEC) {

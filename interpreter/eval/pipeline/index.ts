@@ -40,9 +40,8 @@ export async function executePipeline(
     env, 
     format, 
     isRetryable, 
-    sourceFunction, 
-    hasSyntheticSource,
-    evaluator  // Pass the evaluator when available
+    sourceFunction,
+    evaluator  // Pass the evaluator as 6th parameter (no hasSyntheticSource)
   );
   return await executor.execute(baseOutput);
 }

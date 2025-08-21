@@ -12,7 +12,6 @@ export interface PreprocessedPipeline {
   hasLeadingBuiltins: boolean;
   hasTrailingBuiltins: boolean;
   totalBuiltins: number;
-  requiresSyntheticSource: boolean;
 }
 
 /**
@@ -54,33 +53,21 @@ function createIdentityCommand(): PipelineCommand {
 }
 
 /**
- * Create a synthetic source command placeholder
- * WHY: Not all pipeline sources are retryable:
- *      - "Hello" | @validate  → literal string can't be re-executed
- *      - @varString | @validate → depends: if @varString = "text", not retryable
- *                                          if @varString = @generate(), retryable
- *      - @generate() | @validate → function CAN be re-executed
- *      The synthetic source enables uniform retry handling - stage 1 always
- *      retries stage 0, which either re-runs the function or throws an error.
- * CONTEXT: Only added when isRetryable=true and sourceFunction exists (stored in variable metadata)
+ * Create a real command from a source function for universal context
+ * This converts retryable sources into actual pipeline stages
  */
-function createSyntheticSourceCommand(): PipelineCommand {
+function createSourceCommand(sourceFunction: any): PipelineCommand {
   return {
-    type: 'synthetic' as any,
-    rawIdentifier: 'source',  // User-friendly name instead of __source__
-    identifier: [],
+    type: 'execInvocation' as any,
+    rawIdentifier: sourceFunction.identifier || 'source',
+    identifier: sourceFunction.identifier ? [sourceFunction.identifier] : [],
     args: [],
     fields: [],
-    rawArgs: []
+    rawArgs: [],
+    sourceFunction  // Preserve the source function for execution
   };
 }
 
-/**
- * Check if stages already have a synthetic source stage
- */
-function hasSyntheticSourceStage(stages: LogicalStage[]): boolean {
-  return stages.some(s => s.command.rawIdentifier === 'source');
-}
 
 /**
  * Preprocess a pipeline to separate logical stages from effects
@@ -170,31 +157,26 @@ export function preprocessPipeline(
     }
   }
   
-  // Check if the first stage is already a synthetic source
-  const alreadyHasSyntheticSource = logicalStages.length > 0 && 
-    logicalStages[0].command.rawIdentifier === 'source';
-  
-  // Determine if we need a synthetic source stage
-  const requiresSyntheticSource = isRetryable && 
-    sourceFunction && 
-    !alreadyHasSyntheticSource;
-  
-  if (requiresSyntheticSource) {
-    /**
-     * Add synthetic source as first logical stage
-     * WHY: Allows retry of non-repeatable sources. "Hello" can't be retried,
-     *      but @generate() can be re-executed for fresh data.
-     * GOTCHA: This shifts all stage numbers by 1, requiring adjustment in user-facing output
-     */
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[preprocessor] Adding synthetic source stage');
+  // Convert retryable source functions into real pipeline stages
+  // This implements universal context - sources ARE pipeline stages
+  if (isRetryable && sourceFunction && logicalStages.length > 0) {
+    // Check if we already have a source command as first stage
+    const firstStage = logicalStages[0];
+    const isAlreadySourceCommand = firstStage.command.type === 'execInvocation' && 
+                                   (firstStage.command as any).sourceFunction;
+    
+    if (!isAlreadySourceCommand) {
+      // Convert source function to a real command stage
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[preprocessor] Converting source function to real pipeline stage');
+      }
+      logicalStages.unshift({
+        command: createSourceCommand(sourceFunction),
+        effects: [],
+        originalIndices: [-1], // Mark as source-generated
+        isImplicitIdentity: false
+      });
     }
-    logicalStages.unshift({
-      command: createSyntheticSourceCommand(),
-      effects: [],
-      originalIndices: [-1], // Special index for synthetic
-      isImplicitIdentity: false
-    });
   }
   
   if (process.env.MLLD_DEBUG === 'true') {
@@ -203,7 +185,6 @@ export function preprocessPipeline(
       totalBuiltins,
       hasLeadingBuiltins,
       hasTrailingBuiltins,
-      requiresSyntheticSource,
       stages: logicalStages.map(s => ({
         command: s.command.rawIdentifier,
         effectsCount: s.effects.length,
@@ -216,7 +197,6 @@ export function preprocessPipeline(
     logicalStages,
     hasLeadingBuiltins,
     hasTrailingBuiltins,
-    totalBuiltins,
-    requiresSyntheticSource
+    totalBuiltins
   };
 }

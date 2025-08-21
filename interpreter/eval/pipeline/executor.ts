@@ -29,7 +29,6 @@ export class PipelineExecutor {
   private logicalStages: LogicalStage[];  // NEW
   private isRetryable: boolean;
   private sourceFunction?: () => Promise<string>; // Store source function for retries
-  private hasSyntheticSource: boolean;
   private sourceExecutedOnce: boolean = false; // Track if source has been executed once
   private initialInput: string = ''; // Store initial input for synthetic source
   private allRetryHistory: Map<string, string[]> = new Map();
@@ -41,15 +40,13 @@ export class PipelineExecutor {
     format?: string,
     isRetryable: boolean = false,
     sourceFunction?: () => Promise<string>,
-    hasSyntheticSource: boolean = false,
     evaluator?: IEvaluator  // NEW: Optional injection point
   ) {
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Constructor (with preprocessing):', {
         originalPipelineLength: pipeline.length,
         isRetryable,
-        hasSourceFunction: !!sourceFunction,
-        hasSyntheticSource
+        hasSourceFunction: !!sourceFunction
       });
     }
     
@@ -77,7 +74,6 @@ export class PipelineExecutor {
     this.format = format;
     this.isRetryable = isRetryable;
     this.sourceFunction = sourceFunction;
-    this.hasSyntheticSource = hasSyntheticSource || this.preprocessed.requiresSyntheticSource;
     this.evaluator = evaluator;  // Store the injected evaluator
   }
 
@@ -202,7 +198,7 @@ export class PipelineExecutor {
         this.env, 
         this.format,
         this.stateMachine.getEvents(),
-        this.hasSyntheticSource,
+        false,  // No more synthetic sources
         this.allRetryHistory
       );
       
@@ -344,7 +340,7 @@ export class PipelineExecutor {
         this.env, 
         this.format,
         this.stateMachine.getEvents(),
-        this.hasSyntheticSource,
+        false,  // No more synthetic sources
         this.allRetryHistory
       );
       
@@ -411,22 +407,30 @@ export class PipelineExecutor {
   ): Promise<string> {
     // Don't try to set @input - stageEnv already has it set by createStageEnvironment
     
-    // In universal context, we don't need synthetic source - handle it directly
-    if (command.rawIdentifier === 'source') {
-      // For universal context, the source is just the first retryable function
-      // We can re-execute it using the sourceFunction if available
-      if (this.sourceFunction) {
-        const currentContext = stageEnv.getPipelineContext();
-        if (currentContext && this.env) {
-          this.env.setPipelineContext(currentContext);
-        }
-        const fresh = await this.sourceFunction();
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[executeCommandUniversal] Source function returned:', fresh);
-        }
-        return fresh;
+    // Handle source commands with sourceNode (from universal context conversion)
+    if ((command as any).sourceNode) {
+      const sourceNode = (command as any).sourceNode;
+      
+      // Re-execute the source node
+      if (sourceNode.type === 'ExecInvocation') {
+        const { evaluateExecInvocation } = await import('../exec-invocation');
+        // Pass stageEnv which has the pipeline context already set
+        // evaluateExecInvocation takes (node, env, evaluator?) not context
+        const result = await evaluateExecInvocation(sourceNode, stageEnv, this.evaluator);
+        return String(result.value);
+      } else if (sourceNode.type === 'command') {
+        const { interpolate } = await import('../../core/interpreter');
+        const { InterpolationContext } = await import('../../core/interpolation-context');
+        const command = await interpolate(sourceNode.commandTemplate || sourceNode.nodes || [], stageEnv, InterpolationContext.ShellCommand);
+        const result = await stageEnv.executeCommand(command);
+        return result;
+      } else if (sourceNode.type === 'code') {
+        const { evaluateCodeExecution } = await import('../code-execution');
+        const result = await evaluateCodeExecution(sourceNode, stageEnv);
+        return String(result.value);
       }
-      // If no source function, just return the input (non-retryable source)
+      
+      // Fallback - just return input
       return input;
     }
     
@@ -512,55 +516,23 @@ export class PipelineExecutor {
     input: string,
     stageEnv: Environment
   ): Promise<string> {
-    /**
-     * Special handling for synthetic source stage
-     * WHY: Enables retry of pipeline sources. When stage 2 says "retry", it goes back
-     *      to stage 1 (source) which can re-execute the original function.
-     * GOTCHA: First time returns cached result, subsequent times re-execute function
-     * CONTEXT: Only exists when pipeline starts with retryable function
-     */
+    // Legacy synthetic source handling - deprecated with universal context
     if (command.rawIdentifier === 'source') {
-      const firstTime = !this.sourceExecutedOnce;
-      this.sourceExecutedOnce = true;
-      
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[PipelineExecutor] Executing source stage:', {
-          firstTime,
-          hasSourceFunction: !!this.sourceFunction,
-          isRetryable: this.isRetryable
-        });
+      // This should not be reached with universal context
+      // Sources are now real pipeline stages
+      if (this.sourceFunction) {
+        const currentContext = stageEnv.getPipelineContext();
+        if (currentContext && this.env) {
+          this.env.setPipelineContext(currentContext);
+        }
+        const fresh = await this.sourceFunction();
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[PipelineExecutor] Legacy source function returned:', fresh);
+        }
+        return fresh;
       }
-      
-      if (firstTime) {
-        // First execution - return the already-computed initial input
-        // WHY: The function was already executed to get the pipeline input,
-        //      no need to execute it twice on the first pass
-        return this.initialInput;
-      }
-      
-      // Retry execution - need to call source function
-      if (!this.sourceFunction) {
-        // SECURITY: Prevents retry of non-retryable sources like literals
-        //           which could lead to inconsistent behavior
-        throw new Error('Cannot retry stage 1 (source): Input is not a function and cannot be retried');
-      }
-      
-      // Re-execute the source function to get fresh input
-      // Pass the current pipeline context to the source function
-      // This ensures the source can access the updated @p context on retry
-      
-      // The source function needs access to the current pipeline context
-      // Set it on the environment before calling the source
-      const currentContext = stageEnv.getPipelineContext();
-      if (currentContext && this.env) {
-        this.env.setPipelineContext(currentContext);
-      }
-      
-      const fresh = await this.sourceFunction();
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[PipelineExecutor] Source function returned fresh input:', fresh);
-      }
-      return fresh;
+      // No source function - return input  
+      return this.initialInput;
     }
     
     // Handle built-in pipeline commands (show, log, output)
@@ -867,8 +839,21 @@ export class PipelineExecutor {
   }
 
   private isRetrySignal(output: any): boolean {
-    const isRetry = output === 'retry' || 
-      (output && typeof output === 'object' && output.value === 'retry');
+    // Check for direct retry values
+    let isRetry = output === 'retry' || 
+      (output && typeof output === 'object' && (output.value === 'retry' || output.retry === true));
+    
+    // Also check for stringified JSON retry signal
+    if (!isRetry && typeof output === 'string' && output.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(output);
+        if (parsed && typeof parsed === 'object' && parsed.retry === true) {
+          isRetry = true;
+        }
+      } catch {
+        // Not valid JSON, ignore
+      }
+    }
     
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Retry check:', {

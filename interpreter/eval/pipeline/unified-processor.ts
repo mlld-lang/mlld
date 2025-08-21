@@ -86,17 +86,11 @@ export async function processPipeline(
     return value;
   }
   
-  // Create synthetic source stage if we have a retryable source
-  const SOURCE_STAGE: PipelineCommand = {
-    rawIdentifier: 'source',
-    identifier: [],
-    args: [],
-    fields: [],
-    rawArgs: []
-  };
+  // Convert retryable sources to real pipeline stages (universal context)
+  let normalizedPipeline = detected.pipeline;
   
   if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[processPipeline] Checking for synthetic source:', {
+    console.error('[processPipeline] Checking for retryable source:', {
       isRetryable: detected.isRetryable,
       hasValue: !!value,
       hasMetadata: !!(value && typeof value === 'object' && 'metadata' in value && value.metadata),
@@ -105,37 +99,86 @@ export async function processPipeline(
     });
   }
   
-  // Normalize pipeline - prepend source stage if retryable
-  const normalizedPipeline = detected.isRetryable && value?.metadata?.sourceFunction
-    ? [SOURCE_STAGE, ...detected.pipeline]
-    : detected.pipeline;
+  // If we have a retryable source function, convert it to a real command stage
+  if (detected.isRetryable && value?.metadata?.sourceFunction) {
+    const sourceNode = value.metadata.sourceFunction;
+    const sourceCommand: PipelineCommand = {
+      type: 'execInvocation' as any,
+      rawIdentifier: sourceNode.identifier || sourceNode.rawIdentifier || 'source',
+      identifier: sourceNode.identifier ? [sourceNode.identifier] : [],
+      args: sourceNode.args || [],
+      fields: sourceNode.fields || [],
+      rawArgs: sourceNode.rawArgs || [],
+      sourceNode  // Preserve the source node for execution
+    };
+    normalizedPipeline = [sourceCommand, ...detected.pipeline];
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[processPipeline] Created source command as stage 0:', {
+        identifier: sourceCommand.rawIdentifier,
+        type: sourceCommand.type
+      });
+    }
+  }
   
-  // Validate pipeline functions exist (skip source stage)
-  const pipelineToValidate = normalizedPipeline.filter(cmd => cmd.rawIdentifier !== 'source');
+  // Validate pipeline functions exist
+  // Note: source commands with sourceNode are validated differently during execution
+  const pipelineToValidate = normalizedPipeline.filter(cmd => !(cmd as any).sourceNode);
   await validatePipeline(pipelineToValidate, env, identifier);
   
-  // Prepare input value for pipeline
-  const input = await prepareInput(value, env);
-  
-  // Create source function for retrying stage 0 if applicable
+  // LAZY SOURCE EVALUATION: Only prepare input if we don't have a retryable source
+  // If we have a retryable source, it will be evaluated as stage 0 of the pipeline
+  let input: string;
   let sourceFunction: (() => Promise<string>) | undefined;
+  
   if (detected.isRetryable && value?.metadata?.sourceFunction) {
-    // Create a function that re-executes the source AST node
     const sourceNode = value.metadata.sourceFunction;
-    sourceFunction = async () => {
-      // Re-evaluate the source node to get fresh input
+    
+    // Check if the source function uses @p or @pipeline as arguments
+    const needsPipelineContext = sourceNode.type === 'ExecInvocation' && 
+      sourceNode.args?.some((arg: any) => 
+        arg.type === 'VariableReference' && 
+        (arg.identifier === 'p' || arg.identifier === 'pipeline' || arg.identifier === 'ctx')
+      );
+    
+    if (needsPipelineContext) {
+      // The source needs @p as an argument - defer evaluation completely
+      // Use empty string as placeholder - the real evaluation happens in stage 0
+      input = '';
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[processPipeline] Deferring source evaluation - needs pipeline context');
+      }
+    } else {
+      // Source doesn't need @p - safe to evaluate now
       if (sourceNode.type === 'ExecInvocation') {
         const { evaluateExecInvocation } = await import('../exec-invocation');
-        // CRITICAL: Pass pipeline context to exec invocation
-        // Get pipeline context from environment
-        const pipelineCtx = env.getPipelineContext();
-        const context = pipelineCtx ? {
-          stage: pipelineCtx.stage || 0,
-          try: pipelineCtx.try || 1,
-          isPipeline: true,
-          tries: pipelineCtx.tries || []
-        } : undefined;
-        const result = await evaluateExecInvocation(sourceNode, env, context);
+        const result = await evaluateExecInvocation(sourceNode, env);
+        input = String(result.value);
+      } else if (sourceNode.type === 'command') {
+        const { interpolate } = await import('../../core/interpreter');
+        const { InterpolationContext } = await import('../../core/interpolation-context');
+        const command = await interpolate(sourceNode.commandTemplate || sourceNode.nodes || [], env, InterpolationContext.ShellCommand);
+        input = await env.executeCommand(command);
+      } else if (sourceNode.type === 'code') {
+        const { evaluateCodeExecution } = await import('../code-execution');
+        const result = await evaluateCodeExecution(sourceNode, env);
+        input = String(result.value);
+      } else {
+        // Fallback - prepare input normally
+        input = await prepareInput(value, env);
+      }
+    }
+    
+    // Create source function for retrying stage 0
+    sourceFunction = async () => {
+      // Re-evaluate the source node to get fresh input
+      // At this point, pipeline context (@p) should be available from the executor
+      if (sourceNode.type === 'ExecInvocation') {
+        const { evaluateExecInvocation } = await import('../exec-invocation');
+        // The pipeline executor should have set the context with updated try count
+        // Pass env which should have @p available as a variable
+        const result = await evaluateExecInvocation(sourceNode, env);
         return String(result.value);
       } else if (sourceNode.type === 'command') {
         // This is a command executable definition, not a run directive
@@ -159,10 +202,14 @@ export async function processPipeline(
       // Fallback - return original input
       return input;
     };
+  } else {
+    // Non-retryable source or no source function - evaluate input normally
+    input = await prepareInput(value, env);
+    sourceFunction = undefined;
   }
   
-  // Store whether we added a synthetic source stage for context adjustment
-  const hasSyntheticSource = normalizedPipeline[0]?.rawIdentifier === 'source';
+  // No longer using synthetic sources - sources are real pipeline stages
+  const hasSyntheticSource = false;
   
   // Execute pipeline with normalized stages
   try {
