@@ -79,7 +79,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   private nodeShadowEnv?: NodeShadowEnvironment; // VM-based Node.js shadow environment
   
   // NEW: Universal context (always present in new mode)
-  private readonly universalContext?: UniversalContext;
+  // Made non-readonly so it can be updated dynamically
+  private universalContext?: UniversalContext;
   
   // Pipeline execution context (OLD - kept for compatibility)
   private pipelineContext?: {
@@ -733,7 +734,34 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Get universal context (new mode only)
    */
   getUniversalContext(): UniversalContext | undefined {
-    return USE_UNIVERSAL_CONTEXT ? this.universalContext : undefined;
+    if (!USE_UNIVERSAL_CONTEXT) return undefined;
+    
+    // Child environments should always get the context from their parent
+    // to ensure they see the latest updates
+    if (this.parent && this.parent.universalContext) {
+      return this.parent.universalContext;
+    }
+    
+    return this.universalContext;
+  }
+  
+  /**
+   * Update universal context (creates new frozen instance)
+   */
+  updateUniversalContext(updates: Partial<UniversalContext>): void {
+    if (!USE_UNIVERSAL_CONTEXT || !this.universalContext) return;
+    
+    // Create new context with updates (frozen)
+    const newContext = Object.freeze({
+      ...this.universalContext,
+      ...updates
+    }) as UniversalContext;
+    
+    // Update this environment and propagate to children
+    this.universalContext = newContext;
+    
+    // Note: Child environments will get the updated context through
+    // the parent reference since they share the same context object
   }
   
   /**

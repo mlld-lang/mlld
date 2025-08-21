@@ -1236,8 +1236,15 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       });
     }
     
+    // Get universal context from environment and pass it in metadata
+    const universalContext = env.getUniversalContext?.();
+    const metadata = {
+      ...variableMetadata,
+      universalContext
+    };
+    
     // Execute JavaScript code using executeCode - pass both params and metadata
-    const result = await env.executeCode(code, 'javascript', processedParams, variableMetadata);
+    const result = await env.executeCode(code, 'javascript', processedParams, metadata);
     
     // Handle the result - parse JSON if it looks like JSON
     let processedResult: any;
@@ -1322,8 +1329,15 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       processedParams['__capturedShadowEnvs'] = this.currentCapturedShadowEnvs;
     }
     
-    // Execute Node code using executeCode - pass metadata for primitives
-    const result = await env.executeCode(code, 'node', processedParams, variableMetadata);
+    // Get universal context from environment and pass it in metadata
+    const universalContext = env.getUniversalContext?.();
+    const metadata = {
+      ...variableMetadata,
+      universalContext
+    };
+    
+    // Execute Node code using executeCode - pass metadata for primitives and context
+    const result = await env.executeCode(code, 'node', processedParams, metadata);
     
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[executeNode] Result from executeCode:', {

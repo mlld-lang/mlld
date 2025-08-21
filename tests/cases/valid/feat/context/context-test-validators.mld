@@ -1,0 +1,11 @@
+/exe @requiresHint() = when first [
+  !@ctx.hint => retry "Hint required"
+  * => "Got hint: @ctx.hint"
+]
+
+/exe @requiresRetry(@minTries) = when first [
+  @ctx.try < @minTries => retry "Not enough tries yet"
+  * => "Success after @ctx.try tries"
+]
+
+/export @requiresHint, @requiresRetry

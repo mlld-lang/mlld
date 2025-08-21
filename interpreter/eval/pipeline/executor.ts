@@ -81,6 +81,9 @@ export class PipelineExecutor {
    * Execute the pipeline
    */
   async execute(initialInput: string): Promise<string> {
+    // Save original context to restore after pipeline
+    const originalContext = this.env.getUniversalContext();
+    
     // Store initial input for synthetic source stage
     this.initialInput = initialInput;
     
@@ -93,6 +96,13 @@ export class PipelineExecutor {
       });
     }
     
+    // Update UniversalContext when pipeline starts
+    this.env.updateUniversalContext({
+      isPipeline: true,
+      stage: 0,
+      input: initialInput
+    });
+    
     // Start the pipeline
     let nextStep = this.stateMachine.transition({ type: 'START', input: initialInput });
     let iteration = 0;
@@ -102,6 +112,39 @@ export class PipelineExecutor {
       iteration++;
       
       const logicalStage = this.logicalStages[nextStep.stage];
+      
+      // Build tries array from events
+      const events = this.stateMachine.getEvents();
+      const tries = [];
+      let currentAttempt = 1;
+      
+      for (const event of events) {
+        if (event.type === 'STAGE_SUCCESS') {
+          tries.push({
+            attempt: currentAttempt,
+            result: 'success' as const,
+            output: event.output
+          });
+          currentAttempt++;
+        } else if (event.type === 'STAGE_RETRY_REQUEST') {
+          tries.push({
+            attempt: currentAttempt,
+            result: 'retry' as const,
+            hint: nextStep.context.hint || null
+          });
+          currentAttempt++;
+        }
+      }
+      
+      // Update UniversalContext for this stage
+      this.env.updateUniversalContext({
+        stage: nextStep.stage,
+        input: nextStep.input,
+        try: nextStep.context.contextAttempt,
+        tries,
+        hint: nextStep.context.hint || null,
+        lastOutput: nextStep.context.lastOutput || null
+      });
       
       if (process.env.MLLD_DEBUG === 'true') {
         console.error(`[PipelineExecutor] Executing logical stage ${nextStep.stage}:`, {
@@ -148,9 +191,11 @@ export class PipelineExecutor {
     }
     
     // Handle final state
-    switch (nextStep.type) {
-      case 'COMPLETE':
-        return nextStep.output;
+    // Restore context when pipeline completes
+    try {
+      switch (nextStep.type) {
+        case 'COMPLETE':
+          return nextStep.output;
       
       case 'ERROR':
         throw new MlldCommandExecutionError(
@@ -178,6 +223,12 @@ export class PipelineExecutor {
       
       default:
         throw new Error('Pipeline ended in unexpected state');
+      }
+    } finally {
+      // Restore original context when pipeline completes
+      if (originalContext) {
+        this.env.updateUniversalContext(originalContext);
+      }
     }
   }
 
@@ -242,7 +293,14 @@ export class PipelineExecutor {
           console.error('[PipelineExecutor] Retry detected at logical stage', context.stage);
         }
         const from = this.parseRetryScope(output);
-        return { type: 'retry', reason: 'Stage requested retry', from };
+        const hint = this.extractRetryHint(output);
+        
+        // Pass hint to state machine
+        if (hint !== null) {
+          this.stateMachine.setRetryHint(hint);
+        }
+        
+        return { type: 'retry', reason: 'Stage requested retry', from, hint };
       }
 
       // Empty output terminates pipeline
@@ -363,7 +421,14 @@ export class PipelineExecutor {
           console.error('[PipelineExecutor] Retry detected at stage', context.stage);
         }
         const from = this.parseRetryScope(output);
-        return { type: 'retry', reason: 'Stage requested retry', from };
+        const hint = this.extractRetryHint(output);
+        
+        // Pass hint to state machine
+        if (hint !== null) {
+          this.stateMachine.setRetryHint(hint);
+        }
+        
+        return { type: 'retry', reason: 'Stage requested retry', from, hint };
       }
 
       // Empty output terminates pipeline
@@ -841,13 +906,13 @@ export class PipelineExecutor {
   private isRetrySignal(output: any): boolean {
     // Check for direct retry values
     let isRetry = output === 'retry' || 
-      (output && typeof output === 'object' && (output.value === 'retry' || output.retry === true));
+      (output && typeof output === 'object' && (output.value === 'retry' || output.retry === true || output.__retry === true));
     
     // Also check for stringified JSON retry signal
     if (!isRetry && typeof output === 'string' && output.startsWith('{')) {
       try {
         const parsed = JSON.parse(output);
-        if (parsed && typeof parsed === 'object' && parsed.retry === true) {
+        if (parsed && typeof parsed === 'object' && (parsed.retry === true || parsed.__retry === true)) {
           isRetry = true;
         }
       } catch {
@@ -870,6 +935,27 @@ export class PipelineExecutor {
       return output.from;
     }
     return undefined;
+  }
+  
+  private extractRetryHint(output: any): any {
+    // Check for __retry format with hint
+    if (output && typeof output === 'object' && output.__retry === true) {
+      return output.hint || null;
+    }
+    
+    // Check for stringified JSON retry signal with hint
+    if (typeof output === 'string' && output.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(output);
+        if (parsed && typeof parsed === 'object' && parsed.__retry === true) {
+          return parsed.hint || null;
+        }
+      } catch {
+        // Not valid JSON, ignore
+      }
+    }
+    
+    return null;
   }
 
   private normalizeOutput(output: any): string {

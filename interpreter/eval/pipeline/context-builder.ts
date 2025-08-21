@@ -56,8 +56,8 @@ export async function createStageEnvironment(
   // Set @input variable
   await setInputVariable(stageEnv, input, format);
   
-  // Set @ctx variable
-  setContextVariable(
+  // Set @ctx variable (only in legacy mode)
+  await setContextVariable(
     stageEnv, 
     context, 
     input,
@@ -119,16 +119,26 @@ async function setInputVariable(
 }
 
 /**
- * Set the @ctx variable
+ * Set the @ctx variable (legacy mode only)
  */
-function setContextVariable(
+async function setContextVariable(
   env: Environment,
   context: StageContext,
   input: any,
   events?: ReadonlyArray<PipelineEvent>,
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>
-): void {
+): Promise<void> {
+  // Check if universal context is enabled
+  const { USE_UNIVERSAL_CONTEXT } = await import('@core/feature-flags');
+  
+  if (USE_UNIVERSAL_CONTEXT) {
+    // When universal context is enabled, @ctx is provided globally
+    // Don't create a local @ctx variable that would override it
+    return;
+  }
+  
+  // Legacy mode: create @ctx variable directly
   const ctxObject = createContextObject(
     context,
     input,

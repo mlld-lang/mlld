@@ -1,0 +1,11 @@
+/exe @contextReporter() = js {
+  return JSON.stringify({
+    try: ctx.try,
+    isPipeline: ctx.isPipeline,
+    stage: ctx.stage,
+    input: ctx.input,
+    hint: ctx.hint
+  });
+}
+
+/export @contextReporter

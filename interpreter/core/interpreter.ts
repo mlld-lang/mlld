@@ -583,6 +583,22 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
     return { value: node.value, env };
   }
   
+  // Handle RetryAction nodes
+  if (node.type === 'RetryAction') {
+    // Evaluate hint if present
+    let hint = null;
+    if ((node as any).hint) {
+      const hintResult = await evaluate((node as any).hint, env, context);
+      hint = hintResult.value;
+    }
+    
+    // Return special retry signal with hint
+    return { 
+      value: { __retry: true, hint },
+      env 
+    };
+  }
+  
   // Handle when expressions
   if (node.type === 'WhenExpression') {
     const { evaluateWhenExpression } = await import('../eval/when-expression');

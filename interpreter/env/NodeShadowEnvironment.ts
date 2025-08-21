@@ -121,7 +121,7 @@ export class NodeShadowEnvironment {
   /**
    * Execute code in the shadow environment with optional parameters
    */
-  async execute(code: string, params?: Record<string, any>): Promise<any> {
+  async execute(code: string, params?: Record<string, any>, universalContext?: any): Promise<any> {
     // Check if cleanup has been called
     if (this.isCleaningUp) {
       throw new Error('Node shadow environment error: Cannot execute after cleanup');
@@ -149,6 +149,29 @@ export class NodeShadowEnvironment {
       }
     }
     
+    // Add ctx to JavaScript context (without @ prefix)
+    // Make it read-only using Object.freeze
+    if (universalContext) {
+      // Build ctx object according to specification
+      const ctxValue = {
+        // Pipeline orchestration
+        try: universalContext.try,
+        tries: universalContext.tries || [],
+        stage: universalContext.stage,
+        isPipeline: universalContext.isPipeline,
+        
+        // Retry communication
+        hint: universalContext.hint || null,
+        lastOutput: universalContext.lastOutput,
+        
+        // Input/output
+        input: universalContext.input
+      };
+      
+      // Make ctx read-only
+      this.context.ctx = Object.freeze(ctxValue);
+    }
+    
     // Wrap code to handle async and capture return values
     const wrappedCode = `
       (async () => {
@@ -168,11 +191,16 @@ export class NodeShadowEnvironment {
       // Restore original console.log
       this.context.console.log = originalLog;
       
-      // Clean up parameters from context after execution
+      // Clean up parameters and ctx from context after execution
       if (params) {
         for (const key of Object.keys(params)) {
           delete this.context[key];
         }
+      }
+      
+      // Clean up ctx
+      if (universalContext) {
+        delete this.context.ctx;
       }
       
       // Same hybrid approach as JavaScriptExecutor:
@@ -190,11 +218,16 @@ export class NodeShadowEnvironment {
       // Restore original console.log on error
       this.context.console.log = originalLog;
       
-      // Clean up parameters even on error
+      // Clean up parameters and ctx even on error
       if (params) {
         for (const key of Object.keys(params)) {
           delete this.context[key];
         }
+      }
+      
+      // Clean up ctx
+      if (universalContext) {
+        delete this.context.ctx;
       }
       
       

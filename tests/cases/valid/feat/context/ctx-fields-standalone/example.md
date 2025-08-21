@@ -1,0 +1,7 @@
+/show "Try: @ctx.try"
+/show "IsPipeline: @ctx.isPipeline"
+/show "Stage: @ctx.stage"
+/show "Input: @ctx.input"
+/show "Hint: @ctx.hint"
+/show "LastOutput: @ctx.lastOutput"
+/show "Tries length: @ctx.tries.length"

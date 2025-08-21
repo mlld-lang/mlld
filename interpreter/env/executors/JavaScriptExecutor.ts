@@ -127,6 +127,28 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         allParamNames.push('mlld');
         allParamValues.push(mlldHelpers);
       }
+      
+      // Add ctx to JavaScript context (without @ prefix)
+      if (metadata?.universalContext) {
+        const ctx = {
+          // Pipeline orchestration
+          try: metadata.universalContext.try,
+          tries: metadata.universalContext.tries || [],
+          stage: metadata.universalContext.stage,
+          isPipeline: metadata.universalContext.isPipeline,
+          
+          // Retry communication
+          hint: metadata.universalContext.hint || null,
+          lastOutput: metadata.universalContext.lastOutput,
+          
+          // Input/output
+          input: metadata.universalContext.input
+        };
+        
+        // Make ctx read-only
+        allParamNames.push('ctx');
+        allParamValues.push(Object.freeze(ctx));
+      }
 
 
       // Create a function with dynamic parameters

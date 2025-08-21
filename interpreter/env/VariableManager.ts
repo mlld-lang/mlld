@@ -69,6 +69,11 @@ export class VariableManager implements IVariableManager {
   }
   
   setVariable(name: string, variable: Variable): void {
+    // Prevent @ctx from being redefined
+    if (name === 'ctx') {
+      throw new Error(`Cannot create variable '@ctx': this name is reserved for the execution context`);
+    }
+    
     // Check if the name is reserved (but allow system variables and parameters to be set)
     const reservedNames = this.deps.getReservedNames();
     if (reservedNames.has(name) && 
@@ -159,22 +164,47 @@ export class VariableManager implements IVariableManager {
   }
   
   getVariable(name: string): Variable | undefined {
-    // NEW: Universal context variables in dual-mode
-    if (USE_UNIVERSAL_CONTEXT && this.deps.getUniversalContext) {
-      const context = this.deps.getUniversalContext();
-      
-      // Handle @ctx, @c, @context (but not when looking for regular variables)
-      // Only provide these special variables when explicitly requested
-      if (context && (name === 'ctx' || name === 'context')) {
-        return createObjectVariable('context', context, false);
+    // Handle @test_ctx override for testing
+    if (name === 'ctx') {
+      // Check if @test_ctx exists (for unit testing)
+      const testCtx = this.variables.get('test_ctx') || this.deps.getParent()?.getVariable('test_ctx');
+      if (testCtx) {
+        // Return test context as @ctx
+        return createObjectVariable('ctx', testCtx.value, false, undefined, {
+          isReserved: true,
+          isReadOnly: true,
+          definedAt: { line: 0, column: 0, filePath: '<context>' }
+        });
       }
       
-      // Don't provide @c as a variable - it might conflict with parameters
-      // @c should only be available in specific contexts like JavaScript execution
+      // Get real context from UniversalContext
+      const context = this.deps.getUniversalContext?.();
+      if (context) {
+        // Build @ctx object according to specification
+        const ctxValue = {
+          // Pipeline orchestration
+          try: context.try,
+          tries: context.tries || [],
+          stage: context.stage,
+          isPipeline: context.isPipeline,
+          
+          // Retry communication
+          hint: context.hint || null,
+          lastOutput: context.lastOutput,
+          
+          // Input/output
+          input: context.input
+        };
+        
+        return createObjectVariable('ctx', ctxValue, false, undefined, {
+          isReserved: true,
+          isReadOnly: true,
+          definedAt: { line: 0, column: 0, filePath: '<context>' }
+        });
+      }
       
-      // For @pipeline/@p, fall through to normal variable lookup
-      // The pipeline context will be handled by the existing mechanism
-      // until we fully implement the universal pipeline
+      // No context available - return undefined
+      return undefined;
     }
     
     // FAST PATH: Check local variables first (most common case)

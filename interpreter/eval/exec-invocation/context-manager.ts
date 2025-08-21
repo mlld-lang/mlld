@@ -188,17 +188,33 @@ export class ExecContextManager {
     
     // Create context variable
     const { createObjectVariable } = await import('@core/types/variable');
-    const contextVar = createObjectVariable('ctx', contextObj, false, undefined, {
-      isPipelineContext: true,
-      isSystem: true
-    });
     
-    // Primary context variable
-    env.setVariable('ctx', contextVar);
+    // Check if universal context is enabled
+    const { USE_UNIVERSAL_CONTEXT } = await import('@core/feature-flags');
     
-    // Legacy aliases - will be deprecated after test migration
-    env.setVariable('p', contextVar);
-    env.setVariable('pipeline', contextVar);
+    if (USE_UNIVERSAL_CONTEXT) {
+      // When universal context is enabled, @ctx is provided globally
+      // Only create legacy aliases for backward compatibility
+      const contextVar = createObjectVariable('p', contextObj, false, undefined, {
+        isPipelineContext: true,
+        isSystem: true
+      });
+      env.setVariable('p', contextVar);
+      env.setVariable('pipeline', contextVar);
+    } else {
+      // Original behavior when universal context is disabled
+      const contextVar = createObjectVariable('ctx', contextObj, false, undefined, {
+        isPipelineContext: true,
+        isSystem: true
+      });
+      
+      // Primary context variable
+      env.setVariable('ctx', contextVar);
+      
+      // Legacy aliases - will be deprecated after test migration
+      env.setVariable('p', contextVar);
+      env.setVariable('pipeline', contextVar);
+    }
   }
   
   

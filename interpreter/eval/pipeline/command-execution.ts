@@ -173,6 +173,9 @@ export async function executeCommandVariable(
   const pipelineCtx = env.getPipelineContext();
   const format = pipelineCtx?.format;
   
+  // Check if universal context is enabled
+  const { USE_UNIVERSAL_CONTEXT } = await import('@core/feature-flags');
+  
   // CRITICAL: Create pipeline context variables (@p, @pipeline, @ctx) if in pipeline
   // Only create if not already present (execEnv might inherit them)
   if (pipelineCtx && !execEnv.getVariable('p')) {
@@ -212,10 +215,17 @@ export async function executeCommandVariable(
       }
     );
     
-    // Set all three aliases
-    execEnv.setParameterVariable('ctx', pipelineVar);
-    execEnv.setParameterVariable('p', pipelineVar);
-    execEnv.setParameterVariable('pipeline', pipelineVar);
+    if (USE_UNIVERSAL_CONTEXT) {
+      // When universal context is enabled, only create @p and @pipeline aliases
+      // @ctx is provided globally via UniversalContext
+      execEnv.setParameterVariable('p', pipelineVar);
+      execEnv.setParameterVariable('pipeline', pipelineVar);
+    } else {
+      // Legacy mode: Set all three aliases
+      execEnv.setParameterVariable('ctx', pipelineVar);
+      execEnv.setParameterVariable('p', pipelineVar);
+      execEnv.setParameterVariable('pipeline', pipelineVar);
+    }
   }
   
   // Parameter binding for executable functions

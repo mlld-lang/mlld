@@ -96,8 +96,9 @@ export class NodeExecutor extends BaseCommandExecutor {
         }
       }
       
-      // Use shadow environment with VM
-      const result = await nodeShadowEnv.execute(code, shadowParams);
+      // Use shadow environment with VM, passing universal context if available
+      const universalContext = metadata?.universalContext;
+      const result = await nodeShadowEnv.execute(code, shadowParams, universalContext);
       
       // Format result (same as subprocess version)
       let output = '';
