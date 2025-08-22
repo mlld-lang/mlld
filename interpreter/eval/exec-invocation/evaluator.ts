@@ -1074,46 +1074,60 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       throw new Error('executeWithPipeline called without pipeline');
     }
     
-    // Import pipeline executor
-    const { processPipeline } = await import('@interpreter/eval/pipeline/unified-processor');
-    
-    // Use context manager to create retryable source
-    const retryableSource = this.contextManager.createRetryableSource(
-      executableNode.getDefinition(),
-      execContext,
-      this,
-      env,
-      args
-    );
-    
-    // NO SYNTHETIC SOURCE NEEDED WITH UNIVERSAL CONTEXT!
-    const normalizedPipeline = node.withClause.pipeline;
-    
     if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[ExecInvocationEvaluator] Universal Context Pipeline:', {
-        hasRetryableSource: !!retryableSource,
-        pipelineLength: normalizedPipeline.length,
-        stages: normalizedPipeline.map((p: any) => p.rawIdentifier || 'unknown')
+      console.error('[executeWithPipeline] Called with:', {
+        nodeType: node.type,
+        hasCommandRef: !!node.commandRef,
+        commandRefName: node.commandRef?.name,
+        pipelineLength: node.withClause.pipeline.length,
+        args: args
       });
     }
     
-    // Get initial value from first execution
-    const initialResult = await executableNode.accept(this, env);
-    const initialValue = typeof initialResult.value === 'string'
-      ? initialResult.value
-      : JSON.stringify(initialResult.value);
+    // Import pipeline executor
+    const { processPipeline } = await import('@interpreter/eval/pipeline/unified-processor');
     
-    // Execute the pipeline with universal context
+    // CRITICAL FIX: The exec function itself should be the first stage of the pipeline!
+    // Don't execute it separately and pass a retryableSource.
+    // Instead, add it as stage 0 of the pipeline.
+    
+    // Create a command for this exec invocation to be stage 0
+    const sourceCommand = {
+      type: 'execInvocation' as any,
+      identifier: [{
+        type: 'VariableReference',
+        valueType: 'varIdentifier', 
+        identifier: node.commandRef?.name || execContext?.metadata?.execName || 'source'
+      }],
+      args: args || [],
+      fields: [],
+      rawIdentifier: node.commandRef?.name || execContext?.metadata?.execName || 'source',
+      rawArgs: args || [],
+      // Store the executable definition for execution
+      executableDef: executableNode.getDefinition()
+    };
+    
+    // Combine source as stage 0 with the rest of the pipeline
+    const fullPipeline = [sourceCommand, ...node.withClause.pipeline];
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[ExecInvocationEvaluator] Universal Context Pipeline:', {
+        fullPipelineLength: fullPipeline.length,
+        stages: fullPipeline.map((p: any) => p.rawIdentifier || 'unknown')
+      });
+    }
+    
+    // Execute the full pipeline starting with empty input
+    // The source (stage 0) will generate the initial value
     const pipelineResult = await processPipeline({
-      value: initialValue,
+      value: '', // Empty initial value - stage 0 will generate it
       env,
       node,
       directive: 'exec',
       identifier: execContext?.metadata?.execName || 'exec',
-      pipeline: normalizedPipeline,
+      pipeline: fullPipeline,
       format: node.withClause.format,
       isRetryable: true,  // ALWAYS true in universal context
-      retryableSource,
       hasSyntheticSource: false  // ALWAYS false with universal context!
     });
     

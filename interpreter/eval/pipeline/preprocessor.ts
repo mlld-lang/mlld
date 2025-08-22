@@ -159,6 +159,8 @@ export function preprocessPipeline(
   
   // Convert retryable source functions into real pipeline stages
   // This implements universal context - sources ARE pipeline stages
+  
+  // Case 1: Explicit sourceFunction parameter (from run/code directives)
   if (isRetryable && sourceFunction && logicalStages.length > 0) {
     // Check if we already have a source command as first stage
     const firstStage = logicalStages[0];
@@ -178,6 +180,10 @@ export function preprocessPipeline(
       });
     }
   }
+  
+  // Case 2: First pipeline stage is an exec function (e.g., @source() | @validator())
+  // In pipelines, ALL stages are retryable, including the first one
+  // No special handling needed - the first stage IS the source and will be retried as stage 0
   
   if (process.env.MLLD_DEBUG === 'true') {
     console.error('[preprocessor] Preprocessing complete:', {

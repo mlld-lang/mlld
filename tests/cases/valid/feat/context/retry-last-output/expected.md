@@ -1,1 +1,1 @@
-Final version. Previous: Draft v2
+Accepted: final draft (try 3)

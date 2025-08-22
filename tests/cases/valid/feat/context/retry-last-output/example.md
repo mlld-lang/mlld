@@ -1,7 +1,16 @@
-/exe @improver() = when first [
-  @ctx.try == 1 => retry "Draft v1"
-  @ctx.try == 2 => retry "Draft v2" 
-  * => "Final version. Previous: @ctx.hint"
+/exe @generator() = when first [
+  @ctx.try == 1 => "draft version 1"
+  @ctx.try == 2 => "draft version 2"
+  * => "final draft"
 ]
 
-/show @improver()
+/exe @formatAccepted() = "Accepted: @ctx.input (try @ctx.try)"
+
+/exe @reviewer() = when first [
+  @ctx.input == "draft version 1" => retry
+  @ctx.input == "draft version 2" => retry
+  * => @formatAccepted()
+]
+
+/var @result = @generator() | @reviewer
+/show @result

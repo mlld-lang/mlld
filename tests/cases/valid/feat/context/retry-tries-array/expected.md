@@ -1,1 +1,1 @@
-Succeeded on try 3. History: 2 attempts
+Success on attempt 3

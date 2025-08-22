@@ -53,6 +53,37 @@ export async function createStageEnvironment(
   // Create child environment
   const stageEnv = env.createChild();
   
+  // CRITICAL: Force update the child's universal context with the latest values
+  // The child was created with a snapshot, but we need the updated context
+  console.error('[ContextBuilder] createStageEnvironment called:', {
+    try: context.contextAttempt,
+    stage: userVisibleStage,
+    isPipeline: true,
+    inputLength: input?.length,
+    historyLength: context.history.length,
+    isRetry: context.contextAttempt > 1
+  });
+  
+  stageEnv.updateUniversalContext({
+    try: context.contextAttempt,
+    tries: context.history,
+    stage: userVisibleStage,
+    isPipeline: true,
+    input: input,
+    hint: context.hint || null,
+    lastOutput: context.history.length > 0 ? context.history[context.history.length - 1] : null
+  });
+  
+  if (process.env.MLLD_DEBUG === 'true') {
+    const updatedCtx = stageEnv.getUniversalContext();
+    console.error('[ContextBuilder] stageEnv context after update:', {
+      try: updatedCtx?.try,
+      stage: updatedCtx?.stage,
+      isPipeline: updatedCtx?.isPipeline,
+      hasInput: !!updatedCtx?.input
+    });
+  }
+  
   // Set @input variable
   await setInputVariable(stageEnv, input, format);
   

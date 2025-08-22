@@ -166,12 +166,57 @@ export async function executeCommandVariable(
     throw new Error(`Cannot execute non-executable variable in pipeline: ${JSON.stringify(varInfo, null, 2)}`);
   }
   
+  // Get the format from the pipeline context BEFORE creating child
+  const pipelineCtx = env.getPipelineContext();
+  const format = pipelineCtx?.format;
+  
+  // Debug: Check what context the parent has
+  if (process.env.MLLD_DEBUG === 'true') {
+    const parentCtx = env.getUniversalContext();
+    console.error('[executeCommandVariable] Parent (stageEnv) has context:', {
+      try: parentCtx?.try,
+      stage: parentCtx?.stage,
+      isPipeline: parentCtx?.isPipeline,
+      input: parentCtx?.input?.substring?.(0, 50) || parentCtx?.input,
+      parentId: env.id || 'no-id',
+      contextObjectId: parentCtx ? Object.keys(parentCtx).join(',') : 'null'
+    });
+  }
+  
   // Create environment with parameter bindings
   const execEnv = env.createChild();
   
-  // Get the format from the pipeline context
-  const pipelineCtx = env.getPipelineContext();
-  const format = pipelineCtx?.format;
+  // Debug: Check what context the child inherited
+  if (process.env.MLLD_DEBUG === 'true') {
+    const childCtx = execEnv.getUniversalContext();
+    console.error('[executeCommandVariable] Child (execEnv) inherited context:', {
+      try: childCtx?.try,
+      stage: childCtx?.stage,
+      isPipeline: childCtx?.isPipeline,
+      input: childCtx?.input?.substring?.(0, 50) || childCtx?.input,
+      childId: execEnv.id || 'no-id',
+      contextObjectId: childCtx ? Object.keys(childCtx).join(',') : 'null'
+    });
+  }
+  
+  // CRITICAL: Update universal context with the input for this exec function
+  // This ensures @ctx.input is available in when expressions and JS blocks
+  // The parent environment already has the correct context from setPipelineContext
+  if (pipelineCtx && stdinInput !== undefined) {
+    execEnv.updateUniversalContext({
+      input: stdinInput
+    });
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      const updatedCtx = execEnv.getUniversalContext();
+      console.error('[executeCommandVariable] Child context after input update:', {
+        try: updatedCtx?.try,
+        stage: updatedCtx?.stage,
+        isPipeline: updatedCtx?.isPipeline,
+        input: updatedCtx?.input?.substring?.(0, 50) || updatedCtx?.input
+      });
+    }
+  }
   
   // Check if universal context is enabled
   const { USE_UNIVERSAL_CONTEXT } = await import('@core/feature-flags');

@@ -770,7 +770,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Update universal context (creates new frozen instance)
    */
   updateUniversalContext(updates: Partial<UniversalContext>): void {
-    if (!USE_UNIVERSAL_CONTEXT || !this.universalContext) return;
+    // Always update universal context since it's always initialized
+    if (!this.universalContext) return;
     
     // Create new context with updates (frozen)
     const newContext = Object.freeze({
@@ -778,11 +779,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       ...updates
     }) as UniversalContext;
     
-    // Update this environment and propagate to children
+    // Update this environment
     this.universalContext = newContext;
     
-    // Note: Child environments will get the updated context through
-    // the parent reference since they share the same context object
+    // CRITICAL FIX: The comment above was wrong - children don't automatically
+    // get the new context because they have their own reference to the old object.
+    // We need to ensure children created after this point will get the new context.
+    // But existing children keep their old reference unless explicitly updated.
   }
   
   /**

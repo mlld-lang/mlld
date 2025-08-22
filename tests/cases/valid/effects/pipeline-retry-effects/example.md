@@ -4,18 +4,19 @@ Testing that effects emit during retry attempts
 
 /exe @source() = "starting"
 
-/exe @flaky(input, pipeline) = when first [
-  @pipeline.try == 1 => show "Attempt 1"
-  @pipeline.try == 2 => show "Attempt 2"
-  @pipeline.try == 3 => show "Attempt 3"
+/exe @flaky() = when first [
+  @ctx.try == 1 => show "Attempt 1" | "retry1"
+  @ctx.try == 2 => show "Attempt 2" | "retry2"
+  @ctx.try == 3 => show "Attempt 3" | "success"
   * => "fallback"
 ]
 
-/exe @retryHandler(input, pipeline) = when first [
-  @pipeline.try < 3 => retry
+/exe @retryHandler() = when first [
+  @ctx.input == "retry1" => retry
+  @ctx.input == "retry2" => retry
   * => "Success"
 ]
 
-/var @result = @source() | @flaky(@p) | @retryHandler(@p)
+/var @result = @source() | @flaky | @retryHandler
 
 /show "Result: @result"

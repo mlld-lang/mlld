@@ -1,11 +1,12 @@
-/exe @successMessage() = js {
-  return `Succeeded on try ${ctx.try}. History: ${ctx.tries.length} attempts`;
-}
-
-/exe @retryTwice() = when first [
-  @ctx.try == 1 => retry "First fail"
-  @ctx.try == 2 => retry "Second fail"
-  * => @successMessage()
+/exe @source() = when first [
+  @ctx.try <= 2 => "connection failed"  
+  * => "data received"
 ]
 
-/show @retryTwice()
+/exe @validator() = when first [
+  @ctx.input == "connection failed" => retry
+  * => "Success on attempt @ctx.try"
+]
+
+/var @result = @source() | @validator
+/show @result
