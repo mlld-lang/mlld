@@ -562,6 +562,14 @@ export async function evaluateShow(
     // Handle based on variable type
     if (isExecutableVar(variable)) {
       // This is an executable invocation - use exec-invocation handler
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[evaluateShow] Calling evaluateExecInvocation with:', {
+          hasWithClause: !!invocation.withClause,
+          hasPipeline: !!invocation.withClause?.pipeline,
+          pipelineLength: invocation.withClause?.pipeline?.length,
+          invocationType: invocation.type
+        });
+      }
       const { evaluateExecInvocation } = await import('./exec-invocation');
       const result = await evaluateExecInvocation(invocation, env);
       

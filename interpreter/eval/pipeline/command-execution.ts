@@ -275,15 +275,84 @@ export async function executeCommandVariable(
   
   // Parameter binding for executable functions
   if (execDef.paramNames) {
-    for (let i = 0; i < execDef.paramNames.length; i++) {
-      const paramName = execDef.paramNames[i];
-      // In pipelines, explicit args bind starting from the SECOND parameter
-      // First parameter always gets @input (stdinInput) implicitly
-      const argIndex = pipelineCtx !== undefined && stdinInput !== undefined ? i - 1 : i;
-      const argValue = argIndex >= 0 && argIndex < args.length ? args[argIndex] : null;
-      
-      // First parameter in pipeline context ALWAYS gets @input
-      const isPipelineParam = i === 0 && pipelineCtx !== undefined && stdinInput !== undefined;
+    // Check if args are variable references from an exec definition pipeline
+    // This happens when pipeline stages use parameters like @upper(@text)
+    const hasVariableRefArgs = args.some(arg => 
+      arg && typeof arg === 'object' && 
+      arg.type === 'VariableReference'
+    );
+    
+    // Check if we're at stage 0 (source stage) where args bind directly
+    // BUT only if we don't have variable reference args
+    const isSourceStage = pipelineCtx && pipelineCtx.stage === 0 && !hasVariableRefArgs;
+    
+    if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+      console.error('[executeCommandVariable] Parameter binding context:', {
+        isSourceStage,
+        hasVariableRefArgs,
+        stage: pipelineCtx?.stage,
+        paramNames: execDef.paramNames,
+        args: args.map(a => ({
+          type: a?.type,
+          content: a?.content?.substring?.(0, 20),
+          identifier: a?.identifier
+        })),
+        stdinInput: stdinInput?.substring?.(0, 50) || stdinInput,
+        hasPipelineCtx: !!pipelineCtx
+      });
+    }
+    
+    // If we have variable reference args, parameters should already be bound
+    // from executeWithPipeline - just ensure @input is available if needed
+    if (hasVariableRefArgs) {
+      for (const paramName of execDef.paramNames) {
+        const existingParam = execEnv.getVariable(paramName);
+        if (!existingParam) {
+          // Only set @input for first param if in pipeline and not already bound
+          if (paramName === execDef.paramNames[0] && pipelineCtx && stdinInput !== undefined) {
+            if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+              console.error(`[executeCommandVariable] Setting @input for unbound param: ${paramName}`);
+            }
+            const { AutoUnwrapManager } = await import('../auto-unwrap-manager');
+            const unwrappedStdin = AutoUnwrapManager.unwrap(stdinInput || '');
+            const textVar = createSimpleTextVariable(
+              paramName,
+              unwrappedStdin || '',
+              { directive: 'var', syntax: 'quoted', hasInterpolation: false, isMultiLine: false },
+              { isPipelineParameter: true }
+            );
+            execEnv.setParameterVariable(paramName, textVar);
+          }
+        } else {
+          if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+            console.error(`[executeCommandVariable] Parameter already bound: ${paramName}`);
+          }
+        }
+      }
+    } else {
+      // Normal parameter binding for direct invocations or literal args
+      for (let i = 0; i < execDef.paramNames.length; i++) {
+        const paramName = execDef.paramNames[i];
+        
+        // Key distinction: source stages (stage 0) bind args directly to params
+        // Pipeline stages (stage > 0) use stdin for first param, offset args by 1
+        let argValue;
+        let isPipelineParam = false;
+        
+        if (isSourceStage) {
+          // Source stage: args bind directly to params (no stdin offset)
+          argValue = i < args.length ? args[i] : null;
+          if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+            console.error(`[executeCommandVariable] Stage 0 binding: ${paramName} = ${argValue}`);
+          }
+        } else {
+          // Pipeline stage: stdin goes to first param, args offset by 1
+          const argIndex = pipelineCtx !== undefined && stdinInput !== undefined ? i - 1 : i;
+          argValue = argIndex >= 0 && argIndex < args.length ? args[argIndex] : null;
+          
+          // First parameter in pipeline stage gets @input
+          isPipelineParam = i === 0 && pipelineCtx !== undefined && stdinInput !== undefined;
+        }
       
       if (isPipelineParam) {
         // First parameter ALWAYS gets the pipeline input (stdinInput)
@@ -381,6 +450,7 @@ export async function executeCommandVariable(
           
           execEnv.setParameterVariable(paramName, paramVar);
         }
+      }
       }
     }
   }

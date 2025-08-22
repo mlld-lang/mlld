@@ -121,4 +121,4 @@ RawArgument "raw argument"
     }
 
 RawArgChar
-  = !(["'`] / "," / ")" / "\\") char:. { return char; }
+  = !(["'`@] / "," / ")" / "\\") char:. { return char; }

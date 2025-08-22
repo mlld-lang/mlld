@@ -99,8 +99,16 @@ export async function processPipeline(
     });
   }
   
-  // If we have a retryable source function, convert it to a real command stage
-  if (detected.isRetryable && value?.metadata?.sourceFunction) {
+  // Check if first stage already has an executable definition (source from exec-invocation)
+  const firstStage = normalizedPipeline[0];
+  const hasExistingSource = firstStage && (
+    (firstStage as any).executableDef ||  // Added by exec-invocation/evaluator.ts
+    (firstStage as any).sourceNode ||      // Legacy source nodes
+    (firstStage.type === 'execInvocation' && (firstStage as any).executableDef)
+  );
+  
+  // Only add a source stage if we don't already have one
+  if (!hasExistingSource && detected.isRetryable && value?.metadata?.sourceFunction) {
     const sourceNode = value.metadata.sourceFunction;
     const sourceCommand: PipelineCommand = {
       type: 'execInvocation' as any,
