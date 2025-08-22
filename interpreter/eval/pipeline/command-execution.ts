@@ -302,32 +302,76 @@ export async function executeCommandVariable(
       });
     }
     
-    // If we have variable reference args, parameters should already be bound
-    // from executeWithPipeline - just ensure @input is available if needed
+    // If we have variable reference args, we need to evaluate them to get their values
+    // then bind those values to parameters (following old exec-invocation pattern)
     if (hasVariableRefArgs) {
-      for (const paramName of execDef.paramNames) {
-        const existingParam = execEnv.getVariable(paramName);
-        if (!existingParam) {
-          // Only set @input for first param if in pipeline and not already bound
-          if (paramName === execDef.paramNames[0] && pipelineCtx && stdinInput !== undefined) {
-            if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-              console.error(`[executeCommandVariable] Setting @input for unbound param: ${paramName}`);
+      // Evaluate each VariableReference to get actual values
+      const evaluatedArgs: any[] = [];
+      
+      for (const arg of args) {
+        if (arg && typeof arg === 'object' && arg.type === 'VariableReference') {
+          // Look up the variable in the parent environment (where parameters from calling function are bound)
+          const parentEnv = execEnv.parent || execEnv;
+          const variable = parentEnv.getVariable(arg.identifier);
+          
+          if (variable) {
+            // Get the actual value from the variable (following old pattern from exec-invocation-old.ts)
+            let value = variable.value;
+            
+            // Handle field access if present (e.g., @user.name)
+            if (arg.fields && arg.fields.length > 0) {
+              for (const field of arg.fields) {
+                if (value && typeof value === 'object' && (field.type === 'field' || field.type === 'numericField')) {
+                  value = value[field.value];
+                } else if (Array.isArray(value) && (field.type === 'index' || field.type === 'arrayIndex')) {
+                  const index = parseInt(field.value, 10);
+                  value = isNaN(index) ? undefined : value[index];
+                } else {
+                  value = undefined;
+                  break;
+                }
+              }
             }
-            const { AutoUnwrapManager } = await import('../auto-unwrap-manager');
-            const unwrappedStdin = AutoUnwrapManager.unwrap(stdinInput || '');
-            const textVar = createSimpleTextVariable(
-              paramName,
-              unwrappedStdin || '',
-              { directive: 'var', syntax: 'quoted', hasInterpolation: false, isMultiLine: false },
-              { isPipelineParameter: true }
-            );
-            execEnv.setParameterVariable(paramName, textVar);
+            
+            evaluatedArgs.push(value);
+            
+            if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+              console.error(`[executeCommandVariable] Evaluated @${arg.identifier} = "${value}"`);
+            }
+          } else {
+            // Variable not found - use empty string as fallback
+            evaluatedArgs.push('');
+            if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+              console.error(`[executeCommandVariable] Variable not found: @${arg.identifier}, using empty string`);
+            }
           }
         } else {
-          if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-            console.error(`[executeCommandVariable] Parameter already bound: ${paramName}`);
-          }
+          // Not a VariableReference, use as-is
+          evaluatedArgs.push(arg);
         }
+      }
+      
+      // Now bind the evaluated values to parameters
+      for (let i = 0; i < execDef.paramNames.length; i++) {
+        const paramName = execDef.paramNames[i];
+        const argValue = i < evaluatedArgs.length ? evaluatedArgs[i] : '';
+        
+        // Convert to string for text variable creation
+        const stringValue = typeof argValue === 'string' ? argValue :
+                          argValue?.content !== undefined ? argValue.content :
+                          String(argValue || '');
+        
+        if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+          console.error(`[executeCommandVariable] Binding parameter: ${paramName} = "${stringValue}"`);
+        }
+        
+        const textVar = createSimpleTextVariable(
+          paramName,
+          stringValue,
+          { directive: 'var', syntax: 'quoted', hasInterpolation: false, isMultiLine: false },
+          { isPipelineParameter: true }
+        );
+        execEnv.setParameterVariable(paramName, textVar);
       }
     } else {
       // Normal parameter binding for direct invocations or literal args

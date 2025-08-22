@@ -468,6 +468,26 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       }
     }
     
+    // Get the withClause from the referenced command's definition
+    // The pipeline is defined on the referenced command, not the commandRef
+    let refWithClause = node.withClause; // Start with commandRef's withClause if any
+    
+    // Extract the referenced command's definition to get its withClause
+    if (refCommand && refCommand.metadata?.executableDef) {
+      const refExecDef = refCommand.metadata.executableDef;
+      if (refExecDef.withClause) {
+        // Merge withClause - pipeline from definition takes precedence
+        refWithClause = refWithClause ? 
+          { ...refWithClause, ...refExecDef.withClause } : 
+          refExecDef.withClause;
+      }
+    } else if (refCommand && (refCommand as any).withClause) {
+      // Check if the variable itself has withClause
+      refWithClause = refWithClause ?
+        { ...refWithClause, ...(refCommand as any).withClause } :
+        (refCommand as any).withClause;
+    }
+    
     // Create a new invocation node for the referenced command with the evaluated args
     const refInvocation: ExecInvocation = {
       type: 'ExecInvocation',
@@ -478,8 +498,8 @@ export class ExecInvocationEvaluator implements ExecVisitor {
           content: typeof arg === 'string' ? arg : JSON.stringify(arg)
         }))
       },
-      // Pass along the pipeline if present
-      ...(node.withClause ? { withClause: node.withClause } : {})
+      // Pass along the merged withClause (including pipeline from definition)
+      ...(refWithClause ? { withClause: refWithClause } : {})
     };
     
     // NATURAL RECURSION - No circular imports!
@@ -1065,7 +1085,7 @@ export class ExecInvocationEvaluator implements ExecVisitor {
   private async executeWithPipeline(
     node: ExecInvocation,
     executableNode: ExecutableNode,
-    env: Environment,
+    env: Environment,  // This is actually execEnv with parameters bound!
     args: any[],
     execContext: any,
     evaluator?: IEvaluator

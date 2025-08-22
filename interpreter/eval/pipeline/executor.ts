@@ -483,6 +483,43 @@ export class PipelineExecutor {
   ): Promise<string | any> {  // Can return retry signal objects
     // Don't try to set @input - stageEnv already has it set by createStageEnvironment
     
+    // Handle source commands with executableDef (from exec-invocation with pipelines)
+    if ((command as any).executableDef) {
+      const execDef = (command as any).executableDef;
+      const args = (command as any).args || [];
+      
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[executeCommandUniversal] Executing source with executableDef:', {
+          type: execDef.type,
+          hasParamNames: !!execDef.paramNames,
+          paramNames: execDef.paramNames,
+          args: args,
+          stage: stageEnv.getPipelineContext()?.stage
+        });
+      }
+      
+      // Create a variable wrapper for the executable definition
+      const execVar = {
+        type: 'executable',
+        name: command.rawIdentifier || 'source',
+        value: execDef,
+        paramNames: execDef.paramNames,
+        metadata: {
+          executableDef: execDef
+        }
+      };
+      
+      // Execute using executeCommandVariable which handles parameter binding
+      const { executeCommandVariable } = await import('./command-execution');
+      const result = await executeCommandVariable(execVar, args, stageEnv, input);
+      
+      // Check for retry signal
+      if (result && typeof result === 'object' && result.__retry === true) {
+        return result;
+      }
+      return String(result);
+    }
+    
     // Handle source commands with sourceNode (from universal context conversion)
     if ((command as any).sourceNode) {
       const sourceNode = (command as any).sourceNode;
