@@ -558,7 +558,7 @@ export class PipelineStateMachine {
     const globalAttempt = totalRetries + 1;
     
     return {
-      stage: stage,  // Keep 0-indexed internally
+      stage: stage + 1,  // 1-indexed for user visibility
       attempt,
       contextAttempt,
       history: stageHistory,

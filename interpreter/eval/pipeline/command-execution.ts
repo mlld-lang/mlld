@@ -317,9 +317,9 @@ export async function executeCommandVariable(
       arg.type === 'VariableReference'
     );
     
-    // Check if we're at stage 0 (source stage) where args bind directly
-    // At stage 0, there's no stdin yet, so args always bind directly
-    const isSourceStage = pipelineCtx && pipelineCtx.stage === 0;
+    // Check if we're at stage 1 (source stage) where args bind directly
+    // At stage 1 (first stage with 1-indexing), there's no stdin yet, so args always bind directly
+    const isSourceStage = pipelineCtx && pipelineCtx.stage === 1;
     
     if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
       console.error('[executeCommandVariable] STAGE EXECUTION:', {

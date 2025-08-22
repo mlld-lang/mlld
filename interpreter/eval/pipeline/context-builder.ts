@@ -25,14 +25,14 @@ export async function createStageEnvironment(
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>
 ): Promise<Environment> {
-  // Keep stage numbers 0-indexed internally throughout the system
-  // Only add +1 when displaying to end users (not in @ctx)
-  const internalStage = context.stage;
+  // Stage comes in already 1-indexed from state machine
+  // No need to adjust it further
+  const userVisibleStage = context.stage;
     
   // Set pipeline context in main environment
   if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
     console.error('[ContextBuilder] Stage numbering:', {
-      internalStage: context.stage,
+      stage: context.stage,
       commandName: command.rawIdentifier,
       contextAttempt: context.contextAttempt,
       historyLength: context.history.length,
@@ -41,7 +41,7 @@ export async function createStageEnvironment(
   }
   
   env.setPipelineContext({
-    stage: internalStage,  // Keep 0-indexed
+    stage: userVisibleStage,  // Already 1-indexed from state machine
     totalStages: context.totalStages,
     currentCommand: command.rawIdentifier,
     input: input,
@@ -56,19 +56,11 @@ export async function createStageEnvironment(
   
   // CRITICAL: Force update the child's universal context with the latest values
   // The child was created with a snapshot, but we need the updated context
-  console.error('[ContextBuilder] createStageEnvironment called:', {
-    try: context.contextAttempt,
-    stage: internalStage,  // 0-indexed
-    isPipeline: true,
-    inputLength: input?.length,
-    historyLength: context.history.length,
-    isRetry: context.contextAttempt > 1
-  });
   
   stageEnv.updateUniversalContext({
     try: context.contextAttempt,
     tries: context.history,
-    stage: internalStage,  // Keep 0-indexed for @ctx.stage
+    stage: userVisibleStage,  // Already 1-indexed for @ctx.stage
     isPipeline: true,
     input: input,
     hint: context.hint || null,

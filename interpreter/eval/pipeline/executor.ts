@@ -299,7 +299,6 @@ export class PipelineExecutor {
       }
       
       // Check for retry signal (from command, not effects)
-      console.error('[DEBUG] About to check isRetrySignal, output:', output, 'type:', typeof output);
       if (this.isRetrySignal(output)) {
         if (process.env.MLLD_DEBUG === 'true') {
           console.error('[PipelineExecutor] Retry detected at logical stage', context.stage);

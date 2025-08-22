@@ -5,9 +5,9 @@ Testing that effects emit during retry attempts
 /exe @source() = "starting"
 
 /exe @flaky() = when first [
-  @ctx.try == 1 => show "Attempt 1" | "retry1"
-  @ctx.try == 2 => show "Attempt 2" | "retry2"
-  @ctx.try == 3 => show "Attempt 3" | "success"
+  @ctx.try == 1 => show "Attempt 0" | "retry1"
+  @ctx.try == 2 => show "Attempt 1" | "retry2"
+  @ctx.try == 3 => show "Attempt 2" | "success"
   * => "fallback"
 ]
 
