@@ -147,6 +147,17 @@ export class PipelineStateMachine {
   }
 
   /**
+   * Set retry hint for current context
+   */
+  setRetryHint(hint: any): void {
+    if (this.state.activeRetryContext) {
+      // Store hint in active retry context
+      // This will be passed to the next attempt
+      (this.state.activeRetryContext as any).hint = hint;
+    }
+  }
+
+  /**
    * Main state transition function
    */
   transition(action: PipelineAction): NextStep {

@@ -266,7 +266,7 @@ export class PipelineExecutor {
       }
       
       // Execute the command
-      let output: string;
+      let output: string | any; // Can be retry signal object
       
       if (logicalStage.isImplicitIdentity) {
         // Identity stage - just pass through
@@ -282,12 +282,15 @@ export class PipelineExecutor {
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[PipelineExecutor] Stage output:', {
           stage: context.stage,
+          outputType: typeof output,
           output: typeof output === 'string' ? output.substring(0, 50) : output,
-          isRetry: this.isRetrySignal(output)
+          isRetry: this.isRetrySignal(output),
+          hasRetryProp: output && typeof output === 'object' ? output.__retry : undefined
         });
       }
       
       // Check for retry signal (from command, not effects)
+      console.error('[DEBUG] About to check isRetrySignal, output:', output, 'type:', typeof output);
       if (this.isRetrySignal(output)) {
         if (process.env.MLLD_DEBUG === 'true') {
           console.error('[PipelineExecutor] Retry detected at logical stage', context.stage);
@@ -304,7 +307,7 @@ export class PipelineExecutor {
       }
 
       // Empty output terminates pipeline
-      if (!output || output.trim() === '') {
+      if (!output || (typeof output === 'string' && output.trim() === '')) {
         return { type: 'success', output: '' };
       }
 
@@ -410,8 +413,10 @@ export class PipelineExecutor {
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[PipelineExecutor] Stage output:', {
           stage: context.stage,
+          outputType: typeof output,
           output: typeof output === 'string' ? output.substring(0, 50) : output,
-          isRetry: this.isRetrySignal(output)
+          isRetry: this.isRetrySignal(output),
+          hasRetryProp: output && typeof output === 'object' ? output.__retry : undefined
         });
       }
       
@@ -432,7 +437,7 @@ export class PipelineExecutor {
       }
 
       // Empty output terminates pipeline
-      if (!output || output.trim() === '') {
+      if (!output || (typeof output === 'string' && output.trim() === '')) {
         return { type: 'success', output: '' };
       }
 
@@ -452,13 +457,19 @@ export class PipelineExecutor {
     command: PipelineCommand,
     input: string,
     stageEnv: Environment
-  ): Promise<string> {
-    // NEW PATH: Use injected evaluator when available in universal context mode
-    if (USE_UNIVERSAL_CONTEXT && this.evaluator) {
+  ): Promise<string | any> {  // Can return retry signal objects
+    // Always use universal path when evaluator is available
+    if (this.evaluator) {
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[executeCommand] Using UNIVERSAL path');
+      }
       return this.executeCommandUniversal(command, input, stageEnv);
     }
     
-    // OLD PATH: Continue with existing implementation
+    // Fallback to legacy if no evaluator (shouldn't happen in practice)
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[executeCommand] Using LEGACY path (no evaluator!)');
+    }
     return this.executeCommandLegacy(command, input, stageEnv);
   }
   
@@ -469,7 +480,7 @@ export class PipelineExecutor {
     command: PipelineCommand,
     input: string,
     stageEnv: Environment
-  ): Promise<string> {
+  ): Promise<string | any> {  // Can return retry signal objects
     // Don't try to set @input - stageEnv already has it set by createStageEnvironment
     
     // Handle source commands with sourceNode (from universal context conversion)
@@ -482,6 +493,10 @@ export class PipelineExecutor {
         // Pass stageEnv which has the pipeline context already set
         // evaluateExecInvocation takes (node, env, evaluator?) not context
         const result = await evaluateExecInvocation(sourceNode, stageEnv, this.evaluator);
+        // Check if it's a retry signal - don't stringify it!
+        if (result.value && typeof result.value === 'object' && result.value.__retry === true) {
+          return result.value;  // Return retry signal as-is for detection
+        }
         return String(result.value);
       } else if (sourceNode.type === 'command') {
         const { interpolate } = await import('../../core/interpreter');
@@ -492,6 +507,10 @@ export class PipelineExecutor {
       } else if (sourceNode.type === 'code') {
         const { evaluateCodeExecution } = await import('../code-execution');
         const result = await evaluateCodeExecution(sourceNode, stageEnv);
+        // Check if it's a retry signal - don't stringify it!
+        if (result.value && typeof result.value === 'object' && result.value.__retry === true) {
+          return result.value;  // Return retry signal as-is for detection
+        }
         return String(result.value);
       }
       
@@ -548,6 +567,17 @@ export class PipelineExecutor {
       // which handles the proper execution of functions with @input
       const result = await this.executeCommandVariable(commandVar, args, stageEnv, input);
       
+      // Check for retry signal BEFORE treating as string
+      if (result && typeof result === 'object' && result.__retry === true) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[executeCommandUniversal] Detected retry signal:', {
+            hasHint: !!result.hint,
+            hint: result.hint
+          });
+        }
+        return result;  // Return retry signal as-is for detection
+      }
+      
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[executeCommandUniversal] executeCommandVariable returned:', {
           resultType: typeof result,
@@ -580,7 +610,7 @@ export class PipelineExecutor {
     command: PipelineCommand,
     input: string,
     stageEnv: Environment
-  ): Promise<string> {
+  ): Promise<string | any> {  // Can return retry signal objects
     // Legacy synthetic source handling - deprecated with universal context
     if (command.rawIdentifier === 'source') {
       // This should not be reached with universal context
@@ -624,7 +654,20 @@ export class PipelineExecutor {
     const { AutoUnwrapManager } = await import('../auto-unwrap-manager');
     
     const result = await AutoUnwrapManager.executeWithPreservation(async () => {
-      return await this.executeCommandVariable(commandVar, args, stageEnv, input);
+      const output = await this.executeCommandVariable(commandVar, args, stageEnv, input);
+      
+      // Check for retry signal BEFORE AutoUnwrapManager processes it
+      if (output && typeof output === 'object' && output.__retry === true) {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[executeCommandLegacy] Detected retry signal:', {
+            hasHint: !!output.hint,
+            hint: output.hint
+          });
+        }
+        return output;  // Return retry signal as-is
+      }
+      
+      return output;
     });
 
     return result;
@@ -762,7 +805,7 @@ export class PipelineExecutor {
     args: any[],
     env: Environment,
     stdinInput?: string
-  ): Promise<string> {
+  ): Promise<string | any> {  // Allow retry signal objects through
     const { executeCommandVariable } = await import('./command-execution');
     return await executeCommandVariable(commandVar, args, env, stdinInput);
   }

@@ -56,15 +56,8 @@ export async function createStageEnvironment(
   // Set @input variable
   await setInputVariable(stageEnv, input, format);
   
-  // Set @ctx variable (only in legacy mode)
-  await setContextVariable(
-    stageEnv, 
-    context, 
-    input,
-    events, 
-    hasSyntheticSource,
-    allRetryHistory
-  );
+  // @ctx is now provided globally through universal context
+  // No need to set it as a local variable
   
   return stageEnv;
 }

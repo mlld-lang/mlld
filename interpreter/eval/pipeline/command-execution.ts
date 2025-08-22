@@ -73,7 +73,7 @@ export async function executeCommandVariable(
   args: any[],
   env: Environment,
   stdinInput?: string
-): Promise<string> {
+): Promise<string | any> {  // Can return retry signal objects
   // Built-in transformer handling
   if (commandVar && commandVar.metadata?.isBuiltinTransformer && commandVar.metadata?.transformerImplementation) {
     try {
@@ -364,6 +364,12 @@ export async function executeCommandVariable(
       const { evaluateWhenExpression } = await import('../when-expression');
       const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
       
+      // Check if it's a retry signal before stringifying
+      if (whenResult.value && typeof whenResult.value === 'object' && 
+          (whenResult.value.__retry === true || whenResult.value.retry === true)) {
+        return whenResult.value;
+      }
+      
       // Return the result
       return String(whenResult.value || '');
     }
@@ -410,8 +416,17 @@ export async function executeCommandVariable(
     
     const result = await env.executeCode(code, execDef.language || 'javascript', params);
     
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[executeCommandVariable] executeCode returned:', {
+        resultType: typeof result,
+        isRetrySignal: result && typeof result === 'object' && result.__retry === true,
+        resultPreview: typeof result === 'object' ? JSON.stringify(result) : String(result).substring(0, 100)
+      });
+    }
+    
     // Check for retry signal BEFORE stringifying
-    if (result && typeof result === 'object' && result.retry === true) {
+    if (result && typeof result === 'object' && 
+        (result.__retry === true || result.retry === true)) {
       // Return the retry object as-is for proper detection
       return result;
     }

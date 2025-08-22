@@ -180,14 +180,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     }
     this.parent = parent;
     
-    // Initialize universal context if feature flag is enabled
-    if (USE_UNIVERSAL_CONTEXT) {
-      // Context is passed through parent or created fresh
-      this.universalContext = parent?.universalContext || createDefaultContext();
-      
-      if (DEBUG_UNIVERSAL_CONTEXT) {
-        logger.debug('[Universal Context] Environment created with context:', this.universalContext);
-      }
+    // Always initialize universal context for consistent behavior
+    // Context is passed through parent or created fresh
+    this.universalContext = parent?.universalContext || createDefaultContext();
+    
+    if (DEBUG_UNIVERSAL_CONTEXT) {
+      logger.debug('[Universal Context] Environment created with context:', this.universalContext);
     }
     
     // Initialize effect handler: use provided, inherit from parent, or create default
@@ -326,7 +324,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getBasePath: () => this.getProjectRoot(),
       getFileDirectory: () => this.getFileDirectory(),
       getExecutionDirectory: () => this.getExecutionDirectory(),
-      getUniversalContext: USE_UNIVERSAL_CONTEXT ? () => this.universalContext : undefined
+      getUniversalContext: () => this.getUniversalContext()
     };
     this.variableManager = new VariableManager(variableManagerDependencies);
     
@@ -700,6 +698,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     tries?: string[];
   }): void {
     this.pipelineContext = context;
+    
+    // Also update the universal context with pipeline information
+    if (this.universalContext) {
+      this.updateUniversalContext({
+        try: context.try || 1,
+        tries: context.tries || [],
+        stage: context.stage,
+        isPipeline: true,
+        input: context.input
+      });
+    }
   }
   
   /**
@@ -734,15 +743,27 @@ export class Environment implements VariableManagerContext, ImportResolverContex
    * Get universal context (new mode only)
    */
   getUniversalContext(): UniversalContext | undefined {
-    if (!USE_UNIVERSAL_CONTEXT) return undefined;
+    // Always provide universal context for consistent behavior
     
-    // Child environments should always get the context from their parent
-    // to ensure they see the latest updates
-    if (this.parent && this.parent.universalContext) {
-      return this.parent.universalContext;
+    // Check for @test_ctx override - follows normal scoping rules
+    const testCtx = this.getVariable('test_ctx');
+    if (testCtx && testCtx.value && typeof testCtx.value === 'object') {
+      return testCtx.value as UniversalContext;
     }
     
-    return this.universalContext;
+    // Walk up the parent chain to find the universal context
+    // Start with self, then check parents
+    // This ensures child environments see updates made by parent environments
+    let current: Environment | undefined = this;
+    
+    while (current) {
+      if (current.universalContext) {
+        return current.universalContext;
+      }
+      current = current.parent;
+    }
+    
+    return undefined;
   }
   
   /**

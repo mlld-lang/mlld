@@ -134,6 +134,17 @@ export async function evaluateWhenExpression(
       // Evaluate the condition
       const conditionResult = await evaluateCondition(pair.condition, env);
       
+      if (process.env.DEBUG_WHEN || process.env.MLLD_DEBUG === 'true') {
+        console.error('[WhenExpression] Condition evaluation:', {
+          index: i,
+          conditionType: pair.condition[0]?.type,
+          conditionResult,
+          hasAction: !!(pair.action && pair.action.length > 0),
+          envHasCtx: !!env.getVariable('ctx'),
+          universalContext: env.getUniversalContext ? env.getUniversalContext() : 'N/A'
+        });
+      }
+      
       if (process.env.DEBUG_WHEN) {
         logger.debug('WhenExpression condition result:', { 
           index: i, 
@@ -173,6 +184,13 @@ export async function evaluateWhenExpression(
           const actionResult = await evaluate(pair.action, actionEnv, context);
           
           let value = actionResult.value;
+          
+          // Debug retry signals
+          if (value && typeof value === 'object' && value.__retry === true) {
+            if (process.env.MLLD_DEBUG === 'true') {
+              console.error('[WhenExpression] Retry signal detected in action result:', value);
+            }
+          }
           
           // Extract Variable values if needed (but keep effects working)
           if (value && typeof value === 'object' && 'type' in value) {

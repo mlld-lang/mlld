@@ -585,6 +585,24 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   
   // Handle RetryAction nodes
   if (node.type === 'RetryAction') {
+    // Check if we're in a pipeline context
+    const universalCtx = env.getUniversalContext ? env.getUniversalContext() : null;
+    const pipelineCtx = env.getPipelineContext ? env.getPipelineContext() : null;
+    
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[RetryAction] Context check:', {
+        hasUniversalCtx: !!universalCtx,
+        isPipeline: universalCtx?.isPipeline,
+        hasPipelineCtx: !!pipelineCtx,
+        ctxTry: universalCtx?.try
+      });
+    }
+    
+    // Retry is only valid in pipelines
+    if (!universalCtx?.isPipeline && !pipelineCtx) {
+      throw new Error('The "retry" action can only be used within pipelines');
+    }
+    
     // Evaluate hint if present
     let hint = null;
     if ((node as any).hint) {

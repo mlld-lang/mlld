@@ -32,8 +32,8 @@ export async function executePipeline(
   sourceFunction?: () => Promise<string>,
   hasSyntheticSource: boolean = false
 ): Promise<string> {
-  // Wire evaluator through when in universal context mode
-  const evaluator = USE_UNIVERSAL_CONTEXT ? createEvaluatorAdapter() : undefined;
+  // Always wire evaluator through for consistent retry handling
+  const evaluator = createEvaluatorAdapter();
   
   const executor = new PipelineExecutor(
     pipeline, 

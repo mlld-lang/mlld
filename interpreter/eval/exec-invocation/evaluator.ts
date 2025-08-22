@@ -20,13 +20,7 @@ import { applyWithClause } from '../with-clause';
 import { interpolate } from '@interpreter/core/interpreter';
 import { InterpolationContext } from '@interpreter/core/interpolation-context';
 import { prepareValueForShadow } from '@interpreter/env/variable-proxy';
-import { 
-  isRetrySignal, 
-  extractRetryHint, 
-  createRetryContext, 
-  recordRetryAttempt,
-  MAX_RETRIES 
-} from '../retry-helper';
+import { isRetrySignal } from '../retry-helper';
 import { 
   isTemplateExecutable, 
   isCodeExecutable, 
@@ -198,104 +192,42 @@ export class ExecInvocationEvaluator implements ExecVisitor {
         );
       }
       
-      // 6. Execute with retry loop for standalone functions
-      // (Pipelines have their own retry mechanism in PipelineExecutor)
-      let currentTry = 1;
-      let lastHint: any = null;
-      let lastOutput: any = null;
-      let tries: Array<any> = [];
-      
-      while (currentTry <= MAX_RETRIES) {
-        // Update universal context if enabled
-        // IMPORTANT: Update execEnv's context, not env's, since that's what the function sees
-        if (USE_UNIVERSAL_CONTEXT && execEnv.updateUniversalContext) {
-          const currentCtx = execEnv.getUniversalContext() || {
-            try: 1,
-            tries: [],
-            stage: 0,
-            isPipeline: false,
-            hint: null,
-            lastOutput: null,
-            input: null
-          };
-          
-          // Update context for this attempt using shared helper
-          const updatedCtx = createRetryContext(
-            currentCtx,
-            currentTry,
-            lastHint,
-            lastOutput,
-            tries
-          );
-          execEnv.updateUniversalContext(updatedCtx);
-        }
-        
-        if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
-          console.error('[ExecInvocationEvaluator] Executing node (attempt ' + currentTry + '):', {
-            nodeType: executableDef.type,
-            hasParams: (executableDef as any).paramNames?.length > 0,
-            paramNames: (executableDef as any).paramNames,
-            argCount: args.length
-          });
-        }
-        
-        // Pass context to visitor for proper pipeline context propagation
-        const result = await executableNode.accept(this, execEnv, parentContext);
-        
-        if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
-          console.error('[ExecInvocationEvaluator] Result:', {
-            hasValue: result.value !== undefined,
-            valueType: typeof result.value,
-            valueLength: typeof result.value === 'string' ? result.value.length : undefined,
-            value: result.value,
-            isRetry: isRetrySignal(result.value)
-          });
-        }
-        
-        // Check if result is a retry signal using shared helper
-        if (isRetrySignal(result.value)) {
-          // Extract hint using shared helper
-          const hint = extractRetryHint(result.value);
-          
-          // Record this attempt using shared helper
-          recordRetryAttempt(tries, currentTry, 'retry', hint, lastOutput);
-          
-          // Update for next attempt
-          lastHint = hint;
-          lastOutput = result.value;
-          currentTry++;
-          
-          if (currentTry > MAX_RETRIES) {
-            throw new MlldInterpreterError(
-              `Maximum retry attempts (${MAX_RETRIES}) exceeded for function '${commandName}'`
-            );
-          }
-          
-          if (process.env.MLLD_DEBUG === 'true') {
-            console.error('[ExecInvocationEvaluator] Retrying with hint:', lastHint);
-          }
-          
-          // Continue to next iteration
-          continue;
-        }
-        
-        // Success - record final attempt if there were retries
-        if (currentTry > 1) {
-          recordRetryAttempt(tries, currentTry, 'success', null, result.value);
-        }
-        
-        // 7. Apply non-pipeline withClause features
-        if (node.withClause) {
-          return await applyWithClause(result, node.withClause, execEnv);
-        }
-        
-        return result;
+      // 6. Execute the function (NO self-retry - retry only works in pipelines)
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
+        console.error('[ExecInvocationEvaluator] Executing node:', {
+          nodeType: executableDef.type,
+          hasParams: (executableDef as any).paramNames?.length > 0,
+          paramNames: (executableDef as any).paramNames,
+          argCount: args.length
+        });
       }
       
-      // Should never reach here due to MAX_RETRIES check above
-      throw new MlldInterpreterError(
-        `Retry loop terminated unexpectedly for function '${commandName}'`
-      );
+      // Pass context to visitor for proper pipeline context propagation
+      const result = await executableNode.accept(this, execEnv, parentContext);
+      
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
+        console.error('[ExecInvocationEvaluator] Result:', {
+          hasValue: result.value !== undefined,
+          valueType: typeof result.value,
+          valueLength: typeof result.value === 'string' ? result.value.length : undefined,
+          value: result.value,
+          isRetry: isRetrySignal(result.value)
+        });
+      }
+      
+      // If a retry signal is returned outside of a pipeline, that's an error
+      if (isRetrySignal(result.value)) {
+        throw new MlldInterpreterError(
+          `Function '${commandName}' returned a retry signal, but retry is only supported within pipelines`
+        );
+      }
+      
+      // 7. Apply non-pipeline withClause features
+      if (node.withClause) {
+        return await applyWithClause(result, node.withClause, execEnv);
+      }
+      
+      return result;
       
     } finally {
       // Always clear metadata shelf, captured shadow envs, and bound params after execution
