@@ -181,9 +181,35 @@ export class ExecInvocationEvaluator implements ExecVisitor {
       }
       
       // 5. Handle pipeline if present (with universal context)
-      if (node.withClause?.pipeline?.length > 0) {
+      // Check both invocation pipeline AND definition pipeline (for exec definitions)
+      const invocationPipeline = node.withClause?.pipeline;
+      const definitionPipeline = (executableDef as any).withClause?.pipeline;
+      
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
+        console.error('[evaluate] Pipeline detection:', {
+          hasInvocationPipeline: !!invocationPipeline,
+          invocationPipelineLength: invocationPipeline?.length,
+          hasDefinitionPipeline: !!definitionPipeline,
+          definitionPipelineLength: definitionPipeline?.length,
+          executableDefType: executableDef?.type
+        });
+      }
+      
+      if ((invocationPipeline?.length > 0) || (definitionPipeline?.length > 0)) {
+        // Use invocation pipeline if present, otherwise use definition pipeline
+        const pipelineToUse = invocationPipeline || definitionPipeline;
+        
+        // Create a modified node with the pipeline
+        const nodeWithPipeline = {
+          ...node,
+          withClause: {
+            ...node.withClause,
+            pipeline: pipelineToUse
+          }
+        };
+        
         return await this.executeWithPipeline(
-          node,
+          nodeWithPipeline,
           executableNode,
           execEnv,
           processedArgs,
@@ -1090,6 +1116,13 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     execContext: any,
     evaluator?: IEvaluator
   ): Promise<EvalResult> {
+    if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC) {
+      console.error('[executeWithPipeline] CALLED!', {
+        hasPipeline: !!node.withClause?.pipeline,
+        pipelineLength: node.withClause?.pipeline?.length
+      });
+    }
+    
     if (!node.withClause?.pipeline) {
       throw new Error('executeWithPipeline called without pipeline');
     }
@@ -1111,29 +1144,73 @@ export class ExecInvocationEvaluator implements ExecVisitor {
     // Don't execute it separately and pass a retryableSource.
     // Instead, add it as stage 0 of the pipeline.
     
+    // Get the actual executable definition
+    let actualExecutableDef = executableNode.getDefinition();
+    
+    // If this is a CommandRef, we need to extract the actual command it references
+    // For example: @shout(msg) = @upper(@msg) | @exclaim
+    // The CommandRef stores the full definition including pipeline
+    // We need to extract just @upper for stage 0
+    let sourceIdentifier = node.commandRef?.name || execContext?.metadata?.execName || 'source';
+    let sourceArgs = args || [];
+    
+    if (actualExecutableDef?.type === 'commandRef') {
+      // The CommandRef points to another command
+      // Extract the actual command name and args from the CommandRef
+      sourceIdentifier = actualExecutableDef.commandRef || sourceIdentifier;
+      // Use the args from the CommandRef definition if they exist
+      if (actualExecutableDef.commandArgs) {
+        sourceArgs = actualExecutableDef.commandArgs;
+      }
+      
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+        console.error('[executeWithPipeline] CommandRef resolution:', {
+          originalName: node.commandRef?.name,
+          resolvedName: sourceIdentifier,
+          hasCommandArgs: !!actualExecutableDef.commandArgs,
+          commandArgsCount: actualExecutableDef.commandArgs?.length
+        });
+      }
+    }
+    
     // Create a command for this exec invocation to be stage 0
     const sourceCommand = {
       type: 'execInvocation' as any,
       identifier: [{
         type: 'VariableReference',
         valueType: 'varIdentifier', 
-        identifier: node.commandRef?.name || execContext?.metadata?.execName || 'source'
+        identifier: sourceIdentifier
       }],
-      args: args || [],
+      args: sourceArgs,
       fields: [],
-      rawIdentifier: node.commandRef?.name || execContext?.metadata?.execName || 'source',
-      rawArgs: args || [],
+      rawIdentifier: sourceIdentifier,
+      rawArgs: sourceArgs,
       // Store the executable definition for execution
-      executableDef: executableNode.getDefinition()
+      executableDef: actualExecutableDef
     };
     
     // Combine source as stage 0 with the rest of the pipeline
     const fullPipeline = [sourceCommand, ...node.withClause.pipeline];
     
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[ExecInvocationEvaluator] Universal Context Pipeline:', {
+    if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+      console.error('[ExecInvocationEvaluator] Pipeline Construction:', {
+        sourceCommand: sourceCommand.rawIdentifier,
+        sourceCommandArgs: sourceCommand.args?.map((a: any) => ({ 
+          type: a?.type, 
+          identifier: a?.identifier,
+          content: a?.content 
+        })),
+        pipelineStages: node.withClause.pipeline.map((p: any) => ({
+          name: p.rawIdentifier || 'unknown',
+          args: p.args?.map((a: any) => ({ type: a?.type, identifier: a?.identifier }))
+        })),
         fullPipelineLength: fullPipeline.length,
-        stages: fullPipeline.map((p: any) => p.rawIdentifier || 'unknown')
+        fullPipelineStages: fullPipeline.map((p: any, i: number) => ({
+          index: i,
+          name: p.rawIdentifier || 'unknown',
+          hasExecutableDef: !!p.executableDef,
+          argsCount: p.args?.length || 0
+        }))
       });
     }
     

@@ -101,6 +101,41 @@ export async function executeCommandVariable(
     if (commandVar.metadata?.executableDef) {
       execDef = commandVar.metadata.executableDef;
       
+      // Handle CommandRef type - need to resolve to actual executable
+      if (execDef?.type === 'commandRef') {
+        if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+          console.error('[executeCommandVariable] Resolving CommandRef:', {
+            commandRef: execDef.commandRef,
+            hasCommandArgs: !!execDef.commandArgs,
+            hasWithClause: !!execDef.withClause
+          });
+        }
+        
+        // Get the actual executable from the environment
+        const referencedCommand = env.getVariable(execDef.commandRef);
+        if (!referencedCommand) {
+          throw new Error(`CommandRef '${execDef.commandRef}' not found in environment`);
+        }
+        
+        // Extract the executable definition from the referenced command
+        if (referencedCommand.metadata?.executableDef) {
+          execDef = referencedCommand.metadata.executableDef;
+        } else if (referencedCommand.value && typeof referencedCommand.value === 'object') {
+          execDef = referencedCommand.value;
+        } else {
+          throw new Error(`CommandRef '${execDef.commandRef}' does not have an executable definition`);
+        }
+        
+        if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+          console.error('[executeCommandVariable] Resolved CommandRef to:', {
+            type: execDef?.type,
+            hasParamNames: !!execDef?.paramNames,
+            paramNames: execDef?.paramNames,
+            language: execDef?.language
+          });
+        }
+      }
+      
       // Also copy paramNames from the variable if not in execDef
       if (!execDef.paramNames && commandVar.paramNames) {
         execDef.paramNames = commandVar.paramNames;
@@ -283,14 +318,16 @@ export async function executeCommandVariable(
     );
     
     // Check if we're at stage 0 (source stage) where args bind directly
-    // BUT only if we don't have variable reference args
-    const isSourceStage = pipelineCtx && pipelineCtx.stage === 0 && !hasVariableRefArgs;
+    // At stage 0, there's no stdin yet, so args always bind directly
+    const isSourceStage = pipelineCtx && pipelineCtx.stage === 0;
     
     if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-      console.error('[executeCommandVariable] Parameter binding context:', {
+      console.error('[executeCommandVariable] STAGE EXECUTION:', {
+        functionName: execDef.name || cmd.rawIdentifier,
+        internalStage: pipelineCtx?.stage,
+        userVisibleStage: pipelineCtx?.stage !== undefined ? pipelineCtx.stage + 1 : undefined,
         isSourceStage,
         hasVariableRefArgs,
-        stage: pipelineCtx?.stage,
         paramNames: execDef.paramNames,
         args: args.map(a => ({
           type: a?.type,
@@ -352,24 +389,46 @@ export async function executeCommandVariable(
       }
       
       // Now bind the evaluated values to parameters
+      // At stage 0, args bind directly. At later stages, stdin goes to first param.
       for (let i = 0; i < execDef.paramNames.length; i++) {
         const paramName = execDef.paramNames[i];
-        const argValue = i < evaluatedArgs.length ? evaluatedArgs[i] : '';
+        
+        let valueToUse;
+        if (isSourceStage) {
+          // Stage 0: args bind directly (no stdin offset)
+          valueToUse = i < evaluatedArgs.length ? evaluatedArgs[i] : '';
+          if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+            console.error(`[executeCommandVariable] Stage 0 - binding arg directly: ${paramName} = "${valueToUse}"`);
+          }
+        } else {
+          // Pipeline stages: first param gets stdin, args offset by 1
+          const isPipelineFirstParam = i === 0 && pipelineCtx !== undefined && stdinInput !== undefined;
+          
+          if (isPipelineFirstParam) {
+            valueToUse = stdinInput;
+            if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+              console.error(`[executeCommandVariable] Pipeline stage - binding stdin to first param: ${paramName} = "${valueToUse}"`);
+            }
+          } else {
+            // Args are offset by 1 in pipeline stages (since first param got stdin)
+            const argIndex = i - 1;
+            valueToUse = argIndex >= 0 && argIndex < evaluatedArgs.length ? evaluatedArgs[argIndex] : '';
+            if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+              console.error(`[executeCommandVariable] Pipeline stage - binding arg to param: ${paramName} = "${valueToUse}"`);
+            }
+          }
+        }
         
         // Convert to string for text variable creation
-        const stringValue = typeof argValue === 'string' ? argValue :
-                          argValue?.content !== undefined ? argValue.content :
-                          String(argValue || '');
-        
-        if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-          console.error(`[executeCommandVariable] Binding parameter: ${paramName} = "${stringValue}"`);
-        }
+        const stringValue = typeof valueToUse === 'string' ? valueToUse :
+                          valueToUse?.content !== undefined ? valueToUse.content :
+                          String(valueToUse || '');
         
         const textVar = createSimpleTextVariable(
           paramName,
           stringValue,
           { directive: 'var', syntax: 'quoted', hasInterpolation: false, isMultiLine: false },
-          { isPipelineParameter: true }
+          { isPipelineParameter: !isSourceStage && i === 0 }
         );
         execEnv.setParameterVariable(paramName, textVar);
       }

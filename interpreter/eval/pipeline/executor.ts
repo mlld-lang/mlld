@@ -87,12 +87,18 @@ export class PipelineExecutor {
     // Store initial input for synthetic source stage
     this.initialInput = initialInput;
     
-    if (process.env.MLLD_DEBUG === 'true') {
+    if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
       console.error('[PipelineExecutor] Starting execution:', {
-        logicalStages: this.logicalStages.map(s => ({
+        logicalStageCount: this.logicalStages.length,
+        logicalStages: this.logicalStages.map((s, i) => ({
+          index: i,
           stage: s.command.rawIdentifier,
-          effects: s.effects.map(e => (e as any).command || e.rawIdentifier || 'unknown')
-        }))
+          hasExecutableDef: !!(s.command as any).executableDef,
+          argsCount: (s.command as any).args?.length || 0,
+          effects: s.effects.map(e => (e as any).command || e.rawIdentifier || 'unknown'),
+          isImplicitIdentity: s.isImplicitIdentity
+        })),
+        initialInput: initialInput?.substring(0, 50)
       });
     }
     
@@ -146,12 +152,15 @@ export class PipelineExecutor {
         lastOutput: nextStep.context.lastOutput || null
       });
       
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.error(`[PipelineExecutor] Executing logical stage ${nextStep.stage}:`, {
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+        console.error(`[PipelineExecutor] EXECUTING STAGE ${nextStep.stage}:`, {
+          internalStage: nextStep.stage,
           command: logicalStage.command.rawIdentifier,
+          hasExecutableDef: !!(logicalStage.command as any).executableDef,
           effectsCount: logicalStage.effects.length,
           contextAttempt: nextStep.context.contextAttempt,
-          input: nextStep.input?.substring(0, 50)
+          input: nextStep.input?.substring(0, 50),
+          isImplicitIdentity: logicalStage.isImplicitIdentity
         });
       }
       

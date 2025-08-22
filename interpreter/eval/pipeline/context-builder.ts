@@ -25,23 +25,24 @@ export async function createStageEnvironment(
   hasSyntheticSource: boolean = false,
   allRetryHistory?: Map<string, string[]>
 ): Promise<Environment> {
-  // Adjust stage numbers for user visibility
-  // Internal stage 0 (source) should appear as stage 1 to users
-  const userVisibleStage = context.stage + 1;
-  const userVisibleTotalStages = context.totalStages;
+  // Keep stage numbers 0-indexed internally throughout the system
+  // Only add +1 when displaying to end users (not in @ctx)
+  const internalStage = context.stage;
     
   // Set pipeline context in main environment
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[ContextBuilder] setPipelineContext:', {
-      stage: userVisibleStage,
+  if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+    console.error('[ContextBuilder] Stage numbering:', {
+      internalStage: context.stage,
+      commandName: command.rawIdentifier,
       contextAttempt: context.contextAttempt,
-      historyLength: context.history.length
+      historyLength: context.history.length,
+      totalStages: context.totalStages
     });
   }
   
   env.setPipelineContext({
-    stage: userVisibleStage,
-    totalStages: userVisibleTotalStages,
+    stage: internalStage,  // Keep 0-indexed
+    totalStages: context.totalStages,
     currentCommand: command.rawIdentifier,
     input: input,
     previousOutputs: context.previousOutputs,
@@ -57,7 +58,7 @@ export async function createStageEnvironment(
   // The child was created with a snapshot, but we need the updated context
   console.error('[ContextBuilder] createStageEnvironment called:', {
     try: context.contextAttempt,
-    stage: userVisibleStage,
+    stage: internalStage,  // 0-indexed
     isPipeline: true,
     inputLength: input?.length,
     historyLength: context.history.length,
@@ -67,7 +68,7 @@ export async function createStageEnvironment(
   stageEnv.updateUniversalContext({
     try: context.contextAttempt,
     tries: context.history,
-    stage: userVisibleStage,
+    stage: internalStage,  // Keep 0-indexed for @ctx.stage
     isPipeline: true,
     input: input,
     hint: context.hint || null,

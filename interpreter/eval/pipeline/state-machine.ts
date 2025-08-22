@@ -82,7 +82,7 @@ export type NextStep =
  * Stage Context
  */
 export interface StageContext {
-  stage: number;                  // 1-indexed stage number
+  stage: number;                  // 0-indexed stage number (internal)
   attempt: number;                 // Global attempt count for this stage
   contextAttempt: number;          // Attempt within current retry context
   history: string[];               // Previous outputs from this stage
@@ -558,7 +558,7 @@ export class PipelineStateMachine {
     const globalAttempt = totalRetries + 1;
     
     return {
-      stage: stage + 1,  // 1-indexed for user
+      stage: stage,  // Keep 0-indexed internally
       attempt,
       contextAttempt,
       history: stageHistory,

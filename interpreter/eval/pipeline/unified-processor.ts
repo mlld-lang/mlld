@@ -121,12 +121,22 @@ export async function processPipeline(
     };
     normalizedPipeline = [sourceCommand, ...detected.pipeline];
     
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[processPipeline] Created source command as stage 0:', {
+    if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+      console.error('[processPipeline] Created ADDITIONAL source command as stage 0:', {
         identifier: sourceCommand.rawIdentifier,
-        type: sourceCommand.type
+        type: sourceCommand.type,
+        hasExistingSource,
+        pipelineLength: detected.pipeline?.length,
+        normalizedLength: normalizedPipeline.length
       });
     }
+  } else if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+    console.error('[processPipeline] NOT adding source stage:', {
+      hasExistingSource,
+      isRetryable: detected.isRetryable,
+      hasSourceFunction: !!value?.metadata?.sourceFunction,
+      pipelineLength: normalizedPipeline?.length
+    });
   }
   
   // Validate pipeline functions exist
