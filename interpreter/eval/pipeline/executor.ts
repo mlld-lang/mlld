@@ -263,6 +263,11 @@ export class PipelineExecutor {
       }
       return fresh;
     }
+
+    // Synthetic identity stage for pipelines that only have inline effects
+    if (command.rawIdentifier === '__identity__') {
+      return input;
+    }
     
     // Resolve the command reference
     const commandVar = await this.resolveCommandReference(command, stageEnv);

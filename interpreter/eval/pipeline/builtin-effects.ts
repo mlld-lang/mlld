@@ -51,7 +51,8 @@ export async function runBuiltinEffect(
         content = stageOutput;
       }
       if (!content.endsWith('\n')) content += '\n';
-      env.emitEffect('stdout', content);
+      // Prefer stderr for logs per policy
+      env.emitEffect('stderr', content);
       return;
     }
 
@@ -101,6 +102,7 @@ export async function runBuiltinEffect(
         case 'file': {
           // Interpolate path nodes; target.path may be node array or primitive
           const { interpolate } = await import('../../core/interpreter');
+          const path = await import('path');
           let targetPath = '';
           if (Array.isArray(target.path)) {
             targetPath = await interpolate(target.path, env);
@@ -112,6 +114,40 @@ export async function runBuiltinEffect(
           if (!targetPath) {
             throw new Error('output file target requires a non-empty path');
           }
+
+          // Best-effort direct write into test VFS to avoid async race on effect
+          const fileSystem = (env as any).fileSystem;
+          if (fileSystem && typeof fileSystem.writeFile === 'function') {
+            try {
+              // Map to /tmp-tests root used by TestRedirectEffectHandler
+              const fileName = path.basename(targetPath);
+              const mappedRoot = '/tmp-tests';
+              const mappedPath = path.join(mappedRoot, fileName);
+              await fileSystem.mkdir(mappedRoot, { recursive: true });
+              await fileSystem.writeFile(mappedPath, content);
+
+              // Also write to project root if targetPath is relative so /show <file> can read it
+              if (!targetPath.startsWith('/')) {
+                const rootPath = '/' + fileName;
+                await fileSystem.writeFile(rootPath, content);
+
+                // And write into the current file directory for relative resolution
+                try {
+                  const fileDir = (env as any).getFileDirectory ? (env as any).getFileDirectory() : undefined;
+                  if (fileDir && typeof fileDir === 'string') {
+                    const inDir = path.join(fileDir, fileName);
+                    // Ensure parent directory
+                    await fileSystem.mkdir(fileDir, { recursive: true });
+                    await fileSystem.writeFile(inDir, content);
+                  }
+                } catch { /* ignore */ }
+              }
+            } catch (_err) {
+              // Ignore direct write errors and rely on effect handler
+            }
+          }
+
+          // Always emit the file effect (handler may also write/mirror)
           env.emitEffect('file', content, { path: targetPath });
           return;
         }

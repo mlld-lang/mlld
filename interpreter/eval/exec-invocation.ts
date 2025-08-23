@@ -1128,8 +1128,46 @@ export async function evaluateExecInvocation(
         rawArgs: []
       };
       
-      // Prepend synthetic source stage to the pipeline
-      const normalizedPipeline = [SOURCE_STAGE, ...node.withClause.pipeline];
+      // Prepend synthetic source stage and attach builtin effects
+      let normalizedPipeline = [SOURCE_STAGE, ...node.withClause.pipeline];
+      // Attach inline builtin effects (log/show/output) to preceding stages
+      try {
+        const { isBuiltinEffect } = await import('./pipeline/builtin-effects');
+        const functional: any[] = [];
+        const pending: any[] = [];
+        for (const s of normalizedPipeline) {
+          const name = s.rawIdentifier;
+          if (isBuiltinEffect(name)) {
+            if (functional.length > 0) {
+              const prev = functional[functional.length - 1];
+              if (!prev.effects) prev.effects = [];
+              prev.effects.push(s);
+            } else {
+              pending.push(s);
+            }
+          } else {
+            const stage = { ...s };
+            if (pending.length > 0) {
+              stage.effects = [...(stage.effects || []), ...pending];
+              pending.length = 0;
+            }
+            functional.push(stage);
+          }
+        }
+        if (functional.length === 0 && pending.length > 0) {
+          functional.push({
+            rawIdentifier: '__identity__',
+            identifier: [],
+            args: [],
+            fields: [],
+            rawArgs: [],
+            effects: [...pending]
+          });
+        }
+        normalizedPipeline = functional;
+      } catch {
+        // If helper import fails, proceed without effect attachment
+      }
       
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[exec-invocation] Creating pipeline with synthetic source:', {

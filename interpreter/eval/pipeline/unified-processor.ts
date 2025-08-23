@@ -116,7 +116,7 @@ export async function processPipeline(
   const { functionalPipeline, hadLeadingEffects } = attachBuiltinEffects(normalizedPipeline);
   
   // Validate pipeline functions exist (skip __source__ stage)
-  const pipelineToValidate = functionalPipeline.filter(cmd => cmd.rawIdentifier !== '__source__');
+  const pipelineToValidate = functionalPipeline.filter(cmd => cmd.rawIdentifier !== '__source__' && cmd.rawIdentifier !== '__identity__');
   await validatePipeline(pipelineToValidate, env, identifier);
   
   // Prepare input value for pipeline
@@ -225,29 +225,54 @@ function attachBuiltinEffects(pipeline: PipelineCommand[]): {
   hadLeadingEffects: boolean;
 } {
   const functional: PipelineCommand[] = [];
+  const pendingLeadingEffects: PipelineCommand[] = [];
   let hadLeadingEffects = false;
 
   for (const cmd of pipeline) {
     const name = cmd.rawIdentifier;
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[attachBuiltinEffects] cmd', name, 'builtin?', isBuiltinEffect(name));
+    }
     if (isBuiltinEffect(name)) {
-      // Attach to the last functional or to __source__ if present
+      // Attach to the last functional; if none yet, collect as pending
       if (functional.length > 0) {
         const prev = functional[functional.length - 1];
         if (!prev.effects) prev.effects = [];
         prev.effects.push(cmd);
       } else {
-        // No functional stage yet. If the first command is a synthetic source,
-        // treat this as leading effect and mark it so the executor can ignore
-        // for now (future: consider attaching to source input).
+        pendingLeadingEffects.push(cmd);
         hadLeadingEffects = true;
       }
       continue;
     }
 
     // Regular functional stage
-    functional.push({ ...cmd });
+    const stage: PipelineCommand = { ...cmd };
+    // If we have pending leading effects, attach them to this first stage
+    if (pendingLeadingEffects.length > 0) {
+      stage.effects = [...(stage.effects || []), ...pendingLeadingEffects];
+      pendingLeadingEffects.length = 0;
+    }
+    functional.push(stage);
   }
 
+  // If pipeline had only builtin effects, synthesize an identity stage to host them
+  if (functional.length === 0 && pendingLeadingEffects.length > 0) {
+    functional.push({
+      rawIdentifier: '__identity__',
+      identifier: [],
+      args: [],
+      fields: [],
+      rawArgs: [],
+      effects: [...pendingLeadingEffects]
+    } as any);
+    pendingLeadingEffects.length = 0;
+  }
+
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.error('[attachBuiltinEffects] functional stages:', functional.map(f => f.rawIdentifier));
+    console.error('[attachBuiltinEffects] first effects:', functional[0]?.effects?.map((e: any) => e.rawIdentifier));
+  }
   return { functionalPipeline: functional, hadLeadingEffects };
 }
 

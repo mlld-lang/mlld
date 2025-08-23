@@ -262,11 +262,11 @@ SlashLog
   = DirectiveContext "/log" _ source:OutputSource format:(_ f:OutputFormat { return f; })? ending:StandardDirectiveEnding {
       helpers.debug('SlashLog with source matched', { source, format, ending });
       
-      // Create stdout target automatically
+      // Create stderr target automatically (policy: logs -> stderr)
       const stdoutTarget = {
         type: 'stream',
-        stream: 'stdout',
-        raw: 'stdout'
+        stream: 'stderr',
+        raw: 'stderr'
       };
       
       // Create exact same AST structure as /output @x to stdout
@@ -277,12 +277,12 @@ SlashLog
       
       const raw = {
         source: source.raw,
-        target: 'stdout'
+        target: 'stderr'
       };
       
       const meta = {
         sourceType: source.type,
-        targetType: 'stream',
+        targetType: 'stream',  
         hasSource: true,
         isLogSugar: true,  // Mark for debugging/tracing
         ...(format ? { format, explicitFormat: true } : {})
@@ -306,8 +306,8 @@ SlashLog
       
       const stdoutTarget = {
         type: 'stream',
-        stream: 'stdout',
-        raw: 'stdout'
+        stream: 'stderr',
+        raw: 'stderr'
       };
       
       const values = {
@@ -315,7 +315,7 @@ SlashLog
       };
       
       const raw = {
-        target: 'stdout'
+        target: 'stderr'
       };
       
       const meta = {

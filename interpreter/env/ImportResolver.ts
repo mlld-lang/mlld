@@ -175,6 +175,10 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     if (inputPath.startsWith('@PROJECTPATH')) {
       inputPath = inputPath.replace('@PROJECTPATH', await this.getProjectPath());
     }
+    if (inputPath.startsWith('@base/')) {
+      const projectRoot = await this.getProjectPath();
+      inputPath = path.join(projectRoot, inputPath.substring(6));
+    }
     
     // Handle URL-relative resolution when current file is a URL
     const currentFile = this.dependencies.getCurrentFilePath?.();

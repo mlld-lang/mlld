@@ -538,14 +538,14 @@ WhenActionDirective
         location: location()
       })];
     }
-  // Special handling for /log directive - syntactic sugar for output to stdout
+  // Special handling for /log directive - syntactic sugar for output to stderr
   / "log" _ source:WhenOutputSource? {
       helpers.debug('WhenActionDirective: log matched');
-      // Create stdout target automatically (same as /log directive)
+      // Create stderr target automatically (same as /log directive)
       const stdoutTarget = {
         type: 'stream',
-        stream: 'stdout',
-        raw: 'stdout'
+        stream: 'stderr',
+        raw: 'stderr'
       };
       
       const values = {
@@ -553,7 +553,7 @@ WhenActionDirective
       };
       
       const raw = {
-        target: 'stdout'
+        target: 'stderr'
       };
       
       let subtype = 'outputStream';
