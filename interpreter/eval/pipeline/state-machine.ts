@@ -20,6 +20,8 @@ export interface RetryContext {
   retryingStage: number;         // Stage being retried
   attemptNumber: number;         // Current attempt (1-based)
   allAttempts: string[];         // All outputs from retry attempts
+  hints?: string[];              // Hints provided per retry request
+  currentHint?: string;          // Last hint provided by requesting stage
 }
 
 /**
@@ -67,7 +69,7 @@ export type PipelineAction =
 
 export type StageResult =
   | { type: 'success'; output: string }
-  | { type: 'retry'; reason?: string; from?: number }
+  | { type: 'retry'; reason?: string; from?: number; hint?: any }
   | { type: 'error'; error: Error };
 
 export type NextStep =
@@ -90,6 +92,8 @@ export interface StageContext {
   totalStages: number;
   outputs: Record<number, string>; // Array-style access
   contextId?: string;              // Current retry context ID
+  hintHistory?: string[];          // Hints observed in this retry context
+  currentHint?: string;            // Last hint for this retry cycle
 }
 
 /**
@@ -189,7 +193,7 @@ export class PipelineStateMachine {
       case 'success':
         return this.handleStageSuccess(stage, result.output);
       case 'retry':
-        return this.handleStageRetry(stage, result.reason, result.from);
+        return this.handleStageRetry(stage, result.reason, result.from, (result as any).hint);
       case 'error':
         return this.handleStageError(stage, result.error);
     }
@@ -276,7 +280,7 @@ export class PipelineStateMachine {
     };
   }
 
-  private handleStageRetry(stage: number, reason?: string, fromOverride?: number): NextStep {
+  private handleStageRetry(stage: number, reason?: string, fromOverride?: number, hint?: any): NextStep {
     const targetStage = fromOverride ?? Math.max(0, stage - 1);
     
     if (process.env.MLLD_DEBUG === 'true') {
@@ -360,7 +364,9 @@ export class PipelineStateMachine {
         requestingStage: stage,
         retryingStage: targetStage,
         attemptNumber: 1,
-        allAttempts: []
+        allAttempts: [],
+        hints: [],
+        currentHint: undefined
       };
       
       // Save previous context's attempts if it exists
@@ -407,6 +413,14 @@ export class PipelineStateMachine {
       targetStage,
       contextId: context.id
     });
+    
+    // Store hint on context for next execution
+    if (hint !== undefined || reason) {
+      const toStore = hint !== undefined ? hint : reason;
+      context.currentHint = toStore as any;
+      if (!context.hints) context.hints = [];
+      context.hints.push(toStore as any);
+    }
     
     // Get input for retry
     const retryInput = this.getInputForStage(targetStage);
@@ -533,7 +547,9 @@ export class PipelineStateMachine {
         0: this.state.baseInput,
         ...Object.fromEntries(previousOutputs.map((out, i) => [i + 1, out]))
       },
-      contextId: context?.id
+      contextId: context?.id,
+      hintHistory: context?.hints ? [...context.hints] : [],
+      currentHint: context?.currentHint
     };
   }
 

@@ -1,5 +1,6 @@
 import { parse } from '@grammar/parser';
 import { Environment } from './env/Environment';
+import type { EffectHandler } from './env/EffectHandler';
 import { evaluate } from './core/interpreter';
 import { formatOutput } from './output/formatter';
 import type { IFileSystemService } from '@services/fs/IFileSystemService';
@@ -45,6 +46,7 @@ export interface InterpretOptions {
   captureEnvironment?: (env: Environment) => void; // Callback to capture environment after execution
   captureErrors?: boolean; // Capture parse errors for pattern development
   ephemeral?: boolean; // Enable ephemeral mode (in-memory caching, no persistence)
+  effectHandler?: EffectHandler; // Optional custom effect handler (tests/CI)
 }
 
 /**
@@ -204,7 +206,9 @@ export async function interpret(
   const env = new Environment(
     options.fileSystem,
     options.pathService,
-    pathContext
+    pathContext,
+    undefined,
+    options.effectHandler
   );
   
   // Register built-in resolvers (async initialization)

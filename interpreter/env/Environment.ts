@@ -678,6 +678,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     input: any;
     previousOutputs: string[];
     format?: string;
+    // Optional retry context data for ambient @ctx
+    attemptCount?: number;
+    attemptHistory?: any[];
+    hint?: string | null;
+    hintHistory?: string[];
   }): void {
     this.pipelineContext = context;
   }
@@ -1221,10 +1226,19 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         const pctx = this.getPipelineContext();
         const ctxValue = testCtxVar ? (testCtxVar.value as any) : (pctx ? {
           try: (pctx as any).attemptCount || 1,
-          tries: (pctx as any).attemptHistory || [],
+          tries: (() => {
+            const outputs: any[] = (pctx as any).attemptHistory || [];
+            const hints: any[] = (pctx as any).hintHistory || [];
+            const arr: any[] = [];
+            const n = Math.max(outputs.length, hints.length);
+            for (let i = 0; i < n; i++) {
+              arr.push({ attempt: i + 1, result: 'retry', hint: hints[i], output: outputs[i] });
+            }
+            return arr;
+          })(),
           stage: typeof pctx.stage === 'number' ? pctx.stage : 0,
           isPipeline: true,
-          hint: null,
+          hint: (pctx as any).hint ?? null,
           // Provide last output from previous stage attempts when available
           lastOutput: Array.isArray((pctx as any).previousOutputs) && (pctx as any).previousOutputs.length > 0
             ? (pctx as any).previousOutputs[(pctx as any).previousOutputs.length - 1]

@@ -7,7 +7,7 @@
 
 import type { Environment } from '../../env/Environment';
 import type { PipelineCommand, VariableSource } from '@core/types';
-import type { StageContext, PipelineEvent } from './state-machine-simplified';
+import type { StageContext, PipelineEvent } from './state-machine';
 import { createPipelineInputVariable, createSimpleTextVariable, createObjectVariable } from '@core/types/variable';
 import { createPipelineInput } from '../../utils/pipeline-input';
 
@@ -58,7 +58,10 @@ export async function createStageEnvironment(
     // Use context-local attempt for ambient @ctx.try
     attemptCount: context.contextAttempt,
     // Preserve attempts history for @ctx.tries
-    attemptHistory: context.history
+    attemptHistory: context.history,
+    // Provide hint info for ambient @ctx.hint
+    hint: context.currentHint,
+    hintHistory: context.hintHistory || []
   });
 
   // Create child environment

@@ -11,7 +11,23 @@ WhenRHSAction "when RHS action"
   / WhenRHSOutputAction  
   / WhenRHSVarAssignment
   / WhenRHSFunctionCall
+  / WhenRHSRetryAction
   / VarRHSContent  // Pure values (fallback)
+
+// Retry action with optional hint value (string/object/function/variable)
+// Returns an array of nodes: [RetryLiteral, <hintNode>?]
+WhenRHSRetryAction
+  = "retry" _ hint:VarRHSContent? {
+      const retryNode = helpers.createNode(NodeType.Literal, { 
+        value: 'retry', 
+        valueType: 'retry',
+        location: location() 
+      });
+      if (typeof hint !== 'undefined' && hint !== null) {
+        return [retryNode, hint];
+      }
+      return [retryNode];
+    }
 
 // Show action - creates regular show directive node
 WhenRHSShowAction

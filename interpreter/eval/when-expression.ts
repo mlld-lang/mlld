@@ -153,6 +153,35 @@ export async function evaluateWhenExpression(
         }
         
         try {
+          // Special-case: detect retry with optional hint without evaluating side-effects
+          // Pattern: action starts with a RetryLiteral, optionally followed by a Text node (hint)
+          if (Array.isArray(pair.action) && pair.action.length >= 1) {
+            const first = pair.action[0] as any;
+            if (first && typeof first === 'object' && first.type === 'Literal' && first.value === 'retry') {
+              let value: any = 'retry';
+              // If there are additional nodes after retry, evaluate them as hint expression
+              if (pair.action.length > 1) {
+                const hintNodes = pair.action.slice(1);
+                const hintEnv = accumulatedEnv.createChild();
+                try {
+                  const hintResult = await evaluate(hintNodes as any, hintEnv, context);
+                  value = { value: 'retry', hint: hintResult.value };
+                } catch {
+                  // Fall back to plain retry on evaluation failure
+                  value = 'retry';
+                }
+              }
+              // In "first" mode, return immediately after first match
+              if (isFirstMode) {
+                return { value, env: accumulatedEnv };
+              }
+              lastMatchValue = value;
+              hasMatch = true;
+              // Merge nodes from accumulatedEnv childless (no child changes here)
+              continue;
+            }
+          }
+
           // Debug: What are we trying to evaluate?
           if (Array.isArray(pair.action) && pair.action[0]) {
             const firstAction = pair.action[0];
@@ -170,7 +199,7 @@ export async function evaluateWhenExpression(
           const actionEnv = accumulatedEnv.createChild();
           // FIXED: Removed isExpression: true to allow effects (like /show) to propagate
           // Effects should work the same everywhere - no special suppression in when expressions
-          const actionResult = await evaluate(pair.action, actionEnv, context);
+          const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
           
           let value = actionResult.value;
           
@@ -295,7 +324,7 @@ export async function evaluateWhenExpression(
         // Evaluate the action for none condition
         const actionEnv = accumulatedEnv.createChild();
         // FIXED: Removed isExpression: true to allow effects (like /show) to propagate
-        const actionResult = await evaluate(pair.action, actionEnv, context);
+        const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
         
         let value = actionResult.value;
         

@@ -309,7 +309,9 @@ WhenExpressionConditionList
 // Single condition => value pair for expressions
 WhenExpressionConditionPair
   = condition:WhenConditionExpression _ "=>" _ action:WhenExpressionAction {
-      return { condition, action: [action] };
+      // Allow actions to return either a single node or an array of nodes (e.g., retry with hint)
+      const act = Array.isArray(action) ? action : [action];
+      return { condition, action: act };
     }
 
 // Actions in when expressions - for /exe context, supports both side effects and return values

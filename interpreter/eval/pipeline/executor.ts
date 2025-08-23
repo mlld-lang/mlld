@@ -200,7 +200,8 @@ export class PipelineExecutor {
           console.error('[PipelineExecutor] Retry detected at stage', context.stage);
         }
         const from = this.parseRetryScope(output);
-        return { type: 'retry', reason: 'Stage requested retry', from };
+        const hint = this.parseRetryHint(output);
+        return { type: 'retry', reason: hint || 'Stage requested retry', from, hint } as StageResult;
       }
 
       // Empty output terminates pipeline
@@ -446,6 +447,13 @@ export class PipelineExecutor {
   private parseRetryScope(output: any): number | undefined {
     if (output && typeof output === 'object' && typeof output.from === 'number') {
       return output.from;
+    }
+    return undefined;
+  }
+
+  private parseRetryHint(output: any): any {
+    if (output && typeof output === 'object' && 'hint' in output) {
+      return (output as any).hint;
     }
     return undefined;
   }

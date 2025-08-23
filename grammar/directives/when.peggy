@@ -883,7 +883,8 @@ WhenOutputTarget
 
 // Implicit action patterns - these match the same syntax as explicit directives but without "/"
 WhenImplicitAction
-  = WhenImplicitVarAssignment
+  = WhenImplicitRetryAction
+  / WhenImplicitVarAssignment
   / WhenImplicitFunctionCall
   / WhenImplicitShowWithPipeline  // NEW: Support show with pipeline syntax
   / WhenImplicitRichContent
@@ -1163,4 +1164,17 @@ WhenImplicitExecDefinitionError
         "/exe",
         location()
       );
+    }
+// Implicit retry with optional hint value (string/object/function/variable)
+WhenImplicitRetryAction
+  = "retry" _ hint:VarRHSContent? {
+      const retryNode = helpers.createNode(NodeType.Literal, { 
+        value: 'retry', 
+        valueType: 'retry',
+        location: location() 
+      });
+      if (typeof hint !== 'undefined' && hint !== null) {
+        return [retryNode, hint];
+      }
+      return [retryNode];
     }
