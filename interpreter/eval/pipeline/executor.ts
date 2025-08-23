@@ -286,7 +286,7 @@ export class PipelineExecutor {
    * Process and validate command arguments
    */
   private async processArguments(args: any[], env: Environment): Promise<any[]> {
-    const evaluatedArgs = [];
+    const evaluatedArgs: any[] = [];
 
     for (const arg of args) {
       // Validate arguments - prevent explicit @input passing
@@ -303,11 +303,9 @@ export class PipelineExecutor {
       }
 
       // Evaluate the argument
-      if (typeof arg === 'string') {
-        evaluatedArgs.push({ type: 'Text', content: arg });
-      } else if (typeof arg === 'number' || typeof arg === 'boolean' || arg === null) {
-        // Handle primitive values (numbers, booleans, null)
-        evaluatedArgs.push({ type: 'Text', content: String(arg) });
+      if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean' || arg === null) {
+        // Preserve primitives as-is for proper parameter typing downstream
+        evaluatedArgs.push(arg);
       } else if (arg && typeof arg === 'object') {
         const evaluatedArg = await this.evaluateArgumentNode(arg, env);
         evaluatedArgs.push(evaluatedArg);
@@ -328,6 +326,7 @@ export class PipelineExecutor {
       }
 
       const { resolveVariable, ResolutionContext } = await import('../../utils/variable-resolution');
+      // Resolve variable in pipeline-input context to preserve wrapper types where appropriate
       let value = await resolveVariable(variable, env, ResolutionContext.PipelineInput);
 
       // Apply field access if present
@@ -337,29 +336,19 @@ export class PipelineExecutor {
         value = fieldResult;
       }
 
-      // Special handling for pipeline context - preserve as object
-      // Check if this is the pipeline context or a field access on it
-      const isPipelineContext = (arg.identifier === 'pipeline' || arg.identifier === 'p') 
-        && variable.metadata?.isPipelineContext;
-      
-      if (isPipelineContext && typeof value === 'object') {
-        // Return the raw object for pipeline context
-        if (process.env.MLLD_DEBUG === 'true') {
-          console.error('[PipelineExecutor] Returning raw pipeline context');
-        }
-        return value;
-      }
-
-      return {
-        type: 'Text',
-        content: typeof value === 'object' ? JSON.stringify(value) : String(value)
-      };
+      // Return raw value so executables receive correctly typed params (objects/arrays/strings)
+      return value;
     }
 
     // For other node types, interpolate
     const { interpolate } = await import('../../core/interpreter');
     const value = await interpolate([arg], env);
-    return { type: 'Text', content: value };
+    // Try to preserve JSON-like structures
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
   }
 
   /**
