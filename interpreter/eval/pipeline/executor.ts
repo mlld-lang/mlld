@@ -232,7 +232,7 @@ export class PipelineExecutor {
     command: PipelineCommand,
     input: string,
     stageEnv: Environment
-  ): Promise<string> {
+  ): Promise<string | { value: 'retry'; hint?: any; from?: number }> {
     // Special handling for synthetic __source__ stage
     if (command.rawIdentifier === '__source__') {
       const firstTime = !this.sourceExecutedOnce;
@@ -415,7 +415,7 @@ export class PipelineExecutor {
     args: any[],
     env: Environment,
     stdinInput?: string
-  ): Promise<string> {
+  ): Promise<string | { value: 'retry'; hint?: any; from?: number }> {
     const { executeCommandVariable } = await import('./command-execution');
     return await executeCommandVariable(commandVar, args, env, stdinInput);
   }

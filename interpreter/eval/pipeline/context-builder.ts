@@ -88,10 +88,6 @@ export async function createStageEnvironment(
   }
 
   // Set pipeline context in main environment
-  if (process.env.MLLD_DEBUG === 'true') {
-    // eslint-disable-next-line no-console
-    console.error('[CTX-BUILDER] hint typeof:', typeof normalizedHint, 'value:', normalizedHint);
-  }
   env.setPipelineContext({
     stage: userVisibleStage,
     totalStages: userVisibleTotalStages,

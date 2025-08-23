@@ -11,12 +11,13 @@ UnifiedVariable
   / UnifiedInterpolationVar
   / UnifiedAtVar
 
-// Unified special variables - simple lowercase names
+// Unified special variables - allow field access
 UnifiedSpecialVariable "Special reserved variable"
-  = "@" id:UnifiedSpecialVariableName {
+  = "@" id:UnifiedSpecialVariableName fields:AnyFieldAccess* {
       return helpers.createVariableReferenceNode('varIdentifier', {
         identifier: id,
-        isSpecial: true
+        isSpecial: true,
+        ...(fields.length > 0 ? { fields } : {})
       }, location());
     }
 
@@ -64,12 +65,13 @@ UnifiedInterpolationVar
   / UnifiedInterpolationSimpleVar
   / UnifiedInterpolationDataVar
 
-// {{now}}, {{base}}, {{input}} - special variables in templates
+// {{now}}, {{base}}, {{input}} - special variables in templates with field access
 UnifiedInterpolationSpecialVar
-  = "{{" _ id:UnifiedSpecialVariableName format:UnifiedVarFormat? _ "}}" {
+  = "{{" _ id:UnifiedSpecialVariableName fields:AnyFieldAccess* format:UnifiedVarFormat? _ "}}" {
       const node = helpers.createVariableReferenceNode('varInterpolation', {
         identifier: id,
         isSpecial: true,
+        ...(fields.length > 0 ? { fields } : {}),
         ...(format ? { format } : {})
       }, location());
       helpers.debug('CreateVAR', { rule: 'UnifiedInterpolationSpecialVar', node });

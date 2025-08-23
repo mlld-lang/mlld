@@ -1053,23 +1053,11 @@ export async function interpolate(
           const fieldName = (lastField && 'value' in lastField) ? String((lastField as any).value) : undefined;
           if (fieldName === 'hint') {
             if (typeof value === 'object' && value !== null) {
-              if (process.env.MLLD_DEBUG === 'true') {
-                // eslint-disable-next-line no-console
-                console.error('[INTERPOLATE] @ctx.hint before normalize:', {
-                  typeofValue: typeof value,
-                  isWrapper: 'wrapperType' in (value as any),
-                  hasAstType: 'type' in (value as any)
-                });
-              }
               if ('wrapperType' in (value as any) && Array.isArray((value as any).content)) {
                 value = await interpolate((value as any).content as any[], env, context);
               } else if ('type' in (value as any)) {
                 const { extractVariableValue } = await import('../utils/variable-resolution');
                 value = await extractVariableValue(value as any, env);
-              }
-              if (process.env.MLLD_DEBUG === 'true') {
-                // eslint-disable-next-line no-console
-                console.error('[INTERPOLATE] @ctx.hint after normalize:', { typeofValue: typeof value });
               }
             }
           }

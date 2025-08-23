@@ -68,7 +68,7 @@ export async function executeCommandVariable(
   args: any[],
   env: Environment,
   stdinInput?: string
-): Promise<string> {
+): Promise<string | { value: 'retry'; hint?: any; from?: number }> {
   // Built-in transformer handling
   if (commandVar && commandVar.metadata?.isBuiltinTransformer && commandVar.metadata?.transformerImplementation) {
     try {
@@ -304,8 +304,26 @@ export async function executeCommandVariable(
       const { evaluateWhenExpression } = await import('../when-expression');
       const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
       
-      // Return the result
-      return String(whenResult.value || '');
+      // Check if this is a retry signal
+      let resultValue = whenResult.value;
+      if (resultValue && typeof resultValue === 'object' && resultValue.value === 'retry') {
+        // This is a retry signal - return it as-is for the pipeline to handle
+        return resultValue;
+      }
+      
+      // Check if the result needs interpolation (wrapped template)
+      if (resultValue && typeof resultValue === 'object' && 'wrapperType' in resultValue && Array.isArray(resultValue.content)) {
+        // This is a wrapped template that needs interpolation
+        const { interpolate } = await import('../../core/interpreter');
+        try {
+          resultValue = await interpolate(resultValue.content, execEnv);
+        } catch (e) {
+          resultValue = String(resultValue);
+        }
+      }
+      
+      // Return the result as string
+      return String(resultValue || '');
     }
     
     // Regular JavaScript/code execution

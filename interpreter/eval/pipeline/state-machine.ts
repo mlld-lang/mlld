@@ -417,15 +417,6 @@ export class PipelineStateMachine {
     // Store hint on context for next execution
     if (hint !== undefined || reason) {
       const toStore = hint !== undefined ? hint : reason;
-      if (process.env.MLLD_DEBUG === 'true') {
-        // eslint-disable-next-line no-console
-        console.error('[StateMachine] Storing hint:', {
-          typeofHint: typeof toStore,
-          isWrapper: !!(toStore && typeof toStore === 'object' && 'wrapperType' in toStore),
-          hasAstType: !!(toStore && typeof toStore === 'object' && 'type' in toStore),
-          preview: typeof toStore === 'string' ? toStore : undefined
-        });
-      }
       context.currentHint = toStore as any;
       if (!context.hints) context.hints = [];
       context.hints.push(toStore as any);
