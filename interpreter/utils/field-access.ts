@@ -3,6 +3,7 @@
  */
 
 import { FieldAccessNode } from '@core/types/primitives';
+import { FieldAccessError } from '@core/errors';
 import { isLoadContentResult, isLoadContentResultURL, isLoadContentResultArray } from '@core/types/load-content';
 import type { Variable } from '@core/types/variable/VariableTypes';
 import { isVariable } from './variable-resolution';
@@ -103,7 +104,14 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       const name = String(fieldValue);
       
       if (typeof rawValue !== 'object' || rawValue === null) {
-        throw new Error(`Cannot access field "${name}" on non-object value`);
+        const chain = [...(options?.parentPath || []), name];
+        const msg = `Cannot access field "${name}" on non-object value (${typeof rawValue})`;
+        throw new FieldAccessError(msg, {
+          baseValue: rawValue,
+          fieldAccessChain: [],
+          failedAtIndex: Math.max(0, chain.length - 1),
+          failedKey: name
+        });
       }
       
       // Handle LoadContentResult objects - access metadata properties
@@ -126,7 +134,16 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           }
         }
         
-        throw new Error(`Field "${name}" not found in LoadContentResult`);
+        {
+          const chain = [...(options?.parentPath || []), name];
+          const msg = `Field "${name}" not found in LoadContentResult`;
+          throw new FieldAccessError(msg, {
+            baseValue: rawValue,
+            fieldAccessChain: [],
+            failedAtIndex: Math.max(0, chain.length - 1),
+            failedKey: name
+          });
+        }
       }
       
       // Handle LoadContentResultArray - special case for .content
@@ -142,7 +159,16 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = result;
           break;
         }
-        throw new Error(`Field "${name}" not found in LoadContentResultArray`);
+        {
+          const chain = [...(options?.parentPath || []), name];
+          const msg = `Field "${name}" not found in LoadContentResultArray`;
+          throw new FieldAccessError(msg, {
+            baseValue: rawValue,
+            fieldAccessChain: [],
+            failedAtIndex: Math.max(0, chain.length - 1),
+            failedKey: name
+          });
+        }
       }
       
       // Handle Variable objects with type 'object' and value field
@@ -154,7 +180,16 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             accessedValue = undefined;
             break;
           }
-          throw new Error(`Field "${name}" not found in object`);
+          {
+            const chain = [...(options?.parentPath || []), name];
+            const msg = `Field "${name}" not found in object`;
+            throw new FieldAccessError(msg, {
+              baseValue: actualValue,
+              fieldAccessChain: [],
+              failedAtIndex: Math.max(0, chain.length - 1),
+              failedKey: name
+            });
+          }
         }
         accessedValue = actualValue[name];
         break;
@@ -168,7 +203,16 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             accessedValue = undefined;
             break;
           }
-          throw new Error(`Field "${name}" not found in object`);
+          {
+            const chain = [...(options?.parentPath || []), name];
+            const msg = `Field "${name}" not found in object`;
+            throw new FieldAccessError(msg, {
+              baseValue: rawValue,
+              fieldAccessChain: [],
+              failedAtIndex: Math.max(0, chain.length - 1),
+              failedKey: name
+            });
+          }
         }
         accessedValue = rawValue.properties[name];
         break;
@@ -262,11 +306,27 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             break;
           }
         }
-        throw new Error(`Cannot access index ${index} on non-array value`);
+        {
+          const chain = [...(options?.parentPath || []), String(index)];
+          const msg = `Cannot access index ${index} on non-array value (${typeof rawValue})`;
+          throw new FieldAccessError(msg, {
+            baseValue: rawValue,
+            fieldAccessChain: [],
+            failedAtIndex: Math.max(0, chain.length - 1),
+            failedKey: index
+          });
+        }
       }
       
       if (index < 0 || index >= rawValue.length) {
-        throw new Error(`Array index ${index} out of bounds (array length: ${rawValue.length})`);
+        const chain = [...(options?.parentPath || []), String(index)];
+        const msg = `Array index ${index} out of bounds (length: ${rawValue.length})`;
+        throw new FieldAccessError(msg, {
+          baseValue: rawValue,
+          fieldAccessChain: [],
+          failedAtIndex: Math.max(0, chain.length - 1),
+          failedKey: index
+        });
       }
       
       accessedValue = rawValue[index];
@@ -282,7 +342,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       // This allows the handler to properly extract and preserve metadata
       const env = options?.env;
       if (!env && field.type === 'arrayFilter') {
-        throw new Error('Environment required for array filter operations');
+        throw new FieldAccessError('Environment required for array filter operations', {
+          baseValue: value,
+          fieldAccessChain: options?.parentPath || [],
+          failedAtIndex: options?.parentPath ? options.parentPath.length : 0,
+          failedKey: 'arrayFilter'
+        });
       }
       
       accessedValue = await arrayOps.handle(value, field, env!);
@@ -290,7 +355,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
     }
     
     default:
-      throw new Error(`Unknown field access type: ${(field as any).type}`);
+      throw new FieldAccessError(`Unknown field access type: ${(field as any).type}`, {
+        baseValue: value,
+        fieldAccessChain: options?.parentPath || [],
+        failedAtIndex: options?.parentPath ? options.parentPath.length : 0,
+        failedKey: String((field as any).type || 'unknown')
+      });
   }
   
   // Check if we need to return context-preserving result
@@ -384,4 +454,3 @@ export function createFieldAccessVariable(
     }
   } as Variable;
 }
-

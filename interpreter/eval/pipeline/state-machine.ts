@@ -298,13 +298,13 @@ export class PipelineStateMachine {
     // Special case: Stage 0 self-retry (synthetic source retrying itself)
     if (stage === 0 && targetStage === 0) {
       if (!this.isStage0Retryable) {
-        return this.handleAbort('Stage 0 cannot retry: Input is not a function');
+        return this.handleAbort('Stage 0 is not retryable: input is not a function. Make the source a function to enable retries.');
       }
       
       // Use simplified retry tracking for stage 0
       const globalRetries = this.state.globalStageRetryCount.get(0) || 0;
       if (globalRetries >= this.maxGlobalRetriesPerStage) {
-        return this.handleAbort(`Stage 0 exceeded global retry limit (${this.maxGlobalRetriesPerStage})`);
+        return this.handleAbort(`Stage 0 exceeded global retry limit (${this.maxGlobalRetriesPerStage} attempts).`);
       }
       
       // Increment global count
@@ -336,7 +336,7 @@ export class PipelineStateMachine {
     
     // Check if stage 1 is trying to retry non-retryable stage 0
     if (targetStage === 0 && !this.isStage0Retryable) {
-      return this.handleAbort('Cannot retry stage 0: Input is not a function');
+      return this.handleAbort('Cannot retry stage 0: input is not a function. Make the source an executable to enable retries.');
     }
     
     // Check if we can reuse existing context (same retry pattern)
@@ -390,8 +390,9 @@ export class PipelineStateMachine {
     
     // Check retry limits
     if (context.attemptNumber > this.maxRetriesPerContext) {
+      const attempts = context.attemptNumber - 1;
       return this.handleAbort(
-        `Stage ${stage} exceeded retry limit (${this.maxRetriesPerContext} attempts)`
+        `Stage ${stage} exceeded retry limit for stage ${targetStage} (${attempts} attempts; max ${this.maxRetriesPerContext}).`
       );
     }
     
@@ -399,7 +400,7 @@ export class PipelineStateMachine {
     const globalRetries = this.state.globalStageRetryCount.get(targetStage) || 0;
     if (globalRetries >= this.maxGlobalRetriesPerStage) {
       return this.handleAbort(
-        `Stage ${targetStage} exceeded global retry limit (${this.maxGlobalRetriesPerStage})`
+        `Stage ${targetStage} exceeded global retry limit (${this.maxGlobalRetriesPerStage} attempts).`
       );
     }
     

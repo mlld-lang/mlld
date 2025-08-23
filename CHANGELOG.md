@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **LoadContentResult metadata preservation**: Auto-unwrap shelf preserves metadata across JS transforms
   - Files loaded with `<file.md>` retain their metadata properties after JS transformations
+  - #362: field access for special variables (@input, @ctx)
 
 ### Internal
 - **AST-based `@base` handling**: Now properly resolved for file I/O and show paths
