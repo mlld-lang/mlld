@@ -933,7 +933,7 @@ export async function evaluateShow(
   
   // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
   if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[SHOW] Emitting effect:', { content: content.substring(0, 50), context });
+    console.error('[SHOW] Emitting effect:', { typeofContent: typeof content, preview: content.substring(0, 80), context });
   }
   env.emitEffect('both', content, { source: directive.location });
   

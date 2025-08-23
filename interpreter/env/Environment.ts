@@ -899,6 +899,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       return;
     }
     
+    // Dev guard: surface non-string content if any caller violated the contract
+    if (process.env.MLLD_DEBUG === 'true' && typeof (content as any) !== 'string') {
+      // eslint-disable-next-line no-console
+      console.error('[EMIT-EFFECT] Non-string content detected:', {
+        type,
+        typeofContent: typeof (content as any),
+        keys: (content && typeof (content as any) === 'object') ? Object.keys(content as any) : undefined,
+      });
+    }
     // Always emit effects (handler decides whether to actually output)
     this.effectHandler.handleEffect({
       type,

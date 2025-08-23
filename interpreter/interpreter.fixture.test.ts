@@ -52,13 +52,8 @@ export const skipTests: Record<string, string> = {
   'var-now-lowercase-basic': 'Requires @time module to be installed',
   'now-enhanced-formats': 'Requires @time module to be installed',
   'import-now-enhanced-formats': 'Requires @time module to be installed',
-  // Staged hint fixtures — enable after doc emission tweak in when-expr
-  // Staged hint fixtures — keep skipped until when-expression normalization lands
-  'pipeline-retry-hint-reception': 'Pending when-expression doc suppression polish',
-  'pipeline-retry-hint-interpolated': 'Pending when-expression doc suppression polish',
-  'pipeline-retry-hint-object': 'Pending when-expression doc suppression polish',
-  'pipeline-retry-hint-function-value': 'Pending when-expression doc suppression polish',
-  'pipeline-retry-hint-object-functions': 'Pending /exe content form in function + when-expr doc suppression'
+  // Keep this one skipped until its grammar is aligned
+  'pipeline-retry-hint-object-functions': 'Pending grammar alignment for object-functions hint fixture'
 };
 
 // Validate semantic token coverage for AST

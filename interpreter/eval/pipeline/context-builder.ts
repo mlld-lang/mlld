@@ -47,7 +47,51 @@ export async function createStageEnvironment(
     ? context.totalStages - 1 
     : context.totalStages;
     
+  // Normalize hint value: ensure strings are plain strings and objects are plain objects
+  let normalizedHint: any = context.currentHint;
+  try {
+    if (normalizedHint && typeof normalizedHint === 'object') {
+      // Case 1: Template wrapper → interpolate to string
+      if ('wrapperType' in normalizedHint && Array.isArray((normalizedHint as any).content)) {
+        const { interpolate } = await import('../../core/interpreter');
+        normalizedHint = await interpolate((normalizedHint as any).content, env);
+      }
+      // Case 2: AST/Variable → extract raw value
+      else if ('type' in normalizedHint) {
+        const { extractVariableValue } = await import('../../utils/variable-resolution');
+        normalizedHint = await extractVariableValue(normalizedHint as any, env);
+      }
+
+      // If it's still an object, only keep it if it's a plain object
+      if (normalizedHint && typeof normalizedHint === 'object') {
+        const isPlain = Object.prototype.toString.call(normalizedHint) === '[object Object]'
+          && !('wrapperType' in (normalizedHint as any))
+          && !('type' in (normalizedHint as any))
+          && !('nodeId' in (normalizedHint as any));
+        if (!isPlain) {
+          // Best-effort stringify to avoid leaking wrappers
+          try {
+            const { JSONFormatter } = await import('../../core/json-formatter');
+            normalizedHint = JSONFormatter.stringify(normalizedHint);
+          } catch {
+            normalizedHint = String(normalizedHint);
+          }
+        }
+      }
+    }
+    // Non-object, non-string → coerce to string
+    if (normalizedHint !== undefined && normalizedHint !== null && typeof normalizedHint !== 'string' && typeof normalizedHint !== 'object') {
+      normalizedHint = String(normalizedHint);
+    }
+  } catch {
+    // Best-effort; keep original on failure
+  }
+
   // Set pipeline context in main environment
+  if (process.env.MLLD_DEBUG === 'true') {
+    // eslint-disable-next-line no-console
+    console.error('[CTX-BUILDER] hint typeof:', typeof normalizedHint, 'value:', normalizedHint);
+  }
   env.setPipelineContext({
     stage: userVisibleStage,
     totalStages: userVisibleTotalStages,
@@ -60,7 +104,7 @@ export async function createStageEnvironment(
     // Preserve attempts history for @ctx.tries
     attemptHistory: context.history,
     // Provide hint info for ambient @ctx.hint
-    hint: context.currentHint,
+    hint: normalizedHint,
     hintHistory: context.hintHistory || []
   });
 

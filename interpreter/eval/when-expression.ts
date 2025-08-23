@@ -164,8 +164,33 @@ export async function evaluateWhenExpression(
                 const hintNodes = pair.action.slice(1);
                 const hintEnv = accumulatedEnv.createChild();
                 try {
-                  const hintResult = await evaluate(hintNodes as any, hintEnv, context);
-                  value = { value: 'retry', hint: hintResult.value };
+                  let hintValue: any;
+                  const firstNode: any = hintNodes[0];
+                  if (firstNode && typeof firstNode === 'object' && 'type' in firstNode && firstNode.type === 'object') {
+                    // Object literal hint → evaluate as data value to preserve object
+                    const { evaluateDataValue } = await import('../eval/data-value-evaluator');
+                    hintValue = await evaluateDataValue(firstNode, hintEnv);
+                  } else {
+                    // String/function/exec/template hint → interpolate to plain string
+                    hintValue = await interpolate(hintNodes as any, hintEnv);
+                    if (typeof hintValue !== 'string') {
+                      // Defensive: ensure non-object hints are plain strings
+                      try {
+                        hintValue = String(hintValue);
+                      } catch {
+                        hintValue = '';
+                      }
+                    }
+                  }
+                  value = { value: 'retry', hint: hintValue };
+                  if (process.env.MLLD_DEBUG === 'true') {
+                    // eslint-disable-next-line no-console
+                    console.error('[WHEN-EXPR] Built retry with hint:', {
+                      hintType: typeof hintValue,
+                      isWrapper: !!(hintValue && typeof hintValue === 'object' && 'wrapperType' in hintValue),
+                      hasAstType: !!(hintValue && typeof hintValue === 'object' && 'type' in hintValue),
+                    });
+                  }
                 } catch {
                   // Fall back to plain retry on evaluation failure
                   value = 'retry';
@@ -202,6 +227,19 @@ export async function evaluateWhenExpression(
           const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
           
           let value = actionResult.value;
+          
+          // Debug what we got from evaluate
+          if (process.env.MLLD_DEBUG === 'true') {
+            console.error('[WHEN-EXPR] Action evaluated to:', {
+              valueType: typeof value,
+              isObject: value && typeof value === 'object',
+              hasWrapperType: value && typeof value === 'object' && 'wrapperType' in value,
+              wrapperType: value && typeof value === 'object' && value.wrapperType,
+              hasContent: value && typeof value === 'object' && 'content' in value,
+              contentIsArray: value && typeof value === 'object' && Array.isArray(value.content),
+              preview: typeof value === 'string' ? value.substring(0, 50) : JSON.stringify(value).substring(0, 100)
+            });
+          }
 
           // Normalize wrapped string nodes (quotes/backticks) into plain strings
           if (value && typeof value === 'object' && 'wrapperType' in value && Array.isArray((value as any).content)) {
@@ -225,6 +263,28 @@ export async function evaluateWhenExpression(
             }
           }
           
+          // Coerce non-string values to strings for expression returns
+          if (typeof value !== 'string') {
+            try {
+              if (value && typeof value === 'object') {
+                // Unwrap template-like values
+                if ('wrapperType' in (value as any) && Array.isArray((value as any).content)) {
+                  value = await interpolate((value as any).content, actionEnv);
+                } else if ('type' in (value as any)) {
+                  const { extractVariableValue } = await import('../utils/variable-resolution');
+                  const extracted = await extractVariableValue(value as any, actionEnv);
+                  value = typeof extracted === 'string' ? extracted : JSON.stringify(extracted);
+                } else {
+                  value = JSON.stringify(value);
+                }
+              } else {
+                value = String(value ?? '');
+              }
+            } catch {
+              value = String(value ?? '');
+            }
+          }
+
           // Debug: What did we get back?
           // console.error('🔍 WHEN-EXPRESSION action result:', {
           //   valueType: typeof value,
@@ -277,6 +337,16 @@ export async function evaluateWhenExpression(
           
           // In "first" mode, return immediately after first match
           if (isFirstMode) {
+            if (process.env.MLLD_DEBUG === 'true') {
+              // eslint-disable-next-line no-console
+              console.error('[WHEN-EXPR] Returning first-match value:', {
+                valueType: typeof value,
+                isObject: typeof value === 'object',
+                hasWrapper: !!(value && typeof value === 'object' && 'wrapperType' in (value as any)),
+                hasAstType: !!(value && typeof value === 'object' && 'type' in (value as any)),
+                preview: typeof value === 'string' ? (value as string).slice(0, 80) : undefined
+              });
+            }
             return { value, env: actionEnv };
           }
           

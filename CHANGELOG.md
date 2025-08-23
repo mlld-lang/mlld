@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Produces identical output to `/output to stdout` with cleaner syntax
   - Grammar implementation follows DRY principles using existing OutputSource patterns
 
+- **Pipeline inline effects**: Builtins `| log`, `| output`, and `| show` work as inline effects
+  - Attach to preceding functional stage, re-run on each retry attempt
+  - `log` outputs to stderr, `output` to files/streams/env, `show` to document
+  - `output to file` resolves `@base/...` and relative paths from project root
+
+- **Pipeline context variables**: New `@ctx` and `@p`/`@pipeline` variables in pipelines
+  - `@ctx`: Lightweight per-stage context with `try`, `tries`, `stage`, `input`, `hint`, `lastOutput`, `isPipeline`
+  - `@p`/`@pipeline`: Array-like outputs with positive/negative indexing, `@p[-1]` gets latest output
+  - `@p.retries.all` provides full retry history for audit trails
+
+- **Retry hints**: The `retry` action can now carry hints to the next attempt
+  - String hints: `retry "need more detail"`
+  - Object hints: `retry { temperature: 0.8 }`
+  - Access via `@ctx.hint` in the retried stage
+
 - **Effect architecture**: Complete overhaul of how side effects (show, output, log directives) are handled
   - New EffectHandler system for managing output operations
   - Immediate effect execution in for loops and when blocks
@@ -21,7 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Grammar ordering for `/when` bare blocks**: Fixed PEG parser ordering issue preventing bare `/when [...]` blocks from working
-  - Swapped WhenBareBlockForm and WhenBlockForm rule order to ensure correct parsing
   - `/when [ condition => action ]` now works correctly with all action types including `log`
   
 - **`/show` directive in for loops**: Fixed `/show` not working properly in for loops
@@ -30,11 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Field access in `/output` directive grammar**: Fixed field access bug when outputting object fields
   - `/output @data.field to "file.txt"` now correctly outputs just the field value
 
+- **LoadContentResult metadata preservation**: Auto-unwrap shelf preserves metadata across JS transforms
+  - Files loaded with `<file.md>` retain their metadata properties after JS transformations
+
 ### Internal
-- **Test infrastructure**: Added comprehensive test coverage for effects and immediate output
-  - New test helper: `tests/helpers/effect-test-helper.ts` for testing effect ordering
-  - Test directory: `tests/cases/valid/effects/` with 10 new test scenarios
-  - New test file: `tests/immediate-effects.test.ts` for immediate effect behavior
+- **AST-based `@base` handling**: Now properly resolved for file I/O and show paths
+- **Stage numbering**: Stages are 1-indexed and count only functional transforms (builtins don't create stages)
 
 ## [2.0.0-rc39]
 ### Added

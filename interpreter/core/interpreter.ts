@@ -1045,6 +1045,38 @@ export async function interpolate(
           if (value === undefined) break;
         }
       }
+
+      // Special-case: Normalize @ctx.hint to a string for interpolation when it carries wrapper/variable forms
+      try {
+        if (node.identifier === 'ctx' && Array.isArray(node.fields) && node.fields.length > 0) {
+          const lastField = node.fields[node.fields.length - 1];
+          const fieldName = (lastField && 'value' in lastField) ? String((lastField as any).value) : undefined;
+          if (fieldName === 'hint') {
+            if (typeof value === 'object' && value !== null) {
+              if (process.env.MLLD_DEBUG === 'true') {
+                // eslint-disable-next-line no-console
+                console.error('[INTERPOLATE] @ctx.hint before normalize:', {
+                  typeofValue: typeof value,
+                  isWrapper: 'wrapperType' in (value as any),
+                  hasAstType: 'type' in (value as any)
+                });
+              }
+              if ('wrapperType' in (value as any) && Array.isArray((value as any).content)) {
+                value = await interpolate((value as any).content as any[], env, context);
+              } else if ('type' in (value as any)) {
+                const { extractVariableValue } = await import('../utils/variable-resolution');
+                value = await extractVariableValue(value as any, env);
+              }
+              if (process.env.MLLD_DEBUG === 'true') {
+                // eslint-disable-next-line no-console
+                console.error('[INTERPOLATE] @ctx.hint after normalize:', { typeofValue: typeof value });
+              }
+            }
+          }
+        }
+      } catch {
+        // Non-fatal normalization failure; proceed with generic conversion
+      }
       
       // Apply condensed pipes if present
       if (node.pipes && node.pipes.length > 0) {
@@ -1223,7 +1255,13 @@ export async function interpolate(
           }
         }
       } else {
-        stringValue = String(value);
+        // Generic fallback
+        if (typeof value === 'object' && value !== null) {
+          const { JSONFormatter } = await import('./json-formatter');
+          stringValue = JSONFormatter.stringify(value);
+        } else {
+          stringValue = String(value);
+        }
       }
       
       
