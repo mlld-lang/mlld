@@ -39,6 +39,7 @@ import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
+import { USE_AMBIENT_CTX } from '@core/feature-flags';
 
 
 /**
@@ -307,7 +308,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getSecurityManager: () => this.securityManager,
       getBasePath: () => this.getProjectRoot(),
       getFileDirectory: () => this.getFileDirectory(),
-      getExecutionDirectory: () => this.getExecutionDirectory()
+      getExecutionDirectory: () => this.getExecutionDirectory(),
+      getPipelineContext: () => this.getPipelineContext()
     };
     this.variableManager = new VariableManager(variableManagerDependencies);
     
@@ -1209,8 +1211,60 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       metadata = undefined;
     }
     
+    // Optionally inject ambient ctx for JS/Node execution only
+    let finalParams = params || {};
+    const lang = (language || '').toLowerCase();
+    const shouldInjectCtx = USE_AMBIENT_CTX && (lang === 'js' || lang === 'javascript' || lang === 'node' || lang === 'nodejs');
+    if (shouldInjectCtx) {
+      try {
+        // Prefer explicit @test_ctx override for deterministic tests
+        const testCtxVar = this.getVariable('test_ctx');
+        const pctx = this.getPipelineContext();
+        const ctxValue = testCtxVar ? (testCtxVar.value as any) : (pctx ? {
+          try: (pctx as any).attemptCount || 1,
+          tries: (pctx as any).attemptHistory || [],
+          stage: typeof pctx.stage === 'number' ? pctx.stage : 0,
+          isPipeline: true,
+          hint: null,
+          // Provide last output from previous stage attempts when available
+          lastOutput: Array.isArray((pctx as any).previousOutputs) && (pctx as any).previousOutputs.length > 0
+            ? (pctx as any).previousOutputs[(pctx as any).previousOutputs.length - 1]
+            : null,
+          // Auto-parse JSON-looking inputs so ctx.input.<field> works
+          input: (() => {
+            const raw = (pctx as any).input;
+            if (typeof raw === 'string') {
+              const trimmed = raw.trim();
+              if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+                  (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+                try {
+                  return JSON.parse(trimmed);
+                } catch {
+                  // ignore parse errors; keep raw
+                }
+              }
+            }
+            return raw;
+          })()
+        } : {
+          try: 1,
+          tries: [],
+          stage: 0,
+          isPipeline: false,
+          hint: null,
+          lastOutput: null,
+          input: null
+        });
+        if (!('ctx' in finalParams)) {
+          finalParams = { ...finalParams, ctx: Object.freeze(ctxValue) };
+        }
+      } catch {
+        // Best-effort; ignore ctx injection errors
+      }
+    }
+
     // Delegate to command executor factory
-    return this.commandExecutorFactory.executeCode(code, language, params, metadata as Record<string, any> | undefined, this.outputOptions, context);
+    return this.commandExecutorFactory.executeCode(code, language, finalParams, metadata as Record<string, any> | undefined, this.outputOptions, context);
   }
 
   

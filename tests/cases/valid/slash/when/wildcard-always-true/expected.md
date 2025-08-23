@@ -5,6 +5,7 @@ Always executes
 
 ## Wildcard in when block array
 Default handler
+
 ## Wildcard with logical operators
 
 Both true

@@ -190,8 +190,15 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     }
     
     // Use the path module that's already imported
+    // Absolute paths are allowed only within the project root
     if (path.isAbsolute(inputPath)) {
-      return inputPath;
+      const absolutePath = path.resolve(inputPath);
+      const projectRoot = path.resolve(this.dependencies.pathContext.projectRoot);
+      const rootWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
+      if (!absolutePath.startsWith(rootWithSep)) {
+        throw new Error(`Access denied: path is outside project root (${inputPath})`);
+      }
+      return absolutePath;
     }
     
     // Check if fuzzy matching is enabled for local files
@@ -273,8 +280,14 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       }
     }
     
-    // Fall back to standard path resolution, but check if the file exists
+    // Fall back to standard path resolution, but check against project root and existence
     const resolvedPath = path.resolve(this.dependencies.pathContext.fileDirectory, inputPath);
+    // Enforce project root boundary
+    const projectRoot = path.resolve(this.dependencies.pathContext.projectRoot);
+    const rootWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
+    if (!resolvedPath.startsWith(rootWithSep)) {
+      throw new Error(`Access denied: path is outside project root (${inputPath})`);
+    }
     
     // If fuzzy matching is enabled but didn't find anything, check if the file exists
     // If not, throw an error with better messaging

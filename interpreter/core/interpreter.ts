@@ -399,7 +399,9 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
                          location.end?.offset === 0;
     if (hasZeroOffset &&
         node.valueType !== 'commandRef' &&
-        node.valueType !== 'varIdentifier') {
+        node.valueType !== 'varIdentifier' &&
+        // Allow ambient @ctx to resolve even if parser produced zero offsets
+        node.identifier !== 'ctx') {
       // Skip orphaned parameter references from grammar bug
       // Note: varIdentifier is excluded because when conditions create these
       // See issue #217 - this workaround prevents when conditions from working
@@ -1433,4 +1435,3 @@ async function processFileFields(
   // Convert to string only if no pipes were applied
   return typeof result === 'string' ? result : JSON.stringify(result);
 }
-

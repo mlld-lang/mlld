@@ -4,6 +4,8 @@ import * as path from 'path';
 
 // Set test environment variable
 process.env.MLLD_TEST = '1';
+// Provide an env var used by import-env tests
+process.env.MLLD_TEST_ENV = process.env.MLLD_TEST_ENV || 'test-env';
 
 // Suppress llmxml logging during tests
 process.env.LOG_LEVEL = 'error';

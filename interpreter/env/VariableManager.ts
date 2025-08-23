@@ -12,6 +12,7 @@ import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import type { CacheManager } from './CacheManager';
 import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
+import { USE_AMBIENT_CTX } from '@core/feature-flags';
 
 export interface IVariableManager {
   // Core variable operations
@@ -43,6 +44,17 @@ export interface VariableManagerDependencies {
   getPathService(): any; // Will be typed more specifically when needed
   getSecurityManager(): any; // Will be typed more specifically when needed
   getBasePath(): string;
+  // Provide access to current pipeline context for ambient @ctx
+  getPipelineContext?(): {
+    stage: number;
+    totalStages: number;
+    currentCommand: string;
+    input: any;
+    previousOutputs: string[];
+    format?: string;
+    attemptCount?: number;
+    attemptHistory?: any[];
+  } | undefined;
 }
 
 export interface VariableManagerContext {
@@ -61,6 +73,10 @@ export class VariableManager implements IVariableManager {
   }
   
   setVariable(name: string, variable: Variable): void {
+    // Prevent @ctx from being redefined by user code
+    if (name === 'ctx') {
+      throw new Error(`Cannot create variable '@ctx': this name is reserved for the execution context`);
+    }
     // Check if the name is reserved (but allow system variables to be set)
     const reservedNames = this.deps.getReservedNames();
     if (reservedNames.has(name) && !variable.metadata?.isReserved && !variable.metadata?.isSystem) {
@@ -148,6 +164,66 @@ export class VariableManager implements IVariableManager {
   }
   
   getVariable(name: string): Variable | undefined {
+    // Ambient, read-only @ctx support (calculated on access)
+    if (name === 'ctx') {
+      if (!USE_AMBIENT_CTX) {
+        return undefined;
+      }
+      // Allow tests to override via @test_ctx
+      const testCtxVar = this.variables.get('test_ctx') || this.deps.getParent()?.getVariable('test_ctx');
+      if (testCtxVar) {
+        return createObjectVariable('ctx', testCtxVar.value, false, undefined, {
+          isReserved: true,
+          isReadOnly: true,
+          definedAt: { line: 0, column: 0, filePath: '<context>' }
+        });
+      }
+
+      const pctx = this.deps.getPipelineContext?.();
+      // Build minimal ctx per spec; defaults when no pipeline context
+      const ctxValue = pctx ? {
+        try: (pctx as any).attemptCount || 1,
+        tries: (pctx as any).attemptHistory || [],
+        stage: typeof pctx.stage === 'number' ? pctx.stage : 0,
+        isPipeline: true,
+        hint: null,
+        // Provide last output from previous stage attempts when available
+        lastOutput: Array.isArray((pctx as any).previousOutputs) && (pctx as any).previousOutputs.length > 0
+          ? (pctx as any).previousOutputs[(pctx as any).previousOutputs.length - 1]
+          : null,
+        // Auto-parse JSON-looking inputs so @ctx.input.<field> works in when-expressions
+        input: (() => {
+          const raw = (pctx as any).input;
+          if (typeof raw === 'string') {
+            const trimmed = raw.trim();
+            if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+                (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+              try {
+                return JSON.parse(trimmed);
+              } catch {
+                // fall through to return raw if parsing fails
+              }
+            }
+          }
+          return raw;
+        })()
+      } : {
+        try: 1,
+        tries: [],
+        stage: 0,
+        isPipeline: false,
+        hint: null,
+        lastOutput: null,
+        input: null
+      };
+
+      return createObjectVariable('ctx', ctxValue, false, undefined, {
+        isReserved: true,
+        isReadOnly: true,
+        definedAt: { line: 0, column: 0, filePath: '<context>' }
+      });
+    }
+
     // FAST PATH: Check local variables first (most common case)
     let variable = this.variables.get(name);
     

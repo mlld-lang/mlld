@@ -55,7 +55,9 @@ export async function createStageEnvironment(
     input: input,
     previousOutputs: context.previousOutputs,
     format: format,
-    attemptCount: context.attempt,
+    // Use context-local attempt for ambient @ctx.try
+    attemptCount: context.contextAttempt,
+    // Preserve attempts history for @ctx.tries
     attemptHistory: context.history
   });
 

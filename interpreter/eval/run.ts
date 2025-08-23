@@ -14,6 +14,7 @@ import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import { ENABLE_RUN_STAGE0_RETRY } from '@core/feature-flags';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -96,6 +97,8 @@ export async function evaluateRun(
   callStack: string[] = []
 ): Promise<EvalResult> {
   let output = '';
+  // Track source node to optionally enable stage-0 retry
+  let sourceNodeForPipeline: any | undefined;
   
   // Create execution context with source information
   const executionContext = {
@@ -578,6 +581,7 @@ export async function evaluateRun(
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execInvocation, env);
     output = String(result.value);
+    sourceNodeForPipeline = execInvocation;
     
   } else if (directive.subtype === 'runExecReference') {
     // Handle exec reference nodes in run directive (from @when actions)
@@ -590,6 +594,7 @@ export async function evaluateRun(
     const { evaluateExecInvocation } = await import('./exec-invocation');
     const result = await evaluateExecInvocation(execRef, env);
     output = String(result.value);
+    sourceNodeForPipeline = execRef;
     
   } else {
     throw new Error(`Unsupported run subtype: ${directive.subtype}`);
@@ -608,13 +613,17 @@ export async function evaluateRun(
     if (withClause.pipeline && withClause.pipeline.length > 0) {
       // Use unified pipeline processor
       const { processPipeline } = await import('./pipeline/unified-processor');
+      const enableStage0 = ENABLE_RUN_STAGE0_RETRY && !!sourceNodeForPipeline;
+      const valueForPipeline = enableStage0
+        ? { value: output, metadata: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
+        : output;
       output = await processPipeline({
-        value: output,
+        value: valueForPipeline,
         env,
         directive,
         pipeline: withClause.pipeline,
         format: withClause.format as string | undefined,
-        isRetryable: false, // run command output is not directly retryable
+        isRetryable: enableStage0,
         location: directive.location
       });
     }

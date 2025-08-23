@@ -1121,6 +1121,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           
           // For error fixtures, expect interpretation to fail and validate error format
           let caughtError: any = null;
+          // Enable ambient ctx only for fixtures that reference @ctx/ctx
+          const __prevCtx = process.env.MLLD_CTX;
+          const __needsAmbientCtx = typeof fixture.input === 'string' && (
+            fixture.input.includes('@ctx.') || fixture.input.includes('ctx.try') || fixture.input.includes('ctx.stage') || fixture.input.includes('ctx.input')
+          );
+          if (__needsAmbientCtx) {
+            process.env.MLLD_CTX = 'true';
+          }
           try {
             await interpret(fixture.input, {
               fileSystem,
@@ -1136,6 +1144,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           } catch (error) {
             caughtError = error;
             expect(error).toBeDefined();
+            // Restore env flag early in error case
+            if (__prevCtx === undefined) delete process.env.MLLD_CTX; else process.env.MLLD_CTX = __prevCtx;
             
             // Compare actual error message to expected pattern
             if (fixture.expectedError && error.message) {
@@ -1287,6 +1297,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             }
           }
           
+          // Enable ambient ctx only for fixtures that reference @ctx/ctx
+          const __prevCtx2 = process.env.MLLD_CTX;
+          const __needsAmbientCtx2 = typeof fixture.input === 'string' && (
+            fixture.input.includes('@ctx.') || fixture.input.includes('ctx.try') || fixture.input.includes('ctx.stage') || fixture.input.includes('ctx.input')
+          );
+          if (__needsAmbientCtx2) {
+            process.env.MLLD_CTX = 'true';
+          }
           // For valid fixtures, expect successful interpretation
           const result = await interpret(fixture.input, {
             fileSystem,
@@ -1300,6 +1318,8 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               showProgress: false // Disable progress output in tests
             }
           });
+          // Restore env flag
+          if (__prevCtx2 === undefined) delete process.env.MLLD_CTX; else process.env.MLLD_CTX = __prevCtx2;
           
           if (isValidFixture && !isSmokeTest) {
             // Normalize output (trim trailing whitespace/newlines)
