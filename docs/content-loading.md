@@ -118,7 +118,7 @@ Access YAML frontmatter from markdown files:
 /show @post.fm.tags                     >> Array of tags
 
 >> Conditional processing
-/when @post.fm.published => /show @post.content
+/when @post.fm.published => show @post.content
 ```
 
 ## json file handling
@@ -257,10 +257,10 @@ Generated on @now
 ```mlld
 >> Pattern returns empty array if no matches
 /var @config = <config.json>
-/when @config => /show "Config loaded"
+/when @config => show "Config loaded"
 
 /var @optional = <optional-file.txt>
-/when !@optional => /show "Optional file not found"
+/when !@optional => show "Optional file not found"
 ```
 
 ### combine multiple sources

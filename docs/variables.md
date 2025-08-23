@@ -91,16 +91,34 @@ Example:
 
 ### Array Access
 
-When working with arrays, use dot notation to access array elements by index:
+When working with arrays, use dot or bracket notation to access elements by index:
 
 ```mlld
 /var @items = ["apple", "banana", "cherry"]
-/var @first = "First item: @items.0"               # @ interpolation with dot notation
-/var @second = ::Second item: {{items.1}}::        # {{}} in templates
-/show "Third item: @items.2"                         # Direct reference
+/var @first = "First item: @items.0"               # Dot notation
+/show "Second item: @items[1]"                      # Bracket notation
 ```
 
-Note: Only dot notation is supported for array access. Bracket notation (`items[0]`) is not supported.
+### Array Slices
+
+Use bracket notation to extract subsets of an array:
+
+```mlld
+/var @numbers = [1, 2, 3, 4, 5]
+/show @numbers[1:3]   # [2, 3]
+/show @numbers[-2:]   # [4, 5]
+/show @numbers[:2]    # [1, 2]
+```
+
+### Escaping Dots
+
+Use `\.` to include a literal dot without triggering field access:
+
+```mlld
+/output @content to "file-@num\.txt"
+```
+
+This works in double quotes, templates, and other string contexts.
 
 ## Expressions and Operators
 

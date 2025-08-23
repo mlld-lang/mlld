@@ -15,8 +15,10 @@ Directives are the core building blocks of mlld. They always start with a `/` sy
 - [/exe](./exe.md) - Create reusable commands, templates, and functions
 - [/import](./import.md) - Import variables from other mlld files or modules
 - [/output](./output.md) - Write content to files, streams, or environment
+- [/log](./log.md) - Write messages to standard output
+- [/for](./for.md) - Iterate over collections
 - [/when](./when.md) - Conditional logic and routing
-- [/path](./path.md) - Define filesystem path variables 
+- [/path](./path.md) - Define filesystem path variables
 
 ## Directive Placement Rules
 

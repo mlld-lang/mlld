@@ -107,17 +107,17 @@ mlld can route data and actions based on conditions using built-in operators:
 /var @priority = @severity > 8 ? "high" : "normal"
 
 # Route actions based on conditions
-/when @request first: [
+/when first [
   @method == "GET" && @path == "/api/users" => @listUsers()
   @method == "POST" && @path == "/api/users" => @createUser()
   @method == "DELETE" => @deleteResource()
 ]
 
 # Conditional value assignment
-/var @config = when: [
+/var @config = when [
   @env == "prod" => @prodSettings
   @env == "staging" => @stagingSettings
-  true => @devSettings
+  none => @devSettings
 ]
 ```
 

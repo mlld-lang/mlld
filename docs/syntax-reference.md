@@ -23,6 +23,7 @@ Directives must appear at start of line (no indentation) and use the `/` prefix:
 /when     - Conditional actions
 /for      - Iterate over collections
 /output   - Write content to files or streams
+/log     - Write messages to stdout
 ```
 
 ### Comments
@@ -54,6 +55,7 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 ()      Command parameter list
 :       Schema reference operator (optional)
 |       Pipeline operator
+[]      Array indexing and slicing
 ```
 
 ### Operators
@@ -93,6 +95,7 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 - Must be quoted with ', ", or `
 - Quotes must match (no mixing)
 - Backslashes and quotes within strings are treated as literal characters
+- Use `\.` to include a literal dot without triggering field access
 - Single-line strings (', ") cannot contain newlines
 - Double quotes (") support @ interpolation: "Hello @name"
 - Backtick templates (`) support @ interpolation: `Hello @name!`
@@ -136,6 +139,7 @@ Variables are created with `@identifier` prefix and support field access:
 @config                            # Reference data variable
 @config.port                       # Field access with dot notation
 @users.0                           # Array element access
+@users[0:2]                        # Array slice (start:end)
 ::Port: {{config.port}}::          # Reference in template
 ```
 
@@ -175,19 +179,22 @@ def hello():
 
 ```mlld
 # Simple form with operators
-/when @score > 90 => /show "Excellent!"
-/when @isAdmin && @isActive => /show "Admin panel"
-/when !@isLocked => /show "Available"
+/when @score > 90 => show "Excellent!"
+/when @isAdmin && @isActive => show "Admin panel"
+/when !@isLocked => show "Available"
 
 # Block forms
-/when @var first: [...]      # Stop at first match
-/when @var all: [...]        # Check all conditions  
-/when @var any: [...] => ... # Execute if any match
+/when [
+  @env == "prod" => @config = "production.json"     # Implicit var
+  none => @config = "development.json"
+]
+/when first [
+  @task == "build" => @compile()
+  * => @default()
+]
 
 # Implicit actions (directive prefix optional)
-/when @env == "prod" => @config = "production.json"     # Implicit /var
-/when @task == "build" => @compile()                    # Implicit /run
-/when @needsInit => @setup() = @initialize()            # Implicit /exe
+/when @needsInit => @setup() = @initialize()            # Implicit exe
 ```
 
 ### /run
@@ -228,11 +235,11 @@ def hello():
 
 ```mlld
 # Output form - executes action for each item
-/for @item in @array => /show @item
-/for @file in <*.md> => /show `Processing @file.filename`
+/for @item in @array => show @item
+/for @file in <*.md> => show `Processing @file.filename`
 
 # Object iteration with key access
-/for @value in @config => /show `@value_key: @value`
+/for @value in @config => show `@value_key: @value`
 
 # Collection form - returns array
 /var @doubled = for @n in @numbers => @n * 2
@@ -254,7 +261,7 @@ def hello():
 /var @hasAccess = !@isBlocked                  # Negation
 
 # With when expressions (value-returning)
-/var @message = when: [
+/var @message = when [
   @lang == "es" => "Hola"
   @lang == "fr" => "Bonjour"
   true => "Hello"

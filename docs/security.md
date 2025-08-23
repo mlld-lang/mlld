@@ -35,8 +35,8 @@ When processing LLM outputs through pipelines, consider the output potentially h
   claude -p "Check if {{data}} contains {{sensitiveInfo}}. Reply APPROVE or DENY."
 }
 
-/var @result = /run {generate-content} | @validateOutput("API keys")
-/when @result contains "DENY" => /run {echo "Blocked potentially sensitive output"}
+/var @result = run {generate-content} | @validateOutput("API keys")
+/when @result contains "DENY" => run {echo "Blocked potentially sensitive output"}
 ```
 
 ## Command Execution

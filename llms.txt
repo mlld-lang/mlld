@@ -339,7 +339,7 @@ Path: <>.relative
 ```mlld
 >> Output form - executes action for each item
 /var @items = ["apple", "banana", "cherry"]
-/for @item in @items => /show `Fruit: @item`
+/for @item in @items => show `Fruit: @item`
 >> Outputs:
 >> Fruit: apple
 >> Fruit: banana
@@ -352,20 +352,20 @@ Path: <>.relative
 
 >> Object iteration
 /var @config = {"host": "localhost", "port": 3000}
-/for @value in @config => /show `Value: @value`
+/for @value in @config => show `Value: @value`
 
 >> Object key access with underscore pattern
-/for @value in @config => /show `@value_key: @value`
+/for @value in @config => show `@value_key: @value`
 >> Outputs:
 >> host: localhost
 >> port: 3000
 
 >> Works with file globs
-/for @file in <*.md> => /show `Processing @file.filename`
+/for @file in <*.md> => show `Processing @file.filename`
 
 >> Empty arrays handled gracefully
 /var @empty = []
-/for @x in @empty => /show @x  >> No output
+/for @x in @empty => show @x  >> No output
 /var @results = for @x in @empty => @x  >> results = []
 ```
 
@@ -767,9 +767,7 @@ For complex operations, create modules instead of inline scripts:
 ### ❌ Overly complex inline mlld
 ```mlld
 /var @results = foreach @processData(@items) | @validate @transform
-/when @results.length > 0: [
-  true => /var @filtered = foreach @filter(@results)
-]
+/when @results.length > 0 => @filtered = foreach @filter(@results)
 ```
 
 ### ✅ Better: Use a module
@@ -1084,14 +1082,14 @@ Functions in pipelines can access @pipeline context and use retry mechanism:
 @pipeline.length  # Number of completed stages
 
 >> Functions can return 'retry' to re-execute current stage
-/exe @validator(input) = when: [
+/exe @validator(input) = when [
   @isValid(@input) => @input
   @pipeline.try < 3 => retry      # Re-execute if less than 3 attempts
   * => "fallback"
 ]
 
 >> Best-of-N selection pattern
-/exe @selectBest(response) = when: [
+/exe @selectBest(response) = when [
   @response.score > 8 => @response
   @pipeline.try < 3 => retry
   * => @selectHighestScore(@pipeline.tries)  # Select from all attempts
@@ -1100,7 +1098,7 @@ Functions in pipelines can access @pipeline context and use retry mechanism:
 /var @result = @prompt | @generate | @selectBest
 
 >> Variation generation pattern
-/exe @variations(input) = when: [
+/exe @variations(input) = when [
   @pipeline.try < 5 => retry
   * => @pipeline.tries      # Return all 5 variations
 ]
@@ -1116,7 +1114,7 @@ In pipeline contexts, `@p` is a shorter alias for `@pipeline`:
 
 ```mlld
 >> Pass pipeline context to functions explicitly
-/exe @validator(input, ctx) = when: [
+/exe @validator(input, ctx) = when [
   @ctx.try < 3 => retry
   * => @input
 ]
@@ -1260,25 +1258,21 @@ mlld doesn't have `return` or `exit` - design your flow instead:
 
 ```mlld
 >> ❌ WRONG: Trying to exit early
-/when @error: [
-  true => /run {exit 1}  # This won't work!
-]
+/when @error => run {exit 1}  # This won't work!
 
 >> ✅ RIGHT: Use conditional flow
-/when @isValid: [
-  true  => /var @continue = true
-  false => /show `❌ Validation failed`
+/when [
+  @isValid => @continue = true
+  !@isValid => show `❌ Validation failed`
 ]
 
-/when @continue: [
-  true => @runMainProcess()
-]
+/when @continue => @runMainProcess()
 
 >> ✅ BETTER: Let the workflow complete naturally
 /var @validation = @validate(@input)
-/when @validation.valid: [
-  true  => @processData(@input)
-  false => /show `Error: @validation.message`
+/when [
+  @validation.valid => @processData(@input)
+  !@validation.valid => show `Error: @validation.message`
 ]
 >> Workflow ends naturally - no forced exit needed
 ```
@@ -1333,7 +1327,7 @@ mlld shines when orchestrating external tools and data. Here are patterns that s
 /exe @loadConfig(env) = run {cat "./config/@env.json"}
 /var @config = @loadConfig(@NODE_ENV)
 
-/when @config.debug => /show `Debug mode enabled`
+/when @config.debug => show `Debug mode enabled`
 ```
 
 ## Workflow Patterns
@@ -1353,14 +1347,12 @@ mlld shines when orchestrating external tools and data. Here are patterns that s
 >> Only proceed if previous steps succeed
 /var @envCheck = @validateEnvironment(["API_KEY", "DB_URL"])
 
-/when @envCheck.valid: [
-  true  => /var @canProceed = true
-  false => /show `❌ @envCheck.summary`
+/when [
+  @envCheck.valid => @canProceed = true
+  !@envCheck.valid => show `❌ @envCheck.summary`
 ]
 
-/when @canProceed: [
-  true => /var @results = @runMainProcess()
-]
+/when @canProceed => @results = @runMainProcess()
 ```
 
 ### Pattern: Module-First Design
@@ -1439,15 +1431,16 @@ Example workflow reading:
 /var @pr = @getPR(@PR_NUMBER)
 
 ## ✅ Validate Changes  
-/when @pr.mergeable: [
-  true  => /var @status = "ready"
-  false => /var @status = "blocked"
+
+/when [
+  @pr.mergeable => @status = "ready"
+  !@pr.mergeable => @status = "blocked"
 ]
 
 ## 📧 Send Notifications
-/when @status: [
-  "ready"   => @commentOnPR(@PR_NUMBER, "Ready to merge!")
-  "blocked" => @sendAlert("PR @PR_NUMBER needs attention")
+/when [
+  @status == "ready"   => @commentOnPR(@PR_NUMBER, "Ready to merge!")
+  @status == "blocked" => @sendAlert("PR @PR_NUMBER needs attention")
 ]
 ```
 
@@ -1660,7 +1653,7 @@ This document processes user data and generates insights.
 
 ### 4. You can use /output to target specific locations and to handle conditional output:
 /output @mydefinedcommand(@var, @othervar) to "@path/to/file.md"
-/when @variable: [ @contains("hi") ] => /output /show "Hello" to "@path/to/file.md"
+/when @contains(@variable, "hi") => output "Hello" to "@path/to/file.md"
 Read more about output in docs/output.md
 
 ## Summary

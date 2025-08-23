@@ -33,7 +33,7 @@ This will remain a codefence.
 
 /show `@greeting, @name!`
 
-/when @hour >= 9 && @hour < 17 => /show "Office hours - support available"
+/when @hour >= 9 && @hour < 17 => show "Office hours - support available"
 
 /show <@./docs/example.md>
 

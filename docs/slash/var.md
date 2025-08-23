@@ -167,25 +167,25 @@ Equality comparisons use mlld-specific coercion:
 
 ### When Expressions (Value-Returning)
 
-Use `when:` to create conditional values that return the first matching result:
+Use `when` to create conditional values that return the first matching result:
 
 ```mlld
 # Basic when expression
-/var @greeting = when: [
+/var @greeting = when [
   @time < 12 => "Good morning"
   @time < 18 => "Good afternoon"
   true => "Good evening"
 ]
 
 # With operators in conditions
-/var @access = when: [
+/var @access = when [
   @role == "admin" && @active => "full"
   @role == "user" && @verified => "limited"
   true => "none"
 ]
 
 # With tail modifiers (pipelines)
-/var @message = when: [
+/var @message = when [
   @lang == "es" => "Hola"
   @lang == "fr" => "Bonjour"
   true => "Hello"

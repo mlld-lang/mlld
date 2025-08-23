@@ -14,28 +14,42 @@ Where:
 - `@<item>` - Variable that holds the current item during iteration
 - `@<collection>` - Array or object to iterate over
 - `<action>` - Directive to execute for each item (typically `/show`)
+- `@<item>_key` - (optional) current index for arrays or key for objects
 
 ### Array Iteration
 
 ```mlld
 /var @fruits = ["apple", "banana", "cherry"]
-/for @fruit in @fruits => /show `- @fruit`
+/for @fruit in @fruits => show `- @fruit`
 ```
 
 Output:
 ```
 - apple
-- banana  
+- banana
 - cherry
+```
+
+### Accessing Array Indices
+
+```mlld
+/for @fruit in @fruits => show `@fruit_key: @fruit`
+```
+
+Output:
+```
+0: apple
+1: banana
+2: cherry
 ```
 
 ### Object Iteration
 
-When iterating over objects, the value is available in the iteration variable, and the key is available as `@<var>_key`:
+When iterating over objects, the value is available in the iteration variable, and the property name is available as `@<var>_key`:
 
 ```mlld
 /var @config = {"host": "localhost", "port": 3000, "secure": true}
-/for @value in @config => /show `@value_key: @value`
+/for @value in @config => show `@value_key: @value`
 ```
 
 Output:
@@ -104,7 +118,7 @@ B-2
 
 ```mlld
 /var @empty = []
-/for @item in @empty => /show @item  # No output
+/for @item in @empty => show @item  # No output
 /var @results = for @x in @empty => @x * 2
 /show @results  # []
 ```
@@ -180,7 +194,7 @@ When iterating over objects, the debug output shows both keys and values:
 
 ```mlld
 /var @config = {"host": "localhost", "port": 3000}
-/for @value in @config => /show "@value_key: @value"
+/for @value in @config => show "@value_key: @value"
 ```
 
 Debug output:
@@ -213,7 +227,7 @@ Note: Debug output is sent to stderr, so use `2>&1` to see it with regular outpu
 
 2. **Add Progress Indicators**: Use `/show` statements to track execution
    ```mlld
-   /for @item in @items => /show "Processing: @item"
+   /for @item in @items => show "Processing: @item"
    ```
 
 3. **Manual Unrolling**: For critical debugging, temporarily unroll the loop

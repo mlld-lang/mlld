@@ -156,14 +156,14 @@ mlld provides conditional logic through operators and routing:
 /when @userType == "premium" || @trial => @enableFeatures()
 
 # Dynamic value selection
-/var @config = when: [
+/var @config = when [
   @region == "EU" => @gdprConfig
   @region == "US" => @ccpaConfig
   true => @defaultConfig
 ]
 
 # Process different data types
-/exe @processRequest(type, data) = when: [
+/exe @processRequest(type, data) = when [
   @type == "json" => @parseJson(@data)
   @type == "xml" => @parseXml(@data)
   @type == "csv" => @parseCsv(@data)

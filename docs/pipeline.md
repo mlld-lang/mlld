@@ -226,7 +226,7 @@ Access pipeline execution state within functions:
 Functions can return `retry` to re-execute the current pipeline stage:
 
 ```mlld
-/exe @validator(input) = when: [
+/exe @validator(input) = when [
   @isValid(@input) => @input
   @pipeline.try < 3 => retry
   * => "fallback"
@@ -239,7 +239,7 @@ Functions can return `retry` to re-execute the current pipeline stage:
 
 **Validation with Retry:**
 ```mlld
-/exe @requireJSON(text) = when: [
+/exe @requireJSON(text) = when [
   @isJSON(@text) => @text
   @pipeline.try < 3 => retry
   * => "{}"
@@ -250,7 +250,7 @@ Functions can return `retry` to re-execute the current pipeline stage:
 
 **Best-of-N Selection:**
 ```mlld
-/exe @selectBest(response) = when: [
+/exe @selectBest(response) = when [
   @response.score > 8 => @response
   @pipeline.try < 3 => retry
   * => @selectHighestScore(@pipeline.tries)
@@ -261,7 +261,7 @@ Functions can return `retry` to re-execute the current pipeline stage:
 
 **Variation Generation:**
 ```mlld
-/exe @variations(input) = when: [
+/exe @variations(input) = when [
   @pipeline.try < 5 => retry
   * => @pipeline.tries
 ]
