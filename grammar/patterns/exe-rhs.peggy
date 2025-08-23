@@ -268,8 +268,8 @@ ExecAsNewTitle
 // Purpose: Allow when: [...] expressions that return values based on first matching condition
 
 WhenExpression "when expression"
-  // Standard: when: [ ... ]
-  = "when" _ modifier:WhenExprModifier? _ ":"? _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
+  // Standard: when [ ... ] or when first [ ... ]
+  = "when" _ modifier:WhenExprModifier? _ "[" _ conditions:WhenExpressionConditionList _ "]" tail:TailModifiers? {
       helpers.debug('WhenExpression matched', { 
         conditionCount: conditions.length,
         hasTailModifiers: !!tail,
@@ -279,8 +279,24 @@ WhenExpression "when expression"
       return helpers.createWhenExpression(conditions, tail, location(), modifier);
     }
   // Error recovery patterns
-  / "when" _ WhenExprModifier? _ ":"? _ "[" _ &{
-      return helpers.isUnclosedArray(input, peg$currPos);
+  / "when" _ WhenExprModifier? _ "[" _ &{
+      // Safer unclosed check for when-expressions: allow newlines; only error if EOF reached without ']'
+      let depth = 1;
+      let i = peg$currPos;
+      let inString = false;
+      let quote = null;
+      while (i < input.length && depth > 0) {
+        const ch = input[i];
+        if (inString) {
+          if (ch === quote && input[i - 1] !== '\\') { inString = false; quote = null; }
+        } else {
+          if (ch === '"' || ch === '\'') { inString = true; quote = ch; }
+          else if (ch === '[') depth++;
+          else if (ch === ']') depth--;
+        }
+        i++;
+      }
+      return depth > 0; // Only report if truly unclosed at EOF
     } {
       helpers.mlldError(
         `Unclosed array in when expression. Expected ']' to close the condition list.`,
@@ -288,17 +304,16 @@ WhenExpression "when expression"
         location()
       );
     }
-  / "when" _ WhenExprModifier? _ ":"? _ {
+  / "when" _ WhenExprModifier? _ {
       helpers.mlldError(
         `Missing condition list in when expression. Expected: when [condition => value, ...]`,
         "[",
         location()
       );
     }
-  // No longer require ':' strictly; keep above recoveries for clearer messages
 
 // Optional modifier for when-expression in /exe RHS (currently supports 'first')
-WhenExprModifier = mod:("first") _ { return mod; }
+WhenExprModifier = mod:("first") { return mod; }
 
 // Value-oriented condition list for when expressions
 WhenExpressionConditionList

@@ -17,7 +17,7 @@ WhenRHSAction "when RHS action"
 // Retry action with optional hint value (string/object/function/variable)
 // Returns an array of nodes: [RetryLiteral, <hintNode>?]
 WhenRHSRetryAction
-  = "retry" _ hint:VarRHSContent? {
+  = "retry" !(_ [\n\r]* ("*" / "none" / [a-zA-Z@]) _ "=>") hint:(_ h:VarRHSContent { return h; })? {
       const retryNode = helpers.createNode(NodeType.Literal, { 
         value: 'retry', 
         valueType: 'retry',

@@ -53,6 +53,7 @@ export const skipTests: Record<string, string> = {
   'now-enhanced-formats': 'Requires @time module to be installed',
   'import-now-enhanced-formats': 'Requires @time module to be installed',
   // Staged hint fixtures — enable after doc emission tweak in when-expr
+  // Staged hint fixtures — keep skipped until when-expression normalization lands
   'pipeline-retry-hint-reception': 'Pending when-expression doc suppression polish',
   'pipeline-retry-hint-interpolated': 'Pending when-expression doc suppression polish',
   'pipeline-retry-hint-object': 'Pending when-expression doc suppression polish',
