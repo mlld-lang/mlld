@@ -6,17 +6,9 @@
  */
 
 import type { DirectiveNode } from '@core/types';
+import type { PipelineCommand } from '@core/types';
 
-/**
- * Pipeline command as parsed from AST
- */
-export interface PipelineCommand {
-  identifier: any[];
-  args: any[];
-  fields: any[];
-  rawIdentifier: string;
-  rawArgs: any[];
-}
+// PipelineCommand type is defined centrally in core/types/run.ts
 
 /**
  * Unified pipeline detection result

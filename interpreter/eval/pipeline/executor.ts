@@ -5,6 +5,7 @@ import type { PipelineCommand } from '@core/types';
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
 import { createStageEnvironment } from './context-builder';
 import { MlldCommandExecutionError } from '@core/errors';
+import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 
 /**
  * Pipeline Executor - Handles actual execution using state machine
@@ -206,10 +207,16 @@ export class PipelineExecutor {
 
       // Empty output terminates pipeline
       if (!output || output.trim() === '') {
+        // Even with empty output, run any attached inline effects that might
+        // be observing attempts (common for logging). Use empty output.
+        await this.runInlineEffects(command, '', stageEnv);
         return { type: 'success', output: '' };
       }
 
-      return { type: 'success', output: this.normalizeOutput(output) };
+      const normalized = this.normalizeOutput(output);
+      // Run inline effects attached to this functional stage (non-stage effects)
+      await this.runInlineEffects(command, normalized, stageEnv);
+      return { type: 'success', output: normalized };
 
     } catch (error) {
       return { type: 'error', error: error as Error };
@@ -451,5 +458,39 @@ export class PipelineExecutor {
     if (typeof output === 'string') return output;
     if (output?.content && output?.filename) return output.content;
     return JSON.stringify(output);
+  }
+
+  /**
+   * Execute any inline builtin effects attached to the command/stage.
+   * Effects do not count as stages and run after successful execution.
+   */
+  private async runInlineEffects(
+    command: any,
+    stageOutput: string,
+    stageEnv: Environment
+  ): Promise<void> {
+    if (!command?.effects || !Array.isArray(command.effects) || command.effects.length === 0) return;
+
+    for (const effectCmd of command.effects) {
+      try {
+        if (!effectCmd?.rawIdentifier || !isBuiltinEffect(effectCmd.rawIdentifier)) continue;
+        await runBuiltinEffect(effectCmd, stageOutput, stageEnv);
+      } catch (err) {
+        // Fail-fast on effect errors
+        if (err instanceof Error) {
+          throw new MlldCommandExecutionError(
+            `Inline effect @${effectCmd.rawIdentifier} failed: ${err.message}`,
+            undefined,
+            {
+              command: effectCmd.rawIdentifier,
+              exitCode: 1,
+              duration: 0,
+              workingDirectory: process.cwd()
+            }
+          );
+        }
+        throw err;
+      }
+    }
   }
 }

@@ -64,7 +64,10 @@ PipelineCommandList
 // Single pipeline command (command reference with @input support)
 // Uses UnifiedReferenceForPipeline to prevent nested pipelines
 PipelineCommand
-  = ref:UnifiedReferenceForPipeline {
+  = PipelineBuiltinOutput
+  / PipelineBuiltinShow
+  / PipelineBuiltinLog
+  / ref:UnifiedReferenceForPipeline {
       helpers.debug('PipelineCommand matched unified reference', { ref });
       
       // Handle ExecInvocation, VariableReferenceWithTail, and VariableReference types
@@ -100,6 +103,112 @@ PipelineCommand
           rawArgs: []
         };
       }
+    }
+
+// -------------------------------------------------------------
+// PIPELINE BUILTIN EFFECTS (minimal)
+// -------------------------------------------------------------
+
+// Support: log [<source>]
+// Example: | log "After stage"   or   | log @var
+PipelineBuiltinLog
+  = "log" ![A-Za-z0-9_] _ src:OutputSource? {
+      // Build a pseudo reference node for identifier compatibility
+      const idNode = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: 'log'
+      }, location());
+
+      // Convert optional source into effect args suitable for interpolation
+      let args = [];
+      let rawArgs = [];
+      if (src) {
+        if (src.type === 'literal') {
+          // Use the literal node array directly
+          args = [src.values];
+          rawArgs = [src.raw?.content || ''];
+        } else if (src.type === 'variable') {
+          const varRef = src.values.identifier && src.values.identifier[0] ? src.values.identifier[0] : null;
+          if (varRef) {
+            args = [varRef];
+            rawArgs = ['@' + (varRef.identifier || '')];
+          }
+        } else if (src.type === 'exec') {
+          args = [src.values]; // ExecInvocation node
+          rawArgs = ['@' + (src.raw?.commandName || '')];
+        }
+      }
+
+      return {
+        identifier: [idNode],
+        args: args,
+        fields: [],
+        rawIdentifier: 'log',
+        rawArgs: rawArgs
+      };
+    }
+
+// show [<source>]
+PipelineBuiltinShow
+  = "show" ![A-Za-z0-9_] _ src:OutputSource? {
+      const idNode = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: 'show'
+      }, location());
+      let args = [];
+      let rawArgs = [];
+      if (src) {
+        if (src.type === 'literal') {
+          args = [src.values];
+          rawArgs = [src.raw?.content || ''];
+        } else if (src.type === 'variable') {
+          const varRef = src.values.identifier && src.values.identifier[0] ? src.values.identifier[0] : null;
+          if (varRef) {
+            args = [varRef];
+            rawArgs = ['@' + (varRef.identifier || '')];
+          }
+        } else if (src.type === 'exec') {
+          args = [src.values];
+          rawArgs = ['@' + (src.raw?.commandName || '')];
+        }
+      }
+
+      return {
+        identifier: [idNode],
+        args,
+        fields: [],
+        rawIdentifier: 'show',
+        rawArgs
+      };
+    }
+
+// output [<source>] to <target>
+PipelineBuiltinOutput
+  = "output" ![A-Za-z0-9_] _ src:OutputSource? _ "to" _ target:OutputTarget {
+      const idNode = helpers.createVariableReferenceNode('varIdentifier', {
+        identifier: 'output'
+      }, location());
+
+      // Normalize args: [source?, target]
+      let srcArg = null;
+      if (src) {
+        if (src.type === 'literal') {
+          srcArg = src.values;
+        } else if (src.type === 'variable') {
+          srcArg = src.values.identifier && src.values.identifier[0] ? src.values.identifier[0] : null;
+        } else if (src.type === 'exec') {
+          srcArg = src.values; // ExecInvocation node
+        }
+      }
+
+      const args = srcArg ? [srcArg, target] : [target];
+      const rawArgs = [];
+
+      return {
+        identifier: [idNode],
+        args,
+        fields: [],
+        rawIdentifier: 'output',
+        rawArgs
+      };
     }
 
 // -------------------------------------------------------------

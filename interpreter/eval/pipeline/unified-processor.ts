@@ -8,10 +8,12 @@
 import type { Environment } from '@interpreter/env/Environment';
 import type { Variable } from '@core/types/variable';
 import { MlldDirectiveError } from '@core/errors';
-import { detectPipeline, debugPipelineDetection, type DetectedPipeline, type PipelineCommand } from './detector';
+import { detectPipeline, debugPipelineDetection, type DetectedPipeline } from './detector';
+import type { PipelineCommand } from '@core/types';
 import { executePipeline } from './index';
 import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transformers';
 import { logger } from '@core/utils/logger';
+import { isBuiltinEffect } from './builtin-effects';
 
 /**
  * Context for pipeline processing
@@ -109,9 +111,12 @@ export async function processPipeline(
   const normalizedPipeline = detected.isRetryable && value?.metadata?.sourceFunction
     ? [SOURCE_STAGE, ...detected.pipeline]
     : detected.pipeline;
+
+  // Partition: attach builtin effect commands to the preceding functional stage
+  const { functionalPipeline, hadLeadingEffects } = attachBuiltinEffects(normalizedPipeline);
   
   // Validate pipeline functions exist (skip __source__ stage)
-  const pipelineToValidate = normalizedPipeline.filter(cmd => cmd.rawIdentifier !== '__source__');
+  const pipelineToValidate = functionalPipeline.filter(cmd => cmd.rawIdentifier !== '__source__');
   await validatePipeline(pipelineToValidate, env, identifier);
   
   // Prepare input value for pipeline
@@ -143,13 +148,13 @@ export async function processPipeline(
   }
   
   // Store whether we added a synthetic source stage for context adjustment
-  const hasSyntheticSource = normalizedPipeline[0]?.rawIdentifier === '__source__';
+  const hasSyntheticSource = functionalPipeline[0]?.rawIdentifier === '__source__';
   
   // Execute pipeline with normalized stages
   try {
     const result = await executePipeline(
       input,
-      normalizedPipeline,
+      functionalPipeline,
       env,
       context.location,
       detected.format,
@@ -207,6 +212,43 @@ async function validatePipeline(
       );
     }
   }
+}
+
+/**
+ * Walk a pipeline and attach builtin effect commands (e.g., @log) to the
+ * immediately preceding functional stage. Returns the functional-only
+ * pipeline with effects stored in the optional `effects` field of each
+ * PipelineCommand.
+ */
+function attachBuiltinEffects(pipeline: PipelineCommand[]): {
+  functionalPipeline: PipelineCommand[];
+  hadLeadingEffects: boolean;
+} {
+  const functional: PipelineCommand[] = [];
+  let hadLeadingEffects = false;
+
+  for (const cmd of pipeline) {
+    const name = cmd.rawIdentifier;
+    if (isBuiltinEffect(name)) {
+      // Attach to the last functional or to __source__ if present
+      if (functional.length > 0) {
+        const prev = functional[functional.length - 1];
+        if (!prev.effects) prev.effects = [];
+        prev.effects.push(cmd);
+      } else {
+        // No functional stage yet. If the first command is a synthetic source,
+        // treat this as leading effect and mark it so the executor can ignore
+        // for now (future: consider attaching to source input).
+        hadLeadingEffects = true;
+      }
+      continue;
+    }
+
+    // Regular functional stage
+    functional.push({ ...cmd });
+  }
+
+  return { functionalPipeline: functional, hadLeadingEffects };
 }
 
 /**
