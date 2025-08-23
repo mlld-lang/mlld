@@ -39,7 +39,6 @@ import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
-import { USE_AMBIENT_CTX } from '@core/feature-flags';
 
 
 /**
@@ -1214,7 +1213,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Optionally inject ambient ctx for JS/Node execution only
     let finalParams = params || {};
     const lang = (language || '').toLowerCase();
-    const shouldInjectCtx = USE_AMBIENT_CTX && (lang === 'js' || lang === 'javascript' || lang === 'node' || lang === 'nodejs');
+    const shouldInjectCtx = (lang === 'js' || lang === 'javascript' || lang === 'node' || lang === 'nodejs');
     if (shouldInjectCtx) {
       try {
         // Prefer explicit @test_ctx override for deterministic tests

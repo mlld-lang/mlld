@@ -14,7 +14,6 @@ import { checkDependencies, DefaultDependencyChecker } from './dependencies';
 import { logger } from '@core/utils/logger';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
-import { ENABLE_RUN_STAGE0_RETRY } from '@core/feature-flags';
 
 /**
  * Extract raw text content from nodes without any interpolation processing
@@ -613,7 +612,8 @@ export async function evaluateRun(
     if (withClause.pipeline && withClause.pipeline.length > 0) {
       // Use unified pipeline processor
       const { processPipeline } = await import('./pipeline/unified-processor');
-      const enableStage0 = ENABLE_RUN_STAGE0_RETRY && !!sourceNodeForPipeline;
+      // Stage-0 retry is always enabled when we have a source node
+      const enableStage0 = !!sourceNodeForPipeline;
       const valueForPipeline = enableStage0
         ? { value: output, metadata: { isRetryable: true, sourceFunction: sourceNodeForPipeline } }
         : output;

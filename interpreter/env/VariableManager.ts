@@ -12,7 +12,6 @@ import { getTimeValue, getProjectPathValue } from '../utils/reserved-variables';
 import type { CacheManager } from './CacheManager';
 import type { ResolverManager } from '@core/resolvers';
 import type { SourceLocation } from '@core/types';
-import { USE_AMBIENT_CTX } from '@core/feature-flags';
 
 export interface IVariableManager {
   // Core variable operations
@@ -166,9 +165,6 @@ export class VariableManager implements IVariableManager {
   getVariable(name: string): Variable | undefined {
     // Ambient, read-only @ctx support (calculated on access)
     if (name === 'ctx') {
-      if (!USE_AMBIENT_CTX) {
-        return undefined;
-      }
       // Allow tests to override via @test_ctx
       const testCtxVar = this.variables.get('test_ctx') || this.deps.getParent()?.getVariable('test_ctx');
       if (testCtxVar) {
