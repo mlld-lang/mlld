@@ -382,6 +382,32 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   /**
+   * Register built-in transformers
+   */
+  private async registerBuiltinTransformers(): Promise<void> {
+    const { builtinTransformers, createTransformerVariable } = await import('../builtin/transformers');
+    
+    for (const transformer of builtinTransformers) {
+      // Register both lowercase and uppercase versions
+      const lowerVar = createTransformerVariable(
+        transformer.name,
+        transformer.implementation,
+        transformer.description,
+        false
+      );
+      this.setVariable(transformer.name, lowerVar);
+      
+      const upperVar = createTransformerVariable(
+        transformer.uppercase,
+        transformer.implementation,
+        transformer.description,
+        true
+      );
+      this.setVariable(transformer.uppercase, upperVar);
+    }
+  }
+
+  /**
    * Register built-in function resolvers (async initialization)
    * This should be called after the Environment is constructed
    */
@@ -400,6 +426,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.resolverManager.registerResolver(new NowResolver());
     this.resolverManager.registerResolver(new DebugResolver());
     this.resolverManager.registerResolver(inputResolver);
+    
+    // Register built-in transformers
+    await this.registerBuiltinTransformers();
     
     // Only reserve names for built-in function resolvers (not file/module resolvers)
     // Function resolvers are those that provide computed values like now, debug, etc.

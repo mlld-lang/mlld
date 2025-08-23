@@ -168,16 +168,39 @@ export function preprocessPipeline(
                                    (firstStage.command as any).sourceFunction;
     
     if (!isAlreadySourceCommand) {
-      // Convert source function to a real command stage
+      // Check if sourceFunction is a function (not an object with metadata)
+      // If it's a function, it's the retry function for directives
+      const isFunction = typeof sourceFunction === 'function';
+      
       if (process.env.MLLD_DEBUG === 'true') {
-        console.error('[preprocessor] Converting source function to real pipeline stage');
+        console.error('[preprocessor] sourceFunction type check:', {
+          type: typeof sourceFunction,
+          isFunction,
+          hasType: sourceFunction && typeof sourceFunction === 'object' && 'type' in sourceFunction,
+          typeValue: sourceFunction?.type,
+          hasSubtype: sourceFunction && typeof sourceFunction === 'object' && 'subtype' in sourceFunction,
+          subtypeValue: sourceFunction?.subtype
+        });
       }
-      logicalStages.unshift({
-        command: createSourceCommand(sourceFunction),
-        effects: [],
-        originalIndices: [-1], // Mark as source-generated
-        isImplicitIdentity: false
-      });
+      
+      // For /run directives, the sourceFunction is a retry function, not metadata
+      // We don't need a synthetic source stage - the first pipeline stage IS the source
+      if (!isFunction) {
+        // Only add source command for ExecInvocations, not Directives
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[preprocessor] Converting source function to real pipeline stage');
+        }
+        logicalStages.unshift({
+          command: createSourceCommand(sourceFunction),
+          effects: [],
+          originalIndices: [-1], // Mark as source-generated
+          isImplicitIdentity: false
+        });
+      } else {
+        if (process.env.MLLD_DEBUG === 'true') {
+          console.error('[preprocessor] Directive source - not adding synthetic stage');
+        }
+      }
     }
   }
   

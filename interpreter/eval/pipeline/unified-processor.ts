@@ -107,28 +107,47 @@ export async function processPipeline(
     (firstStage.type === 'execInvocation' && (firstStage as any).executableDef)
   );
   
-  // Only add a source stage if we don't already have one
+  // Only add a source stage if we have an ExecInvocation source (not a directive)
+  // Directives (like /run) will be handled differently - they provide a sourceFunction
+  // but don't need a synthetic source stage
   if (!hasExistingSource && detected.isRetryable && value?.metadata?.sourceFunction) {
     const sourceNode = value.metadata.sourceFunction;
-    const sourceCommand: PipelineCommand = {
-      type: 'execInvocation' as any,
-      rawIdentifier: sourceNode.identifier || sourceNode.rawIdentifier || 'source',
-      identifier: sourceNode.identifier ? [sourceNode.identifier] : [],
-      args: sourceNode.args || [],
-      fields: sourceNode.fields || [],
-      rawArgs: sourceNode.rawArgs || [],
-      sourceNode  // Preserve the source node for execution
-    };
-    normalizedPipeline = [sourceCommand, ...detected.pipeline];
     
-    if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
-      console.error('[processPipeline] Created ADDITIONAL source command as stage 0:', {
-        identifier: sourceCommand.rawIdentifier,
-        type: sourceCommand.type,
-        hasExistingSource,
-        pipelineLength: detected.pipeline?.length,
-        normalizedLength: normalizedPipeline.length
-      });
+    // Check if this is an ExecInvocation (has identifier) vs a Directive (has type)
+    const isExecInvocation = sourceNode.identifier || sourceNode.rawIdentifier;
+    
+    if (isExecInvocation) {
+      // This is an ExecInvocation - add it as stage 0
+      const sourceCommand: PipelineCommand = {
+        type: 'execInvocation' as any,
+        rawIdentifier: sourceNode.identifier || sourceNode.rawIdentifier,
+        identifier: sourceNode.identifier ? [sourceNode.identifier] : [],
+        args: sourceNode.args || [],
+        fields: sourceNode.fields || [],
+        rawArgs: sourceNode.rawArgs || [],
+        sourceNode  // Preserve the source node for execution
+      };
+      normalizedPipeline = [sourceCommand, ...detected.pipeline];
+      
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+        console.error('[processPipeline] Created ADDITIONAL source command as stage 0:', {
+          identifier: sourceCommand.rawIdentifier,
+          type: sourceCommand.type,
+          hasExistingSource,
+          pipelineLength: detected.pipeline?.length,
+          normalizedLength: normalizedPipeline.length
+        });
+      }
+    } else {
+      // This is a Directive (like /run) - don't add synthetic source
+      // The pipeline will start with its first actual command (e.g., @json)
+      // But we still have the sourceFunction for retry purposes
+      if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
+        console.error('[processPipeline] Directive source - not adding synthetic stage 0:', {
+          sourceNodeType: sourceNode.type,
+          pipelineLength: detected.pipeline?.length
+        });
+      }
     }
   } else if (process.env.MLLD_DEBUG === 'true' || process.env.DEBUG_EXEC === 'true') {
     console.error('[processPipeline] NOT adding source stage:', {

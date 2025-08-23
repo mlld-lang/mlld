@@ -17,8 +17,26 @@ export async function resolveCommandReference(
     return null;
   }
   
+  // Debug: log what we're trying to resolve
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.error('[resolveCommandReference] Resolving:', {
+      rawIdentifier: command.rawIdentifier,
+      hasIdentifier: 'identifier' in command,
+      identifierLength: ('identifier' in command && command.identifier) ? command.identifier.length : 0,
+      identifierType: ('identifier' in command && command.identifier && command.identifier[0]) ? command.identifier[0].type : 'none'
+    });
+  }
+  
   // The command.identifier is already an array of nodes from the parser
   if (!('identifier' in command) || !command.identifier || command.identifier.length === 0) {
+    // Try to resolve by rawIdentifier as a fallback for transformers
+    if (command.rawIdentifier) {
+      const varName = command.rawIdentifier.replace('@', '');
+      const variable = env.getVariable(varName);
+      if (variable && variable.type === 'executable') {
+        return variable;
+      }
+    }
     return null;
   }
   
@@ -238,8 +256,16 @@ export async function executeCommandVariable(
   // This ensures @ctx.input is available in when expressions and JS blocks
   // The parent environment already has the correct context from setPipelineContext
   if (pipelineCtx && stdinInput !== undefined) {
+    // Parse JSON input if possible for @ctx.input to support field access
+    let parsedInput: any = stdinInput;
+    try {
+      parsedInput = JSON.parse(stdinInput);
+    } catch {
+      // Keep as string if not valid JSON
+    }
+    
     execEnv.updateUniversalContext({
-      input: stdinInput
+      input: parsedInput
     });
     
     if (process.env.MLLD_DEBUG === 'true') {

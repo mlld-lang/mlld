@@ -57,12 +57,20 @@ export async function createStageEnvironment(
   // CRITICAL: Force update the child's universal context with the latest values
   // The child was created with a snapshot, but we need the updated context
   
+  // Parse JSON input if possible for @ctx.input to support field access
+  let parsedInput: any = input;
+  try {
+    parsedInput = JSON.parse(input);
+  } catch {
+    // Keep as string if not valid JSON
+  }
+  
   stageEnv.updateUniversalContext({
     try: context.contextAttempt,
     tries: context.history,
     stage: userVisibleStage,  // Already 1-indexed for @ctx.stage
     isPipeline: true,
-    input: input,
+    input: parsedInput,
     hint: context.hint || null,
     lastOutput: context.history.length > 0 ? context.history[context.history.length - 1] : null
   });
