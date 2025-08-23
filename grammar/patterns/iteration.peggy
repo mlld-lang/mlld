@@ -78,6 +78,46 @@ ForSingleAction "for action"
         location: location()
       })];
     }
+  // Special handling for /log directive - syntactic sugar for output to stdout
+  / "log" _ source:OutputSource? {
+      // Create stdout target automatically (same as /log directive)
+      const stdoutTarget = {
+        type: 'stream',
+        stream: 'stdout',
+        raw: 'stdout'
+      };
+      
+      const values = {
+        target: stdoutTarget
+      };
+      
+      const raw = {
+        target: 'stdout'
+      };
+      
+      let subtype = 'outputStream';
+      const meta = { 
+        hasSource: false,
+        targetType: 'stream',
+        isLogSugar: true  // Mark for debugging/tracing
+      };
+      
+      if (source) {
+        values.source = source.values;
+        raw.source = source.raw;
+        meta.hasSource = true;
+        meta.sourceType = source.type;
+      }
+      
+      return [helpers.createNode(NodeType.Directive, {
+        kind: 'output',  // CRITICAL: Use 'output' kind, not 'log'
+        subtype: subtype,
+        values: values,
+        raw: raw,
+        meta: meta,
+        location: location()
+      })];
+    }
   // Generic handling for other directives (with optional /)
   / directive:("show" / "var") _ content:VarRHSContent {
       return helpers.createForActionNode(directive, content, location());

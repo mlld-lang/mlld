@@ -47,7 +47,7 @@ SlashWhen
             "Incorrect: /when @var any [@cond1 => action1, @cond2 => action2]\\n" +
             "Correct:   /when @var any [@cond1, @cond2] => /show \"Any matched\"", "=>", location());
     }
-  / WhenBlockForm
+  / WhenBareBlockForm  // MUST come before WhenBlockForm to handle bare [...] syntax
   // Bare block form with modifier: /when <modifier>: [...] => <action>
   / DirectiveContext "/when" _ modifier:WhenModifier _ ":"? _ "[" _ conditions:WhenConditionList _ "]" 
     _ action:("=>" _ a:WhenAction { return a; })? {
@@ -89,7 +89,7 @@ SlashWhen
         location()
       );
     }
-  / WhenBareBlockForm
+  / WhenBlockForm
   // Error recovery: Missing => in simple form
   / DirectiveContext "/when" _ condition:WhenSimpleCondition _ !"=>" {
       helpers.mlldError("Invalid /when syntax. Expected '=>' after condition. Use: /when @condition => action", "=>", location());
@@ -531,6 +531,48 @@ WhenActionDirective
       
       return [helpers.createNode(NodeType.Directive, {
         kind: 'output',
+        subtype: subtype,
+        values: values,
+        raw: raw,
+        meta: meta,
+        location: location()
+      })];
+    }
+  // Special handling for /log directive - syntactic sugar for output to stdout
+  / "log" _ source:WhenOutputSource? {
+      helpers.debug('WhenActionDirective: log matched');
+      // Create stdout target automatically (same as /log directive)
+      const stdoutTarget = {
+        type: 'stream',
+        stream: 'stdout',
+        raw: 'stdout'
+      };
+      
+      const values = {
+        target: stdoutTarget
+      };
+      
+      const raw = {
+        target: 'stdout'
+      };
+      
+      let subtype = 'outputStream';
+      const meta = { 
+        hasSource: false,
+        targetType: 'stream',
+        isLogSugar: true,  // Mark for debugging/tracing
+        enhanced: true
+      };
+      
+      if (source) {
+        values.source = source.values;
+        raw.source = source.raw;
+        meta.hasSource = true;
+        meta.sourceType = source.type;
+      }
+      
+      return [helpers.createNode(NodeType.Directive, {
+        kind: 'output',  // CRITICAL: Use 'output' kind, not 'log'
         subtype: subtype,
         values: values,
         raw: raw,

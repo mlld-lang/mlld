@@ -5,6 +5,37 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc40]
+### Added
+- **`/log` directive support in action contexts**: Extended `/log` to work in for loops and when blocks
+  - `/for @item in @items => log @item` - Log each item during iteration
+  - `/when [ condition => log "message" ]` - Log in when block actions
+  - Produces identical output to `/output to stdout` with cleaner syntax
+  - Grammar implementation follows DRY principles using existing OutputSource patterns
+
+- **Effect architecture**: Complete overhaul of how side effects (show, output, log directives) are handled
+  - New EffectHandler system for managing output operations
+  - Immediate effect execution in for loops and when blocks
+  - Effects in exe+when blocks called from for expressions now execute immediately
+  - Progress messages appear in real-time during long-running operations
+
+### Fixed
+- **Grammar ordering for `/when` bare blocks**: Fixed PEG parser ordering issue preventing bare `/when [...]` blocks from working
+  - Swapped WhenBareBlockForm and WhenBlockForm rule order to ensure correct parsing
+  - `/when [ condition => action ]` now works correctly with all action types including `log`
+  
+- **`/show` directive in for loops**: Fixed `/show` not working properly in for loops
+  - Show directives now emit output immediately during iteration
+  
+- **Field access in `/output` directive grammar**: Fixed field access bug when outputting object fields
+  - `/output @data.field to "file.txt"` now correctly outputs just the field value
+
+### Internal
+- **Test infrastructure**: Added comprehensive test coverage for effects and immediate output
+  - New test helper: `tests/helpers/effect-test-helper.ts` for testing effect ordering
+  - Test directory: `tests/cases/valid/effects/` with 10 new test scenarios
+  - New test file: `tests/immediate-effects.test.ts` for immediate effect behavior
+
 ## [2.0.0-rc39]
 ### Added
 - **`/log` directive**: New syntactic sugar for `/output to stdout` for more concise console output (#357)
