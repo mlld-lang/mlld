@@ -7,6 +7,6 @@
   return input;
 }
 
-/var @result = @source() with { pipeline: [ show @ctx.input, @validator ] }
+/var @result = @source() with { pipeline: [ show, @validator ] }
 
 /show "Final: @result"

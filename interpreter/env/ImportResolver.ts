@@ -166,8 +166,16 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
       return this.fetchURL(pathOrUrl);
     }
     const resolvedPath = await this.resolvePath(pathOrUrl);
-    
-    return this.dependencies.fileSystem.readFile(resolvedPath);
+    if (process.env.MLLD_DEBUG === 'true') {
+      // eslint-disable-next-line no-console
+      console.error('[ImportResolver.readFile] path=', pathOrUrl, 'resolved=', resolvedPath);
+    }
+    const content = await this.dependencies.fileSystem.readFile(resolvedPath);
+    if (process.env.MLLD_DEBUG === 'true') {
+      // eslint-disable-next-line no-console
+      console.error('[ImportResolver.readFile] len=', content?.length ?? 0);
+    }
+    return content;
   }
   
   async resolvePath(inputPath: string): Promise<string> {

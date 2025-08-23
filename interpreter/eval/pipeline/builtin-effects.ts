@@ -77,13 +77,12 @@ export async function runBuiltinEffect(
     case 'output':
     case 'OUTPUT': {
       // args[0] = optional source; args[1] = required target object
+      // Determine content: if two or more args, first is source; with one or zero args, use stage output
       let content = stageOutput;
-      if (effect.args && effect.args.length > 0) {
-        // Only treat the first arg as the source; ignore extras
+      if (effect.args && effect.args.length >= 2) {
         try {
           content = await evaluateEffectArg(effect.args[0], env);
         } catch {
-          // Fall back to stageOutput on evaluation failure
           content = stageOutput;
         }
       }
@@ -103,52 +102,49 @@ export async function runBuiltinEffect(
           // Interpolate path nodes; target.path may be node array or primitive
           const { interpolate } = await import('../../core/interpreter');
           const path = await import('path');
-          let targetPath = '';
+          let resolvedPath = '';
           if (Array.isArray(target.path)) {
-            targetPath = await interpolate(target.path, env);
+            resolvedPath = await interpolate(target.path, env);
           } else if (typeof target.path === 'string') {
-            targetPath = target.path;
+            resolvedPath = target.path;
           } else if (target.values) {
-            targetPath = await interpolate(target.values, env);
+            resolvedPath = await interpolate(target.values, env);
           }
-          if (!targetPath) {
+          if (!resolvedPath) {
             throw new Error('output file target requires a non-empty path');
           }
 
-          // Best-effort direct write into test VFS to avoid async race on effect
-          const fileSystem = (env as any).fileSystem;
-          if (fileSystem && typeof fileSystem.writeFile === 'function') {
-            try {
-              // Map to /tmp-tests root used by TestRedirectEffectHandler
-              const fileName = path.basename(targetPath);
-              const mappedRoot = '/tmp-tests';
-              const mappedPath = path.join(mappedRoot, fileName);
-              await fileSystem.mkdir(mappedRoot, { recursive: true });
-              await fileSystem.writeFile(mappedPath, content);
-
-              // Also write to project root if targetPath is relative so /show <file> can read it
-              if (!targetPath.startsWith('/')) {
-                const rootPath = '/' + fileName;
-                await fileSystem.writeFile(rootPath, content);
-
-                // And write into the current file directory for relative resolution
-                try {
-                  const fileDir = (env as any).getFileDirectory ? (env as any).getFileDirectory() : undefined;
-                  if (fileDir && typeof fileDir === 'string') {
-                    const inDir = path.join(fileDir, fileName);
-                    // Ensure parent directory
-                    await fileSystem.mkdir(fileDir, { recursive: true });
-                    await fileSystem.writeFile(inDir, content);
-                  }
-                } catch { /* ignore */ }
-              }
-            } catch (_err) {
-              // Ignore direct write errors and rely on effect handler
-            }
+          // Handle @base prefix used in resolver-style paths
+          if (resolvedPath.startsWith('@base/')) {
+            const projectRoot = (env as any).getProjectRoot ? (env as any).getProjectRoot() : '/';
+            resolvedPath = path.join(projectRoot, resolvedPath.substring(6));
           }
 
-          // Always emit the file effect (handler may also write/mirror)
-          env.emitEffect('file', content, { path: targetPath });
+          // Resolve relative paths against project root for consistency with /output
+          if (!path.isAbsolute(resolvedPath)) {
+            const base = (env as any).getBasePath ? (env as any).getBasePath() : '/';
+            resolvedPath = path.resolve(base, resolvedPath);
+          }
+
+          // Write via the environment's file system (single target), matching /output behavior
+          if (process.env.MLLD_DEBUG === 'true') {
+            // eslint-disable-next-line no-console
+            console.error('[builtin-effects] output:file →', resolvedPath);
+          }
+          const fileSystem = (env as any).fileSystem;
+          if (!fileSystem || typeof fileSystem.writeFile !== 'function') {
+            throw new Error('File system not available for pipeline output');
+          }
+          const dir = path.dirname(resolvedPath);
+          try {
+            await fileSystem.mkdir(dir, { recursive: true });
+          } catch {
+            // Directory may already exist; ignore
+          }
+          await fileSystem.writeFile(resolvedPath, content);
+
+          // Emit a file effect for handlers/observers
+          env.emitEffect('file', content, { path: resolvedPath });
           return;
         }
         case 'stream': {

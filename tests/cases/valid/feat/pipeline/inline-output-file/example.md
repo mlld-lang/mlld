@@ -4,4 +4,4 @@
 
 /var @_ = @gen() with { pipeline: [ output to "inline-file.txt" ] }
 
-/show </tmp-tests/inline-file.txt>
+/show <@base/inline-file.txt>
