@@ -439,17 +439,27 @@ export async function evaluateExecInvocation(
             
             // Handle field access (e.g., @user.name)
             if (varRef.fields && varRef.fields.length > 0) {
-              // Navigate through nested fields
               for (const field of varRef.fields) {
-                if (value && typeof value === 'object' && (field.type === 'field' || field.type === 'numericField')) {
-                  // Handle object field access (including numeric fields)
-                  value = value[field.value];
+                if (value && typeof value === 'object' && (
+                  field.type === 'field' ||
+                  field.type === 'stringIndex' ||
+                  field.type === 'bracketAccess' ||
+                  field.type === 'numericField'
+                )) {
+                  value = (value as any)[field.value];
                 } else if (Array.isArray(value) && (field.type === 'index' || field.type === 'arrayIndex')) {
-                  // Handle array index access
                   const index = parseInt(field.value, 10);
                   value = isNaN(index) ? undefined : value[index];
+                } else if (field.type === 'variableIndex') {
+                  const idxVar = env.getVariable(field.value);
+                  if (!idxVar) {
+                    value = undefined;
+                    break;
+                  }
+                  const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+                  const idxValue = await resolveValue(idxVar, env, ResolutionContext.StringInterpolation);
+                  value = (value as any)?.[idxValue as any];
                 } else {
-                  // Field not found or invalid access
                   value = undefined;
                   break;
                 }

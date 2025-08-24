@@ -12,9 +12,10 @@ used throughout the Mlld grammar.
 // STRING LITERALS
 // -------------------------------------------------------------
 
-// String literal - ONLY single quotes for true literals (no interpolation)
+// String literal - supports single or double quotes without interpolation
 StringLiteral "String Literal"
   = "'" content:EscapedSingleStringContent "'" { return content; }
+  / '"' content:EscapedStringContent '"' { return content; }
 
 // -------------------------------------------------------------
 // NUMBER LITERALS

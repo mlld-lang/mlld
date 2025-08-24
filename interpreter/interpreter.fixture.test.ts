@@ -46,7 +46,6 @@ export const skipTests: Record<string, string> = {
   // Module import tests that need published modules
   'var-data-object-strings-array-functions': 'Issue #254: Registry tests need isolation - @mlld/array not published yet',
   // Bracket notation tests - skipped until grammar issue resolved
-  'bracket-notation-comprehensive': 'Issue #306: Bracket notation field access lost in grammar parsing pipeline',
   // Tests that require @time module
   'now-lowercase-basic': 'Requires @time module to be installed',
   'var-now-lowercase-basic': 'Requires @time module to be installed',
