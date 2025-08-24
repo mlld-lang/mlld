@@ -97,7 +97,6 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       cwd: this.workingDirectory,
       env: { ...process.env, ...(options?.env || {}) },
       maxBuffer: 10 * 1024 * 1024, // 10MB limit
-      timeout: options?.timeout || 30000,
       ...(options?.input ? { input: options.input } : {})
     });
 

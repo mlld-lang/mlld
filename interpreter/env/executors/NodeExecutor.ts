@@ -243,8 +243,7 @@ ${code}
             ...process.env,
             NODE_PATH: nodePaths.join(path.delimiter)
           },
-          maxBuffer: 10 * 1024 * 1024, // 10MB limit
-          timeout: 30000
+          maxBuffer: 10 * 1024 * 1024 // 10MB limit
         });
       } catch (execError: any) {
         // Handle subprocess execution errors

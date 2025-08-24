@@ -5,6 +5,13 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc42]
+### Fixed
+- **Removed command timeout restrictions for LLM workflows**: Completely removed 30-second timeout limits from all command executors
+  - LLM commands can now run as long as needed without timing out
+  - Previously, commands would silently fail after 30 seconds, causing issues with large prompts or complex reasoning tasks
+  - Affects all shell commands, JavaScript execution, and Node.js subprocess execution
+
 ## [2.0.0-rc41]
 ### Fixed
 - **CLI markdown streaming and document output**: Fixed effects system to properly handle markdown content in CLI output (#342)
