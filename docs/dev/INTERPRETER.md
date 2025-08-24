@@ -69,6 +69,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
   - StringInterpolation: unwrap to primitives/strings; auto-exec executables when interpolated where appropriate.
   - Equality/Expression: strict comparisons without coercion; avoid auto-exec.
 - Field access: `utils/field-access.ts` supports dot/bracket/numeric; handles `variableIndex` indirection by resolving index variables.
+- Array slicing: supports `@arr[a:b]`, negative indices, and open ranges; preserves metadata for special arrays.
 - Interpolation: `interpolate()` processes unified template/quote nodes, variable refs, file refs, and condensed pipes; escapes via `interpolation-context`.
 
 ### Exec + Pipelines
@@ -77,11 +78,16 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - Pipelines:
   - Condensed: `@value|@json|@xml|@upper` processed by `eval/pipeline/unified-processor`.
   - With-clause: `run [...] with { pipeline: [...] }` sets `pipelineContext` on env for each stage.
+  - Inline effects: built-ins `| log`, `| output`, `| show` attach to the preceding stage, run after it succeeds, and re-run on each retry attempt.
   - Streaming: optional sinks in `eval/pipeline/stream-sinks/*` (progress-only, terminal); ambient `@ctx` exposes attempt/hint history for retry semantics.
+
+### Metadata Preservation
+
+- LoadContentResult metadata shelf: exec invocation preserves file metadata across JS transforms (see `eval/exec-invocation.ts`).
 
 ### Iteration
 
-- `/for`: `eval/for.ts` iterates arrays/objects; action per item; emits effects immediately; collection form returns array results; supports `_key` pattern for object keys.
+- `/for`: `eval/for.ts` iterates arrays/objects; action per item; emits effects immediately (show/output/log); collection form returns array results; supports `_key` pattern for object keys.
 - `foreach`: `eval/data-value-evaluator.ts` (Cartesian product) executes parameterized commands/templates over arrays; lazy complex data until needed; capped combinations for performance.
 
 ### Imports and Resolvers
@@ -126,6 +132,7 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - /exe: `interpreter/eval/exe.ts` — define executables (command/code/template/section/ref)
 - @fn(...): `interpreter/eval/exec-invocation.ts` — unified invocation with `with { ... }`
 - /show: `interpreter/eval/show.ts` — display content, header transforms
+- /log: inline effect via pipelines; shorthand for output-to-stdout in actions
 - /when: `interpreter/eval/when.ts`, `interpreter/eval/when-expression.ts` — conditionals
 - /for: `interpreter/eval/for.ts` — iteration over arrays/objects
 - foreach (operator): `interpreter/eval/data-value-evaluator.ts` — cartesian execution
