@@ -6,6 +6,7 @@ import { PipelineStateMachine, type StageContext, type StageResult } from './sta
 import { createStageEnvironment } from './context-builder';
 import { MlldCommandExecutionError } from '@core/errors';
 import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
+import { getStreamBus } from './stream-bus';
 
 /**
  * Pipeline Executor - Handles actual execution using state machine
@@ -56,6 +57,8 @@ export class PipelineExecutor {
   async execute(initialInput: string): Promise<string> {
     // Store initial input for synthetic source stage
     this.initialInput = initialInput;
+    // Publish pipeline start
+    try { getStreamBus().publish({ type: 'PIPELINE_START', input: initialInput }); } catch {}
     
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Pipeline start:', {
@@ -92,6 +95,15 @@ export class PipelineExecutor {
       }
       
       const command = this.pipeline[nextStep.stage];
+      // Publish stage start
+      try {
+        getStreamBus().publish({
+          type: 'STAGE_START',
+          stage: nextStep.stage,
+          attempt: nextStep.context.contextAttempt,
+          commandId: command?.rawIdentifier
+        });
+      } catch {}
       const result = await this.executeStage(
         command,
         nextStep.input,
@@ -130,9 +142,11 @@ export class PipelineExecutor {
     // Handle final state
     switch (nextStep.type) {
       case 'COMPLETE':
+        try { getStreamBus().publish({ type: 'PIPELINE_COMPLETE', output: nextStep.output }); } catch {}
         return nextStep.output;
       
       case 'ERROR':
+        try { getStreamBus().publish({ type: 'STAGE_FAILURE', stage: nextStep.stage, error: nextStep.error }); } catch {}
         throw new MlldCommandExecutionError(
           `Pipeline failed at stage ${nextStep.stage + 1}: ${nextStep.error.message}`,
           undefined,
@@ -145,6 +159,7 @@ export class PipelineExecutor {
         );
       
       case 'ABORT':
+        try { getStreamBus().publish({ type: 'PIPELINE_ABORT', reason: nextStep.reason }); } catch {}
         throw new MlldCommandExecutionError(
           `Pipeline aborted: ${nextStep.reason}`,
           undefined,
@@ -201,6 +216,15 @@ export class PipelineExecutor {
           console.error('[PipelineExecutor] Retry detected at stage', context.stage);
         }
         const from = this.parseRetryScope(output);
+        // Publish retry request event immediately for progress sinks
+        try {
+          getStreamBus().publish({
+            type: 'STAGE_RETRY_REQUEST',
+            requestingStage: context.stage,
+            targetStage: typeof from === 'number' ? from : Math.max(0, context.stage - 1),
+            contextId: 'pending'
+          });
+        } catch {}
         const hint = this.parseRetryHint(output);
         return { type: 'retry', reason: hint || 'Stage requested retry', from, hint } as StageResult;
       }
@@ -216,9 +240,23 @@ export class PipelineExecutor {
       const normalized = this.normalizeOutput(output);
       // Run inline effects attached to this functional stage (non-stage effects)
       await this.runInlineEffects(command, normalized, stageEnv);
+      // Publish stage success with basic metrics
+      try {
+        const bytes = Buffer.byteLength(normalized || '', 'utf8');
+        const words = (normalized || '').trim() ? (normalized || '').trim().split(/\s+/).length : 0;
+        getStreamBus().publish({
+          type: 'STAGE_SUCCESS',
+          stage: context.stage,
+          outputPreview: (normalized || '').slice(0, 80),
+          bytes,
+          words,
+          attempt: context.contextAttempt
+        });
+      } catch {}
       return { type: 'success', output: normalized };
 
     } catch (error) {
+      try { getStreamBus().publish({ type: 'STAGE_FAILURE', stage: context.stage, error: error as Error }); } catch {}
       return { type: 'error', error: error as Error };
     } finally {
       this.env.clearPipelineContext();

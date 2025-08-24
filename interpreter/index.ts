@@ -278,7 +278,20 @@ export async function interpret(
   }
   
   // Evaluate the AST
-  await evaluate(ast, env);
+  // Attach progress-only sink when requested (Phase 1)
+  let progressDetach: (() => void) | undefined;
+  if (options.streaming?.mode === 'progress') {
+    const { ProgressOnlySink } = await import('./eval/pipeline/stream-sinks/progress');
+    const sink = new ProgressOnlySink();
+    sink.attach();
+    progressDetach = () => sink.detach();
+  }
+
+  try {
+    await evaluate(ast, env);
+  } finally {
+    if (progressDetach) progressDetach();
+  }
   
   // Display collected errors with rich formatting if enabled
   if (options.outputOptions?.collectErrors) {
