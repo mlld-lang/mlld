@@ -1,1 +1,0 @@
-@run [(echo "hello world")] << this uses the left marker
