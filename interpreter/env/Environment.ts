@@ -696,6 +696,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     attemptHistory?: any[];
     hint?: string | null;
     hintHistory?: string[];
+    // Internal stage index (unadjusted for synthetic source)
+    internalStage?: number;
   }): void {
     this.pipelineContext = context;
   }
@@ -1210,6 +1212,28 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     context?: CommandExecutionContext
   ): Promise<string> {
     // Merge with instance defaults and delegate to command executor factory
+    // Auto-plumb pipeline context if not provided
+    if (!context) {
+      const pctx = this.getPipelineContext();
+      if (pctx) {
+        context = {
+          stage: (pctx as any).internalStage ?? (pctx as any).stage,
+          commandId: (pctx as any).currentCommand,
+          directiveType: 'run',
+          filePath: this.getCurrentFilePath()
+        };
+      }
+    } else if (context && (context.stage === undefined || context.commandId === undefined)) {
+      const pctx = this.getPipelineContext();
+      if (pctx) {
+        if (context.stage === undefined) {
+          context.stage = (pctx as any).internalStage ?? (pctx as any).stage;
+        }
+        if (context.commandId === undefined) {
+          context.commandId = (pctx as any).currentCommand;
+        }
+      }
+    }
     const finalOptions = { ...this.outputOptions, ...options };
     return this.commandExecutorFactory.executeCommand(command, finalOptions, context);
   }
@@ -1286,6 +1310,29 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         }
       } catch {
         // Best-effort; ignore ctx injection errors
+      }
+    }
+
+    // Auto-plumb pipeline context if not provided
+    if (!context) {
+      const pctx = this.getPipelineContext();
+      if (pctx) {
+        context = {
+          stage: (pctx as any).internalStage ?? (pctx as any).stage,
+          commandId: (pctx as any).currentCommand,
+          directiveType: 'run',
+          filePath: this.getCurrentFilePath()
+        };
+      }
+    } else if (context && (context.stage === undefined || context.commandId === undefined)) {
+      const pctx = this.getPipelineContext();
+      if (pctx) {
+        if (context.stage === undefined) {
+          context.stage = (pctx as any).internalStage ?? (pctx as any).stage;
+        }
+        if (context.commandId === undefined) {
+          context.commandId = (pctx as any).currentCommand;
+        }
       }
     }
 

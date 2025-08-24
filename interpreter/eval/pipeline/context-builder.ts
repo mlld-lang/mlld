@@ -90,6 +90,7 @@ export async function createStageEnvironment(
   // Set pipeline context in main environment
   env.setPipelineContext({
     stage: userVisibleStage,
+    internalStage: context.stage,
     totalStages: userVisibleTotalStages,
     currentCommand: command.rawIdentifier,
     input: input,

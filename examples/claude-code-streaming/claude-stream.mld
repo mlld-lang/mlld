@@ -1,0 +1,19 @@
+"Claude Code SDK – Streaming JSON"
+
+/desc
+  This pipeline runs a Node script that connects to Anthropic via the Claude SDK
+  and streams JSON events (NDJSON) as they arrive.
+  
+  Set ANTHROPIC_API_KEY before running. Optionally set PROMPT to customize input.
+  
+  Examples:
+    MLLD_STREAM=full mlld examples/claude-code-streaming/claude-stream.mld
+    PROMPT="Summarize this repo" \
+    MLLD_STREAM=full mlld examples/claude-code-streaming/claude-stream.mld
+
+/show "Starting Claude streaming example…"
+
+/run { node examples/claude-code-streaming/stream.js }
+
+/show "Finished."
+

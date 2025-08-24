@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
@@ -82,12 +82,14 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     // Decide streaming
     const streaming = this.getStreamingOptions();
     if (streaming.mode === 'full' || streaming.mode === 'progress') {
-      // Stream via spawn
-      const sh = process.env.SHELL || 'sh';
-      const child = spawn(sh, ['-lc', safeCommand], {
+      // Stream via execa with shell (dynamic import for CJS compatibility)
+      const { execa } = await import('execa');
+      const child = execa(safeCommand, {
+        shell: true,
         cwd: this.workingDirectory,
         env: { ...process.env, ...(options?.env || {}) },
-        stdio: ['ignore', 'pipe', 'pipe']
+        timeout: options?.timeout || 30000,
+        input: options?.input
       });
       let stdoutBuf = '';
       let stderrBuf = '';
@@ -97,36 +99,29 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       child.stdout?.on('data', (chunk: Buffer) => {
         const text = decoderOut.write(chunk);
         stdoutBuf += text;
-        try { getStreamBus().publish({ type: 'CHUNK', stage: 0, source: 'stdout', text }); } catch {}
+        try { getStreamBus().publish({ type: 'CHUNK', stage: (context?.stage ?? 0), source: 'stdout', text, commandId: context?.commandId, attempt: undefined }); } catch {}
       });
       child.stderr?.on('data', (chunk: Buffer) => {
         const text = decoderErr.write(chunk);
         stderrBuf += text;
-        try { getStreamBus().publish({ type: 'CHUNK', stage: 0, source: 'stderr', text }); } catch {}
+        try { getStreamBus().publish({ type: 'CHUNK', stage: (context?.stage ?? 0), source: 'stderr', text, commandId: context?.commandId, attempt: undefined }); } catch {}
       });
-
-      // Timeout handling
-      const timeoutMs = options?.timeout || 30000;
-      let killed = false;
-      const timer = setTimeout(() => {
-        killed = true;
-        try { child.kill('SIGTERM'); } catch {}
-      }, timeoutMs);
-
-      const exitCode: number = await new Promise((resolve, reject) => {
-        child.on('error', (err) => reject(err));
-        child.on('close', (code) => resolve(code ?? 0));
-      });
-      clearTimeout(timer);
+      let resultExit = 0;
+      try {
+        await child; // execa collects but we rely on our own buffers
+      } catch (e: any) {
+        // execa rejected on non-zero or timeout
+        resultExit = typeof e?.exitCode === 'number' ? e.exitCode : (e?.timedOut ? 124 : 1);
+      }
 
       const duration = Date.now() - startTime;
-      if (killed || exitCode !== 0) {
+      if (resultExit !== 0) {
         const err = new MlldCommandExecutionError(
-          `Shell command failed${killed ? ' (timeout)' : ''}`,
+          `Shell command failed${(child as any).timedOut ? ' (timeout)' : ''}`,
           context?.sourceLocation,
           {
             command: safeCommand,
-            exitCode: killed ? 124 : exitCode,
+            exitCode: resultExit,
             duration,
             stderr: stderrBuf,
             stdout: stdoutBuf,
