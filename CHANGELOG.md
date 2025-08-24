@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Retry hints**: The `retry` action can now carry hints to the next attempt
   - String hints: `retry "need more detail"`
   - Object hints: `retry { temperature: 0.8 }`
+  - Function hints: `retry @somefunc(@input)`
   - Access via `@ctx.hint` in the retried stage
 
 - **Effect architecture**: Complete overhaul of how side effects (show, output, log directives) are handled
