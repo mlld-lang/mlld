@@ -1,4 +1,4 @@
-# mlld (pre-release)
+# mlld (pre-release -- beware dragons!)
 
 mlld is a modular llm scripting language, bringing software engineering to LLM workflows: modularity, versioning, and reproducibility.
 
