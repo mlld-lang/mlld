@@ -35,6 +35,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Effects in exe+when blocks called from for expressions now execute immediately
   - Progress messages appear in real-time during long-running operations
 
+- **Automatic JSON parsing**: Shell commands returning JSON are now automatically parsed into objects/arrays
+  - Eliminates need for manual `JSON.parse()` calls when working with APIs and JSON-returning commands
+  - Configurable via `MLLD_AUTO_PARSE_JSON` environment variable (defaults to enabled)
+
+- **Shell alias resolution**: Automatic resolution of shell aliases in command execution
+  - Commands like `claude`, `ll`, `la` now work in mlld scripts when defined as shell aliases
+  - Configurable via `MLLD_RESOLVE_ALIASES` environment variable (defaults to enabled)
+  - Debug output available with `MLLD_DEBUG_ALIASES=true` to see alias resolution in action
+
+- **Fixed `none` keyword in when expressions**: Corrected bug where `none` was always executing
+  - The `none` keyword now properly executes only when no other conditions match
+  - Affects when expressions used in `/exe` functions (e.g., `/exe @func() = when [...]`)
+  - Side effects in when expressions now work correctly without duplication
+
 ### Fixed
 - **Grammar ordering for `/when` bare blocks**: Fixed PEG parser ordering issue preventing bare `/when [...]` blocks from working
   - `/when [ condition => action ]` now works correctly with all action types including `log`

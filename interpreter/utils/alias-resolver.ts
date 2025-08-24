@@ -39,6 +39,25 @@ export function resolveAlias(command: string): AliasResolutionResult {
     };
   }
   
+  // Don't resolve shell built-in commands - they have specific shell behavior
+  // that differs from their external binary counterparts
+  const shellBuiltins = [
+    'echo', 'cd', 'pwd', 'test', '[', 'true', 'false', 'exit',
+    'export', 'unset', 'set', 'source', '.', 'eval', 'exec',
+    'read', 'printf', 'kill', 'jobs', 'bg', 'fg', 'wait',
+    'type', 'hash', 'alias', 'unalias', 'history', 'fc',
+    'times', 'trap', 'ulimit', 'umask', 'getopts', 'shift',
+    'break', 'continue', 'return', 'local', 'declare', 'typeset'
+  ];
+  
+  if (shellBuiltins.includes(commandName)) {
+    return {
+      wasAlias: false,
+      resolvedCommand: command,
+      originalCommand
+    };
+  }
+  
   try {
     // Method 1: Try to get alias definition using bash -c
     // This runs in an interactive-like context that loads aliases
