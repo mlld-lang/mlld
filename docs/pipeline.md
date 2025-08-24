@@ -198,16 +198,16 @@ Pipeline errors include context about which step failed:
 3. **Handle errors early**: Validate data before transforming
 4. **Test incrementally**: Build pipelines step by step
 
-## Pipeline Context and Retry
+## Retries and Hints
 
 Pipelines provide access to execution context through the `@pipeline` variable and support retry mechanisms for validation and error recovery.
 
-### @pipeline Context Variable
+### @pipeline Context Variable (and @p alias)
 
 Access pipeline execution state within functions:
 
 ```mlld
-# Access stage outputs by index
+# Access stage outputs by index (also via @p)
 @pipeline[0]      # Input to the pipeline
 @pipeline[1]      # Output of first stage
 @pipeline[-1]     # Output of previous stage
@@ -223,12 +223,12 @@ Access pipeline execution state within functions:
 
 ### Retry Mechanism
 
-Functions can return `retry` to re-execute the current pipeline stage:
+Functions can return `retry` to re-execute the previous pipeline stage:
 
 ```mlld
 /exe @validator(input) = when [
   @isValid(@input) => @input
-  @pipeline.try < 3 => retry
+  @pipeline.try < 3 => retry   # Retries the previous stage (the source of @input)
   * => "fallback"
 ]
 
@@ -277,6 +277,56 @@ Functions can return `retry` to re-execute the current pipeline stage:
 - Attempt outputs stored in `@pipeline.tries`
 - Counters reset when moving to next stage
 - Empty output terminates pipeline early
+
+### Inline Effects
+
+Inline effects attach to the preceding functional stage and run after it succeeds:
+
+```mlld
+/var @out = @data | @transform | log "done" | show "visible" | output to {file: { path: "out.txt" }}
+```
+
+- `| log [args...]` → writes to stderr (debug output)
+- `| show [args...]` → writes to stdout and appends to the document
+- `| output [source] to {file|stream|env: ...}` → writes to file/stream/env
+- Effects re-run on each retry of their owning stage
+- Effects do not create new functional stages (stage numbering is unchanged)
+
+### Ambient @ctx
+
+Within pipeline stages, `@ctx` provides per-stage context:
+
+```mlld
+@ctx.try        # attempt number for this stage
+@ctx.tries      # list of prior attempt outputs
+@ctx.stage      # current stage number (1-based)
+@ctx.input      # input to this stage (string)
+@ctx.lastOutput # previous stage output
+@ctx.isPipeline # true inside pipelines
+```
+
+Retry hints: a stage can pass a hint to the next attempt.
+
+```mlld
+/exe @askLLM(text) = when [
+  @needsMore(@text) => retry "add more detail"
+  * => @text
+]
+
+/var @res = @prompt | @askLLM | @finalize(`Hint was: @ctx.hint`)
+```
+
+## Inline Effects
+
+Inline effects attach to the preceding functional stage and run after it succeeds. Effects re-run on retries of their owning stage and do not create additional stages.
+
+```mlld
+/var @out = @data | @transform | log "done" | show "visible" | output to {file: { path: "out.txt" }}
+```
+
+- `| log [args...]` → writes to stderr (debug output)
+- `| show [args...]` → writes to stdout and appends to document
+- `| output [source] to {file|stream|env: ...}` → writes to file/stream/env
 
 ## See Also
 

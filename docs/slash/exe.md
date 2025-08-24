@@ -134,6 +134,33 @@ Complex operations:
 /run @process("input.txt", "output.txt")
 ```
 
+## Conditionals in /exe (Critical Pattern)
+
+Define decision logic directly inside /exe using when blocks.
+
+```mlld
+# Bare when: evaluate all matching conditions; last value returned
+/exe @grade(score) = when [
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  * => "C"
+]
+
+# when first: stop at the first match
+/exe @httpStatus(code) = when first [
+  @code >= 500 => "server error"
+  @code >= 400 => "client error"
+  * => "ok"
+]
+
+# Value-returning when: explicit when: form also supported
+/exe @pick(lang) = when: [
+  @lang == "es" => "Hola"
+  @lang == "fr" => "Bonjour"
+  true => "Hello"
+]
+```
+
 ## Shadow Environments
 
 Create a collection of related functions:

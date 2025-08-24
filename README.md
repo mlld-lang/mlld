@@ -73,10 +73,12 @@ npm install -g mlld
 ```mlld
 /var @name = "Alice"                    # Create variable
 /show `Hello @name!`                    # Display output
-/run {echo "System: @name logged in"}   # Run commands
+/show {echo "System: @name logged in"}  # Run a command and display output
+/show js { console.log("Hello from JS"); "Done" }  # Run JS and display
+/run {echo "Hidden output"}             # Silent run (no document output unless using show/log/output)
 ```
 
-Only `/show`, `/run`, and `/output` produce output. Everything else sets up state.
+Only `/show`, `/output`, and `/log` produce output. Everything else sets up state.
 
 ### 2. Context Composition
 
@@ -99,7 +101,15 @@ PR: @currentPR
 /exe @improveClarity(text) = run "claude -p 'Rewrite for clarity: @text'"
 /exe @addExamples(text) = run "claude -p 'Add examples to: @text'"
 
-/var @answer = run {claude -p "@question"} | @checkFacts | @improveClarity | @addExamples
+/var @answer = run {claude -p "@question"} | @checkFacts | @improveClarity | @addExamples | log "refined" | show "done"
+
+# Retry example: request one more attempt if validation fails
+/exe @validate(input) = when [
+  @isValid(@input) => @input
+  @pipeline.try < 3 => retry
+  * => "fallback"
+]
+/var @result = @answer | @validate
 ```
 
 ### 4. Iteration and Processing
@@ -107,7 +117,7 @@ PR: @currentPR
 ```mlld
 # For loops - execute actions for each item
 /var @files = ["report.md", "summary.md", "notes.md"]
-/for @file in @files => /show `Processing: @file`
+/for @file in @files => show `Processing: @file`
 
 # Collect results with for expressions
 /var @scores = [85, 92, 78, 95]
@@ -172,14 +182,14 @@ Route actions based on complex conditions:
 
 ```mlld
 # Route requests based on method and path
-/when @request first: [
+/when first [
   @method == "GET" && @path == "/users" => @listUsers()
   @method == "POST" && @path == "/users" => @createUser()
   @method == "DELETE" => @deleteResource()
 ]
 
 # Process features conditionally (implicit actions)
-/when @features: [
+/when [
   @hasAuth => @authModule = "enabled"      # Implicit /var
   @hasChat => @loadChat()                  # Implicit /run
   @hasVideo => /import { video } from @company/video
@@ -205,6 +215,20 @@ Use `when:` to create conditional values:
 ```
 
 Read more about [/when](docs/slash/when.md)
+
+### /exe + when (critical pattern)
+
+Define decision logic inside /exe using when blocks:
+
+```mlld
+/exe @grade(score) = when first [
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  * => "C"
+]
+
+/show `Grade: @grade(91)`  # A
+```
 
 ## Examples
 

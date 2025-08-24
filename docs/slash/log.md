@@ -7,6 +7,8 @@ title: "/log Directive"
 
 The `/log` directive writes messages to standard output. It is shorthand for `/output ... to stdout` and is useful for printing debug or progress information.
 
+Note: The inline pipeline effect `| log` writes to stderr and runs after the preceding stage; see pipeline docs.
+
 ## Syntax
 
 ```mlld
