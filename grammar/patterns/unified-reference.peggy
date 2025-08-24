@@ -30,7 +30,7 @@ UnifiedReferenceForPipeline "unified reference for pipeline commands"
   / VariableForPipeline           // @var.field - no tail capture
 
 // =============================================================================
-// FIELD ACCESS EXEC PATTERN (Champion #1)
+// FIELD ACCESS EXEC PATTERN 
 // =============================================================================
 // Source: FieldAccessExecPattern from var-rhs.peggy (PROVEN to work!)
 // Handles: @obj.field.method(args) with optional tail modifiers
@@ -104,7 +104,7 @@ FieldAccessExecNoTail "field access exec invocation without tail"
     }
 
 // =============================================================================
-// SIMPLE EXEC PATTERN (Champion #2) 
+// SIMPLE EXEC PATTERN 
 // =============================================================================
 // Source: ExecInvocationPattern from var-rhs.peggy
 // Handles: @func(args) with optional tail modifiers
@@ -208,7 +208,7 @@ VariableForPipeline "variable reference for pipeline"
     }
 
 // =============================================================================
-// VARIABLE REFERENCE PATTERN (Champion #3)
+// VARIABLE REFERENCE PATTERN 
 // =============================================================================
 // Source: VariableReferenceWithTail from variables.peggy
 // Handles: @var.field with optional tail modifiers
