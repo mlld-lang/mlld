@@ -9,6 +9,7 @@ import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 export interface ExecutorDependencies {
   errorUtils: ErrorUtils;
   workingDirectory: string;
+  getStreamingOptions: () => { mode: 'off'|'full'|'progress'; dest: 'stdout'|'stderr'|'auto'; noTty?: boolean };
   shadowEnvironment: ShadowEnvironment;
   nodeShadowProvider: NodeShadowEnvironmentProvider;
   variableProvider: VariableProvider;
@@ -28,7 +29,7 @@ export class CommandExecutorFactory {
     const { errorUtils, workingDirectory, shadowEnvironment, nodeShadowProvider, variableProvider } = dependencies;
 
     // Create all executor instances
-    this.shellExecutor = new ShellCommandExecutor(errorUtils, workingDirectory);
+    this.shellExecutor = new ShellCommandExecutor(errorUtils, workingDirectory, dependencies.getStreamingOptions);
     this.jsExecutor = new JavaScriptExecutor(errorUtils, workingDirectory, shadowEnvironment);
     this.nodeExecutor = new NodeExecutor(errorUtils, workingDirectory, nodeShadowProvider);
     this.pythonExecutor = new PythonExecutor(errorUtils, workingDirectory, this.shellExecutor);

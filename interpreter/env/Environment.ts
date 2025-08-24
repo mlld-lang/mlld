@@ -68,6 +68,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Utility managers
   private cacheManager: CacheManager;
   private errorUtils: ErrorUtils;
+  private streamingOptions: { mode?: 'off'|'full'|'progress'; dest?: 'stdout'|'stderr'|'auto'; noTty?: boolean } | undefined;
   private commandExecutorFactory: CommandExecutorFactory;
   private variableManager: IVariableManager;
   private importResolver: IImportResolver;
@@ -350,6 +351,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     const executorDependencies: ExecutorDependencies = {
       errorUtils: this.errorUtils,
       workingDirectory: this.getExecutionDirectory(),
+      getStreamingOptions: () => this.getStreamingOptions(),
       shadowEnvironment: {
         getShadowEnv: (language: string) => this.getShadowEnv(language)
       },
@@ -363,6 +365,17 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       }
     };
     this.commandExecutorFactory = new CommandExecutorFactory(executorDependencies);
+  }
+
+  setStreamingOptions(opts?: { mode?: 'off'|'full'|'progress'; dest?: 'stdout'|'stderr'|'auto'; noTty?: boolean }): void {
+    this.streamingOptions = opts || { mode: 'off', dest: 'auto' };
+  }
+
+  getStreamingOptions(): { mode: 'off'|'full'|'progress'; dest: 'stdout'|'stderr'|'auto'; noTty?: boolean } {
+    const mode = this.streamingOptions?.mode || 'off';
+    const dest = this.streamingOptions?.dest || 'auto';
+    const noTty = this.streamingOptions?.noTty || false;
+    return { mode, dest, noTty };
   }
   
   /**

@@ -229,6 +229,10 @@ export async function interpret(
   if (options.urlConfig) {
     env.setURLConfig(options.urlConfig);
   }
+  // Configure streaming options (Phase 0/1 plumbing)
+  if (options.streaming) {
+    env.setStreamingOptions(options.streaming);
+  }
   
   // Set output options if provided
   if (options.outputOptions) {
@@ -278,19 +282,27 @@ export async function interpret(
   }
   
   // Evaluate the AST
-  // Attach progress-only sink when requested (Phase 1)
+  // Attach sinks when requested
   let progressDetach: (() => void) | undefined;
+  let terminalDetach: (() => void) | undefined;
   if (options.streaming?.mode === 'progress') {
     const { ProgressOnlySink } = await import('./eval/pipeline/stream-sinks/progress');
     const sink = new ProgressOnlySink();
     sink.attach();
     progressDetach = () => sink.detach();
+  } else if (options.streaming?.mode === 'full') {
+    const { TerminalSink } = await import('./eval/pipeline/stream-sinks/terminal');
+    const dest = options.streaming?.dest || 'auto';
+    const sink = new TerminalSink(dest);
+    sink.attach();
+    terminalDetach = () => sink.detach();
   }
 
   try {
     await evaluate(ast, env);
   } finally {
     if (progressDetach) progressDetach();
+    if (terminalDetach) terminalDetach();
   }
   
   // Display collected errors with rich formatting if enabled
