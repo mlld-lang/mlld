@@ -47,6 +47,12 @@ export interface InterpretOptions {
   captureErrors?: boolean; // Capture parse errors for pattern development
   ephemeral?: boolean; // Enable ephemeral mode (in-memory caching, no persistence)
   effectHandler?: EffectHandler; // Optional custom effect handler (tests/CI)
+  // Streaming scaffolding (Phase 0): parsed but unused
+  streaming?: {
+    mode?: 'off' | 'full' | 'progress';
+    dest?: 'stdout' | 'stderr' | 'auto';
+    noTty?: boolean;
+  };
 }
 
 /**
