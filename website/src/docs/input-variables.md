@@ -63,7 +63,7 @@ echo '{"version": "1.0.0", "author": "Alice"}' | mlld release.mld
 
 ```mlld
 /import { version, author } from @input
-/var @release = ::Release {{version}} by {{author}}::
+/var @release = :::Release {{version}} by {{author}}:::
 /show @release
 ```
 
@@ -87,7 +87,7 @@ echo '{"config": "production"}' | API_KEY=secret123 mlld deploy.mld
 
 ```mlld
 /import { API_KEY, config } from @input
-/var @deployment = ::Deploying {{config}} with key {{API_KEY}}::
+/var @deployment = :::Deploying {{config}} with key {{API_KEY}}:::
 /show @deployment
 ```
 
@@ -121,7 +121,7 @@ USER_DATA='{"name": "Alice", "role": "admin"}' mlld user.mld
 
 ```mlld
 /import { USER_DATA } from @input
-/var @welcome = ::Welcome {{USER_DATA.name}} ({{USER_DATA.role}})::
+/var @welcome = :::Welcome {{USER_DATA.name}} ({{USER_DATA.role}}):::
 /show @welcome
 ```
 
@@ -168,7 +168,7 @@ When piping to functions without providing arguments, mlld intelligently handles
 
 **Multi-parameter functions with JSON** - Automatically destructured:
 ```mlld
-/exe @greet(name, title) = ::Hello {{title}} {{name}}!::
+/exe @greet(name, title) = :::Hello {{title}} {{name}}!:::
 /var @result = /run {echo '{"name": "Smith", "title": "Dr."}'} | @greet
 >> greet receives: name = "Smith", title = "Dr."
 ```
@@ -197,6 +197,6 @@ Each pipeline step runs in a child environment where:
 ```mlld
 /import { NODE_ENV } from @input
 /var @environment = @NODE_ENV || "development"
-/var @message = ::Running in {{environment}} mode::
+/var @message = :::Running in {{environment}} mode:::
 /show @message
 ```

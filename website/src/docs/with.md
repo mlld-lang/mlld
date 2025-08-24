@@ -215,11 +215,11 @@ Build complex data processing workflows:
 ### With /when
 
 ```mlld
-/var @api_response = /run {curl api.example.com} with {
+/var @api_response = run {curl api.example.com} with {
   pipeline: [@validate_json(@input)]
 }
 
-/when @api_response => /data @parsed = /run {echo "@api_response"} with {
+/when @api_response => @parsed = run {echo "@api_response"} with {
   pipeline: [@parse_json(@input)]
 }
 ```

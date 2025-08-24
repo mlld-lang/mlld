@@ -15,6 +15,7 @@ mlld is built around several key principles:
 - Provide clear context and specific instructions to LLMs
 - Support text-based workflows and transformations
 - Enable structured processing through pipelines
+- Route data and actions based on logical conditions
 - Keep the core language simple while allowing extension through modules
 
 ## Why mlld?
@@ -73,9 +74,9 @@ You are helping {{name}}, a {{role}}, working on {{context.project}} using {{con
 /show @prompt
 ```
 
-### 3. Only /add and /run Produce Output
+### 3. Only /show and /run Produce Output
 
-This is crucial - most directives just set up state. Only `/add` and `/run` actually contribute to the final document:
+This is crucial - most directives just set up state. Only `/show` and `/run` actually contribute to the final document:
 
 ```mlld
 /var @hidden = "This won't appear in output"
@@ -87,7 +88,7 @@ This is crucial - most directives just set up state. Only `/add` and `/run` actu
 
 ### 4. Complexity Lives in Modules
 
-mlld deliberately lacks traditional programming constructs (loops, error handling, complex logic). Instead, modules provide these capabilities:
+When you need loops, error handling, or complex algorithms, modules provide these capabilities:
 
 ```mlld
 # Instead of language features, use modules:
@@ -100,6 +101,63 @@ mlld deliberately lacks traditional programming constructs (loops, error handlin
 ```
 
 This separation keeps mlld scripts clean and focused on orchestration while modules handle implementation details.
+
+### 5. Logical Routing with Operators
+
+mlld can route data and actions based on conditions using built-in operators:
+
+```mlld
+# Use operators in expressions
+/var @canProcess = @status == "ready" && !@isLocked
+/var @priority = @severity > 8 ? "high" : "normal"
+
+# Route actions based on conditions
+/when first [
+  @method == "GET" && @path == "/api/users" => @listUsers()
+  @method == "POST" && @path == "/api/users" => @createUser()
+  @method == "DELETE" => @deleteResource()
+]
+
+# Conditional value assignment
+/var @config = when [
+  @env == "prod" => @prodSettings
+  @env == "staging" => @stagingSettings
+  none => @devSettings
+]
+```
+
+This allows mlld to function as a logical router, making decisions based on runtime conditions without programming constructs.
+
+### 6. Pipelines for Transformations
+
+Chain transformations with the pipeline operator `|`:
+
+```mlld
+/var @report = /run "cat data.json" | @json | @md | show "done" | output to {file: { path: "report.md" }}
+```
+
+- Outside templates: spaced/stacked pipes are allowed; inside templates: condensed `|@transform`.
+- Inline effects do not create stages and re-run on retries (`| log`, `| show`, `| output`).
+- Access pipeline state with `@pipeline` (alias `@p`): `@p[-1]` previous output, `@pipeline.try` attempt number.
+- Inside stages, ambient `@ctx` exposes `try`, `tries`, `input`, and optional retry `hint` passed between attempts.
+
+See: [Pipelines](./pipeline.md)
+
+### 7. Reusable Functions with Conditional Logic (/exe)
+
+Define conditional behavior inside /exe using when blocks:
+
+```mlld
+/exe @grade(score) = when first [
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  * => "C"
+]
+
+/show `Grade: @grade(86)`  # B
+```
+
+See: [/when](./slash/when.md), [/exe](./slash/exe.md)
 
 ## Modular Prompt Engineering
 

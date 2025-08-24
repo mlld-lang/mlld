@@ -5,7 +5,7 @@ title: "Syntax Reference"
 
 # Syntax Reference
 
-This document provides a comprehensive reference for the mlld syntax.
+This document provides a reference for the mlld syntax.
 
 ## Core Tokens
 
@@ -21,7 +21,9 @@ Directives must appear at start of line (no indentation) and use the `/` prefix:
 /path     - Define filesystem path variables
 /var     - Define structured data variables
 /when     - Conditional actions
+/for      - Iterate over collections
 /output   - Write content to files or streams
+/log     - Write messages to stdout
 ```
 
 ### Comments
@@ -39,8 +41,9 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 ### Delimiters
 
 ```
-[ ]     Path boundaries and resolver paths
-:: ::   Template boundaries (double-bracket templates)
+< >     File/URL loading and content extraction
+:: ::   Double colon template boundaries (@ interpolation)
+::: ::: Triple colon template boundaries ({{}} interpolation)
 { }     Command boundaries (braces for multi-line)
 " "     Command boundaries (quotes for single-line)
 ` `     Backtick templates (with @ interpolation)
@@ -51,17 +54,81 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 ,       List separator
 ()      Command parameter list
 :       Schema reference operator (optional)
+|       Pipeline operator
+[]      Array indexing and slicing
 ```
+
+## Pipelines
+
+### Basic
+
+```mlld
+/var @out = /run "echo hello" | @upper | @md
+```
+
+- Outside templates/quotes: spaced and stacked pipes are allowed.
+- Inside templates/quotes: use condensed form only (e.g., `` `Hi @name|@upper` ``).
+- Equivalent to: `with { pipeline: [@upper, @md] }`.
+
+### Inline Effects
+
+```mlld
+/var @r = @data | @transform | log "ok" | show "done" | output to {file: { path: "out.txt" }}
+```
+
+- `| log` → writes to stderr; `| show` → stdout + document; `| output` → file/stream/env.
+- Effects attach to the preceding stage and re-run on retries; they do not create stages.
+
+### Context Variables
+
+- `@pipeline` (alias `@p`) exposes stage outputs by index: `@p[0]`, `@p[1]`, `@p[-1]`.
+- Retry info: `@pipeline.try`, `@pipeline.tries`, `@pipeline.retries.all`.
+- Ambient `@ctx` within stages: `@ctx.try`, `@ctx.tries`, `@ctx.input`, `@ctx.hint`.
+
+See: [Pipelines](./pipeline.md)
+
+### Operators
+
+```
+# Comparison Operators
+==      Equality (with mlld type coercion)
+!=      Inequality
+>       Greater than
+<       Less than
+>=      Greater than or equal
+<=      Less than or equal
+
+# Logical Operators
+&&      Logical AND (short-circuits)
+||      Logical OR (short-circuits)
+!       Logical NOT (unary)
+
+# Conditional Operator
+? :     Ternary conditional (test ? true_value : false_value)
+
+# Grouping
+()      Parentheses for explicit precedence
+```
+
+#### Operator Precedence (highest to lowest)
+1. `()` - Parentheses
+2. `!` - Logical NOT
+3. `>`, `<`, `>=`, `<=` - Comparison
+4. `==`, `!=` - Equality
+5. `&&` - Logical AND
+6. `||` - Logical OR
+7. `? :` - Ternary conditional
 
 ### String Values
 
 - Must be quoted with ', ", or `
 - Quotes must match (no mixing)
 - Backslashes and quotes within strings are treated as literal characters
+- Use `\.` to include a literal dot without triggering field access
 - Single-line strings (', ") cannot contain newlines
 - Double quotes (") support @ interpolation: "Hello @name"
 - Backtick templates (`) support @ interpolation: `Hello @name!`
-- Double-bracket templates support {{}} interpolation: ::Hello {{name}}!::
+- Double-bracket templates support {{}} interpolation: :::Hello {{name}}!:::
 
 ### Identifiers
 
@@ -78,8 +145,8 @@ Syntax: Variables are created with `@identifier` and referenced with `@identifie
 ```mlld
 /path @docs = "./documentation"    # Create path variable
 @docs                              # Reference path variable
-[@./path]                          # Resolver path (needs brackets)
-[@PROJECTPATH/config]              # Project root resolver path
+<@./path>                          # Resolver path (needs alligators)
+<@PROJECTPATH/config>              # Project root resolver path
 ```
 
 ### Text Variables
@@ -90,7 +157,7 @@ Variables are created with `@identifier` prefix and referenced differently based
 @name                              # Reference in directives
 "Hello @name"                     # Reference in double quotes
 `Welcome @name!`                   # Reference in backtick templates
-::Content with {{name}}::          # Reference in double-bracket templates
+:::Content with {{name}}:::          # Reference in double-bracket templates
 ```
 
 ### Data Variables
@@ -101,6 +168,7 @@ Variables are created with `@identifier` prefix and support field access:
 @config                            # Reference data variable
 @config.port                       # Field access with dot notation
 @users.0                           # Array element access
+@users[0:2]                        # Array slice (start:end)
 ::Port: {{config.port}}::          # Reference in template
 ```
 
@@ -123,17 +191,41 @@ def hello():
 
 ## Directive Patterns
 
-### /add
+### /show
 
 ```mlld
-/show [path]
-/show [path # section_text]
-/show [path] as "# New Title"           # Rename section
-/show "Section" from [path]
-/show "Section" from [path] as "# New Title"
+/show <path>
+/show <path # section_text>
+/show <path> as "# New Title"           # Rename section
+/show "Section" from <path>
+/show "Section" from <path> as "# New Title"
 /show @variable                          # Add variable content
 /show "Literal text"                    # Add literal text
-/show ::Template with {{var}}::          # Add template
+/show :::Template with {{var}}:::          # Add template
+/show {echo "Hello"}                    # Run command and display
+/show js { console.log("Hi"); "Done" }  # Run JS and display
+```
+
+### /when
+
+```mlld
+# Simple form with operators
+/when @score > 90 => show "Excellent!"
+/when @isAdmin && @isActive => show "Admin panel"
+/when !@isLocked => show "Available"
+
+# Block forms
+/when [
+  @env == "prod" => @config = "production.json"     # Implicit var
+  none => @config = "development.json"
+]
+/when first [
+  @task == "build" => @compile()
+  * => @default()
+]
+
+# Implicit actions (directive prefix optional)
+/when @needsInit => @setup() = @initialize()            # Implicit exe
 ```
 
 ### /run
@@ -152,7 +244,7 @@ def hello():
 /import { greeting, config } from "shared.mld"      # File import
 /import { * } from "utils.mld"                      # Import all
 /import { fetchData } from @corp/utils              # Module import (no quotes)
-/import { readme } from [@./README.md]              # Resolver path import (brackets)
+/import { readme } from <@./README.md>              # Resolver path import (alligators)
 /import { API_KEY } from @INPUT                     # Environment variables
 ```
 
@@ -166,18 +258,57 @@ def hello():
   npm test
 }
 /exe @calculate(x) = js {return @x * 2}           # Code executable
-/exe @getIntro(file) = [@file # Introduction]     # Section executable
+/exe @getIntro(file) = <@file # Introduction>     # Section executable
 /exe @js = { formatDate, parseJSON }               # Shadow environment
+
+# Conditionals inside /exe
+/exe @grade(score) = when [                        # Bare when: all matches run, last value returned
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  * => "C"
+]
+/exe @httpStatus(code) = when first [              # when first: stop at first match
+  @code >= 500 => "server error"
+  @code >= 400 => "client error"
+  * => "ok"
+]
 ```
 
-### /text
+### /for
+
+```mlld
+# Output form - executes action for each item
+/for @item in @array => show @item
+/for @file in <*.md> => show `Processing @file.filename`
+
+# Object iteration with key access
+/for @value in @config => show `@value_key: @value`
+
+# Collection form - returns array
+/var @doubled = for @n in @numbers => @n * 2
+/var @greetings = for @name in @names => `Hello, @name!`
+```
+
+### /var
 
 ```mlld
 /var @name = "value"                    # Simple text
 /var @greeting = "Hello @name!"         # With @ interpolation
 /var @template = `Welcome @user!`       # Backtick template
-/var @content = ::Hello {{name}}!::     # Double-bracket template
+/var @content = :::Hello {{name}}!:::     # Double-bracket template
 /var @result = /run "date"              # From command output
+
+# With expressions
+/var @isValid = @score > 80 && @completed      # Logical expression
+/var @status = @isPro ? "premium" : "basic"    # Ternary
+/var @hasAccess = !@isBlocked                  # Negation
+
+# With when expressions (value-returning)
+/var @message = when [
+  @lang == "es" => "Hola"
+  @lang == "fr" => "Bonjour"
+  true => "Hello"
+]
 ```
 
 ### /path
@@ -203,17 +334,27 @@ def hello():
 ### Backtick Templates (Primary - with @ interpolation)
 ```mlld
 /var @message = `Hello @name, welcome to @place!`
-/var @link = `[@title](@url)`
+/var @link = `<@title>(@url)`
 ```
 
-### Double-Bracket Templates (For @ heavy content)
+### Double Colon Templates (Alternative to backticks - with @ interpolation)
 ```mlld
-/var @tweet = ::Hey {{user}}, check out {{handle}}'s new post!::
-/var @prompt = ::
+/var @docs = ::The `getData()` function returns @value::
+/var @code = ::
+  Use `npm install` to setup
+  Then call `init(@name)` to start
+::
+```
+Double colon syntax is useful when you need backticks inside your template.
+
+### Triple Colon Templates (For {{}} interpolation)
+```mlld
+/var @tweet = :::Hey {{user}}, check out {{handle}}'s new post!:::
+/var @prompt = :::
   System: {{role}}
   Context: {{context.data}}
   User: {{username}}
-::
+:::
 ```
 
 ## Variable Interpolation Rules
@@ -222,9 +363,11 @@ def hello():
 - **Double quotes**: `"Hello @name"` - @ interpolation works
 - **Single quotes**: `'Hello @name'` - @ is literal text (no interpolation)
 - **Backtick templates**: `` `Hello @name!` `` - @ interpolation works
-- **Double-bracket templates**: `::Hello {{name}}!::` - Use {{}} for variables
+- **Double colon templates**: `::Hello @name!::` - @ interpolation works
+- **Triple colon templates**: `:::Hello {{name}}!:::` - Use {{}} for variables
 - **Commands in braces**: `{echo "User: @name"}` - @ interpolation works
 - **Directives**: `/add @greeting` - Direct @ reference
 
-### Key Rule: "Double brackets, double braces"
-In `::...::` templates, always use `{{variable}}` syntax.
+### Key Rule: Template Interpolation
+- Single/double quotes, backticks, and `::...::` use `@variable` syntax
+- Triple colons `:::...:::` use `{{variable}}` syntax

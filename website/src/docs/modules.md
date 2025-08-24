@@ -37,7 +37,7 @@ Once installed, import modules in your `.mld.md` or `.mld` files:
 /import { formatDate, capitalize } from @alice/utils
 
 /var @greeting = `Hello @capitalize("world")!`
-/var @today = `Today is @formatDate(@TIME)`
+/var @today = `Today is @formatDate(@NOW)`
 
 /show @greeting
 /show @today
@@ -444,16 +444,16 @@ Utility functions for text formatting and dates. Perfect for blogs, documentatio
 ```mlld-run
 /import { formatDate, capitalize, greeting } from @alice/utils
 
-/var @today = ::Today is {{formatDate(@TIME)}}::
+/var @today = :::Today is {{formatDate(@NOW)}}:::
 /show @today
 ```
 
 ## export
 
 ```mlld-run
-/exe @formatDate(dateStr) = ::{{dateStr | format("YYYY-MM-DD")}}::
-/exe @capitalize(text) = ::{{text | title}}::
-/exe @greeting(name) = ::Hello, {{capitalize(@name)}}!::
+/exe @formatDate(dateStr) = :::{{dateStr | format("YYYY-MM-DD")}}:::
+/exe @capitalize(text) = :::{{text | title}}:::
+/exe @greeting(name) = :::Hello, {{capitalize(@name)}}!:::
 
 /var @module = {
   formatDate: @formatDate,
@@ -469,7 +469,7 @@ Utility functions for text formatting and dates. Perfect for blogs, documentatio
 Formats a date string to YYYY-MM-DD format.
 
 ```mlld
-/var @myDate = ::{{formatDate("2024-01-15T10:30:00Z")}}::
+/var @myDate = :::{{formatDate("2024-01-15T10:30:00Z")}}:::
 /show @myDate
 ```
 
@@ -480,7 +480,7 @@ Output: `2024-01-15`
 Capitalizes the first letter of each word.
 
 ```mlld
-/var @title = ::{{capitalize("hello world")}}::
+/var @title = :::{{capitalize("hello world")}}:::
 /show @title
 ```
 
@@ -491,7 +491,7 @@ Output: `Hello World`
 Creates a personalized greeting message.
 
 ```mlld
-/var @welcome = ::{{greeting("Alice")}}::
+/var @welcome = :::{{greeting("Alice")}}:::
 /show @welcome
 ```
 
@@ -552,11 +552,11 @@ license: CC0
 mlld-version: 1.0.0-rc-12
 ---
 
-/exe @formatDate(dateStr) = ::{{dateStr | format("YYYY-MM-DD")}}::
+/exe @formatDate(dateStr) = :::{{dateStr | format("YYYY-MM-DD")}}:::
 
-/exe @capitalize(text) = ::{{text | title}}::
+/exe @capitalize(text) = :::{{text | title}}:::
 
-/exe @greeting(name) = ::Hello, {{capitalize(@name)}}!::
+/exe @greeting(name) = :::Hello, {{capitalize(@name)}}!:::
 
 >> Explicit module export - defines what's available to importers
 /var @module = {
@@ -971,8 +971,8 @@ mlld install @community/string-utils
 /import { slugify, truncate } from @community/string-utils
 
 /var @title = "My Blog Post Title!"
-/var @slug = ::{{slugify(@title)}}::
-/var @summary = ::{{truncate("This is a long description...", 50)}}::
+/var @slug = :::{{slugify(@title)}}:::
+/var @summary = :::{{truncate("This is a long description...", 50)}}:::
 
 >> Output
 /show ::Slug: {{@slug}}::
@@ -1647,10 +1647,6 @@ See [Pipeline Format Feature](pipeline.md#pipeline-format-feature) for complete 
      return @principal * Math.pow(1 + @rate, @time);
    )}
    ```
-
-## Future Considerations
-
-The module system may be extended with additional features based on community needs and feedback. Potential areas for enhancement include improved search capabilities, update management, and better integration with development tools.
 
 ### Contributing
 

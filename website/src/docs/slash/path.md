@@ -48,12 +48,12 @@ Where:
 
 ## Special Path Resolvers
 
-mlld provides special resolvers for paths (used with brackets):
+mlld provides special resolvers for paths (used with alligators):
 
-- `[@./path]`: Project root relative path
-- `[@PROJECTPATH/path]`: Alternative project root syntax
+- `<@./path>`: Project root relative path
+- `<@PROJECTPATH/path>`: Alternative project root syntax
 
-Resolver paths use brackets: `[@./path]`, while regular paths use quotes: `"./path"`
+Resolver paths use alligators: `<@./path>`, while regular paths use quotes: `"./path"`
 
 ## Referencing Path Variables
 
@@ -61,11 +61,11 @@ Path variables are referenced using the `@identifier` syntax:
 
 ```mlld
 /path @docs = "./docs"
-/show [@docs/guide.md]
+/show <@docs/guide.md>
 ```
 
 Path variables can be used:
-- Inside square brackets `[...]` for paths
+- Inside alligators `<...>` for paths
 - In commands: `/run "ls @docs"`
 - With additional path segments appended using `/`
 
@@ -87,13 +87,13 @@ Using path variables in commands:
 Embedding files with path variables:
 ```mlld
 /path @templates = "./templates"
-/show [@templates/header.md]
+/show <@templates/header.md>
 ```
 
 Using path segments:
 ```mlld
 /path @src = "./src"
-/show [@src/components/button.js]
+/show <@src/components/button.js>
 ```
 
 ## Error Handling
@@ -114,7 +114,7 @@ Paths can include variables with @ interpolation in double quotes:
 
 ## Path Best Practices
 
-- For project-relative paths, use `[@./path]` resolver syntax
+- For project-relative paths, use `<@./path>` resolver syntax
 - Use forward slashes for path separators (even on Windows)
 - Be cautious when using absolute paths or parent directory references (`..`), as they may make your mlld files less portable
 - Consider using path variables to encapsulate filesystem paths for better maintainability

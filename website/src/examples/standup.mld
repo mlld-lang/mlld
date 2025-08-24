@@ -1,0 +1,54 @@
+
+/var @commits = run {git log --since="yesterday"}
+/var @prs = run {gh pr list --json title,url,createdAt}
+
+/exe @claude(request) = run {claude -p "@request"}
+/exe @formatPRs(items) = js {
+  return items.map(pr => `- PR: ${pr.title} (${pr.url})`).join('\n');
+}
+
+>> simple template
+/var @standup = `
+  Write a standup update in markdown summarizing the work I did 
+  yesterday based on the following commits and PRs.
+
+  ## Commits:
+  @commits
+
+  ## PRs:
+  @formatPRs(@prs)
+`
+
+>> executable template
+/exe @reviewPrompt(input) = `
+Review the following standup update to ensure I'm not taking credit for work I didn't do.
+
+My username is @githubuser. Here's my standup update:
+<standup>
+@input
+</standup>
+
+Check whether there are any commits or PRs listed that I wasn't involved in. If there are, respond with DENY. If there are not, respond with APPROVE.
+
+Your response should contain APPROVE or DENY in all caps.
+`
+
+/exe @hasApproval(text) = js {
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes('approve')) {
+    return 'true';
+  } else if (lowerText.includes('deny')) {
+    return 'false';  
+  }
+  return 'error';
+}
+
+/exe @review(@input) = when [
+  @input => @check = @claude(@reviewPrompt(@input)) 
+  @hasApproval(@check) => show "Approved: @check"
+  @hasApproval(@check) => @input
+  !@hasApproval(@check) && @ctx.retries < 3 => retry
+  none => show "No definitive answer: @input"
+]
+
+/show @claude(@standup) | show "Reviewing #@p.try..." | @review
