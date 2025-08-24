@@ -1,3 +1,3 @@
-filename: code-review.mld
+filename: standup.mld
 className: hero-terminal
-output: "Looking at the TypeBlorp updates, the new unidirectional flow implementation correctly separates concerns between state mutations and subscriptions. The observer pattern implementation is clean but has potential race conditions in the notification queue that should be addressed with a proper message ordering mechanism. I recommend adding tests for concurrent updates."
+heading: "Retries built-in? Heck yes. Use shell commands, JS, mlld's when expressions to create readable workflows in a tenth as much code."

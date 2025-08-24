@@ -64,7 +64,16 @@ layout: base.njk
   
   <div class="container">
     <div class="content-grid">
-      <!-- First row -->
+
+      <div class="grid-row">
+        <span class="vertical-line"></span>
+        <h3 class="card-heading">{{ (examples.default['standup'] or examples['standup']).heading }}</h3>
+        <div class="card-content">
+          {% set example = examples.default['standup'] or examples['standup'] %}
+          {% include "components/mlld-example.njk" %}
+        </div>
+      </div>
+
       <div class="grid-row">
         <span class="vertical-line"></span>
         <h3 class="card-heading">{{ (examples.default['readme-embed'] or examples['readme-embed']).heading }}</h3>
@@ -74,7 +83,6 @@ layout: base.njk
         </div>
       </div>
       
-      <!-- Second row -->
       <div class="grid-row">
         <span class="vertical-line"></span>
         <h3 class="card-heading">{{ (examples.default['test-plan'] or examples['test-plan']).heading }}</h3>
@@ -84,7 +92,6 @@ layout: base.njk
         </div>
       </div>
       
-      <!-- Third row -->
       <div class="grid-row">
         <span class="vertical-line"></span>
         <h3 class="card-heading">{{ (examples.default['imports'] or examples['imports']).heading }}</h3>
