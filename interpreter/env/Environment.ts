@@ -923,6 +923,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.effectHandler = handler;
   }
   
+  /**
+   * Get the parent environment (if this is a child environment).
+   */
+  getParent(): Environment | undefined {
+    return this.parent;
+  }
+  
   // --- Shadow Environment Management ---
   
   /**

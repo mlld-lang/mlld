@@ -68,23 +68,29 @@ export async function evaluateOutput(
     
     if (!hasSource) {
       // @output [file.md] or @output to target - output full document
-      // Get the full document content by formatting all nodes
-      try {
-        const nodes = env.getNodes();
-        const { formatOutput } = await import('../output/formatter');
-        content = await formatOutput(nodes, {
-          format: format || 'markdown',
-          variables: env.getAllVariables()
-        });
-      } catch (formatError) {
-        // If there's an error, log it in debug mode
-        if (env.hasVariable('DEBUG')) {
-          const debug = env.getVariable('DEBUG');
-          if (debug && debug.value) {
-            logger.error('Output format error', { error: formatError.message });
+      // Get the accumulated document from effect handler (includes both markdown and directive outputs)
+      const effectHandler = env.getEffectHandler();
+      if (effectHandler && typeof effectHandler.getDocument === 'function') {
+        content = effectHandler.getDocument();
+      } else {
+        // Fallback to node formatting if no effect handler
+        try {
+          const nodes = env.getNodes();
+          const { formatOutput } = await import('../output/formatter');
+          content = await formatOutput(nodes, {
+            format: format || 'markdown',
+            variables: env.getAllVariables()
+          });
+        } catch (formatError) {
+          // If there's an error, log it in debug mode
+          if (env.hasVariable('DEBUG')) {
+            const debug = env.getVariable('DEBUG');
+            if (debug && debug.value) {
+              logger.error('Output format error', { error: formatError.message });
+            }
           }
+          throw formatError;
         }
-        throw formatError;
       }
     } else {
       // Evaluate source content

@@ -247,6 +247,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
             logger.debug('Skipping non-document node type:', { type: (n as any).type });
           }
         }
+        
+        // Add all nodes to environment for document reconstruction
+        // This enables /output directive to recreate the complete document
+        if (!context?.isExpression) {
+          env.addNode(n);
+        }
       }
     } else {
       // No frontmatter, process all nodes normally
@@ -254,6 +260,12 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
         const result = await evaluate(n, env, context);
         lastValue = result.value;
         lastResult = result;
+        
+        // Add all nodes to environment for document reconstruction
+        // This enables /output directive to recreate the complete document
+        if (!context?.isExpression) {
+          env.addNode(n);
+        }
         
         // Emit effects for non-directive nodes to preserve document structure
         // Skip effect emission when evaluating expressions (they're not document content)
