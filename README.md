@@ -134,7 +134,7 @@ PR: @currentPR
 /var @results = foreach @query(@models, @prompts)  << 9 results
 ```
 
-## Modules
+## Modules ⚠️ registry is not live yet
 
 ### Using Modules
 
