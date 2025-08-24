@@ -31,9 +31,9 @@ function validateNonePlacement(conditions: WhenConditionPair[]): void {
   for (let i = 0; i < conditions.length; i++) {
     const condition = conditions[i].condition;
     
-    if (isNoneCondition(condition)) {
+    if (condition.length === 1 && isNoneCondition(condition[0])) {
       foundNone = true;
-    } else if (condition?.type === 'Literal' && condition?.valueType === 'wildcard') {
+    } else if (condition.length === 1 && condition[0]?.type === 'Literal' && condition[0]?.valueType === 'wildcard') {
       foundWildcard = true;
       if (foundNone) {
         // * after none is technically valid but makes none unreachable
@@ -42,14 +42,14 @@ function validateNonePlacement(conditions: WhenConditionPair[]): void {
     } else if (foundNone) {
       throw new MlldWhenExpressionError(
         'The "none" keyword can only appear as the last condition(s) in a when block',
-        condition.location
+        condition[0]?.location
       );
     }
     
-    if (foundWildcard && isNoneCondition(condition)) {
+    if (foundWildcard && condition.length === 1 && isNoneCondition(condition[0])) {
       throw new MlldWhenExpressionError(
         'The "none" keyword cannot appear after "*" (wildcard) as it would never be reached',
-        condition.location
+        condition[0].location
       );
     }
   }
@@ -125,7 +125,7 @@ export async function evaluateWhenExpression(
     const pair = node.conditions[i];
     
     // Check if this is a none condition
-    if (isNoneCondition(pair.condition)) {
+    if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
       // Skip none conditions in first pass
       continue;
     }
@@ -221,9 +221,12 @@ export async function evaluateWhenExpression(
           // - /when (directive) uses global scope semantics (handled elsewhere)
           // - when: [...] in /exe uses LOCAL scope – evaluate actions in a child env
           const actionEnv = accumulatedEnv.createChild();
-          // FIXED: Removed isExpression: true to allow effects (like /show) to propagate
-          // Effects should work the same everywhere - no special suppression in when expressions
-          const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
+          // FIXED: Suppress side effects in when expressions used in /exe functions
+          // Side effects should be handled by the calling context (e.g., /show @func())
+          const actionResult = await evaluate(pair.action, actionEnv, { 
+            ...(context || {}), 
+            isExpression: true 
+          });
           
           let value = actionResult.value;
           
@@ -368,7 +371,7 @@ export async function evaluateWhenExpression(
       const pair = node.conditions[i];
       
       // Only process none conditions in second pass
-      if (!isNoneCondition(pair.condition)) {
+      if (!(pair.condition.length === 1 && isNoneCondition(pair.condition[0]))) {
         continue;
       }
       
@@ -380,8 +383,12 @@ export async function evaluateWhenExpression(
       try {
         // Evaluate the action for none condition
         const actionEnv = accumulatedEnv.createChild();
-        // FIXED: Removed isExpression: true to allow effects (like /show) to propagate
-        const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
+        // FIXED: Suppress side effects in when expressions used in /exe functions
+        // Side effects should be handled by the calling context (e.g., /show @func())
+        const actionResult = await evaluate(pair.action, actionEnv, { 
+          ...(context || {}), 
+          isExpression: true 
+        });
         
         let value = actionResult.value;
         

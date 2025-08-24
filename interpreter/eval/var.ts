@@ -345,6 +345,10 @@ export async function evaluateVar(
       resolvedValue = await env.executeCommand(valueNode.command);
     }
     
+    // Apply automatic JSON parsing for shell command output
+    const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
+    resolvedValue = processCommandOutput(resolvedValue);
+    
   } else if (valueNode.type === 'VariableReference') {
     // Variable reference: @otherVar
     if (process.env.MLLD_DEBUG === 'true') {

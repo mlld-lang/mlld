@@ -3,6 +3,7 @@ import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutio
 import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
+import { resolveAliasWithCache } from '@interpreter/utils/alias-resolver';
 
 /**
  * Executes shell commands using execSync
@@ -45,6 +46,20 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       };
     }
 
+    // Try to resolve aliases before validation
+    const aliasResolution = resolveAliasWithCache(command, {
+      enabled: process.env.MLLD_RESOLVE_ALIASES !== 'false',
+      timeout: 2000,
+      cache: true
+    });
+
+    const commandToExecute = aliasResolution.resolvedCommand;
+    
+    // Debug logging for alias resolution
+    if (aliasResolution.wasAlias && process.env.MLLD_DEBUG_ALIASES === 'true') {
+      console.error(`[mlld] Resolved alias: ${aliasResolution.originalCommand} → ${aliasResolution.resolvedCommand}`);
+    }
+
     /**
      * Validate and parse command for safe execution
      * WHY: Shell commands can contain dangerous operators (;, &&, ||, >, <, |)
@@ -58,7 +73,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
      */
     let safeCommand: string;
     try {
-      safeCommand = CommandUtils.validateAndParseCommand(command);
+      safeCommand = CommandUtils.validateAndParseCommand(commandToExecute);
     } catch (error: unknown) {
       // Pass through the validation error with its detailed message
       const message = error instanceof Error ? error.message : String(error);
@@ -66,7 +81,7 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
         message, // Use the full error message from CommandUtils
         context?.sourceLocation,
         {
-          command,
+          command: commandToExecute,
           exitCode: 1,
           duration: 0,
           stderr: message,
