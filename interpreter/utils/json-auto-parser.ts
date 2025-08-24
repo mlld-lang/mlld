@@ -97,3 +97,4 @@ export function processCommandOutput(output: string, enableAutoParse?: boolean):
   const result = tryParseJson(output);
   return result.value;
 }
+
