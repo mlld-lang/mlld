@@ -5,6 +5,15 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc41]
+### Fixed
+- **CLI markdown streaming and document output**: Fixed effects system to properly handle markdown content in CLI output (#342)
+  - CLI now displays markdown content progressively during execution (streaming mode)
+  - `/output "file.md"` directive correctly outputs complete document including both markdown and directive results
+  - Markdown content from mlld files is now included in CLI output alongside directive results
+  - Updated test expectations to reflect correct behavior with preserved newlines from markdown content
+  - Added basic architectural docs for effects system
+
 ## [2.0.0-rc40]
 ### Added
 - **`/log` directive support in action contexts**: Extended `/log` to work in for loops and when blocks
