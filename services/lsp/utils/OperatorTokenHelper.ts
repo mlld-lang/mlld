@@ -146,6 +146,71 @@ export class OperatorTokenHelper {
           tokenType: 'operator',
           modifiers: []
         });
+      } else if (field.type === 'arraySlice') {
+        // Token for opening bracket
+        const openBracketPos = this.document.positionAt(field.location.start.offset);
+        this.tokenBuilder.addToken({
+          line: openBracketPos.line,
+          char: openBracketPos.character,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
+        
+        // Token for start index (if present)
+        if (field.start !== undefined && field.start !== null) {
+          const startStr = String(field.start);
+          // Start index is right after the opening bracket
+          const startPos = this.document.positionAt(field.location.start.offset + 1);
+          this.tokenBuilder.addToken({
+            line: startPos.line,
+            char: startPos.character,
+            length: startStr.length,
+            tokenType: 'number',
+            modifiers: []
+          });
+        }
+        
+        // Token for colon separator
+        const sourceText = this.document.getText();
+        const rangeText = sourceText.substring(field.location.start.offset, field.location.end.offset);
+        const colonIndex = rangeText.indexOf(':');
+        if (colonIndex !== -1) {
+          const colonPos = this.document.positionAt(field.location.start.offset + colonIndex);
+          this.tokenBuilder.addToken({
+            line: colonPos.line,
+            char: colonPos.character,
+            length: 1,
+            tokenType: 'operator',
+            modifiers: []
+          });
+        }
+        
+        // Token for end index (if present)
+        if (field.end !== undefined && field.end !== null) {
+          const endStr = String(field.end);
+          // End index is after the colon
+          if (colonIndex !== -1) {
+            const endPos = this.document.positionAt(field.location.start.offset + colonIndex + 1);
+            this.tokenBuilder.addToken({
+              line: endPos.line,
+              char: endPos.character,
+              length: endStr.length,
+              tokenType: 'number',
+              modifiers: []
+            });
+          }
+        }
+        
+        // Token for closing bracket
+        const closeBracketPos = this.document.positionAt(field.location.end.offset - 1);
+        this.tokenBuilder.addToken({
+          line: closeBracketPos.line,
+          char: closeBracketPos.character,
+          length: 1,
+          tokenType: 'operator',
+          modifiers: []
+        });
       }
       
       currentOffset = field.location.end.offset;

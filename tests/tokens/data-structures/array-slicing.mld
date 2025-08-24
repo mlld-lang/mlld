@@ -1,0 +1,5 @@
+/var @subset = @array[0:5]
+/var @last = @items[-3:]
+/var @allButLast = @data[:-1]
+/var @middle = @list[2:8]
+/show @files[0:10].filename

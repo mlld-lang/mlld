@@ -1,0 +1,7 @@
+/exe @validator() = when [
+  @isValid(@input) => @input
+  @pipeline.try < 3 => retry
+  * => "fallback"
+]
+/var @result = @data | @transform(@p) | @format(@p[-1])
+/exe @process() = @ctx.input | @filter(@ctx.stage)
