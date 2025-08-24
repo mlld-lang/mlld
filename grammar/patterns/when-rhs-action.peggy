@@ -16,8 +16,21 @@ WhenRHSAction "when RHS action"
 
 // Retry action with optional hint value (string/object/function/variable)
 // Returns an array of nodes: [RetryLiteral, <hintNode>?]
+// IMPORTANT: Hint must be on the same line to avoid consuming next condition
 WhenRHSRetryAction
-  = "retry" !(_ [\n\r]* ("*" / "none" / [a-zA-Z@]) _ "=>") hint:(_ h:VarRHSContent { return h; })? {
+  = "retry" 
+    // Look ahead to ensure we're not immediately before another condition on a new line
+    !(_ [\n\r]+ _ ("*" / "none" / [a-zA-Z@]) [^=]* "=>") 
+    // Then optionally parse a hint - must be on same line
+    hint:(
+      // Must have whitespace but NO newline before the hint
+      [ \t]+ 
+      // Lookahead to ensure the hint doesn't contain "=>" which would indicate a condition
+      // This allows @func() calls but prevents matching new conditions
+      !([^=\n\r]* "=>")
+      // Parse the hint content (but not across newlines)
+      h:SingleLineVarRHSContent { return h; }
+    )? {
       const retryNode = helpers.createNode(NodeType.Literal, { 
         value: 'retry', 
         valueType: 'retry',
@@ -28,6 +41,11 @@ WhenRHSRetryAction
       }
       return [retryNode];
     }
+
+// Single-line version of VarRHSContent for retry hints
+// Prevents hint parsing from crossing line boundaries
+SingleLineVarRHSContent
+  = ![\n\r] content:VarRHSContent { return content; }
 
 // Show action - creates regular show directive node
 WhenRHSShowAction

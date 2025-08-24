@@ -278,7 +278,15 @@ WhenExpression "when expression"
       
       return helpers.createWhenExpression(conditions, tail, location(), modifier);
     }
-  // Error recovery patterns
+  // Error recovery: Missing bracket after when
+  / "when" _ WhenExprModifier? _ !"[" {
+      helpers.mlldError(
+        `Missing condition list in when expression. Expected: when [condition => value, ...]`,
+        "[",
+        location()
+      );
+    }
+  // Error recovery: Unclosed bracket
   / "when" _ WhenExprModifier? _ "[" _ &{
       // Safer unclosed check for when-expressions: allow newlines; only error if EOF reached without ']'
       let depth = 1;
@@ -304,7 +312,7 @@ WhenExpression "when expression"
         location()
       );
     }
-  / "when" _ WhenExprModifier? _ {
+  / "when" _ WhenExprModifier? _ !"[" {
       helpers.mlldError(
         `Missing condition list in when expression. Expected: when [condition => value, ...]`,
         "[",
