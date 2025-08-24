@@ -21,7 +21,7 @@ Shadow environments allow mlld `/exec` functions to be called from within JavaSc
 
 ### JavaScript Shadow Environment
 
-**Location**: `interpreter/env/Environment.ts` (lines 1175-1214, 1438-1524)
+**Location**: `interpreter/env/Environment.ts`
 
 **Architecture**:
 - **Storage**: Uses `Map<string, Map<string, any>>` in `shadowEnvs` property
@@ -34,23 +34,19 @@ Shadow environments allow mlld `/exec` functions to be called from within JavaSc
 // Storage in Environment class
 private shadowEnvs: Map<string, Map<string, any>> = new Map();
 
-// Setting shadow environment
+// Setting shadow environment (simplified)
 setShadowEnv(language: string, functions: Map<string, any>): void {
-  if (language === 'node' || language === 'nodejs') {
-    // Special handling for Node.js
-  } else {
-    this.shadowEnvs.set(language, functions);
-  }
+  this.shadowEnvs.set(language, functions);
 }
 
-// Execution with shadow functions
+// Execution with shadow functions (simplified)
 const shadowEnv = this.getShadowEnv('js') || this.getShadowEnv('javascript');
 const mergedParams = { ...Object.fromEntries(shadowEnv || []), ...params };
 ```
 
 ### Node.js Shadow Environment
 
-**Location**: `interpreter/env/NodeShadowEnvironment.ts`
+**Location**: `interpreter/env/NodeShadowEnvironment.ts`, wired via `Environment` node shadow provider and used by command executors
 
 **Architecture**:
 - **Storage**: Dedicated `NodeShadowEnvironment` class instance

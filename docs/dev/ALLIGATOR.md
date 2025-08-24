@@ -24,6 +24,12 @@ The alligator syntax (`<file>` or `<pattern>`) in mlld provides powerful content
 /var @modules = <*.mld.md # tldr> as "### [@mlld/<>.fm.name](<>.relative)"
 ```
 
+### Detection and Interpolation Rules
+
+- In templates/strings, `<...>` is treated as a file reference only when it contains one of: `.`, `/`, `*`, or `@`.
+- This allows XML-like tags such as `<thinking>` to remain literal text.
+- Angle brackets always mean “load contents”, not “filename string”. Use quotes for literal paths.
+
 ## The Content Extraction Magic
 
 The key principle: **`<file>` behaves like `<file>.content` automatically in most contexts**

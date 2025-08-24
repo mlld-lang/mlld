@@ -60,7 +60,7 @@ VariableReference nodes appear in many contexts with different `valueType` value
 - **Context**: Direct variable reference using `@` syntax
 - **Examples**: `@myVar`, `@config.name`, `@list[0]`
 - **Appears in**: 
-  - Data values: `@data x = { field: @myVar }`
+  - Var values: `/var @x = { field: @myVar }`
   - Path contexts: `[@projectPath/file.md]`
   - Variable fields in add directive
 
@@ -73,7 +73,7 @@ VariableReference nodes appear in many contexts with different `valueType` value
 
 #### `valueType: 'identifier'`
 - **Context**: Variable name in assignments (LHS)
-- **Examples**: The `x` in `@data x = ...`
+- **Examples**: The `x` in `/var @x = ...`
 - **Appears in**: 
   - `identifier` field of assignment directives
 
@@ -117,7 +117,7 @@ Directive nodes can appear at different levels with different meanings:
 - **Detection**: `meta.isDataValue === true`
 - **Example**:
   ```javascript
-  // In @data results = { test: run [(cmd)] }
+  // In /var @results = { test: run [(cmd)] }
   {
     type: 'object',
     properties: {
@@ -133,7 +133,7 @@ Directive nodes can appear at different levels with different meanings:
 #### RHS Reference Directives
 - **Context**: Right-hand side of assignments
 - **Detection**: `meta.isRHSRef === true`
-- **Example**: `@text content = run [(echo "hello")]`
+- **Example**: `/var @content = run [(echo "hello")]`
 
 ### Text Nodes
 
@@ -144,10 +144,10 @@ Text nodes represent literal text content in various contexts:
 - **Detection**: Parent is an array that represents template content
 - **Identifying template arrays**: Contains mix of Text and VariableReference nodes with `valueType: 'varInterpolation'`
 
-#### Path Segments
-- **Context**: Part of file paths
-- **Detection**: Within path-related fields
-- **Example**: The "folder" in `[folder/file.txt]`
+#### File Reference Segments
+- **Context**: Part of file references and sections
+- **Detection**: Within path/section nodes produced by angle-bracket syntax
+- **Example**: The "folder" in `<folder/file.txt>`
 
 #### Command/Code Text
 - **Context**: Shell commands or code blocks
@@ -169,9 +169,9 @@ Arrays serve different purposes based on their content:
   }
   ```
 
-#### Path Segment Arrays
+#### File Reference Arrays
 - **Contains**: Text, PathSeparator, VariableReference nodes
-- **Context**: Path construction in import/add directives
+- **Context**: Angle-bracket file references and sections
 
 #### Data Arrays
 - **Contains**: Any valid data value (primitives, objects, directives, etc.)
@@ -220,7 +220,7 @@ function isTopLevelDirective(node: any, parent: any): boolean {
 
 ## Field Location Guide
 
-### Data Directive Fields
+### Var Directive Fields
 
 **`values.value`** can contain:
 - **Primitives**: strings, numbers, booleans, null (stored directly, not as node arrays)
@@ -230,15 +230,15 @@ function isTopLevelDirective(node: any, parent: any): boolean {
 - **Variable references**: With `valueType: 'varIdentifier'`
 - **Template arrays**: Array of Text/VariableReference nodes
 
-**Important**: The data directive is the only directive where primitive values in objects/arrays are NOT wrapped in node arrays. This is because:
-1. Data directive represents JavaScript data structures
-2. Primitives in data contexts are literals without interpolation
+**Important**: The `/var` directive is the place where primitive values in objects/arrays are NOT wrapped in node arrays. This is because:
+1. `/var` represents JavaScript data structures
+2. Primitives in var contexts are literals without interpolation
 3. Type discriminators (`type: 'object'`, `type: 'directive'`, etc.) provide the necessary type information
 4. This design enables lazy evaluation of embedded directives
 
-Example of data directive value structure:
+Example of var directive value structure:
 ```javascript
-// @data config = { name: "app", version: 1.0, test: run [(npm test)] }
+// /var @config = { name: "app", version: 1.0, test: run [(npm test)] }
 {
   "type": "object",
   "properties": {
@@ -252,7 +252,7 @@ Example of data directive value structure:
 }
 ```
 
-### Text Directive Fields
+### Template/Text Fields
 
 **`values.content`** can contain:
 - **Template array**: Mix of Text and VariableReference nodes
@@ -260,7 +260,7 @@ Example of data directive value structure:
 
 ### Path-related Fields
 
-**`values.path`** in import/add directives:
+**`values.path`** in file/section nodes (angle-bracket syntax):
 - **Array of nodes**: Text, PathSeparator, VariableReference
 - **Variable references**: With `valueType: 'varIdentifier'`
 
@@ -356,9 +356,9 @@ if (Array.isArray(value)) {
 
 #### Variable Reference: `@config`
 
-**In Data Value**:
+**In Var Value**:
 ```javascript
-// @data x = { setting: @config }
+// /var @x = { setting: @config }
 {
   type: 'VariableReference',
   valueType: 'varIdentifier',
@@ -376,9 +376,9 @@ if (Array.isArray(value)) {
 }
 ```
 
-**In Path**:
+**In File Reference**:
 ```javascript
-// [@config/file.txt]
+// <@base/config/file.txt>
 {
   type: 'VariableReference',
   valueType: 'varIdentifier',
@@ -399,9 +399,9 @@ if (Array.isArray(value)) {
 }
 ```
 
-**As Data Value**:
+**As Var Value**:
 ```javascript
-// @data result = { cmd: run [(test)] }
+// /var @result = { cmd: run [(test)] }
 {
   type: 'Directive',
   kind: 'run',
@@ -412,7 +412,7 @@ if (Array.isArray(value)) {
 
 **As RHS Reference**:
 ```javascript
-// @text output = run [(test)]
+// /var @output = run [(test)]
 {
   type: 'Directive',
   kind: 'run',
@@ -470,3 +470,9 @@ async function authorizeRunDirective(directive: RunDirective) {
 ## Conclusion
 
 Understanding context is crucial for correctly interpreting Mlld's AST. While the reuse of node types provides consistency and modularity in the grammar, it requires AST consumers to be context-aware. This guide should serve as a reference for implementing robust AST processing that handles all the nuances of Mlld's context-dependent node system.
+
+## Normalization Notes
+
+- Tail modifiers (e.g., `with { ... }`) normalize to a unified `withClause` on directives and exec invocations.
+- Exec calls `@fn(...)` parse as distinct `ExecInvocation` nodes; plain `@fn` is a `VariableReference`.
+- Quote/template syntaxes normalize to arrays for interpolation; interpreter handles them via `interpolate()`.

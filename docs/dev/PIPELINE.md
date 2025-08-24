@@ -961,14 +961,23 @@ grammar/
 
 ```
 interpreter/
+├── core/
+│   ├── interpreter.ts                   # main AST evaluator + interpolate
+│   └── interpolation-context.ts         # escaping strategies for interpolation
 ├── eval/
-│   ├── data-value-evaluator.ts  # foreach execution
-│   ├── when.ts                  # conditional logic
-│   ├── run.ts                   # with clause handling
-│   └── lazy-eval.ts             # shared lazy evaluation
+│   ├── data-value-evaluator.ts          # array/object evaluation; foreach/cartesian
+│   ├── when.ts                          # /when directive dispatcher
+│   ├── when-expression.ts               # boolean expressions for conditions
+│   ├── run.ts                           # run/sh execution and with-clause plumbing
+│   ├── exe.ts                           # /exe creation (command/code/template/section)
+│   ├── exec-invocation.ts               # unified @fn(...) invocation with tails
+│   ├── with-clause.ts                   # apply with { pipeline, format, ... }
+│   └── pipeline/
+│       ├── unified-processor.ts         # condensed and structured pipelines
+│       └── stream-sinks/                # progress/full terminal sinks
 └── utils/
-    ├── cartesian-product.ts     # foreach utilities
-    └── dependency-validator.ts  # with clause deps
+    ├── cartesian-product.ts             # foreach utilities
+    └── pipeline-input.ts                # pipeline input wrapper helpers
 ```
 
 ### Error Hierarchy

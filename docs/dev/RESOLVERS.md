@@ -9,10 +9,10 @@ This document explains mlld's unified resolver system, which handles all @ refer
 All @ references in mlld (imports, paths, etc.) are resolved through the same resolver system:
 
 ```mlld
-@import { "YYYY-MM-DD" as date } from @NOW    # Function resolver
-@add [@./README.md]                            # Path resolver  
-@import { utils } from @company/toolkit        # Module resolver
-@path docs = @PROJECTPATH/documentation        # Path resolver
+@import { "YYYY-MM-DD" as date } from @now      # Function resolver
+/show <@base/README.md>                         # Path resolver (angle brackets load contents)
+@import { utils } from @company/toolkit         # Module resolver
+/var @docsRoot = "<@base/docs>"                 # Path string via resolver prefix
 ```
 
 The resolver system determines whether `@identifier` refers to a resolver or a variable, then routes accordingly.
@@ -29,13 +29,13 @@ mlld supports three categories of resolvers, each serving different use cases:
 #### Function Resolvers
 Compute data dynamically and can accept parameters via import selections or path segments.
 
-- **@NOW**: Dynamic timestamp formatting
-- **@DEBUG**: Environment inspection with configurable detail levels
-- **@INPUT**: Stdin/environment variable access
+- **@now**: Dynamic timestamp formatting
+- **@debug**: Environment inspection with configurable detail levels
+- **@input**: Stdin/environment variable access
 
 ```mlld
-@import { "YYYY-MM-DD" as date, "HH:mm:ss" as time } from @NOW
-@import { config, data } from @INPUT
+@import { "YYYY-MM-DD" as date, "HH:mm:ss" as time } from @now
+@import { config, data } from @input
 ```
 
 #### Module Resolvers  
@@ -53,13 +53,12 @@ Resolve module references to specific content sources (registries, private repos
 #### Path Resolvers
 Map @ prefixes to filesystem locations, enabling path-based access with variable interpolation.
 
-- **@PROJECTPATH** / **@.**: Project root directory
-- **@docs**: Documentation directory
-- **@config**: Configuration directory
+- **@base**: Project root directory (default built-in)
+- Additional prefixes configured via `mlld.lock.json`
 
 ```mlld
-@add [@./src/components/Button.tsx]
-@path readme = @docs/getting-started.md
+/show <@base/src/components/Button.tsx>
+/var @readme = <@base/docs/getting-started.md>
 ```
 
 ### Resolver Capabilities
@@ -97,7 +96,7 @@ interface ResolverCapabilities {
 ```
 
 **Examples:**
-- `@NOW`: 
+- `@now`: 
   ```typescript
   {
     io: { read: true, write: false, list: false },
@@ -107,7 +106,7 @@ interface ResolverCapabilities {
     priority: 1
   }
   ```
-- `@PROJECTPATH`: 
+- `@base`: 
   ```typescript
   {
     io: { read: true, write: false, list: true },
@@ -133,16 +132,15 @@ interface ResolverCapabilities {
 Resolver names are protected to prevent variable/resolver conflicts:
 
 ```mlld
-@text NOW = "my time"  # ❌ ERROR: 'NOW' is reserved for resolver
-@import { "format" as time } from @NOW  # ❌ ERROR: 'time' is reserved
-@import { "format" as timestamp } from @NOW  # ✅ OK
+@var @now = "my time"        # ❌ ERROR: 'now' is reserved for resolver
+@import { "format" as time } from @now   # ❌ ERROR: 'time' is reserved in this context
+@import { "format" as timestamp } from @now  # ✅ OK
 ```
 
 **Protection Rules:**
-1. Built-in resolver names (NOW, DEBUG, INPUT, PROJECTPATH, .) are reserved
+1. Built-in resolver names (now, debug, input, base) are reserved
 2. Custom resolver names become reserved when registered
-3. Both uppercase and lowercase variants are protected
-4. Variable creation and import aliases are validated against reserved names
+3. Variable creation and import aliases are validated against reserved names
 
 ## Technical Architecture
 
@@ -243,9 +241,8 @@ mlld uses a three-tier resolution approach, checked in order:
    - Sorted by prefix length for correct matching (longest first)
 
 2. **Built-in Resolver Lookup** - For built-in resolvers
-   - Checks if the reference matches a built-in resolver directly (NOW, DEBUG, INPUT, PROJECTPATH)
-   - These don't use prefixes - they ARE the resolver (e.g., @NOW, not @time/)
-   - Case-insensitive matching for convenience
+   - Checks if the reference matches a built-in resolver directly (now, debug, input, base)
+   - These don't use prefixes - they ARE the resolver (e.g., @now, not @time/)
 
 3. **Priority-Based Fallback** - For unmatched references
    - Iterates through all resolvers by priority
@@ -259,8 +256,8 @@ This design ensures explicit prefix configurations take precedence while maintai
 Each resolver type has a default priority (lower number = higher priority):
 
 ```
-Priority 1:  Function resolvers (NOW, DEBUG, INPUT)
-Priority 1:  Path resolvers (PROJECTPATH)
+Priority 1:  Function resolvers (now, debug, input)
+Priority 1:  Path resolvers (base)
 Priority 10: Module resolvers (REGISTRY)
 Priority 20: File resolvers (LOCAL, GITHUB, HTTP)
 ```
