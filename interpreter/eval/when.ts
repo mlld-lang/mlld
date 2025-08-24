@@ -73,6 +73,16 @@ async function compareValues(expressionValue: any, conditionValue: any, env: Env
   }
 }
 
+function preview(value: unknown, max = 60): string {
+  try {
+    if (typeof value === 'string') return value.length > max ? value.slice(0, max) + '…' : value;
+    if (typeof value === 'number' || typeof value === 'boolean' || value === null || value === undefined) return String(value);
+    return JSON.stringify(value)?.slice(0, max) + (JSON.stringify(value)?.length! > max ? '…' : '');
+  } catch {
+    return String(value);
+  }
+}
+
 /**
  * Evaluates a @when directive.
  * Handles simple, switch, and block forms.
@@ -703,7 +713,29 @@ export async function evaluateCondition(
     const node = condition[0];
     if (node.type === 'BinaryExpression' || node.type === 'TernaryExpression' || node.type === 'UnaryExpression') {
       const { evaluateUnifiedExpression } = await import('./expressions');
-      const result = await evaluateUnifiedExpression(node as any, env);
+      let result: unknown;
+      try {
+        result = await evaluateUnifiedExpression(node as any, env);
+      } catch (err) {
+        // Add operator and operand previews for helpful diagnostics
+        const op = (node as any).operator || (node as any).test?.type || node.type;
+        const lhs = (node as any).left ?? (node as any).argument ?? (node as any).test;
+        const rhs = (node as any).right ?? (node as any).consequent;
+        const message = `Failed to evaluate condition expression (${op}).`;
+        throw new MlldConditionError(message, undefined, node.location, {
+          originalError: err as Error,
+          errors: [
+            {
+              type: 'expression',
+              count: 1,
+              firstExample: {
+                conditionIndex: 0,
+                message: `op=${op}, left=${preview(lhs)}, right=${preview(rhs)}`
+              }
+            }
+          ]
+        } as any);
+      }
       if (process.env.MLLD_DEBUG === 'true') {
         console.log('[DEBUG] Unified expression evaluation result:', {
           nodeType: node.type,
@@ -747,8 +779,19 @@ export async function evaluateCondition(
           }
         };
         
-        // Execute the modified invocation
-        const result = await evaluateExecInvocation(modifiedExecNode, childEnv);
+    // Execute the modified invocation
+    let result: any;
+    try {
+      result = await evaluateExecInvocation(modifiedExecNode, childEnv);
+    } catch (err) {
+      const name = modifiedExecNode?.commandRef?.name || 'exec';
+      throw new MlldConditionError(
+        `Failed to evaluate function in condition: ${name}`,
+        undefined,
+        (modifiedExecNode as any).location,
+        { originalError: err as Error } as any
+      );
+    }
         
         // Check the result for truthiness
         if (result.stdout !== undefined) {
@@ -781,7 +824,18 @@ export async function evaluateCondition(
     }
     
     // No comparison variable - just execute the function and check its result
-    const result = await evaluateExecInvocation(execNode, childEnv);
+    let result: any;
+    try {
+      result = await evaluateExecInvocation(execNode, childEnv);
+    } catch (err) {
+      const name = (execNode as any)?.commandRef?.name || 'exec';
+      throw new MlldConditionError(
+        `Failed to evaluate function in condition: ${name}`,
+        undefined,
+        (execNode as any).location,
+        { originalError: err as Error } as any
+      );
+    }
     
     // Check the result for truthiness
     if (result.stdout !== undefined) {
@@ -819,7 +873,17 @@ export async function evaluateCondition(
   }
   
   // Evaluate the condition with condition and expression context
-  const result = await evaluate(condition, childEnv, { isCondition: true, isExpression: true });
+  let result: any;
+  try {
+    result = await evaluate(condition, childEnv, { isCondition: true, isExpression: true });
+  } catch (err) {
+    throw new MlldConditionError(
+      'Failed to evaluate condition value',
+      undefined,
+      (condition[0] as any)?.location,
+      { originalError: err as Error } as any
+    );
+  }
   
   if (process.env.DEBUG_WHEN) {
     logger.debug('Condition evaluation result:', { result });

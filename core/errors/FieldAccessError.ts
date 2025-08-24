@@ -14,6 +14,10 @@ export interface FieldAccessErrorDetails {
   failedAtIndex: number;
   /** The specific field/index key that failed */
   failedKey: string | number;
+  /** Optional: human-readable access path strings */
+  accessPath?: string[];
+  /** Optional: available keys on the base object when applicable */
+  availableKeys?: string[];
 }
 
 /**

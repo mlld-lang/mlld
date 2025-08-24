@@ -315,7 +315,8 @@ export class ErrorDisplayFormatter {
 
     const relevantDetails = [];
     
-    for (const [key, value] of Object.entries(error.details)) {
+    const detailsObj: any = error.details;
+    for (const [key, value] of Object.entries(detailsObj)) {
       // Skip suggestion as it's handled separately
       if (key === 'suggestion') continue;
       // Skip sourceContent as it's only for internal use
@@ -338,7 +339,36 @@ export class ErrorDisplayFormatter {
           relevantDetails.push(`  ${key}: ${formatLocationForError(value)}`);
         }
       } else {
-        relevantDetails.push(`  ${key}: ${String(value)}`);
+        // Friendly formatting for arrays and known keys
+        if (key === 'availableKeys' && Array.isArray(value)) {
+          const list = (value as any[]).map(v => String(v));
+          const max = 12;
+          const shown = list.slice(0, max).join(', ');
+          const more = list.length > max ? ` … (+${list.length - max} more)` : '';
+          relevantDetails.push(`  availableKeys: ${shown}${more}`);
+
+          // Suggest similar keys to failedKey
+          const failedKey = detailsObj?.failedKey != null ? String(detailsObj.failedKey) : '';
+          if (failedKey && list.length) {
+            const needle = failedKey.toLowerCase();
+            const suggestions = list
+              .filter(k => k.toLowerCase().includes(needle) || needle.includes(k.toLowerCase()))
+              .slice(0, 5);
+            if (suggestions.length) {
+              relevantDetails.push(`  didYouMean: ${suggestions.join(', ')}`);
+            }
+          }
+        } else if (Array.isArray(value)) {
+          relevantDetails.push(`  ${key}: ${(value as any[]).map(v => String(v)).join(', ')}`);
+        } else if (typeof value === 'object') {
+          try {
+            relevantDetails.push(`  ${key}: ${JSON.stringify(value)}`);
+          } catch {
+            relevantDetails.push(`  ${key}: ${String(value)}`);
+          }
+        } else {
+          relevantDetails.push(`  ${key}: ${String(value)}`);
+        }
       }
     }
 

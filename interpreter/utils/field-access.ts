@@ -235,7 +235,16 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = undefined;
           break;
         }
-        throw new Error(`Field "${name}" not found in object`);
+        const chain = [...(options?.parentPath || []), name];
+        const availableKeys = rawValue && typeof rawValue === 'object' ? Object.keys(rawValue) : [];
+        throw new FieldAccessError(`Field "${name}" not found in object`, {
+          baseValue: rawValue,
+          fieldAccessChain: [],
+          failedAtIndex: Math.max(0, chain.length - 1),
+          failedKey: name,
+          accessPath: chain,
+          availableKeys
+        });
       }
       
       accessedValue = rawValue[name];
@@ -247,7 +256,14 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       const numKey = String(fieldValue);
       
       if (typeof rawValue !== 'object' || rawValue === null) {
-        throw new Error(`Cannot access numeric field "${numKey}" on non-object value`);
+        const chain = [...(options?.parentPath || []), numKey];
+        throw new FieldAccessError(`Cannot access numeric field "${numKey}" on non-object value`, {
+          baseValue: rawValue,
+          fieldAccessChain: [],
+          failedAtIndex: Math.max(0, chain.length - 1),
+          failedKey: numKey,
+          accessPath: chain
+        });
       }
       
       // Handle normalized AST objects (must have both type and properties)
@@ -257,7 +273,14 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             accessedValue = undefined;
             break;
           }
-          throw new Error(`Numeric field "${numKey}" not found in object`);
+          const chain = [...(options?.parentPath || []), numKey];
+          throw new FieldAccessError(`Numeric field "${numKey}" not found in object`, {
+            baseValue: rawValue,
+            fieldAccessChain: [],
+            failedAtIndex: Math.max(0, chain.length - 1),
+            failedKey: numKey,
+            accessPath: chain
+          });
         }
         accessedValue = rawValue.properties[numKey];
         break;
@@ -269,7 +292,14 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           accessedValue = undefined;
           break;
         }
-        throw new Error(`Numeric field "${numKey}" not found in object`);
+        const chain = [...(options?.parentPath || []), numKey];
+        throw new FieldAccessError(`Numeric field "${numKey}" not found in object`, {
+          baseValue: rawValue,
+          fieldAccessChain: [],
+          failedAtIndex: Math.max(0, chain.length - 1),
+          failedKey: numKey,
+          accessPath: chain
+        });
       }
       
       accessedValue = rawValue[numKey];
@@ -284,7 +314,15 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       if (rawValue && typeof rawValue === 'object' && rawValue.type === 'array' && rawValue.items) {
         const items = rawValue.items;
         if (index < 0 || index >= items.length) {
-          throw new Error(`Array index ${index} out of bounds (array length: ${items.length})`);
+          const chain = [...(options?.parentPath || []), String(index)];
+          throw new FieldAccessError(`Array index ${index} out of bounds (array length: ${items.length})`, {
+            baseValue: rawValue,
+            fieldAccessChain: [],
+            failedAtIndex: Math.max(0, chain.length - 1),
+            failedKey: index,
+            accessPath: chain,
+            availableKeys: Array.from({ length: items.length }, (_, i) => String(i))
+          });
         }
         accessedValue = items[index];
         break;

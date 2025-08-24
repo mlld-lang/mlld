@@ -391,16 +391,22 @@ export class PipelineStateMachine {
     // Check retry limits
     if (context.attemptNumber > this.maxRetriesPerContext) {
       const attempts = context.attemptNumber - 1;
+      const hintSuffix = context.currentHint
+        ? ` Hint: ${typeof context.currentHint === 'string' ? context.currentHint : JSON.stringify(context.currentHint).slice(0, 120)}`
+        : '';
       return this.handleAbort(
-        `Stage ${stage} exceeded retry limit for stage ${targetStage} (${attempts} attempts; max ${this.maxRetriesPerContext}).`
+        `Stage ${stage} exceeded retry limit for stage ${targetStage} (${attempts} attempts; max ${this.maxRetriesPerContext}).${hintSuffix}`
       );
     }
     
     // Check global limit for target stage
     const globalRetries = this.state.globalStageRetryCount.get(targetStage) || 0;
     if (globalRetries >= this.maxGlobalRetriesPerStage) {
+      const hintSuffix = context.currentHint
+        ? ` Hint: ${typeof context.currentHint === 'string' ? context.currentHint : JSON.stringify(context.currentHint).slice(0, 120)}`
+        : '';
       return this.handleAbort(
-        `Stage ${targetStage} exceeded global retry limit (${this.maxGlobalRetriesPerStage} attempts).`
+        `Stage ${targetStage} exceeded global retry limit (${this.maxGlobalRetriesPerStage} attempts).${hintSuffix}`
       );
     }
     
