@@ -15,7 +15,7 @@ class MlldSyntaxGenerator {
     
     // Define token patterns
     this.patterns = {
-      directive: `/(${this.directives.join('|')})\\b`,
+      directive: `(${this.directives.join('|')})\\b`,
       variable: '@\\w+',
       reservedVariable: '@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b',
       projectPathShort: '@\\.',
