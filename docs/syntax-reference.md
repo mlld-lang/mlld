@@ -58,6 +58,35 @@ Comments use `>>` (two greater-than signs) and can appear at start of line or en
 []      Array indexing and slicing
 ```
 
+## Pipelines
+
+### Basic
+
+```mlld
+/var @out = /run "echo hello" | @upper | @md
+```
+
+- Outside templates/quotes: spaced and stacked pipes are allowed.
+- Inside templates/quotes: use condensed form only (e.g., `` `Hi @name|@upper` ``).
+- Equivalent to: `with { pipeline: [@upper, @md] }`.
+
+### Inline Effects
+
+```mlld
+/var @r = @data | @transform | log "ok" | show "done" | output to {file: { path: "out.txt" }}
+```
+
+- `| log` → writes to stderr; `| show` → stdout + document; `| output` → file/stream/env.
+- Effects attach to the preceding stage and re-run on retries; they do not create stages.
+
+### Context Variables
+
+- `@pipeline` (alias `@p`) exposes stage outputs by index: `@p[0]`, `@p[1]`, `@p[-1]`.
+- Retry info: `@pipeline.try`, `@pipeline.tries`, `@pipeline.retries.all`.
+- Ambient `@ctx` within stages: `@ctx.try`, `@ctx.tries`, `@ctx.input`, `@ctx.hint`.
+
+See: [Pipelines](./pipeline.md)
+
 ### Operators
 
 ```
@@ -173,6 +202,8 @@ def hello():
 /show @variable                          # Add variable content
 /show "Literal text"                    # Add literal text
 /show :::Template with {{var}}:::          # Add template
+/show {echo "Hello"}                    # Run command and display
+/show js { console.log("Hi"); "Done" }  # Run JS and display
 ```
 
 ### /when
@@ -229,6 +260,18 @@ def hello():
 /exe @calculate(x) = js {return @x * 2}           # Code executable
 /exe @getIntro(file) = <@file # Introduction>     # Section executable
 /exe @js = { formatDate, parseJSON }               # Shadow environment
+
+# Conditionals inside /exe
+/exe @grade(score) = when [                        # Bare when: all matches run, last value returned
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  * => "C"
+]
+/exe @httpStatus(code) = when first [              # when first: stop at first match
+  @code >= 500 => "server error"
+  @code >= 400 => "client error"
+  * => "ok"
+]
 ```
 
 ### /for

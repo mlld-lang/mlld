@@ -123,6 +123,37 @@ mlld can route data and actions based on conditions using built-in operators:
 
 This allows mlld to function as a logical router, making decisions based on runtime conditions without programming constructs.
 
+### 6. Pipelines for Transformations
+
+Chain transformations with the pipeline operator `|`:
+
+```mlld
+/var @report = /run "cat data.json" | @json | @md | show "done" | output to {file: { path: "report.md" }}
+```
+
+- Outside templates: spaced/stacked pipes are allowed; inside templates: condensed `|@transform`.
+- Inline effects do not create stages and re-run on retries (`| log`, `| show`, `| output`).
+- Access pipeline state with `@pipeline` (alias `@p`): `@p[-1]` previous output, `@pipeline.try` attempt number.
+- Inside stages, ambient `@ctx` exposes `try`, `tries`, `input`, and optional retry `hint` passed between attempts.
+
+See: [Pipelines](./pipeline.md)
+
+### 7. Reusable Functions with Conditional Logic (/exe)
+
+Define conditional behavior inside /exe using when blocks:
+
+```mlld
+/exe @grade(score) = when first [
+  @score >= 90 => "A"
+  @score >= 80 => "B"
+  * => "C"
+]
+
+/show `Grade: @grade(86)`  # B
+```
+
+See: [/when](./slash/when.md), [/exe](./slash/exe.md)
+
 ## Modular Prompt Engineering
 
 ### Building Prompt Libraries

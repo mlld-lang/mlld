@@ -102,17 +102,23 @@ The refactored system uses context-aware resolution to determine when to preserv
 enum ResolutionContext {
   // Preserve Variable wrapper
   VariableAssignment = 'variable-assignment',
+  VariableCopy = 'variable-copy',
   ArrayElement = 'array-element',
   ObjectProperty = 'object-property',
   FunctionArgument = 'function-argument',
-  PipelineStage = 'pipeline-stage',
-  
+  DataStructure = 'data-structure',
+  FieldAccess = 'field-access',
+  ImportResult = 'import-result',
+
   // Extract raw value
   StringInterpolation = 'string-interpolation',
   CommandExecution = 'command-execution',
   FileOutput = 'file-output',
   Conditional = 'conditional',
-  Display = 'display'
+  Display = 'display',
+  PipelineInput = 'pipeline-input',
+  Truthiness = 'truthiness',
+  Equality = 'equality'
 }
 ```
 

@@ -391,6 +391,33 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
       accessedValue = await arrayOps.handle(value, field, env!);
       break;
     }
+
+    case 'variableIndex': {
+      const env = options?.env;
+      if (!env) {
+        throw new FieldAccessError('Environment required for variable index resolution', {
+          baseValue: value,
+          fieldAccessChain: options?.parentPath || [],
+          failedAtIndex: options?.parentPath ? options.parentPath.length : 0,
+          failedKey: field.value
+        });
+      }
+
+      const indexVar = env.getVariable(field.value);
+      if (!indexVar) {
+        throw new FieldAccessError(`Variable not found for index: ${field.value}`, {
+          baseValue: value,
+          fieldAccessChain: options?.parentPath || [],
+          failedAtIndex: options?.parentPath ? options.parentPath.length : 0,
+          failedKey: field.value
+        });
+      }
+
+      const { resolveValue, ResolutionContext } = await import('./variable-resolution');
+      const indexValue = await resolveValue(indexVar, env, ResolutionContext.StringInterpolation);
+      const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
+      return accessField(value, resolvedField, options);
+    }
     
     default:
       throw new FieldAccessError(`Unknown field access type: ${(field as any).type}`, {

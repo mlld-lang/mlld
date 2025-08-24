@@ -86,6 +86,22 @@ Use template functions defined with /exec:
 /show @message("Alice", "logged in")
 ```
 
+## Running Commands and Code
+
+`/show` can execute commands and code, then display the result in the document.
+
+```mlld
+# Shell command
+/show {echo "Hello world"}
+
+# JavaScript code
+/show js { console.log("Hello"); "Done" }
+```
+
+Notes:
+- `/run` executes silently; pair it with pipelines or use `/show`/`/log`/`/output` to surface results.
+- `/show` runs the command/code and writes the result into the document.
+
 ## Path Types
 
 Paths can be:

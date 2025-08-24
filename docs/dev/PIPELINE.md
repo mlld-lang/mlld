@@ -961,15 +961,52 @@ grammar/
 
 ```
 interpreter/
+├── core/
+│   ├── interpreter.ts                   # main AST evaluator + interpolate
+│   └── interpolation-context.ts         # escaping strategies for interpolation
 ├── eval/
-│   ├── data-value-evaluator.ts  # foreach execution
-│   ├── when.ts                  # conditional logic
-│   ├── run.ts                   # with clause handling
-│   └── lazy-eval.ts             # shared lazy evaluation
+│   ├── data-value-evaluator.ts          # array/object evaluation; foreach/cartesian
+│   ├── when.ts                          # /when directive dispatcher
+│   ├── when-expression.ts               # boolean expressions for conditions
+│   ├── run.ts                           # run/sh execution and with-clause plumbing
+│   ├── exe.ts                           # /exe creation (command/code/template/section)
+│   ├── exec-invocation.ts               # unified @fn(...) invocation with tails
+│   ├── with-clause.ts                   # apply with { pipeline, format, ... }
+│   └── pipeline/
+│       ├── unified-processor.ts         # condensed and structured pipelines
+│       └── stream-sinks/                # progress/full terminal sinks
 └── utils/
-    ├── cartesian-product.ts     # foreach utilities
-    └── dependency-validator.ts  # with clause deps
+    ├── cartesian-product.ts             # foreach utilities
+    └── pipeline-input.ts                # pipeline input wrapper helpers
 ```
+
+### Inline Effects
+
+- Built-in inline effects can be added as pipeline stages without creating new functional stages:
+  - `| log [args...]` → writes to stderr (debug output)
+  - `| show [args...]` → writes to stdout and appends to document
+  - `| output [source] to {file|stream|env: ...}` → writes to file/stream/env
+- Effects attach to the preceding functional stage and run after it succeeds.
+- Effects re-run on each retry attempt for the owning stage.
+- File targets resolve `@base/...` prefixes and relative paths from the project root.
+
+#### Retry + Stage Numbering Summary
+
+| Case | Functional stages | When effects run | Retry behavior | Stage numbering impact |
+| - | - | - | - | - |
+| Functional stage with inline effects (`@fn | log | output`) | +1 | After the stage succeeds | Effects re-run on each retry of that stage | Effects do not create new stages |
+| Inline-effects-only pipeline (no functional transforms) | +0 (synthetic identity stage) | After synthetic stage | Effects re-run if upstream retry triggers re-evaluation | Synthetic stage is not counted in user-facing stage numbers |
+| Retry request from stage N (returns `retry`) | unchanged | N-1 re-executes, then effects fire | Effects attached to N-1 re-run; stage N re-evaluates after N-1 succeeds | Stages are counted by functional transforms only |
+
+### Context Variables
+
+- `@pipeline` (and alias `@p`) expose pipeline state:
+  - Indexing: `@pipeline[0]` (input), `@pipeline[1]`, `@pipeline[-1]` (previous), etc.
+  - Retry: `@pipeline.try`, `@pipeline.tries`, `@pipeline.retries.all`
+  - Stage: `@pipeline.stage`, `@pipeline.length`
+- Ambient `@ctx` is available during pipeline evaluation with per-stage info:
+  - `@ctx.try`, `@ctx.tries`, `@ctx.stage`, `@ctx.input`, `@ctx.lastOutput`, `@ctx.isPipeline`
+  - Retry hints: `retry "hint"` or `retry { ... }` make `@ctx.hint` available to the next attempt
 
 ### Error Hierarchy
 

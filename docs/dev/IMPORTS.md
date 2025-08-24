@@ -120,6 +120,10 @@ Import Directive → Path Resolution → Content Fetching → Module Evaluation 
    // Returns: 'input' | 'resolver' | 'module' | 'file' | 'url'
    ```
 
+   Notes:
+   - Resolver-prefixed paths (e.g., `@base/...`) must be wrapped in angle brackets when loading contents: `<@base/file.mld>`.
+   - Module imports never use angle brackets: `@import { x } from @user/module`.
+
 3. **Content Resolution**
    - For registry modules: Fetch from GitHub gist
    - For local files: Read from filesystem
@@ -541,4 +545,3 @@ const result = await evaluate(ast, childEnv);
 2. **Complex Content Detection**: Could benefit from memoization
 3. **Shadow Environment Capture**: Only captured when needed
 4. **Field Access**: Direct object traversal, no string parsing
-
