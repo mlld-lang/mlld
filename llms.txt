@@ -1,4 +1,4 @@
-<MLLD_GUIDE>
+<MLLD_GUIDE version="2.0.0-rc42">
 <TOC>
 <OVERVIEW>Purpose, two execution modes, "What mlld IS/ISN'T," mental model shift.</OVERVIEW>
 <CORE_RULES>
