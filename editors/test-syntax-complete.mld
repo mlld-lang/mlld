@@ -291,4 +291,107 @@ This is a template that contains @var
 /for @item in @items => @template(@item)
 
 /var @array = for @item in @items => @otherfunc(@item)
-/exe @function(@items) = for @item in @items => @otherfunc(@item) 
+/exe @function(@items) = for @item in @items => @otherfunc(@item)
+
+## New Features (rc32-rc40)
+
+### Log Directive (rc39-rc40)
+/log "Simple log message"
+/log @variable
+/log `Interpolated: @value`
+/for @item in @items => log @item
+/when @debug => log "Debug mode active"
+/when [
+  @level > 10 => log "High level"
+  @level > 5 => log "Medium level"
+  * => log "Low level"
+]
+
+### Nested For Loops (rc37)
+/for @x in ["A", "B"] => for @y in [1, 2] => show "@x-@y"
+/for @outer in @data => for @inner in @outer.items => for @deep in @inner.values => log "@deep"
+/var @matrix = for @row in @rows => for @col in @cols => @compute(@row, @col)
+
+### Array Slicing (rc36)
+/var @subset = @array[0:5]
+/var @last3 = @items[-3:]
+/var @allButLast = @data[:-1]
+/var @middle = @list[2:8]
+/var @fromSecond = @array[1:]
+/show @files[0:10].filename
+
+### Array Index in For Loops (rc34)
+/for @item in ["a", "b", "c"] => show "@item_key: @item"
+/for @value in @config => show "Key @value_key = @value"
+
+### Pipeline Context Variables (rc35)
+/var @result = @data | @transform
+/exe @validator() = when [
+  @isValid(@input) => @input
+  @pipeline.try < 3 => retry
+  * => "fallback"
+]
+/var @output = @source | @stage1 | @stage2
+/exe @process() = when [
+  @p.try < 5 => retry
+  * => @p.tries
+]
+/var @best = @generate | @validate(@p) | @select(@p[-1])
+/exe @multi() = @ctx.input | @filter(@ctx.stage)
+
+### Wildcard Literal (rc33)
+/when * => show "Always executes"
+/when [
+  @status == "active" => show "Active"
+  @status == "pending" => show "Pending"  
+  * => show "Unknown"
+]
+/exe @handler() = when: [
+  @valid => @value
+  * => "default"
+]
+/var @catch = * ? "yes" : "no"
+
+### When First Modifier (rc39)
+/when first [
+  @role == "admin" => show "Admin panel"
+  @role == "user" => show "User dashboard"
+  * => show "Guest access"
+]
+/exe @switch(val) = when first [
+  @val == 1 => "one"
+  @val == 2 => "two"
+  @val == 3 => "three"
+  * => "other"
+]
+
+### None Keyword (rc39)
+/when [
+  @hasFeatureA => @enableA()
+  @hasFeatureB => @enableB()
+  none => show "No features enabled"
+]
+/when first [
+  @x > 10 => show "high"
+  @x > 5 => show "medium"
+  none => show "low or zero"
+]
+/exe @check() = when: [
+  @valid => @process()
+  none => "invalid"
+]
+
+### Retry Hints (rc40)
+/exe @improve() = when [
+  @quality > 0.8 => @input
+  @ctx.try < 3 => retry "need better quality"
+  * => retry { temperature: 0.9, detail: "high" }
+]
+/var @enhanced = @generate | @improve | @format
+
+### Context Fields (rc40)
+/exe @stage() = when [
+  @ctx.isPipeline => show "In pipeline at stage @ctx.stage"
+  * => show "Not in pipeline"
+]
+/var @tracked = @start | @middle(@ctx.tries) | @end(@ctx.lastOutput) 

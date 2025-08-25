@@ -14,7 +14,10 @@ export class LiteralVisitor extends BaseVisitor {
     let tokenType = 'string';
     let modifiers: string[] = [];
     
-    if (typeof value === 'number') {
+    // Handle special keyword literals first
+    if (valueType === 'wildcard' || valueType === 'none' || valueType === 'retry') {
+      tokenType = 'keyword';
+    } else if (typeof value === 'number') {
       tokenType = 'number';
     } else if (typeof value === 'boolean') {
       tokenType = 'boolean';

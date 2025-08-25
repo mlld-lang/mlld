@@ -1,0 +1,9 @@
+/when * => show "Always"
+/when [
+  @x > 10 => show "High"
+  * => show "Default"
+]
+/exe @handler() = when: [
+  @valid => @value
+  * => "fallback"
+]

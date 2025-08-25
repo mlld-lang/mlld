@@ -1,0 +1,10 @@
+/when [
+  @hasA => @enableA()
+  @hasB => @enableB()
+  none => show "Nothing enabled"
+]
+/when first [
+  @x > 10 => show "high"
+  @x > 5 => show "medium"
+  none => show "low"
+]
