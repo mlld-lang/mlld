@@ -6891,6 +6891,35 @@ city: NYC`
 }
 ```
 
+##### Example.o Variant
+
+**Input:**
+```mlld
+# Test: JSON transformer basic formatting
+
+## Format existing JSON
+
+{
+"name": "Alice",
+"age": 30,
+"city": "NYC"
+}
+
+## Convert markdown to JSON
+
+{}
+
+## Chain with other transformers
+
+{
+"items": [
+1,
+2,
+3
+]
+}
+```
+
 #### Feat / Transformers / Md basic
 
 **Input:**
@@ -9388,6 +9417,29 @@ a: string = one, b: string = two, c: undefined = undefined, d: undefined = undef
 a: string = x, b: string = y, c: string = z, d: string = w
 ```
 
+##### Example.o Variant
+
+**Input:**
+```mlld
+# Test Node.js Undefined Parameter Handling
+
+# Test case 1: All parameters provided
+
+Hello, Dr. Alice PhD!
+
+# Test case 2: Only required parameter
+
+Hello Bob!
+
+# Test case 3: Check parameter types
+
+a: string = first, b: undefined = undefined, c: undefined = undefined, d: undefined = undefined
+
+a: string = one, b: string = two, c: undefined = undefined, d: undefined = undefined
+
+a: string = x, b: string = y, c: string = z, d: string = w
+```
+
 #### Slash / Exe / Optional slash run
 
 **Input:**
@@ -9819,6 +9871,23 @@ Demo object contains:
 - value result: test-value
 - message result: Hello from exec
 - greeting result: Hello, World!
+
+Executing stored command:
+Result: test-value
+```
+
+##### Example.o Variant
+
+**Input:**
+```mlld
+Demo object contains:
+
+- valueCmd type: executable
+- value result: test-value
+- message result: Hello from exec
+- greeting result: Hello, World!
+
+()
 
 Executing stored command:
 Result: test-value
