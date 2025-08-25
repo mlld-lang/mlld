@@ -1,0 +1,93 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests
+        run: npm test
+      - name: Ensure CHANGELOG was updated
+        run: |
+          if ! git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q '^CHANGELOG.md$'; then
+            echo 'CHANGELOG.md must be updated for releases'
+            exit 1
+          fi
+      - name: Determine version
+        id: bump
+        run: |
+          set -e
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo '')
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          if [ "v$CURRENT_VERSION" = "$LAST_TAG" ]; then
+            echo "No version bump detected"
+            if [[ "$CURRENT_VERSION" == *-rc* ]]; then
+              echo "Bumping release candidate"
+              npm version prerelease --preid=rc --no-git-tag-version
+              npm run sync:mlldx
+            else
+              echo "Bumping patch version"
+              npm run bump
+            fi
+            npm run build:version
+            npm install --package-lock-only --ignore-scripts
+            NEW_VERSION=$(node -p "require('./package.json').version")
+            git config user.name 'github-actions[bot]'
+            git config user.email 'github-actions[bot]@users.noreply.github.com'
+            git commit -am "chore: bump version to $NEW_VERSION [skip ci]"
+            git push origin HEAD:main
+            CURRENT_VERSION=$NEW_VERSION
+          fi
+          echo "version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+      - name: Generate release notes
+        run: |
+          VERSION=${{ steps.bump.outputs.version }}
+          awk -v v="$VERSION" '/^## \['v'\]/{flag=1;next}/^## \[/{flag=0}flag' CHANGELOG.md > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+      - name: Tag release
+        run: |
+          VERSION=${{ steps.bump.outputs.version }}
+          git tag v$VERSION
+          git push origin v$VERSION
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.bump.outputs.version }}
+          body_path: RELEASE_NOTES.md
+      - name: Build
+        run: npm run build
+      - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RC_LATEST: ${{ vars.RC_LATEST }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ "$VERSION" == *-rc* ]]; then
+            if [ "$RC_LATEST" = "true" ]; then
+              TAG=latest
+            else
+              TAG=rc
+            fi
+          else
+            TAG=latest
+          fi
+          npm run publish:all -- --tag $TAG
