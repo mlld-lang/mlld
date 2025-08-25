@@ -4,8 +4,6 @@ import * as path from 'path';
 
 // Set test environment variable
 process.env.MLLD_TEST = '1';
-// Provide an env var used by import-env tests
-process.env.MLLD_TEST_ENV = process.env.MLLD_TEST_ENV || 'test-env';
 
 // Suppress llmxml logging during tests
 process.env.LOG_LEVEL = 'error';
@@ -24,6 +22,9 @@ if (fs.existsSync(envTestPath)) {
     }
   });
 }
+
+// Provide an env var used by import-env tests (fallback if not set by .env.test)
+process.env.MLLD_TEST_ENV = process.env.MLLD_TEST_ENV || 'test-env';
 
 // Mock readline for tests to prevent prompts
 import { vi } from 'vitest';
