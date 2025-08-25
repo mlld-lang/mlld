@@ -132,7 +132,7 @@ export async function evaluateWhenExpression(
     
     try {
       // Evaluate the condition
-      const conditionResult = await evaluateCondition(pair.condition, env);
+      const conditionResult = await evaluateCondition(pair.condition, accumulatedEnv);
       
       if (process.env.DEBUG_WHEN) {
         logger.debug('WhenExpression condition result:', { 
@@ -220,13 +220,17 @@ export async function evaluateWhenExpression(
           // IMPORTANT SCOPING RULE:
           // - /when (directive) uses global scope semantics (handled elsewhere)
           // - when: [...] in /exe uses LOCAL scope – evaluate actions in a child env
+          //
+          // Also: Local variable assignments inside earlier actions must be
+          // visible to later actions in the same when-expression. We therefore
+          // evaluate each action in a child env and merge resulting variable
+          // bindings back into the accumulatedEnv after evaluation.
           const actionEnv = accumulatedEnv.createChild();
           // FIXED: Suppress side effects in when expressions used in /exe functions
           // Side effects should be handled by the calling context (e.g., /show @func())
-          const actionResult = await evaluate(pair.action, actionEnv, { 
-            ...(context || {}), 
-            isExpression: true 
-          });
+          // Evaluate the action in normal directive context so effects stream.
+          // We avoid forcing isExpression here to preserve effect emission.
+          const actionResult = await evaluate(pair.action, actionEnv, context);
           
           let value = actionResult.value;
           
@@ -288,9 +292,8 @@ export async function evaluateWhenExpression(
               const directiveKind = singleAction.kind;
               // For side-effect directives, handle appropriately for expression context
               if (directiveKind === 'show') {
-                // Show actions in when expressions should display their output (the return value IS the side effect)
-                // Don't suppress show output - it's the main requirement of Issue #341
-                // Keep the original value which contains the show content
+                // Tag as side-effect so pipeline layer can suppress echo
+                value = { __whenEffect: 'show', text: value } as any;
               } else if (directiveKind === 'output') {
                 // Output actions should return empty string (file write is the side effect)
                 value = '';
@@ -325,19 +328,19 @@ export async function evaluateWhenExpression(
             value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
           }
           
+          // Merge variable assignments from this action back into the
+          // accumulated environment so subsequent actions can see them.
+          // We use mergeChild to merge variables; since actions are evaluated
+          // with isExpression=true, no user-facing nodes are produced.
+          accumulatedEnv.mergeChild(actionEnv);
+
           // In "first" mode, return immediately after first match
           if (isFirstMode) {
-            return { value, env: actionEnv };
+            return { value, env: accumulatedEnv };
           }
-          
+
           // For bare when, save the value and continue evaluating
           lastMatchValue = value;
-          
-          // Merge nodes from the action environment into accumulated environment
-          const childNodes = actionEnv.getNodes();
-          for (const node of childNodes) {
-            accumulatedEnv.addNode(node);
-          }
           
           // Continue to evaluate other matching conditions
         } catch (actionError) {
@@ -385,10 +388,7 @@ export async function evaluateWhenExpression(
         const actionEnv = accumulatedEnv.createChild();
         // FIXED: Suppress side effects in when expressions used in /exe functions
         // Side effects should be handled by the calling context (e.g., /show @func())
-        const actionResult = await evaluate(pair.action, actionEnv, { 
-          ...(context || {}), 
-          isExpression: true 
-        });
+        const actionResult = await evaluate(pair.action, actionEnv, context);
         
         let value = actionResult.value;
         
@@ -397,20 +397,17 @@ export async function evaluateWhenExpression(
           value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
         }
         
+        // Merge variable assignments from this none-action into accumulator
+        accumulatedEnv.mergeChild(actionEnv);
+
         // In "first" mode, return immediately after first none match
         if (isFirstMode) {
-          return { value, env: actionEnv };
+          return { value, env: accumulatedEnv };
         }
-        
+
         // For bare when, save the none value and continue
         lastNoneValue = value;
         hasMatch = true;
-        
-        // Merge nodes from the action environment into accumulated environment
-        const childNodes = actionEnv.getNodes();
-        for (const node of childNodes) {
-          accumulatedEnv.addNode(node);
-        }
       } catch (actionError) {
         throw new MlldWhenExpressionError(
           `Error evaluating none action for condition ${i + 1}: ${actionError.message}`,

@@ -311,6 +311,20 @@ export async function executeCommandVariable(
         return resultValue;
       }
       
+      // If when-expression produced a side-effect show inside a pipeline,
+      // propagate the input forward (so the stage doesn't terminate) while
+      // still letting the effect line be emitted by the action itself.
+      const inPipeline = !!env.getPipelineContext();
+      if (inPipeline && resultValue && typeof resultValue === 'object' && (resultValue as any).__whenEffect === 'show') {
+        // If this is the last stage, suppress echo to avoid showing seed text.
+        // If there are more stages, propagate input forward to keep pipeline alive.
+        const pctx = env.getPipelineContext?.();
+        const isLastStage = pctx && typeof pctx.stage === 'number' && typeof pctx.totalStages === 'number'
+          ? pctx.stage >= pctx.totalStages
+          : false;
+        return isLastStage ? '' : (stdinInput || '');
+      }
+
       // Check if the result needs interpolation (wrapped template)
       if (resultValue && typeof resultValue === 'object' && 'wrapperType' in resultValue && Array.isArray(resultValue.content)) {
         // This is a wrapped template that needs interpolation
@@ -320,6 +334,10 @@ export async function executeCommandVariable(
         } catch (e) {
           resultValue = String(resultValue);
         }
+      }
+      // Unwrap tagged show effects for non-pipeline contexts
+      if (resultValue && typeof resultValue === 'object' && (resultValue as any).__whenEffect === 'show') {
+        resultValue = (resultValue as any).text ?? '';
       }
       
       // Return the result as string

@@ -547,7 +547,14 @@ export async function evaluateRun(
         // Evaluate the when expression with the parameter environment
         const { evaluateWhenExpression } = await import('./when-expression');
         const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
-        output = whenResult.value;
+        // If the when-expression tagged a side-effect show, unwrap to its text
+        // so /run echoes it as output (tests expect duplicate lines).
+        const val: any = whenResult.value as any;
+        if (val && typeof val === 'object' && (val as any).__whenEffect === 'show') {
+          output = (val as any).text ?? '';
+        } else {
+          output = whenResult.value as any;
+        }
         
         logger.debug('🎯 mlld-when result:', {
           outputType: typeof output,
@@ -629,6 +636,14 @@ export async function evaluateRun(
     }
   }
   
+  // Ensure string output before newline handling
+  if (typeof output !== 'string') {
+    try {
+      output = String(output);
+    } catch {
+      output = '';
+    }
+  }
   // Output directives always end with a newline
   // This is the interpreter's responsibility, not the grammar's
   if (!output.endsWith('\n')) {

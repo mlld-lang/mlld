@@ -725,7 +725,12 @@ export async function evaluateExecInvocation(
       // Evaluate the when expression with the parameter environment
       const { evaluateWhenExpression } = await import('./when-expression');
       const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
-      result = whenResult.value;
+      let value: any = whenResult.value;
+      // Unwrap tagged show effects for non-pipeline exec-invocation (so /run echoes value)
+      if (value && typeof value === 'object' && (value as any).__whenEffect === 'show') {
+        value = (value as any).text ?? '';
+      }
+      result = value;
       // Update execEnv to the result which contains merged nodes
       execEnv = whenResult.env;
     } else if (definition.language === 'mlld-for') {

@@ -5,6 +5,16 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc44]
+### Fixed
+- when-expression in `/exe`: local assignments now visible to subsequent actions; conditions evaluate against accumulated env.
+- Effect streaming restored for when-actions; `show` tagged and handled pipeline-aware to avoid unintended echoes at stage end.
+- Pipeline retries with `show` in stage: preserve attempt output and continue by forwarding prior input; final stage suppresses echo.
+- `/run` output handling hardened: always stringified before newline; mlld-when returns unwrap tagged `show` for expected echo.
+
+### Tests
+- Add fixture verifying local assignment visibility within `/exe` when-expressions.
+
 ## [2.0.0-rc43]
 ### Added
 - **`--allow-absolute` flag**: Override project root restrictions for file access
