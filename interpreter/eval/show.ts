@@ -931,8 +931,12 @@ export async function evaluateShow(
     content += '\n';
   }
   
-  // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
-  env.emitEffect('both', content, { source: directive.location });
+  // Only emit the effect if we're not in an expression context
+  // In expression contexts (like when expressions), we only return the value
+  if (!context?.isExpression) {
+    // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
+    env.emitEffect('both', content, { source: directive.location });
+  }
   
   // Return the content
   return { value: content, env };
