@@ -51,19 +51,17 @@ This design keeps documents readable as regular Markdown while enabling programm
 /run js (@name) {console.log("Hi", name)}  << Pass vars to native JS
 ```
 
-### 3. Commands Require Braces or Quotes
+### 3. Commands Require Braces
 ```mlld
 ❌ WRONG: /run echo "hello"
 ❌ WRONG: /run [echo "hello"]
 ✅ RIGHT: /run {echo "hello"}
-✅ RIGHT: /run "echo hello"
 
->> CRITICAL: 'run' vs 'sh' for shell commands
-✅ /run "echo hello"            << Single-line, pipes only (|)
+>> CRITICAL: 'run' vs 'run sh' for shell commands
 ✅ /run {echo "hello" | cat}    << Single-line with pipe
 ❌ /run {cmd1 && cmd2}          << WRONG - && not allowed with 'run'
-✅ /sh {cmd1 && cmd2}           << RIGHT - use 'sh' for && or ||
-✅ /sh {                        << Use 'sh' for multi-line scripts
+✅ /run sh {cmd1 && cmd2}       << Use 'run sh' for && or ||
+✅ /run sh {                    << Use 'run sh' for multi-line scripts
   if [ -f "file.txt" ]; then
     cat file.txt
   fi
@@ -71,9 +69,9 @@ This design keeps documents readable as regular Markdown while enabling programm
 
 >> Language specifiers
 ✅ /run js {console.log("hi")}  << JavaScript execution
-✅ /exe @fn = run "echo hi"     << Single-line shell executable
-✅ /exe @fn = sh {echo hi}      << Multi-line shell executable
-✅ /exe @fn = js {return 42}    << JavaScript executable (no 'run')
+✅ /exe @fn() = run {echo hi}   << Single-line shell executable
+✅ /exe @fn() = run sh {echo hi}<< Multi-line shell executable
+✅ /exe @fn() = js {return 42}  << JavaScript executable (no 'run')
 ```
 
 ### 4. Only /show, /run, and /output Produce Output
@@ -85,9 +83,10 @@ This design keeps documents readable as regular Markdown while enabling programm
 ```
 
 ### 5. Context-Specific Variable Syntax
-**Primary template syntax**: Use single backtick templates with @ interpolation
+**Primary template syntax**: Use backtick templates with @ interpolation
 - Backtick templates: `` `Hello @name!` `` - @name IS interpolated (PREFERRED)
-- String literals: `/var @msg = "Hello @name"` - @name is NOT interpolated (literal text)
+- Double quotes: `/var @msg = "Hello @name"` - @name IS interpolated
+- Single quotes: `/var @msg = 'Hello @name'` - @name is NOT interpolated (literal text)
 - Command context: `{echo "Hello @name"}` - @name IS interpolated (variable value)
 - Double-colon escape: `::Hello @name!::` - For text with backticks (uses @var interpolation)
 - Triple-colon escape: `:::Hello {{name}}!:::` - For social media with many @ symbols
@@ -97,7 +96,7 @@ This design keeps documents readable as regular Markdown while enabling programm
 /var @user = { "name": "Alice", "scores": [10, 20, 30] }
 
 >> In directives:
-/show @user.name           << "Alice"
+/show @user.name           << Alice
 /show @user.scores.1       << 20 (array access with dot notation)
 
 >> In templates:
@@ -168,55 +167,39 @@ This design keeps documents readable as regular Markdown while enabling programm
 
 ### 8.2 Pipe Transformations
 
-**Condensed Pipe Syntax**: Transform data inline with `|@transform` (no spaces!).
+Pipes transform data inline. Outside templates, pipes may include spaces or be stacked vertically. Inside templates, use condensed syntax (`|@transform`) without spaces and without arguments.
 
 ```mlld
->> File reference pipes:
-/var @formatted = `<data.json>|@json`         << Pretty-print JSON
-/var @xmlData = `<data.json>|@json|@xml`     << JSON to XML
-/var @upper = `<readme.md>|@upper`           << Uppercase content
+>> File reference pipes
+/var @formatted = <data.json> | @json
+/var @xmlData = <data.json> | @json | @xml
 
->> Variable pipes in templates:
-/var @name = "alice"
-/var @greeting = `Hello @name|@upper!`       << "Hello ALICE!"
+>> Variable pipes in templates
 /var @data = {"user": "bob", "role": "admin"}
-/var @output = `User data: @data|@json`      << Pretty JSON
+/var @summary = `User data: @data|@json`
 
->> Pipes with field access:
-/var @title = `<package.json>.name|@upper`
-/var @sorted = `<data.json>.items|@sort|@json`
+>> Pipes with field access
+/var @sorted = <data.json>.items | @sort | @json
 
->> Available transforms:
+>> Available transforms
 >> @json - Pretty-print JSON
->> @xml - Convert to XML format  
->> @upper/@lower - Case conversion
->> @trim - Remove whitespace
+>> @xml - Convert to XML format
 >> Plus any transforms from imported modules
 ```
 
 ### 9. Import Patterns
 
-**CRITICAL DISTINCTION**: mlld has two different import syntaxes - one for modules and one for paths.
-
 ```mlld
->> MODULE imports (no brackets, @ prefix):
+>> Module imports (no quotes)
 /import { parallel, retry } from @mlld/core
 /import { utils } from @company/utils
 
->> PATH imports (WITH ANGLE BRACKETS for resolver paths):
-/import { readme } from <@base/README.md>
-/import { config } from <@base/config.mld>
-/import { shared } from <@local/utils.mld>
-
->> Regular path imports (quotes, no @ prefix):
+>> Path imports
+/import { readme } from "@base/README.md"
+/import { config } from "@base/config.mld"
+/import { shared } from "@local/utils.mld"
 /import { helper, config } from "./utils.mld"
 ```
-
-**Why angle brackets matter:**
-- `<@base/file.md>` - Angle brackets tell mlld "resolve this path and read the file"
-- `@author/module` - No angle brackets means "resolve this as a module reference"
-
-Without angle brackets, `@base/file` would be treated as trying to import from a user named "base" - which is why you might see errors like "User 'base' not found in registry".
 
 ### 9.1 'As' Template Syntax for Globs
 
@@ -287,7 +270,7 @@ Path: <>.relative
 
 **Special Conditions:**
 - **`*`** - Wildcard that always matches (catch-all)
-- **`none`** - Matches when no other conditions have matched (must be last)
+- **`none`** - Fallback when no other conditions matched; good for bare `/when`
 
 ```mlld
 /when first [
@@ -386,22 +369,21 @@ Path: <>.relative
 /show @greeting
 /show "Welcome to mlld!"  >> Inline comments too!
 
->> Run commands (quotes for single lines)
-/run "echo System info:"
-/run "date"
+>> Run commands
+/run {echo System info:}
+/run {date}
 
->> IMPORTANT: Single-line commands with 'run' can only use pipes (|)
->> For multi-line shell scripts or commands with && or ||, use 'sh'
-/run "echo Hello | tr '[:lower:]' '[:upper:]'"  >> Pipes allowed
+>> IMPORTANT: 'run' commands may only use pipes (|)
+/run {echo Hello | tr '[:lower:]' '[:upper:]'}  >> Pipes allowed
 
->> Use 'sh' for multi-line shell scripts
-/sh {
+>> Use 'run sh' for multi-line shell scripts
+/run sh {
   echo "Multiple commands"
   ls -la
 }
 
->> Use 'sh' for conditional execution (|| and &&)
-/exe @safeDeploy(@env) = sh {
+>> Use 'run sh' for conditional execution (|| and &&)
+/exe @safeDeploy(@env) = run sh {
   npm test && npm run deploy:$env || echo "Deployment failed"
 }
 
@@ -496,32 +478,32 @@ The unified `/var` directive creates variables with types inferred from syntax:
 ### @ interpolation in double quotes
 ```mlld
 /var @greeting = "Hello @name!"    >> @ variables work in double quotes
-/run "echo User: @username"         >> Works in quoted commands
+/run {echo User: @username}         >> Works in braces
 /run {echo "Welcome @user.name"}    >> And in brace commands
 ```
 
 ### File References in Templates
 ```mlld
 >> Include file content in any interpolation context
-/var @readme = `<README.md>`                    >> Load entire file
-/var @author = `<package.json>.author`         >> JSON field access
-/var @email = `<data.json>.users[0].email`     >> Array access
-/var @formatted = `<data.json>|@json`          >> With transformation
+/var @readme = <README.md>                    >> Load entire file
+/var @author = <package.json>.author         >> JSON field access
+/var @email = <data.json>.users[0].email     >> Array access
+/var @formatted = <data.json>|@json          >> With transformation
 
 >> Works in all interpolation contexts:
 /show `Documentation: <docs/api.md>`            >> In backticks
-/run "cat <config.txt>"                         >> In quoted strings
+/run {cat <config.txt>}                         >> In quoted strings
 /run {echo "<version.txt>"}                     >> In command braces
 /var @content = ::<changelog.md>::             >> In double-colon templates
 
 >> Variable substitution in paths
 /var @dir = "docs"
 /var @file = "readme"
-/var @content = `<@dir/@file.md>`              >> Dynamic paths
+/var @content = <@dir/@file.md>              >> Dynamic paths
 
 >> Glob patterns
-/var @allDocs = `<*.md>`                        >> All markdown files
-/var @tests = `<tests/*.txt>`                   >> Pattern matching
+/var @allDocs = <*.md>                        >> All markdown files
+/var @tests = <tests/*.txt>                   >> Pattern matching
 
 >> Circular reference protection
 >> If file A includes <B.txt> and B includes <A.txt>, returns empty
@@ -545,12 +527,13 @@ The unified `/var` directive creates variables with types inferred from syntax:
 
 ```mlld
 >> Command executable
-/exe @deploy(@env) = run "deploy.sh $env"      >> Single line with quotes
-/exe @build(@type) = sh {                      >> Multi-line requires 'sh'
+/exe @deploy(@env) = run {deploy.sh $env}
+/exe @build(@type) = run sh {                  >> Multi-line requires 'run sh'
   npm run build:$type
   npm test
 }
-/exe @checkFile(@path) = sh {                  >> 'sh' for if/then/else
+/>> Use 'run sh' for if/then/else
+/exe @checkFile(@path) = run sh {
   if [ -f "$path" ]; then
     echo "File exists"
   else
@@ -599,7 +582,7 @@ The unified `/var` directive creates variables with types inferred from syntax:
 ## Import System
 
 ```mlld
->> Namespace imports (NEW - prevents variable collisions)
+/>> Namespace imports (prevent variable collisions)
 /import "shared.mld"              << Creates @shared namespace
 /import "./config.mld"            << Creates @config namespace
 /import "data/users.mld" as db    << Creates @db namespace
@@ -612,28 +595,28 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /import @corp/utils               << Creates @utils namespace
 /import @corp/utils as corpUtils  << Custom namespace
 
->> Environment variables (must be in mlld.lock.json)
-/import { API_KEY, NODE_ENV } from @input
+>> Environment variables (must be allowed in mlld.lock.json and prefixed with MLLD_)
+/import { MLLD_API_KEY, MLLD_NODE_ENV } from @input
 ```
 
 ## Paths
 
 ```mlld
 >> Simple paths (quoted strings)
-/path @docs = "./documentation"
-/path @output = "results/output.txt"
+/var @docs = "./documentation"
+/var @output = "results/output.txt"
 
 >> Paths with interpolation (double quotes)
-/path @userFile = "data/@username/profile.json"
+/var @userFile = "data/@username/profile.json"
 
 >> Literal paths (single quotes - no interpolation)
-/path @template = 'templates/@var-template.html'  // @var is literal text
+/var @template = 'templates/@var-template.html'  // @var is literal text
 
 >> Bare resolvers (no quotes)
 /import { utils } from @corp/shared-lib
 
->> URLs with caching
-/path @api = https://api.example.com/data (5m)
+>> URLs
+/var @api = "https://api.example.com/data"
 ```
 
 ## Output Directive
@@ -652,9 +635,9 @@ The unified `/var` directive creates variables with types inferred from syntax:
 /output @config to "settings.yaml" as yaml
 ```
 
-## Shell Commands: run vs sh
+## Shell Commands: run vs run sh
 
-Understanding when to use `run` vs `sh` is critical for shell commands:
+Understanding when to use `run` vs `run sh` is critical for shell commands:
 
 ### Use 'run' for:
 - **Single-line commands** that only use pipes (`|`)
@@ -662,9 +645,9 @@ Understanding when to use `run` vs `sh` is critical for shell commands:
 - **Security**: `run` is restricted to prevent command injection
 
 ```mlld
-/run "echo Hello World"                    >> Simple command
+/run {echo Hello World}                    >> Simple command
 /run {cat file.txt | grep "pattern"}      >> Pipes are allowed
-/run "ls -la | head -10"                   >> Single line with pipe
+/run {ls -la | head -10}                   >> Single line with pipe
 
 >> These will FAIL with 'run':
 ❌ /run {cmd1 && cmd2}                     >> && not allowed
@@ -672,19 +655,19 @@ Understanding when to use `run` vs `sh` is critical for shell commands:
 ❌ /run {if [ -f "file" ]; then ...; fi}   >> Multi-line not allowed
 ```
 
-### Use 'sh' for:
+### Use 'run sh' for:
 - **Multi-line shell scripts**
 - **Conditional execution** with `&&` or `||`
 - **Control structures** like if/then/else, loops
 - **Complex shell operations**
 
 ```mlld
-/sh {
+/run sh {
   echo "Starting deployment"
   npm test && npm build && npm deploy
 }
 
-/exe @safeDelete(@file) = sh {
+/exe @safeDelete(@file) = run sh {
   if [ -f "$file" ]; then
     rm "$file"
     echo "Deleted $file"
@@ -693,18 +676,18 @@ Understanding when to use `run` vs `sh` is critical for shell commands:
   fi
 }
 
-/exe @tryCommand(@cmd) = sh {
+/exe @tryCommand(@cmd) = run sh {
   $cmd || echo "Command failed with exit code $?"
 }
 ```
 
 ### Parameter Syntax Differences:
 - In `run`: Use `@param` for mlld interpolation
-- In `sh`: Use `$param` for shell variable interpolation
+- In `run sh`: Use `$param` for shell variable interpolation
 
 ```mlld
-/exe @greet(@name) = run "echo Hello @name"     >> @name in run
-/exe @greet(@name) = sh { echo "Hello $name" }  >> $name in sh
+/exe @greet(@name) = run {echo Hello @name}     >> @name in run
+/exe @greet(@name) = run sh { echo "Hello $name" }  >> $name in run sh
 ```
 
 ## Common Patterns
@@ -734,11 +717,10 @@ Understanding when to use `run` vs `sh` is critical for shell commands:
 
 ## Common Mistakes
 
-### ❌ Forgetting braces or quotes in commands
+### ❌ Forgetting braces in commands
 ```mlld
-/run echo "hello"     << WRONG - needs braces or quotes
-/run {echo "hello"}   << CORRECT - braces
-/run "echo hello"     << CORRECT - quotes for single line
+/run echo "hello"     << WRONG - needs braces
+/run {echo "hello"}   << CORRECT
 ```
 
 ### ❌ Missing @ when creating variables
@@ -782,19 +764,6 @@ For complex operations, create modules instead of inline scripts:
 ```mlld
 /var @result = @run {echo "hello"}  << WRONG - no @ before run
 /var @result = run {echo "hello"}   << CORRECT
-```
-
-### ❌ Using old directive names
-```mlld
-/text @name = "Alice"     << WRONG - old syntax
-/data @config = {}        << WRONG - old syntax
-/add @content            << WRONG - old syntax
-/exec @cmd = run {ls}    << WRONG - old syntax
-
-/var @name = "Alice"      << CORRECT - unified /var
-/var @config = {}         << CORRECT - unified /var
-/show @content           << CORRECT - new name
-/exe @cmd = run {ls}     << CORRECT - shortened name
 ```
 
 ### ❌ Confusing file references with HTML
@@ -931,15 +900,15 @@ Environment variables require explicit permission in `mlld.lock.json`:
 ```json
 {
   "security": {
-    "allowedEnv": ["NODE_ENV", "API_KEY", "GITHUB_TOKEN"]
+    "allowedEnv": ["MLLD_NODE_ENV", "MLLD_API_KEY", "MLLD_GITHUB_TOKEN"]
   }
 }
 ```
 
 Then access them via @input:
 ```mlld
-/import { NODE_ENV, API_KEY } from @input
-/show `Running in @NODE_ENV mode with API access`
+/import { MLLD_NODE_ENV, MLLD_API_KEY } from @input
+/show `Running in @MLLD_NODE_ENV mode with API access`
 ```
 
 ### Frontmatter Metadata
@@ -959,7 +928,7 @@ author: Your Name
 /show <https://raw.githubusercontent.com/example/repo/main/README.md>
 
 >> Assign URL content to variables:
-/path @docs = "https://example.com/api-docs.md"
+/var @docs = "https://example.com/api-docs.md"
 /var @readme = <https://example.com/README.md>
 ```
 
@@ -971,11 +940,11 @@ mlld supports Unix-style pipelines for chaining commands:
 
 ```mlld
 >> Basic pipeline
-/var @result = run {echo "hello world"} | @uppercase
-/show @result  # HELLO WORLD
+/var @result = run {cat data.json} | @json
+/show @result
 
->> Multi-step pipeline  
-/var @data = run {cat data.json} | @json | @uppercase | @csv
+>> Multi-step pipeline
+/var @data = run {cat data.json} | @json | @csv
 ```
 
 ### How Pipelines Work
@@ -983,7 +952,6 @@ mlld supports Unix-style pipelines for chaining commands:
 - Each step gets an @input variable with the piped data
 - Functions without arguments get smart parameter handling
 - Each step runs in a child environment
-- Use `with { format: "json|csv|xml|text" }` to specify parsing
 - Functions can access @pipeline context variable during execution
 
 ### Smart Parameter Handling
@@ -1025,14 +993,12 @@ mlld supports both condensed and whitespace-separated pipelines, plus a stacked 
 
 - Condensed (no spaces): attach pipes adjacent to the value
   ```mlld
-  /var @greet = `Hi @name|@upper!`
   /var @data = `<data.json>|@json|@xml`
   ```
 
 - Spaced (single line, outside templates/quotes):
   ```mlld
-  /var @out = @value | @upper | @trim
-  /var @data = <data.json> | @json | @md
+  /var @data = <data.json> | @json | @xml
   ```
 
 - Stacked (multi-line, outside templates/quotes):
@@ -1113,24 +1079,24 @@ Functions in pipelines can access @pipeline context and use retry mechanism:
 In pipeline contexts, `@p` is a shorter alias for `@pipeline`:
 
 ```mlld
->> Pass pipeline context to functions explicitly
-/exe @validator(input, ctx) = when [
+>> @ctx is ambient; @p is shorthand for @pipeline
+/exe @validator(input) = when [
   @ctx.try < 3 => retry
   * => @input
 ]
-/var @result = @data | @validator(@p)  >> @p = @pipeline
+/var @result = @data | @validator()
 
->> Access specific fields concisely
-/exe @checker(input, attempt) = js {
-  return attempt < 3 ? "retry" : input;
+>> Access specific fields with @p.try
+/exe @checker(input) = js {
+  return @ctx.try < 3 ? "retry" : input;
 }
-/var @result = @data | @checker(@p.try)  >> Just the try count
+/var @result = @data | @checker()
 
 >> Pass entire context to JavaScript
 /exe @analyzer(input, pipeline) = js {
   return `Stage ${pipeline.stage}: ${input}`;
 }
-/var @result = @data | @analyzer(@p)  >> Entire context object
+/var @result = @data | @analyzer(@p)
 ```
 
 ## Philosophy: Simplicity in Files, Complexity in Modules
@@ -1141,7 +1107,7 @@ mlld's design philosophy centers on keeping `.mld` files simple and readable whi
 >> Don't try to implement complex logic in mlld
 >> Instead, import capabilities from modules:
 
-/import { parallel, retry, cache, pipeline } from @mlld/core
+/import { parallel, retry, pipeline } from @mlld/core
 /import { validateSchema, transform } from @myorg/data-utils
 
 >> Simple, readable mlld:
@@ -1325,7 +1291,7 @@ mlld shines when orchestrating external tools and data. Here are patterns that s
 /import { NODE_ENV, API_KEY } from @input
 
 /exe @loadConfig(env) = run {cat "./config/@env.json"}
-/var @config = @loadConfig(@NODE_ENV)
+/var @config = @loadConfig(@MLLD_NODE_ENV)
 
 /when @config.debug => show `Debug mode enabled`
 ```
@@ -1428,7 +1394,7 @@ Example workflow reading:
 
 >> Section headers show the flow: Check → Validate → Notify
 ## 🔍 Check PR Status
-/var @pr = @getPR(@PR_NUMBER)
+/var @pr = @getPR(@MLLD_PR_NUMBER)
 
 ## ✅ Validate Changes  
 
@@ -1439,8 +1405,8 @@ Example workflow reading:
 
 ## 📧 Send Notifications
 /when [
-  @status == "ready"   => @commentOnPR(@PR_NUMBER, "Ready to merge!")
-  @status == "blocked" => @sendAlert("PR @PR_NUMBER needs attention")
+  @status == "ready"   => @commentOnPR(@MLLD_PR_NUMBER, "Ready to merge!")
+  @status == "blocked" => @sendAlert("PR @MLLD_PR_NUMBER needs attention")
 ]
 ```
 
@@ -1503,8 +1469,7 @@ You can configure custom prefixes manually in your `mlld.lock.json`:
       ]
     }
   },
-  "modules": {},
-  "cache": {}
+  "modules": {}
 }
 ```
 
@@ -1547,8 +1512,7 @@ Then configure your private repository:
       ]
     }
   },
-  "modules": {},
-  "cache": {}
+  "modules": {}
 }
 ```
 
@@ -1595,7 +1559,6 @@ mlld publish my-module.mld.md --private
 >> Publish to custom directory in repo
 mlld publish my-module.mld.md --private --path lib/modules
 
->> Also create registry PR for future public release
 mlld publish my-module.mld.md --private --pr
 ```
 
@@ -1672,7 +1635,8 @@ Understanding where different variable syntaxes work is crucial:
 | Backtick templates | `@variable` | `` `Hello @name!` `` | Primary template syntax |
 | Commands `{...}` | `@variable` | `{echo "@message"}` | @ prefix for interpolation |
 | JavaScript | Plain names | `{(@array.join(@sep))}` | Parameters are JS variables |
-| String literals | No interpolation | `"Hello @name"` | @name is literal text |
+| Double quotes | `@variable` | `"Hello @name"` | Interpolated string |
+| Single quotes | None | `'Hello @name'` | @name is literal text |
 | Directive level | `@variable` | `/show @greeting` | Direct variable reference |
 
 ### Key Rules:
@@ -1681,7 +1645,6 @@ Understanding where different variable syntaxes work is crucial:
 - **In triple-colon templates**: Use `{{variable}}` or `{{object.field}}` (for text with @ symbols)
 - **In commands**: Always use `@variable` or `@object.field`
 - **In JavaScript**: Parameters become plain JavaScript variables
-- **String assignments**: Variables are NOT interpolated (they're literals)
 
 ## Remember
 
