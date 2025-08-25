@@ -22,6 +22,7 @@ website/_site/
 # Generated files
 core/version.ts
 core/errors/patterns/parse-errors.generated.js
+core/errors/patterns/js-errors.generated.js
 
 # IDE-generated JavaScript files in core/types
 core/types/*.js
@@ -63,7 +64,6 @@ pids
 .env.development.local
 .env.test.local
 .env.production.local
-.env.test
 
 # Mistakenly created directories
 Support/ 
