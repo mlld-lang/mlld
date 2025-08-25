@@ -5,6 +5,14 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc43]
+### Added
+- **`--allow-absolute` flag**: Override project root restrictions for file access
+  - Permits loading files from absolute paths outside project directory
+  - Applies to `<file>` syntax, `/path` directives, and `/import` statements
+  - Security opt-in: default behavior maintains project root isolation
+  - Persists in `mlld.lock.json` under `security.allowAbsolutePaths` when configured
+
 ## [2.0.0-rc42]
 ### Fixed
 - **Removed command timeout restrictions for LLM workflows**: Completely removed 30-second timeout limits from all command executors

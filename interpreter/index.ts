@@ -47,6 +47,7 @@ export interface InterpretOptions {
   captureErrors?: boolean; // Capture parse errors for pattern development
   ephemeral?: boolean; // Enable ephemeral mode (in-memory caching, no persistence)
   effectHandler?: EffectHandler; // Optional custom effect handler (tests/CI)
+  allowAbsolutePaths?: boolean; // Allow absolute paths outside project root
 }
 
 /**
@@ -210,6 +211,10 @@ export async function interpret(
     undefined,
     options.effectHandler
   );
+
+  if (options.allowAbsolutePaths !== undefined) {
+    env.setAllowAbsolutePaths(options.allowAbsolutePaths);
+  }
   
   // Register built-in resolvers (async initialization)
   await env.registerBuiltinResolvers();

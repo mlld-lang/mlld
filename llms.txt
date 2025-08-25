@@ -1,4 +1,4 @@
-<MLLD_GUIDE version="2.0.0-rc42">
+<MLLD_GUIDE version="2.0.0-rc43">
 <TOC>
 <OVERVIEW>Purpose, two execution modes, "What mlld IS/ISN'T," mental model shift.</OVERVIEW>
 <CORE_RULES>
@@ -206,7 +206,7 @@ Angle brackets load file contents (not filenames). Works in variables, templates
 # Field access on loaded JSON
 /var @authorEmail = <package.json>.author.email
 
-# Globs + “as” templates
+# Globs + "as" templates
 /var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
 ```
 
@@ -216,6 +216,8 @@ Inline transforms (pipes):
 /var @pretty = <data.json> | @json
 /var @summary = `User data: @data|@json`
 ```
+
+Security: By default, restricts to project root. Use `--allow-absolute` flag to permit absolute paths outside project.
 
 </RULE_8_FILE_LOADING>
 

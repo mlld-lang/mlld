@@ -35,6 +35,7 @@ mlld input.mld
 - `--verbose, -v` - Show detailed output
 - `--debug` - Enable debug logging
 - `--env <file>` - Load environment variables from specified file
+- `--allow-absolute` - Permit file access outside project root
 
 **Examples:**
 ```bash
@@ -52,6 +53,9 @@ mlld document.mld --watch
 
 # Load environment variables
 mlld document.mld --env .env.local
+
+# Allow absolute paths outside project
+mlld script.mld --allow-absolute
 ```
 
 ## Module Commands
@@ -290,6 +294,7 @@ npx mlldx@latest ci-task.mld     # Run without installation
 All standard mlld options plus:
 - `--env <file>` - Load environment variables from specified file
 - `--ephemeral` - Automatically set for mlldx
+- `--allow-absolute` - Permit file access outside project root
 
 **Examples:**
 ```bash

@@ -284,6 +284,30 @@ Generated on @now
 /show @toc
 ```
 
+## absolute paths
+
+By default, mlld restricts file access to the project root:
+
+```mlld
+/var @system = </etc/hosts>         >> Error: outside project root
+/path @abs = "/usr/local/config"
+/var @config = <@abs>                >> Error: outside project root
+```
+
+Enable absolute paths with `--allow-absolute` flag:
+
+```bash
+mlld script.mld --allow-absolute
+```
+
+Now absolute paths work:
+
+```mlld
+/var @hosts = </etc/hosts>          >> Loads system file
+/path @tmp = "/tmp/data.txt"
+/var @data = <@tmp>                  >> Loads from /tmp
+```
+
 ## limitations
 
 - Token counting uses estimation (4-5 chars/token depending on file type)
@@ -291,3 +315,4 @@ Generated on @now
 - Glob patterns follow standard rules (see glob documentation)
 - Section extraction works only with markdown heading syntax
 - URL loading requires valid URLs with proper protocols
+- Absolute paths require `--allow-absolute` flag for security

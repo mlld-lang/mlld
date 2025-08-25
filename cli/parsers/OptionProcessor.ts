@@ -43,7 +43,9 @@ export class OptionProcessor {
       // Error capture for pattern development
       captureErrors: cliOptions.captureErrors,
       // Ephemeral mode
-      ephemeral: cliOptions.ephemeral
+      ephemeral: cliOptions.ephemeral,
+      // Absolute path override
+      allowAbsolutePaths: cliOptions.allowAbsolute
     };
   }
 

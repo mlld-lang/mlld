@@ -96,6 +96,8 @@ export interface CLIOptions {
   ephemeral?: boolean;
   // Environment file path
   env?: string;
+  // Allow absolute paths outside project root
+  allowAbsolute?: boolean;
   _?: string[]; // Remaining args after command
 }
 

@@ -201,6 +201,10 @@ export class ArgumentParser {
         case '--env':
           options.env = args[++i];
           break;
+        // Allow absolute paths outside project root
+        case '--allow-absolute':
+          options.allowAbsolute = true;
+          break;
         // Transformation is always enabled by default
         // No transform flags needed
         default:

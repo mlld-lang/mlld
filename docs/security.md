@@ -2,6 +2,29 @@
 
 This document outlines security considerations when using mlld, particularly when processing untrusted data or LLM outputs.
 
+## File System Access
+
+By default, mlld restricts file access to the project root directory and its subdirectories:
+
+```mlld
+/var @config = </etc/passwd>        >> Access denied: outside project root
+/var @local = <./config.json>       >> Allowed: within project
+```
+
+**Override with `--allow-absolute`**: Explicitly permit absolute paths outside project:
+
+```bash
+mlld script.mld --allow-absolute    # Allows access to any filesystem path
+```
+
+Use cases for `--allow-absolute`:
+- CI/CD pipelines accessing system files
+- Development tools reading from `/tmp`
+- Scripts processing user home directory files
+- Integration with system configuration
+
+**Best Practice**: Only use `--allow-absolute` with trusted scripts. Never enable for untrusted or LLM-generated content.
+
 ## Pipeline Scope Access
 
 Pipeline functions have access to parent scope variables:

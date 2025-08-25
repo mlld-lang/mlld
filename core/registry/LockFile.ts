@@ -43,6 +43,8 @@ export interface LockFileData {
     blockedPatterns?: string[];
     trustedDomains?: string[];
     allowedEnv?: string[];
+    allowAbsolutePaths?: boolean;
+    allowedEnvVars?: string[];
   };
 }
 
@@ -262,6 +264,11 @@ export class LockFile {
     this.data!.security.policies = policy;
     this.isDirty = true;
     await this.save();
+  }
+
+  getAllowAbsolutePaths(): boolean {
+    this.ensureLoaded();
+    return this.data!.security?.allowAbsolutePaths === true;
   }
 
   // Environment variable management methods

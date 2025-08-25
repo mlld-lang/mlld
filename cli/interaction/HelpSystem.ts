@@ -491,6 +491,9 @@ Output Formatting Options:
   --no-normalize-blank-lines  Disable blank line normalization in output
   --no-format                 Disable prettier markdown formatting (preserve original spacing)
 
+Security Options:
+  --allow-absolute            Allow absolute paths outside project root (use with caution!)
+
 Examples:
   mlld script.mld                     # Run a local file
   mlld script.mld --stdout            # Output to stdout

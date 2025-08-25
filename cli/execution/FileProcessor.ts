@@ -225,7 +225,8 @@ export class FileProcessor {
       enableTrace: true,
       useMarkdownFormatter: !cliOptions.noFormat,
       captureErrors: cliOptions.captureErrors,
-      ephemeral: cliOptions.ephemeral
+      ephemeral: cliOptions.ephemeral,
+      allowAbsolutePaths: cliOptions.allowAbsolute
     });
     
     // Extract result and environment
