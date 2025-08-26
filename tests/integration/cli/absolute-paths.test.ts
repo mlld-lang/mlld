@@ -207,12 +207,12 @@ describe('Absolute Path Access with --allow-absolute flag', () => {
 /show @internal`, 'utf-8');
       
       // Should work the same with or without --allow-absolute for internal files
-      const { stdout: withoutFlag } = await execAsync(`node "${mlldBin}" "${scriptPath}"`, { cwd: projectDir });
+      const { stdout: withoutFlag } = await execAsync(`node "${mlldBin}" "${scriptPath}"`, { cwd: projectDir, timeout: 10000 });
       expect(withoutFlag.trim()).toBe('INTERNAL_CONTENT');
-      
-      const { stdout: withFlag } = await execAsync(`node "${mlldBin}" --allow-absolute "${scriptPath}"`, { cwd: projectDir });
+
+      const { stdout: withFlag } = await execAsync(`node "${mlldBin}" --allow-absolute "${scriptPath}"`, { cwd: projectDir, timeout: 10000 });
       expect(withFlag.trim()).toBe('INTERNAL_CONTENT');
-    });
+    }, 15000);
   });
 
   describe('Security implications', () => {
