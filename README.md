@@ -5,6 +5,7 @@ mlld is a modular llm scripting language, bringing software engineering to LLM w
 I still consider it 'early', but this isn't a slapped together idea. I've been working on it nearly every single day for 8 months straight.
 
 [Give this to your LLM](https://mlld.ai/llms.txt)
+[Syntax highlighting / LSP](https://marketplace.visualstudio.com/items?itemName=andyet.mlld-vscode)
 
 ## Installation
 
