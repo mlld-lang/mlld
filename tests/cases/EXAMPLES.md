@@ -7752,7 +7752,7 @@ Object.fromEntries(headers.map((h, i) => [h, row[i]]))
 /exe @processText(input) = js {
 console.log('Type:', input.type);
 console.log('Data is text:', input.data === input.text);
-return 'Text length: ' + input.text.length;
+return 'Text length: ' + input.text.trim().length;
 }
 
 /var @textResult = @getData() with { format: "text", pipeline: [@processText] }
