@@ -48,6 +48,10 @@ jobs:
             echo 'Could not determine version from CHANGELOG.md'
             exit 1
           fi
+          if ! echo "$CHANGELOG_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
+            echo "Invalid changelog version format: $CHANGELOG_VERSION"
+            exit 1
+          fi
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
           if [ "$PACKAGE_VERSION" != "$CHANGELOG_VERSION" ]; then
             echo "package.json version ($PACKAGE_VERSION) does not match changelog version ($CHANGELOG_VERSION)"
@@ -58,6 +62,10 @@ jobs:
         run: |
           VERSION=${{ steps.version.outputs.version }}
           awk -v v="$VERSION" '/^## \['v'\]/{flag=1;next}/^## \[/{flag=0}flag' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "Release notes not found for version $VERSION"
+            exit 1
+          fi
           cat RELEASE_NOTES.md
       - name: Tag release
         run: |
