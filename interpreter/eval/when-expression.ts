@@ -202,7 +202,7 @@ export async function evaluateWhenExpression(
               }
               lastMatchValue = value;
               hasMatch = true;
-              hasValueProducingMatch = true;  // retry produces a value
+              hasValueProducingMatch = true;  // action produces a value
               // Merge nodes from accumulatedEnv childless (no child changes here)
               continue;
             }
