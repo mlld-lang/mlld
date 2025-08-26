@@ -1,7 +1,7 @@
 # Test pipeline with different formats
 
 /exe @getData() = {echo '[{"name":"Alice","age":30},{"name":"Bob","age":25}]'}
-/exe @getCSV() = {echo 'name,age\nAlice,30\nBob,25'}
+/exe @getCSV() = {echo -e 'name,age\nAlice,30\nBob,25'}
 
 >> JSON format (default)
 /exe @processJSON(input) = js {
