@@ -1,7 +1,7 @@
 # Test pipeline with different formats
 
 /exe @getData() = {echo '[{"name":"Alice","age":30},{"name":"Bob","age":25}]'}
-/exe @getCSV() = {echo 'name,age\nAlice,30\nBob,25'}
+/exe @getCSV() = {printf 'name,age\nAlice,30\nBob,25'}
 
 >> JSON format (default)
 /exe @processJSON(input) = js {
@@ -57,7 +57,7 @@ Object.fromEntries(headers.map((h, i) => [h, row[i]]))
 /exe @processText(input) = js {
 console.log('Type:', input.type);
 console.log('Data is text:', input.data === input.text);
-return 'Text length: ' + input.text.length;
+return 'Text length: ' + input.text.trim().length;
 }
 
 /var @textResult = @getData() with { format: "text", pipeline: [@processText] }

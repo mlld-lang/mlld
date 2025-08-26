@@ -83,6 +83,7 @@ export async function evaluateWhenExpression(
   let lastMatchValue: any = null;
   let hasMatch = false;
   let hasNonNoneMatch = false;
+  let hasValueProducingMatch = false;  // Track if any condition produced an actual return value (not just side effects)
   let lastNoneValue: any = null;
   let accumulatedEnv = env;
   
@@ -201,6 +202,7 @@ export async function evaluateWhenExpression(
               }
               lastMatchValue = value;
               hasMatch = true;
+              hasValueProducingMatch = true;  // action produces a value
               // Merge nodes from accumulatedEnv childless (no child changes here)
               continue;
             }
@@ -298,9 +300,9 @@ export async function evaluateWhenExpression(
                 // Output actions should return empty string (file write is the side effect)
                 value = '';
               } else if (directiveKind === 'var') {
-                // Variable assignments should return the assigned value in when expressions
-                // The variable evaluator returns empty string, but we need the assigned value
-                // Extract the variable identifier and get its value from the result environment
+                // Variable assignments in when expressions are side effects
+                // They should not count as value-producing matches for 'none' evaluation
+                // But we do need to extract the value for chaining purposes
                 const identifier = singleAction.values?.identifier;
                 if (identifier && Array.isArray(identifier) && identifier[0]) {
                   const varName = identifier[0].identifier;
@@ -319,6 +321,8 @@ export async function evaluateWhenExpression(
                     }
                   }
                 }
+                // Don't count this as a value-producing match
+                // Variable assignments are side effects, not return values
               }
             }
           }
@@ -341,6 +345,20 @@ export async function evaluateWhenExpression(
 
           // For bare when, save the value and continue evaluating
           lastMatchValue = value;
+          
+          // Check if this is a variable assignment (which shouldn't count as value-producing)
+          if (Array.isArray(pair.action) && pair.action.length === 1) {
+            const singleAction = pair.action[0];
+            if (singleAction && typeof singleAction === 'object' && 
+                singleAction.type === 'Directive' && singleAction.kind === 'var') {
+              // Variable assignment - don't mark as value-producing
+              // The value is just for internal chaining, not a return value
+            } else {
+              hasValueProducingMatch = true;  // This action produced a real value
+            }
+          } else {
+            hasValueProducingMatch = true;  // Multi-action or non-directive action produced a value
+          }
           
           // Continue to evaluate other matching conditions
         } catch (actionError) {
@@ -368,8 +386,8 @@ export async function evaluateWhenExpression(
     }
   }
   
-  // Second pass: Evaluate none conditions if no non-none conditions matched
-  if (!hasNonNoneMatch) {
+  // Second pass: Evaluate none conditions if no value-producing conditions matched
+  if (!hasValueProducingMatch) {
     for (let i = 0; i < node.conditions.length; i++) {
       const pair = node.conditions[i];
       

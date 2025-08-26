@@ -5,6 +5,11 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc45]
+### Fixed
+- **when-expression `none` condition evaluation**: Fixed bug where variable assignments prevented `none` conditions from executing
+  - Variable assignments (`@var = value`) in when expressions are now correctly treated as side effects, not return values, enabling the `none` condition to execute when no value-producing actions match (e.g., `show`, function calls, `retry`). Most importantly, conditions that only assign variables no longer prevent `none` from executing when later conditions don't match
+
 ## [2.0.0-rc44]
 ### Fixed
 - when-expression in `/exe`: local assignments now visible to subsequent actions; conditions evaluate against accumulated env.
