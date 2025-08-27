@@ -1,4 +1,4 @@
- mlld CLI Reference
+# mlld CLI Reference
 
 The mlld CLI provides commands for processing mlld files, managing modules, and configuring your mlld environment.
 
