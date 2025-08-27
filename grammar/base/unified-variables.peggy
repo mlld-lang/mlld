@@ -166,12 +166,14 @@ UnifiedVariableWithPipes "variable with optional pipes"
 
 // Unified template-specific variable pattern that doesn't check for tail modifiers
 // Used in template contexts where keywords like "with" should be treated as literal text
+// Handles backslash as a boundary marker: @var\ stops variable, @var\\ includes literal \
 UnifiedTemplateVariableReference "variable reference in template context"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess* pipes:TemplatePipeChain? {
+  = "@" id:BaseIdentifier fields:AnyFieldAccess* boundary:VariableBoundary? pipes:TemplatePipeChain? {
       const normalizedId = helpers.normalizePathVar(id);
       const varRef = helpers.createVariableReferenceNode('varIdentifier', {
         identifier: normalizedId,
-        ...(fields.length > 0 ? { fields: fields } : {})
+        ...(fields.length > 0 ? { fields: fields } : {}),
+        ...(boundary ? { boundary: boundary } : {})
       }, location());
       
       if (pipes && pipes.length > 0) {
@@ -182,3 +184,9 @@ UnifiedTemplateVariableReference "variable reference in template context"
       }
       return varRef;
     }
+
+// Variable boundary pattern - handles backslash escape for disambiguation
+// Single \ is consumed as boundary, double \\ produces literal \
+VariableBoundary "variable boundary"
+  = "\\\\" { return { type: 'literal', value: '\\' }; }  // Double backslash -> literal
+  / "\\" !"\\" { return { type: 'consumed' }; }           // Single backslash -> boundary only
