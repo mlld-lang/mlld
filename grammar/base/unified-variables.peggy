@@ -7,8 +7,7 @@
 
 // Unified variable types - the root rule used by other directives
 UnifiedVariable
-  = UnifiedSpecialVariable    // Check special vars first
-  / UnifiedInterpolationVar
+  = UnifiedSpecialVariable
   / UnifiedAtVar
 
 // Unified special variables - allow field access
@@ -81,7 +80,7 @@ UnifiedInterpolationSpecialVar
 // {{var}} for simple variable interpolation
 UnifiedInterpolationSimpleVar
   = "{{" _ id:BaseIdentifier format:UnifiedVarFormat? _ "}}" {
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
+      const node = helpers.createVariableReferenceNode('varInterpolation', {
         identifier: id,
         ...(format ? { format } : {})
       }, location());
@@ -92,7 +91,7 @@ UnifiedInterpolationSimpleVar
 // {{var.field}} or {{var[index]}} for data field/array access
 UnifiedInterpolationDataVar
   = "{{" _ id:BaseIdentifier fields:AnyFieldAccess* format:UnifiedVarFormat? _ "}}" {
-      const node = helpers.createVariableReferenceNode('varIdentifier', {
+      const node = helpers.createVariableReferenceNode('varInterpolation', {
         identifier: id,
         fields: fields || [],
         ...(format ? { format } : {})

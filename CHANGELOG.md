@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **when-expression `none` condition evaluation**: Fixed bug where variable assignments prevented `none` conditions from executing
   - Variable assignments (`@var = value`) in when expressions are now correctly treated as side effects, not return values, enabling the `none` condition to execute when no value-producing actions match (e.g., `show`, function calls, `retry`). Most importantly, conditions that only assign variables no longer prevent `none` from executing when later conditions don't match
+- **Triple-colon template interpolation in executables (#379)**: Fixed bug where triple-colon templates with `{{var}}` syntax weren't being interpolated when passed as arguments to executable functions
+- **Undefined variable syntax preservation**: Fixed bug where undefined variables in triple-colon templates incorrectly displayed as `@varname` instead of preserving the original `{{varname}}` syntax
+- **Parser incorrectly matching variables in plain text**: Fixed 3+ month old bug where `{{var}}` syntax was being parsed as variable references in plain text/markdown content
 
 ## [2.0.0-rc44]
 ### Fixed
