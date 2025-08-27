@@ -391,7 +391,7 @@ mlld env remove API_KEY
 
 **Usage in mlld:**
 ```mlld
-/import {GITHUB_TOKEN, NODE_ENV} from @input
+/import { GITHUB_TOKEN, NODE_ENV } from @input
 ```
 
 ## Registry Commands
