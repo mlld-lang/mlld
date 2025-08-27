@@ -483,7 +483,7 @@ mlld env allow MY_API_KEY
 
 Then use in mlld files:
 ```mlld
-/import {MY_API_KEY} from @input
+/import { MY_API_KEY } from @input
 ```
 
 ## File Extensions
