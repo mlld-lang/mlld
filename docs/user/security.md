@@ -173,7 +173,7 @@ Global security settings in `~/.mlld/mlld.lock.json`:
 ### Sanitized Execution
 ```mlld
 /exe @safeRun(cmd, args) = when [
-  @cmd in ["ls", "cat", "grep", "echo"] => run {@cmd @args}
+  @cmd == "ls" || @cmd == "cat" || @cmd == "grep" || @cmd == "echo" => run {@cmd @args}
   * => "Error: command not allowed"
 ]
 ```

@@ -104,7 +104,15 @@ Located in `tests/cases/valid/`. These tests:
 - Compare actual output against expected output
 - Fail if output doesn't match exactly
 
-#### 2. Smoke Tests
+#### 2. Documentation Tests
+Located in `tests/cases/valid/docs/`. Automatically extracted from `docs/user/*.md`:
+- **Syntax-only validation** - Parse but don't execute
+- Extract via `scripts/extract-doc-tests.mjs` during `npm run build:fixtures`
+- 140+ code blocks from documentation become test cases
+- Tests marked as `(syntax only)` in output
+- Catches outdated/invalid syntax without requiring complete context
+
+#### 3. Smoke Tests
 For examples without expected output (mainly in `examples/` directory):
 - Verify the code parses successfully
 - Verify execution doesn't crash
@@ -190,6 +198,7 @@ The main test runner is in `interpreter/interpreter.fixture.test.ts`. It:
 2. Sets up appropriate test environment for each fixture
 3. Runs different test types based on fixture metadata:
    - **Valid tests**: Compare output to expected result + validate semantic token coverage
+   - **Documentation tests**: Validate syntax only, skip execution (return after parse check)
    - **Smoke tests**: Verify execution doesn't crash + validate semantic token coverage
    - **Exception tests**: Verify specific errors are thrown
    - **Warning tests**: Verify warnings are produced

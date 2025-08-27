@@ -554,6 +554,17 @@ export async function evaluateExecInvocation(
             // Get the actual value from the variable
             let value = variable.value;
             
+            // WHY: Template variables store AST arrays for lazy evaluation,
+            //      must interpolate before passing to executables
+            const { isTemplate } = await import('@core/types/variable');
+            if (isTemplate(variable)) {
+              if (Array.isArray(value)) {
+                value = await interpolate(value, env);
+              } else if (variable.metadata?.templateAst && Array.isArray(variable.metadata.templateAst)) {
+                value = await interpolate(variable.metadata.templateAst, env);
+              }
+            }
+            
             // Handle field access (e.g., @user.name)
             if (varRef.fields && varRef.fields.length > 0) {
               for (const field of varRef.fields) {
@@ -636,8 +647,14 @@ export async function evaluateExecInvocation(
       const varName = varRef.identifier;
       const variable = env.getVariable(varName);
       if (variable && !varRef.fields) {
-        // Only preserve if no field access
-        originalVariables[i] = variable;
+        // GOTCHA: Don't preserve template variables after interpolation,
+        //         use the interpolated string value instead
+        const { isTemplate } = await import('@core/types/variable');
+        if (isTemplate(variable) && typeof evaluatedArgs[i] === 'string') {
+          originalVariables[i] = undefined;
+        } else {
+          originalVariables[i] = variable;
+        }
         
         if (process.env.MLLD_DEBUG === 'true') {
           const subtype = variable.type === 'primitive' && 'primitiveType' in variable 

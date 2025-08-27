@@ -21,6 +21,7 @@ import parser from '../grammar/generated/parser/parser.js';
 const parse = parser.parse;
 import { glob } from 'glob';
 import { fileURLToPath } from 'url';
+import { extractDocumentationTests } from './extract-doc-tests.mjs';
 // Note: Output generation requires compiled interpreter - will be handled post-build
 
 const __filename = fileURLToPath(import.meta.url);
@@ -106,23 +107,27 @@ async function main() {
     console.log(`Examples: ${EXAMPLES_DIR}`);
     console.log('');
     
-    // Step 1: Check existing fixtures (but don't wipe them)
+    // Step 1: Extract documentation tests FIRST
+    console.log('📖 Extracting documentation tests...');
+    await extractDocumentationTests();
+    
+    // Step 2: Check existing fixtures (but don't wipe them)
     console.log('🔍 Checking existing fixtures...');
     await cleanOrphanedFixtures();
     
-    // Step 2: Copy examples to test cases
+    // Step 3: Copy examples to test cases
     console.log('📋 Copying examples to test cases...');
     await copyExamplesToTests();
     
-    // Step 3: Process all test cases
+    // Step 4: Process all test cases
     console.log('🏗️  Processing test cases...');
     const stats = await processAllCases();
     
-    // Step 4: Generate index files
+    // Step 5: Generate index files
     console.log('📝 Generating index files...');
     await generateIndexFiles();
     
-    // Step 5: Build EXAMPLES.md
+    // Step 6: Build EXAMPLES.md
     console.log('📚 Building documentation...');
     await buildExamplesMarkdown();
     
