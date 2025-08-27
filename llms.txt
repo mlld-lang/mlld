@@ -1,63 +1,63 @@
 <MLLD_GUIDE version="2.0.0-rc43">
 <TOC>
-<OVERVIEW>Purpose, two execution modes, "What mlld IS/ISN'T," mental model shift.</OVERVIEW>
+<OVERVIEW> ......................... Purpose, two execution modes, "What mlld IS/ISN'T," mental model shift.
 <CORE_RULES>
-  <RULE_1_DIRECTIVES_START_LINES>Only lines beginning with / are mlld; everything else is Markdown.</RULE_1_DIRECTIVES_START_LINES>
-  <RULE_2_VARIABLE_SYNTAX>Create with /var @x = … ; reference with @x in templates/commands.</RULE_2_VARIABLE_SYNTAX>
-  <RULE_3_COMMANDS_NEED_BRACES>All commands use braces; language specifiers; /exe shortcuts.</RULE_3_COMMANDS_NEED_BRACES>
-  <RULE_4_OUTPUT_SOURCES>Only /show, /run, /output emit output.</RULE_4_OUTPUT_SOURCES>
-  <RULE_5_INTERPOLATION_CONTEXTS>Backticks/double-colon/triple-colon, quotes, and command contexts.</RULE_5_INTERPOLATION_CONTEXTS>
-  <RULE_6_FIELD_ACCESS>Dot + index access for objects/arrays; array slicing [start:end].</RULE_6_FIELD_ACCESS>
-  <RULE_7_PARAMETERIZED_CONTENT>Reusable templates and functions via /exe.</RULE_7_PARAMETERIZED_CONTENT>
-  <RULE_8_FILE_LOADING>Angle brackets load file contents; globs; metadata fields; safety.</RULE_8_FILE_LOADING>
-  <RULE_9_IMPORTS>Modules, paths, registries; "as namespace."</RULE_9_IMPORTS>
-  <RULE_10_WHEN_OVERVIEW>/when forms (bare, first, simple) – full detail in CONTROL_FLOW.</RULE_10_WHEN_OVERVIEW>
-  <RULE_11_ITERATION_OVERVIEW>foreach and /for – full detail in CONTROL_FLOW.</RULE_11_ITERATION_OVERVIEW>
-  <RULE_12_OPERATORS>Logical, comparison, ternary operators for expressions.</RULE_12_OPERATORS>
+  <RULE_1_SLASHES_START_LINES> ..... Only lines beginning with `/` are mlld; everything else is text.
+  <RULE_2_VARIABLE_SYNTAX> ......... Create with /var @x = … ; reference with @x in templates/commands.
+  <RULE_3_COMMANDS_NEED_BRACES> .... All commands use braces; language specifiers; /exe shortcuts.
+  <RULE_4_OUTPUT_SOURCES> .......... Only /show, /run, /output emit output.
+  <RULE_5_INTERPOLATION_CONTEXTS> .. Backticks/double-colon/triple-colon, quotes, and command contexts.
+  <RULE_6_FIELD_ACCESS> ............ Dot + index access for objects/arrays; array slicing [start:end].
+  <RULE_7_PARAMETERIZED_CONTENT> ... Reusable templates and functions via /exe.
+  <RULE_8_FILE_LOADING> ............ Angle brackets load file contents; globs; metadata fields; safety.
+  <RULE_9_IMPORTS> ................. Modules, paths, registries; "as namespace."
+  <RULE_10_WHEN_OVERVIEW> .......... When forms (bare, first, simple) – full detail in CONTROL_FLOW.
+  <RULE_11_ITERATION_OVERVIEW> ..... foreach and /for – full detail in CONTROL_FLOW.
+  <RULE_12_OPERATORS> .............. Logical, comparison, ternary operators for expressions.
 </CORE_RULES>
 <SYNTAX>
-  <VARIABLES>Types, primitives, command results, code execution.</VARIABLES>
-  <TEMPLATES>Backticks, ::…::, :::…:::; interpolation rules.</TEMPLATES>
-  <FILE_LOADING>Angle brackets, metadata fields, globs, "as" templates, detection rules.</FILE_LOADING>
-  <PIPELINES>Operator |, transformers, @ctx/@p context, retry/hints, inline effects.</PIPELINES>
-  <COMMENTS>">>" and "<<" comments (start/end-of-line).</COMMENTS>
-  <RESERVED_VARIABLES>@now, @input, @base, @debug.</RESERVED_VARIABLES>
+  <VARIABLES> ...................... Types, primitives, command results, code execution.
+  <TEMPLATES> ...................... Backticks, ::…::, :::…:::; interpolation rules.
+  <FILE_LOADING> ................... Angle brackets, metadata fields, globs, "as" templates, detection rules.
+  <PIPELINES> ...................... Operator |, transformers, @ctx/@p context, retry/hints, inline effects.
+  <COMMENTS> ....................... ">>" and "<<" comments (start/end-of-line).
+  <RESERVED_VARIABLES> ............. @now, @input, @base, @debug.
 </SYNTAX>
 <COMMANDS>
-  <RUN_VS_RUN_SH>Decision tree, security & syntax differences, param passing.</RUN_VS_RUN_SH>
-  <EXE_EXECUTABLES>Defining shell/js/node/template/section executables; shadow env intro.</EXE_EXECUTABLES>
-  <OUTPUT_DIRECTIVE>Write to files/stdout/stderr with optional formats.</OUTPUT_DIRECTIVE>
-  <LOG_DIRECTIVE>Syntactic sugar for /output to stdout; works in action contexts.</LOG_DIRECTIVE>
+  <RUN_VS_RUN_SH> .................. Decision tree, security & syntax differences, param passing.
+  <EXE_EXECUTABLES> ................ Defining shell/js/node/template/section executables; shadow env intro.
+  <OUTPUT_DIRECTIVE> ............... Write to files/stdout/stderr with optional formats.
+  <LOG_DIRECTIVE> .................. Syntactic sugar for /output to stdout; works in action contexts.
 </COMMANDS>
 <CONTROL_FLOW>
-  <WHEN_DECISIONS>Bare/first/simple forms, /exe...when patterns, wildcard (*), none keyword.</WHEN_DECISIONS>
-  <ITERATION>foreach vs /for; nested loops; objects with _key; collection form.</ITERATION>
-  <NO_EARLY_EXIT>Design flows instead of exits; patterns.</NO_EARLY_EXIT>
+  <WHEN_DECISIONS> ................. Bare/first/simple forms, /exe...when patterns, wildcard (*), none keyword.
+  <ITERATION> ...................... foreach vs /for; nested loops; objects with _key; collection form.
+  <NO_EARLY_EXIT> .................. Design flows instead of exits; patterns.
 </CONTROL_FLOW>
-<MODULES>Module-first philosophy; imports; helpers; shadow environments; isolation.</MODULES>
-<PATTERNS>Tool orchestration; data pipelines; conditional workflows; guarded/step-by-step.</PATTERNS>
+<MODULES> .......................... Module-first philosophy; imports; helpers; shadow environments; isolation.
+<PATTERNS> ......................... Tool orchestration; data pipelines; conditional workflows; guarded/step-by-step.
 <CONFIGURATION>
-  <ENVIRONMENT_VARIABLES>Allow-list, @input import.</ENVIRONMENT_VARIABLES>
-  <FRONTMATTER>Document metadata block.</FRONTMATTER>
-  <PATHS_AND_URLS>Quoted/unquoted paths, dynamic paths, URL loading.</PATHS_AND_URLS>
-  <RESOLVERS>Prefixes, LOCAL/HTTP/GITHUB/REGISTRY; quick CLI setup.</RESOLVERS>
-  <PUBLISHING_PRIVATE_MODULES>Auth, repo layout, commands.</PUBLISHING_PRIVATE_MODULES>
+  <ENVIRONMENT_VARIABLES> .......... Allow-list, @input import.
+  <FRONTMATTER> .................... Document metadata block.
+  <PATHS_AND_URLS> ................. Quoted/unquoted paths, dynamic paths, URL loading.
+  <RESOLVERS> ...................... Prefixes, LOCAL/HTTP/GITHUB/REGISTRY; quick CLI setup.
+  <PUBLISHING_PRIVATE_MODULES> ..... Auth, repo layout, commands.
 </CONFIGURATION>
 <COMMON_MISTAKES>
-  <MISTAKE_MISSING_AT>Create variables with @; directives use /.</MISTAKE_MISSING_AT>
-  <MISTAKE_USING_AT_FOR_DIRECTIVE>@run is invalid; use /run on LHS and run / implicit RHS.</MISTAKE_USING_AT_FOR_DIRECTIVE>
-  <MISTAKE_PLAIN_TEXT_INTERPOLATION>Interpolation only in directive/template contexts.</MISTAKE_PLAIN_TEXT_INTERPOLATION>
-  <MISTAKE_TEMPLATE_LANGUAGE_CONFUSION>mlld ≠ template engine; use /show or /exe.</MISTAKE_TEMPLATE_LANGUAGE_CONFUSION>
-  <MISTAKE_FILE_VS_STRING>Angle brackets load content; quotes hold literal filenames.</MISTAKE_FILE_VS_STRING>
-  <MISTAKE_XML_VS_FILE_TAGS><thinking> is plain text; <file.txt> is a file ref (has ./*/@).</MISTAKE_XML_VS_FILE_TAGS>
-  <MISTAKE_NESTED_FUNC_CALLS>Don't shell-call @func inside commands; assign then use.</MISTAKE_NESTED_FUNC_CALLS>
-  <MISTAKE_STRING_CONCAT>Prefer templates over procedural concatenation.</MISTAKE_STRING_CONCAT>
-  <MISTAKE_COMPLEX_LOGIC>Move algorithms into helpers/modules.</MISTAKE_COMPLEX_LOGIC>
-  <MISTAKE_IMPORT_BRACKETS>Know when to use angle brackets for path resolvers.</MISTAKE_IMPORT_BRACKETS>
-  <MISTAKE_NO_EARLY_EXIT>Model flows via /when rather than exits.</MISTAKE_NO_EARLY_EXIT>
+  <MISTAKE_MISSING_AT> ............. Create variables with @; directives use /.
+  <MISTAKE_USING_AT_FOR> ........... @run is invalid; use /run on LHS and run / implicit RHS.
+  <MISTAKE_INTERPOLATION> .......... Interpolation only in directive/template contexts.
+  <MISTAKE_NOT_TEMPLATE_LANG> ...... mlld ≠ template engine; use /show or /exe.
+  <MISTAKE_FILE_VS_STRING> ......... Angle brackets load content; quotes hold literal filenames.
+  <MISTAKE_XML_VS_FILE_TAGS> ....... <thinking> is plain text; <file.txt> is a file ref (has ./*/@).
+  <MISTAKE_NESTED_FUNC_CALLS> ...... Don't shell-call @func inside commands; assign then use.
+  <MISTAKE_STRING_CONCAT> .......... Prefer templates over procedural concatenation.
+  <MISTAKE_COMPLEX_LOGIC> .......... Move algorithms into helpers/modules.
+  <MISTAKE_IMPORT_BRACKETS> ........ Know when to use angle brackets for path resolvers.
+  <MISTAKE_NO_EARLY_EXIT> .......... Model flows via /when rather than exits.
 </COMMON_MISTAKES>
-<REFERENCE>Execution context table, syntax summary, quick transforms list.</REFERENCE>
-<SEE_ALSO>Documentation, examples repository, source code.</SEE_ALSO>
+<REFERENCE> ........................ Execution context table, syntax summary, quick transforms list.
+<SEE_ALSO> ......................... Documentation, examples repository, source code.
 </TOC>
 
 <OVERVIEW>
@@ -777,32 +777,32 @@ mlld publish my-module.mld.md --private --path lib/modules --pr
 
 </MISTAKE_MISSING_AT>
 
-<MISTAKE_USING_AT_FOR_DIRECTIVE>
+<MISTAKE_USING_AT>
 
 ```mlld
 ❌ /var @result = @run {echo "hello"}
 ✅ /var @result = run {echo "hello"}
 ```
 
-</MISTAKE_USING_AT_FOR_DIRECTIVE>
+</MISTAKE_USING_AT>
 
-<MISTAKE_PLAIN_TEXT_INTERPOLATION>
+<MISTAKE_INTERPOLATION>
 
 ```mlld
 ❌ Hello @name!             # plain Markdown, no interp
 ✅ /show "Hello @name!"
 ```
 
-</MISTAKE_PLAIN_TEXT_INTERPOLATION>
+</MISTAKE_INTERPOLATION>
 
-<MISTAKE_TEMPLATE_LANGUAGE_CONFUSION>
+<MISTAKE_NOT_TEMPLATE_LANG>
 
 ```mlld
 ❌ This is {{name}}'s doc
 ✅ /show ::This is {{name}}'s doc::
 ```
 
-</MISTAKE_TEMPLATE_LANGUAGE_CONFUSION>
+</MISTAKE_NOT_TEMPLATE_LANG>
 
 <MISTAKE_FILE_VS_STRING>
 
