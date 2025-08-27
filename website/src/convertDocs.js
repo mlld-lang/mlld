@@ -6,14 +6,6 @@ const path = require('path');
 const sourceDir = path.join(__dirname, '../../docs/user');
 const outputDir = path.join(__dirname, 'docs');
 
-// Debug filename checking
-function debugFilePath(filePath) {
-  const parts = filePath.split(path.sep);
-  console.log(`Path: ${filePath}`);
-  console.log(`Parts: ${JSON.stringify(parts)}`);
-  return false;
-}
-
 // Skip review files
 function shouldSkipFile(filePath) {
   // Skip any -review.md files
@@ -27,9 +19,6 @@ if (!fs.existsSync(outputDir)) {
 
 // Function to convert a file
 function convertFile(filePath) {
-  // Debug the first few files
-  debugFilePath(filePath);
-  
   // Skip review files
   if (shouldSkipFile(filePath)) {
     console.log(`Skipping review file: ${filePath}`);
