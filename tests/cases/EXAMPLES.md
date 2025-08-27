@@ -4779,11 +4779,19 @@ false
 # String indexOf method
 6
 -1
+<<<<<<< HEAD
 6
 # String length method
 11
 0
 21
+=======
+4
+# String length method
+11
+0
+19
+>>>>>>> 6845d8ca (add tests for builtins)
 # String case methods
 hello world
 HELLO WORLD
@@ -4844,8 +4852,11 @@ false
 
 **Expected Output:**
 ```markdown
+<<<<<<< HEAD
 # Variable arguments in methods
 
+=======
+>>>>>>> 6845d8ca (add tests for builtins)
 # Test with variable arguments
 true
 true
@@ -4859,7 +4870,10 @@ apple -> banana -> cherry -> date
   "fox"
 ]
 # Edge cases with variables
+<<<<<<< HEAD
 
+=======
+>>>>>>> 6845d8ca (add tests for builtins)
 false
 [
   "T",
