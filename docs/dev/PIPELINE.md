@@ -235,38 +235,38 @@ interface RetryContext {
 
 ### @pipeline Context Variable
 
-The `@pipeline` variable provides access to pipeline execution state:
+The `@p` (`@pipeline`) variable provides access to pipeline execution state:
 
 ```mlld
 # Array indexing for stage outputs
-@pipeline[0]      # Input to the pipeline
-@pipeline[1]      # Output of first stage
-@pipeline[-1]     # Output of previous stage
-@pipeline[-2]     # Output two stages back
+@p[0]      # Input to the pipeline
+@p[1]      # Output of first stage
+@p[-1]     # Output of previous stage
+@p[-2]     # Output two stages back
 
 # Retry and attempt tracking (context-local)
-@pipeline.try     # Current attempt within active retry context (1, 2, 3...)
-@pipeline.tries   # Array of previous attempts within active retry context
+@p.try     # Current attempt within active retry context (1, 2, 3...)
+@p.tries   # Array of previous attempts within active retry context
 
 # Global retry history
-@pipeline.retries.all  # All attempts from ALL retry contexts
+@p.retries.all  # All attempts from ALL retry contexts
 
 # Stage information
-@pipeline.stage   # Current stage number (1-based)
-@pipeline.length  # Number of completed stages
+@p.stage   # Current stage number (1-based)
+@p.length  # Number of completed stages
 ```
 
 **Critical**: `try` and `tries` are **local to the retry context**. Stages outside the active retry context see `try: 1` and `tries: []`. This is by design - each stage starts fresh unless part of an active retry.
 
-#### Syntactic Sugar: @p Alias
+#### Input Semantics
 
-In pipeline contexts, `@p` is available as a shorter alias for `@pipeline`:
+- `@p[0]` (and alias `@p[0]`) is the original/base input to the pipeline.
+- The stage execution context exposes the current stage input via `@ctx.input` (user-facing) and as the first bound parameter for executables where applicable.
+- There is no `@pipeline.input` field; references to "pipeline input" in code refer to `@ctx.input` for the current stage or `@p[0]` for the original/base input.
+
+These semantics ensure that validators can reason about the current stage's input (`@ctx.input`) while selection/aggregation patterns can reach back to the original input using `@p[0]`.
 
 ```mlld
-# These are equivalent:
-/var @result = "data"|@validator(@pipeline)
-/var @result = "data"|@validator(@p)
-
 # Especially useful for accessing specific fields:
 /exe @checker(input, try) = when: [
   @try < 3 => retry
