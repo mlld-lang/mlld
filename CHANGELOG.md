@@ -5,6 +5,16 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc46]
+### Added
+- **Builtin methods for arrays and strings**: Common JavaScript methods available on variables
+  - Array methods: `.includes(value)`, `.indexOf(value)`, `.length()`, `.join(separator)`
+  - String methods: `.includes(substring)`, `.indexOf(substring)`, `.length()`, `.toLowerCase()`, `.toUpperCase()`, `.trim()`, `.startsWith(prefix)`, `.endsWith(suffix)`, `.split(separator)`
+  - Methods work with both literal and variable arguments: `@list.includes("item")` or `@list.includes(@search)`
+  - Implemented as field access exec patterns, treated as ExecInvocations internally
+  - Example: `/show @fruits.includes("banana")` returns `true` if the array contains "banana"
+  - Eliminates need for JavaScript wrappers for common operations
+
 ## [2.0.0-rc45]
 ### Fixed
 - **when-expression `none` condition evaluation**: Fixed bug where variable assignments prevented `none` conditions from executing

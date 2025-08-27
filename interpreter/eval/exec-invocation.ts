@@ -124,6 +124,123 @@ export async function evaluateExecInvocation(
   let variable;
   const commandRefWithObject = node.commandRef as any & { objectReference?: any }; // Type assertion to handle objectReference
   if (node.commandRef && commandRefWithObject.objectReference) {
+    // Check if this is a builtin method call (e.g., @list.includes())
+    const builtinMethods = ['includes', 'length', 'indexOf', 'join', 'split', 'toLowerCase', 'toUpperCase', 'trim', 'startsWith', 'endsWith'];
+    if (builtinMethods.includes(commandName)) {
+      // Handle builtin methods on objects/arrays/strings
+      const objectRef = commandRefWithObject.objectReference;
+      const objectVar = env.getVariable(objectRef.identifier);
+      if (!objectVar) {
+        throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
+      }
+      
+      // Extract the value
+      const { extractVariableValue } = await import('../utils/variable-resolution');
+      let objectValue = await extractVariableValue(objectVar, env);
+      
+      // Navigate through fields if present
+      if (objectRef.fields && objectRef.fields.length > 0) {
+        for (const field of objectRef.fields) {
+          if (typeof objectValue === 'object' && objectValue !== null) {
+            objectValue = (objectValue as any)[field.value];
+          } else {
+            throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
+          }
+        }
+      }
+      
+      // Evaluate arguments
+      const evaluatedArgs: any[] = [];
+      for (const arg of args) {
+        const { evaluateDataValue } = await import('./data-value-evaluator');
+        const evaluatedArg = await evaluateDataValue(arg, env);
+        evaluatedArgs.push(evaluatedArg);
+      }
+      
+      // Apply the builtin method
+      let result: any;
+      switch (commandName) {
+        case 'includes':
+          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
+            result = objectValue.includes(evaluatedArgs[0]);
+          } else {
+            throw new MlldInterpreterError(`Cannot call .includes() on ${typeof objectValue}`);
+          }
+          break;
+        case 'length':
+          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
+            result = objectValue.length;
+          } else {
+            throw new MlldInterpreterError(`Cannot call .length() on ${typeof objectValue}`);
+          }
+          break;
+        case 'indexOf':
+          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
+            result = objectValue.indexOf(evaluatedArgs[0]);
+          } else {
+            throw new MlldInterpreterError(`Cannot call .indexOf() on ${typeof objectValue}`);
+          }
+          break;
+        case 'join':
+          if (Array.isArray(objectValue)) {
+            result = objectValue.join(evaluatedArgs[0] || ',');
+          } else {
+            throw new MlldInterpreterError(`Cannot call .join() on ${typeof objectValue}`);
+          }
+          break;
+        case 'split':
+          if (typeof objectValue === 'string') {
+            result = objectValue.split(evaluatedArgs[0] || '');
+          } else {
+            throw new MlldInterpreterError(`Cannot call .split() on ${typeof objectValue}`);
+          }
+          break;
+        case 'toLowerCase':
+          if (typeof objectValue === 'string') {
+            result = objectValue.toLowerCase();
+          } else {
+            throw new MlldInterpreterError(`Cannot call .toLowerCase() on ${typeof objectValue}`);
+          }
+          break;
+        case 'toUpperCase':
+          if (typeof objectValue === 'string') {
+            result = objectValue.toUpperCase();
+          } else {
+            throw new MlldInterpreterError(`Cannot call .toUpperCase() on ${typeof objectValue}`);
+          }
+          break;
+        case 'trim':
+          if (typeof objectValue === 'string') {
+            result = objectValue.trim();
+          } else {
+            throw new MlldInterpreterError(`Cannot call .trim() on ${typeof objectValue}`);
+          }
+          break;
+        case 'startsWith':
+          if (typeof objectValue === 'string') {
+            result = objectValue.startsWith(evaluatedArgs[0]);
+          } else {
+            throw new MlldInterpreterError(`Cannot call .startsWith() on ${typeof objectValue}`);
+          }
+          break;
+        case 'endsWith':
+          if (typeof objectValue === 'string') {
+            result = objectValue.endsWith(evaluatedArgs[0]);
+          } else {
+            throw new MlldInterpreterError(`Cannot call .endsWith() on ${typeof objectValue}`);
+          }
+          break;
+        default:
+          throw new MlldInterpreterError(`Unknown builtin method: ${commandName}`);
+      }
+      
+      // Return the result wrapped appropriately
+      return {
+        value: result,
+        display: String(result)
+      };
+    }
+    
     // Get the object first
     const objectRef = commandRefWithObject.objectReference;
     const objectVar = env.getVariable(objectRef.identifier);
