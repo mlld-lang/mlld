@@ -1,6 +1,6 @@
 # Quick Start
 
-Get running with mlld in 5 minutes. mlld is a modular prompt scripting language that turns Markdown into executable workflows.
+Get running with mlld in 5 minutes. 
 
 ## Installation
 
@@ -253,8 +253,7 @@ Use logical, comparison, and ternary operators:
 
 Now that you know the basics, explore these topics:
 
-- **[Language Reference](language-reference.md)** - Complete syntax guide
+- **[Language Reference](reference.md)** - Syntax guide
 - **[Content and Data](content-and-data.md)** - Advanced file loading and data handling
-- **[Control Flow](control-flow.md)** - Complex conditionals, loops, and pipelines
-- **[Modules](modules.md)** - Creating and using reusable modules
-- **[Patterns](patterns.md)** - Common workflows and recipes
+- **[Flow Control](flow-control.md)** - Complex conditionals, loops, and pipelines
+- **[Language Reference](reference.md)** - Complete syntax guide

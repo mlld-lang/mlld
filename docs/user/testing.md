@@ -1,10 +1,10 @@
 # Testing mlld Modules and Scripts
 
-Testing mlld code ensures your modules and workflows work correctly. mlld provides a native test system designed for the unique needs of LLM orchestration and dynamic workflows.
+mlld provides a native test system designed for the unique needs of LLM orchestration and dynamic workflows.
 
 ## Quick Start
 
-Create a `.test.mld` file:
+Create a `modulename.test.mld` file:
 
 ```mlld
 /var @data = ["apple", "banana", "cherry"]

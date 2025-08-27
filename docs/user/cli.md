@@ -599,8 +599,3 @@ mlld --help
 mlld publish --help
 mlld setup --help
 ```
-
-For more information:
-- Documentation: https://mlld.ai/docs
-- Issues: https://github.com/mlld-lang/mlld/issues
-- Community: https://github.com/mlld-lang/mlld/discussions

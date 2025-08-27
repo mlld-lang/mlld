@@ -1,7 +1,5 @@
 # Security
 
-mlld prioritizes practical security that protects against real threats without hindering productivity. The security model is built around controlled access and progressive trust.
-
 ## File System Access
 
 By default, mlld restricts file access to the project root directory:
