@@ -1273,6 +1273,61 @@ section.content-section h2 {
   transition: color 0.2s;
 }
 
+/* Code block copy button styles */
+.code-block-wrapper {
+  position: relative;
+}
+
+.code-copy-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  border: none;
+  border-radius: 4px;
+  padding: 0.4rem 0.6rem;
+  background: var(--code-bg, rgba(0, 0, 0, 0.1));
+  color: var(--text-secondary, #666);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  z-index: 10;
+}
+
+.code-block-wrapper:hover .code-copy-button {
+  opacity: 1;
+}
+
+.code-copy-button:hover {
+  background: var(--code-bg-hover, rgba(0, 0, 0, 0.2));
+  color: var(--text-primary, #333);
+}
+
+.code-copy-button.copied {
+  color: #27c93f !important;
+  opacity: 1;
+}
+
+.code-copy-button svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .code-copy-button {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+  }
+  
+  .code-copy-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+  }
+}
+
 .vscode-link {
   margin-top: 0.5rem;
 }

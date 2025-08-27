@@ -21,34 +21,12 @@ layout: base.njk
       <ul class="nav-list">
         <li><a href="/docs/introduction/" {{ "/docs/introduction/" | isActive(page.url) }}>Introduction</a></li>
         {% for docPage in collections.docs %}
-          {% if not docPage.url.includes('/directives/') and 
-                not docPage.url.includes('/index.html') and 
+          {% if not docPage.url.includes('/index.html') and 
                 not docPage.url.includes('/introduction/') and
                 docPage.url != '/docs/' %}
             <li><a href="{{ docPage.url }}" {{ docPage.url | isActive(page.url) }}>{{ docPage.data.title }}</a></li>
           {% endif %}
         {% endfor %}
-        
-        <li>
-          <h4>Directives</h4>
-          <ul class="nav-list">
-            <li><a href="/docs/directives/" {{ "/docs/directives/" | isActive(page.url) }}>Overview</a></li>
-            {% for docPage in collections.docs %}
-              {% if docPage.url.includes('/directives/') and 
-                    not docPage.url.endsWith('/directives/') and 
-                    not docPage.url.endsWith('/directives/index.html') %}
-                {% set directiveName = docPage.url.split('/').slice(-2)[0] %}
-                <li><a href="{{ docPage.url }}" {{ docPage.url | isActive(page.url) }}>
-                  {% if directiveName.startsWith('@') %}
-                    {{ directiveName }}
-                  {% else %}
-                    @{{ directiveName }}
-                  {% endif %}
-                </a></li>
-              {% endif %}
-            {% endfor %}
-          </ul>
-        </li>
       </ul>
     </nav>
   </aside>

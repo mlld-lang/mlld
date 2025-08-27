@@ -1,150 +1,333 @@
 ---
 layout: docs.njk
-title: "mlld Test System"
+title: "Testing mlld Modules and Scripts"
 ---
 
-# mlld Test System
+# Testing mlld Modules and Scripts
 
-The mlld test system provides a native way to write and run tests for mlld modules and applications.
+mlld provides a native test system designed for the unique needs of LLM orchestration and dynamic workflows.
 
 ## Quick Start
 
-### Writing Tests
-
-Create a `.test.mld` file anywhere in your project:
+Create a `modulename.test.mld` file:
 
 ```mlld
->> my-module.test.mld
-/import { eq, ok, includes } from "path/to/test.mld.md"
-
->> Test data
-/var @input = ["apple", "banana", "cherry"]
-
->> Write tests as boolean variables with test_ prefix
-/var @test_array_has_three_items = @eq(@len(@input), 3)
-/var @test_includes_banana = @includes(@input, "banana")
-/var @test_first_item_is_apple = @eq(@input.0, "apple")
+/var @data = ["apple", "banana", "cherry"]
+/var @test_array_has_items = @data.length() > 0
+/var @test_includes_banana = @data.includes("banana")
+/var @test_first_item = @data[0] == "apple"
 ```
 
-### Running Tests
+Run tests:
 
 ```bash
-# Run all tests
-mlld test
-
-# Run tests matching a pattern
-mlld test array           # Runs tests with "array" in the path
-mlld test src/utils       # Runs all tests in src/utils/
-mlld test parser.test.mld # Runs specific test file
+mlld test                    # All tests
+mlld test utils/             # Tests in utils/
+mlld test parser.test.mld    # Specific file
 ```
 
-## Test Assertions
+## Test Structure
+
+### Test Discovery
+
+Tests are discovered automatically:
+- Files ending in `.test.mld` 
+- Variables are seen as tests
+- Variables evaluated as true pass; false fails
+
+```mlld
+# This variable is a test
+/var @test_basic_math = 2 + 2 == 4
+
+# This variable is not a test
+/var @helper_data = [1, 2, 3]
+
+# This is also a test
+/var @test_array_length = @helper_data.length() == 3
+```
+
+### Test Results
+
+Tests pass when the variable evaluates to `true` (or truthy):
+
+```mlld
+/var @test_passes = true
+/var @test_also_passes = "hello"      # Truthy string
+/var @test_fails = false
+/var @test_also_fails = ""            # Falsy string
+```
+
+## Writing Tests
+
+### Basic Assertions
 
 The test module provides these assertion functions that return booleans:
 
-### Basic Assertions
+#### Basic Assertions
 - `@eq(a, b)` - Strict equality (===)
 - `@deepEq(a, b)` - Deep equality for objects/arrays
 - `@ok(value)` - Truthy check
 - `@notOk(value)` - Falsy check
 
-### Comparison Assertions
+#### Comparison Assertions
 - `@gt(a, b)` - Greater than
 - `@gte(a, b)` - Greater than or equal
 - `@lt(a, b)` - Less than
 - `@lte(a, b)` - Less than or equal
 
-### Container Assertions
+#### Container Assertions
 - `@includes(container, item)` - Check if string/array contains item
 - `@contains(haystack, needle)` - Alias for includes (better for strings)
 - `@len(value)` - Get length of string/array/object
 
-### Error Assertions
-- `@throws(fn)` - Check if function throws an error
+### Testing Functions
 
-## Test Discovery
-
-Tests are discovered using the following rules:
-- Any variable starting with `test_` is considered a test
-- Test files match the pattern `**/*.test.mld`
-- Files in `node_modules/`, `.mlld-cache/`, and `mlld/tests/tmp/` are ignored
-
-## Example Test File
+Test `/exe` functions by calling them:
 
 ```mlld
-/import { eq, deepEq, ok, notOk, includes, len } from "../test.mld.md"
+/exe @greet(name) = `Hello, @name!`
+/exe @double(n) = js { return n * 2 }
 
->> Test object equality
-/var @user1 = {"name": "Alice", "age": 30}
-/var @user2 = {"name": "Alice", "age": 30}
-/var @test_users_are_equal = @deepEq(@user1, @user2)
-
->> Test array operations
-/var @numbers = [1, 2, 3, 4, 5]
-/var @test_array_length = @eq(@len(@numbers), 5)
-/var @test_includes_three = @includes(@numbers, 3)
-
->> Test with exec functions
-/exe @double(n) = javascript {return n * 2}
-/var @doubled = foreach @double(@numbers)
-/var @test_foreach_doubles = @deepEq(@doubled, [2, 4, 6, 8, 10])
-
->> Test falsy values
-/var @test_empty_string_is_falsy = @notOk("")
-/var @test_zero_is_falsy = @notOk(0)
-/var @test_null_is_falsy = @notOk(null)
+/var @test_greet_works = @greet("Alice") == "Hello, Alice!"
+/var @test_double_works = @double(5) == 10
+/var @test_double_zero = @double(0) == 0
 ```
 
-## Test Output
+### Testing Commands
 
-Tests produce colored output showing:
-- ✓ Passed tests in green
-- ✗ Failed tests in red
-- File execution errors
-- Test summary with total counts and timing
+Test command execution by capturing output:
 
-Example output:
+```mlld
+/var @result = run {echo "test"}
+/var @test_echo_works = @result.trim() == "test"
+
+# Test JavaScript execution
+/var @js_result = js { return "computed" }
+/var @test_js_execution = @js_result == "computed"
+```
+
+### Testing with File Operations
+
+Test file loading and processing:
+
+```mlld
+# Assuming test data files exist
+/var @config = <test-config.json>
+/var @readme = <test-readme.md>
+
+/var @test_config_loaded = @config != null
+/var @test_has_title = @config.title == "Test Config"
+/var @test_readme_has_content = @readme.length() > 0
+```
+
+### Testing Conditionals
+
+Test `/when` logic by checking outcomes:
+
+```mlld
+/var @user = {"role": "admin", "active": true}
+/var @result = ""
+
+/when [
+  @user.role == "admin" && @user.active => @result = "admin-access"
+  @user.role == "user" => @result = "user-access"
+  none => @result = "no-access"
+]
+
+/var @test_admin_access = @result == "admin-access"
+```
+
+### Testing Loops and Iteration
+
+Test `/for` loops and `foreach`:
+
+```mlld
+/var @numbers = [1, 2, 3, 4, 5]
+/exe @square(n) = js { return n * n }
+
+# Test foreach transformation
+/var @squared = foreach @square(@numbers)
+/var @test_foreach_length = @squared.length() == 5
+/var @test_first_square = @squared[0] == 1
+/var @test_last_square = @squared[4] == 25
+
+# Test for loop collection
+/var @doubled = for @n in @numbers => js { return @n * 2 }
+/var @test_doubled_sum = @doubled[0] + @doubled[1] == 6  # 2 + 4
+```
+
+## Running Tests
+
+### Basic Commands
+
+```bash
+# Run all tests in project
+mlld test
+
+# Run tests matching pattern  
+mlld test auth                # Files/paths containing "auth"
+mlld test src/utils/          # All tests in directory
+mlld test validation.test.mld # Specific test file
+```
+
+### Test Output
+
+Tests show results as they run:
+
 ```
 Running tests...
 
 src/utils
-  ✓ parser.test.mld (15ms)
-    ✓ parse basic
-    ✓ parse complex
-    ✗ parse edge cases
+  ✓ validation.test.mld (12ms)
+    ✓ user validation works
+    ✓ email format check
+    ✗ password strength
 
-modules/array
-  ✓ array.test.mld (8ms)
-    ✓ filter works
-    ✓ map works
-    ✓ reduce works
+modules/auth  
+  ✓ auth.test.mld (8ms)
+    ✓ login flow
+    ✓ logout clears session
 
-Tests: 5 passed, 1 failed (6 total)
-Time: 28ms
+Tests: 4 passed, 1 failed (5 total)
+Time: 23ms
+```
+
+### Environment Variables
+
+Load environment variables for tests:
+
+```bash
+# Load specific env file
+mlld test --env .env.test
+
+# Auto-loads .env and .env.test from current directory
+mlld test
+```
+
+Test files can access allowed environment variables:
+
+```mlld
+/import { MLLD_API_KEY, MLLD_NODE_ENV } from @input
+/var @test_has_api_key = @MLLD_API_KEY != null
+/var @test_test_environment = @MLLD_NODE_ENV == "test"
 ```
 
 ## Best Practices
 
-1. **Name tests descriptively**: Use `test_` prefix followed by what's being tested
-2. **One assertion per test**: Makes failures easier to understand
-3. **Group related tests**: Use comments to organize tests into sections
-4. **Test edge cases**: Empty arrays, null values, boundary conditions
-5. **Keep tests fast**: Avoid slow operations in test files
+### Test Naming
 
-## Limitations (MVP)
+Use descriptive test names:
 
-The current MVP implementation has these limitations:
-- No setup/teardown support
-- No test isolation (all tests in a file share the same environment)
-- No async test support beyond what mlld naturally handles
-- No mocking or stubbing
-- No coverage reporting
-- Sequential execution only
+```mlld
+# ✅ Good - descriptive names
+/var @test_user_validation_requires_email = ...
+/var @test_password_must_be_8_characters = ...
+/var @test_admin_can_delete_posts = ...
 
-## Using the Test Module
+# ❌ Bad - unclear names  
+/var @test_validation = ...
+/var @test_user = ...
+/var @test_1 = ...
+```
 
-The test module can be imported from:
-1. Local file path: `"../../modules/core/test.mld.md"`
-2. Registry module: `@mlld/test` (when published)
+### Keep Tests Focused
 
-For local development, use relative imports until the module is published to the registry.
+Write focused tests that check one thing:
+
+```mlld
+# ✅ Good - one assertion per test
+/var @test_array_length = @data.length() == 3
+/var @test_first_item = @data[0] == "apple"
+/var @test_includes_banana = @data.includes("banana")
+
+# ❌ Bad - multiple assertions in one test
+/var @test_array_stuff = @data.length() == 3 && @data[0] == "apple" && @data.includes("banana")
+```
+
+### Test Edge Cases
+
+Include boundary conditions and edge cases:
+
+```mlld
+/exe @calculateDiscount(price, percent) = when [
+  @price <= 0 => 0
+  @percent < 0 => @price
+  @percent > 100 => 0
+  * => js { return @price * (100 - @percent) / 100 }
+]
+
+# Test normal cases
+/var @test_normal_discount = @calculateDiscount(100, 10) == 90
+
+# Test edge cases
+/var @test_zero_price = @calculateDiscount(0, 10) == 0
+/var @test_negative_price = @calculateDiscount(-50, 10) == 0
+/var @test_negative_percent = @calculateDiscount(100, -5) == 100
+/var @test_over_100_percent = @calculateDiscount(100, 150) == 0
+```
+
+### Use Helper Functions
+
+Create reusable test helpers:
+
+```mlld
+/exe @assertEq(actual, expected) = @actual == @expected
+/exe @assertContains(container, item) = @container.includes(@item)
+/exe @assertLength(array, expectedLength) = @array.length() == @expectedLength
+
+# Use helpers in tests
+/var @test_user_name = @assertEq(@user.name, "Alice")
+/var @test_tags_include_admin = @assertContains(@user.tags, "admin")
+/var @test_permissions_count = @assertLength(@user.permissions, 3)
+```
+
+## Integration with CI/CD
+
+### GitHub Actions
+
+```yaml
+name: Test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - run: npm install -g @mlld/cli
+      - run: mlld test
+```
+
+### Environment Setup
+
+Set up test environments in CI:
+
+```bash
+# Install dependencies
+npm install -g @mlld/cli
+
+# Set test environment variables
+export MLLD_NODE_ENV=test
+export MLLD_API_TIMEOUT=5000
+
+# Run tests with coverage
+mlld test --env .env.ci
+```
+
+## Limitations
+
+The current test system has these limitations:
+
+- **No mocking**: External dependencies must be handled manually
+- **Sequential execution**: Tests run one file at a time
+- **No setup/teardown**: No built-in before/after hooks
+- **Shared environment**: All tests in a file share the same variable scope
+- **No test isolation**: Tests can affect each other within the same file
+
+For complex testing needs, consider:
+- Splitting tests into multiple files for isolation
+- Using separate test data files
+- Creating dedicated test modules with helper functions
+- Mocking external dependencies with conditional logic

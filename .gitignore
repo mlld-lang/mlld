@@ -12,6 +12,7 @@ build/
 
 # Website built files
 website/_site/
+website/src/docs/
 
 # Dev docs
 /_dev
