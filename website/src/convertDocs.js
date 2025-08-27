@@ -2,25 +2,22 @@ const fs = require('fs');
 const path = require('path');
 
 // Source and destination directories
-const sourceDir = path.join(__dirname, '../../docs');
+// Now we only process docs/user directory
+const sourceDir = path.join(__dirname, '../../docs/user');
 const outputDir = path.join(__dirname, 'docs');
 
 // Debug filename checking
 function debugFilePath(filePath) {
-  const isDevFile = filePath.includes('/dev/') || filePath.includes('\\dev\\');
   const parts = filePath.split(path.sep);
   console.log(`Path: ${filePath}`);
   console.log(`Parts: ${JSON.stringify(parts)}`);
-  console.log(`Includes '/dev/': ${filePath.includes('/dev/')}`);
-  console.log(`Includes '\\dev\\': ${filePath.includes('\\dev\\')}`);
-  console.log(`Is dev file: ${isDevFile}`);
-  return isDevFile;
+  return false;
 }
 
-// Skip the dev directory
+// Skip review files
 function shouldSkipFile(filePath) {
-  // Only skip files that are in the docs/dev/ directory
-  return filePath.includes(`${path.sep}docs${path.sep}dev${path.sep}`);
+  // Skip any -review.md files
+  return filePath.includes('-review.md');
 }
 
 // Ensure output directory exists
@@ -33,9 +30,9 @@ function convertFile(filePath) {
   // Debug the first few files
   debugFilePath(filePath);
   
-  // Skip files in the dev directory
+  // Skip review files
   if (shouldSkipFile(filePath)) {
-    console.log(`Skipping dev file: ${filePath}`);
+    console.log(`Skipping review file: ${filePath}`);
     return;
   }
 
@@ -47,13 +44,12 @@ function convertFile(filePath) {
   
   let outputPath;
   if (isReadme) {
-    // For README.md, create index.html in the same directory
-    const dirName = path.dirname(relativePath);
-    outputPath = path.join(outputDir, dirName, 'index.md');
+    // For README.md in the root, create index.md
+    outputPath = path.join(outputDir, 'index.md');
     console.log(`Special handling for README: ${filePath} -> ${outputPath}`);
   } else {
-    // Normal handling for other files
-    outputPath = path.join(outputDir, relativePath);
+    // Normal handling for other files - all go to the root of docs since we have no subdirs
+    outputPath = path.join(outputDir, path.basename(filePath));
   }
   
   // Create output directory if it doesn't exist
@@ -94,17 +90,22 @@ ${content}`;
   console.log(`Converted: ${relativePath} to ${outputPath}`);
 }
 
-// Function to process a directory recursively
+// Function to process the docs/user directory (no subdirectories)
 function processDirectory(dirPath) {
+  // Check if the source directory exists
+  if (!fs.existsSync(dirPath)) {
+    console.error(`Source directory does not exist: ${dirPath}`);
+    process.exit(1);
+  }
+  
   const files = fs.readdirSync(dirPath);
   
   for (const file of files) {
     const filePath = path.join(dirPath, file);
     const stats = fs.statSync(filePath);
     
-    if (stats.isDirectory()) {
-      processDirectory(filePath);
-    } else if (stats.isFile() && path.extname(file) === '.md') {
+    // Only process .md files in the root (no subdirectories)
+    if (stats.isFile() && path.extname(file) === '.md') {
       convertFile(filePath);
     }
   }

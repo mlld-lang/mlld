@@ -1,5 +1,3 @@
-Based on my research of the codebase, I can now create an accurate `sdk.md` document that reflects the actual SDK API:
-
 # SDK Usage
 
 The mlld SDK allows you to integrate mlld processing into your JavaScript or TypeScript applications.

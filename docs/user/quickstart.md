@@ -1,5 +1,3 @@
-Now I'll create the quickstart.md document based on the documentation plan and using accurate syntax from the test cases:
-
 # Quick Start
 
 Get running with mlld in 5 minutes. mlld is a modular prompt scripting language that turns Markdown into executable workflows.

@@ -1,5 +1,3 @@
-Now I have a good understanding of the testing system. Let me create the new testing.md documentation:
-
 # Testing mlld Modules and Scripts
 
 Testing mlld code ensures your modules and workflows work correctly. mlld provides a native test system designed for the unique needs of LLM orchestration and dynamic workflows.

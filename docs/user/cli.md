@@ -1,6 +1,4 @@
-Now I have a good understanding of the current cli.md structure and accurate syntax. The document is already well-structured and comprehensive. Based on the reorganization plan, the cli.md should remain mostly as-is since it's already a complete CLI reference. Let me create the updated version following the style guidelines:
-
-# mlld CLI Reference
+ mlld CLI Reference
 
 The mlld CLI provides commands for processing mlld files, managing modules, and configuring your mlld environment.
 

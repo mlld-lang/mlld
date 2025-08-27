@@ -1,5 +1,3 @@
-Now I have enough information to create a comprehensive security.md document. Based on the examination of the codebase, I can see that mlld has several security features implemented and others in development.
-
 # Security
 
 mlld prioritizes practical security that protects against real threats without hindering productivity. The security model is built around controlled access and progressive trust.
