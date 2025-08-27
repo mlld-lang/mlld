@@ -290,6 +290,7 @@ mlld provides built-in transformers (both uppercase and lowercase work):
 /var @users = [{"name": "Alice", "age": 30}, {"name": "Bob", "age": 25}]
 /var @tocsv = @users | @CSV
 /show @tocsv
+```
 
 ## Templates and Interpolation
 
@@ -418,12 +419,18 @@ Last updated: @now
 ```mlld
 >> Load files and check context limits
 /var @files = <src/**/*.ts>
-/var @totalTokens = 0
 
->> Filter large files
-/var @large = foreach @file(@files) {
-  /when @file.tokest > 2000 => @file
+>> Define filter for large files (over 2000 tokens)
+/exe @filterLarge(files) = js {
+  return files.filter(f => f.tokest > 2000)
 }
+/var @large = @filterLarge(@files)
+
+>> Calculate total tokens
+/exe @sumTokens(files) = js {
+  return files.reduce((sum, f) => sum + (f.tokest || 0), 0)
+}
+/var @totalTokens = @sumTokens(@files)
 
 /show `Found @large.length files over 2000 tokens`
 /show `Total estimated tokens: @totalTokens`
@@ -436,10 +443,11 @@ Last updated: @now
 /var @users = run {curl -s api.example.com/users}
 /var @parsed = @users | @json
 
->> Filter active users  
-/var @active = foreach @user(@parsed) {
-  /when @user.status == "active" => @user
+>> Define filter function for active users
+/exe @filterActive(users) = js {
+  return users.filter(u => u.status === "active")
 }
+/var @active = @filterActive(@parsed)
 
 >> Generate report
 /var @report = `# User Report
@@ -466,12 +474,17 @@ Generated: @now
 /var @baseConfig = <config/base.json>
 /var @envConfig = <config/@env.json>
 
->> Merge configurations
-/var @config = {
-  ...@baseConfig.json,
-  ...@envConfig.json,
-  "environment": @env,
-  "timestamp": @now
+>> Merge configurations using JS
+/var @config = js {
+  return Object.assign(
+    {},
+    @baseConfig.json,
+    @envConfig.json,
+    {
+      environment: @env,
+      timestamp: @now
+    }
+  )
 }
 
 /output @config to "runtime-config.json" as json

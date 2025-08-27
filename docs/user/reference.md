@@ -69,7 +69,7 @@ Define reusable functions and templates:
 ```mlld
 # Shell commands
 /exe @greet(name) = run {echo "Hello @name"}
-/exe @deploy() = run sh {
+/exe @deploy() = sh {
   npm test && npm run build
   ./deploy.sh
 }
@@ -81,7 +81,7 @@ Define reusable functions and templates:
 }
 
 # Templates
-/exe @welcome(name, role) = ::Welcome {{name}}! Role: {{role}}::
+/exe @welcome(name, role) = ::Welcome @name! Role: @role::
 /exe @format(title, content) = :::
 # {{title}}
 
