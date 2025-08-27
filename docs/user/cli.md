@@ -346,7 +346,7 @@ mlld alias --name home --path ~/my-modules
 **Usage after creating:**
 ```mlld
 /import {utils} from @shared/utils
-/import {data} from @desktop/my-data
+/import { data } from @desktop/my-data
 ```
 
 ### `mlld auth`
