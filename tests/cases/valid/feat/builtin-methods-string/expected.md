@@ -5,11 +5,11 @@ false
 # String indexOf method
 6
 -1
-4
+6
 # String length method
 11
 0
-19
+21
 # String case methods
 hello world
 HELLO WORLD

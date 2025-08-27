@@ -1,4 +1,4 @@
-# mlld Language Reference
+# Syntax Reference
 
 Here's a syntax reference for mlld.
 
