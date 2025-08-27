@@ -5,28 +5,23 @@ title: "mlld Documentation"
 
 # mlld Documentation
 
-mlld is a simple scripting language designed to work within markdown and markdown-like documents. It processes special `/directive` lines while preserving all other content as-is.
+mlld is a scripting language designed to make it delightful to work with LLMs in repeatable ways that would be onerous in a chat context. 
 
-## Documentation Structure
+## Docs
 
-- [Introduction to mlld](./introduction.md) - Overview and basic concepts
-- [Grammar Reference](./grammar-reference.md) - Complete syntax reference
-- [Directives](./directives/README.md) - Detailed documentation for each directive
-- [Variables](./variables.md) - Working with different variable types
-- [Error Handling](./error-handling.md) - Understanding how errors work in mlld
-- [Modules](./modules.md) - Using and creating mlld modules
-- [Publishing Modules](./publishing-modules.md) - Guide to publishing modules to the registry
-
+- **[Intro](./introduction.md) - Best place to start**
+- [Quickstart](./quickstart.md)
+- [Content and data](./content-and-data.md)
+- [Flow control](./flow-control.md)
+- [CLI usage](./cli.md)
+- [SDK usage](./sdk.md)
+- [Security considerations](./security.md)
+- [Syntax reference](./reference.md)
+- [Developer documentation](https://github.com/mlld-lang/mlld/tree/main/docs/dev)
 ## Getting Started
 
-If you're new to mlld, start with the [Introduction](./introduction.md) to learn the basic concepts.
+If you're new to mlld, start with the [Introduction](./introduction.md) to learn the basic concepts and understand why mlld exists and what it can help you do.
 
-For CLI usage information, check the [CLI Usage](./cli-usage.md) guide.
+[Join the Discord](https://discord.gg/mlld) and ask questions.
 
-If you're integrating mlld into your application, see the [SDK Usage](./sdk-usage.md) documentation.
-
-For sharing your mlld code with others, see the [Publishing Modules](./publishing-modules.md) guide.
-
-## Implementation Notes
-
-This documentation is based on the actual implementation of mlld. The directive handlers, variable resolvers, and error handling mechanisms described here match the codebase's functionality. If you encounter any discrepancies or have questions about specific features, please refer to the tests in the repository for detailed examples of supported functionality.
+If you encounter any confusing errors or clear bugs, [filing a clear and repeatable bug report](https://github.com/mlld-lang/mlld/issues/new?template=bug_report.md) would be extremely appreciated.

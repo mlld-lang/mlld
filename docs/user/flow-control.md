@@ -313,7 +313,7 @@ Use flags to coordinate flow:
 ### Conditional Actions
 
 ```mlld
-/exe @isProduction() = run {test "$NODE_ENV" = "production" && echo "true"}
+/exe @isProduction() = sh {test "$NODE_ENV" = "production" && echo "true"}
 /when first [
   @isProduction() && @testsPass => run {npm run deploy:prod}
   @testsPass => run {npm run deploy:staging}

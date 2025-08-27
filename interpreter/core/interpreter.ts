@@ -948,9 +948,14 @@ export async function interpolate(
       
       if (!variable) {
         if (process.env.MLLD_DEBUG === 'true') {
-          logger.debug('Variable not found during interpolation:', { varName });
+          logger.debug('Variable not found during interpolation:', { varName, valueType: node.valueType });
         }
-        parts.push(`@${varName}`); // Keep unresolved with @ symbol
+        // WHY: Preserve original syntax when variable is undefined for better error messages
+        if (node.valueType === 'varInterpolation') {
+          parts.push(`{{${varName}}}`);  // {{var}} syntax
+        } else {
+          parts.push(`@${varName}`);      // @var syntax
+        }
         continue;
       }
       
@@ -1273,6 +1278,16 @@ export async function interpolate(
       }
       
       parts.push(escapedValue);
+      
+      // Handle boundary marker after variable if present
+      // @var\ produces just the variable, @var\\ produces variable + literal backslash
+      if (node.boundary) {
+        if (node.boundary.type === 'literal') {
+          // Double backslash: add literal backslash after variable
+          parts.push(node.boundary.value);
+        }
+        // Single backslash (type: 'consumed'): don't add anything, it's just a boundary
+      }
     } else if (node.type === 'ExecInvocation') {
       // Handle exec invocation nodes in interpolation
       const { evaluateExecInvocation } = await import('../eval/exec-invocation');

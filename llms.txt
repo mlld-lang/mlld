@@ -160,7 +160,7 @@ Prefer backticks for templates; use `::…::` to escape backticks; use `:::…::
 </RULE_5_INTERPOLATION_CONTEXTS>
 
 <RULE_6_FIELD_ACCESS>
-Objects/arrays use dot+index in directives and `{{ }}` in ::/::: templates. Arrays support slicing with `[start:end]`.
+Objects/arrays use dot+index in directives and `{{ }}` in ::: templates only. Arrays support slicing with `[start:end]`.
 
 ```mlld
 /var @user = {"name":"Alice","scores":[10,20,30]}
@@ -176,7 +176,7 @@ Objects/arrays use dot+index in directives and `{{ }}` in ::/::: templates. Arra
 /show @arr[2:]              # [3,4,5] - from index 2
 
 # Double-colon templates:
-/show ::{{user.name}} has {{user.scores.0}}::
+/show ::@user.name has @user.scores.0::
 ```
 
 </RULE_6_FIELD_ACCESS>
@@ -188,7 +188,7 @@ Use `/exe` for parameterized templates or commands.
 /exe @greet(name) = run {echo "Hello @name"}
 /run @greet("Bob")
 
-/exe @welcome(name, role) = ::Welcome {{name}}, our new {{role}}!::
+/exe @welcome(name, role) = ::Welcome @name, our new @role!::
 /show @welcome("Rae","developer")
 ```
 
@@ -254,7 +254,7 @@ Use `foreach` to transform collections; use `/for` to execute/collect. Full deta
 
 ```mlld
 /var @names = ["Alice","Bob"]
-/exe @greet(name) = ::Hi {{name}}!::
+/exe @greet(name) = ::Hi @name!::
 /var @gs = foreach @greet(@names)
 /for @n in @names => show `Name: @n`
 ```
@@ -551,7 +551,7 @@ Notes:
 ```mlld
 # foreach (transform)
 /var @names = ["alice","bob","charlie"]
-/exe @greet(name) = ::Hi {{name}}!::
+/exe @greet(name) = ::Hi @name!::
 /var @greetings = foreach @greet(@names)
 
 # /for (execute)
@@ -799,7 +799,7 @@ mlld publish my-module.mld.md --private --path lib/modules --pr
 
 ```mlld
 ❌ This is {{name}}'s doc
-✅ /show ::This is {{name}}'s doc::
+✅ /show ::This is @name's doc::
 ```
 
 </MISTAKE_NOT_TEMPLATE_LANG>

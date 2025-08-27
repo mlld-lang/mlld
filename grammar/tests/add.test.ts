@@ -181,9 +181,9 @@ describe('Add Directive', () => {
     expect(directiveNode.values).toHaveProperty('content');
     expect(Array.isArray(directiveNode.values.content)).toBe(true);
     
-    // Verify content includes variable nodes - {{name}} is normalized to @name in raw
+    // Verify content includes variable nodes - {{name}} should be preserved in raw
     const contentText = directiveNode.raw.content;
-    expect(contentText.includes('@name')).toBe(true);
+    expect(contentText.includes('{{name}}')).toBe(true);
   });
   
   test('Template add with headerLevel', async () => {
