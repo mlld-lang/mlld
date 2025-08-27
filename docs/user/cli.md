@@ -1,3 +1,5 @@
+Now I have a good understanding of the current cli.md structure and accurate syntax. The document is already well-structured and comprehensive. Based on the reorganization plan, the cli.md should remain mostly as-is since it's already a complete CLI reference. Let me create the updated version following the style guidelines:
+
 # mlld CLI Reference
 
 The mlld CLI provides commands for processing mlld files, managing modules, and configuring your mlld environment.
@@ -64,11 +66,16 @@ mlld script.mld --allow-absolute
 
 Create a new mlld module interactively.
 
-**Features:**
-- Interactive prompts for module metadata
-- Location-aware: prompts to use configured local module directory
-- Auto-detects git repository information
-- Creates `.mld.md` files for better documentation
+```bash
+# Interactive creation
+mlld init
+
+# Create specific module
+mlld init utils.mld.md
+
+# Non-interactive with metadata
+mlld init --name utils --author alice --about "Utility functions"
+```
 
 **Options:**
 - `-n, --name <name>` - Module name
@@ -81,21 +88,20 @@ Create a new mlld module interactively.
 - `--skip-git` - Skip git integration
 - `-f, --force` - Overwrite existing files
 
-**Examples:**
-```bash
-# Interactive creation
-mlld init
-
-# Create specific module
-mlld init utils.mld.md
-
-# Non-interactive with metadata
-mlld init --name utils --author alice --about "Utility functions"
-```
-
 ### `mlld publish [module.mld.md]`
 
 Publish a module to the registry or private repository.
+
+```bash
+# Publish to public registry
+mlld publish my-module.mld.md
+
+# Publish to private repository
+mlld publish my-module.mld.md --private
+
+# Preview what would be published
+mlld publish --dry-run
+```
 
 **Options:**
 - `--dry-run` - Preview without publishing
@@ -108,32 +114,10 @@ Publish a module to the registry or private repository.
 - `--path <dir>` - Custom directory for private modules
 - `--pr` - Also create registry PR for private modules
 
-**Examples:**
-```bash
-# Publish to public registry
-mlld publish my-module.mld.md
-
-# Publish to private repository
-mlld publish my-module.mld.md --private
-
-# Publish to custom directory
-mlld publish my-module.mld.md --private --path lib/modules
-
-# Preview what would be published
-mlld publish --dry-run
-```
-
 ### `mlld install [modules...]`
 
 Install modules from the registry or lock file.
 
-**Options:**
-- `-v, --verbose` - Show detailed output
-- `--no-cache` - Skip cache and re-download
-- `--dry-run` - Preview without installing
-- `-f, --force` - Force reinstall
-
-**Examples:**
 ```bash
 # Install specific modules
 mlld install @alice/utils @bob/helpers
@@ -145,17 +129,16 @@ mlld install
 mlld install @alice/utils --force
 ```
 
+**Options:**
+- `-v, --verbose` - Show detailed output
+- `--no-cache` - Skip cache and re-download
+- `--dry-run` - Preview without installing
+- `-f, --force` - Force reinstall
+
 ### `mlld ls`
 
 List installed modules and their status.
 
-**Options:**
-- `-v, --verbose` - Show version hashes
-- `--format <format>` - Output format: `list` (default), `table`, `json`
-- `--missing` - Only show missing modules
-- `--cached` - Only show cached modules
-
-**Examples:**
 ```bash
 # Basic list
 mlld ls
@@ -167,15 +150,16 @@ mlld ls --format table --verbose
 mlld ls --missing
 ```
 
+**Options:**
+- `-v, --verbose` - Show version hashes
+- `--format <format>` - Output format: `list` (default), `table`, `json`
+- `--missing` - Only show missing modules
+- `--cached` - Only show cached modules
+
 ### `mlld info <module>`
 
 Show detailed information about a module.
 
-**Options:**
-- `-v, --verbose` - Include technical details
-- `--format <format>` - Output format: `text` (default), `json`
-
-**Examples:**
 ```bash
 # Show module info
 mlld info @alice/utils
@@ -184,32 +168,29 @@ mlld info @alice/utils
 mlld info @alice/utils --format json
 ```
 
+**Options:**
+- `-v, --verbose` - Include technical details
+- `--format <format>` - Output format: `text` (default), `json`
+
 ### `mlld clean [modules...]`
 
 Remove modules from lock file and cache to resolve import issues.
 
-**Options:**
-- `--all` - Clear all cached modules
-- `--registry` - Clear only registry modules (preserve local modules)
-- `-v, --verbose` - Show detailed output during cleaning
-
-**Examples:**
 ```bash
 # Remove specific module from cache
 mlld clean @mlld/env
-
-# Remove multiple modules
-mlld clean @mlld/env @alice/utils
 
 # Clear all cached modules
 mlld clean --all
 
 # Clear only registry modules
 mlld clean --registry
-
-# Verbose output
-mlld clean @mlld/env --verbose
 ```
+
+**Options:**
+- `--all` - Clear all cached modules
+- `--registry` - Clear only registry modules (preserve local modules)
+- `-v, --verbose` - Show detailed output during cleaning
 
 **Use Cases:**
 - Fix stale cached module data preventing proper imports
@@ -223,12 +204,6 @@ Analyze and update module dependencies automatically.
 
 **Aliases:** `mlld needs`, `mlld deps`
 
-**Options:**
-- `--verbose` - Show detailed analysis
-- `--auto` - Auto-detect mode (default)
-- `--force` - Add frontmatter even if missing
-
-**Examples:**
 ```bash
 # Analyze current directory
 mlld add-needs
@@ -240,22 +215,17 @@ mlld add-needs my-module.mld.md
 mlld add-needs --verbose
 ```
 
+**Options:**
+- `--verbose` - Show detailed analysis
+- `--auto` - Auto-detect mode (default)
+- `--force` - Add frontmatter even if missing
+
 ## Development Commands
 
 ### `mlld test [patterns...]`
 
 Run mlld test files (`.test.mld` files).
 
-**Features:**
-- Automatically loads `.env` and `.env.test` files from current directory
-- Runs tests in isolated processes when multiple files are executed
-- Prevents environment variable pollution between test modules
-- Shows test results with timing and pass/fail indicators
-
-**Options:**
-- `--env <file>` - Load environment variables from specific file
-
-**Examples:**
 ```bash
 # Run all tests
 mlld test
@@ -266,6 +236,15 @@ mlld test array string
 # Use custom environment file
 mlld test --env .env.staging
 ```
+
+**Features:**
+- Automatically loads `.env` and `.env.test` files from current directory
+- Runs tests in isolated processes when multiple files are executed
+- Prevents environment variable pollution between test modules
+- Shows test results with timing and pass/fail indicators
+
+**Options:**
+- `--env <file>` - Load environment variables from specific file
 
 **Environment Loading:**
 - If `--env` is specified: loads only that file
@@ -283,18 +262,16 @@ mlld test --env .env.staging
 
 The ephemeral version of mlld for CI/CD and serverless environments. Uses in-memory caching instead of filesystem persistence.
 
-**Usage:**
 ```bash
-mlldx script.mld                 # Run with in-memory cache
-mlldx script.mld --env prod.env  # Load environment variables
-npx mlldx@latest ci-task.mld     # Run without installation
-```
+# Run with in-memory cache
+mlldx script.mld
 
-**Options:**
-All standard mlld options plus:
-- `--env <file>` - Load environment variables from specified file
-- `--ephemeral` - Automatically set for mlldx
-- `--allow-absolute` - Permit file access outside project root
+# Load environment variables
+mlldx script.mld --env prod.env
+
+# Run without installation
+npx mlldx@latest ci-task.mld
+```
 
 **Examples:**
 ```bash
@@ -320,15 +297,6 @@ docker run -it node:18 npx mlldx@latest /scripts/task.mld
 
 Interactive configuration wizard for mlld projects.
 
-**Options:**
-- `--github` - Set up GitHub private modules only
-- `--local` - Set up path aliases only
-- `--basic` - Create basic mlld.lock.json only
-- `--force` - Overwrite existing configuration
-- `--check` - Check current configuration status
-- `--add-resolver` - Add a new resolver to existing config
-
-**Examples:**
 ```bash
 # Interactive setup wizard
 mlld setup
@@ -341,10 +309,15 @@ mlld setup --local
 
 # Check configuration
 mlld setup --check
-
-# Add new resolver
-mlld setup --add-resolver
 ```
+
+**Options:**
+- `--github` - Set up GitHub private modules only
+- `--local` - Set up path aliases only
+- `--basic` - Create basic mlld.lock.json only
+- `--force` - Overwrite existing configuration
+- `--check` - Check current configuration status
+- `--add-resolver` - Add a new resolver to existing config
 
 **What it configures:**
 1. GitHub private module access
@@ -356,12 +329,6 @@ mlld setup --add-resolver
 
 Create path aliases for easy module imports.
 
-**Options:**
-- `-n, --name <alias>` - Alias name (required)
-- `-p, --path <path>` - Directory path (required)
-- `-g, --global` - Create global alias (default: local)
-
-**Examples:**
 ```bash
 # Create path alias (project-specific)
 mlld alias --name shared --path ../shared-modules
@@ -373,22 +340,21 @@ mlld alias --name desktop --path ~/Desktop --global
 mlld alias --name home --path ~/my-modules
 ```
 
+**Options:**
+- `-n, --name <alias>` - Alias name (required)
+- `-p, --path <path>` - Directory path (required)
+- `-g, --global` - Create global alias (default: local)
+
 **Usage after creating:**
 ```mlld
-@import { utils } from @shared/utils
-@import { data } from @desktop/my-data
+/import {utils} from @shared/utils
+/import {data} from @desktop/my-data
 ```
 
 ### `mlld auth`
 
 Manage GitHub authentication for private modules.
 
-**Subcommands:**
-- `login` - Authenticate with GitHub
-- `logout` - Remove stored credentials
-- `status` - Check authentication status
-
-**Examples:**
 ```bash
 # Login to GitHub
 mlld auth login
@@ -400,16 +366,15 @@ mlld auth status
 mlld auth logout
 ```
 
+**Subcommands:**
+- `login` - Authenticate with GitHub
+- `logout` - Remove stored credentials
+- `status` - Check authentication status
+
 ### `mlld env`
 
 Manage environment variable permissions.
 
-**Subcommands:**
-- `allow <vars...>` - Allow environment variables
-- `list` - List allowed variables
-- `remove <vars...>` - Remove variable access
-
-**Examples:**
 ```bash
 # Allow environment variables
 mlld env allow GITHUB_TOKEN NODE_ENV API_KEY
@@ -421,9 +386,14 @@ mlld env list
 mlld env remove API_KEY
 ```
 
+**Subcommands:**
+- `allow <vars...>` - Allow environment variables
+- `list` - List allowed variables
+- `remove <vars...>` - Remove variable access
+
 **Usage in mlld:**
 ```mlld
-@import { GITHUB_TOKEN, NODE_ENV } from @INPUT
+/import {GITHUB_TOKEN, NODE_ENV} from @input
 ```
 
 ## Registry Commands
@@ -432,13 +402,6 @@ mlld env remove API_KEY
 
 Interact with the mlld module registry.
 
-**Subcommands:**
-- `search <query>` - Search for modules
-- `audit` - Check for security advisories
-- `update` - Update modules
-- `stats` - Show usage statistics
-
-**Examples:**
 ```bash
 # Search for modules
 mlld registry search json
@@ -449,6 +412,12 @@ mlld registry audit
 # Update modules
 mlld registry update
 ```
+
+**Subcommands:**
+- `search <query>` - Search for modules
+- `audit` - Check for security advisories
+- `update` - Update modules
+- `stats` - Show usage statistics
 
 ## Configuration Files
 
@@ -516,7 +485,7 @@ mlld env allow MY_API_KEY
 
 Then use in mlld files:
 ```mlld
-@import { MY_API_KEY } from @INPUT
+/import {MY_API_KEY} from @input
 ```
 
 ## File Extensions
