@@ -57,6 +57,7 @@
     "reinstall": "node scripts/install-local.cjs",
     "reinstall:clean": "node scripts/clean-local.cjs",
     "prepare-main": "node prepare-main.js",
+    "pretest": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

@@ -40,52 +40,49 @@ jobs:
             exit 1
           fi
       - name: Determine version
-        id: bump
+        id: version
         run: |
           set -e
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo '')
-          CURRENT_VERSION=$(node -p "require('./package.json').version")
-          if [ "v$CURRENT_VERSION" = "$LAST_TAG" ]; then
-            echo "No version bump detected"
-            if [[ "$CURRENT_VERSION" == *-rc* ]]; then
-              echo "Bumping release candidate"
-              npm version prerelease --preid=rc --no-git-tag-version
-              npm run sync:mlldx
-            else
-              echo "Bumping patch version"
-              npm run bump
-            fi
-            npm run build:version
-            npm install --package-lock-only --ignore-scripts
-            NEW_VERSION=$(node -p "require('./package.json').version")
-            git config user.name 'github-actions[bot]'
-            git config user.email 'github-actions[bot]@users.noreply.github.com'
-            git commit -am "chore: bump version to $NEW_VERSION [skip ci]"
-            git push origin HEAD:main
-            CURRENT_VERSION=$NEW_VERSION
+          CHANGELOG_VERSION=$(grep -m1 '^## \[' CHANGELOG.md | sed -E 's/^## \[([^]]+)\].*/\1/')
+          if [ -z "$CHANGELOG_VERSION" ]; then
+            echo 'Could not determine version from CHANGELOG.md'
+            exit 1
           fi
-          echo "version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+          if ! echo "$CHANGELOG_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
+            echo "Invalid changelog version format: $CHANGELOG_VERSION"
+            exit 1
+          fi
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PACKAGE_VERSION" != "$CHANGELOG_VERSION" ]; then
+            echo "package.json version ($PACKAGE_VERSION) does not match changelog version ($CHANGELOG_VERSION)"
+            exit 1
+          fi
+          echo "version=$CHANGELOG_VERSION" >> "$GITHUB_OUTPUT"
       - name: Generate release notes
         run: |
-          VERSION=${{ steps.bump.outputs.version }}
+          VERSION=${{ steps.version.outputs.version }}
           awk -v v="$VERSION" '/^## \['v'\]/{flag=1;next}/^## \[/{flag=0}flag' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "Release notes not found for version $VERSION"
+            exit 1
+          fi
           cat RELEASE_NOTES.md
       - name: Tag release
         run: |
-          VERSION=${{ steps.bump.outputs.version }}
+          VERSION=${{ steps.version.outputs.version }}
           git tag v$VERSION
           git push origin v$VERSION
       - name: Create GitHub release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.bump.outputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
           body_path: RELEASE_NOTES.md
       - name: Publish packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           RC_LATEST: ${{ vars.RC_LATEST }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=${{ steps.version.outputs.version }}
           if [[ "$VERSION" == *-rc* ]]; then
             if [ "$RC_LATEST" = "true" ]; then
               TAG=latest
