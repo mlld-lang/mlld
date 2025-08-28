@@ -27,6 +27,9 @@ if (!fs.existsSync(targetDir)) {
 
 console.log('Copying tree-sitter WASM files...');
 
+// In CI, tree-sitter packages might not be available - this is OK
+const isCI = process.env.CI === 'true';
+
 for (const lang of languages) {
   const wasmFile = `tree-sitter-${lang}.wasm`;
   const pkgName = `tree-sitter-${lang}`;
@@ -69,12 +72,22 @@ for (const lang of languages) {
   }
   
   if (!found) {
-    console.warn(`⚠ Warning: ${wasmFile} not found for ${pkgName}.`);
-    console.warn(`  Searched in:`);
-    for (const p of possiblePaths) {
-      console.warn(`   - ${path.relative(projectRoot, p)}`);
+    if (isCI) {
+      console.log(`ℹ️  ${wasmFile} not available in CI environment (${pkgName})`);
+    } else {
+      console.warn(`⚠ Warning: ${wasmFile} not found for ${pkgName}.`);
+      console.warn(`  Searched in:`);
+      for (const p of possiblePaths) {
+        console.warn(`   - ${path.relative(projectRoot, p)}`);
+      }
     }
   }
+}
+
+// In CI, if no files were copied, still exit successfully
+if (isCI && !fs.readdirSync(targetDir).some(f => f.endsWith('.wasm'))) {
+  console.log('\nℹ️  No WASM files available in CI environment - this is OK for builds');
+  process.exit(0);
 }
 
 console.log('\nWASM files copied to dist/wasm/');

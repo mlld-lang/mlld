@@ -173,12 +173,15 @@ async function build() {
     currentStep++;
     
     showProgress(steps[currentStep].display, 'running');
-    console.log(`\n${yellow}[info]${reset} WASM copy step is optional in CI environments.`);
+    if (process.env.CI) {
+      console.log(`\n${yellow}[info]${reset} WASM copy step is optional in CI environments.`);
+    }
     await runCommandOptional('npm run build:wasm', 'wasm');
     showProgress(steps[currentStep].display, 'done');
     currentStep++;
     
     showProgress(steps[currentStep].display, 'running');
+    // sync:mlldx handles CI detection internally and exits gracefully
     await runCommand('npm run sync:mlldx', 'sync');
     showProgress(steps[currentStep].display, 'done');
     
@@ -186,19 +189,37 @@ async function build() {
     
   } catch (error) {
     console.log(`\n${red}❌ Build failed!${reset}\n`);
-    // Show clearer diagnostics from buildOutput
+    
+    // First check what step actually threw the error
+    if (error.message) {
+      const failedStep = error.message.match(/(\w+) failed/)?.[1];
+      if (failedStep) {
+        console.log(`${red}Error in step: ${failedStep}${reset}\n`);
+        
+        // Find the output for this specific step
+        const stepOutput = buildOutput.find(e => e.step === failedStep);
+        if (stepOutput) {
+          if (stepOutput.stderr) {
+            console.log('Error output:');
+            console.log(stepOutput.stderr);
+          }
+          if (stepOutput.stdout && stepOutput.stdout.includes('Error')) {
+            console.log('Output:');
+            console.log(stepOutput.stdout);
+          }
+        }
+      } else {
+        console.log(`${red}Error: ${error.message}${reset}\n`);
+      }
+    }
+    
+    // Show any non-optional failures
     const failures = buildOutput.filter(e => e.exitCode && e.exitCode !== 0 && !e.optional);
-    const firstFailure = failures.length > 0 ? failures[failures.length - 1] : buildOutput[buildOutput.length - 1];
-    if (firstFailure) {
-      console.log(`${red}Error in step: ${firstFailure.step}${reset}\n`);
-      if (firstFailure.stderr) {
-        console.log('Error output:');
-        console.log(firstFailure.stderr);
-      }
-      if (firstFailure.stdout && firstFailure.stdout.includes('Error')) {
-        console.log('Output:');
-        console.log(firstFailure.stdout);
-      }
+    if (failures.length > 0 && !error.message?.includes('failed')) {
+      console.log(`${red}Failed steps:${reset}`);
+      failures.forEach(e => {
+        console.log(` - ${e.step} (exit ${e.exitCode})`);
+      });
     }
     // Also show any non-zero optional steps as warnings
     const optionalFailures = buildOutput.filter(e => e.exitCode && e.exitCode !== 0 && e.optional);
