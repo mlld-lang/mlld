@@ -24,6 +24,8 @@
 /exe @getSeed() = "seed-data"
 
 # Test conditional retry with fallback after max attempts
-/var @result = @getSeed() with { pipeline: [@jsonGenerator, @retryUntilValidJSON(@p), js { return `valid-json: ${@input}` }] }
+/exe @formatValid(input) = `valid-json: @input`
+
+/var @result = @getSeed() with { pipeline: [@jsonGenerator, @retryUntilValidJSON(@p), @formatValid] }
 
 /show @result

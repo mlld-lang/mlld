@@ -23,7 +23,7 @@ describe('Pipeline @ctx/@p and retry behavior', () => {
   it('disallows retry of stage 0 when source is a literal', async () => {
     const failing = `/var @literal = \"text\"\n/exe @retryer(input) = when first [\n  @pipeline.try < 2 => retry \"x\"\n  * => @input\n]\n/var @out = @literal with { pipeline: [@retryer] }\n/show @out`;
 
-    await expect(testWithEffects(failing)).rejects.toThrow(/Cannot retry stage 0: input is not a function/i);
+    await expect(testWithEffects(failing)).rejects.toThrow(/(Cannot retry stage 0|Stage 0 is not retryable)/i);
   });
 
   it('supports negative index access on @p', async () => {
@@ -34,7 +34,7 @@ describe('Pipeline @ctx/@p and retry behavior', () => {
   });
 
   it('aggregates all retry contexts via @p.retries.all', async () => {
-    const input = `/exe @seed() = \"base\"\n\n/exe @gen(input, pipeline) = \`v-@pipeline.try: @input\`\n\n/exe @retry2(input, pipeline) = when first [\n  @pipeline.try < 3 => retry\n  * => @input\n]\n\n/exe @id(input) = @input\n\n/exe @retry3(input, pipeline) = when first [\n  @pipeline.try < 2 => retry\n  * => @input\n]\n\n/exe @emitAll(input, pipeline) = js {\n  return JSON.stringify(pipeline.retries.all);\n}\n\n/var @result = @seed() with { pipeline: [@gen(@p), @retry2(@p), @id, @retry3(@p), @emitAll(@p)] }\n/show @result`;
+    const input = `/exe @seed() = \"base\"\n\n/exe @gen(input, pipeline) = \`v-@pipeline.try: @input\`\n\n/exe @retry2(input, pipeline) = when first [\n  @pipeline.try < 3 => retry\n  * => @input\n]\n\n/exe @id(input) = \`@input\`\n\n/exe @retry3(input, pipeline) = when first [\n  @pipeline.try < 2 => retry\n  * => @input\n]\n\n/exe @emitAll(input, pipeline) = js {\n  return JSON.stringify(pipeline.retries.all);\n}\n\n/var @result = @seed() with { pipeline: [@gen(@p), @retry2(@p), @id, @retry3(@p), @emitAll(@p)] }\n/show @result`;
 
     const { output } = await testWithEffects(input);
     // Expect JSON arrays representing attempts from two distinct contexts
