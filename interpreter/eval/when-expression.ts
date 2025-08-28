@@ -370,12 +370,7 @@ export async function evaluateWhenExpression(
         }
       }
     } catch (conditionError) {
-      // DEBUG: Show what error occurred
-      console.error('❌ CONDITION ERROR:', {
-        index: i,
-        error: conditionError.message,
-        stack: conditionError.stack
-      });
+      // Let the error propagate - it's expected in retry scenarios
       
       // Collect condition errors but continue evaluating
       errors.push(new MlldWhenExpressionError(

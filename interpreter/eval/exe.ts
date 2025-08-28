@@ -111,13 +111,6 @@ export async function evaluateExe(
     if (env.hasShadowEnvs()) {
       const capturedEnvs = env.captureAllShadowEnvs();
       
-      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
-        console.error('[DEBUG] Retroactively updating shadow env executables with captured envs:', {
-          language,
-          functions: Array.from(shadowFunctions.keys()),
-          capturedEnvs
-        });
-      }
       
       // Update each function variable's metadata to include the captured shadow envs
       for (const ref of envRefs) {
@@ -673,9 +666,6 @@ function createExecWrapper(
             isParameter: true
           }
         );
-        if (process.env.DEBUG_PARAM_EXEC) {
-          console.error(`[DEBUG] Setting parameter '${paramName}' in exec environment`);
-        }
         execEnv.setParameterVariable(paramName, paramVar);
       }
     }
@@ -747,14 +737,6 @@ function createExecWrapper(
       // Get captured shadow environments from executable metadata
       const capturedEnvs = (execVar.metadata as any)?.capturedShadowEnvs;
       
-      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
-        console.error('[DEBUG] createExecWrapper passing shadow envs:', {
-          execName,
-          hasCapturedEnvs: !!capturedEnvs,
-          capturedEnvs,
-          language: definition.language
-        });
-      }
       
       // For JS/Node execution, pass captured envs through params
       // Using __ prefix following mlld's internal property pattern

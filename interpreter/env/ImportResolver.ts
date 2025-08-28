@@ -148,7 +148,6 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     
     // Check the structure of result.content
     if (!result.content.content || !result.content.contentType) {
-      console.error('Resolver result structure:', JSON.stringify(result, null, 2));
       throw new Error(`Resolver returned invalid content structure for '${reference}': missing content or contentType`);
     }
     

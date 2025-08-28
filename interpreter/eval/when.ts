@@ -123,12 +123,6 @@ async function evaluateWhenSimple(
   if (conditionResult) {
     // Execute the action if condition is true
     const result = await evaluate(node.values.action, env);
-    if (process.env.DEBUG_WHEN || process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] When condition was true, executing action:', {
-        conditionResult,
-        actionType: node.values.action[0]?.type
-      });
-    }
     return result;
   }
   
@@ -677,12 +671,6 @@ export async function evaluateCondition(
   env: Environment,
   variableName?: string
 ): Promise<boolean> {
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.log('[DEBUG] evaluateCondition called with:', {
-      conditionLength: condition.length,
-      firstNodeType: condition[0]?.type
-    });
-  }
 
   // Handle new WhenCondition wrapper nodes from unified expressions
   if (condition.length === 1 && condition[0].type === 'WhenCondition') {
@@ -735,13 +723,6 @@ export async function evaluateCondition(
             }
           ]
         } as any);
-      }
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log('[DEBUG] Unified expression evaluation result:', {
-          nodeType: node.type,
-          resultValue: result,
-          resultType: typeof result
-        });
       }
       return isTruthy(result);
     }

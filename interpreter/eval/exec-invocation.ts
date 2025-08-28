@@ -234,10 +234,19 @@ export async function evaluateExecInvocation(
           throw new MlldInterpreterError(`Unknown builtin method: ${commandName}`);
       }
       
+      // Apply post-invocation fields if present (e.g., @str.split(',')[1])
+      const postFieldsBuiltin: any[] = (node as any).fields || [];
+      if (postFieldsBuiltin && postFieldsBuiltin.length > 0) {
+        const { accessField } = await import('../utils/field-access');
+        for (const f of postFieldsBuiltin) {
+          result = await accessField(result, f, { env });
+        }
+      }
+      
       // Return the result wrapped appropriately
       return {
         value: result,
-        display: String(result)
+        display: typeof result === 'string' ? result : (Array.isArray(result) ? JSON.stringify(result, null, 2) : String(result))
       };
     }
     
@@ -252,18 +261,6 @@ export async function evaluateExecInvocation(
     const { extractVariableValue } = await import('../utils/variable-resolution');
     const objectValue = await extractVariableValue(objectVar, env);
     
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('Object reference in exec invocation', {
-        objectRef: objectRef.identifier,
-        objectVarType: objectVar.type,
-        objectVarValue: typeof objectVar.value,
-        objectVarIsComplex: (objectVar as any).isComplex,
-        objectValueType: typeof objectValue,
-        isString: typeof objectValue === 'string',
-        objectKeys: typeof objectValue === 'object' && objectValue !== null ? Object.keys(objectValue) : 'not-object',
-        objectValue: typeof objectValue === 'object' && objectValue !== null ? JSON.stringify(objectValue, null, 2).substring(0, 500) : objectValue
-      });
-    }
     
     // Access the field
     if (objectRef.fields && objectRef.fields.length > 0) {
@@ -333,14 +330,6 @@ export async function evaluateExecInvocation(
         }
       }
       
-      // if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
-      //   console.error('[DEBUG] Converting __executable object to ExecutableVariable:', {
-      //     commandName,
-      //     hasMetadata: !!metadata,
-      //     hasCapturedEnvs: !!(metadata.capturedShadowEnvs),
-      //     metadata
-      //   });
-      // }
       // Convert the __executable object to a proper ExecutableVariable
       const { createExecutableVariable } = await import('@core/types/variable/VariableFactories');
       variable = createExecutableVariable(
@@ -1017,14 +1006,6 @@ export async function evaluateExecInvocation(
                          definition.language === 'node' || definition.language === 'nodejs')) {
       (codeParams as any).__capturedShadowEnvs = capturedEnvs;
       
-      // if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
-      //   console.error('[DEBUG] exec-invocation passing shadow envs:', {
-      //     commandName,
-      //     hasCapturedEnvs: !!capturedEnvs,
-      //     capturedEnvs,
-      //     language: definition.language
-      //   });
-      // }
     }
     
     // Execute the code with parameters and metadata
@@ -1242,6 +1223,22 @@ export async function evaluateExecInvocation(
     throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
   }
   
+  // Apply post-invocation field/index access if present (e.g., @func()[1], @obj.method().2)
+  const postFields: any[] = (node as any).fields || [];
+  if (postFields && postFields.length > 0) {
+    try {
+      const { accessField } = await import('../utils/field-access');
+      let current: any = result;
+      for (const f of postFields) {
+        current = await accessField(current, f, { env });
+      }
+      result = current;
+    } catch (e) {
+      // Preserve existing behavior: if field access fails, surface error as interpreter error
+      throw e;
+    }
+  }
+
   // Apply withClause transformations if present
   if (node.withClause) {
     if (node.withClause.pipeline) {

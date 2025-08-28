@@ -114,9 +114,6 @@ export class VariableImporter {
         }
         continue;
       }
-      if (process.env.DEBUG_MODULE_EXPORT || process.env.MLLD_DEBUG === 'true') {
-        console.error(`[DEBUG] Exporting variable '${name}' of type '${variable.type}'`);
-      }
       // For executable variables, we need to preserve the full structure
       if (variable.type === 'executable') {
         const execVar = variable as ExecutableVariable;
@@ -368,9 +365,6 @@ export class VariableImporter {
       const importedValue = moduleObject[importName];
       const variable = this.createVariableFromValue(alias, importedValue, importPath, importName);
       
-      if (process.env.DEBUG_MODULE_EXPORT) {
-        console.error(`[DEBUG] Importing '${importName}' as '${alias}' with metadata:`, variable.metadata);
-      }
       
       targetEnv.setVariable(alias, variable);
     }

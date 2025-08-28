@@ -79,36 +79,7 @@ export async function evaluateForDirective(
     let i = 0;
     const iterableArray = Array.from(iterable);
     
-    // Debug: Log collection info
-    if (debugEnabled) {
-      console.error('[DEBUG_FOR] For loop starting:', {
-        directive: '/for',
-        variable: varName,
-        collectionType: Array.isArray(sourceValue) ? 'array' : typeof sourceValue,
-        collectionSize: iterableArray.length,
-        location: directive.location ? `${directive.location.start.line}:${directive.location.start.column}` : 'unknown'
-      });
-      
-      // Show first few items for context
-      if (iterableArray.length > 0) {
-        const preview = iterableArray.slice(0, 3).map(([key, value]) => ({
-          key,
-          value: DebugUtils.truncateValue(value, typeof value, 30)
-        }));
-        console.error('[DEBUG_FOR] Collection preview:', { firstItems: preview });
-      }
-    }
     for (const [key, value] of iterableArray) {
-      // Debug: Log iteration start
-      if (debugEnabled) {
-        console.error(`[DEBUG_FOR] For loop iteration ${i + 1}/${iterableArray.length}:`, {
-          variable: varName,
-          currentValue: DebugUtils.truncateValue(value, typeof value, 50),
-          currentKey: key,
-          hasKey: key !== null && typeof key === 'string',
-          actionAvailable: directive.values.action ? directive.values.action.length : 'null'
-        });
-      }
       
       let childEnv = env.createChildEnvironment();
       // Preserve Variable wrappers when setting iteration variable
@@ -128,54 +99,21 @@ export async function evaluateForDirective(
       const actionNodes = directive.values.action;
       let actionResult: any = { value: undefined, env: childEnv };
       
-      // Debug: Log action evaluation
-      if (debugEnabled) {
-        console.error('[DEBUG_FOR] Evaluating for loop action:', {
-          actionType: actionNodes && actionNodes.length > 0 ? actionNodes[0].type : 'none',
-          actionCount: actionNodes ? actionNodes.length : 0,
-          iterationNumber: i + 1
-        });
-      }
       
       for (const actionNode of actionNodes) {
-        // Debug: Log what we're about to evaluate
-        if (debugEnabled) {
-          console.error('[DEBUG_FOR] About to evaluate action node:', {
-            type: actionNode.type,
-            kind: actionNode.kind,
-            subtype: actionNode.subtype
-          });
-        }
         try {
           actionResult = await evaluate(actionNode, childEnv);
-          // Debug: Log evaluation result
-          if (debugEnabled) {
-            console.error('[DEBUG_FOR] Action evaluation result:', {
-              hasValue: actionResult.value !== undefined,
-              valueType: typeof actionResult.value,
-              value: actionResult.value
-            });
-          }
           // Update childEnv to the result environment to capture any changes
           if (actionResult.env) {
             childEnv = actionResult.env;
           }
         } catch (error) {
-          if (debugEnabled) {
-            console.error('[DEBUG_FOR] Error evaluating action:', error);
-          }
           throw error;
         }
       }
       
       // No need to transfer nodes - effects are emitted immediately to the shared handler
       
-      // Debug: Log iteration completion
-      if (debugEnabled) {
-        console.error(`[DEBUG_FOR] For loop iteration ${i + 1} completed:`, {
-          hasExecOutput: actionResult.value !== undefined && actionResult.value !== null
-        });
-      }
       
       // If the action was a bare exec invocation that produced output,
       // emit it as an effect instead of creating a node
@@ -191,15 +129,6 @@ export async function evaluateForDirective(
       i++;
     }
     
-    // Debug: Log for loop completion
-    if (debugEnabled) {
-      console.error('[DEBUG_FOR] For loop completed:', {
-        directive: '/for',
-        variable: varName,
-        totalIterations: i,
-        expectedIterations: iterableArray.length
-      });
-    }
   } finally {
     env.popDirective();
   }
@@ -247,10 +176,6 @@ export async function evaluateForExpression(
       // Expression is an array of nodes, evaluate them
       let exprResult: unknown = null;
       if (Array.isArray(expr.expression) && expr.expression.length > 0) {
-        // Debug log
-        if (process.env.DEBUG_FOR) {
-          console.error('[DEBUG_FOR] Evaluating expression:', JSON.stringify(expr.expression, null, 2));
-        }
         
         // Handle wrapped content structure (similar to for directive actions)
         // Don't unwrap templates with interpolation - they need to be evaluated as a whole
@@ -264,16 +189,10 @@ export async function evaluateForExpression(
             !expr.expression[0].hasInterpolation) {
           // Only unwrap non-interpolated content
           nodesToEvaluate = expr.expression[0].content;
-          if (process.env.DEBUG_FOR) {
-            console.error('[DEBUG_FOR] Unwrapped non-interpolated content:', JSON.stringify(nodesToEvaluate, null, 2));
-          }
         }
         
         // Evaluate all nodes
         const result = await evaluate(nodesToEvaluate, childEnv, { isExpression: true });
-        if (process.env.DEBUG_FOR) {
-          console.error('[DEBUG_FOR] Result:', result);
-        }
         
         // Update childEnv if evaluate returned an updated environment
         if (result.env) {

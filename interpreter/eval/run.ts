@@ -286,20 +286,6 @@ export async function evaluateRun(
         }
       }
       
-      // Debug logging
-      if (process.env.DEBUG_EXEC || process.env.NODE_ENV === 'test') {
-        console.error('[DEBUG] Field access resolved value:', {
-          identifier: varRef.identifier,
-          fields: varRef.fields.map(f => ({ type: f.type, value: f.value })),
-          valueType: typeof value,
-          hasExecutable: value && typeof value === 'object' && '__executable' in value,
-          hasType: value && typeof value === 'object' && 'type' in value,
-          valueKeys: value && typeof value === 'object' ? Object.keys(value) : [],
-          hasExecutableDef: value && typeof value === 'object' && 'executableDef' in value,
-          executableDef: value && typeof value === 'object' ? value.executableDef : undefined,
-          value: process.env.DEBUG_EXEC === 'verbose' ? value : undefined
-        });
-      }
       
       // The resolved value could be an executable object directly or a string reference
       if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'executable') {
@@ -348,17 +334,6 @@ export async function evaluateRun(
           }
         };
         
-        // Debug shadow env preservation
-        if (process.env.DEBUG_EXEC) {
-          console.error('[DEBUG] Reconstructed executable metadata:', {
-            name: fullName,
-            hasMetadata: !!value.metadata,
-            hasCapturedShadowEnvs: !!capturedShadowEnvs,
-            capturedShadowEnvKeys: capturedShadowEnvs ? Object.keys(capturedShadowEnvs) : [],
-            deserializedLangs: capturedShadowEnvs ? Object.entries(capturedShadowEnvs).map(([lang, map]) => 
-              `${lang}: ${map instanceof Map ? map.size : 0} functions`) : []
-          });
-        }
       } else if (typeof value === 'string') {
         // String reference to an executable  
         const variable = env.getVariable(value);
