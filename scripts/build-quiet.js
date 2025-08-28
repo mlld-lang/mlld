@@ -104,7 +104,8 @@ async function runCommandOptional(command, stepName) {
         step: stepName,
         stdout: output,
         stderr: errorOutput,
-        exitCode: code
+        exitCode: code,
+        optional: true
       });
 
       if (code !== 0) {
@@ -172,6 +173,7 @@ async function build() {
     currentStep++;
     
     showProgress(steps[currentStep].display, 'running');
+    console.log(`\n${yellow}[info]${reset} WASM copy step is optional in CI environments.`);
     await runCommandOptional('npm run build:wasm', 'wasm');
     showProgress(steps[currentStep].display, 'done');
     currentStep++;
@@ -184,19 +186,27 @@ async function build() {
     
   } catch (error) {
     console.log(`\n${red}❌ Build failed!${reset}\n`);
-    
-    // Show error output from failed step
-    const failedStep = buildOutput[buildOutput.length - 1];
-    if (failedStep) {
-      console.log(`${red}Error in step: ${failedStep.step}${reset}\n`);
-      if (failedStep.stderr) {
+    // Show clearer diagnostics from buildOutput
+    const failures = buildOutput.filter(e => e.exitCode && e.exitCode !== 0 && !e.optional);
+    const firstFailure = failures.length > 0 ? failures[failures.length - 1] : buildOutput[buildOutput.length - 1];
+    if (firstFailure) {
+      console.log(`${red}Error in step: ${firstFailure.step}${reset}\n`);
+      if (firstFailure.stderr) {
         console.log('Error output:');
-        console.log(failedStep.stderr);
+        console.log(firstFailure.stderr);
       }
-      if (failedStep.stdout && failedStep.stdout.includes('Error')) {
+      if (firstFailure.stdout && firstFailure.stdout.includes('Error')) {
         console.log('Output:');
-        console.log(failedStep.stdout);
+        console.log(firstFailure.stdout);
       }
+    }
+    // Also show any non-zero optional steps as warnings
+    const optionalFailures = buildOutput.filter(e => e.exitCode && e.exitCode !== 0 && e.optional);
+    if (optionalFailures.length > 0) {
+      console.log(`\n${yellow}Optional step warnings:${reset}`);
+      optionalFailures.forEach(e => {
+        console.log(` - ${e.step} (exit ${e.exitCode})`);
+      });
     }
     
     console.log(`\nRun ${yellow}npm run build:verbose${reset} to see full output.`);
