@@ -79,6 +79,51 @@ async function runCommand(command, stepName) {
   });
 }
 
+// Run a command but do not fail the build on non-zero exit.
+// Useful for optional steps like copying WASM files where environments may vary.
+async function runCommandOptional(command, stepName) {
+  return new Promise((resolve) => {
+    const child = spawn(command, {
+      shell: true,
+      cwd: projectRoot
+    });
+
+    let output = '';
+    let errorOutput = '';
+
+    child.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    child.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+
+    child.on('close', (code) => {
+      buildOutput.push({
+        step: stepName,
+        stdout: output,
+        stderr: errorOutput,
+        exitCode: code
+      });
+
+      if (code !== 0) {
+        // Log as a warning and continue
+        console.warn(`\n${yellow}Warning:${reset} Optional step '${stepName}' exited with code ${code}. Continuing...`);
+        if (errorOutput) {
+          console.warn('stderr:');
+          console.warn(errorOutput);
+        }
+        if (output) {
+          console.warn('stdout:');
+          console.warn(output);
+        }
+      }
+      resolve();
+    });
+  });
+}
+
 async function build() {
   console.log(`${yellow}Starting quiet build...${reset}\n`);
   
@@ -127,7 +172,7 @@ async function build() {
     currentStep++;
     
     showProgress(steps[currentStep].display, 'running');
-    await runCommand('npm run build:wasm', 'wasm');
+    await runCommandOptional('npm run build:wasm', 'wasm');
     showProgress(steps[currentStep].display, 'done');
     currentStep++;
     
