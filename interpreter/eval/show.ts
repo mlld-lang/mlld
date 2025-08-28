@@ -56,7 +56,8 @@ export async function evaluateShow(
     if (directive.values?.invocation) {
       // New unified AST structure: support VariableReference and VariableReferenceWithTail
       const invocationNode = directive.values.invocation as any;
-      if (!invocationNode || (invocationNode.type !== 'VariableReference' && invocationNode.type !== 'VariableReferenceWithTail' && invocationNode.type !== 'TemplateVariable')) {
+      const allowedTypes = ['VariableReference', 'VariableReferenceWithTail', 'TemplateVariable'] as const;
+      if (!invocationNode || !allowedTypes.includes(invocationNode.type)) {
         throw new Error('Show variable directive missing variable reference');
       }
       variableNode = invocationNode;

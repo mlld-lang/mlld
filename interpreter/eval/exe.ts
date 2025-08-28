@@ -192,7 +192,7 @@ export async function evaluateExe(
       // If RHS is a bare reference to the first parameter and no extra args are present,
       // compile as a template executable instead of a commandRef.
       // WHY: Identity bodies should not be treated as command references at runtime.
-      const isIdentity = paramNames.length >= 1 && args.length === 0 && refName === paramNames[0];
+      const isIdentity = paramNames.length >= 1 && args.length === 0 && typeof refName === 'string' && refName.length > 0 && refName === paramNames[0];
       if (isIdentity) {
         executableDef = {
           type: 'template',
