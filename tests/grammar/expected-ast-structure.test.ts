@@ -429,11 +429,9 @@ describe('Parser Behavior Comparison', () => {
     const ast = parseSync(input);
     const value = ast[0].values.value;
     
-    console.log('Current array AST:', JSON.stringify(value, null, 2));
     // Currently: [1, 2, 3] (plain JS array)
     
     const normalized = ASTEvaluator.normalizeArray(value);
-    console.log('After normalization:', JSON.stringify(normalized, null, 2));
     // After: { type: 'array', items: [1, 2, 3], location: {...} }
   });
   
@@ -442,11 +440,9 @@ describe('Parser Behavior Comparison', () => {
     const ast = parseSync(input);
     const value = ast[0].values.value;
     
-    console.log('Current object AST:', JSON.stringify(value, null, 2));
     // Currently: { name: 'test' } (plain JS object)
     
     const normalized = ASTEvaluator.normalizeObject(value);
-    console.log('After normalization:', JSON.stringify(normalized, null, 2));
     // After: { type: 'object', properties: { name: 'test' }, location: {...} }
   });
 });

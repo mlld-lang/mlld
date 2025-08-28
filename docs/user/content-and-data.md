@@ -313,6 +313,33 @@ Use different template syntaxes for different contexts:
 /var @social = :::Hey @{{name}}, check out {{user.role}}!:::
 ```
 
+### External Templates (.att, .mtt)
+
+mlld supports two formats for external template files:
+- `.att` template files interpolate `@` vars and `<alligator.md>` vars
+- `.mtt` templates interpolate simple {{mustache}} style vars (less full featured)
+
+Keep reusable templates in standalone files and execute them as functions:
+
+```mlld
+>> Files
+# templates/welcome.att   -> Hello @name! Title: @title
+# templates/note.mtt      -> Note: {{body}}
+
+>> Define executables from files
+/exe @welcome(name, title) = template "./templates/welcome.att"
+/exe @note(body)           = template "./templates/note.mtt"
+
+>> Invoke with parameters
+/show @welcome("Alice", "Engineer")
+/show @note("Bring snacks")
+```
+
+Rules:
+- `.att` uses `@var` and supports `<file.md>` references inside the template.
+- `.mtt` uses `{{var}}` (simple mustache‑style). It is currently less full‑featured than `.att`.
+- These files are not imported as modules. Use the `/exe ... = template "path"` form.
+
 ### Interpolation Contexts
 
 Variable interpolation works in specific contexts:
@@ -506,6 +533,7 @@ Generated: @now
 - Use backticks for simple cases: `` `Hello @name` ``
 - Use `::...::` when template contains backticks
 - Use `:::...:::` with `{{}}` syntax for many @ symbols
+- Store larger templates as `.att` or `.mtt` and bind them via `/exe ... = template "path"`
 
 **Environment Variables:**
 - Import explicitly: `/import { API_KEY } from @input`

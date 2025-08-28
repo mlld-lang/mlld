@@ -5,7 +5,7 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0-rc46]
+## [2.0.0-rc45]
 ### Added
 - **Builtin methods for arrays and strings**: Common JavaScript methods available on variables
   - Array methods: `.includes(value)`, `.indexOf(value)`, `.length()`, `.join(separator)`
@@ -14,8 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Implemented as field access exec patterns, treated as ExecInvocations internally
   - Example: `/show @fruits.includes("banana")` returns `true` if the array contains "banana"
   - Eliminates need for JavaScript wrappers for common operations
+- **External template file support**: `.att` and `.mtt`
+  - `.att` (at template): interpolates `@vars` and `<file.md>` references
+  - `.mtt` (mustache template): interpolates `{{vars}}` (simple mustache‑style)
+  - Define as executables: `/exe @name(params) = template "path/to/file.att|.mtt"`
+  - Invoke with arguments: `/show @name("val1", "val2")`
+- **Testing improvements**: 
+  - Basic documentation tests to ensure published docs have valid syntax
+  - Performance test suite
 
-## [2.0.0-rc45]
+### Changed
+- `/import` no longer accepts `.att`/`.mtt`. Importing these files emits an educational error with the proper usage example (use `/exe ... = template "path"`).
+
 ### Fixed
 - **Incorrect docs:** Corrected errant syntax in docs, added testing infrastructure for ensuring published docs' syntax is always valid.
 - **when-expression `none` condition evaluation**: Fixed bug where variable assignments prevented `none` conditions from executing

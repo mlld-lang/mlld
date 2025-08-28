@@ -10,6 +10,11 @@ import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 /**
  * Pipeline Executor - Handles actual execution using state machine
  */
+/**
+ * Pipeline Executor
+ * WHY: Drive stage execution using the state machine and construct proper stage environments.
+ * CONTEXT: Re-runs inline effects per retry; empty output is treated as early termination.
+ */
 export class PipelineExecutor {
   private stateMachine: PipelineStateMachine;
   private env: Environment;
@@ -52,6 +57,10 @@ export class PipelineExecutor {
 
   /**
    * Execute the pipeline
+   */
+  /**
+   * Execute the pipeline until completion or error.
+   * WHY: Convert state-machine steps into actual command execution and effect emission.
    */
   async execute(initialInput: string): Promise<string> {
     // Store initial input for synthetic source stage
@@ -164,6 +173,10 @@ export class PipelineExecutor {
   /**
    * Execute a single stage
    */
+  /**
+   * Execute a single pipeline stage with the constructed stage environment.
+   * GOTCHA: Inline effects are run after successful stage execution and re-run on retries.
+   */
   private async executeStage(
     command: PipelineCommand,
     input: string,
@@ -228,6 +241,10 @@ export class PipelineExecutor {
   /**
    * Execute a pipeline command
    */
+  /**
+   * Execute a pipeline command (function or synthetic __source__).
+   * CONTEXT: __source__ uses the initial input the first time, and a source function on retries.
+   */
   private async executeCommand(
     command: PipelineCommand,
     input: string,
@@ -253,7 +270,7 @@ export class PipelineExecutor {
       
       // Retry execution - need to call source function
       if (!this.sourceFunction) {
-        throw new Error('Cannot retry stage 0: Input is not a function and cannot be retried');
+        throw new Error('Cannot retry stage 0: input is not a function. Make the source a function to enable retries.');
       }
       
       // Re-execute the source function to get fresh input

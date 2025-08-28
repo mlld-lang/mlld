@@ -695,6 +695,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           'flow-control-19',  // Uses placeholder functions for illustration
           'introduction-04',  // Shows comment syntax with <<
           'introduction-19',  // Shows invalid /when syntax for education
+          'introduction-20',  // (index shift) Same invalid /when example after docs update
           'security-03',      // Intentionally shows blocked && operator
         ];
         
@@ -763,6 +764,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       'flow-control-19',  // Uses placeholder functions for illustration
       'introduction-04',  // Shows comment syntax with <<
       'introduction-19',  // Shows invalid /when syntax for education
+      'introduction-20',  // (index shift) Same invalid /when example after docs update
       'security-03',      // Intentionally shows blocked && operator
     ];
     

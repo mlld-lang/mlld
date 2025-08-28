@@ -10,6 +10,25 @@ import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadow
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import * as path from 'path';
+
+function buildTemplateAstFromContent(content: string): any[] {
+  const ast: any[] = [];
+  const regex = /@([A-Za-z_][\w\.]*)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      ast.push({ type: 'Text', content: content.slice(lastIndex, match.index) });
+    }
+    ast.push({ type: 'VariableReference', identifier: match[1] });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < content.length) {
+    ast.push({ type: 'Text', content: content.slice(lastIndex) });
+  }
+  return ast;
+}
 
 /**
  * Extract parameter names from the params array.
@@ -111,13 +130,6 @@ export async function evaluateExe(
     if (env.hasShadowEnvs()) {
       const capturedEnvs = env.captureAllShadowEnvs();
       
-      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
-        console.error('[DEBUG] Retroactively updating shadow env executables with captured envs:', {
-          language,
-          functions: Array.from(shadowFunctions.keys()),
-          capturedEnvs
-        });
-      }
       
       // Update each function variable's metadata to include the captured shadow envs
       for (const ref of envRefs) {
@@ -167,29 +179,60 @@ export async function evaluateExe(
     // Check if this is a command reference
     const commandRef = directive.values?.commandRef;
     if (commandRef) {
-      // This is a reference to another exec command
-      // commandRef is an object with name and identifier properties
-      const refName = typeof commandRef === 'object' && commandRef.name 
-        ? commandRef.name 
-        : await interpolate(commandRef, env);
+      /**
+       * Handle executable defined as a reference to another symbol
+       * WHY: The RHS may be a simple variable reference (identity), or a true command reference.
+       *      We preserve identity bodies as templates at compile-time to avoid runtime ambiguity.
+       */
+      let refName: string | undefined;
+      try {
+        if (commandRef && typeof commandRef === 'object') {
+          // Extract identifier from VariableReference node when present
+          if ('type' in commandRef && (commandRef as any).type === 'VariableReference' && 'identifier' in (commandRef as any)) {
+            refName = (commandRef as any).identifier as string;
+          }
+          // Some AST shapes surface a { name } property
+          else if ('name' in commandRef && typeof (commandRef as any).name === 'string') {
+            refName = (commandRef as any).name as string;
+          }
+        }
+      } catch {}
+      // Fallback: interpolate to string (legacy behavior)
+      if (!refName) {
+        refName = await interpolate(commandRef as any, env);
+      }
       const args = directive.values?.args || [];
       
       // Get parameter names if any
       const params = directive.values?.params || [];
       const paramNames = extractParamNames(params);
       
-      // Parameters are allowed to shadow outer scope variables
-      
-      // Store the reference definition with optional pipeline
-      const withClause = directive.values?.withClause;
-      executableDef = {
-        type: 'commandRef',
-        commandRef: refName,
-        commandArgs: args,
-        withClause,
-        paramNames,
-        sourceDirective: 'exec'
-      } satisfies CommandRefExecutable;
+      // COMPILE-TIME IDENTITY NORMALIZATION
+      // If RHS is a bare reference to the first parameter and no extra args are present,
+      // compile as a template executable instead of a commandRef.
+      // WHY: Identity bodies should not be treated as command references at runtime.
+      const isIdentity = paramNames.length >= 1 && args.length === 0 && typeof refName === 'string' && refName.length > 0 && refName === paramNames[0];
+      if (isIdentity) {
+        executableDef = {
+          type: 'template',
+          template: [
+            { type: 'VariableReference', identifier: refName }
+          ],
+          paramNames,
+          sourceDirective: 'exec'
+        } satisfies TemplateExecutable;
+      } else {
+        // Store the reference definition (true command reference)
+        const withClause = directive.values?.withClause;
+        executableDef = {
+          type: 'commandRef',
+          commandRef: refName,
+          commandArgs: args,
+          withClause,
+          paramNames,
+          sourceDirective: 'exec'
+        } satisfies CommandRefExecutable;
+      }
     } else {
       // Handle regular command definition
       const commandNodes = directive.values?.command;
@@ -304,6 +347,45 @@ export async function evaluateExe(
     // Parameters are allowed to shadow outer scope variables
     
     // Create template executable definition
+    executableDef = {
+      type: 'template',
+      template: templateNodes,
+      paramNames,
+      sourceDirective: 'exec'
+    } satisfies TemplateExecutable;
+    
+  } else if (directive.subtype === 'exeTemplateFile') {
+    // Handle template executable loaded from external file by extension
+    // Syntax: /exe @name(params) = template "path/to/file.att|.mtt"
+    const pathNodes = directive.values?.path;
+    if (!pathNodes || !Array.isArray(pathNodes) || pathNodes.length === 0) {
+      throw new Error('Exec template-file directive missing path');
+    }
+    // Path is parsed as Text nodes; join raw content
+    const rawPath = directive.raw?.path || (Array.isArray(pathNodes) ? pathNodes.map((n: any) => n.content || '').join('') : '');
+    const filePath = String(rawPath);
+    
+    // Determine template style by extension
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext !== '.att' && ext !== '.mtt') {
+      throw new Error(`Unsupported template file extension for ${filePath}. Use .att (@var) or .mtt ({{var}}).`);
+    }
+    
+    // Read file content relative to current env
+    const fileContent = await env.readFile(filePath);
+    
+    // Convert mustache to @var if needed
+    let normalized = fileContent;
+    if (ext === '.mtt') {
+      normalized = normalized.replace(/{{\s*([\w\.]+)\s*}}/g, '@$1');
+    }
+    // Build minimal template AST from normalized content
+    const templateNodes = buildTemplateAstFromContent(normalized);
+    
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    
     executableDef = {
       type: 'template',
       template: templateNodes,
@@ -445,14 +527,7 @@ export async function evaluateExe(
    */
   const location = astLocationToSourceLocation(directive.location, env.getCurrentFilePath());
   
-  // Debug shadow environment capture
-  if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
-    console.error(`[DEBUG] Creating executable '${identifier}', shadow envs available:`, env.hasShadowEnvs());
-    if (env.hasShadowEnvs()) {
-      const captured = env.captureAllShadowEnvs();
-      console.error('[DEBUG] Captured shadow environments:', captured);
-    }
-  }
+    // CONTEXT: Shadow environments may be present; capture them for later execution
   
   const variable = createExecutableVariable(
     identifier,
@@ -464,7 +539,7 @@ export async function evaluateExe(
     {
       definedAt: location,
       executableDef, // Store the full definition in metadata
-      // NEW: Capture shadow environments if they exist
+      // CONTEXT: preserve captured shadow environments for this executable
       ...(env.hasShadowEnvs() ? { 
         capturedShadowEnvs: env.captureAllShadowEnvs() 
       } : {})
@@ -649,9 +724,6 @@ function createExecWrapper(
             isParameter: true
           }
         );
-        if (process.env.DEBUG_PARAM_EXEC) {
-          console.error(`[DEBUG] Setting parameter '${paramName}' in exec environment`);
-        }
         execEnv.setParameterVariable(paramName, paramVar);
       }
     }
@@ -723,14 +795,6 @@ function createExecWrapper(
       // Get captured shadow environments from executable metadata
       const capturedEnvs = (execVar.metadata as any)?.capturedShadowEnvs;
       
-      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
-        console.error('[DEBUG] createExecWrapper passing shadow envs:', {
-          execName,
-          hasCapturedEnvs: !!capturedEnvs,
-          capturedEnvs,
-          language: definition.language
-        });
-      }
       
       // For JS/Node execution, pass captured envs through params
       // Using __ prefix following mlld's internal property pattern

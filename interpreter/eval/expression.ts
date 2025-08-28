@@ -97,12 +97,6 @@ export async function evaluateExpression(
   env: Environment,
   context?: { isExpression?: boolean }
 ): Promise<EvalResult> {
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.log('[DEBUG] evaluateExpression called with node type:', node.type);
-    if (node.type === 'BinaryExpression') {
-      console.log('[DEBUG] Binary operator:', (node as BinaryExpression).operator);
-    }
-  }
   
   if (node.type === 'BinaryExpression') {
     return evaluateBinaryExpression(node, env, context);
@@ -126,16 +120,6 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
     operator = operator[0];
   }
   
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.log('[DEBUG] evaluateBinaryExpression called with operator:', operator);
-    console.log('[DEBUG] evaluateBinaryExpression:', {
-      operator,
-      leftType: left.type,
-      rightType: right.type,
-      left: left.type === 'VariableReference' ? (left as any).identifier : left,
-      right: right.type === 'VariableReference' ? (right as any).identifier : right
-    });
-  }
   
   // Short-circuit evaluation for logical operators
   const expressionContext = { isExpression: true, ...context };
@@ -158,14 +142,6 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
     const leftResult = await evaluate(left, env, expressionContext);
     const leftTruthy = isTruthy(leftResult.value);
     
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] || operator left side:', {
-        left: leftResult.value,
-        leftTruthy,
-        leftType: typeof leftResult.value,
-        isVariable: leftResult.value && typeof leftResult.value === 'object' && 'type' in leftResult.value
-      });
-    }
     
     // Short-circuit: if left is truthy, return left value
     if (leftTruthy) {
@@ -174,12 +150,6 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
     
     // Otherwise evaluate and return right
     const rightResult = await evaluate(right, env, expressionContext);
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] || operator right side:', {
-        right: rightResult.value,
-        rightTruthy: isTruthy(rightResult.value)
-      });
-    }
     return { value: rightResult.value, env };
   }
   
@@ -187,26 +157,9 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
   const leftResult = await evaluate(left, env, expressionContext);
   const rightResult = await evaluate(right, env, expressionContext);
   
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.log('[DEBUG] Evaluated operands:', {
-      leftResult: leftResult.value,
-      rightResult: rightResult.value,
-      leftIsVariable: leftResult.value && typeof leftResult.value === 'object' && 'type' in leftResult.value,
-      rightIsVariable: rightResult.value && typeof rightResult.value === 'object' && 'type' in rightResult.value
-    });
-  }
   
   if (operator === '==') {
     const equal = isEqual(leftResult.value, rightResult.value);
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] == comparison:', {
-        left: leftResult.value,
-        leftType: typeof leftResult.value,
-        right: rightResult.value,
-        rightType: typeof rightResult.value,
-        equal
-      });
-    }
     return { value: equal, env };
   }
   
@@ -219,7 +172,6 @@ async function evaluateBinaryExpression(node: BinaryExpression, env: Environment
   if (operator === '<') {
     const leftNum = toNumber(leftResult.value);
     const rightNum = toNumber(rightResult.value);
-    // console.log('[DEBUG] < comparison:', leftResult.value, '<', rightResult.value, '=', leftNum < rightNum);
     return { value: leftNum < rightNum, env };
   }
   

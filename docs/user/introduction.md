@@ -324,6 +324,8 @@ Any mlld files you put in llm/run can be run with `mlld run file` (extension opt
 
 You can use `mlld setup` to create other prefixes (or configure them in `mlld.lock.json`) so you could have `llm/agents` `llm/context` `llm/docs`.
 
+Tip: keep reusable templates in `llm/templates/` and bind them as executables with `/exe ... = template "path"`.
+
 ### mlld wants to help you write simple, readable code
 
 There are things that Very Serious Programmers will dislike about mlld. Here's one!

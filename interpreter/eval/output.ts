@@ -49,18 +49,6 @@ export async function evaluateOutput(
   // Removed: isLegacy flag - bracket syntax no longer supported
   
   
-  // Debug logging
-  const debugEnabled = process.env.DEBUG_OUTPUT === '1' || process.env.MLLD_DEBUG === 'true';
-  if (debugEnabled) {
-    console.error('[DEBUG_OUTPUT] Evaluating output directive', { 
-      directive: directive.subtype,
-      source: sourceType,
-      hasSource: hasSource,
-      targetType: targetType,
-      format: format,
-      values: directive.values
-    });
-  }
   
   try {
     // Get the content to output
@@ -548,27 +536,11 @@ async function outputToFile(
   directive: DirectiveNode
 ): Promise<void> {
   
-  // Debug logging
-  const debugEnabled = process.env.DEBUG_OUTPUT === '1' || process.env.MLLD_DEBUG === 'true';
-  if (debugEnabled) {
-    console.error('[DEBUG_OUTPUT] outputToFile', { 
-      path: target.path,
-      raw: target.raw,
-      contentLength: content.length,
-      contentPreview: content.substring(0, 50)
-    });
-  }
   
   // Evaluate the file path
   const pathResult = await interpolate(target.path, env);
   let targetPath = String(pathResult);
   
-  if (debugEnabled) {
-    console.error('[DEBUG_OUTPUT] Interpolated path:', { 
-      originalPath: target.raw,
-      interpolatedPath: targetPath
-    });
-  }
   
   // TODO: This is a hack to handle @base in quoted output paths
   // The proper fix requires rethinking how @identifier resolution works

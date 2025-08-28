@@ -10,8 +10,6 @@ describe('Path Directive', () => {
     const content = `/path @docs = "@PROJECTPATH/documentation"`;
     const parseResult = await parse(content);
     
-    // Log the structure
-    console.log('Path Directive Structure:', JSON.stringify(parseResult.ast[0], null, 2));
     
     // Get the directive from the parse result (should be the first node)
     const directiveNode = parseResult.ast[0];

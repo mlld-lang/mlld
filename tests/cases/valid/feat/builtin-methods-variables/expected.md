@@ -1,11 +1,4 @@
-
-
-
 # Variable arguments in methods
-
-
-
-
 
 # Test with variable arguments
 true
@@ -20,7 +13,6 @@ apple -> banana -> cherry -> date
   "fox"
 ]
 # Edge cases with variables
-
 
 false
 [

@@ -14,6 +14,12 @@
 /**
  * Retry Context - Just one at a time
  */
+/**
+ * Retry Context
+ * WHY: Track a single active retry pattern to avoid pathological nested retries.
+ * CONTEXT: The requesting stage asks to retry a specific upstream stage; attempts and hints
+ *          are local to this context and cleared when the requesting stage completes.
+ */
 export interface RetryContext {
   id: string;                    // Unique context ID
   requestingStage: number;       // Stage that requested retry
@@ -43,6 +49,11 @@ export type PipelineEvent =
 
 /**
  * Pipeline State
+ */
+/**
+ * Pipeline State
+ * WHY: Centralize stage progression, retry limits, and history needed to build @p/@ctx.
+ * GOTCHA: We store a single activeRetryContext by design; nested retries are not supported.
  */
 export interface PipelineState {
   status: 'IDLE' | 'RUNNING' | 'RETRYING' | 'COMPLETED' | 'FAILED';
@@ -99,6 +110,12 @@ export interface StageContext {
 /**
  * Simplified Pipeline State Machine
  */
+/**
+ * Pipeline State Machine
+ * WHY: Provide deterministic transitions for stage execution and simplified retry semantics.
+ * CONTEXT: Only one active retry context is allowed. Stage N can request a retry of stage N-1.
+ * GOTCHA: Stage 0 can only be retried if its source is a function; literals are not retryable.
+ */
 export class PipelineStateMachine {
   private state: PipelineState;
   private readonly maxRetriesPerContext = 10;
@@ -150,6 +167,10 @@ export class PipelineStateMachine {
   /**
    * Main state transition function
    */
+  /**
+   * Transition the state machine based on the latest action.
+   * WHY: Decouple stage execution from state mutations to keep behavior predictable.
+   */
   transition(action: PipelineAction): NextStep {
     switch (action.type) {
       case 'START':
@@ -163,6 +184,10 @@ export class PipelineStateMachine {
     }
   }
 
+  /**
+   * Initialize pipeline execution for the first stage.
+   * CONTEXT: Records PIPELINE_START and first STAGE_START events and seeds baseInput.
+   */
   private handleStart(input: string): NextStep {
     if (this.state.status !== 'IDLE') {
       return { type: 'INVALID_ACTION' };
@@ -186,6 +211,10 @@ export class PipelineStateMachine {
     };
   }
 
+  /**
+   * Handle the result of a stage: success, retry, or error.
+   * GOTCHA: Success on the retrying stage immediately re-executes the requesting stage.
+   */
   private handleStageResult(result: StageResult): NextStep {
     const stage = this.state.currentStage;
 
@@ -199,6 +228,10 @@ export class PipelineStateMachine {
     }
   }
 
+  /**
+   * Process a successful stage output and advance the pipeline.
+   * CONTEXT: When inside a retry context, completing the retried stage schedules the requester.
+   */
   private handleStageSuccess(stage: number, output: string): NextStep {
     const context = this.state.activeRetryContext;
     
@@ -280,6 +313,11 @@ export class PipelineStateMachine {
     };
   }
 
+  /**
+   * Handle a retry request from the requesting stage.
+   * WHY: Only upstream retries are allowed to keep the model simple and predictable.
+   * GOTCHA: Targeting stage 0 requires a function source; otherwise we abort with guidance.
+   */
   private handleStageRetry(stage: number, reason?: string, fromOverride?: number, hint?: any): NextStep {
     const targetStage = fromOverride ?? Math.max(0, stage - 1);
     
@@ -298,7 +336,7 @@ export class PipelineStateMachine {
     // Special case: Stage 0 self-retry (synthetic source retrying itself)
     if (stage === 0 && targetStage === 0) {
       if (!this.isStage0Retryable) {
-        return this.handleAbort('Stage 0 is not retryable: input is not a function. Make the source a function to enable retries.');
+        return this.handleAbort('Cannot retry stage 0: input is not a function. Make the source a function to enable retries.');
       }
       
       // Use simplified retry tracking for stage 0
@@ -336,7 +374,7 @@ export class PipelineStateMachine {
     
     // Check if stage 1 is trying to retry non-retryable stage 0
     if (targetStage === 0 && !this.isStage0Retryable) {
-      return this.handleAbort('Cannot retry stage 0: input is not a function. Make the source an executable to enable retries.');
+      return this.handleAbort('Cannot retry stage 0: input is not a function. Make the source a function to enable retries.');
     }
     
     // Check if we can reuse existing context (same retry pattern)
@@ -453,6 +491,9 @@ export class PipelineStateMachine {
     };
   }
 
+  /**
+   * Record a stage error and halt execution.
+   */
   private handleStageError(stage: number, error: Error): NextStep {
     this.recordEvent({ type: 'STAGE_FAILURE', stage, error });
     this.state.status = 'FAILED';
@@ -464,6 +505,9 @@ export class PipelineStateMachine {
     };
   }
 
+  /**
+   * Abort the pipeline with a reason (e.g., retry limit, non-retryable source).
+   */
   private handleAbort(reason: string): NextStep {
     this.recordEvent({ type: 'PIPELINE_ABORT', reason });
     this.state.status = 'FAILED';
@@ -476,6 +520,11 @@ export class PipelineStateMachine {
 
   /**
    * Build context for stage execution
+   */
+  /**
+   * Build a user-facing context snapshot for a given stage.
+   * WHY: The executor uses this to construct @ctx and @p variables in stage environments.
+   * GOTCHA: Attempt counts are context-local; downstream stages outside a retry context see try=1.
    */
   private buildStageContext(stage: number): StageContext {
     const context = this.state.activeRetryContext;

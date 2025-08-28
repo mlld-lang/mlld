@@ -18,6 +18,11 @@ import { isBuiltinEffect } from './builtin-effects';
 /**
  * Context for pipeline processing
  */
+/**
+ * Unified pipeline processing input
+ * WHY: Provide a single entry that handles detection, validation, and execution across evaluators.
+ * CONTEXT: Supports explicit pipeline arrays and auto-detected tails; can mark inputs as retryable.
+ */
 export interface UnifiedPipelineContext {
   // Required
   value: any;                    // Initial value (Variable, string, object, etc.)
@@ -42,6 +47,11 @@ export interface UnifiedPipelineContext {
  * 
  * This is the main entry point that should be used by all evaluators.
  * It handles detection, validation, execution, and type preservation.
+ */
+/**
+ * Process a value through its pipeline (if any)
+ * WHY: Normalize detection across AST/directive sources and handle synthetic source stage injection.
+ * GOTCHA: A synthetic __source__ stage is prepended when the base input is retryable (function source).
  */
 export async function processPipeline(
   context: UnifiedPipelineContext

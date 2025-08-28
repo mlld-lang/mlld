@@ -27,8 +27,6 @@ describe('Directive Base Structure', () => {
         
         const node = ast[0] as DirectiveNode;
         
-        // Output all directive structures for debugging
-        console.log(`${directiveName} directive structure:`, JSON.stringify(node, null, 2));
         
         expect(node.type).toBe('Directive');
         
@@ -62,8 +60,6 @@ describe('Directive Base Structure', () => {
           }
         }
       } catch (error) {
-        // These are real architectural issues that need to be fixed
-        console.error(`Failed to parse ${directiveName} with error:`, error);
         throw error;
       }
     });

@@ -92,12 +92,15 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     }
 
     // Execute the validated command
+    // In test environments with MLLD_NO_STREAMING, suppress stderr to keep output clean
+    const suppressStderr = process.env.MLLD_NO_STREAMING === 'true' || process.env.NODE_ENV === 'test';
     const result = execSync(safeCommand, {
       encoding: 'utf8',
       cwd: this.workingDirectory,
       env: { ...process.env, ...(options?.env || {}) },
       maxBuffer: 10 * 1024 * 1024, // 10MB limit
-      ...(options?.input ? { input: options.input } : {})
+      ...(options?.input ? { input: options.input } : {}),
+      ...(suppressStderr ? { stdio: ['pipe', 'pipe', 'pipe'] } : {})
     });
 
     const duration = Date.now() - startTime;

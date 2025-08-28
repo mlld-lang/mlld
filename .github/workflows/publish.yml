@@ -61,7 +61,7 @@ jobs:
       - name: Generate release notes
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          awk -v v="$VERSION" '/^## \['"$VERSION"'\]/{flag=1;next}/^## \[/{flag=0}flag' CHANGELOG.md > RELEASE_NOTES.md
+          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {flag=1;next} /^## \[/{flag=0} flag' CHANGELOG.md > RELEASE_NOTES.md
           if [ ! -s RELEASE_NOTES.md ]; then
             echo "Release notes not found for version $VERSION"
             exit 1

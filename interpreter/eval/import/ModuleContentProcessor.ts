@@ -39,6 +39,33 @@ export class ModuleContentProcessor {
     this.securityValidator.beginImport(resolvedPath);
 
     try {
+      // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
+      const lowerPath = resolvedPath.toLowerCase();
+      if (lowerPath.endsWith('.att') || lowerPath.endsWith('.mtt')) {
+        const { MlldImportError } = await import('@core/errors');
+        // Try to infer a friendly suggested name from the directive
+        let suggestedName = 'template';
+        try {
+          const ns = (directive as any)?.values?.namespace;
+          if (Array.isArray(ns) && ns[0]?.content) suggestedName = ns[0].content;
+          const firstImport = (directive as any)?.values?.imports?.[0];
+          if (firstImport?.alias) suggestedName = firstImport.alias;
+        } catch {}
+        const example = `/exe @${suggestedName}(param1, param2) = template "${resolvedPath}"
+/show @${suggestedName}("value1", "value2")`;
+        throw new MlldImportError(
+          `Template files cannot be imported: ${resolvedPath}. Use an executable template instead.`,
+          {
+            code: 'TEMPLATE_IMPORT_NOT_ALLOWED',
+            context: {
+              hint: 'Define an /exe that loads the template file and declares parameters.',
+              example
+            },
+            details: { filePath: resolvedPath }
+          }
+        );
+      }
+
       // Read content from source
       const content = await this.readContentFromSource(resolvedPath, isURL);
 
@@ -48,21 +75,30 @@ export class ModuleContentProcessor {
       // Validate security (including hash validation, but NOT circular imports since we're tracking now)
       await this.securityValidator.validateContentSecurity(resolution, content);
 
-      // Parse content based on type
-      const parseResult = await this.parseContentByType(content, resolvedPath, directive);
+      // Parse content based on type and capture processed content
+      const { parsed, processedContent, isPlainText, templateSyntax } = await this.parseContentByType(
+        content,
+        resolvedPath,
+        directive
+      );
 
       // Check if this is a JSON file (special handling)
       if (resolvedPath.endsWith('.json')) {
-        return this.processJSONContent(parseResult, directive, resolvedPath);
+        return this.processJSONContent(parsed, directive, resolvedPath);
       }
 
       // Check if this is plain text content (not mlld)
-      if (parseResult.isPlainText) {
+      if (isPlainText) {
         return this.processPlainTextContent(resolvedPath);
       }
 
+      // Handle raw template files (.att for @var, .mtt for mustache)
+      if (!parsed && templateSyntax) {
+        return this.processRawTemplate(processedContent, templateSyntax, resolvedPath);
+      }
+
       // Process mlld content
-      return this.processMLLDContent(parseResult, resolvedPath, isURL);
+      return this.processMLLDContent(parsed, processedContent, resolvedPath, isURL);
     } finally {
       // End import tracking
       this.securityValidator.endImport(resolvedPath);
@@ -81,6 +117,32 @@ export class ModuleContentProcessor {
     this.securityValidator.beginImport(ref);
 
     try {
+      // Disallow importing template files (.att/.mtt). Use /exe ... = template "path" instead.
+      const lowerRef = ref.toLowerCase();
+      if (lowerRef.endsWith('.att') || lowerRef.endsWith('.mtt')) {
+        const { MlldImportError } = await import('@core/errors');
+        let suggestedName = 'template';
+        try {
+          const ns = (directive as any)?.values?.namespace;
+          if (Array.isArray(ns) && ns[0]?.content) suggestedName = ns[0].content;
+          const firstImport = (directive as any)?.values?.imports?.[0];
+          if (firstImport?.alias) suggestedName = firstImport.alias;
+        } catch {}
+        const example = `/exe @${suggestedName}(param1, param2) = template "${ref}"
+/show @${suggestedName}("value1", "value2")`;
+        throw new MlldImportError(
+          `Template files cannot be imported: ${ref}. Use an executable template instead.`,
+          {
+            code: 'TEMPLATE_IMPORT_NOT_ALLOWED',
+            context: {
+              hint: 'Define an /exe that loads the template file and declares parameters.',
+              example
+            },
+            details: { filePath: ref }
+          }
+        );
+      }
+
       if (process.env.MLLD_DEBUG === 'true') {
         console.log(`[ModuleContentProcessor] Processing resolver content for: ${ref}`);
         console.log(`[ModuleContentProcessor] Content length: ${content.length}`);
@@ -91,20 +153,29 @@ export class ModuleContentProcessor {
       this.env.cacheSource(ref, content);
 
       // Parse content based on type
-      const parseResult = await this.parseContentByType(content, ref, directive);
+      const { parsed, processedContent, isPlainText, templateSyntax } = await this.parseContentByType(
+        content,
+        ref,
+        directive
+      );
 
       // Check if this is a JSON file (special handling)
       if (ref.endsWith('.json')) {
-        return this.processJSONContent(parseResult, directive, ref);
+        return this.processJSONContent(parsed, directive, ref);
       }
 
       // Check if this is plain text content (not mlld)
-      if (parseResult.isPlainText) {
+      if (isPlainText) {
         return this.processPlainTextContent(ref);
       }
 
+      // Handle raw template files (.att for @var, .mtt for mustache)
+      if (!parsed && templateSyntax) {
+        return this.processRawTemplate(processedContent, templateSyntax, ref);
+      }
+
       // Process mlld content
-      const result = await this.processMLLDContent(parseResult, ref, false);
+      const result = await this.processMLLDContent(parsed, processedContent, ref, false);
       
       if (process.env.MLLD_DEBUG === 'true') {
         console.log(`[ModuleContentProcessor] Module object keys: ${Object.keys(result.moduleObject).join(', ')}`);
@@ -137,24 +208,34 @@ export class ModuleContentProcessor {
    * Parse content by type (JSON vs mlld vs text)
    */
   private async parseContentByType(
-    content: string, 
-    resolvedPath: string, 
+    content: string,
+    resolvedPath: string,
     directive: DirectiveNode
-  ): Promise<any> {
+  ): Promise<{ parsed: any | null; processedContent: string; isPlainText: boolean; templateSyntax?: 'tripleColon' | 'doubleColon' }> {
     // Check if this is a JSON file
     if (resolvedPath.endsWith('.json')) {
       try {
-        return JSON.parse(content);
+        return { parsed: JSON.parse(content), processedContent: content, isPlainText: false };
       } catch (error) {
         throw new Error(`Failed to parse JSON file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`);
       }
+    }
+
+    // New: explicit template file handling
+    // .att = "at template" using @var references
+    if (resolvedPath.endsWith('.att')) {
+      return { parsed: null, processedContent: content, isPlainText: false, templateSyntax: 'doubleColon' };
+    }
+    // .mtt = mustache-template using {{var}} references
+    if (resolvedPath.endsWith('.mtt')) {
+      return { parsed: null, processedContent: content, isPlainText: false, templateSyntax: 'tripleColon' };
     }
 
     // Only parse .mld and .md files as mlld content
     // All other files (like .txt) should be treated as plain text
     if (!resolvedPath.endsWith('.mld') && !resolvedPath.endsWith('.md')) {
       // Return a marker indicating this is plain text content
-      return { isPlainText: true, content };
+      return { parsed: { isPlainText: true }, processedContent: content, isPlainText: true };
     }
 
     // Handle section extraction if specified
@@ -167,6 +248,9 @@ export class ModuleContentProcessor {
       }
     }
 
+    // Removed: triple-colon detection for .mld/.mld.md imports.
+    // External template detection now uses .att and .mtt extensions.
+
     // Parse the imported mlld content
     const parseResult = await parse(processedContent);
 
@@ -175,7 +259,7 @@ export class ModuleContentProcessor {
       this.handleParseError(parseResult.error, resolvedPath);
     }
 
-    return parseResult;
+    return { parsed: parseResult, processedContent, isPlainText: false };
   }
 
   /**
@@ -188,6 +272,41 @@ export class ModuleContentProcessor {
     const moduleObject: Record<string, any> = {};
 
     // Create a dummy child environment for consistency
+    const childEnv = this.env.createChild(path.dirname(resolvedPath));
+    childEnv.setCurrentFilePath(resolvedPath);
+
+    return {
+      moduleObject,
+      frontmatter: null,
+      childEnvironment: childEnv
+    };
+  }
+
+  /**
+   * Process raw template content without parsing
+   */
+  private async processRawTemplate(
+    content: string,
+    templateSyntax: 'doubleColon' | 'tripleColon',
+    resolvedPath: string
+  ): Promise<ModuleProcessingResult> {
+    let finalContent = content;
+    let finalSyntax: 'doubleColon' | 'tripleColon' = templateSyntax;
+    if (templateSyntax === 'tripleColon') {
+      // Convert {{var}} to @var for our internal template AST
+      finalContent = content.replace(/{{\s*([\w\.]+)\s*}}/g, '@$1');
+      finalSyntax = 'doubleColon';
+    }
+
+    const moduleObject: Record<string, any> = {
+      default: {
+        __template: true,
+        content: finalContent,
+        templateSyntax: finalSyntax,
+        templateAst: this.buildTemplateAst(finalContent)
+      }
+    };
+
     const childEnv = this.env.createChild(path.dirname(resolvedPath));
     childEnv.setCurrentFilePath(resolvedPath);
 
@@ -232,6 +351,7 @@ export class ModuleContentProcessor {
    */
   private async processMLLDContent(
     parseResult: any,
+    sourceContent: string,
     resolvedPath: string,
     isURL: boolean
   ): Promise<ModuleProcessingResult> {
@@ -273,11 +393,50 @@ export class ModuleContentProcessor {
       moduleObject.__meta__ = frontmatter;
     }
 
+    // If no variables were exported, treat the entire file as a template
+    if (Object.keys(moduleObject).length === 0 && (resolvedPath.endsWith('.mld') || resolvedPath.endsWith('.mld.md'))) {
+      // Only wrap as template if the file has substantive content (not just comments/whitespace)
+      const hasSubstantive = this.hasSubstantiveContent(sourceContent);
+      if (!hasSubstantive) {
+        return {
+          moduleObject,
+          frontmatter,
+          childEnvironment: childEnv
+        };
+      }
+      let templateSyntax: 'doubleColon' | 'tripleColon' = 'doubleColon';
+      let templateContent = sourceContent;
+      const trimmedSource = sourceContent.trim();
+      if (trimmedSource.startsWith(':::')) {
+        templateSyntax = 'tripleColon';
+        templateContent = trimmedSource.slice(3).trimStart();
+        if (templateContent.endsWith(':::')) {
+          templateContent = templateContent.slice(0, -3).trimEnd();
+        }
+      }
+
+      moduleObject.default = {
+        __template: true,
+        content: templateContent,
+        templateSyntax,
+        templateAst: this.buildTemplateAst(templateContent)
+      };
+    }
+
     return {
       moduleObject,
       frontmatter,
       childEnvironment: childEnv
     };
+  }
+
+  /**
+   * Determine if content has substantive (non-comment, non-whitespace) text
+   */
+  private hasSubstantiveContent(content: string): boolean {
+    const lines = content.split('\n');
+    const filtered = lines.filter(l => !/^\s*(>>|<<)/.test(l) && l.trim() !== '');
+    return filtered.join('').trim().length > 0;
   }
 
   /**
@@ -309,6 +468,27 @@ export class ModuleContentProcessor {
     }
     
     return sectionLines.join('\n').trim();
+  }
+
+  /**
+   * Build a simple template AST from content with @var placeholders
+   */
+  private buildTemplateAst(content: string): any[] {
+    const ast: any[] = [];
+    const regex = /@([A-Za-z_][\w\.]*)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        ast.push({ type: 'Text', content: content.slice(lastIndex, match.index) });
+      }
+      ast.push({ type: 'VariableReference', identifier: match[1] });
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < content.length) {
+      ast.push({ type: 'Text', content: content.slice(lastIndex) });
+    }
+    return ast;
   }
 
   /**

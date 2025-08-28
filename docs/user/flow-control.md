@@ -204,7 +204,7 @@ Alice
 
 ### Pipeline Context
 
-Access pipeline context with `@ctx` and pipeline history with `@p`:
+Access pipeline context with `@ctx` and pipeline history with `@p` (alias for `@pipeline`):
 
 ```mlld
 /exe @validator(input) = when first [
@@ -218,18 +218,24 @@ Access pipeline context with `@ctx` and pipeline history with `@p`:
 ```
 
 Context object (`@ctx`) contains:
-- `try` - current attempt number
-- `tries` - array of all attempts
+- `try` - current attempt number in the context of the active retry
+- `tries` - array containing history of attempts
 - `stage` - current pipeline stage
-- `input` - original pipeline input
-- `hint` - message from `retry "hint"`
-- `lastOutput` - output from previous stage
-- `isPipeline` - true if in pipeline
+- `input` - current stage input (use `@p[0]` to read the original pipeline input)
+- `hint` - the most recent hint passed via `retry "..."` (string or object)
+- `lastOutput` - output from the previous stage (if any)
+- `isPipeline` - true when executing inside a pipeline stage
 
 Pipeline array (`@p`) contains:
-- `@p[0]` - original input
-- `@p[-1]` - previous stage output
-- `@p.retries.all` - full retry history
+- `@p[0]` - original/base input to the pipeline
+- `@p[1]` … `@p[n]` - outputs of completed visible stages
+- `@p[-1]` - previous stage output; `@p[-2]` two stages back, etc.
+- `@p.retries.all` - all attempt outputs from all retry contexts (for best-of-N patterns)
+
+Gotchas:
+- `@ctx.try` and `@ctx.tries` are local to the active retry context. Stages that are not the requester or the retried stage will see `try: 1` and `tries: []`.
+- `@ctx.input` is the current stage input, not the original. Use `@p[0]` for the original pipeline input.
+- A synthetic internal stage may be created for retryable sources; stage numbers and `@p` indices shown above hide this internal stage.
 
 ### Retry with Hints
 

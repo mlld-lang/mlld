@@ -8,6 +8,11 @@ import { logger } from '@core/utils/logger';
 /**
  * Resolve a command reference to an executable variable
  */
+/**
+ * Resolve a pipeline command reference to an executable or value.
+ * WHY: Commands may be object methods, executables, or values with field access.
+ * CONTEXT: Used by pipeline execution to resolve identifiers from the stage env.
+ */
 export async function resolveCommandReference(
   command: PipelineCommand,
   env: Environment
@@ -62,6 +67,11 @@ export async function resolveCommandReference(
 
 /**
  * Execute a command variable with arguments
+ */
+/**
+ * Execute a resolved command variable with arguments in a stage environment.
+ * WHY: Handle built-in transformers, code/command/template execs, and when-expressions.
+ * CONTEXT: First parameter in pipeline gets @input (format-aware), other params bind explicitly.
  */
 export async function executeCommandVariable(
   commandVar: any,
@@ -387,20 +397,41 @@ export async function executeCommandVariable(
     const result = await interpolate(execDef.template, execEnv, InterpolationContext.Default);
     return result;
   } else if (execDef.type === 'commandRef') {
-    // Handle command references - recursively call the referenced command
-    const refExecVar = env.getVariable(execDef.commandRef);
-    if (!refExecVar) {
+    /**
+     * Handle command references
+     * WHY: The reference might be an executable or a parameter/value in the execution scope.
+     * CONTEXT: Prefer the execution parameter scope so pipeline parameters (e.g., input) are visible.
+     */
+    const refRaw = execDef.commandRef || '';
+    // Use the provided identifier as-is; evaluateExe should have normalized it from AST
+    const refName = String(refRaw);
+
+    // Prefer resolving in the execution parameter scope first (execEnv)
+    const fromParamScope = (execEnv as Environment).getVariable(refName);
+
+    if (fromParamScope) {
+      // If this is an executable, recursively execute it in the same param scope
+      if ((fromParamScope as any).type === 'executable') {
+        return await executeCommandVariable(fromParamScope as any, execDef.commandArgs ?? [], execEnv, stdinInput);
+      }
+      // Non-executable reference in exec scope: this is most likely a mistake now that
+      // identity bodies compile to template executables.
+      const t = (fromParamScope as any).type;
+      throw new Error(`Referenced symbol '${refName}' is not executable (type: ${t}). Use a template executable (e.g., \`@${refName}\`) or refactor the definition.`);
+    }
+
+    // Fallback to stage environment lookup for global executables/variables
+    const refVar = env.getVariable(refName);
+    if (!refVar) {
       throw new Error(`Referenced executable not found: ${execDef.commandRef}`);
     }
-    
-    // Recursively execute the referenced command with the same input
-    const result = await executeCommandVariable(
-      refExecVar,
-      execDef.commandArgs ?? [],
-      env,
-      stdinInput
-    );
-    return result;
+
+    if ( (refVar as any).type === 'executable') {
+      return await executeCommandVariable(refVar as any, execDef.commandArgs ?? [], env, stdinInput);
+    }
+    // Non-executable reference in stage env: surface clear guidance
+    const t = (refVar as any).type;
+    throw new Error(`Referenced symbol '${refName}' is not executable (type: ${t}). Use a template executable or a function.`);
   }
   
   throw new Error(`Unsupported executable type in pipeline: ${execDef.type}`);

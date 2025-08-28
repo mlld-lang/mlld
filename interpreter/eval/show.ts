@@ -54,13 +54,26 @@ export async function evaluateShow(
     let varName: string;
     
     if (directive.values?.invocation) {
-      // New unified AST structure
-      const invocationNode = directive.values.invocation;
-      if (!invocationNode || invocationNode.type !== 'VariableReference') {
+      // New unified AST structure: support VariableReference and VariableReferenceWithTail
+      const invocationNode = directive.values.invocation as any;
+      const allowedTypes = ['VariableReference', 'VariableReferenceWithTail', 'TemplateVariable'] as const;
+      if (!invocationNode || !allowedTypes.includes(invocationNode.type)) {
         throw new Error('Show variable directive missing variable reference');
       }
       variableNode = invocationNode;
-      varName = invocationNode.identifier;
+      if (invocationNode.type === 'VariableReference') {
+        varName = invocationNode.identifier;
+      } else if (invocationNode.type === 'VariableReferenceWithTail') {
+        // Extract inner variable identifier for lookup; pipeline handled later
+        const innerVar = invocationNode.variable;
+        if (innerVar.type === 'TemplateVariable') {
+          varName = innerVar.identifier; // __template__
+        } else {
+          varName = innerVar.identifier;
+        }
+      } else if (invocationNode.type === 'TemplateVariable') {
+        varName = invocationNode.identifier; // __template__
+      }
     } else if (directive.values?.variable) {
       // Legacy structure (for backwards compatibility during transition)
       const legacyVariable = directive.values.variable;
@@ -153,7 +166,7 @@ export async function evaluateShow(
       
       // For template variables (like ::{{var}}::), we need to interpolate the template content
       if (isTemplate(variable)) {
-        // For double-bracket templates, the value is the AST array
+          // For double-bracket templates, the value is the AST array
         if (Array.isArray(value)) {
           if (process.env.MLLD_DEBUG === 'true') {
             logger.debug('Template interpolation in show', {
@@ -166,7 +179,7 @@ export async function evaluateShow(
             logger.debug('Interpolation result:', { value });
           }
         } else if (variable.metadata?.templateAst && Array.isArray(variable.metadata.templateAst)) {
-          // Fallback - check metadata (shouldn't be needed with new code)
+          // GOTCHA: Some legacy paths store template AST in metadata
           value = await interpolate(variable.metadata.templateAst, env);
         }
       }
@@ -246,6 +259,12 @@ export async function evaluateShow(
       value = variable.value;
     } else {
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
+    }
+
+    // Handle pipeline from VariableReferenceWithTail if present (for unified invocation path)
+    if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
+      const { executePipeline } = await import('./pipeline');
+      content = await executePipeline(typeof value === 'string' ? value : String(value ?? ''), variableNode.withClause.pipeline, env);
     }
     } // Close the if (value === undefined && variable) block
     
