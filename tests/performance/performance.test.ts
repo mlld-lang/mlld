@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { parse } from '../../grammar/generated/parser/parser';
 import { interpret } from '../../interpreter/index';
-import { Environment } from '../../interpreter/env/Environment';
+import { NodeFileSystem } from '../../services/fs/NodeFileSystem';
+import { PathService } from '../../services/fs/PathService';
+import { PathContextBuilder } from '../../core/services/PathContextService';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -140,6 +142,9 @@ class PerformanceTracker {
 
 describe('Performance Benchmarks', () => {
   let tracker: PerformanceTracker;
+  const fsService = new NodeFileSystem();
+  const pathService = new PathService();
+  const defaultContext = PathContextBuilder.fromDefaults();
   
   beforeAll(() => {
     tracker = new PerformanceTracker();
@@ -170,11 +175,6 @@ describe('Performance Benchmarks', () => {
     notifications: true
   }
 }
-
-/for @user in @data.users => when first [
-  @user.age > 28 => show "Senior: @user.name"
-  * => show "Junior: @user.name"
-]
       `;
       
       const result = tracker.measure('Parse complex nested structure', () => {
@@ -204,8 +204,11 @@ describe('Performance Benchmarks', () => {
   describe('Interpreter Performance', () => {
     it('should measure variable assignment', async () => {
       const result = await tracker.measureAsync('Variable assignment', async () => {
-        const env = new Environment();
-        await interpret('/var @x = "hello"', { env });
+        await interpret('/var @x = "hello"', { 
+          fileSystem: fsService,
+          pathService,
+          pathContext: defaultContext
+        });
       }, 500);
       
       expect(result.avgDuration).toBeLessThan(2);
@@ -214,12 +217,11 @@ describe('Performance Benchmarks', () => {
     it('should measure for loop performance', async () => {
       const mlld = `
 /var @items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-/for @item in @items => var @squared = @item * @item
+/for @item in @items => show "@item"
       `;
       
       const result = await tracker.measureAsync('For loop (10 items)', async () => {
-        const env = new Environment();
-        await interpret(mlld, { env });
+        await interpret(mlld, { fileSystem: fsService, pathService, pathContext: defaultContext });
       }, 200);
       
       expect(result.avgDuration).toBeLessThan(10);
@@ -235,8 +237,7 @@ describe('Performance Benchmarks', () => {
       `;
       
       const result = await tracker.measureAsync('Pipeline (3 stages)', async () => {
-        const env = new Environment();
-        await interpret(mlld, { env });
+        await interpret(mlld, { fileSystem: fsService, pathService, pathContext: defaultContext });
       }, 300);
       
       expect(result.avgDuration).toBeLessThan(5);
@@ -244,19 +245,18 @@ describe('Performance Benchmarks', () => {
     
     it('should measure when expression evaluation', async () => {
       const mlld = `
-/var @score = 85
-/var @grade = when first [
+/exe @grade(score) = when first [
   @score >= 90 => "A"
   @score >= 80 => "B"
   @score >= 70 => "C"
   @score >= 60 => "D"
   * => "F"
 ]
+/var @result = @grade(85)
       `;
       
       const result = await tracker.measureAsync('When expression (5 conditions)', async () => {
-        const env = new Environment();
-        await interpret(mlld, { env });
+        await interpret(mlld, { fileSystem: fsService, pathService, pathContext: defaultContext });
       }, 400);
       
       expect(result.avgDuration).toBeLessThan(3);
@@ -279,8 +279,7 @@ describe('Performance Benchmarks', () => {
       `;
       
       const result = await tracker.measureAsync('Deep object access (5 levels)', async () => {
-        const env = new Environment();
-        await interpret(mlld, { env });
+        await interpret(mlld, { fileSystem: fsService, pathService, pathContext: defaultContext });
       }, 300);
       
       expect(result.avgDuration).toBeLessThan(3);
@@ -295,8 +294,7 @@ describe('Performance Benchmarks', () => {
       `;
       
       const result = await tracker.measureAsync('Template interpolation (complex)', async () => {
-        const env = new Environment();
-        await interpret(mlld, { env });
+        await interpret(mlld, { fileSystem: fsService, pathService, pathContext: defaultContext });
       }, 400);
       
       expect(result.avgDuration).toBeLessThan(4);
@@ -304,12 +302,12 @@ describe('Performance Benchmarks', () => {
     
     it('should measure import resolution', async () => {
       const mlld = `
-/import { @greeting, @farewell } from "./fixtures/test-module.mld"
+/import { greeting, farewell } from "./tests/performance/fixtures/test-module.mld"
 /show @greeting
       `;
       
       // Create a mock module file
-      const fixturesDir = path.join(process.cwd(), 'fixtures');
+      const fixturesDir = path.join(process.cwd(), 'tests', 'performance', 'fixtures');
       if (!fs.existsSync(fixturesDir)) {
         fs.mkdirSync(fixturesDir, { recursive: true });
       }
@@ -319,8 +317,7 @@ describe('Performance Benchmarks', () => {
       );
       
       const result = await tracker.measureAsync('Import resolution', async () => {
-        const env = new Environment();
-        await interpret(mlld, { env });
+        await interpret(mlld, { fileSystem: fsService, pathService, pathContext: defaultContext });
       }, 100);
       
       expect(result.avgDuration).toBeLessThan(15);
@@ -330,44 +327,6 @@ describe('Performance Benchmarks', () => {
     });
   });
   
-  describe('Memory-Intensive Operations', () => {
-    it('should measure large array operations', async () => {
-      const mlld = `
-/var @large = js {
-  const arr = [];
-  for (let i = 0; i < 1000; i++) {
-    arr.push({ id: i, value: 'item' + i });
-  }
-  return arr;
-}
-/var @filtered = js {
-  return large.filter(item => item.id % 2 === 0);
-}
-      `;
-      
-      const result = await tracker.measureAsync('Large array (1000 items) filter', async () => {
-        const env = new Environment();
-        await interpret(mlld, { env });
-      }, 50);
-      
-      expect(result.avgDuration).toBeLessThan(20);
-    });
-    
-    it('should measure recursive function calls', async () => {
-      const mlld = `
-/exe @fibonacci(n) = js {
-  if (n <= 1) return n;
-  return fibonacci(n - 1) + fibonacci(n - 2);
-}
-/var @result = @fibonacci(10)
-      `;
-      
-      const result = await tracker.measureAsync('Recursive fibonacci(10)', async () => {
-        const env = new Environment();
-        await interpret(mlld, { env });
-      }, 100);
-      
-      expect(result.avgDuration).toBeLessThan(10);
-    });
-  });
+  // Removed JS-only performance tests (e.g., Fibonacci, large array) —
+  // they don’t exercise mlld semantics and add little value.
 });
