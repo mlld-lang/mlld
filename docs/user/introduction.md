@@ -62,7 +62,6 @@ Edit your file again to try this -- don't worry if it doesn't make sense immedia
 ]
 
 /show @ask() | @check
-
 ```
 
 If you run `mlld myfile.mld` again, you should get a _different_ response -- without the impact of prompt injection.
