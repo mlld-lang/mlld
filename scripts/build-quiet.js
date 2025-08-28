@@ -30,16 +30,19 @@ let currentStep = 0;
 let buildOutput = [];
 let errorOccurred = false;
 
-function showProgress(step, status = 'running') {
+function showProgress(step, status = 'running', stepIndex = null) {
   process.stdout.write('\r\x1b[K'); // Clear current line
   const dots = '.'.repeat((currentStep % 3) + 1).padEnd(3);
   
+  // Use provided stepIndex or fall back to currentStep
+  const displayStep = stepIndex !== null ? stepIndex : currentStep;
+  
   if (status === 'running') {
-    process.stdout.write(`${yellow}Building${dots}${reset} [${currentStep + 1}/${steps.length}] ${step}`);
+    process.stdout.write(`${yellow}Building${dots}${reset} [${displayStep + 1}/${steps.length}] ${step}`);
   } else if (status === 'done') {
-    process.stdout.write(`${green}✓${reset} [${currentStep}/${steps.length}] ${step}\n`);
+    process.stdout.write(`${green}✓${reset} [${displayStep}/${steps.length}] ${step}\n`);
   } else if (status === 'error') {
-    process.stdout.write(`${red}✗${reset} [${currentStep}/${steps.length}] ${step}\n`);
+    process.stdout.write(`${red}✗${reset} [${displayStep}/${steps.length}] ${step}\n`);
   }
 }
 
@@ -140,10 +143,10 @@ async function build() {
   try {
     // Build grammar if needed
     if (missingFiles.length > 0) {
-      showProgress('Building missing grammar files', 'running');
+      // Show as step 0/7 when building missing grammar files
+      process.stdout.write(`${yellow}Building..${reset} [0/${steps.length}] Building missing grammar files\n`);
       await runCommand('npm run build:grammar:core', 'grammar-pre');
-      showProgress('Grammar files generated', 'done');
-      currentStep++;
+      process.stdout.write(`${green}✓${reset} Grammar files generated\n\n`);
     }
     
     // Run build steps
