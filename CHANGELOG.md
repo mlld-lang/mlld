@@ -5,6 +5,10 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc46]
+### Fixed
+- **Method calls in when conditions**: Fixed grammar bug preventing method calls on function results in `/when` and `/exe...when` conditions
+
 ## [2.0.0-rc45]
 ### Added
 - **Builtin methods for arrays and strings**: Common JavaScript methods available on variables

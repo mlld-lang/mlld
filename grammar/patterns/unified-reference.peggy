@@ -1,7 +1,5 @@
 // UNIFIED REFERENCE PATTERNS
 // Purpose: Consolidated, battle-tested patterns for all @variable and @exec() usage
-// Replaces: 20+ duplicate patterns across the grammar
-// Source: Best implementations from var-rhs.peggy and variables.peggy
 
 // =============================================================================
 // CORE UNIFIED PATTERNS (choose the right one based on syntax)
@@ -9,7 +7,8 @@
 
 // Meta-pattern that chooses the right implementation based on syntax
 UnifiedReference "unified variable or exec reference"
-  = FieldAccessExec          // @obj.method(args) - must come first (most specific)
+  = ExecResultMethodCall     // @func(args).method(args) on exec result
+  / FieldAccessExec          // @obj.method(args) - most specific object form
   / SimpleExec               // @func(args) 
   / VariableWithTail         // @var.field with tail modifiers
 
@@ -18,14 +17,16 @@ UnifiedReferenceWithTail "unified reference with tail support"
   = UnifiedReference         // All patterns already support tail modifiers
 
 UnifiedReferenceNoTail "unified reference without tail support"  
-  = FieldAccessExecNoTail    // @obj.method(args) - no tail
+  = ExecResultMethodCall     // @func(args).method(args) - no tail captured
+  / FieldAccessExecNoTail    // @obj.method(args) - no tail
   / SimpleExecNoTail         // @func(args) - no tail
   / VariableNoTail           // @var.field - no tail
 
 // Special pattern for use inside pipeline contexts
 // This allows function arguments but prevents capturing tail modifiers
 UnifiedReferenceForPipeline "unified reference for pipeline commands"
-  = FieldAccessExecForPipeline    // @obj.method(args) - no tail capture
+  = ExecResultMethodCall          // @func(args).method(args) - no tail capture
+  / FieldAccessExecForPipeline    // @obj.method(args) - no tail capture
   / SimpleExecForPipeline         // @func(args) - no tail capture
   / VariableForPipeline           // @var.field - no tail capture
 

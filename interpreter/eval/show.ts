@@ -565,9 +565,9 @@ export async function evaluateShow(
       throw new Error('Show invocation directive missing invocation');
     }
     
-    // Check if this is a method call on an object (has objectReference)
-    const commandRef = invocation.commandRef;
-    if (commandRef && (commandRef as any).objectReference) {
+    // Check if this is a method call on an object or on an exec result
+    const commandRef = invocation.commandRef as any;
+    if (commandRef && (commandRef.objectReference || commandRef.objectSource)) {
       // This is a method call like @list.includes() - evaluate directly
       const { evaluateExecInvocation } = await import('./exec-invocation');
       const result = await evaluateExecInvocation(invocation, env);
@@ -585,7 +585,7 @@ export async function evaluateShow(
       }
     } else {
       // Normal invocation - look up the variable
-      const name = commandRef.name || commandRef.identifier[0]?.content;
+      const name = commandRef.name || commandRef.identifier?.[0]?.content;
       if (!name) {
         throw new Error('Add invocation missing name');
       }

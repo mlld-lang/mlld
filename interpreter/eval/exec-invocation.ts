@@ -120,33 +120,54 @@ export async function evaluateExecInvocation(
     throw new MlldInterpreterError('ExecInvocation has no command identifier');
   }
   
-  // Check if this is a field access exec invocation (e.g., @demo.valueCmd())
+  // Check if this is a field access exec invocation (e.g., @obj.method())
+  // or a method call on an exec result (e.g., @func(args).method())
   let variable;
-  const commandRefWithObject = node.commandRef as any & { objectReference?: any }; // Type assertion to handle objectReference
-  if (node.commandRef && commandRefWithObject.objectReference) {
+  const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: ExecInvocation };
+  if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
     // Check if this is a builtin method call (e.g., @list.includes())
     const builtinMethods = ['includes', 'length', 'indexOf', 'join', 'split', 'toLowerCase', 'toUpperCase', 'trim', 'startsWith', 'endsWith'];
     if (builtinMethods.includes(commandName)) {
       // Handle builtin methods on objects/arrays/strings
-      const objectRef = commandRefWithObject.objectReference;
-      const objectVar = env.getVariable(objectRef.identifier);
-      if (!objectVar) {
-        throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
-      }
-      
-      // Extract the value
-      const { extractVariableValue } = await import('../utils/variable-resolution');
-      let objectValue = await extractVariableValue(objectVar, env);
-      
-      // Navigate through fields if present
-      if (objectRef.fields && objectRef.fields.length > 0) {
-        for (const field of objectRef.fields) {
-          if (typeof objectValue === 'object' && objectValue !== null) {
-            objectValue = (objectValue as any)[field.value];
-          } else {
-            throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
+      let objectValue: any;
+
+      if (commandRefWithObject.objectReference) {
+        const objectRef = commandRefWithObject.objectReference;
+        const objectVar = env.getVariable(objectRef.identifier);
+        if (!objectVar) {
+          throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
+        }
+        // Extract the value from the variable reference
+        const { extractVariableValue } = await import('../utils/variable-resolution');
+        objectValue = await extractVariableValue(objectVar, env);
+
+        // Navigate through fields if present
+        if (objectRef.fields && objectRef.fields.length > 0) {
+          for (const field of objectRef.fields) {
+            if (typeof objectValue === 'object' && objectValue !== null) {
+              objectValue = (objectValue as any)[field.value];
+            } else {
+              throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
+            }
           }
         }
+      } else if (commandRefWithObject.objectSource) {
+        // Evaluate the source ExecInvocation to obtain a value, then apply builtin method
+        const { evaluateExecInvocation } = await import('./exec-invocation');
+        const srcResult = await evaluateExecInvocation(commandRefWithObject.objectSource, env);
+        if (srcResult && typeof srcResult === 'object') {
+          if (srcResult.value !== undefined) {
+            const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+            objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Default);
+          } else if (typeof srcResult.stdout === 'string') {
+            objectValue = srcResult.stdout;
+          }
+        }
+      }
+
+      // Fallback if we still don't have an object value
+      if (typeof objectValue === 'undefined') {
+        throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
       }
       
       // Evaluate arguments
@@ -248,6 +269,10 @@ export async function evaluateExecInvocation(
         value: result,
         display: typeof result === 'string' ? result : (Array.isArray(result) ? JSON.stringify(result, null, 2) : String(result))
       };
+    }
+    // If this is a non-builtin method with objectSource, we do not (yet) support it
+    if (commandRefWithObject.objectSource && !commandRefWithObject.objectReference) {
+      throw new MlldInterpreterError(`Only builtin methods are supported on exec results (got: ${commandName})`);
     }
     
     // Get the object first

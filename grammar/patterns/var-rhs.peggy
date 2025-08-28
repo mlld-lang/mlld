@@ -7,6 +7,7 @@ VarRHSContent "var assignment value"
   / VarWhenError                // Error recovery: when expressions not allowed in /var
   / ForExpression               // for @var in @collection => expression
   / ForeachCommandExpression    // foreach @command(@arrays)
+  / ExecResultMethodCall        // @func(args).method(args) on exec result
   / ExecInvocationWithFields    // Exec invocations followed by field/index access (must come before FieldAccessExecPattern)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
