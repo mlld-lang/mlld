@@ -2996,8 +2996,8 @@ for loops are combined with pipeline retry logic.
 ]
 
 /exe @check_response(response, name, p) = when [
-  @len(@response) < 5 && @p.try < 2 => show "Response too short for @name, retrying (attempt @p.try)..."
-  @len(@response) < 5 && @p.try < 2 => retry
+  @len(@response) < 5 && @ctx.try < 2 => show "Response too short for @name, retrying (attempt @ctx.try)..."
+  @len(@response) < 5 && @ctx.try < 2 => retry
   * => show "Success for @name"
   * => @response
 ]
@@ -3303,7 +3303,7 @@ After
 show attached to the source should replay once per attempt.
 
 /exe @source() = js {
-  // Return any value; attempts tracked via @p.try in the pipeline
+  // Return any value; attempts tracked via @ctx.try in the pipeline
   return "payload";
 }
 
@@ -3312,7 +3312,7 @@ show attached to the source should replay once per attempt.
   * => "done"
 ]
 
-/var @result = @source() | show "Src attempt @p.try" | @retryHandler(@p)
+/var @result = @source() | show "Src attempt @ctx.try" | @retryHandler(@p)
 
 /show "Finished"
 ```
@@ -3339,7 +3339,7 @@ Finished
 Inline pipeline show should append to the document.
 
 /var @a = "textA" | show
-/var @b = "textB" | show "X: @p.try"
+/var @b = "textB" | show "X: @ctx.try"
 ```
 
 **Expected Output:**
@@ -4846,10 +4846,6 @@ false
 ```markdown
 # Variable arguments in methods
 
-
-
-
-
 # Test with variable arguments
 true
 true
@@ -4863,7 +4859,6 @@ apple -> banana -> cherry -> date
   "fox"
 ]
 # Edge cases with variables
-
 
 false
 [
@@ -8197,10 +8192,10 @@ selected: variation-outstanding from [variation-good, variation-excellent, varia
 ```mlld
 # Complex Retry Logic Test
 
-/exe @qualityScorer(input, attempt) = js {
-  // Generate different scores based on attempt
+/exe @qualityScorer(input) = js {
+  // Generate different scores based on attempt - @ctx.try is ambient
   const scores = [0.2, 0.6, 0.9, 0.95, 0.85];
-  const score = scores[attempt - 1] || 0.8;
+  const score = scores[ctx.try - 1] || 0.8;
   return `score:${score}:${input}`;
 }
 
@@ -8235,7 +8230,7 @@ selected: variation-outstanding from [variation-good, variation-excellent, varia
 /exe @getData() = "test-data"
 
 # Test complex retry logic with attempt selection
-/var @result = @getData() with { pipeline: [@qualityScorer(@p.try), @adaptiveRetry] }
+/var @result = @getData() with { pipeline: [@qualityScorer, @adaptiveRetry] }
 
 /show @result
 ```
@@ -8266,14 +8261,14 @@ best: score:0.95:test-data (from 4 attempts)
   }
 }
 
-/exe @jsonGenerator(input, attempt) = js {
+/exe @jsonGenerator(input) = js {
   const attempts = [
     'not json at all',
     '{"incomplete": ',
     '{"valid": "json"}',
     '{"perfect": "json", "attempt": 4}'
   ];
-  return attempts[attempt - 1] || '{"fallback": "json"}';
+  return attempts[ctx.try - 1] || '{"fallback": "json"}';
 }
 
 /exe @retryUntilValidJSON(input) = when first [
@@ -8286,7 +8281,7 @@ best: score:0.95:test-data (from 4 attempts)
 /exe @getSeed() = "seed-data"
 
 # Test conditional retry with fallback after max attempts
-/var @result = @getSeed() with { pipeline: [@jsonGenerator(@p.try), @validateJSON, @retryUntilValidJSON] }
+/var @result = @getSeed() with { pipeline: [@jsonGenerator, @validateJSON, @retryUntilValidJSON] }
 
 /show @result
 ```
@@ -8455,10 +8450,10 @@ Used hint: missing title
   * => "invalid-score"
 ]
 
-/exe @scoreGenerator(input, attempt) = js {
-  // Simulate generating different scores based on attempt
-  if (attempt == 1) return 0.1; // Too low, should retry
-  if (attempt == 2) return 0.3; // Low quality
+/exe @scoreGenerator(input) = js {
+  // Simulate generating different scores based on attempt - @ctx.try is ambient
+  if (ctx.try == 1) return 0.1; // Too low, should retry
+  if (ctx.try == 2) return 0.3; // Low quality
   return 0.9; // High quality
 }
 
@@ -8473,7 +8468,7 @@ Used hint: missing title
 /exe @getTestData() = "test-data"
 
 # Test retry mechanism in when expressions
-/var @result = @getTestData() with { pipeline: [@scoreGenerator(@p.try), @validateScore, @qualityControl] }
+/var @result = @getTestData() with { pipeline: [@scoreGenerator, @validateScore, @qualityControl] }
 
 /show @result
 ```

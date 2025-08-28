@@ -1,9 +1,9 @@
 # Complex Retry Logic Test
 
-/exe @qualityScorer(input, attempt) = js {
-  // Generate different scores based on attempt
+/exe @qualityScorer(input) = js {
+  // Generate different scores based on attempt - @ctx.try is ambient
   const scores = [0.2, 0.6, 0.9, 0.95, 0.85];
-  const score = scores[attempt - 1] || 0.8;
+  const score = scores[ctx.try - 1] || 0.8;
   return `score:${score}:${input}`;
 }
 
@@ -38,6 +38,6 @@
 /exe @getData() = "test-data"
 
 # Test complex retry logic with attempt selection
-/var @result = @getData() with { pipeline: [@qualityScorer(@p.try), @adaptiveRetry] }
+/var @result = @getData() with { pipeline: [@qualityScorer, @adaptiveRetry] }
 
 /show @result

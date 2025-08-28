@@ -9,14 +9,14 @@
   }
 }
 
-/exe @jsonGenerator(input, attempt) = js {
+/exe @jsonGenerator(input) = js {
   const attempts = [
     'not json at all',
     '{"incomplete": ',
     '{"valid": "json"}',
     '{"perfect": "json", "attempt": 4}'
   ];
-  return attempts[attempt - 1] || '{"fallback": "json"}';
+  return attempts[ctx.try - 1] || '{"fallback": "json"}';
 }
 
 /exe @retryUntilValidJSON(input) = when first [
@@ -29,6 +29,6 @@
 /exe @getSeed() = "seed-data"
 
 # Test conditional retry with fallback after max attempts
-/var @result = @getSeed() with { pipeline: [@jsonGenerator(@p.try), @validateJSON, @retryUntilValidJSON] }
+/var @result = @getSeed() with { pipeline: [@jsonGenerator, @validateJSON, @retryUntilValidJSON] }
 
 /show @result

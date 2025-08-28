@@ -3,7 +3,7 @@
 show attached to the source should replay once per attempt.
 
 /exe @source() = js {
-  // Return any value; attempts tracked via @p.try in the pipeline
+  // Return any value; attempts tracked via @ctx.try in the pipeline
   return "payload";
 }
 
@@ -12,7 +12,7 @@ show attached to the source should replay once per attempt.
   * => "done"
 ]
 
-/var @result = @source() | show "Src attempt @p.try" | @retryHandler(@p)
+/var @result = @source() | show "Src attempt @ctx.try" | @retryHandler(@p)
 
 /show "Finished"
 
