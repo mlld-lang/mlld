@@ -12,7 +12,9 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.join(__dirname, '..');
 
-const languages = ['javascript', 'python', 'bash'];
+// Only include languages we actually have WASM files for
+// TODO: Add 'python' and 'bash' when their WASM files become available
+const languages = ['javascript'];
 const sourceDir = path.join(projectRoot, 'node_modules');
 const targetDir = path.join(projectRoot, 'dist', 'wasm');
 
