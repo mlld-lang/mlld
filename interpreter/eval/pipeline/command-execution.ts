@@ -8,6 +8,11 @@ import { logger } from '@core/utils/logger';
 /**
  * Resolve a command reference to an executable variable
  */
+/**
+ * Resolve a pipeline command reference to an executable or value.
+ * WHY: Commands may be object methods, executables, or values with field access.
+ * CONTEXT: Used by pipeline execution to resolve identifiers from the stage env.
+ */
 export async function resolveCommandReference(
   command: PipelineCommand,
   env: Environment
@@ -62,6 +67,11 @@ export async function resolveCommandReference(
 
 /**
  * Execute a command variable with arguments
+ */
+/**
+ * Execute a resolved command variable with arguments in a stage environment.
+ * WHY: Handle built-in transformers, code/command/template execs, and when-expressions.
+ * CONTEXT: First parameter in pipeline gets @input (format-aware), other params bind explicitly.
  */
 export async function executeCommandVariable(
   commandVar: any,
@@ -387,14 +397,16 @@ export async function executeCommandVariable(
     const result = await interpolate(execDef.template, execEnv, InterpolationContext.Default);
     return result;
   } else if (execDef.type === 'commandRef') {
-    // Handle command references — support both executable refs and parameter/value passthrough
-    // 1) Normalize the reference name (strip leading '@' if present)
+    /**
+     * Handle command references
+     * WHY: The reference might be an executable or a parameter/value in the execution scope.
+     * CONTEXT: Prefer the execution parameter scope so pipeline parameters (e.g., input) are visible.
+     */
     const refRaw = execDef.commandRef || '';
     // Use the provided identifier as-is; evaluateExe should have normalized it from AST
     const refName = String(refRaw);
 
-    // 2) Prefer resolving in the execution parameter scope first (execEnv)
-    //    so parameter variables like `input` are visible here.
+    // Prefer resolving in the execution parameter scope first (execEnv)
     const fromParamScope = (execEnv as Environment).getVariable(refName);
 
     if (fromParamScope) {
@@ -402,27 +414,24 @@ export async function executeCommandVariable(
       if ((fromParamScope as any).type === 'executable') {
         return await executeCommandVariable(fromParamScope as any, execDef.commandArgs ?? [], execEnv, stdinInput);
       }
-      // Otherwise, treat as value passthrough (common for identity refs like @input)
-      if ((fromParamScope as any).type === 'pipeline-input' && (fromParamScope as any).value) {
-        return String((fromParamScope as any).value.text ?? '');
-      }
-      return String((fromParamScope as any).value ?? '');
+      // Non-executable reference in exec scope: this is most likely a mistake now that
+      // identity bodies compile to template executables.
+      const t = (fromParamScope as any).type;
+      throw new Error(`Referenced symbol '${refName}' is not executable (type: ${t}). Use a template executable (e.g., \`@${refName}\`) or refactor the definition.`);
     }
 
-    // 3) Fallback to stage environment lookup for global executables/variables
+    // Fallback to stage environment lookup for global executables/variables
     const refVar = env.getVariable(refName);
     if (!refVar) {
       throw new Error(`Referenced executable not found: ${execDef.commandRef}`);
     }
 
-    if ((refVar as any).type === 'executable') {
+    if ( (refVar as any).type === 'executable') {
       return await executeCommandVariable(refVar as any, execDef.commandArgs ?? [], env, stdinInput);
     }
-    // Non-executable value — pass it through as string (unwrap pipeline input)
-    if ((refVar as any).type === 'pipeline-input' && (refVar as any).value) {
-      return String((refVar as any).value.text ?? '');
-    }
-    return String((refVar as any).value ?? '');
+    // Non-executable reference in stage env: surface clear guidance
+    const t = (refVar as any).type;
+    throw new Error(`Referenced symbol '${refName}' is not executable (type: ${t}). Use a template executable or a function.`);
   }
   
   throw new Error(`Unsupported executable type in pipeline: ${execDef.type}`);

@@ -165,7 +165,7 @@ export async function evaluateShow(
       
       // For template variables (like ::{{var}}::), we need to interpolate the template content
       if (isTemplate(variable)) {
-        // For double-bracket templates, the value is the AST array
+          // For double-bracket templates, the value is the AST array
         if (Array.isArray(value)) {
           if (process.env.MLLD_DEBUG === 'true') {
             logger.debug('Template interpolation in show', {
@@ -178,7 +178,7 @@ export async function evaluateShow(
             logger.debug('Interpolation result:', { value });
           }
         } else if (variable.metadata?.templateAst && Array.isArray(variable.metadata.templateAst)) {
-          // Fallback - check metadata (shouldn't be needed with new code)
+          // GOTCHA: Some legacy paths store template AST in metadata
           value = await interpolate(variable.metadata.templateAst, env);
         }
       }

@@ -14,6 +14,11 @@ import { createPipelineInput } from '../../utils/pipeline-input';
 /**
  * Simplified pipeline context interface
  */
+/**
+ * User-facing pipeline context available as @pipeline/@p in stage environments.
+ * WHY: Provide stage number, history, and convenience indexing for stage outputs.
+ * GOTCHA: 'try' and 'tries' are local to the active retry context and reset downstream.
+ */
 export interface SimplifiedPipelineContext {
   try: number;                    // Current attempt number
   tries: string[];                // Previous attempts in current context
@@ -27,6 +32,11 @@ export interface SimplifiedPipelineContext {
 
 /**
  * Create execution environment for a pipeline stage (simplified version)
+ */
+/**
+ * Create execution environment for a pipeline stage.
+ * WHY: Constructs @input (with format), @pipeline/@p, and seeds the ambient @ctx data.
+ * CONTEXT: Hides the synthetic source stage from user-visible indices and stage numbers.
  */
 export async function createStageEnvironment(
   command: PipelineCommand,
