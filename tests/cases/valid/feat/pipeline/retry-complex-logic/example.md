@@ -28,8 +28,6 @@
 }
 
 /exe @adaptiveRetry(input) = when first [
-  @input.includes("score:0.9") => @input
-  @input.includes("score:0.8") => @input
   @pipeline.try < 5 => retry
   * => @bestOfAttempts(@input, @pipeline.tries)
 ]

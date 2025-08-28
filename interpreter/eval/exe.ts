@@ -168,10 +168,24 @@ export async function evaluateExe(
     const commandRef = directive.values?.commandRef;
     if (commandRef) {
       // This is a reference to another exec command
-      // commandRef is an object with name and identifier properties
-      const refName = typeof commandRef === 'object' && commandRef.name 
-        ? commandRef.name 
-        : await interpolate(commandRef, env);
+      // Prefer extracting identifier from AST rather than interpolated strings
+      let refName: string | undefined;
+      try {
+        if (commandRef && typeof commandRef === 'object') {
+          // Direct VariableReference node with identifier
+          if ('type' in commandRef && (commandRef as any).type === 'VariableReference' && 'identifier' in (commandRef as any)) {
+            refName = (commandRef as any).identifier as string;
+          }
+          // Some shapes may surface a { name } property already normalized
+          else if ('name' in commandRef && typeof (commandRef as any).name === 'string') {
+            refName = (commandRef as any).name as string;
+          }
+        }
+      } catch {}
+      // Fallback: interpolate to string (legacy behavior)
+      if (!refName) {
+        refName = await interpolate(commandRef as any, env);
+      }
       const args = directive.values?.args || [];
       
       // Get parameter names if any

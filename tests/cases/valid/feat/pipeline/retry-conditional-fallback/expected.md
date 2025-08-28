@@ -4,4 +4,4 @@
 
 # Test conditional retry with fallback after max attempts
 
-fallback: using default JSON structure
+valid-json: {"valid": "json"}

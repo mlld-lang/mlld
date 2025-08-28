@@ -387,20 +387,42 @@ export async function executeCommandVariable(
     const result = await interpolate(execDef.template, execEnv, InterpolationContext.Default);
     return result;
   } else if (execDef.type === 'commandRef') {
-    // Handle command references - recursively call the referenced command
-    const refExecVar = env.getVariable(execDef.commandRef);
-    if (!refExecVar) {
+    // Handle command references — support both executable refs and parameter/value passthrough
+    // 1) Normalize the reference name (strip leading '@' if present)
+    const refRaw = execDef.commandRef || '';
+    // Use the provided identifier as-is; evaluateExe should have normalized it from AST
+    const refName = String(refRaw);
+
+    // 2) Prefer resolving in the execution parameter scope first (execEnv)
+    //    so parameter variables like `input` are visible here.
+    const fromParamScope = (execEnv as Environment).getVariable(refName);
+
+    if (fromParamScope) {
+      // If this is an executable, recursively execute it in the same param scope
+      if ((fromParamScope as any).type === 'executable') {
+        return await executeCommandVariable(fromParamScope as any, execDef.commandArgs ?? [], execEnv, stdinInput);
+      }
+      // Otherwise, treat as value passthrough (common for identity refs like @input)
+      if ((fromParamScope as any).type === 'pipeline-input' && (fromParamScope as any).value) {
+        return String((fromParamScope as any).value.text ?? '');
+      }
+      return String((fromParamScope as any).value ?? '');
+    }
+
+    // 3) Fallback to stage environment lookup for global executables/variables
+    const refVar = env.getVariable(refName);
+    if (!refVar) {
       throw new Error(`Referenced executable not found: ${execDef.commandRef}`);
     }
-    
-    // Recursively execute the referenced command with the same input
-    const result = await executeCommandVariable(
-      refExecVar,
-      execDef.commandArgs ?? [],
-      env,
-      stdinInput
-    );
-    return result;
+
+    if ((refVar as any).type === 'executable') {
+      return await executeCommandVariable(refVar as any, execDef.commandArgs ?? [], env, stdinInput);
+    }
+    // Non-executable value — pass it through as string (unwrap pipeline input)
+    if ((refVar as any).type === 'pipeline-input' && (refVar as any).value) {
+      return String((refVar as any).value.text ?? '');
+    }
+    return String((refVar as any).value ?? '');
   }
   
   throw new Error(`Unsupported executable type in pipeline: ${execDef.type}`);
