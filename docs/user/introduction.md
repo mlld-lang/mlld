@@ -326,7 +326,7 @@ You can use `mlld setup` to create other prefixes (or configure them in `mlld.lo
 
 Tip: keep reusable templates in `llm/templates/` and bind them as executables with `/exe ... = template "path"`.
 
-### mlld wants to help you write simple, readable code
+## mlld wants to help you write simple, readable code
 
 There are things that Very Serious Programmers will dislike about mlld. Here's one!
 
