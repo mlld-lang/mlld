@@ -1,10 +1,14 @@
->> Import specific variables
-/import { API_KEY, NODE_ENV } from @input
-/show `Deploying to @NODE_ENV with key @API_KEY`
+>> In directives
+/show @name
 
->> Import and use in objects
-/var @config = {
-  "apiKey": @API_KEY,
-  "environment": @NODE_ENV,
-  "timestamp": @now
-}
+>> In double quotes
+/var @greeting = "Hello @name"
+
+>> In command braces
+/run {echo "Welcome @name"}
+
+>> NOT in single quotes (literal)
+/var @literal = 'Hello @name'               >> Outputs: Hello @name
+
+>> NOT in plain markdown lines
+Hello @name                                 >> Plain text, no interpolation

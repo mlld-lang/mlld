@@ -10,6 +10,25 @@ import { resolveShadowEnvironment, mergeShadowFunctions } from './helpers/shadow
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { logger } from '@core/utils/logger';
 import { AutoUnwrapManager } from './auto-unwrap-manager';
+import * as path from 'path';
+
+function buildTemplateAstFromContent(content: string): any[] {
+  const ast: any[] = [];
+  const regex = /@([A-Za-z_][\w\.]*)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      ast.push({ type: 'Text', content: content.slice(lastIndex, match.index) });
+    }
+    ast.push({ type: 'VariableReference', identifier: match[1] });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < content.length) {
+    ast.push({ type: 'Text', content: content.slice(lastIndex) });
+  }
+  return ast;
+}
 
 /**
  * Extract parameter names from the params array.
@@ -328,6 +347,45 @@ export async function evaluateExe(
     // Parameters are allowed to shadow outer scope variables
     
     // Create template executable definition
+    executableDef = {
+      type: 'template',
+      template: templateNodes,
+      paramNames,
+      sourceDirective: 'exec'
+    } satisfies TemplateExecutable;
+    
+  } else if (directive.subtype === 'exeTemplateFile') {
+    // Handle template executable loaded from external file by extension
+    // Syntax: /exe @name(params) = template "path/to/file.att|.mtt"
+    const pathNodes = directive.values?.path;
+    if (!pathNodes || !Array.isArray(pathNodes) || pathNodes.length === 0) {
+      throw new Error('Exec template-file directive missing path');
+    }
+    // Path is parsed as Text nodes; join raw content
+    const rawPath = directive.raw?.path || (Array.isArray(pathNodes) ? pathNodes.map((n: any) => n.content || '').join('') : '');
+    const filePath = String(rawPath);
+    
+    // Determine template style by extension
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext !== '.att' && ext !== '.mtt') {
+      throw new Error(`Unsupported template file extension for ${filePath}. Use .att (@var) or .mtt ({{var}}).`);
+    }
+    
+    // Read file content relative to current env
+    const fileContent = await env.readFile(filePath);
+    
+    // Convert mustache to @var if needed
+    let normalized = fileContent;
+    if (ext === '.mtt') {
+      normalized = normalized.replace(/{{\s*([\w\.]+)\s*}}/g, '@$1');
+    }
+    // Build minimal template AST from normalized content
+    const templateNodes = buildTemplateAstFromContent(normalized);
+    
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    
     executableDef = {
       type: 'template',
       template: templateNodes,

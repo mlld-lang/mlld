@@ -1,14 +1,11 @@
->> In directives
-/show @name
+>> Files
+# templates/welcome.att   -> Hello @name! Title: @title
+# templates/note.mtt      -> Note: {{body}}
 
->> In double quotes
-/var @greeting = "Hello @name"
+>> Define executables from files
+/exe @welcome(name, title) = template "./templates/welcome.att"
+/exe @note(body)           = template "./templates/note.mtt"
 
->> In command braces
-/run {echo "Welcome @name"}
-
->> NOT in single quotes (literal)
-/var @literal = 'Hello @name'               >> Outputs: Hello @name
-
->> NOT in plain markdown lines
-Hello @name                                 >> Plain text, no interpolation
+>> Invoke with parameters
+/show @welcome("Alice", "Engineer")
+/show @note("Bring snacks")

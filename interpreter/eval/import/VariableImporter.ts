@@ -7,6 +7,7 @@ import {
   createSimpleTextVariable,
   createPathVariable,
   createExecutableVariable,
+  createTemplateVariable,
   isExecutable,
   isExecutableVariable,
   getEffectiveType,
@@ -180,6 +181,25 @@ export class VariableImporter {
       return this.createExecutableFromImport(name, value, source, metadata);
     }
     
+    // Check if this is a template export
+    if (value && typeof value === 'object' && (value as any).__template) {
+      const templateSource: VariableSource = {
+        directive: 'var',
+        syntax: 'template',
+        hasInterpolation: true,
+        isMultiLine: true
+      };
+      const tmplMetadata = { ...metadata, templateAst: (value as any).templateAst };
+      return createTemplateVariable(
+        name,
+        (value as any).content,
+        undefined,
+        (value as any).templateSyntax === 'tripleColon' ? 'tripleColon' : 'doubleColon',
+        templateSource,
+        tmplMetadata
+      );
+    }
+    
     // Infer the variable type from the value
     const originalType = this.inferVariableType(value);
     
@@ -303,9 +323,9 @@ export class VariableImporter {
     // with a conventional name, unwrap it for better ergonomics
     let namespaceObject = moduleObject;
     
-    // Get the module name from the import path
-    const importPath = directive.values?.from?.[0]?.content || '';
-    const moduleName = importPath.split('/').pop()?.replace(/\.mld$/, '') || '';
+    // Get the module name from the import path (for unwrapping heuristics)
+    const importRef = directive.values?.from?.[0]?.content || '';
+    const moduleName = importRef.split('/').pop()?.replace(/\.mld$/, '') || '';
     
     // Check if there's a single export with the module name or common patterns
     const exportKeys = Object.keys(moduleObject);
@@ -332,13 +352,21 @@ export class VariableImporter {
       }
     }
     
+    const importPath = childEnv.getCurrentFilePath() || 'unknown';
+
+    // If the unwrapped object is a template export, create a template variable instead
+    if (namespaceObject && typeof namespaceObject === 'object' && (namespaceObject as any).__template) {
+      const templateVar = this.createVariableFromValue(alias, namespaceObject, importPath);
+      targetEnv.setVariable(alias, templateVar);
+      return;
+    }
+
     // Create namespace variable with the (potentially unwrapped) object
     const namespaceVar = this.createNamespaceVariable(
-      alias, 
-      namespaceObject, 
-      childEnv.getCurrentFilePath() || 'unknown'
+      alias,
+      namespaceObject,
+      importPath
     );
-    
     targetEnv.setVariable(alias, namespaceVar);
   }
 
