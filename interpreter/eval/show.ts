@@ -546,22 +546,10 @@ export async function evaluateShow(
       throw new Error('Show invocation directive missing invocation');
     }
     
-    // Get the invocation name
+    // Check if this is a method call on an object (has objectReference)
     const commandRef = invocation.commandRef;
-    const name = commandRef.name || commandRef.identifier[0]?.content;
-    if (!name) {
-      throw new Error('Add invocation missing name');
-    }
-    
-    // Look up what this invocation refers to
-    const variable = env.getVariable(name);
-    if (!variable) {
-      throw new Error(`Variable not found: ${name}`);
-    }
-    
-    // Handle based on variable type
-    if (isExecutableVar(variable)) {
-      // This is an executable invocation - use exec-invocation handler
+    if (commandRef && (commandRef as any).objectReference) {
+      // This is a method call like @list.includes() - evaluate directly
       const { evaluateExecInvocation } = await import('./exec-invocation');
       const result = await evaluateExecInvocation(invocation, env);
       
@@ -577,7 +565,38 @@ export async function evaluateShow(
         content = String(result.value);
       }
     } else {
-      throw new Error(`Variable ${name} is not executable (type: ${variable.type})`);
+      // Normal invocation - look up the variable
+      const name = commandRef.name || commandRef.identifier[0]?.content;
+      if (!name) {
+        throw new Error('Add invocation missing name');
+      }
+      
+      // Look up what this invocation refers to
+      const variable = env.getVariable(name);
+      if (!variable) {
+        throw new Error(`Variable not found: ${name}`);
+      }
+      
+      // Handle based on variable type
+      if (isExecutableVar(variable)) {
+        // This is an executable invocation - use exec-invocation handler
+        const { evaluateExecInvocation } = await import('./exec-invocation');
+        const result = await evaluateExecInvocation(invocation, env);
+        
+        // Convert result to string appropriately
+        if (typeof result.value === 'string') {
+          content = result.value;
+        } else if (result.value === null || result.value === undefined) {
+          content = '';
+        } else if (typeof result.value === 'object') {
+          // For objects and arrays, use JSON.stringify
+          content = JSON.stringify(result.value);
+        } else {
+          content = String(result.value);
+        }
+      } else {
+        throw new Error(`Variable ${name} is not executable (type: ${variable.type})`);
+      }
     }
     
   } else if (directive.subtype === 'addTemplateInvocation') {

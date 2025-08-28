@@ -1,4 +1,4 @@
-# Testing mlld Modules and Scripts
+# Testing modules
 
 mlld provides a native test system designed for the unique needs of LLM orchestration and dynamic workflows.
 

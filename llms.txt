@@ -19,6 +19,7 @@
   <VARIABLES> ...................... Types, primitives, command results, code execution.
   <TEMPLATES> ...................... Backticks, ::…::, :::…:::; interpolation rules.
   <FILE_LOADING> ................... Angle brackets, metadata fields, globs, "as" templates, detection rules.
+  <BUILTIN_METHODS> ................ Array and string methods: includes, indexOf, join, split, etc.
   <PIPELINES> ...................... Operator |, transformers, @ctx/@p context, retry/hints, inline effects.
   <COMMENTS> ....................... ">>" and "<<" comments (start/end-of-line).
   <RESERVED_VARIABLES> ............. @now, @input, @base, @debug.
@@ -160,7 +161,7 @@ Prefer backticks for templates; use `::…::` to escape backticks; use `:::…::
 </RULE_5_INTERPOLATION_CONTEXTS>
 
 <RULE_6_FIELD_ACCESS>
-Objects/arrays use dot+index in directives and `{{ }}` in ::: templates only. Arrays support slicing with `[start:end]`.
+Objects/arrays use dot+index in directives and `{{ }}` in ::: templates only. Arrays support slicing with `[start:end]` and builtin methods.
 
 ```mlld
 /var @user = {"name":"Alice","scores":[10,20,30]}
@@ -174,6 +175,16 @@ Objects/arrays use dot+index in directives and `{{ }}` in ::: templates only. Ar
 /show @arr[-2:]             # [4,5] - last 2
 /show @arr[:-1]             # [1,2,3,4] - all except last
 /show @arr[2:]              # [3,4,5] - from index 2
+
+# Builtin methods on arrays/strings:
+/var @list = ["apple", "banana", "cherry"]
+/var @text = "Hello World"
+/show @list.includes("banana")      # true
+/show @list.indexOf("cherry")       # 2
+/show @list.join(", ")              # "apple, banana, cherry"
+/show @text.toLowerCase()           # "hello world"
+/show @text.split(" ")              # ["Hello", "World"]
+/show @text.includes("World")       # true
 
 # Double-colon templates:
 /show ::@user.name has @user.scores.0::
@@ -334,6 +345,48 @@ File metadata fields: `content` (default), `filename`, `relative`, `absolute`, `
 
 URL metadata fields: All file fields plus: `url`, `domain`, `title`, `description`, `html`, `text`, `md`, `headers`, `status`, `contentType`
 </FILE_LOADING>
+
+<BUILTIN_METHODS>
+Variables support builtin methods for common operations. Methods are called with parentheses and can accept arguments.
+
+**Array Methods:**
+- `@array.includes(value)` - Returns true if array contains value
+- `@array.indexOf(value)` - Returns index of value, or -1 if not found
+- `@array.length()` - Returns array length
+- `@array.join(separator)` - Joins array elements into string
+
+**String Methods:**
+- `@string.includes(substring)` - Returns true if string contains substring
+- `@string.indexOf(substring)` - Returns index of substring, or -1
+- `@string.length()` - Returns string length
+- `@string.toLowerCase()` - Converts to lowercase
+- `@string.toUpperCase()` - Converts to uppercase
+- `@string.trim()` - Removes leading/trailing whitespace
+- `@string.startsWith(prefix)` - Returns true if starts with prefix
+- `@string.endsWith(suffix)` - Returns true if ends with suffix
+- `@string.split(separator)` - Splits into array
+
+```mlld
+/var @fruits = ["apple", "banana", "cherry"]
+/var @message = "Hello World"
+
+# Array operations
+/show @fruits.includes("banana")    # true
+/show @fruits.indexOf("cherry")     # 2
+/show @fruits.join(" and ")         # "apple and banana and cherry"
+
+# String operations
+/show @message.toLowerCase()        # "hello world"
+/show @message.split(" ")          # ["Hello", "World"]
+/show @message.includes("World")    # true
+
+# With variable arguments
+/var @search = "banana"
+/show @fruits.includes(@search)     # true
+```
+
+Note: Methods are parsed as field access exec patterns (`@obj.method(args)`) and executed as ExecInvocations internally.
+</BUILTIN_METHODS>
 
 <PIPELINES>
 Chain stages with `|`. Built-ins: @json, @xml, @csv, @md (upper/lower accepted). Stages access context via `@ctx` and pipeline history via `@p`.
