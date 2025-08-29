@@ -32,6 +32,8 @@ Let's edit your `myfile.mld` to have:
 /show @claude("wdyt of mlld? check it out: @docs")
 ```
 
+**Important:** Make sure you've run `claude` at least once wherever you've saved `myfile.mld` so you permit Claude Code to run there.
+
 Then run it again with `mlld myfile.mld`
 
 Oh, hey, you learned something about mlld *and* [prompt injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/)! LLMs are just reading a wall of text and inferring what comes next, so instructions secretly embedded in something you give them can redirect them into [giving away your GitHub keys](https://invariantlabs.ai/blog/mcp-github-vulnerability) or [giving your research paper a good review](https://www.reddit.com/r/AskAcademia/comments/1lw3jyg/prompt_injections_in_submitted_manuscripts/).
