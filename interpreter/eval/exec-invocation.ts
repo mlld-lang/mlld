@@ -806,7 +806,15 @@ export async function evaluateExecInvocation(
   // Handle command executables
   else if (isCommandExecutable(definition)) {
     // Interpolate the command template with parameters using ShellCommand context
-    const command = await interpolate(definition.commandTemplate, execEnv, InterpolationContext.ShellCommand);
+    let command = await interpolate(definition.commandTemplate, execEnv, InterpolationContext.ShellCommand);
+    // Normalize common escaped sequences for usability in oneliners
+    // Only handle simple \n, \t, \r, \0 to their literal counterparts
+    // Leave quotes/backslashes intact for shell correctness
+    command = command
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\0/g, '\0');
     
     if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
       logger.debug('Executing command', {
@@ -1082,17 +1090,29 @@ export async function evaluateExecInvocation(
     // The commandArgs contains the original AST nodes for how to call the referenced command
     // We need to evaluate these nodes with the current invocation's parameters bound
     if (definition.commandArgs && definition.commandArgs.length > 0) {
-      // Evaluate each arg individually since they are VariableReference nodes
+      if (process.env.MLLD_DEBUG === 'true') {
+        try {
+          console.error('[EXEC INVOC] commandRef args shape:', (definition.commandArgs as any[]).map((a: any) => Array.isArray(a) ? 'array' : (a && typeof a === 'object' && a.type) || typeof a));
+        } catch {}
+      }
+      // Evaluate each arg; handle interpolated string args that are arrays of parts
       let refArgs: any[] = [];
-      const { evaluate } = await import('../core/interpreter');
+      const { evaluate, interpolate } = await import('../core/interpreter');
+      const { InterpolationContext } = await import('../core/interpolation-context');
       
       for (const argNode of definition.commandArgs) {
-        // Evaluate the individual argument node
-        const argResult = await evaluate(argNode, execEnv, { isExpression: true });
-        
-        // Extract the actual value
-        if (argResult && argResult.value !== undefined) {
-          refArgs.push(argResult.value);
+        let value: any;
+        // If this arg is an array of parts (from DataString with interpolation),
+        // interpolate the whole array into a single string argument
+        if (Array.isArray(argNode)) {
+          value = await interpolate(argNode as any[], execEnv, InterpolationContext.Default);
+        } else {
+          // Evaluate the individual argument node
+          const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
+          value = argResult?.value;
+        }
+        if (value !== undefined) {
+          refArgs.push(value);
         }
       }
       

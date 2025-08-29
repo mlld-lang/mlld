@@ -422,4 +422,3 @@ SingleQuoteChar
 BacktickChar
   = '\\' char:. { return '\\' + char; }  // Escaped characters
   / !'`' char:. { return char; }
-

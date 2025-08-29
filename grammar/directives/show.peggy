@@ -456,6 +456,9 @@ SlashShow
         meta.comment = ending.comment;
       }
       
+      // Apply unified pipeline processing for ending tail (adds values.pipeline/meta.withClause)
+      helpers.processPipelineEnding(values, raw, meta, ending);
+
       // Determine subtype based on invocation type
       const subtype = isExecInvocation ? 'showInvocation' : 'showVariable';
       
