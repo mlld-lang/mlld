@@ -153,7 +153,6 @@ export async function evaluateExecInvocation(
         }
       } else if (commandRefWithObject.objectSource) {
         // Evaluate the source ExecInvocation to obtain a value, then apply builtin method
-        const { evaluateExecInvocation } = await import('./exec-invocation');
         const srcResult = await evaluateExecInvocation(commandRefWithObject.objectSource, env);
         if (srcResult && typeof srcResult === 'object') {
           if (srcResult.value !== undefined) {
