@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc46]
 ### Fixed
 - **Method calls in when conditions**: Fixed grammar bug preventing method calls on function results in `/when` and `/exe...when` conditions
+- **CommendRef interpolation issue**: Fixed grammar bug preventing full interpolation of values inside quotes/templates inside executables
 
 ## [2.0.0-rc45]
 ### Added

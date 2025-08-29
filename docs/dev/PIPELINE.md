@@ -1171,4 +1171,22 @@ mlld's pipeline architecture provides a cohesive system for data processing thro
 - **Validation** with dependency checking
 
 These features share common patterns while maintaining distinct responsibilities, creating a powerful yet understandable system for building complex data pipelines in a declarative way.
+### Hint Scoping (@ctx.hint)
+
+mlld treats `@ctx` as ambient and amnesiac — it reflects only the truth about “this stage right now.” To keep retry payloads contained and to avoid leaking cross-stage state, hint visibility is precisely scoped:
+
+- Visible only inside the retried stage body during its execution.
+- Cleared before inline pipeline effects attached to the retried stage (e.g., `with { pipeline: [ show ... ] }`). Those effects see `@ctx.hint == null`.
+- Cleared before re-executing the requesting stage. The requester sees `@ctx.hint == null`.
+- Downstream stages and effects after the retried stage also see `@ctx.hint == null`.
+
+Examples:
+
+```
+/show @retriedStage() with { pipeline: [ show `hint in effect: @ctx.hint` ] } | @requester
+```
+
+- Inside `@retriedStage` body: `@ctx.hint` is available.
+- In the inline `show` effect: `@ctx.hint == null`.
+- In `@requester`: `@ctx.hint == null`.
 

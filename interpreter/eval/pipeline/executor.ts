@@ -227,6 +227,25 @@ export class PipelineExecutor {
       }
 
       const normalized = this.normalizeOutput(output);
+      // Clear hint for inline effects: @ctx.hint is only visible inside the retried stage body
+      // May be worth revisiting this based on user feedback
+      try {
+        const pctx = this.env.getPipelineContext?.();
+        if (pctx) {
+          this.env.setPipelineContext({
+            stage: pctx.stage,
+            totalStages: pctx.totalStages,
+            currentCommand: pctx.currentCommand,
+            input: pctx.input,
+            previousOutputs: pctx.previousOutputs,
+            format: pctx.format,
+            attemptCount: (pctx as any).attemptCount,
+            attemptHistory: (pctx as any).attemptHistory,
+            hint: null,
+            hintHistory: (pctx as any).hintHistory || []
+          } as any);
+        }
+      } catch {}
       // Run inline effects attached to this functional stage (non-stage effects)
       await this.runInlineEffects(command, normalized, stageEnv);
       return { type: 'success', output: normalized };
