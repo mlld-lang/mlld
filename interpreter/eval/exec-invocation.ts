@@ -263,10 +263,30 @@ export async function evaluateExecInvocation(
         }
       }
       
-      // Return the result wrapped appropriately
+      // If a withClause (e.g., pipeline) is attached to this builtin invocation, apply it
+      if (node.withClause) {
+        if (node.withClause.pipeline) {
+          const { processPipeline } = await import('./pipeline/unified-processor');
+          const pipelineResult = await processPipeline({
+            value: String(result),
+            env,
+            node,
+            identifier: node.identifier
+          });
+          // Still need to handle other withClause features (trust, needs)
+          return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
+        } else {
+          return applyWithClause(String(result), node.withClause, env);
+        }
+      }
+
+      // Return the result wrapped appropriately when no withClause is present
       return {
         value: result,
-        display: typeof result === 'string' ? result : (Array.isArray(result) ? JSON.stringify(result, null, 2) : String(result))
+        env,
+        stdout: typeof result === 'string' ? result : (Array.isArray(result) ? JSON.stringify(result, null, 2) : String(result)),
+        stderr: '',
+        exitCode: 0
       };
     }
     // If this is a non-builtin method with objectSource, we do not (yet) support it

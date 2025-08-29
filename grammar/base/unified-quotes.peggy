@@ -114,9 +114,12 @@ UnifiedBacktick "Backtick string with interpolation"
 // Shared interpolation pattern for both double quotes and backticks
 // Supports @var, @func(args), and <file.md>
 UnifiedInterpolationContent "Shared interpolation content"
-  = UnifiedExecInvocation        // @func(args) - must come before variable
+  = ExecResultMethodCall         // @func(args).method(args)
+  / FieldAccessExec              // @obj.method(args)
+  / UnifiedExecInvocation        // @func(args)
   / FileReferenceInterpolation   // <file.md> references with fields/pipes
-  / TemplateVariableReference    // @var - NO tail modifier constraints
+  / TemplateVariableReference    // @var (with template pipes and fields)
+  / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
 
 // Content inside backtick templates - supports @var and @func(args) and <file.md>
 UnifiedBacktickInterpolation "Backtick interpolation content"

@@ -5,6 +5,20 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc47]
+### Added
+- e2e tests for method chaining and templates
+- Deprecation tracker and DeprecationError
+- Deprecation notice for array dot notation
+
+### Changed
+- Interpolation precedence for quotes/templates
+
+### Fixed
+- Post-field/index on execs across contexts
+- Tail pipeline on builtin methods
+- Template method calls
+
 ## [2.0.0-rc46]
 ### Fixed
 - **Method calls in when conditions**: Fixed grammar bug preventing method calls on function results in `/when` and `/exe...when` conditions
