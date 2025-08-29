@@ -20,7 +20,7 @@ Access object properties and array elements:
 
 ```mlld
 /var @userName = @user.name        # "Alice"
-/var @firstItem = @items.0         # "apple"
+/var @firstItem = @items[0]         # "apple"
 ```
 
 Array slicing:
@@ -361,8 +361,8 @@ Complex nested structures:
 }
 
 /show @config.database.host           # "localhost"
-/show @config.database.ports.0        # 5432
-/show @config.features.1              # "api"
+/show @config.database.ports[0]        # 5432
+/show @config.features[1]              # "api"
 ```
 
 ## Module System

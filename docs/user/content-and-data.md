@@ -8,7 +8,7 @@ Load files with `<file.txt>`, work with data structures using dot notation, tran
 /var @config = <config.json>             >> Load and parse JSON
 /show @config.database.host              >> Access nested fields
 /var @files = <docs/*.md>                >> Load multiple files
-/show @files.0.filename                  >> Access file metadata
+/show @files[0].filename                  >> Access file metadata
 ```
 
 ## File Loading
@@ -43,8 +43,8 @@ Use standard glob patterns to load multiple files:
 /var @source = <{src,lib}/**/*.ts>       >> Multiple directories
 
 >> Access individual files
-/show @docs.0.content                    >> First file's content
-/show @docs.0.filename                   >> First file's name
+/show @docs[0].content                    >> First file's content
+/show @docs[0].filename                   >> First file's name
 ```
 
 ### Section Extraction
@@ -168,13 +168,13 @@ Access object properties and array elements with dot notation:
 /show @user.name                         >> "Alice"
 
 >> Array elements by index
-/show @user.scores.0                     >> 10
-/show @user.scores.1                     >> 20
+/show @user.scores[0]                     >> 10
+/show @user.scores[1]                     >> 20
 
 >> Nested access
 /var @config = {"db": {"host": "localhost", "users": ["admin", "guest"]}}
 /show @config.db.host                    >> "localhost"
-/show @config.db.users.1                 >> "guest"
+/show @config.db.users[1]                 >> "guest"
 ```
 
 ### Array Slicing

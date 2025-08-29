@@ -7,5 +7,5 @@
 }
 
 /show @config.database.host           # "localhost"
-/show @config.database.ports.0        # 5432
-/show @config.features.1              # "api"
+/show @config.database.ports[0]        # 5432
+/show @config.features[1]              # "api"

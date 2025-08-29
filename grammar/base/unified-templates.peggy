@@ -131,9 +131,12 @@ UnifiedBraceInterpolation "Brace interpolation"
 
 // @var style interpolation for double colons
 UnifiedAtInterpolation "At-sign interpolation"
-  = UnifiedExecInvocation      // @func(args)
+  = ExecResultMethodCall         // @func(args).method(args)
+  / FieldAccessExec              // @obj.method(args)
+  / UnifiedExecInvocation        // @func(args)
   / FileReferenceInterpolation   // <file.md>
-  / TemplateVariableReference   // @var - NO tail modifier constraints
+  / TemplateVariableReference    // @var (with template pipes and fields)
+  / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
   / "@" !BaseIdentifier char:. { // @ followed by non-identifier
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }
