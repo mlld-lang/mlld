@@ -7,8 +7,8 @@
 
 // Main output source pattern - supports all source types
 OutputSource "output source"
-  = OutputVariable      // Variable MUST come before exec invocation
-  / OutputExecInvocation
+  = OutputExecInvocation // Exec invocation first to capture @func().method()
+  / OutputVariable      // Then plain variable or simple exec calls
   / OutputCommand  
   / OutputLiteral
 
@@ -46,7 +46,17 @@ OutputVariable
       let values, raw, subtype;
       
       if (ref.type === 'ExecInvocation') {
-        // Function/method call with arguments
+        // Detect method on exec result and route to exec path
+        const isExecResultMethod = ref.commandRef && ref.commandRef.objectSource;
+        if (isExecResultMethod) {
+          return {
+            type: 'exec',
+            subtype: 'outputExecInvocation',
+            values: ref,
+            raw: { commandName: ref.commandRef.name }
+          };
+        }
+        // Simple function call with arguments – keep variable-style structure
         values = {
           identifier: ref.commandRef.identifier,
           args: ref.commandRef.args || []

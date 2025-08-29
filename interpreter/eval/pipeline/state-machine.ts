@@ -258,6 +258,8 @@ export class PipelineStateMachine {
     // If we're in a retry context and just completed the retrying stage,
     // re-execute the requesting stage
     if (context && stage === context.retryingStage) {
+      // Clear the hint before handing control back to the requesting stage
+      context.currentHint = undefined;
       const nextStage = context.requestingStage;
       this.state.currentStage = nextStage;
       this.state.currentInput = output;

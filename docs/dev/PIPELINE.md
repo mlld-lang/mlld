@@ -865,7 +865,7 @@ export interface FieldAccess {
 }
 ```
 
-## Primitive Types Support (v2.0.0+)
+## Primitive Types Support
 
 mlld now supports primitive types (numbers, booleans, null) as first-class values:
 
@@ -941,6 +941,46 @@ Each feature introduces variables into child scopes:
 run [cmd] with { pipeline: [@transform(@input)] }
 # '@input' available in transform scope
 ```
+
+### Inline Effects in Pipelines (log/show/output)
+
+Inline builtin effects are observability tools that attach to the preceding functional stage in a pipeline. They do not create stages themselves and therefore do not affect retry targeting or stage indexing.
+
+Key points:
+
+- Attachment: `@log`, `@show`, and `@output` in a pipeline are attached to the nearest preceding functional stage (including the synthetic `__source__` stage for retryable sources).
+- Emission semantics: Effects are emitted immediately after their owning stage runs, for every attempt. If a downstream stage requests a retry, the previously emitted effects remain (they are not rolled back). This preserves progress visibility across attempts.
+- Stage-neutral: Effects are not counted as stages. The state machine only sees functional stages, so retry requests (e.g., from `@validator`) continue to target upstream stages correctly.
+
+Examples:
+
+Shorthand pipe syntax:
+
+```mlld
+/exe @source() = js { return "v" + ctx.try }
+/exe @validator(input) = js { if (ctx.try < 3) return "retry"; return input }
+
+# Emits v1, v2, v3 (one per attempt), then final value
+/show @source() | show | @validator
+```
+
+Longhand with-clause syntax (identical behavior):
+
+```mlld
+/show @source() with { pipeline: [ show, @validator ] }
+```
+
+Implementation:
+
+- Grammar collects both pipe (`|`) and `with { pipeline: [...] }` formats into a unified pipeline structure (see `helpers.processPipelineEnding` and `detectPipeline`).
+- `attachBuiltinEffects` groups effect commands with their preceding functional stage.
+- `PipelineExecutor` emits effects immediately after stage execution, on every attempt, and never counts them as discrete stages.
+
+Implications:
+
+- Observability is consistent and immediate across retries.
+- Effects on the synthetic `__source__` stage (e.g., directly after a retryable invocation) replay per attempt as expected.
+- Document output reflects effects emission order; stderr `log` output is still not included in document content.
 
 ## Implementation Components
 
@@ -1131,3 +1171,22 @@ mlld's pipeline architecture provides a cohesive system for data processing thro
 - **Validation** with dependency checking
 
 These features share common patterns while maintaining distinct responsibilities, creating a powerful yet understandable system for building complex data pipelines in a declarative way.
+### Hint Scoping (@ctx.hint)
+
+mlld treats `@ctx` as ambient and amnesiac — it reflects only the truth about “this stage right now.” To keep retry payloads contained and to avoid leaking cross-stage state, hint visibility is precisely scoped:
+
+- Visible only inside the retried stage body during its execution.
+- Cleared before inline pipeline effects attached to the retried stage (e.g., `with { pipeline: [ show ... ] }`). Those effects see `@ctx.hint == null`.
+- Cleared before re-executing the requesting stage. The requester sees `@ctx.hint == null`.
+- Downstream stages and effects after the retried stage also see `@ctx.hint == null`.
+
+Examples:
+
+```
+/show @retriedStage() with { pipeline: [ show `hint in effect: @ctx.hint` ] } | @requester
+```
+
+- Inside `@retriedStage` body: `@ctx.hint` is available.
+- In the inline `show` effect: `@ctx.hint == null`.
+- In `@requester`: `@ctx.hint == null`.
+

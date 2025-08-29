@@ -116,7 +116,28 @@ export async function evaluateShow(
     } else {
       throw new Error('Show variable directive missing variable reference');
     }
-    
+
+    // Process any attached pipeline for this invocation via unified pipeline
+    try {
+      const { processPipeline } = await import('./pipeline/unified-processor');
+      const hasPipeline = Boolean((directive as any)?.values?.withClause?.pipeline || (directive as any)?.meta?.withClause?.pipeline || (directive as any)?.values?.pipeline);
+      if (hasPipeline) {
+        const isRetryable = true; // Exec invocations are retryable as sources
+        const wrappedValue = { value: content, metadata: { sourceFunction: invocation } } as any;
+        content = await processPipeline({
+          value: wrappedValue,
+          env,
+          node: invocation,
+          directive,
+          isRetryable,
+          identifier: 'show',
+          location: directive.location
+        });
+      }
+    } catch {
+      // Ignore pipeline processing errors here; content already computed
+    }
+
     // Get variable from environment or handle template literals
     let variable: any;
     let value: any;
@@ -565,9 +586,9 @@ export async function evaluateShow(
       throw new Error('Show invocation directive missing invocation');
     }
     
-    // Check if this is a method call on an object (has objectReference)
-    const commandRef = invocation.commandRef;
-    if (commandRef && (commandRef as any).objectReference) {
+    // Check if this is a method call on an object or on an exec result
+    const commandRef = invocation.commandRef as any;
+    if (commandRef && (commandRef.objectReference || commandRef.objectSource)) {
       // This is a method call like @list.includes() - evaluate directly
       const { evaluateExecInvocation } = await import('./exec-invocation');
       const result = await evaluateExecInvocation(invocation, env);
@@ -585,7 +606,7 @@ export async function evaluateShow(
       }
     } else {
       // Normal invocation - look up the variable
-      const name = commandRef.name || commandRef.identifier[0]?.content;
+      const name = commandRef.name || commandRef.identifier?.[0]?.content;
       if (!name) {
         throw new Error('Add invocation missing name');
       }

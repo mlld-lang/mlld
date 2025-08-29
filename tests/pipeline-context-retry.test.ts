@@ -16,8 +16,8 @@ describe('Pipeline @ctx/@p and retry behavior', () => {
     expect(output).toContain('input=seed');
     // At the first visible stage, there is no previous visible stage output
     expect(output).toContain('last=undefined');
-    // hint should be the last retry hint
-    expect(output).toContain('hint=hint!');
+    // hint is visible only inside the retried stage; outside it should be null
+    expect(output).toContain('hint=null');
   });
 
   it('disallows retry of stage 0 when source is a literal', async () => {

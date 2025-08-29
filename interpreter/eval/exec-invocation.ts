@@ -120,33 +120,53 @@ export async function evaluateExecInvocation(
     throw new MlldInterpreterError('ExecInvocation has no command identifier');
   }
   
-  // Check if this is a field access exec invocation (e.g., @demo.valueCmd())
+  // Check if this is a field access exec invocation (e.g., @obj.method())
+  // or a method call on an exec result (e.g., @func(args).method())
   let variable;
-  const commandRefWithObject = node.commandRef as any & { objectReference?: any }; // Type assertion to handle objectReference
-  if (node.commandRef && commandRefWithObject.objectReference) {
+  const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: ExecInvocation };
+  if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
     // Check if this is a builtin method call (e.g., @list.includes())
     const builtinMethods = ['includes', 'length', 'indexOf', 'join', 'split', 'toLowerCase', 'toUpperCase', 'trim', 'startsWith', 'endsWith'];
     if (builtinMethods.includes(commandName)) {
       // Handle builtin methods on objects/arrays/strings
-      const objectRef = commandRefWithObject.objectReference;
-      const objectVar = env.getVariable(objectRef.identifier);
-      if (!objectVar) {
-        throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
-      }
-      
-      // Extract the value
-      const { extractVariableValue } = await import('../utils/variable-resolution');
-      let objectValue = await extractVariableValue(objectVar, env);
-      
-      // Navigate through fields if present
-      if (objectRef.fields && objectRef.fields.length > 0) {
-        for (const field of objectRef.fields) {
-          if (typeof objectValue === 'object' && objectValue !== null) {
-            objectValue = (objectValue as any)[field.value];
-          } else {
-            throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
+      let objectValue: any;
+
+      if (commandRefWithObject.objectReference) {
+        const objectRef = commandRefWithObject.objectReference;
+        const objectVar = env.getVariable(objectRef.identifier);
+        if (!objectVar) {
+          throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
+        }
+        // Extract the value from the variable reference
+        const { extractVariableValue } = await import('../utils/variable-resolution');
+        objectValue = await extractVariableValue(objectVar, env);
+
+        // Navigate through fields if present
+        if (objectRef.fields && objectRef.fields.length > 0) {
+          for (const field of objectRef.fields) {
+            if (typeof objectValue === 'object' && objectValue !== null) {
+              objectValue = (objectValue as any)[field.value];
+            } else {
+              throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
+            }
           }
         }
+      } else if (commandRefWithObject.objectSource) {
+        // Evaluate the source ExecInvocation to obtain a value, then apply builtin method
+        const srcResult = await evaluateExecInvocation(commandRefWithObject.objectSource, env);
+        if (srcResult && typeof srcResult === 'object') {
+          if (srcResult.value !== undefined) {
+            const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+            objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Default);
+          } else if (typeof srcResult.stdout === 'string') {
+            objectValue = srcResult.stdout;
+          }
+        }
+      }
+
+      // Fallback if we still don't have an object value
+      if (typeof objectValue === 'undefined') {
+        throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
       }
       
       // Evaluate arguments
@@ -248,6 +268,10 @@ export async function evaluateExecInvocation(
         value: result,
         display: typeof result === 'string' ? result : (Array.isArray(result) ? JSON.stringify(result, null, 2) : String(result))
       };
+    }
+    // If this is a non-builtin method with objectSource, we do not (yet) support it
+    if (commandRefWithObject.objectSource && !commandRefWithObject.objectReference) {
+      throw new MlldInterpreterError(`Only builtin methods are supported on exec results (got: ${commandName})`);
     }
     
     // Get the object first
@@ -782,7 +806,15 @@ export async function evaluateExecInvocation(
   // Handle command executables
   else if (isCommandExecutable(definition)) {
     // Interpolate the command template with parameters using ShellCommand context
-    const command = await interpolate(definition.commandTemplate, execEnv, InterpolationContext.ShellCommand);
+    let command = await interpolate(definition.commandTemplate, execEnv, InterpolationContext.ShellCommand);
+    // Normalize common escaped sequences for usability in oneliners
+    // Only handle simple \n, \t, \r, \0 to their literal counterparts
+    // Leave quotes/backslashes intact for shell correctness
+    command = command
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\0/g, '\0');
     
     if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
       logger.debug('Executing command', {
@@ -1058,17 +1090,29 @@ export async function evaluateExecInvocation(
     // The commandArgs contains the original AST nodes for how to call the referenced command
     // We need to evaluate these nodes with the current invocation's parameters bound
     if (definition.commandArgs && definition.commandArgs.length > 0) {
-      // Evaluate each arg individually since they are VariableReference nodes
+      if (process.env.MLLD_DEBUG === 'true') {
+        try {
+          console.error('[EXEC INVOC] commandRef args shape:', (definition.commandArgs as any[]).map((a: any) => Array.isArray(a) ? 'array' : (a && typeof a === 'object' && a.type) || typeof a));
+        } catch {}
+      }
+      // Evaluate each arg; handle interpolated string args that are arrays of parts
       let refArgs: any[] = [];
-      const { evaluate } = await import('../core/interpreter');
+      const { evaluate, interpolate } = await import('../core/interpreter');
+      const { InterpolationContext } = await import('../core/interpolation-context');
       
       for (const argNode of definition.commandArgs) {
-        // Evaluate the individual argument node
-        const argResult = await evaluate(argNode, execEnv, { isExpression: true });
-        
-        // Extract the actual value
-        if (argResult && argResult.value !== undefined) {
-          refArgs.push(argResult.value);
+        let value: any;
+        // If this arg is an array of parts (from DataString with interpolation),
+        // interpolate the whole array into a single string argument
+        if (Array.isArray(argNode)) {
+          value = await interpolate(argNode as any[], execEnv, InterpolationContext.Default);
+        } else {
+          // Evaluate the individual argument node
+          const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
+          value = argResult?.value;
+        }
+        if (value !== undefined) {
+          refArgs.push(value);
         }
       }
       

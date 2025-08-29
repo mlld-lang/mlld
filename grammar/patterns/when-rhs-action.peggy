@@ -25,10 +25,8 @@ WhenRHSRetryAction
     hint:(
       // Must have whitespace but NO newline before the hint
       [ \t]+ 
-      // Lookahead to ensure the hint doesn't contain "=>" which would indicate a condition
-      // This allows @func() calls but prevents matching new conditions
-      !([^=\n\r]* "=>")
       // Parse the hint content (but not across newlines)
+      // SingleLineVarRHSContent already prevents crossing line boundaries
       h:SingleLineVarRHSContent { return h; }
     )? {
       const retryNode = helpers.createNode(NodeType.Literal, { 
