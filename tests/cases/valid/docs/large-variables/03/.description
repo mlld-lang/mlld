@@ -1,1 +1,1 @@
-From large-variables.md line 44: Instead of: /run {wc -l < "@bigfile"}
+From large-variables.md line 37: Use Shell Mode
