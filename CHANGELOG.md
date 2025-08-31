@@ -5,6 +5,25 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc48]
+### Added
+- **Large variable support for bash/shell executors**: Automatic handling of variables exceeding Node.js environment limits
+  - Shell mode (`/run sh {...}`) automatically injects large variables directly into scripts, bypassing Node's ~128KB limit
+  - Works transparently - use `$varname` as usual, mlld handles the injection method based on size
+  - Enabled by default via `MLLD_BASH_HEREDOC` (can be disabled if needed)
+  - Configurable threshold via `MLLD_MAX_BASH_ENV_VAR_SIZE` (default: 131072 bytes)
+
+### Fixed
+- **E2BIG errors with large data**: Fixed Node.js throwing errors when passing large variables to shell commands
+  - Common when loading entire codebases: `<**/*.js>`, `<**/*.sol>`, etc.
+  - Affects audit workflows processing multiple files simultaneously
+  - Simple `/run {...}` commands now provide helpful error messages suggesting shell mode
+
+### Documentation
+- Updated large variables documentation with clearer, more accessible language
+- Removed unnecessary configuration details since feature is enabled by default
+- Added explanation of why shell mode works (direct script injection vs environment passing)
+
 ## [2.0.0-rc47]
 ### Added
 - e2e tests for method chaining and templates

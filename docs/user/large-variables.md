@@ -9,8 +9,8 @@ Use shell mode for large data:
 >> This fails with large data
 /run {grep "TODO" "@largefile"}
 
->> This works with any size
-/run sh { echo "$largefile" | grep "TODO" }
+>> This works with any size  
+/run sh (@largefile) { echo "$largefile" | grep "TODO" }
 ```
 
 ## The Problem
@@ -25,7 +25,7 @@ Node.js can't pass variables larger than ~128KB to commands - it throws an `E2BI
 /run {wc -l "@allCode"}
 
 >> This works with any size
-/run sh { echo "$allCode" | wc -l }
+/run sh (@allCode) { echo "$allCode" | wc -l }
 ```
 
 ## The Solution
@@ -35,12 +35,16 @@ Node.js can't pass variables larger than ~128KB to commands - it throws an `E2BI
 Switch from simple `/run {...}` to shell mode `/run sh {...}`:
 
 ```mlld
->> Simple run - limited to ~128KB
+>> Simple run - limited to ~128KB, uses @var syntax
 /run {tool "@data"}
 
->> Shell mode - handles any size
-/run sh { echo "$data" | tool }
+>> Shell mode - handles any size, pass params then use $var syntax
+/run sh (@data) { echo "$data" | tool }
 ```
+
+**Important syntax difference:**
+- Simple `/run {...}` interpolates mlld variables with `@var` syntax
+- Shell `/run sh (@var) {...}` declares parameters in parentheses, then uses `$var` syntax inside
 
 ### For Executables
 
@@ -50,13 +54,16 @@ Define executables with bash or sh to handle large data:
 >> Load entire codebase
 /var @contracts = <**/*.sol>
 
->> Process with shell executable
+>> Process with shell executable - parameter becomes shell variable
 /exe @analyze(code) = sh {
   echo "$code" | solidity-analyzer
 }
 
+>> Pass the mlld variable when calling
 /show @analyze(@contracts)
 ```
+
+The key: shell mode receives mlld variables as parameters (declared in parentheses), then accesses them as shell variables with `$` inside the code block.
 
 ### Working with External Tools
 
