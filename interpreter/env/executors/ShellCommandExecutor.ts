@@ -46,6 +46,52 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       };
     }
 
+    // Friendly detection for oversized environment variables
+    const envOverrides = (options?.env || {}) as Record<string, unknown>;
+    const MAX_SIZE = (() => {
+      const v = process.env.MLLD_MAX_SHELL_ENV_VAR_SIZE;
+      if (!v) return 128 * 1024; // 128KB default
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
+    })();
+    try {
+      const offenders: { key: string; bytes: number }[] = [];
+      for (const [k, v] of Object.entries(envOverrides)) {
+        const s = typeof v === 'string' ? v : JSON.stringify(v);
+        const size = Buffer.byteLength(s || '', 'utf8');
+        if (size > MAX_SIZE) offenders.push({ key: k, bytes: size });
+      }
+      if (offenders.length > 0) {
+        const details = offenders
+          .sort((a, b) => b.bytes - a.bytes)
+          .slice(0, 5)
+          .map(o => `${o.key} (${o.bytes} bytes)`).join(', ');
+        const message = [
+          'Environment payload too large for /run execution (Node E2BIG safeguard).',
+          `Largest variables: ${details}`,
+          'Suggestions:',
+          '- Use `/run sh { ... }` or `/exe ... = bash { ... }` for shell workflows with large data',
+          '- Pass file paths or manifests instead of inlining huge content',
+          '- Reduce variable size or split inputs'
+        ].join('\n');
+        throw new MlldCommandExecutionError(
+          message,
+          context?.sourceLocation,
+          {
+            command,
+            exitCode: 1,
+            duration: 0,
+            stderr: message,
+            workingDirectory: this.workingDirectory,
+            directiveType: context?.directiveType || 'run'
+          }
+        );
+      }
+    } catch (e) {
+      if (e instanceof MlldCommandExecutionError) throw e;
+      // Continue if size check fails unexpectedly
+    }
+
     // Try to resolve aliases before validation
     const aliasResolution = resolveAliasWithCache(command, {
       enabled: process.env.MLLD_RESOLVE_ALIASES !== 'false',

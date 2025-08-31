@@ -1,4 +1,6 @@
-import { spawnSync } from 'child_process';
+// Note: use dynamic require for spawnSync so tests can spy via require('child_process')
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const child_process = require('child_process');
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
@@ -81,15 +83,91 @@ export class BashExecutor extends BaseCommandExecutor {
         };
       }
       
+      // Optional heredoc prelude for oversized variables (opt-in via MLLD_BASH_HEREDOC)
+      let prelude = '';
+      const useHeredoc = (() => {
+        // Default ON for bash/sh to keep UX seamless; allow explicit opt-out
+        const v = (process.env.MLLD_BASH_HEREDOC || '').toLowerCase();
+        if (v === '0' || v === 'false' || v === 'off' || v === 'disabled') return false;
+        return true;
+      })();
+      if (useHeredoc) {
+        const MAX_SIZE = (() => {
+          const v = process.env.MLLD_MAX_BASH_ENV_VAR_SIZE;
+          if (!v) return 64 * 1024; // 64KB default (conservative for bash)
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? Math.floor(n) : 64 * 1024;
+        })();
+        const smallEnv: Record<string, string> = {};
+        const lines: string[] = [];
+        let counter = 0;
+        let largeVarCount = 0;
+        
+        for (const [k, v] of Object.entries(envVars)) {
+          const size = Buffer.byteLength(v || '', 'utf8');
+          if (size > MAX_SIZE) {
+            largeVarCount++;
+            
+            // Sanitize variable name for bash (replace non-alphanumeric/underscore with underscore)
+            const safeName = k.replace(/[^a-zA-Z0-9_]/g, '_');
+            if (safeName !== k && process.env.MLLD_DEBUG === 'true') {
+              console.error(`[BashExecutor] Variable name sanitized: ${k} -> ${safeName}`);
+            }
+            
+            // Generate unique marker and ensure it doesn't exist in content
+            let marker = `MLLD_EOF_${Date.now().toString(36)}_${(++counter).toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+            while (v.includes(`\n${marker}\n`) || v.startsWith(`${marker}\n`) || v.endsWith(`\n${marker}`) || v === marker) {
+              marker = `MLLD_EOF_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}_${counter}`;
+            }
+            
+            // Build heredoc using command substitution (portable in bash)
+            lines.push(`${safeName}=$(cat <<'${marker}'`);
+            lines.push(v);
+            lines.push(`${marker}`);
+            lines.push(`)`);
+            lines.push(`export ${safeName}`);
+          } else {
+            smallEnv[k] = v;
+          }
+        }
+        if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1') {
+          try {
+            const sizes: Record<string, number> = {};
+            Object.entries(envVars).slice(0, 10).forEach(([k, v]) => sizes[k] = Buffer.byteLength(v || '', 'utf8'));
+            console.error(`[BashExecutor] Heredoc decision — MAX=${MAX_SIZE}, sizes:`, JSON.stringify(sizes));
+          } catch {}
+        }
+        
+        // Optional debug logging
+        if (largeVarCount > 0 && process.env.MLLD_DEBUG === 'true') {
+          console.error(`[BashExecutor] Using heredoc for ${largeVarCount} oversized variable(s) (>${MAX_SIZE} bytes)`);
+        }
+        
+        envVars = smallEnv;
+        if (lines.length > 0) prelude = lines.join('\n') + '\n';
+      }
+
       // Don't inject helpers for bash - we just pass string values
-      const codeWithHelpers = code;
+      // IMPORTANT: When using heredoc prelude, do NOT enhance user code to avoid
+      // altering variable expansion/command substitution semantics around large vars.
+      const enhancedCode = prelude
+        ? (prelude + code)
+        : CommandUtils.enhanceShellCodeForCommandSubstitution(code);
       
-      // Detect command substitution patterns and automatically add stderr capture
-      const enhancedCode = CommandUtils.enhanceShellCodeForCommandSubstitution(codeWithHelpers);
-      
+      // Optional debug: dump the constructed bash script (prelude + user code)
+      if ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1') {
+        try {
+          console.error('--- MLLD Bash Script (BEGIN) ---');
+          console.error(enhancedCode);
+          const keys = Object.keys(envVars);
+          console.error(`[MLLD Bash Env] keys: ${keys.length > 50 ? keys.slice(0, 50).join(',') + '…' : keys.join(',')}`);
+          console.error('--- MLLD Bash Script (END) ---');
+        } catch {}
+      }
+
       // For multiline bash scripts, use stdin to avoid shell escaping issues
       // Use spawnSync to capture both stdout and stderr
-      const execResult = spawnSync('bash', [], {
+      const execResult = child_process.spawnSync('bash', [], {
         input: enhancedCode,
         encoding: 'utf8',
         env: { ...process.env, ...envVars },
