@@ -4,6 +4,7 @@
  */
 
 import type { Variable } from '@core/types/variable';
+import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { resolveValue, ResolutionContext } from '@interpreter/utils/variable-resolution';
 import type { Environment } from './Environment';
 
@@ -44,11 +45,26 @@ function convertToString(value: any): string {
   }
   
   if (Array.isArray(value)) {
-    // For arrays, join with newlines (common bash pattern)
+    // Handle arrays of LoadContentResult specially
+    if (isLoadContentResultArray(value)) {
+      try {
+        return value.map(v => v.content).join('\n\n');
+      } catch {
+        // Fallback: generic conversion
+        return value.map(item => convertToString(item)).join('\n');
+      }
+    }
+    // For generic arrays, join with newlines (common bash pattern)
     return value.map(item => convertToString(item)).join('\n');
   }
   
   if (typeof value === 'object') {
+    // Auto-unwrap LoadContentResult objects to their content string
+    try {
+      if (isLoadContentResult(value)) {
+        return value.content ?? '';
+      }
+    } catch {}
     // For objects, use JSON representation
     try {
       return JSON.stringify(value);

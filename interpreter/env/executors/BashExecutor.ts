@@ -125,7 +125,10 @@ export class BashExecutor extends BaseCommandExecutor {
             lines.push(v);
             lines.push(`${marker}`);
             lines.push(`)`);
-            lines.push(`export ${safeName}`);
+            if (safeName !== k) {
+              // Provide original name as alias for user code
+              lines.push(`${k}="$${safeName}"`);
+            }
           } else {
             smallEnv[k] = v;
           }
@@ -139,8 +142,8 @@ export class BashExecutor extends BaseCommandExecutor {
         }
         
         // Optional debug logging
-        if (largeVarCount > 0 && process.env.MLLD_DEBUG === 'true') {
-          console.error(`[BashExecutor] Using heredoc for ${largeVarCount} oversized variable(s) (>${MAX_SIZE} bytes)`);
+        if (largeVarCount > 0) {
+          try { console.error(`[BashExecutor] Using heredoc for ${largeVarCount} oversized variable(s) (>${MAX_SIZE} bytes)`); } catch {}
         }
         
         envVars = smallEnv;

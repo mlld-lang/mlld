@@ -10,14 +10,14 @@ For bash/sh executables, large variables are injected via heredocs instead of en
 
 ### Implementation Location
 
-`interpreter/env/executors/BashExecutor.ts` (lines 84-138)
+`interpreter/env/executors/BashExecutor.ts`
 
 ### How It Works
 
 1. **Detection**: Variables >128KB (configurable) are separated from regular env vars
 2. **Sanitization**: Variable names are sanitized for bash compatibility
 3. **Marker Generation**: Unique EOF markers avoid content collision
-4. **Injection**: Heredoc prelude prepended to user code
+4. **Injection**: Heredoc prelude prepended to user code as shell-local assignments
 5. **Execution**: Script sent via stdin to bash
 
 ### Example Transformation
@@ -37,15 +37,22 @@ huge_data=$(cat <<'MLLD_EOF_abc123_def456'
 [500KB of content...]
 MLLD_EOF_abc123_def456
 )
-export huge_data
 echo "$huge_data" | wc -l
 ```
 
 ### Configuration
 
-- `MLLD_BASH_HEREDOC`: Enable flag (off by default)
-- `MLLD_MAX_BASH_ENV_VAR_SIZE`: Threshold in bytes (default: 131072)
+- `MLLD_BASH_HEREDOC`: Enabled by default for bash/sh. Set to `0`, `false`, `off`, or `disabled` to disable.
+- `MLLD_MAX_BASH_ENV_VAR_SIZE`: Threshold in bytes for heredoc injection (default: 131072)
 - `MLLD_DEBUG`: Shows when heredocs are used
+- `MLLD_DEBUG_BASH_SCRIPT=1`: Dumps the full constructed bash script + env keys to stderr
+
+Note: Oversized variables are intentionally not exported. Keeping them as local
+shell variables avoids E2BIG when executing external programs (env + argv size).
+
+If a parameter name contains characters not allowed in bash identifiers, we sanitize
+it (e.g., `my-var-name` → `my_var_name`) and create an alias so both `$my_var_name`
+and `$my-var-name` work within the script.
 
 ### Security Considerations
 
@@ -77,6 +84,36 @@ Where test.mld:
 /exe @process(content) = sh { echo "$content" | wc -c }
 /show @process(@data)
 ```
+
+### Bash Variable Adapter Behavior
+
+File-backed values (LoadContentResult) are unwrapped to their `.content` string for bash/sh
+parameters. Arrays of LoadContentResult are joined with a blank line between entries.
+
+- Implementation: `interpreter/env/bash-variable-adapter.ts`
+- Rationale: bash expects plain strings; unwrapping preserves user intent for `$var`.
+
+### Run Command Guardrails (/run)
+
+Simple `/run { ... }` does not use heredocs. To prevent hard-to-diagnose E2BIG failures,
+we proactively detect oversized payloads and return a helpful error suggesting:
+
+- Use `/run sh { ... }` or `/exe ... = bash { ... }` to leverage heredocs
+- Pass file paths/manifests or stream via stdin
+- Reduce or split the data
+
+Configurable thresholds for these guards:
+
+- `MLLD_MAX_SHELL_ENV_VAR_SIZE` (default 131072): env var payload guard
+- `MLLD_MAX_SHELL_COMMAND_SIZE` (default 131072): command payload size guard
+
+Implementation: `interpreter/env/executors/ShellCommandExecutor.ts`
+
+### Default Behavior and Opt-out
+
+- Bash/sh heredoc injection: ON by default (toggle via `MLLD_BASH_HEREDOC`)
+- Variables injected via heredoc are shell-local (not exported)
+- `/run` remains strict (no heredocs), with friendly guidance when payloads are too large
 
 ### Related Files
 

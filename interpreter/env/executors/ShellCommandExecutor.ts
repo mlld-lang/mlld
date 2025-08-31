@@ -46,7 +46,9 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
       };
     }
 
-    // Friendly detection for oversized environment variables
+    // Friendly detection for oversized inputs in simple /run
+    // 1) environment overrides (passed via options.env)
+    // 2) command payload length (very large interpolated arguments)
     const envOverrides = (options?.env || {}) as Record<string, unknown>;
     const MAX_SIZE = (() => {
       const v = process.env.MLLD_MAX_SHELL_ENV_VAR_SIZE;
@@ -67,12 +69,43 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
           .slice(0, 5)
           .map(o => `${o.key} (${o.bytes} bytes)`).join(', ');
         const message = [
-          'Environment payload too large for /run execution (Node E2BIG safeguard).',
+          'Environment payload too large for /run execution due to Node E2BIG safeguard.',
           `Largest variables: ${details}`,
           'Suggestions:',
-          '- Use `/run sh { ... }` or `/exe ... = bash { ... }` for shell workflows with large data',
-          '- Pass file paths or manifests instead of inlining huge content',
-          '- Reduce variable size or split inputs'
+          '- Use `/run sh { ... }` or `/exe ... = sh { ... }` for shell workflows with large data',
+          '- Pass file paths instead of inlining huge content',
+          '- Reduce variable size or split up inputs'
+        ].join('\n');
+        throw new MlldCommandExecutionError(
+          message,
+          context?.sourceLocation,
+          {
+            command,
+            exitCode: 1,
+            duration: 0,
+            stderr: message,
+            workingDirectory: this.workingDirectory,
+            directiveType: context?.directiveType || 'run'
+          }
+        );
+      }
+
+      // Check command payload size as a proxy for argument size
+      const CMD_MAX = (() => {
+        const v = process.env.MLLD_MAX_SHELL_COMMAND_SIZE;
+        if (!v) return 128 * 1024; // 128KB default
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
+      })();
+      const cmdBytes = Buffer.byteLength(command || '', 'utf8');
+      if (cmdBytes > CMD_MAX) {
+        const message = [
+          'Command payload too large for /run execution (may exceed OS args+env limits).',
+          `Command size: ${cmdBytes} bytes (max ~${CMD_MAX})`,
+          'Suggestions:',
+          '- Use `/run sh { ... }` or `/exe ... = sh { ... }` for shell workflows with large data',
+          '- Pass file paths instead of inlining huge content',
+          '- Reduce variable size or split up inputs'
         ].join('\n');
         throw new MlldCommandExecutionError(
           message,

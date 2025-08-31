@@ -51,9 +51,16 @@ function createTestFile(name, content) {
 
 // Helper to run mlld with options
 function runMlld(scriptPath, env = {}) {
-  const result = spawnSync('node', [MLLD_BIN, scriptPath], {
+  // Allow absolute paths for tests that write/read from /tmp
+  const args = [MLLD_BIN, '--allow-absolute', scriptPath];
+  const result = spawnSync('node', args, {
     cwd: TEST_DIR,
-    env: { ...process.env, ...env },
+    env: { 
+      ...process.env, 
+      MLLD_BASH_HEREDOC: process.env.MLLD_BASH_HEREDOC || '1',
+      MLLD_DEBUG_BASH_SCRIPT: process.env.MLLD_DEBUG_BASH_SCRIPT || '1',
+      ...env 
+    },
     encoding: 'utf8',
     maxBuffer: 10 * 1024 * 1024 // 10MB buffer for large outputs
   });

@@ -57,7 +57,8 @@ describe('BashExecutor - Heredoc Support', () => {
       // Verify heredoc structure using cat heredoc
       expect(script).toContain("testvar=$(cat <<'MLLD_EOF_");
       expect(script).toContain(largeContent);
-      expect(script).toContain('export testvar');
+      // Oversized vars are no longer exported; they remain local shell vars
+      expect(script).not.toContain('export testvar');
       expect(script).toContain('echo "Value: $testvar"');
       
       spawnSyncSpy.mockRestore();
@@ -128,7 +129,8 @@ describe('BashExecutor - Heredoc Support', () => {
       
       // Should use sanitized name
       expect(script).toContain("my_var_name=$(cat <<'MLLD_EOF_");
-      expect(script).toContain('export my_var_name');
+      // No export for oversized vars; alias should map original -> sanitized
+      expect(script).toContain('my-var-name="$my_var_name"');
       
       spawnSyncSpy.mockRestore();
     });
@@ -207,8 +209,9 @@ describe('BashExecutor - Heredoc Support', () => {
       // Should have two heredocs
       expect(script).toContain("var1=$(cat <<'MLLD_EOF_");
       expect(script).toContain("var2=$(cat <<'MLLD_EOF_");
-      expect(script).toContain('export var1');
-      expect(script).toContain('export var2');
+      // No exports for oversized vars
+      expect(script).not.toContain('export var1');
+      expect(script).not.toContain('export var2');
       
       // Small variable should be in env
       expect(env.small).toBe('tiny');

@@ -1,45 +1,99 @@
 # Working with Large Variables
 
-mlld can handle large amounts of data (like entire codebases loaded with `<**/*.sol>`) but has some limits due to system constraints.
+mlld can handle large amounts of data like entire codebases. But Node.js has limits when passing large variables to shell commands - typically around 128KB.
 
-## Quick Reference
+## tldr
 
-**Problem**: Variables larger than ~200KB fail with `E2BIG` error when passed to commands.
+Use shell mode for large data:
+```mlld
+>> This fails with large data
+/run {grep "TODO" "@largefile"}
 
-**Solution**: Use bash/sh executables with heredoc support enabled:
-```bash
-export MLLD_BASH_HEREDOC=1  # Enable large variable support
-export MLLD_MAX_BASH_ENV_VAR_SIZE=262144  # Optional: adjust threshold (default 128KB)
+>> This works with any size
+/run sh { echo "$largefile" | grep "TODO" }
 ```
 
-## When This Applies
+## The Problem
 
-- Loading many files: `<**/*.md>` 
-- Processing large datasets
-- Working with entire codebases
+Node.js can't pass variables larger than ~128KB to commands - it throws an `E2BIG` error. This happens when loading many files:
 
-## How to Handle
-
-### For Bash/Shell Code
 ```mlld
-# This works with large data when MLLD_BASH_HEREDOC=1
+>> Load entire codebase (could be megabytes)
+/var @allCode = <**/*.js>
+
+>> This will error if @allCode > 128KB
+/run {wc -l "@allCode"}
+
+>> This works with any size
+/run sh { echo "$allCode" | wc -l }
+```
+
+## The Solution
+
+### Use Shell Mode
+
+Switch from simple `/run {...}` to shell mode `/run sh {...}`:
+
+```mlld
+>> Simple run - limited to ~128KB
+/run {tool "@data"}
+
+>> Shell mode - handles any size
+/run sh { echo "$data" | tool }
+```
+
+### For Executables
+
+Define executables with bash or sh to handle large data:
+
+```mlld
+>> Load entire codebase
 /var @contracts = <**/*.sol>
+
+>> Process with shell executable
 /exe @analyze(code) = sh {
   echo "$code" | solidity-analyzer
 }
+
 /show @analyze(@contracts)
 ```
 
-### For Simple Commands
-If `/run` fails with large data, switch to an executable:
+### Working with External Tools
+
+Pipe data to tools instead of passing as arguments:
+
 ```mlld
-# Instead of: /run {wc -l < "@bigfile"}
-/exe @count(data) = sh { echo "$data" | wc -l }
-/show @count(@bigfile)
+>> Good pattern for large data
+/exe @process(content) = sh {
+  echo "$content" | jq '.items[]'
+}
+
+>> Load many files
+/var @configs = <**/*.json>
+/show @process(@configs)
 ```
 
-## Environment Variables
+## How It Works
 
-- `MLLD_BASH_HEREDOC`: Set to `1`, `true`, `on`, or `enabled` to enable
-- `MLLD_MAX_BASH_ENV_VAR_SIZE`: Size threshold in bytes (default: 131072)
-- `MLLD_DEBUG`: Set to `true` to see when heredocs are used
+- Simple `/run {...}` passes variables through Node's environment (128KB limit)
+- Shell mode `/run sh {...}` injects large variables directly into the shell script instead of the environment, bypassing Node's limit
+- Your variables work the same - just use `$varname` in shell mode
+
+## When You'll Hit This
+
+Common scenarios that exceed 128KB:
+- Loading all source files: `<**/*.js>`
+- Processing large JSON files
+- Working with documentation: `<docs/**/*.md>`
+- Analyzing entire codebases
+
+## Error Messages
+
+mlld gives helpful errors when you hit the limit:
+
+```
+Error: Variable '@data' is too large (215KB)
+Try using: /run sh { ... } or /exe ... = sh { ... }
+```
+
+Just follow the suggestion to switch to shell mode.
