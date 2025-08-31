@@ -72,9 +72,12 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
           'Environment payload too large for /run execution due to Node E2BIG safeguard.',
           `Largest variables: ${details}`,
           'Suggestions:',
-          '- Use `/run sh { ... }` or `/exe ... = sh { ... }` for shell workflows with large data',
+          '- Use `/run sh (@varname) { echo "$varname" | tool }` for shell workflows with large data',
+          '- Or define `/exe @process(data) = sh { echo "$data" | tool }` then call with @process(@varname)',
           '- Pass file paths instead of inlining huge content',
-          '- Reduce variable size or split up inputs'
+          '- Reduce variable size or split up inputs',
+          '',
+          'Learn more: https://mlld.ai/docs/large-variables'
         ].join('\n');
         throw new MlldCommandExecutionError(
           message,
@@ -103,9 +106,12 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
           'Command payload too large for /run execution (may exceed OS args+env limits).',
           `Command size: ${cmdBytes} bytes (max ~${CMD_MAX})`,
           'Suggestions:',
-          '- Use `/run sh { ... }` or `/exe ... = sh { ... }` for shell workflows with large data',
+          '- Use `/run sh (@varname) { echo "$varname" | tool }` for shell workflows with large data',
+          '- Or define `/exe @process(data) = sh { echo "$data" | tool }` then call with @process(@varname)',
           '- Pass file paths instead of inlining huge content',
-          '- Reduce variable size or split up inputs'
+          '- Reduce variable size or split up inputs',
+          '',
+          'Learn more: https://mlld.ai/docs/large-variables'
         ].join('\n');
         throw new MlldCommandExecutionError(
           message,
