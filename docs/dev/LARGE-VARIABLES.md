@@ -104,8 +104,10 @@ we proactively detect oversized payloads and return a helpful error suggesting:
 
 Configurable thresholds for these guards:
 
-- `MLLD_MAX_SHELL_ENV_VAR_SIZE` (default 131072): env var payload guard
+- `MLLD_MAX_SHELL_ENV_VAR_SIZE` (default 131072): per-variable env size guard
+- `MLLD_MAX_SHELL_ENV_TOTAL_SIZE` (default ~200KB): total env override size guard
 - `MLLD_MAX_SHELL_COMMAND_SIZE` (default 131072): command payload size guard
+- `MLLD_MAX_SHELL_ARGS_ENV_TOTAL` (default ~256KB): combined args+env size guard
 
 Implementation: `interpreter/env/executors/ShellCommandExecutor.ts`
 

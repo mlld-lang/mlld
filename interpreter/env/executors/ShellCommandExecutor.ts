@@ -58,9 +58,11 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
     })();
     try {
       const offenders: { key: string; bytes: number }[] = [];
+      let envTotalBytes = 0;
       for (const [k, v] of Object.entries(envOverrides)) {
         const s = typeof v === 'string' ? v : JSON.stringify(v);
         const size = Buffer.byteLength(s || '', 'utf8');
+        envTotalBytes += size;
         if (size > MAX_SIZE) offenders.push({ key: k, bytes: size });
       }
       if (offenders.length > 0) {
@@ -93,6 +95,44 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
         );
       }
 
+      // Check total env payload size (sum of overrides)
+      const ENV_TOTAL_MAX = (() => {
+        const v = process.env.MLLD_MAX_SHELL_ENV_TOTAL_SIZE;
+        if (!v) return 200 * 1024; // ~200KB default
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0 ? Math.floor(n) : 200 * 1024;
+      })();
+      if (envTotalBytes > ENV_TOTAL_MAX) {
+        const biggest = Object.entries(envOverrides)
+          .map(([k, v]) => ({ key: k, bytes: Buffer.byteLength((typeof v === 'string' ? v : JSON.stringify(v)) || '', 'utf8') }))
+          .sort((a, b) => b.bytes - a.bytes)
+          .slice(0, 5)
+          .map(o => `${o.key} (${o.bytes} bytes)`).join(', ');
+        const message = [
+          'Environment too large for /run execution (Node E2BIG safeguard).',
+          `Total env override size: ${envTotalBytes} bytes (max ~${ENV_TOTAL_MAX})`,
+          `Largest variables: ${biggest}`,
+          'Suggestions:',
+          '- Use `/run sh (@var) { echo "$var" | tool }` or `/exe ... = sh { ... }` to stream via heredocs',
+          '- Pass file paths or stream via stdin (printf, here-strings)',
+          '- Reduce or split the data',
+          '',
+          'Learn more: https://mlld.ai/docs/large-variables'
+        ].join('\n');
+        throw new MlldCommandExecutionError(
+          message,
+          context?.sourceLocation,
+          {
+            command,
+            exitCode: 1,
+            duration: 0,
+            stderr: message,
+            workingDirectory: this.workingDirectory,
+            directiveType: context?.directiveType || 'run'
+          }
+        );
+      }
+
       // Check command payload size as a proxy for argument size
       const CMD_MAX = (() => {
         const v = process.env.MLLD_MAX_SHELL_COMMAND_SIZE;
@@ -101,6 +141,9 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
         return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
       })();
       const cmdBytes = Buffer.byteLength(command || '', 'utf8');
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error(`[ShellCommandExecutor] Command size: ${cmdBytes} bytes, limit: ${CMD_MAX} bytes`);
+      }
       if (cmdBytes > CMD_MAX) {
         const message = [
           'Command payload too large for /run execution (may exceed OS args+env limits).',
@@ -110,6 +153,38 @@ export class ShellCommandExecutor extends BaseCommandExecutor {
           '- Or define `/exe @process(data) = sh { echo "$data" | tool }` then call with @process(@varname)',
           '- Pass file paths instead of inlining huge content',
           '- Reduce variable size or split up inputs',
+          '',
+          'Learn more: https://mlld.ai/docs/large-variables'
+        ].join('\n');
+        throw new MlldCommandExecutionError(
+          message,
+          context?.sourceLocation,
+          {
+            command,
+            exitCode: 1,
+            duration: 0,
+            stderr: message,
+            workingDirectory: this.workingDirectory,
+            directiveType: context?.directiveType || 'run'
+          }
+        );
+      }
+
+      // Combined args + env guard (approximate)
+      const ARGS_ENV_MAX = (() => {
+        const v = process.env.MLLD_MAX_SHELL_ARGS_ENV_TOTAL;
+        if (!v) return 256 * 1024; // ~256KB default
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0 ? Math.floor(n) : 256 * 1024;
+      })();
+      const combined = cmdBytes + envTotalBytes;
+      if (combined > ARGS_ENV_MAX) {
+        const message = [
+          'Command + environment too large for /run execution (args+env limit).',
+          `Combined size: ${combined} bytes (max ~${ARGS_ENV_MAX})`,
+          'Suggestions:',
+          '- Use `/run sh { ... }` or `/exe ... = bash { ... }` and pass data via heredocs/stdin',
+          '- Pass file paths or split the data',
           '',
           'Learn more: https://mlld.ai/docs/large-variables'
         ].join('\n');
