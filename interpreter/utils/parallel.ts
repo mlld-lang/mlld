@@ -30,17 +30,18 @@ export async function runWithConcurrency<T, R>(
 
   const results: R[] = ordered ? new Array(count) : [];
   let index = 0;
-  let lastStart = 0;
+  let pacingChain: Promise<void> = Promise.resolve();
 
   const nextIndex = async (): Promise<number> => {
-    if (index >= count) return -1;
     // Optional simple pacing control: ensure at least paceMs between starts
     if (paceMs > 0) {
-      const now = Date.now();
-      const wait = Math.max(0, lastStart + paceMs - now);
-      if (wait > 0) await new Promise(r => setTimeout(r, wait));
-      lastStart = Date.now();
+      const prev = pacingChain;
+      let release!: () => void;
+      pacingChain = new Promise<void>(res => { release = res; });
+      await prev; // serialize starts
+      setTimeout(release, paceMs);
     }
+    if (index >= count) return -1;
     return index++;
   };
 
@@ -62,4 +63,3 @@ export async function runWithConcurrency<T, R>(
   await Promise.all(workers);
   return results;
 }
-

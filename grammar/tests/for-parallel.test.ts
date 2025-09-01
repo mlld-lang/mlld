@@ -17,7 +17,7 @@ describe('Grammar - /for parallel options', () => {
   });
 
   it('parses for (n, wait) parallel in expressions with time units and spaces', async () => {
-    const input = '/var @r = for ( 5 , 30s ) parallel @x in @arr => @x';
+    const input = '/var @r = for ( 5 , 1s ) parallel @x in @arr => @x';
     const { ast } = await parse(input);
     const varDir = ast[0] as DirectiveNode;
     expect(varDir.kind).toBe('var');
@@ -28,7 +28,6 @@ describe('Grammar - /for parallel options', () => {
     expect(forExpr.meta.forOptions).toBeDefined();
     expect(forExpr.meta.forOptions.parallel).toBe(true);
     expect(forExpr.meta.forOptions.cap).toBe(5);
-    expect(forExpr.meta.forOptions.rateMs).toBe(30000);
+    expect(forExpr.meta.forOptions.rateMs).toBe(1000);
   });
 });
-
