@@ -2,7 +2,7 @@
 // Implementation of the /for directive for iteration
 
 SlashFor "for directive"
-  = DirectiveContext "/for" _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction ending:StandardDirectiveEnding {
+  = DirectiveContext "/for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:ForSingleAction ending:StandardDirectiveEnding {
       helpers.debug('SlashFor matched', { pattern, action, ending });
       
       const meta = {
@@ -21,7 +21,8 @@ SlashFor "for directive"
         {
           variable: [pattern.variable],
           source: pattern.source,
-          action: Array.isArray(action) ? action : [action]
+          action: Array.isArray(action) ? action : [action],
+          forOptions: opts || undefined
         },
         {
           variable: pattern.variable.identifier,

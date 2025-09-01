@@ -14,6 +14,19 @@ ForIterationPattern "for iteration pattern"
       };
     }
 
+// Optional parallel spec for /for and for-expressions
+ForParallelSpec
+  = _ "(" _ cap:NumberLiteral _ "," _ wait:TimeDurationLiteral _ ")" _ "parallel" {
+      const rateMs = helpers.ttlToSeconds(wait.value, wait.unit) * 1000;
+      return { parallel: true, cap: Number(cap), rateMs };
+    }
+  / _ cap:NumberLiteral _ "parallel" {
+      return { parallel: true, cap: Number(cap) };
+    }
+  / _ "parallel" {
+      return { parallel: true };
+    }
+
 // Single action for for loops - simpler than WhenAction
 ForSingleAction "for action"
   // Support nested for directive (without slash) - creates a nested ForDirective

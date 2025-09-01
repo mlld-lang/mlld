@@ -1104,7 +1104,7 @@ export const helpers = {
   /**
    * Creates a ForExpression node for for...in expressions in /var assignments
    */
-  createForExpression(variable: any, source: any, expression: any, location: any) {
+  createForExpression(variable: any, source: any, expression: any, location: any, opts?: any) {
     return {
       type: 'ForExpression',
       nodeId: randomUUID(),
@@ -1113,7 +1113,8 @@ export const helpers = {
       expression: Array.isArray(expression) ? expression : [expression],
       location: location,
       meta: {
-        isForExpression: true
+        isForExpression: true,
+        forOptions: opts || undefined
       }
     };
   },
