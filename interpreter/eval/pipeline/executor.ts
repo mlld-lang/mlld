@@ -7,8 +7,14 @@ import { createStageEnvironment } from './context-builder';
 import { MlldCommandExecutionError } from '@core/errors';
 import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
+import { logger } from '@core/utils/logger';
 
-const GLOBAL_PARALLEL_LIMIT = Number(process.env.MLLD_PARALLEL_LIMIT || 4);
+function getParallelLimit(): number {
+  const raw = process.env.MLLD_PARALLEL_LIMIT;
+  const n = raw !== undefined ? parseInt(String(raw), 10) : NaN;
+  if (!Number.isFinite(n) || n < 1) return 4;
+  return n;
+}
 
 /**
  * Pipeline Executor - Handles actual execution using state machine
@@ -205,7 +211,9 @@ export class PipelineExecutor {
           break;
         } catch (err: any) {
           if (isRateLimitError(err)) {
-            console.warn('Rate limit detected, retrying with backoff');
+            if (process.env.MLLD_DEBUG === 'true') {
+              logger.warn('Rate limit detected, retrying with backoff');
+            }
             const retry = await this.rateLimiter.wait();
             if (retry) continue;
           }
@@ -516,7 +524,7 @@ export class PipelineExecutor {
     context: StageContext
   ): Promise<StageResult> {
     const outputs: string[] = new Array(commands.length);
-    const limit = Math.min(GLOBAL_PARALLEL_LIMIT, commands.length);
+    const limit = Math.max(1, Math.min(getParallelLimit(), commands.length));
     let index = 0;
     const run = async () => {
       while (index < commands.length) {

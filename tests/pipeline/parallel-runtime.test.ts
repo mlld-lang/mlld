@@ -87,6 +87,61 @@ describe('Parallel Pipeline - Runtime Behavior', () => {
     expect(out.trim()).toContain('L:x + R:x');
   });
 
+  it('respects MLLD_PARALLEL_LIMIT=1', async () => {
+    const input = `
+/exe @slowEcho(input) = js {
+  const a = Number(process.env.${ACTIVE_KEY} || '0') + 1;
+  process.env.${ACTIVE_KEY} = String(a);
+  const m = Number(process.env.${MAX_KEY} || '0');
+  if (a > m) process.env.${MAX_KEY} = String(a);
+  await new Promise(r => setTimeout(r, 5));
+  process.env.${ACTIVE_KEY} = String(a - 1);
+  return input;
+}
+
+/exe @seed() = "s"
+/var @out = @seed() | @slowEcho || @slowEcho || @slowEcho || @slowEcho
+/show @out`;
+
+    process.env.MLLD_PARALLEL_LIMIT = '1';
+    try {
+      await interpret(input, { fileSystem, pathService });
+      expect(process.env[MAX_KEY]).toBe('1');
+    } finally {
+      delete process.env.MLLD_PARALLEL_LIMIT;
+    }
+  });
+
+  it('clamps invalid MLLD_PARALLEL_LIMIT to default (4)', async () => {
+    const invalids = ['0', '-3', 'abc'];
+    for (const v of invalids) {
+      const input = `
+/exe @slowEcho(input) = js {
+  const a = Number(process.env.${ACTIVE_KEY} || '0') + 1;
+  process.env.${ACTIVE_KEY} = String(a);
+  const m = Number(process.env.${MAX_KEY} || '0');
+  if (a > m) process.env.${MAX_KEY} = String(a);
+  await new Promise(r => setTimeout(r, 10));
+  process.env.${ACTIVE_KEY} = String(a - 1);
+  return input;
+}
+
+/exe @seed() = "s"
+/var @out = @seed() | @slowEcho || @slowEcho || @slowEcho || @slowEcho || @slowEcho || @slowEcho
+/show @out`;
+
+      process.env.MLLD_PARALLEL_LIMIT = v;
+      delete process.env[ACTIVE_KEY];
+      delete process.env[MAX_KEY];
+      try {
+        await interpret(input, { fileSystem, pathService });
+        expect(process.env[MAX_KEY]).toBe('4');
+      } finally {
+        delete process.env.MLLD_PARALLEL_LIMIT;
+      }
+    }
+  });
+
   it('should fail the whole group if any branch errors', async () => {
     const input = `
 /exe @left(input) = \`L:@input\`
@@ -104,5 +159,17 @@ describe('Parallel Pipeline - Runtime Behavior', () => {
     await expect(
       interpret(input, { fileSystem, pathService })
     ).rejects.toThrow(/Pipeline failed at stage 2|boom/);
+  });
+
+  it('rejects leading || in shorthand with a clear message', async () => {
+    const input = `
+/exe @left(input) = \`L:@input\`
+/exe @right(input) = \`R:@input\`
+/var @out = "x" | || @right | @left
+/show @out`;
+
+    await expect(
+      interpret(input, { fileSystem, pathService })
+    ).rejects.toThrow(/Parallel group cannot be the first pipeline stage/i);
   });
 });

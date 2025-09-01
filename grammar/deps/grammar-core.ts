@@ -1209,4 +1209,15 @@ export const helpers = {
       meta.comment = ending.comment;
     }
   }
+  ,
+  /**
+   * Throw a clear error when a parallel group appears as the first pipeline stage.
+   * '||' runs a stage in parallel with the previous stage; the source stage has no previous stage.
+   */
+  throwParallelLeadingError(location: any): never {
+    const msg = "Parallel group cannot be the first pipeline stage. '||' runs a stage in parallel with the previous stage, which is not possible for the source stage. Start with a single '|' stage, then add '||' peers.";
+    const err: any = new Error(msg);
+    (err as any).location = location;
+    throw err;
+  }
 };

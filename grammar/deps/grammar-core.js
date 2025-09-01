@@ -1116,5 +1116,15 @@ export const helpers = {
         if (ending.comment) {
             meta.comment = ending.comment;
         }
+    },
+    /**
+     * Throw a clear error when a parallel group appears as the first pipeline stage.
+     * '||' runs a stage in parallel with the previous stage; the source stage has no previous stage.
+     */
+    throwParallelLeadingError(location) {
+        const msg = "Parallel group cannot be the first pipeline stage. '||' runs a stage in parallel with the previous stage, which is not possible for the source stage. Start with a single '|' stage, then add '||' peers.";
+        const err = new Error(msg);
+        err.location = location;
+        throw err;
     }
 };

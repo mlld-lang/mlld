@@ -13,7 +13,7 @@ import type { PipelineStage, PipelineCommand } from '@core/types';
 import { executePipeline } from './index';
 import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transformers';
 import { logger } from '@core/utils/logger';
-import { isBuiltinEffect } from './builtin-effects';
+import { attachBuiltinEffects } from './effects-attachment';
 
 /**
  * Context for pipeline processing
@@ -82,7 +82,7 @@ export async function processPipeline(
       detected.isRetryable = context.isRetryable;
     }
     if (process.env.MLLD_DEBUG === 'true' && identifier) {
-      console.log('[processPipeline] Detection result:', {
+      logger.debug('[processPipeline] Detection result:', {
         identifier,
         nodeType: node?.type,
         hasDetected: !!detected,
@@ -108,7 +108,7 @@ export async function processPipeline(
   };
   
   if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[processPipeline] Checking for synthetic source:', {
+    logger.debug('[processPipeline] Checking for synthetic source:', {
       isRetryable: detected.isRetryable,
       hasValue: !!value,
       hasMetadata: !!(value && typeof value === 'object' && 'metadata' in value && value.metadata),
@@ -226,75 +226,6 @@ async function validatePipeline(
       );
     }
   }
-}
-
-/**
- * Walk a pipeline and attach builtin effect commands (e.g., @log) to the
- * immediately preceding functional stage. Returns the functional-only
- * pipeline with effects stored in the optional `effects` field of each
- * PipelineCommand.
- */
-function attachBuiltinEffects(pipeline: PipelineStage[]): {
-  functionalPipeline: PipelineStage[];
-  hadLeadingEffects: boolean;
-} {
-  const functional: PipelineStage[] = [];
-  const pendingLeadingEffects: PipelineCommand[] = [];
-  let hadLeadingEffects = false;
-
-  for (const stage of pipeline) {
-    if (Array.isArray(stage)) {
-      const { functionalPipeline: group, hadLeadingEffects: inner } = attachBuiltinEffects(stage);
-      if (pendingLeadingEffects.length > 0 && group.length > 0) {
-        const first = group[0] as PipelineCommand;
-        first.effects = [...(first.effects || []), ...pendingLeadingEffects];
-        pendingLeadingEffects.length = 0;
-      }
-      if (group.length > 0) {
-        functional.push(group as PipelineCommand[]);
-      }
-      hadLeadingEffects = hadLeadingEffects || inner;
-      continue;
-    }
-
-    const name = stage.rawIdentifier;
-    if (isBuiltinEffect(name)) {
-      if (functional.length > 0) {
-        const prev = functional[functional.length - 1];
-        if (Array.isArray(prev)) {
-          const first = prev[0];
-          first.effects = [...(first.effects || []), stage];
-        } else {
-          prev.effects = [...(prev.effects || []), stage];
-        }
-      } else {
-        pendingLeadingEffects.push(stage);
-        hadLeadingEffects = true;
-      }
-      continue;
-    }
-
-    const cmd: PipelineCommand = { ...stage };
-    if (pendingLeadingEffects.length > 0) {
-      cmd.effects = [...(cmd.effects || []), ...pendingLeadingEffects];
-      pendingLeadingEffects.length = 0;
-    }
-    functional.push(cmd);
-  }
-
-  if (functional.length === 0 && pendingLeadingEffects.length > 0) {
-    functional.push({
-      rawIdentifier: '__identity__',
-      identifier: [],
-      args: [],
-      fields: [],
-      rawArgs: [],
-      effects: [...pendingLeadingEffects]
-    } as PipelineCommand);
-    pendingLeadingEffects.length = 0;
-  }
-
-  return { functionalPipeline: functional, hadLeadingEffects };
 }
 
 /**

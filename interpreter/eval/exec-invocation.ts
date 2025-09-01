@@ -1338,73 +1338,12 @@ export async function evaluateExecInvocation(
         rawArgs: []
       };
       
-      // Prepend synthetic source stage and attach builtin effects
+      // Prepend synthetic source stage and attach builtin effects consistently
       let normalizedPipeline = [SOURCE_STAGE, ...node.withClause.pipeline];
-      // Attach inline builtin effects (log/show/output) to preceding stages
       try {
-        const { isBuiltinEffect } = await import('./pipeline/builtin-effects');
-        const functional: any[] = [];
-        const pending: any[] = [];
-        for (const s of normalizedPipeline) {
-          // Handle parallel groups specially
-          if (Array.isArray(s)) {
-            const group: any[] = [];
-            for (const cmd of s) {
-              const name = cmd?.rawIdentifier;
-              if (name && isBuiltinEffect(name)) {
-                // Collect effect to be applied to next non-effect stage(s)
-                pending.push(cmd);
-                continue;
-              }
-              const cstage = { ...cmd };
-              if (pending.length > 0) {
-                cstage.effects = [...(cstage.effects || []), ...pending];
-              }
-              group.push(cstage);
-            }
-            // Clear pending after attaching to this group
-            if (pending.length > 0) pending.length = 0;
-            if (group.length > 0) functional.push(group);
-            continue;
-          }
-
-          // Single stage handling
-          const name = (s as any)?.rawIdentifier;
-          if (name && isBuiltinEffect(name)) {
-            if (functional.length > 0) {
-              const prev = functional[functional.length - 1];
-              if (Array.isArray(prev)) {
-                // Attach to each command in the previous parallel group
-                for (const pcmd of prev) {
-                  pcmd.effects = [...(pcmd.effects || []), s];
-                }
-              } else {
-                if (!prev.effects) (prev as any).effects = [];
-                (prev as any).effects.push(s);
-              }
-            } else {
-              pending.push(s);
-            }
-          } else {
-            const stage = { ...(s as any) };
-            if (pending.length > 0) {
-              (stage as any).effects = [...((stage as any).effects || []), ...pending];
-              pending.length = 0;
-            }
-            functional.push(stage);
-          }
-        }
-        if (functional.length === 0 && pending.length > 0) {
-          functional.push({
-            rawIdentifier: '__identity__',
-            identifier: [],
-            args: [],
-            fields: [],
-            rawArgs: [],
-            effects: [...pending]
-          });
-        }
-        normalizedPipeline = functional;
+        const { attachBuiltinEffects } = await import('./pipeline/effects-attachment');
+        const { functionalPipeline } = attachBuiltinEffects(normalizedPipeline);
+        normalizedPipeline = functionalPipeline as any;
       } catch {
         // If helper import fails, proceed without effect attachment
       }
