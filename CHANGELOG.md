@@ -12,17 +12,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Works transparently - use `$varname` as usual, mlld handles the injection method based on size
   - Enabled by default via `MLLD_BASH_HEREDOC` (can be disabled if needed)
   - Configurable threshold via `MLLD_MAX_BASH_ENV_VAR_SIZE` (default: 131072 bytes)
+ - **Pipeline parallel groups**: `A || B || C` executes commands concurrently as a single stage
+   - With-clause parity: nested arrays represent a parallel group (e.g., `with { pipeline: [ [@left, @right], @combine ] }`)
+   - Concurrency capped by `MLLD_PARALLEL_LIMIT` (default `4`); results preserve declaration order and flow to the next stage as a JSON array string
+ - **Rate-limit resilience in pipelines**: 429/“rate limit” errors trigger exponential backoff with bounded retries per stage
+ - **Unified effect attachment**: Single helper attaches inline builtin effects (show/log/output) to preceding stages and to each branch of parallel groups
 
 ### Fixed
 - **E2BIG errors with large data**: Fixed Node.js throwing errors when passing large variables to shell commands
   - Common when loading entire codebases: `<**/*.js>`, `<**/*.sol>`, etc.
   - Affects audit workflows processing multiple files simultaneously
   - Simple `/run {...}` commands now provide helpful error messages suggesting shell mode
+ - **Retry in parallel groups**: Returning `retry` from within a parallel group rejects with a clear error (retry is unsupported inside the group)
+ - **Parallel limit hardening**: `MLLD_PARALLEL_LIMIT` parsing clamps invalid/low values to defaults; limit is read per execution to respect environment overrides
 
 ### Documentation
 - Updated large variables documentation with clearer, more accessible language
 - Removed unnecessary configuration details since feature is enabled by default
 - Added explanation of why shell mode works (direct script injection vs environment passing)
+- Updated developer docs for parallel execution: shorthand `||` rule (no leading `||`), with-clause nested group syntax, effect behavior on groups, and references to tests
+ - Corrected iterator docs to reflect current behavior: `/for` executes sequentially (no `parallel` flag); parallelism exists in pipelines via `||` groups
 
 ## [2.0.0-rc47]
 ### Added

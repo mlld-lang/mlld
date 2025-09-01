@@ -14,7 +14,6 @@ mlld's Peggy.js grammar uses abstraction-first design with hierarchical patterns
 
 Recent additions:
 - `||` marks parallel pipeline stages
-- `/for parallel` allows optional caps (`/for 5 parallel`) and rate hints (`/for (5,30s) parallel`)
 
 ## Principles
 

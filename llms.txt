@@ -32,7 +32,7 @@
 </COMMANDS>
 <CONTROL_FLOW>
   <WHEN_DECISIONS> ................. Bare/first/simple forms, /exe...when patterns, wildcard (*), none keyword.
-  <ITERATION> ...................... foreach vs /for; nested loops; objects with _key; collection form; /for parallel syntax.
+  <ITERATION> ...................... foreach vs /for; nested loops; objects with _key; collection form.
   <NO_EARLY_EXIT> .................. Design flows instead of exits; patterns.
 </CONTROL_FLOW>
 <MODULES> .......................... Module-first philosophy; imports; helpers; shadow environments; isolation.
