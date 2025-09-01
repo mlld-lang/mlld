@@ -116,6 +116,52 @@ export async function evaluateRun(
     
     // Interpolate command (resolve variables) with shell command context
     const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
+
+    // Friendly pre-check for oversized simple /run command payloads
+    // Rationale: Some environments may not hit ShellCommandExecutor's guard early enough.
+    // This check ensures users see a clear suggestion before the shell invocation.
+    try {
+      const CMD_MAX = (() => {
+        const v = process.env.MLLD_MAX_SHELL_COMMAND_SIZE;
+        if (!v) return 128 * 1024; // 128KB default
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
+      })();
+      const cmdBytes = Buffer.byteLength(command || '', 'utf8');
+      if (process.env.MLLD_DEBUG === 'true') {
+        try { console.error(`[run.ts] /run command size: ${cmdBytes} bytes (max ~${CMD_MAX})`); } catch {}
+      }
+      if (cmdBytes > CMD_MAX) {
+        const message = [
+          'Command payload too large for /run execution (may exceed OS args+env limits).',
+          `Command size: ${cmdBytes} bytes (max ~${CMD_MAX})`,
+          'Suggestions:',
+          '- Use `/run sh (@var) { echo "$var" | tool }` or `/exe ... = sh { ... }` to leverage heredocs',
+          '- Pass file paths or stream via stdin (printf, here-strings)',
+          '- Reduce or split the data',
+          '',
+          'Learn more: https://mlld.ai/docs/large-variables'
+        ].join('\n');
+        throw new MlldCommandExecutionError(
+          message,
+          directive.location,
+          {
+            command,
+            exitCode: 1,
+            duration: 0,
+            stderr: message,
+            workingDirectory: env.getBasePath(),
+            directiveType: 'run'
+          },
+          env
+        );
+      }
+    } catch (e) {
+      if (e instanceof MlldCommandExecutionError) {
+        throw e;
+      }
+      // Non-fatal sizing errors should not block execution
+    }
     
     /**
      * Security check before command execution

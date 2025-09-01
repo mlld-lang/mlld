@@ -495,6 +495,8 @@ Parameter syntax:
 ```
 
 Security: `run` forbids `&&`/`||` to reduce injection risk; escalate to `run sh` when necessary.
+
+Large variables: For bash/sh executables, variables >128KB are automatically handled via heredocs (when `MLLD_BASH_HEREDOC=1`). For `/run` commands exceeding limits, use `/exe` with bash/sh instead.
 </RUN_VS_RUN_SH>
 
 <EXE_EXECUTABLES>

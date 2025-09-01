@@ -1,0 +1,9 @@
+{
+  "description": "Test heredoc handling for large variables",
+  "env": {
+    "MLLD_BASH_HEREDOC": "1",
+    "MLLD_MAX_BASH_ENV_VAR_SIZE": "131072"
+  },
+  "skip": false,
+  "skipReason": ""
+}
