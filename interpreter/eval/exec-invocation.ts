@@ -844,22 +844,30 @@ export async function evaluateExecInvocation(
     }
     
     // Build environment variables from parameters for shell execution
+    // Only include parameters that are referenced in the command string to avoid
+    // passing oversized, unused values into the environment (E2BIG risk).
     const envVars: Record<string, string> = {};
+    const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const referencesParam = (cmd: string, name: string) => {
+      // Match $name (not followed by word char) or ${name}, avoiding escaped dollars (\$)
+      const n = escapeRegex(name);
+      const simple = new RegExp(`(^|[^\\\\])\\$${n}(?![A-Za-z0-9_])`);
+      const braced = new RegExp(`\\$\\{${n}\\}`);
+      return simple.test(cmd) || braced.test(cmd);
+    };
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
+      if (!referencesParam(command, paramName)) continue; // skip unused params
       
       // Properly serialize proxy objects for execution
       const paramVar = execEnv.getVariable(paramName);
       if (paramVar && typeof paramVar.value === 'object' && paramVar.value !== null) {
-        // For objects and arrays, use JSON serialization
         try {
           envVars[paramName] = JSON.stringify(paramVar.value);
-        } catch (e) {
-          // Fallback to string version if JSON serialization fails
+        } catch {
           envVars[paramName] = evaluatedArgStrings[i];
         }
       } else {
-        // For primitives and other types, use the string version
         envVars[paramName] = evaluatedArgStrings[i];
       }
     }

@@ -1,12 +1,12 @@
 // Note: use dynamic require for spawnSync so tests can spy via require('child_process')
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const child_process = require('child_process');
+import * as fs from 'fs';
 import { BaseCommandExecutor, type CommandExecutionOptions, type CommandExecutionResult } from './BaseCommandExecutor';
 import { CommandUtils } from '../CommandUtils';
 import type { ErrorUtils, CommandExecutionContext } from '../ErrorUtils';
 import { MlldCommandExecutionError } from '@core/errors';
 import { isTextLike, type Variable } from '@core/types/variable';
-import { prepareVariablesForBash, injectBashHelpers } from '../bash-variable-helpers';
 import { adaptVariablesForBash } from '../bash-variable-adapter';
 
 export interface VariableProvider {
@@ -54,12 +54,15 @@ export class BashExecutor extends BaseCommandExecutor {
     try {
       // Build environment variables from parameters
       let envVars: Record<string, string> = {};
-      
+      let tempFiles: string[] = [];
+
       if (params && typeof params === 'object') {
         // Always use the adapter to convert Variables/proxies to strings
         // This handles both enhanced Variables and regular values
         const env = { getVariable: () => null } as any; // Minimal env for adapter
-        envVars = await adaptVariablesForBash(params, env);
+        const adapted = await adaptVariablesForBash(params, env);
+        envVars = adapted.envVars;
+        tempFiles = adapted.tempFiles;
       } else {
         // When no params are provided, include all text variables as environment variables
         // This allows bash code blocks to access mlld variables via $varname
@@ -200,6 +203,16 @@ export class BashExecutor extends BaseCommandExecutor {
       const result = hasTTYCheck && stderr && !stdout ? stderr : stdout;
       
       const duration = Date.now() - startTime;
+
+      // Clean up any temporary files created for oversized variables
+      for (const file of tempFiles) {
+        try {
+          fs.unlinkSync(file);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+
       return {
         output: result.toString().replace(/\n+$/, ''),
         duration,

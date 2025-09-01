@@ -7,6 +7,9 @@ import type { Variable } from '@core/types/variable';
 import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { resolveValue, ResolutionContext } from '@interpreter/utils/variable-resolution';
 import type { Environment } from './Environment';
+import * as fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 /**
  * Convert Variables to string values suitable for bash environment variables
@@ -16,16 +19,28 @@ import type { Environment } from './Environment';
 export async function adaptVariablesForBash(
   params: Record<string, any>,
   env: Environment
-): Promise<Record<string, string>> {
+): Promise<{ envVars: Record<string, string>; tempFiles: string[] }> {
   const bashVars: Record<string, string> = {};
-  
+  const tempFiles: string[] = [];
+  const MAX_ENV_VAR_LENGTH = 128 * 1024; // 128KB typical env var limit
+
   for (const [key, value] of Object.entries(params)) {
     // Resolve the value - will extract if it's a Variable, pass through if not
     const resolved = await resolveValue(value, env, ResolutionContext.CommandExecution);
-    bashVars[key] = convertToString(resolved);
+    const strValue = convertToString(resolved);
+
+    if (strValue.length > MAX_ENV_VAR_LENGTH) {
+      const tmpDir = os.tmpdir();
+      const tmpFile = path.join(tmpDir, `mlld_env_${key}_${Date.now()}`);
+      fs.writeFileSync(tmpFile, strValue);
+      bashVars[key] = tmpFile;
+      tempFiles.push(tmpFile);
+    } else {
+      bashVars[key] = strValue;
+    }
   }
-  
-  return bashVars;
+
+  return { envVars: bashVars, tempFiles };
 }
 
 /**
