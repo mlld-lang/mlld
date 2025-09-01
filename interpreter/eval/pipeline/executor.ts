@@ -8,13 +8,7 @@ import { MlldCommandExecutionError } from '@core/errors';
 import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
 import { logger } from '@core/utils/logger';
-
-function getParallelLimit(): number {
-  const raw = process.env.MLLD_PARALLEL_LIMIT;
-  const n = raw !== undefined ? parseInt(String(raw), 10) : NaN;
-  if (!Number.isFinite(n) || n < 1) return 4;
-  return n;
-}
+import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
 
 /**
  * Pipeline Executor - Handles actual execution using state machine
@@ -523,22 +517,20 @@ export class PipelineExecutor {
     input: string,
     context: StageContext
   ): Promise<StageResult> {
-    const outputs: string[] = new Array(commands.length);
-    const limit = Math.max(1, Math.min(getParallelLimit(), commands.length));
-    let index = 0;
-    const run = async () => {
-      while (index < commands.length) {
-        const i = index++;
-        const res = await this.executeStage(commands[i], input, context);
-        if (res.type !== 'success') {
-          throw res.type === 'error' ? res.error : new Error('retry not supported in parallel stage');
-        }
-        outputs[i] = res.output;
-      }
-    };
     try {
-      await Promise.all(Array.from({ length: limit }, run));
-      return { type: 'success', output: JSON.stringify(outputs) };
+      const results = await runWithConcurrency(
+        commands,
+        Math.min(getParallelLimit(), commands.length),
+        async (cmd, i) => {
+          const res = await this.executeStage(cmd, input, context);
+          if (res.type !== 'success') {
+            throw res.type === 'error' ? res.error : new Error('retry not supported in parallel stage');
+          }
+          return res.output;
+        },
+        { ordered: true }
+      );
+      return { type: 'success', output: JSON.stringify(results) };
     } catch (err) {
       return { type: 'error', error: err as Error };
     }
