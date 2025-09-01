@@ -157,7 +157,7 @@ throw new MlldDirectiveError(
 - `pipeline` parallel groups use `A || B || C` to execute multiple commands as a single stage. Outputs are collected in command order and passed to the next stage as a JSON array string. Concurrency is limited by `MLLD_PARALLEL_LIMIT`.
 - `retry` is not supported from inside a pipeline parallel group; design retries in the following stage which can request an upstream retry. Per-command rate-limit errors inside the group use exponential backoff.
 
-See also: `docs/dev/PIPELINE.md` (Parallel Execution).
+See also: `docs/dev/PIPELINE.md` (Parallel Execution) for shorthand rules (no leading `||`), with-clause nested-group syntax, and effect behavior on parallel groups.
 
 ## Debugging
 
