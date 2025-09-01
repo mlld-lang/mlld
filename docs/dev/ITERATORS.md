@@ -11,10 +11,12 @@ related-types: core/types { ForDirective, ForExpression, ForeachCommandExpressio
 ## tldr
 
 mlld provides two iteration mechanisms:
-- **`/for`**: Simple iteration over collections with actions (`/for @item in @items => action`)
+- **`/for`**: Simple iteration over collections with actions (`/for @item in @items => action`), with optional `parallel` execution and concurrency caps
 - **`foreach`**: Cartesian product over multiple arrays with parameterized commands (`foreach @cmd(@arr1, @arr2)`)
 
 Both follow mlld's single-pass evaluation and direct execution principles.
+
+Parallelism also exists in pipelines via `||` groups (see docs/dev/PIPELINE.md). Pipeline parallelism is distinct from iterator parallelism and has different semantics (results are collected as a JSON array and `retry` is not supported inside the group).
 
 ## Principles
 
@@ -46,6 +48,7 @@ Key characteristics:
 - Object iteration exposes keys via `@var_key` pattern
 - ForExpression returns ArrayVariable with metadata
 - Error collection continues execution
+- Optional `parallel` keyword (`/for parallel @x in @arr`) runs iterations concurrently up to `MLLD_PARALLEL_LIMIT` or an explicit cap
 
 ### foreach Operator
 
@@ -147,6 +150,14 @@ throw new MlldDirectiveError(
 - Child environment nodes must be transferred to parent in /for loops
 - Variables preserve wrappers through iteration for type consistency
 - Cartesian product limited to 10,000 combinations for performance
+
+## Parallelism: Iterators vs Pipelines
+
+- `/for parallel …` runs loop iterations concurrently. Concurrency is limited by `MLLD_PARALLEL_LIMIT` (or an explicit per-loop cap). Each iteration gets its own child environment; errors are reported with iteration context.
+- `pipeline` parallel groups use `A || B || C` to execute multiple commands as a single stage. Outputs are collected in command order and passed to the next stage as a JSON array string. Concurrency is limited by `MLLD_PARALLEL_LIMIT`.
+- `retry` is not supported from inside a pipeline parallel group; design retries in the following stage which can request an upstream retry. Per-command rate-limit errors inside the group use exponential backoff.
+
+See also: `docs/dev/PIPELINE.md` (Parallel Execution).
 
 ## Debugging
 

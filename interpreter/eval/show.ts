@@ -117,23 +117,18 @@ export async function evaluateShow(
       throw new Error('Show variable directive missing variable reference');
     }
 
-    // Process any attached pipeline for this invocation via unified pipeline
+    // Process any attached pipeline for this invocation via unified processor
     try {
       const { processPipeline } = await import('./pipeline/unified-processor');
-      const hasPipeline = Boolean((directive as any)?.values?.withClause?.pipeline || (directive as any)?.meta?.withClause?.pipeline || (directive as any)?.values?.pipeline);
-      if (hasPipeline) {
-        const isRetryable = true; // Exec invocations are retryable as sources
-        const wrappedValue = { value: content, metadata: { sourceFunction: invocation } } as any;
-        content = await processPipeline({
-          value: wrappedValue,
-          env,
-          node: invocation,
-          directive,
-          isRetryable,
-          identifier: 'show',
-          location: directive.location
-        });
-      }
+      const processed = await processPipeline({
+        value: content,
+        env,
+        node: invocation,
+        directive,
+        identifier: 'show',
+        location: directive.location
+      });
+      content = typeof processed === 'string' ? processed : JSONFormatter.stringify(processed);
     } catch {
       // Ignore pipeline processing errors here; content already computed
     }
@@ -282,10 +277,12 @@ export async function evaluateShow(
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
     }
 
-    // Handle pipeline from VariableReferenceWithTail if present (for unified invocation path)
-    if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
-      const { executePipeline } = await import('./pipeline');
-      content = await executePipeline(typeof value === 'string' ? value : String(value ?? ''), variableNode.withClause.pipeline, env);
+    // Legacy compatibility: only apply this path when not using unified invocation tail
+    if (!(directive as any)?.values?.invocation) {
+      if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
+        const { executePipeline } = await import('./pipeline');
+        content = await executePipeline(typeof value === 'string' ? value : String(value ?? ''), variableNode.withClause.pipeline, env);
+      }
     }
     } // Close the if (value === undefined && variable) block
     
@@ -418,10 +415,33 @@ export async function evaluateShow(
       content = '';
     }
     
-    // Handle pipeline from VariableReferenceWithTail if present
-    if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
-      const { executePipeline } = await import('./pipeline');
-      content = await executePipeline(content, variableNode.withClause.pipeline, env);
+    // Legacy path: only run when invocation is not present (avoid double-processing)
+    if (!(directive as any)?.values?.invocation) {
+      if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
+        const { executePipeline } = await import('./pipeline');
+        content = await executePipeline(content, variableNode.withClause.pipeline, env);
+      }
+    }
+    
+    // Unified pipeline processing for showVariable: detect pipeline from invocation or directive
+    try {
+      const { hasPipeline } = await import('./pipeline/detector');
+      const invocationNode = (directive as any)?.values?.invocation;
+      if (hasPipeline(invocationNode, directive)) {
+        const { processPipeline } = await import('./pipeline/unified-processor');
+        // Use direct value; do not inject synthetic source here — avoids stage-0 retry confusion
+        const processed = await processPipeline({
+          value: content,
+          env,
+          node: invocationNode,
+          directive,
+          identifier: varName || 'show',
+          location: directive.location
+        });
+        content = typeof processed === 'string' ? processed : JSONFormatter.stringify(processed);
+      }
+    } catch {
+      // If no pipeline detected or processing fails, leave content as-is
     }
     
     

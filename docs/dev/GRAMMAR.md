@@ -12,6 +12,10 @@ related-types: core/types { DirectiveNode, NodeType, DirectiveKind }
 
 mlld's Peggy.js grammar uses abstraction-first design with hierarchical patterns. Source files in `grammar/*.peggy` concatenate during build. Helpers live in `grammar/deps/grammar-core.ts`. Grammar and TypeScript types must stay 100% synchronized. When changing grammar, fix abstractions not symptoms.
 
+Recent additions:
+- `||` marks parallel pipeline stages
+- `/for parallel` allows optional caps (`/for 5 parallel`) and rate hints (`/for (5,30s) parallel`)
+
 ## Principles
 
 - **First match wins**: PEG.js has no concept of specificity and never backtracks after matching, so **rule order matters** -- more specific rules go first

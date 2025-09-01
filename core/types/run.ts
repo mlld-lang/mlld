@@ -8,8 +8,10 @@ import { TrustLevel } from './primitives';
 /**
  * With clause for pipeline and dependency management
  */
+export type PipelineStage = PipelineCommand | PipelineCommand[];
+
 export interface WithClause {
-  pipeline?: PipelineCommand[];
+  pipeline?: PipelineStage[];
   needs?: DependencyMap;
   trust?: TrustLevel;
   [key: string]: any; // For other with clause properties

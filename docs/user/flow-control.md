@@ -261,6 +261,30 @@ Output:
 Used hint: missing title
 ```
 
+### Parallel Pipelines
+
+Run multiple transforms concurrently within a single pipeline stage using `||`.
+
+```mlld
+/exe @left(input) = `L:@input`
+/exe @right(input) = `R:@input`
+/exe @combine(input) = js {
+  // Parallel stage returns a JSON array string
+  const [l, r] = JSON.parse(input);
+  return `${l} | ${r}`;
+}
+
+/var @out = "seed" with { pipeline: [ @left || @right, @combine ] }
+/show @out
+```
+
+Notes:
+- Results preserve order of commands in the group.
+- The next stage receives a JSON array string (parse it or accept as text).
+- Concurrency is capped by `MLLD_PARALLEL_LIMIT` (default `4`).
+- Returning `retry` inside a parallel group is not supported; do validation after the group and request a retry of the previous (non‑parallel) stage if needed.
+- Inline effects attached to grouped commands run after each command completes.
+
 ### Complex Retry Patterns
 
 Multi-stage pipelines with retry and fallback:

@@ -1,5 +1,5 @@
-/var @result = @data | @validate | @process
+/var @canDeploy = @testsPass && @isApproved
 /when [
-  @result.success => output @result.data to "output.json"
-  !@result.success => show `Processing failed: @result.error`
+  @canDeploy => run {npm run deploy}
+  !@canDeploy => show "Deployment blocked - check tests and approval"
 ]

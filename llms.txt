@@ -20,7 +20,7 @@
   <TEMPLATES> ...................... Backticks, ::…::, :::…:::; interpolation rules.
   <FILE_LOADING> ................... Angle brackets, metadata fields, globs, "as" templates, detection rules.
   <BUILTIN_METHODS> ................ Array and string methods: includes, indexOf, join, split, etc.
-  <PIPELINES> ...................... Operator |, transformers, @ctx/@p context, retry/hints, inline effects.
+  <PIPELINES> ...................... Operator |, transformers, @ctx/@p context, retry/hints, inline effects, parallel groups with ||.
   <COMMENTS> ....................... ">>" and "<<" comments (start/end-of-line).
   <RESERVED_VARIABLES> ............. @now, @input, @base, @debug.
 </SYNTAX>
@@ -32,7 +32,7 @@
 </COMMANDS>
 <CONTROL_FLOW>
   <WHEN_DECISIONS> ................. Bare/first/simple forms, /exe...when patterns, wildcard (*), none keyword.
-  <ITERATION> ...................... foreach vs /for; nested loops; objects with _key; collection form.
+  <ITERATION> ...................... foreach vs /for; nested loops; objects with _key; collection form; /for parallel syntax.
   <NO_EARLY_EXIT> .................. Design flows instead of exits; patterns.
 </CONTROL_FLOW>
 <MODULES> .......................... Module-first philosophy; imports; helpers; shadow environments; isolation.
@@ -419,6 +419,29 @@ Pipeline array (@p): `@p[0]` (input), `@p[-1]` (previous output), `@p.retries.al
 Inline effects: `@data | @transform | log` (stderr), `@data | output to "file.txt"` (inline write)
 
 Formats (`with { format: "json|csv|xml|text" }`): guide parsing for pipeline stages.
+
+Parallel groups (`||`): run multiple commands as one stage in parallel.
+
+```mlld
+# Two transforms run concurrently; outputs are collected in order
+/exe @left(input) = `L:@input`
+/exe @right(input) = `R:@input`
+/exe @combine(input) = js {
+  const arr = JSON.parse(input); // parallel stage returns a JSON array string
+  return arr.join(' + ');
+}
+
+/var @out = "x" with { pipeline: [ @left || @right, @combine ] }
+/show @out   # → "L:x + R:x"
+```
+
+Semantics:
+* Grouping: `A || B || C` forms a single stage executed concurrently with a global cap.
+* Ordering: Results preserve command order; next stage receives a JSON array string.
+* Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
+* Retries: Returning `retry` inside a parallel group is not supported and aborts the pipeline. If you need retries, run validation after the group and request a retry of the previous (non-parallel) stage.
+* Rate limits: 429/“rate limit” errors trigger per-command exponential backoff.
+* Inline effects: Effects attached to commands in the group run after each command succeeds.
 
 </PIPELINES>
 

@@ -51,12 +51,29 @@ WithProperty
 
 // Array of pipeline commands
 PipelineArray
-  = "[" _ commands:PipelineCommandList? _ "]" {
+  = "[" _ commands:PipelineStageList? _ "]" {
       return commands || [];
     }
 
 // List of pipeline commands
-PipelineCommandList
+// A pipeline stage can be a single command or a parallel group represented
+// as a nested array: [[@a, @b], @c]
+PipelineStageList
+  = first:PipelineStage rest:(CommaSpace st:PipelineStage { return st; })* {
+      return [first, ...rest];
+    }
+
+PipelineStage
+  = ParallelGroupArray
+  / PipelineCommand
+
+// Parallel group inside with { pipeline: [...] }, only commands allowed inside
+ParallelGroupArray
+  = "[" _ cmds:GroupCommandList? _ "]" {
+      return cmds || [];
+    }
+
+GroupCommandList
   = first:PipelineCommand rest:(CommaSpace cmd:PipelineCommand { return cmd; })* {
       return [first, ...rest];
     }

@@ -1121,8 +1121,43 @@ export const helpers = {
   /**
    * Creates an action node for /for directive actions
    */
-  createForActionNode(directive: string, content: any, location: any) {
+  createForActionNode(directive: string, content: any, location: any, endingTail?: any) {
     const kind = directive as DirectiveKindKey;
+    // Special-case: support show actions with either templates/quotes or unified references
+    if (kind === 'show' && content) {
+      // Detect UnifiedQuote/Template structures (have { content, wrapperType })
+      if (content && typeof content === 'object' && 'content' in content && 'wrapperType' in content) {
+        const values: any = { content: (content as any).content };
+        // For templates/quotes, attach pipeline to values.pipeline (showTemplate branch consumes it)
+        if (endingTail && endingTail.pipeline) {
+          values.pipeline = endingTail.pipeline;
+        }
+        return [this.createNode(NodeType.Directive, {
+          kind,
+          subtype: 'showTemplate',
+          values,
+          raw: { content: this.reconstructRawString((content as any).content) },
+          meta: { implicit: false, isTemplateContent: true },
+          location
+        })];
+      }
+
+      // Otherwise assume a unified reference (VariableReference/ExecInvocation/etc.)
+      const isExec = content && typeof content === 'object' && content.type === 'ExecInvocation';
+      const values: any = { invocation: content };
+      // Attach directive-level withClause so unified pipeline detector can find it
+      if (endingTail && endingTail.pipeline) {
+        values.withClause = { pipeline: endingTail.pipeline };
+      }
+      return [this.createNode(NodeType.Directive, {
+        kind,
+        subtype: isExec ? 'showInvocation' : 'showVariable',
+        values,
+        raw: { content: this.reconstructRawString(content) },
+        meta: { implicit: false },
+        location
+      })];
+    }
     return [this.createNode(NodeType.Directive, {
       kind,
       subtype: kind,

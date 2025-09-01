@@ -194,6 +194,10 @@ Pipeline stages automatically preserve LoadContentResult metadata through JavaSc
 
 **Implementation**: Pipeline execution wraps JS functions with `AutoUnwrapManager.executeWithPreservation()` - arrays use exact content matching, single files get metadata auto-reattached to transformed content.
 
+### Parallel Execution
+
+Pipeline stages can run in parallel by grouping commands with `||`. The first pipe in a pipeline remains a single `|`; subsequent `||` entries join the same parallel block. Results from a parallel block are collected in order and passed to the next stage as a JSON array. Concurrency is limited by the `MLLD_PARALLEL_LIMIT` environment variable (default `4`). Rate-limit errors trigger a dedicated `RateLimitRetry` backoff that warns the user and retries with exponential delays.
+
 ## Pipeline Retry Architecture (v2.0.0+)
 
 The pipeline retry system enables automatic retry of failed or invalid pipeline steps through a simplified state machine architecture.

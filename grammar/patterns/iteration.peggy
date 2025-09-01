@@ -119,8 +119,14 @@ ForSingleAction "for action"
       })];
     }
   // Generic handling for other directives (with optional /)
-  / directive:("show" / "var") _ content:VarRHSContent {
-      return helpers.createForActionNode(directive, content, location());
+  / "show" _ content:(UnifiedQuoteOrTemplate / UnifiedReferenceWithTail) ending:StandardDirectiveEnding {
+      // Support both template/quote content and unified references for show actions
+      // Pass along any tail pipeline from the standard directive ending
+      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null);
+    }
+  / directive:("var") _ content:VarRHSContent ending:StandardDirectiveEnding {
+      // Create the action node; pass ending.tail so pipelines are embedded immutably
+      return helpers.createForActionNode(directive, content, location(), ending ? ending.tail : null);
     }
   / invocation:UnifiedReferenceWithTail {
       // Follow the /when pattern - no @ consumption

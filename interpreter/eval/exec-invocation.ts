@@ -1309,7 +1309,7 @@ export async function evaluateExecInvocation(
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[exec-invocation] Handling pipeline:', {
           pipelineLength: node.withClause.pipeline.length,
-          stages: node.withClause.pipeline.map((p: any) => p.rawIdentifier || 'unknown')
+          stages: node.withClause.pipeline.map((p: any) => Array.isArray(p) ? '[parallel]' : (p.rawIdentifier || 'unknown'))
         });
       }
       
@@ -1346,19 +1346,49 @@ export async function evaluateExecInvocation(
         const functional: any[] = [];
         const pending: any[] = [];
         for (const s of normalizedPipeline) {
-          const name = s.rawIdentifier;
-          if (isBuiltinEffect(name)) {
+          // Handle parallel groups specially
+          if (Array.isArray(s)) {
+            const group: any[] = [];
+            for (const cmd of s) {
+              const name = cmd?.rawIdentifier;
+              if (name && isBuiltinEffect(name)) {
+                // Collect effect to be applied to next non-effect stage(s)
+                pending.push(cmd);
+                continue;
+              }
+              const cstage = { ...cmd };
+              if (pending.length > 0) {
+                cstage.effects = [...(cstage.effects || []), ...pending];
+              }
+              group.push(cstage);
+            }
+            // Clear pending after attaching to this group
+            if (pending.length > 0) pending.length = 0;
+            if (group.length > 0) functional.push(group);
+            continue;
+          }
+
+          // Single stage handling
+          const name = (s as any)?.rawIdentifier;
+          if (name && isBuiltinEffect(name)) {
             if (functional.length > 0) {
               const prev = functional[functional.length - 1];
-              if (!prev.effects) prev.effects = [];
-              prev.effects.push(s);
+              if (Array.isArray(prev)) {
+                // Attach to each command in the previous parallel group
+                for (const pcmd of prev) {
+                  pcmd.effects = [...(pcmd.effects || []), s];
+                }
+              } else {
+                if (!prev.effects) (prev as any).effects = [];
+                (prev as any).effects.push(s);
+              }
             } else {
               pending.push(s);
             }
           } else {
-            const stage = { ...s };
+            const stage = { ...(s as any) };
             if (pending.length > 0) {
-              stage.effects = [...(stage.effects || []), ...pending];
+              (stage as any).effects = [...((stage as any).effects || []), ...pending];
               pending.length = 0;
             }
             functional.push(stage);
@@ -1383,7 +1413,7 @@ export async function evaluateExecInvocation(
         console.error('[exec-invocation] Creating pipeline with synthetic source:', {
           originalLength: node.withClause.pipeline.length,
           normalizedLength: normalizedPipeline.length,
-          stages: normalizedPipeline.map((p: any) => p.rawIdentifier || 'unknown')
+          stages: normalizedPipeline.map((p: any) => Array.isArray(p) ? '[parallel]' : (p.rawIdentifier || 'unknown'))
         });
       }
       

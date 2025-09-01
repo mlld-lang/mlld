@@ -33,14 +33,16 @@ TailValue
       }
       return result;
     }      // for 'with'
-  / "[" _ items:PipelineCommandList _ "]" { return items; } // for 'pipeline'
+  / "[" _ items:PipelineStageList _ "]" { return items; } // for 'pipeline' (supports parallel groups)
   / transformers:PipelineShorthand { return transformers; }  // for '|'
   / level:TrustLevel { return level; }                       // for 'trust'
   / deps:NeedsObject { return deps; }                        // for 'needs'
   / title:AsSectionRenameString { return title; }            // for 'as'
 
+// Support parallel groups with `||` inside pipeline shorthand
+// Example: | @a || @b || @c | @d  -> [[a,b,c], d]
 PipelineShorthand
-  = first:PipelineCommand rest:PipelineRest* {
+  = first:PipelineStageFirst rest:PipelineRest* {
       helpers.debug('PipelineShorthand matched', { 
         first: first?.rawIdentifier || first,
         restCount: rest.length,
@@ -49,8 +51,23 @@ PipelineShorthand
       return [first, ...rest];
     }
 
+PipelineStageFirst
+  = ParallelSequence
+  / PipelineCommand
+
+// A rest stage can be a single command or a parallel group separated by `||`
 PipelineRest
-  = _ "|" _ cmd:PipelineCommand {
+  = _ "|" _ group:ParallelSequence {
+      helpers.debug('PipelineRest matched (parallel)', { count: Array.isArray(group) ? group.length : 1 });
+      return group; // Array of commands represents a parallel stage
+    }
+  / _ "|" _ cmd:PipelineCommand {
       helpers.debug('PipelineRest matched', { cmd: cmd?.rawIdentifier || cmd });
       return cmd;
+    }
+
+// One pipeline stage consisting of multiple commands executed in parallel
+ParallelSequence
+  = first:PipelineCommand rest:(_ "||" _ c:PipelineCommand { return c; })+ {
+      return [first, ...rest];
     }

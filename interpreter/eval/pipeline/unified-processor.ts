@@ -9,7 +9,7 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { Variable } from '@core/types/variable';
 import { MlldDirectiveError } from '@core/errors';
 import { detectPipeline, debugPipelineDetection, type DetectedPipeline } from './detector';
-import type { PipelineCommand } from '@core/types';
+import type { PipelineStage, PipelineCommand } from '@core/types';
 import { executePipeline } from './index';
 import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transformers';
 import { logger } from '@core/utils/logger';
@@ -33,7 +33,7 @@ export interface UnifiedPipelineContext {
   directive?: any;               // Directive that might have pipeline
   
   // Manual pipeline (if not auto-detected)
-  pipeline?: PipelineCommand[];  // Explicit pipeline to execute
+  pipeline?: PipelineStage[];  // Explicit pipeline to execute
   format?: string;               // Data format hint
   isRetryable?: boolean;         // Override retryability
   
@@ -194,12 +194,16 @@ export async function processPipeline(
  * Validate that all pipeline functions exist
  */
 async function validatePipeline(
-  pipeline: PipelineCommand[],
+  pipeline: PipelineStage[],
   env: Environment,
   identifier?: string
 ): Promise<void> {
-  for (const cmd of pipeline) {
-    const funcName = cmd.rawIdentifier;
+  for (const stage of pipeline) {
+    if (Array.isArray(stage)) {
+      await validatePipeline(stage, env, identifier);
+      continue;
+    }
+    const funcName = stage.rawIdentifier;
     
     // Check if it's a built-in transformer
     if (isBuiltinTransformer(funcName)) {
@@ -230,43 +234,54 @@ async function validatePipeline(
  * pipeline with effects stored in the optional `effects` field of each
  * PipelineCommand.
  */
-function attachBuiltinEffects(pipeline: PipelineCommand[]): {
-  functionalPipeline: PipelineCommand[];
+function attachBuiltinEffects(pipeline: PipelineStage[]): {
+  functionalPipeline: PipelineStage[];
   hadLeadingEffects: boolean;
 } {
-  const functional: PipelineCommand[] = [];
+  const functional: PipelineStage[] = [];
   const pendingLeadingEffects: PipelineCommand[] = [];
   let hadLeadingEffects = false;
 
-  for (const cmd of pipeline) {
-    const name = cmd.rawIdentifier;
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[attachBuiltinEffects] cmd', name, 'builtin?', isBuiltinEffect(name));
+  for (const stage of pipeline) {
+    if (Array.isArray(stage)) {
+      const { functionalPipeline: group, hadLeadingEffects: inner } = attachBuiltinEffects(stage);
+      if (pendingLeadingEffects.length > 0 && group.length > 0) {
+        const first = group[0] as PipelineCommand;
+        first.effects = [...(first.effects || []), ...pendingLeadingEffects];
+        pendingLeadingEffects.length = 0;
+      }
+      if (group.length > 0) {
+        functional.push(group as PipelineCommand[]);
+      }
+      hadLeadingEffects = hadLeadingEffects || inner;
+      continue;
     }
+
+    const name = stage.rawIdentifier;
     if (isBuiltinEffect(name)) {
-      // Attach to the last functional; if none yet, collect as pending
       if (functional.length > 0) {
         const prev = functional[functional.length - 1];
-        if (!prev.effects) prev.effects = [];
-        prev.effects.push(cmd);
+        if (Array.isArray(prev)) {
+          const first = prev[0];
+          first.effects = [...(first.effects || []), stage];
+        } else {
+          prev.effects = [...(prev.effects || []), stage];
+        }
       } else {
-        pendingLeadingEffects.push(cmd);
+        pendingLeadingEffects.push(stage);
         hadLeadingEffects = true;
       }
       continue;
     }
 
-    // Regular functional stage
-    const stage: PipelineCommand = { ...cmd };
-    // If we have pending leading effects, attach them to this first stage
+    const cmd: PipelineCommand = { ...stage };
     if (pendingLeadingEffects.length > 0) {
-      stage.effects = [...(stage.effects || []), ...pendingLeadingEffects];
+      cmd.effects = [...(cmd.effects || []), ...pendingLeadingEffects];
       pendingLeadingEffects.length = 0;
     }
-    functional.push(stage);
+    functional.push(cmd);
   }
 
-  // If pipeline had only builtin effects, synthesize an identity stage to host them
   if (functional.length === 0 && pendingLeadingEffects.length > 0) {
     functional.push({
       rawIdentifier: '__identity__',
@@ -275,14 +290,10 @@ function attachBuiltinEffects(pipeline: PipelineCommand[]): {
       fields: [],
       rawArgs: [],
       effects: [...pendingLeadingEffects]
-    } as any);
+    } as PipelineCommand);
     pendingLeadingEffects.length = 0;
   }
 
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[attachBuiltinEffects] functional stages:', functional.map(f => f.rawIdentifier));
-    console.error('[attachBuiltinEffects] first effects:', functional[0]?.effects?.map((e: any) => e.rawIdentifier));
-  }
   return { functionalPipeline: functional, hadLeadingEffects };
 }
 
