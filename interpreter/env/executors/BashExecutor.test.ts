@@ -219,6 +219,18 @@ describe('BashExecutor - Heredoc Support', () => {
       spawnSyncSpy.mockRestore();
     });
   });
+
+  it('does not expand variables or command substitution inside heredoc content', async () => {
+    // Force heredoc path for even small values
+    process.env.MLLD_BASH_HEREDOC = '1';
+    process.env.MLLD_MAX_BASH_ENV_VAR_SIZE = '8';
+
+    const executor = new BashExecutor(mockErrorUtils, '/tmp', mockVariableProvider);
+    const tricky = "literal $(echo hacked) $HOME `uname`";
+
+    const out = await executor.execute('printf "%s" "$x"', {}, undefined, { x: tricky });
+    expect(out).toBe(tricky);
+  });
   
   describe('Debug Logging', () => {
     it('should log when heredocs are used in debug mode', async () => {
