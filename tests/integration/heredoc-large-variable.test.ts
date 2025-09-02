@@ -30,6 +30,7 @@ describe('Bash heredoc integration', () => {
 /exe @native_echo(arg) = {echo "node executed"}
 /show @shell_echo(@content)
 /show @native_echo(@content)
+/run @native_echo(@content)
 /show @content.length()
 /run { rm -f big.txt }
 `;
@@ -47,7 +48,9 @@ describe('Bash heredoc integration', () => {
     );
 
     expect(stdout).toContain('shell executed');
-    expect(stdout).toContain('node executed');
+    // Should appear at least twice: once from /show, once from /run exec-invocation
+    const nodeEchoCount = (stdout.match(/node executed/g) || []).length;
+    expect(nodeEchoCount).toBeGreaterThanOrEqual(2);
     expect(stdout).toContain('215920');
   });
 });

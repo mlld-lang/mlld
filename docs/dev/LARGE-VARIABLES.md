@@ -93,29 +93,31 @@ parameters. Arrays of LoadContentResult are joined with a blank line between ent
 - Implementation: `interpreter/env/bash-variable-adapter.ts`
 - Rationale: bash expects plain strings; unwrapping preserves user intent for `$var`.
 
-### Run Command Guardrails (/run)
+### Run Command Behavior (/run)
 
-Simple `/run { ... }` does not use heredocs. To prevent hard-to-diagnose E2BIG failures,
-we proactively detect oversized payloads and return a helpful error suggesting:
+By default, simple `/run { ... }` will automatically fall back to bash execution
+when command or env payloads exceed conservative limits, avoiding Node's E2BIG.
+This fallback streams the command via stdin and, when parameters are present,
+uses heredocs for oversized values. This makes large-data use transparent in most cases.
 
-- Use `/run sh { ... }` or `/exe ... = bash { ... }` to leverage heredocs
-- Pass file paths/manifests or stream via stdin
-- Reduce or split the data
-
-Configurable thresholds for these guards:
+Configurable thresholds for the fallback check:
 
 - `MLLD_MAX_SHELL_ENV_VAR_SIZE` (default 131072): per-variable env size guard
 - `MLLD_MAX_SHELL_ENV_TOTAL_SIZE` (default ~200KB): total env override size guard
 - `MLLD_MAX_SHELL_COMMAND_SIZE` (default 131072): command payload size guard
 - `MLLD_MAX_SHELL_ARGS_ENV_TOTAL` (default ~256KB): combined args+env size guard
 
-Implementation: `interpreter/env/executors/ShellCommandExecutor.ts`
+Implementation:
+- Pre-check and fallback: `interpreter/env/executors/CommandExecutorFactory.ts`
+- Strict simple executor (used when not falling back): `interpreter/env/executors/ShellCommandExecutor.ts`
 
 ### Default Behavior and Opt-out
 
 - Bash/sh heredoc injection: ON by default (toggle via `MLLD_BASH_HEREDOC`)
 - Variables injected via heredoc are shell-local (not exported)
-- `/run` remains strict (no heredocs), with friendly guidance when payloads are too large
+- `/run` auto-fallback to bash for large payloads is ON by default
+- Set `MLLD_DISABLE_SH=1` to disable fallback and keep `/run` strict (useful for
+  debugging or enforcing policy until security controls are in place)
 
 ### Related Files
 
