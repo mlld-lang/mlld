@@ -117,26 +117,10 @@ export async function evaluateShow(
       throw new Error('Show variable directive missing variable reference');
     }
 
-    // Process any attached pipeline for this invocation via unified pipeline
-    try {
-      const { processPipeline } = await import('./pipeline/unified-processor');
-      const hasPipeline = Boolean((directive as any)?.values?.withClause?.pipeline || (directive as any)?.meta?.withClause?.pipeline || (directive as any)?.values?.pipeline);
-      if (hasPipeline) {
-        const isRetryable = true; // Exec invocations are retryable as sources
-        const wrappedValue = { value: content, metadata: { sourceFunction: invocation } } as any;
-        content = await processPipeline({
-          value: wrappedValue,
-          env,
-          node: invocation,
-          directive,
-          isRetryable,
-          identifier: 'show',
-          location: directive.location
-        });
-      }
-    } catch {
-      // Ignore pipeline processing errors here; content already computed
-    }
+    // NOTE: Do not pre-process pipelines here. For show-invocation, we rely on
+    // evaluateExecInvocation(invocation, env) to execute any attached withClause
+    // (including parallel groups) correctly. Pre-processing here can interfere
+    // with retry/source wiring and produce partial outputs.
 
     // Get variable from environment or handle template literals
     let variable: any;

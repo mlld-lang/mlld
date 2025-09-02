@@ -7,7 +7,8 @@ import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { isExecutableVariable, createSimpleTextVariable, createObjectVariable, createArrayVariable, createPrimitiveVariable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
-import { MlldInterpreterError } from '@core/errors';
+import { MlldInterpreterError, MlldCommandExecutionError } from '@core/errors';
+import { CommandUtils } from '../env/CommandUtils';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
@@ -872,25 +873,88 @@ export async function evaluateExecInvocation(
       }
     }
     
-    // Execute the command with environment variables
-    const commandOutput = await execEnv.executeCommand(command, { env: envVars });
+    // Check if any referenced env var is oversized; if so, optionally fallback to bash heredoc
+    const perVarMax = (() => {
+      const v = process.env.MLLD_MAX_SHELL_ENV_VAR_SIZE;
+      if (!v) return 128 * 1024; // 128KB default
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
+    })();
+    const needsBashFallback = Object.values(envVars).some(v => Buffer.byteLength(v || '', 'utf8') > perVarMax);
+    const fallbackDisabled = (() => {
+      const v = (process.env.MLLD_DISABLE_COMMAND_BASH_FALLBACK || '').toLowerCase();
+      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+    })();
     
-    // Try to parse as JSON if it looks like JSON
-    if (typeof commandOutput === 'string' && commandOutput.trim()) {
-      const trimmed = commandOutput.trim();
-      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
-          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-        try {
-          result = JSON.parse(trimmed);
-        } catch {
-          // Not valid JSON, use as-is
+    if (needsBashFallback && !fallbackDisabled) {
+      // Preserve ShellCommandExecutor security validation
+      try {
+        CommandUtils.validateAndParseCommand(command);
+      } catch (error) {
+        throw new MlldCommandExecutionError(
+          error instanceof Error ? error.message : String(error),
+          context?.sourceLocation,
+          {
+            command,
+            exitCode: 1,
+            duration: 0,
+            stderr: error instanceof Error ? error.message : String(error),
+            workingDirectory: (execEnv as any).getProjectRoot?.() || '',
+            directiveType: context?.directiveType || 'run'
+          }
+        );
+      }
+      // Build params for bash execution using evaluated argument values, but only those referenced
+      const codeParams: Record<string, any> = {};
+      for (let i = 0; i < params.length; i++) {
+        const paramName = params[i];
+        if (!referencesParam(command, paramName)) continue;
+        codeParams[paramName] = evaluatedArgs[i];
+      }
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[exec-invocation] Falling back to bash heredoc for oversized command params', {
+          commandSnippet: command.slice(0, 120),
+          paramCount: Object.keys(codeParams).length
+        });
+      }
+      const commandOutput = await execEnv.executeCode(command, 'sh', codeParams);
+      // Try to parse as JSON if it looks like JSON
+      if (typeof commandOutput === 'string' && commandOutput.trim()) {
+        const trimmed = commandOutput.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          try {
+            result = JSON.parse(trimmed);
+          } catch {
+            result = commandOutput;
+          }
+        } else {
           result = commandOutput;
         }
       } else {
         result = commandOutput;
       }
     } else {
-      result = commandOutput;
+      // Execute the command with environment variables
+      const commandOutput = await execEnv.executeCommand(command, { env: envVars });
+      
+      // Try to parse as JSON if it looks like JSON
+      if (typeof commandOutput === 'string' && commandOutput.trim()) {
+        const trimmed = commandOutput.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          try {
+            result = JSON.parse(trimmed);
+          } catch {
+            // Not valid JSON, use as-is
+            result = commandOutput;
+          }
+        } else {
+          result = commandOutput;
+        }
+      } else {
+        result = commandOutput;
+      }
     }
   }
   // Handle code executables
@@ -1354,6 +1418,23 @@ export async function evaluateExecInvocation(
         const functional: any[] = [];
         const pending: any[] = [];
         for (const s of normalizedPipeline) {
+          // Preserve parallel groups (arrays) as-is
+          if (Array.isArray(s)) {
+            // If we had pending effects before a group, attach them to a synthetic identity before the group
+            if (pending.length > 0) {
+              functional.push({
+                rawIdentifier: '__identity__',
+                identifier: [],
+                args: [],
+                fields: [],
+                rawArgs: [],
+                effects: [...pending]
+              });
+              pending.length = 0;
+            }
+            functional.push(s);
+            continue;
+          }
           const name = s.rawIdentifier;
           if (isBuiltinEffect(name)) {
             if (functional.length > 0) {

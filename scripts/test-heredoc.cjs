@@ -98,7 +98,7 @@ tests.push({
   script: `
 /var @data = \`${'x'.repeat(100000)}\`
 /exe @count(msg) = sh {
-  echo "Length: $(echo -n "$msg" | wc -c)"
+  echo "Length: $(echo -n \"$msg\" | wc -c | tr -d '[:space:]')"
 }
 /show @count(@data)
 `,
@@ -116,7 +116,7 @@ tests.push({
   script: `
 /var @data = \`${'y'.repeat(200000)}\`
 /exe @verify(content) = sh {
-  echo "Length: $(echo -n "$content" | wc -c)"
+  echo "Length: $(echo -n \"$content\" | wc -c | tr -d '[:space:]')"
   echo "First char: $(echo -n "$content" | head -c 1)"
   echo "Last char: $(echo -n "$content" | tail -c 1)"
 }
@@ -138,9 +138,9 @@ tests.push({
 /var @data2 = \`${'b'.repeat(70000)}\`
 /var @data3 = \`${'c'.repeat(70000)}\`
 /exe @multi(x, y, z) = sh {
-  echo "X length: $(echo -n "$x" | wc -c)"
-  echo "Y length: $(echo -n "$y" | wc -c)"
-  echo "Z length: $(echo -n "$z" | wc -c)"
+  echo "X length: $(echo -n \"$x\" | wc -c | tr -d '[:space:]')"
+  echo "Y length: $(echo -n \"$y\" | wc -c | tr -d '[:space:]')"
+  echo "Z length: $(echo -n \"$z\" | wc -c | tr -d '[:space:]')"
   echo "X char: $(echo -n "$x" | head -c 1)"
   echo "Y char: $(echo -n "$y" | head -c 1)"
   echo "Z char: $(echo -n "$z" | head -c 1)"
@@ -189,7 +189,7 @@ tests.push({
   script: `
 /var @data = \`${'x'.repeat(50)}MLLD_EOF_test${'y'.repeat(50)}\`
 /exe @check(content) = sh {
-  echo "Length: $(echo -n "$content" | wc -c)"
+  echo "Length: $(echo -n \"$content\" | wc -c | tr -d '[:space:]')"
   echo "Contains marker: $(echo "$content" | grep -o "MLLD_EOF_test" || echo "not found")"
 }
 /show @check(@data)
@@ -208,7 +208,7 @@ tests.push({
   script: `
 /var @huge = \`${'m'.repeat(1000000)}\`
 /exe @process(data) = sh {
-  echo "Size: $(echo -n "$data" | wc -c)"
+  echo "Size: $(echo -n \"$data\" | wc -c | tr -d '[:space:]')"
   echo "MD5: $(echo -n "$data" | md5sum | cut -d' ' -f1)"
 }
 /show @process(@huge)
@@ -238,7 +238,7 @@ tests.push({
   script: `
 /var @filedata = <large.txt>
 /exe @analyze(content) = sh {
-  echo "File size: $(echo -n "$content" | wc -c)"
+  echo "File size: $(echo -n \"$content\" | wc -c | tr -d '[:space:]')"
   echo "First word: $(echo "$content" | head -c 4)"
 }
 /show @analyze(@filedata)
