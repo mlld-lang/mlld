@@ -58,7 +58,9 @@ function runMlld(scriptPath, env = {}) {
     env: { 
       ...process.env, 
       MLLD_BASH_HEREDOC: process.env.MLLD_BASH_HEREDOC || '1',
-      MLLD_DEBUG_BASH_SCRIPT: process.env.MLLD_DEBUG_BASH_SCRIPT || '1',
+      // Default to not dumping full bash script to keep tests fast;
+      // individual tests can enable via env override when needed.
+      MLLD_DEBUG_BASH_SCRIPT: process.env.MLLD_DEBUG_BASH_SCRIPT || '0',
       ...env 
     },
     encoding: 'utf8',
