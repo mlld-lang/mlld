@@ -235,7 +235,11 @@ tests.push({
 /exe @echo_it2(big) = { echo @big bar }
 /show @echo_it2(@huge)
 `,
-  expected: (output) => output.includes(' bar'),
+  expected: (output) => {
+    // Ensure a substantial slice of the payload is present and the trailing marker remains
+    const bigSlice = 'n'.repeat(20000);
+    return output.includes(bigSlice) && output.includes(' bar');
+  },
   shouldPass: true
 });
 
