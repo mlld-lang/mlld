@@ -245,6 +245,26 @@ tests.push({
   shouldPass: true
 });
 
+// Test 7.6: Ensure both /show and /run produce output with fallback for large payloads
+tests.push({
+  name: 'Show and Run consistent output for large var fallback',
+  env: {
+    MLLD_BASH_HEREDOC: '1'
+  },
+  script: `
+/var @huge = \`${'n'.repeat(200000)}\`
+/exe @echo_it2(big) = { echo @big bar }
+/show @echo_it2(@huge)
+/run @echo_it2(@huge)
+`,
+  expected: (output) => {
+    const bigSlice = 'n'.repeat(20000);
+    const countBars = (output.match(/ bar/g) || []).length;
+    return output.includes(bigSlice) && countBars >= 2;
+  },
+  shouldPass: true
+});
+
 // Test 8: Load from file and pass to bash
 tests.push({
   name: 'Load large file and process with heredoc',
