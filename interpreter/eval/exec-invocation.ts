@@ -826,6 +826,28 @@ export async function evaluateExecInvocation(
   }
   // Handle command executables
   else if (isCommandExecutable(definition)) {
+    // First, detect which parameters are referenced in the template BEFORE interpolation
+    // This is crucial for deciding when to use bash fallback for large variables
+    const referencedInTemplate = new Set<string>();
+    try {
+      const nodes = definition.commandTemplate as any[];
+      if (Array.isArray(nodes)) {
+        for (const n of nodes) {
+          if (n && typeof n === 'object' && n.type === 'VariableReference' && typeof n.identifier === 'string') {
+            referencedInTemplate.add(n.identifier);
+          } else if (n && typeof n === 'object' && n.type === 'Text' && typeof (n as any).content === 'string') {
+            // Also detect literal @name patterns in text segments
+            for (const pname of params) {
+              const re = new RegExp(`@${pname}(?![A-Za-z0-9_])`);
+              if (re.test((n as any).content)) {
+                referencedInTemplate.add(pname);
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+    
     // Interpolate the command template with parameters using ShellCommand context
     let command = await interpolate(definition.commandTemplate, execEnv, InterpolationContext.ShellCommand);
     // Normalize common escaped sequences for usability in oneliners
@@ -850,7 +872,9 @@ export async function evaluateExecInvocation(
     const envVars: Record<string, string> = {};
     const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const referencesParam = (cmd: string, name: string) => {
-      // Match $name (not followed by word char) or ${name}, avoiding escaped dollars (\$)
+      // Prefer original template reference detection so interpolation doesn't hide usage
+      if (referencedInTemplate.has(name)) return true;
+      // Also check for $name (not followed by word char) or ${name}, avoiding escaped dollars (\$)
       const n = escapeRegex(name);
       const simple = new RegExp(`(^|[^\\\\])\\$${n}(?![A-Za-z0-9_])`);
       const braced = new RegExp(`\\$\\{${n}\\}`);
@@ -887,15 +911,40 @@ export async function evaluateExecInvocation(
     })();
     
     if (needsBashFallback && !fallbackDisabled) {
-      // Preserve ShellCommandExecutor security validation
+      // Build a bash-friendly command string where param refs stay as "$name"
+      // so BashExecutor can inject them via heredoc.
+      let fallbackCommand = '';
       try {
-        CommandUtils.validateAndParseCommand(command);
+        const nodes = definition.commandTemplate as any[];
+        if (Array.isArray(nodes)) {
+          for (const n of nodes) {
+            if (n && typeof n === 'object' && n.type === 'VariableReference' && typeof n.identifier === 'string' && params.includes(n.identifier)) {
+              fallbackCommand += `"$${n.identifier}"`;
+            } else if (n && typeof n === 'object' && 'content' in n) {
+              fallbackCommand += String((n as any).content || '');
+            } else if (typeof n === 'string') {
+              fallbackCommand += n;
+            } else {
+              // Fallback: interpolate conservatively for unexpected nodes
+              fallbackCommand += await interpolate([n as any], execEnv, InterpolationContext.ShellCommand);
+            }
+          }
+        } else {
+          fallbackCommand = command;
+        }
+      } catch {
+        fallbackCommand = command;
+      }
+
+      // Validate base command semantics (keep same security posture)
+      try {
+        CommandUtils.validateAndParseCommand(fallbackCommand);
       } catch (error) {
         throw new MlldCommandExecutionError(
           error instanceof Error ? error.message : String(error),
           context?.sourceLocation,
           {
-            command,
+            command: fallbackCommand,
             exitCode: 1,
             duration: 0,
             stderr: error instanceof Error ? error.message : String(error),
@@ -904,6 +953,7 @@ export async function evaluateExecInvocation(
           }
         );
       }
+
       // Build params for bash execution using evaluated argument values, but only those referenced
       const codeParams: Record<string, any> = {};
       for (let i = 0; i < params.length; i++) {
@@ -913,11 +963,11 @@ export async function evaluateExecInvocation(
       }
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[exec-invocation] Falling back to bash heredoc for oversized command params', {
-          commandSnippet: command.slice(0, 120),
+          fallbackSnippet: fallbackCommand.slice(0, 120),
           paramCount: Object.keys(codeParams).length
         });
       }
-      const commandOutput = await execEnv.executeCode(command, 'sh', codeParams);
+      const commandOutput = await execEnv.executeCode(fallbackCommand, 'sh', codeParams);
       // Try to parse as JSON if it looks like JSON
       if (typeof commandOutput === 'string' && commandOutput.trim()) {
         const trimmed = commandOutput.trim();

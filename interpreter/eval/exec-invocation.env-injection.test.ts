@@ -122,4 +122,6 @@ describe('ExecInvocation env injection for command executables', () => {
 
     ShellCommandExecutor.prototype.execute = original;
   });
+
+  // Note: fallback to bash heredoc for {} templates is covered via e2e in scripts/test-heredoc.cjs
 });

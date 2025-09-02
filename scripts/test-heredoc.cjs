@@ -223,6 +223,22 @@ tests.push({
   shouldPass: true
 });
 
+// Test 7.5: Bare {} exec with large variable should fallback to heredoc
+tests.push({
+  name: 'Bare {} exec with large variable uses fallback',
+  env: {
+    MLLD_BASH_HEREDOC: '1',
+    MLLD_MAX_BASH_ENV_VAR_SIZE: '131072'
+  },
+  script: `
+/var @huge = \`${'n'.repeat(200000)}\`
+/exe @echo_it2(big) = { echo @big bar }
+/show @echo_it2(@huge)
+`,
+  expected: (output) => output.includes(' bar'),
+  shouldPass: true
+});
+
 // Test 8: Load from file and pass to bash
 tests.push({
   name: 'Load large file and process with heredoc',
