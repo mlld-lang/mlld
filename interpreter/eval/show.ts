@@ -117,21 +117,10 @@ export async function evaluateShow(
       throw new Error('Show variable directive missing variable reference');
     }
 
-    // Process any attached pipeline for this invocation via unified processor
-    try {
-      const { processPipeline } = await import('./pipeline/unified-processor');
-      const processed = await processPipeline({
-        value: content,
-        env,
-        node: invocation,
-        directive,
-        identifier: 'show',
-        location: directive.location
-      });
-      content = typeof processed === 'string' ? processed : JSONFormatter.stringify(processed);
-    } catch {
-      // Ignore pipeline processing errors here; content already computed
-    }
+    // NOTE: Do not pre-process pipelines here. For show-invocation, we rely on
+    // evaluateExecInvocation(invocation, env) to execute any attached withClause
+    // (including parallel groups) correctly. Pre-processing here can interfere
+    // with retry/source wiring and produce partial outputs.
 
     // Get variable from environment or handle template literals
     let variable: any;

@@ -22,22 +22,13 @@ export async function adaptVariablesForBash(
 ): Promise<{ envVars: Record<string, string>; tempFiles: string[] }> {
   const bashVars: Record<string, string> = {};
   const tempFiles: string[] = [];
-  const MAX_ENV_VAR_LENGTH = 128 * 1024; // 128KB typical env var limit
 
+  // Always return actual string values. Oversized values are handled by
+  // BashExecutor via heredoc injection, not via temp files here.
   for (const [key, value] of Object.entries(params)) {
-    // Resolve the value - will extract if it's a Variable, pass through if not
     const resolved = await resolveValue(value, env, ResolutionContext.CommandExecution);
     const strValue = convertToString(resolved);
-
-    if (strValue.length > MAX_ENV_VAR_LENGTH) {
-      const tmpDir = os.tmpdir();
-      const tmpFile = path.join(tmpDir, `mlld_env_${key}_${Date.now()}`);
-      fs.writeFileSync(tmpFile, strValue);
-      bashVars[key] = tmpFile;
-      tempFiles.push(tmpFile);
-    } else {
-      bashVars[key] = strValue;
-    }
+    bashVars[key] = strValue;
   }
 
   return { envVars: bashVars, tempFiles };

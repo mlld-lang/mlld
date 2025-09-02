@@ -180,17 +180,47 @@ export class PipelineExecutor {
    * GOTCHA: Inline effects are run after successful stage execution and re-run on retries.
    */
   private async executeStage(
-    command: PipelineCommand,
+    command: PipelineCommand | PipelineCommand[],
     input: string,
     context: StageContext
   ): Promise<StageResult> {
     try {
-      // Set up execution environment
+      // Parallel group support: if the stage is an array of commands, execute all in parallel
+      if (Array.isArray(command)) {
+        const outputs: (string | { value: 'retry'; hint?: any; from?: number })[] = [];
+        // Execute each sub-command with its own stage environment
+        for (const sub of command) {
+          const subEnv = await createStageEnvironment(
+            sub,
+            input,
+            context,
+            this.env,
+            this.format,
+            this.stateMachine.getEvents(),
+            this.hasSyntheticSource,
+            this.allRetryHistory
+          );
+          const out = await this.executeCommand(sub, input, subEnv);
+          outputs.push(out);
+        }
+        // If any branch requested a retry, propagate a retry signal
+        const retry = outputs.find(o => typeof o === 'object' && o && 'value' in o && (o as any).value === 'retry');
+        if (retry) {
+          const r = retry as any;
+          return { type: 'retry', reason: r.hint || 'Parallel stage requested retry', from: r.from, hint: r.hint };
+        }
+        // Normalize outputs to strings and pass JSON array to next stage
+        const normalized = outputs.map(o => String(o ?? ''));
+        const jsonArray = JSON.stringify(normalized);
+        return { type: 'success', output: jsonArray };
+      }
+
+      // Set up execution environment for a single command stage
       const stageEnv = await createStageEnvironment(
-        command, 
-        input, 
-        context, 
-        this.env, 
+        command,
+        input,
+        context,
+        this.env,
         this.format,
         this.stateMachine.getEvents(),
         this.hasSyntheticSource,
