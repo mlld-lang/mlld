@@ -165,7 +165,8 @@ tests.push({
   name: 'Debug output shows heredoc usage',
   env: { 
     MLLD_BASH_HEREDOC: '1',
-    MLLD_DEBUG: 'true',
+    // Use MLLD_DEBUG_BASH_SCRIPT to avoid CLI resetting MLLD_DEBUG
+    MLLD_DEBUG_BASH_SCRIPT: '1',
     MLLD_MAX_BASH_ENV_VAR_SIZE: '1000' // Very low threshold
   },
   script: `
