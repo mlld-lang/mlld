@@ -132,7 +132,7 @@ This pattern is defined in `grammar/patterns/variables.peggy` and used by both `
 
 ## Built-in Transformers
 
-As of version 1.4.2, mlld includes built-in transformers that integrate seamlessly with the pipeline system.
+mlld includes built-in transformers that integrate seamlessly with the pipeline system.
 
 ### Architecture
 
@@ -194,7 +194,30 @@ Pipeline stages automatically preserve LoadContentResult metadata through JavaSc
 
 **Implementation**: Pipeline execution wraps JS functions with `AutoUnwrapManager.executeWithPreservation()` - arrays use exact content matching, single files get metadata auto-reattached to transformed content.
 
-## Pipeline Retry Architecture (v2.0.0+)
+### Parallel Execution
+
+Pipeline stages run in parallel when grouped with `||`.
+
+- Grouping: `A || B || C` forms one stage that executes `A`, `B`, and `C` concurrently; results preserve command order.
+- With-clause parity: Nested arrays in `with { pipeline: [...] }` represent a parallel stage. Example: `with { pipeline: [ [@left, @right], @combine ] }` is equivalent to `| @left || @right | @combine`.
+- Shorthand rule: Shorthand pipelines cannot start with `||`. The parser returns an error explaining that `||` runs in parallel with the previous stage, which the source stage does not have.
+- Output: The next stage receives a JSON array string of the group’s outputs.
+- Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
+- Effects: Inline effects attached before a parallel group run once per branch after that branch succeeds; effect failures abort the pipeline.
+- Rate limits: 429/“rate limit” errors in a branch use exponential backoff.
+
+See tests in `tests/pipeline/parallel-runtime.test.ts` for ordering, concurrency caps, failure behavior, and effects.
+
+#### Related: /for Parallel
+- Iterator parallelism uses the same concurrency utility as pipelines but has different semantics.
+- `/for parallel` (see `docs/dev/ITERATORS.md`) streams directive outputs as iterations complete (order not guaranteed), while the collection form preserves input order.
+- Pipeline groups always deliver a JSON array string to the next stage, maintain declaration order, and do not support `retry` from inside the group.
+
+#### Nested Groups
+- Nested parallel groups are not supported semantically. While AST arrays can nest syntactically, execution treats each array as a single stage boundary and does not introduce multi-level parallel orchestration.
+- If you need multiple parallel phases, model them as separate stages with validation between them (e.g., parallel → combine/validate → parallel).
+
+## Pipeline Retry Architecture
 
 The pipeline retry system enables automatic retry of failed or invalid pipeline steps through a simplified state machine architecture.
 
@@ -595,7 +618,7 @@ Test coverage includes:
 - Backwards compatibility
 - Multi-stage pipelines with format specified
 
-## Variable Type System Integration (v2.0.0+)
+## Variable Type System Integration
 
 The pipeline system integrates with mlld's Variable type system, which wraps all values with metadata about their source, type, and context.
 
@@ -1189,4 +1212,3 @@ Examples:
 - Inside `@retriedStage` body: `@ctx.hint` is available.
 - In the inline `show` effect: `@ctx.hint == null`.
 - In `@requester`: `@ctx.hint == null`.
-

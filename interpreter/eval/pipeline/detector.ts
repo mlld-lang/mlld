@@ -6,7 +6,7 @@
  */
 
 import type { DirectiveNode } from '@core/types';
-import type { PipelineCommand } from '@core/types';
+import type { PipelineStage } from '@core/types';
 
 // PipelineCommand type is defined centrally in core/types/run.ts
 
@@ -14,7 +14,7 @@ import type { PipelineCommand } from '@core/types';
  * Unified pipeline detection result
  */
 export interface DetectedPipeline {
-  pipeline: PipelineCommand[];
+  pipeline: PipelineStage[];
   source: 'node-pipes' | 'node-withClause' | 'directive-values' | 'directive-meta';
   format?: string;
   isRetryable?: boolean;
@@ -87,7 +87,7 @@ export function detectPipeline(
  * Condensed pipes (from @var|@transform syntax) need to be converted
  * to the standard PipelineCommand format used by executePipeline.
  */
-function convertCondensedPipe(pipe: any): PipelineCommand {
+function convertCondensedPipe(pipe: any): PipelineStage {
   // Handle different condensed pipe formats
   if (pipe.type === 'CondensedPipe') {
     return {
@@ -131,7 +131,7 @@ export function extractPipelineMetadata(
   node: any,
   directive?: DirectiveNode
 ): {
-  pipeline?: PipelineCommand[];
+  pipeline?: PipelineStage[];
   format?: string;
   trust?: string;
   needs?: any;

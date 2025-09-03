@@ -3,6 +3,8 @@ import { evaluate, interpolate, type EvalResult } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { MlldDirectiveError } from '@core/errors';
 import { toIterable } from './for-utils';
+import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
+import { RateLimitRetry, isRateLimitError } from '../eval/pipeline/rate-limit-retry';
 import { createArrayVariable, createObjectVariable } from '@core/types/variable';
 import { isVariable, extractVariableValue } from '../utils/variable-resolution';
 import { VariableImporter } from './import/VariableImporter';
@@ -75,58 +77,63 @@ export async function evaluateForDirective(
       );
     }
 
-    // Execute action for each item
-    let i = 0;
+    // Determine parallel options (directive-specified or inherited from parent scope)
+    const specified = (directive.values as any).forOptions as { parallel?: boolean; cap?: number; rateMs?: number } | undefined;
+    const inherited = (env as any).__forOptions as typeof specified | undefined;
+    const effective = specified ?? inherited;
+
     const iterableArray = Array.from(iterable);
-    
-    for (const [key, value] of iterableArray) {
-      
+
+    const runOne = async (entry: [any, any], idx: number) => {
+      const [key, value] = entry;
       let childEnv = env.createChildEnvironment();
-      // Preserve Variable wrappers when setting iteration variable
+      // Inherit forOptions for nested loops if set
+      if (effective) (childEnv as any).__forOptions = effective;
       const iterationVar = ensureVariable(varName, value);
       childEnv.setVariable(varName, iterationVar);
-
-      // For objects, bind key with underscore pattern
       if (key !== null && typeof key === 'string') {
         const keyVar = ensureVariable(`${varName}_key`, key);
         childEnv.setVariable(`${varName}_key`, keyVar);
       }
 
-      // Evaluate action in child environment
-      // Handle action which might be an array of nodes (following /when pattern)
-      // IMPORTANT: Get a fresh reference to the action nodes for each iteration
-      // to avoid any potential mutation issues
       const actionNodes = directive.values.action;
-      let actionResult: any = { value: undefined, env: childEnv };
-      
-      
-      for (const actionNode of actionNodes) {
+      const retry = new RateLimitRetry();
+      while (true) {
         try {
-          actionResult = await evaluate(actionNode, childEnv);
-          // Update childEnv to the result environment to capture any changes
-          if (actionResult.env) {
-            childEnv = actionResult.env;
+          let actionResult: any = { value: undefined, env: childEnv };
+          for (const actionNode of actionNodes) {
+            actionResult = await evaluate(actionNode, childEnv);
+            if (actionResult.env) childEnv = actionResult.env;
           }
-        } catch (error) {
-          throw error;
+          // Emit bare exec output as effect (legacy behavior)
+          if (
+            directive.values.action.length === 1 &&
+            directive.values.action[0].type === 'ExecInvocation' &&
+            actionResult.value !== undefined && actionResult.value !== null
+          ) {
+            const outputContent = String(actionResult.value) + '\n';
+            env.emitEffect('both', outputContent, { source: directive.values.action[0].location });
+          }
+          retry.reset();
+          break;
+        } catch (err: any) {
+          if (isRateLimitError(err)) {
+            const again = await retry.wait();
+            if (again) continue;
+          }
+          throw err;
         }
       }
-      
-      // No need to transfer nodes - effects are emitted immediately to the shared handler
-      
-      
-      // If the action was a bare exec invocation that produced output,
-      // emit it as an effect instead of creating a node
-      if (directive.values.action.length === 1 && 
-          directive.values.action[0].type === 'ExecInvocation' &&
-          actionResult.value !== undefined && actionResult.value !== null) {
-        // Emit the exec output as a 'both' effect (shows on stdout and adds to document)
-        const outputContent = String(actionResult.value) + '\n';
-        env.emitEffect('both', outputContent, { 
-          source: directive.values.action[0].location 
-        });
+      return undefined as void;
+    };
+
+    if (effective?.parallel) {
+      const cap = Math.min(effective.cap ?? getParallelLimit(), iterableArray.length);
+      await runWithConcurrency(iterableArray, cap, runOne, { ordered: false, paceMs: effective.rateMs });
+    } else {
+      for (let i = 0; i < iterableArray.length; i++) {
+        await runOne(iterableArray[i], i);
       }
-      i++;
     }
     
   } finally {
@@ -159,64 +166,57 @@ export async function evaluateForExpression(
   const results: unknown[] = [];
   const errors: Array<{ index: number; error: Error; value: unknown }> = [];
 
-  // Collect results from each iteration
-  for (const [key, value] of iterable) {
+  const specified = (expr.meta as any)?.forOptions as { parallel?: boolean; cap?: number; rateMs?: number } | undefined;
+  const inherited = (env as any).__forOptions as typeof specified | undefined;
+  const effective = specified ?? inherited;
+
+  const iterableArray = Array.from(iterable);
+
+  const runOne = async (entry: [any, any], idx: number) => {
+    const [key, value] = entry;
     let childEnv = env.createChildEnvironment();
-    // Preserve Variable wrappers when setting iteration variable
+    if (effective) (childEnv as any).__forOptions = effective;
     const iterationVar = ensureVariable(varName, value);
     childEnv.setVariable(varName, iterationVar);
-
-    // For objects, bind key with underscore pattern
     if (key !== null && typeof key === 'string') {
       const keyVar = ensureVariable(`${varName}_key`, key);
       childEnv.setVariable(`${varName}_key`, keyVar);
     }
-
     try {
-      // Expression is an array of nodes, evaluate them
       let exprResult: unknown = null;
       if (Array.isArray(expr.expression) && expr.expression.length > 0) {
-        
-        // Handle wrapped content structure (similar to for directive actions)
-        // Don't unwrap templates with interpolation - they need to be evaluated as a whole
         let nodesToEvaluate = expr.expression;
-        
-        // Only unwrap if it's NOT a template requiring interpolation
-        // Templates with hasInterpolation flag should be passed intact to evaluate()
-        if (expr.expression.length === 1 && 
-            expr.expression[0].content && 
-            expr.expression[0].wrapperType &&
-            !expr.expression[0].hasInterpolation) {
-          // Only unwrap non-interpolated content
-          nodesToEvaluate = expr.expression[0].content;
+        if (
+          expr.expression.length === 1 &&
+          (expr.expression[0] as any).content &&
+          (expr.expression[0] as any).wrapperType &&
+          !(expr.expression[0] as any).hasInterpolation
+        ) {
+          nodesToEvaluate = (expr.expression[0] as any).content;
         }
-        
-        // Evaluate all nodes
         const result = await evaluate(nodesToEvaluate, childEnv, { isExpression: true });
-        
-        // Update childEnv if evaluate returned an updated environment
-        if (result.env) {
-          childEnv = result.env;
-        }
-        
-        // No need to transfer nodes - effects are emitted immediately to the shared handler
-        
-        // Extract the actual value from Variables
+        if (result.env) childEnv = result.env;
         if (isVariable(result.value)) {
           exprResult = await extractVariableValue(result.value, childEnv);
         } else {
           exprResult = result.value;
         }
       }
-      results.push(exprResult);
+      return exprResult as any;
     } catch (error) {
-      // Collect error with context
-      errors.push({ 
-        index: results.length, 
-        error: error as Error, 
-        value 
-      });
-      results.push(null);
+      errors.push({ index: idx, error: error as Error, value });
+      return null as any;
+    }
+  };
+
+  if (effective?.parallel) {
+    const cap = Math.min(effective.cap ?? getParallelLimit(), iterableArray.length);
+    const orderedResults = await runWithConcurrency(iterableArray, cap, runOne, { ordered: true, paceMs: effective.rateMs });
+    for (const r of orderedResults) results.push(r);
+  } else {
+    for (let i = 0; i < iterableArray.length; i++) {
+      const r = await runOne(iterableArray[i], i);
+      results.push(r);
     }
   }
 

@@ -832,13 +832,13 @@ WhenPathText
 
 // Output source for when actions (simplified)
 WhenOutputSource
-  = "@" id:BaseIdentifier {
-      // Simple variable reference
+  = varRef:VariableNoTail {
+      // Variable reference (supports field access)
       return {
         type: 'variable',
         subtype: 'outputVariable',
-        values: [helpers.createVariableReferenceNode('identifier', { identifier: id }, location())],
-        raw: '@' + id
+        values: [varRef],
+        raw: '@' + varRef.identifier
       };
     }
   / str:DataString {

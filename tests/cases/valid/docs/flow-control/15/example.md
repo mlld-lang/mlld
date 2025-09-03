@@ -1,12 +1,8 @@
-/exe @source() = when first [
-  @ctx.try == 1 => "draft"
-  * => "final"
+/exe @validator(input) = when first [
+  @input.valid => @input.value
+  @ctx.try < 3 => retry "validation failed"
+  none => "fallback value"
 ]
 
-/exe @validator() = when first [
-  @ctx.input == "draft" => retry "missing title"
-  * => `Used hint: @ctx.hint`
-]
-
-/var @result = @source() | @validator
+/var @result = "invalid" | @validator
 /show @result

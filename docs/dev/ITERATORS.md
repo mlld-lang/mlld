@@ -11,10 +11,12 @@ related-types: core/types { ForDirective, ForExpression, ForeachCommandExpressio
 ## tldr
 
 mlld provides two iteration mechanisms:
-- **`/for`**: Simple iteration over collections with actions (`/for @item in @items => action`)
-- **`foreach`**: Cartesian product over multiple arrays with parameterized commands (`foreach @cmd(@arr1, @arr2)`)
+- **`/for`**: Simple iteration over collections with actions (`/for @item in @items => action`). Executes sequentially by default and supports parallel execution.
+- **`foreach`**: Cartesian product over multiple arrays with parameterized commands (`foreach @cmd(@arr1, @arr2)`).
 
 Both follow mlld's single-pass evaluation and direct execution principles.
+
+Parallelism also exists in pipelines via `||` groups (see docs/dev/PIPELINE.md). Pipeline parallelism is distinct from iterator parallelism and has different semantics (results are collected as a JSON array and `retry` is not supported inside the group).
 
 ## Principles
 
@@ -46,6 +48,7 @@ Key characteristics:
 - Object iteration exposes keys via `@var_key` pattern
 - ForExpression returns ArrayVariable with metadata
 - Error collection continues execution
+  
 
 ### foreach Operator
 
@@ -148,6 +151,14 @@ throw new MlldDirectiveError(
 - Variables preserve wrappers through iteration for type consistency
 - Cartesian product limited to 10,000 combinations for performance
 
+## Parallelism: Iterators vs Pipelines
+
+- Iterators (`/for`) run sequentially by default and support parallel execution.
+- Pipelines support parallel groups: `A || B || C` executes a single stage concurrently. Outputs are collected in declaration order and passed as a JSON array string to the next stage. Concurrency is limited by `MLLD_PARALLEL_LIMIT`.
+- `retry` is not supported from inside a pipeline parallel group; design validation in the following stage and request an upstream retry if needed. Per‑command rate‑limit errors inside the group use exponential backoff.
+
+See also: `docs/dev/PIPELINE.md` (Parallel Execution) for shorthand rules (no leading `||`), with-clause nested-group syntax, and effect behavior on parallel groups.
+
 ## Debugging
 
 ### Grammar Issues
@@ -164,3 +175,33 @@ npm run ast -- '@data results = foreach @cmd(@arr)'
 - Check wrapped content structure in for loop actions
 - Verify child environment node transfer
 - Monitor Variable type preservation through iterations
+
+## /for Parallel Execution
+
+Syntax options:
+
+```mlld
+# Default cap from MLLD_PARALLEL_LIMIT (4 if unset)
+/for parallel @x in @items => show @x
+
+# Per-loop cap override
+/for 3 parallel @x in @items => show @x
+
+# Cap with pacing between task starts (time units: s, m, h, d, w)
+/for (3, 1s) parallel @x in @items => show @x
+
+# Collection form with parallel
+/var @out = for 2 parallel @x in ["a","b","c"] => @upper(@x)
+```
+
+Semantics:
+- Concurrency cap: defaults to `MLLD_PARALLEL_LIMIT` (env), overridable per loop; cap never exceeds collection length.
+- Pacing: optional minimum delay between iteration starts; `(n, 1s)` adds ~1 second between starts across the loop.
+- Directive form: emits effects as iterations complete (non‑deterministic order); continues on error with iteration context; per‑iteration 429/“rate limit” errors use exponential backoff.
+- Expression form: collects results in input order; errors are attached in metadata (`forErrors`) and the corresponding result is `null`.
+- Nested loops: inner loops inherit outer `forOptions` unless overridden.
+
+Implementation references:
+- Grammar: `grammar/patterns/iteration.peggy:ForParallelSpec`, `grammar/directives/for.peggy`
+- Runtime: `interpreter/utils/parallel.ts`, `interpreter/eval/for.ts`
+- Tests: `grammar/tests/for-parallel.test.ts`, `tests/for/parallel-runtime.test.ts`

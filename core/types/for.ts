@@ -14,6 +14,12 @@ export interface ForDirective extends DirectiveNode {
     source: BaseMlldNode[];
     /** Action to execute for each item */
     action: BaseMlldNode[];
+    /** Optional parallel options for this loop */
+    forOptions?: {
+      parallel?: boolean;
+      cap?: number;
+      rateMs?: number;
+    };
   };
   meta: {
     hasVariables: true;
@@ -36,6 +42,11 @@ export interface ForExpression extends BaseMlldNode {
   expression: BaseMlldNode[];
   meta: {
     isForExpression: true;
+    forOptions?: {
+      parallel?: boolean;
+      cap?: number;
+      rateMs?: number;
+    };
   };
 }
 

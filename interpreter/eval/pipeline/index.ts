@@ -1,5 +1,5 @@
 import type { Environment } from '../../env/Environment';
-import type { PipelineCommand } from '@core/types';
+import type { PipelineStage } from '@core/types';
 import { PipelineExecutor } from './executor';
 
 // Re-export types
@@ -22,7 +22,7 @@ export { PipelineExecutor } from './executor';
  */
 export async function executePipeline(
   baseOutput: string,
-  pipeline: PipelineCommand[],
+  pipeline: PipelineStage[],
   env: Environment,
   location?: any,
   format?: string,

@@ -1,7 +1,5 @@
-/var @files = ["config.json", "data.json", "users.json"]
-/exe @processFile(file) = when first [
-  @file.endsWith(".json") => `Processed: @file`
-  * => `Skipped: @file`
+/var @result = @data | @validate | @process
+/when [
+  @result.success => output @result.data to "output.json"
+  !@result.success => show `Processing failed: @result.error`
 ]
-/var @results = foreach @processFile(@files)
-/for @result in @results => show @result

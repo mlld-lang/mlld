@@ -160,6 +160,29 @@ Output:
 [2, 4, 6, 8]
 ```
 
+### Parallel /for
+
+Run iterations in parallel with an optional per-loop cap and pacing between starts. Use the directive form for side effects (order may vary) or the collection form for ordered results.
+
+```mlld
+/exe @upper(s) = js { return String(s).toUpperCase() }
+
+# Directive form (streams as done; order not guaranteed)
+/for parallel @x in ["a","b","c","d"] => show @x
+
+# Cap override and pacing between task starts
+/for (2, 1s) parallel @n in [1,2,3,4] => show `Item: @n`
+
+# Collection form (preserves input order)
+/var @res = for 2 parallel @x in ["x","y","z"] => @upper(@x)
+/show @res
+```
+
+Output (collection form):
+```
+["X","Y","Z"]
+```
+
 ### Foreach Transforms
 
 Use `foreach` to transform collections with templates or executables:
@@ -260,6 +283,30 @@ Output:
 ```
 Used hint: missing title
 ```
+
+### Parallel Pipelines
+
+Run multiple transforms concurrently within a single pipeline stage using `||`.
+
+```mlld
+/exe @left(input) = `L:@input`
+/exe @right(input) = `R:@input`
+/exe @combine(input) = js {
+  // Parallel stage returns a JSON array string
+  const [l, r] = JSON.parse(input);
+  return `${l} | ${r}`;
+}
+
+/var @out = "seed" with { pipeline: [ @left || @right, @combine ] }
+/show @out
+```
+
+Notes:
+- Results preserve order of commands in the group.
+- The next stage receives a JSON array string (parse it or accept as text).
+- Concurrency is capped by `MLLD_PARALLEL_LIMIT` (default `4`).
+- Returning `retry` inside a parallel group is not supported; do validation after the group and request a retry of the previous (non‑parallel) stage if needed.
+- Inline effects attached to grouped commands run after each command completes.
 
 ### Complex Retry Patterns
 

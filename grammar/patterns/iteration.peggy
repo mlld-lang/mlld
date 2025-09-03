@@ -14,6 +14,19 @@ ForIterationPattern "for iteration pattern"
       };
     }
 
+// Optional parallel spec for /for and for-expressions
+ForParallelSpec
+  = _ "(" _ cap:NumberLiteral _ "," _ wait:TimeDurationLiteral _ ")" _ "parallel" {
+      const rateMs = helpers.ttlToSeconds(wait.value, wait.unit) * 1000;
+      return { parallel: true, cap: Number(cap), rateMs };
+    }
+  / _ cap:NumberLiteral _ "parallel" {
+      return { parallel: true, cap: Number(cap) };
+    }
+  / _ "parallel" {
+      return { parallel: true };
+    }
+
 // Single action for for loops - simpler than WhenAction
 ForSingleAction "for action"
   // Support nested for directive (without slash) - creates a nested ForDirective
@@ -119,8 +132,14 @@ ForSingleAction "for action"
       })];
     }
   // Generic handling for other directives (with optional /)
-  / directive:("show" / "var") _ content:VarRHSContent {
-      return helpers.createForActionNode(directive, content, location());
+  / "show" _ content:(UnifiedQuoteOrTemplate / UnifiedReferenceWithTail) ending:StandardDirectiveEnding {
+      // Support both template/quote content and unified references for show actions
+      // Pass along any tail pipeline from the standard directive ending
+      return helpers.createForActionNode('show', content, location(), ending ? ending.tail : null);
+    }
+  / directive:("var") _ content:VarRHSContent ending:StandardDirectiveEnding {
+      // Create the action node; pass ending.tail so pipelines are embedded immutably
+      return helpers.createForActionNode(directive, content, location(), ending ? ending.tail : null);
     }
   / invocation:UnifiedReferenceWithTail {
       // Follow the /when pattern - no @ consumption

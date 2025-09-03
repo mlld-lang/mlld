@@ -1,5 +1,4 @@
-/var @greetings = ["Hello", "Hi", "Hey"]
 /var @names = ["Alice", "Bob", "Charlie"]
-/exe @custom_greeting(greet, name) = :::{{greet}}, {{name}}! Nice to see you.:::
-/var @messages = foreach @custom_greeting(@greetings, @names)
-/show @messages
+/exe @greeting(name) = :::{{name}}, welcome to the team!:::
+/var @welcomes = foreach @greeting(@names)
+/show @welcomes

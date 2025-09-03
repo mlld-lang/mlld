@@ -1,5 +1,5 @@
-/var @result = @data | @validate | @process
+/var @validation = @validate(@input)
 /when [
-  @result.success => output @result.data to "output.json"
-  !@result.success => show `Processing failed: @result.error`
+  @validation.valid => show "Processing successful"
+  !@validation.valid => show `Error: @validation.message`
 ]
