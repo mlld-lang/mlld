@@ -871,13 +871,20 @@ export async function evaluateExecInvocation(
     // passing oversized, unused values into the environment (E2BIG risk).
     const envVars: Record<string, string> = {};
     const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Cache compiled regex per parameter for performance on large templates
+    const paramRegexCache: Record<string, { simple: RegExp; braced: RegExp }> = {};
     const referencesParam = (cmd: string, name: string) => {
       // Prefer original template reference detection so interpolation doesn't hide usage
       if (referencedInTemplate.has(name)) return true;
       // Also check for $name (not followed by word char) or ${name}, avoiding escaped dollars (\$)
-      const n = escapeRegex(name);
-      const simple = new RegExp(`(^|[^\\\\])\\$${n}(?![A-Za-z0-9_])`);
-      const braced = new RegExp(`\\$\\{${n}\\}`);
+      if (!paramRegexCache[name]) {
+        const n = escapeRegex(name);
+        paramRegexCache[name] = {
+          simple: new RegExp(`(^|[^\\\\])\\$${n}(?![A-Za-z0-9_])`),
+          braced: new RegExp(`\\$\\{${n}\\}`)
+        };
+      }
+      const { simple, braced } = paramRegexCache[name];
       return simple.test(cmd) || braced.test(cmd);
     };
     for (let i = 0; i < params.length; i++) {

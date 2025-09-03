@@ -38,12 +38,13 @@ describe('Bash heredoc integration', () => {
     const scriptPath = path.join(projectDir, 'large-variable.mld');
     await writeFile(scriptPath, script);
 
+    const MAX_BUFFER = 10 * 1024 * 1024; // 10MB for large outputs
     const { stdout } = await execAsync(
       `node "${mlldBin}" "${scriptPath}"`,
       {
         cwd: projectDir,
         env: { ...process.env, MLLD_BASH_HEREDOC: '1' },
-        maxBuffer: 10 * 1024 * 1024
+        maxBuffer: MAX_BUFFER
       }
     );
 

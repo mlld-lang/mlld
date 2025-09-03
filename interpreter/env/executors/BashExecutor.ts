@@ -117,9 +117,10 @@ export class BashExecutor extends BaseCommandExecutor {
               console.error(`[BashExecutor] Variable name sanitized: ${k} -> ${safeName}`);
             }
             
-            // Generate unique marker and ensure it doesn't exist in content
+            // Generate unique marker and ensure it doesn't appear at line boundaries in content
             let marker = `MLLD_EOF_${Date.now().toString(36)}_${(++counter).toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-            while (v.includes(`\n${marker}\n`) || v.startsWith(`${marker}\n`) || v.endsWith(`\n${marker}`) || v === marker) {
+            const conflicts = (m: string) => new RegExp(`(?:\\n${m}\\n|^${m}\\n|\\n${m}$|^${m}$)`, 'm').test(v);
+            while (conflicts(marker)) {
               marker = `MLLD_EOF_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}_${counter}`;
             }
             
