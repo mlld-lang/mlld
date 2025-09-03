@@ -146,7 +146,10 @@ export class BashExecutor extends BaseCommandExecutor {
         
         // Optional debug logging
         if (largeVarCount > 0) {
-          try { console.error(`[BashExecutor] Using heredoc for ${largeVarCount} oversized variable(s) (>${MAX_SIZE} bytes)`); } catch {}
+          const debugOn = (process.env.MLLD_DEBUG === 'true') || ((process.env.MLLD_DEBUG_BASH_SCRIPT || '').toLowerCase() === '1');
+          if (debugOn) {
+            try { console.error(`[BashExecutor] Using heredoc for ${largeVarCount} oversized variable(s) (>${MAX_SIZE} bytes)`); } catch {}
+          }
         }
         
         envVars = smallEnv;
