@@ -231,14 +231,19 @@ async function validatePipeline(
  * PipelineCommand.
  */
 function attachBuiltinEffects(pipeline: PipelineCommand[]): {
-  functionalPipeline: PipelineCommand[];
+  functionalPipeline: any[];
   hadLeadingEffects: boolean;
 } {
-  const functional: PipelineCommand[] = [];
+  const functional: any[] = [];
   const pendingLeadingEffects: PipelineCommand[] = [];
   let hadLeadingEffects = false;
 
-  for (const cmd of pipeline) {
+  for (const cmd of pipeline as any[]) {
+    // Preserve parallel groups (arrays) as-is; effects attach only to functional stages
+    if (Array.isArray(cmd)) {
+      functional.push(cmd);
+      continue;
+    }
     const name = cmd.rawIdentifier;
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[attachBuiltinEffects] cmd', name, 'builtin?', isBuiltinEffect(name));
