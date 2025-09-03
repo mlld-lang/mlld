@@ -1,10 +1,12 @@
-/exe @left(input) = `L:@input`
-/exe @right(input) = `R:@input`
-/exe @combine(input) = js {
-  // Parallel stage returns a JSON array string
-  const [l, r] = JSON.parse(input);
-  return `${l} | ${r}`;
-}
+/exe @source() = when first [
+  @ctx.try == 1 => "draft"
+  * => "final"
+]
 
-/var @out = "seed" with { pipeline: [ @left || @right, @combine ] }
-/show @out
+/exe @validator() = when first [
+  @ctx.input == "draft" => retry "missing title"
+  * => `Used hint: @ctx.hint`
+]
+
+/var @result = @source() | @validator
+/show @result

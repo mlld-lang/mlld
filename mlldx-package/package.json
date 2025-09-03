@@ -9,11 +9,7 @@
     "bin/"
   ],
   "dependencies": {
-<<<<<<< HEAD
-    "mlld": "^2.0.0-fix404-3"
-=======
-    "mlld": "^2.0.0-48"
->>>>>>> origin/main
+    "mlld": "^2.0.0-rc49"
   },
   "keywords": [
     "mlld",

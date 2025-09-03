@@ -268,6 +268,10 @@ Use `foreach` to transform collections; use `/for` to execute/collect. Full deta
 /exe @greet(name) = ::Hi @name!::
 /var @gs = foreach @greet(@names)
 /for @n in @names => show `Name: @n`
+
+# Optional parallel forms
+/for parallel @n in @names => show @n              # uses MLLD_PARALLEL_LIMIT (default 4)
+/var @caps = for 2 parallel @n in @names => @greet(@n)  # per-loop cap override
 ```
 
 </RULE_11_ITERATION_OVERVIEW>
@@ -652,6 +656,23 @@ Notes:
 ```
 
 Empty arrays are safe: `/for` emits nothing; `for … =>` returns `[]`. </ITERATION>
+
+Parallel /for (optional):
+
+```mlld
+# Default cap from env (MLLD_PARALLEL_LIMIT, default 4)
+/for parallel @x in @items => show @x
+
+# Cap override and pacing between starts (units: s, m, h, d, w)
+/for (2, 1s) parallel @x in @items => show @x
+
+# Collection form preserves input order
+/var @out = for 3 parallel @x in ["a","b","c"] => @upper(@x)
+```
+
+Notes:
+- Directive form streams results as iterations finish (order not guaranteed); expression form returns results in input order.
+- Concurrency capped by `MLLD_PARALLEL_LIMIT` unless overridden per loop.
 
 <NO_EARLY_EXIT>
 mlld has no `return/exit`. Model outcomes with `/when` and flags.

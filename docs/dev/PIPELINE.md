@@ -208,6 +208,11 @@ Pipeline stages run in parallel when grouped with `||`.
 
 See tests in `tests/pipeline/parallel-runtime.test.ts` for ordering, concurrency caps, failure behavior, and effects.
 
+#### Related: /for Parallel
+- Iterator parallelism uses the same concurrency utility as pipelines but has different semantics.
+- `/for parallel` (see `docs/dev/ITERATORS.md`) streams directive outputs as iterations complete (order not guaranteed), while the collection form preserves input order.
+- Pipeline groups always deliver a JSON array string to the next stage, maintain declaration order, and do not support `retry` from inside the group.
+
 ## Pipeline Retry Architecture
 
 The pipeline retry system enables automatic retry of failed or invalid pipeline steps through a simplified state machine architecture.

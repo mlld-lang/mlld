@@ -79,5 +79,18 @@ describe('/for parallel - Runtime Behavior', () => {
     await interpret(input, { fileSystem, pathService });
     expect(process.env[MAX_KEY]).toBe('3');
   });
-});
 
+  it('enforces pacing between iteration starts for /for (cap, wait) parallel', async () => {
+    const input = `
+/exe @id(input) = js { return input }
+
+/for (3, 0.02s) parallel @x in ["a","b","c","d","e","f"] => show @id(@x)
+`;
+
+    const t0 = Date.now();
+    await interpret(input, { fileSystem, pathService });
+    const elapsed = Date.now() - t0;
+    // With 6 items and 20ms pacing, starts are at least ~100ms apart in total
+    expect(elapsed).toBeGreaterThanOrEqual((6 - 1) * 20 - 15);
+  });
+});
