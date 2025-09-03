@@ -185,13 +185,7 @@ export class PipelineExecutor {
     context: StageContext
   ): Promise<StageResult> {
     try {
-      if (process.env.MLLD_DEBUG === 'true' && !Array.isArray(command)) {
-        // Debug: show attached effects on this stage
-        console.error('[PipelineExecutor] executeStage effects:', {
-          stageId: command.rawIdentifier,
-          effects: Array.isArray((command as any).effects) ? (command as any).effects.map((e: any) => e.rawIdentifier) : []
-        });
-      }
+      // Effects, if any, are attached to functional stages and executed after success
       // Parallel group support: if the stage is an array of commands, execute all in parallel
       if (Array.isArray(command)) {
         const outputs: (string | { value: 'retry'; hint?: any; from?: number })[] = [];

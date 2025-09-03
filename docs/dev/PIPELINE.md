@@ -213,6 +213,10 @@ See tests in `tests/pipeline/parallel-runtime.test.ts` for ordering, concurrency
 - `/for parallel` (see `docs/dev/ITERATORS.md`) streams directive outputs as iterations complete (order not guaranteed), while the collection form preserves input order.
 - Pipeline groups always deliver a JSON array string to the next stage, maintain declaration order, and do not support `retry` from inside the group.
 
+#### Nested Groups
+- Nested parallel groups are not supported semantically. While AST arrays can nest syntactically, execution treats each array as a single stage boundary and does not introduce multi-level parallel orchestration.
+- If you need multiple parallel phases, model them as separate stages with validation between them (e.g., parallel → combine/validate → parallel).
+
 ## Pipeline Retry Architecture
 
 The pipeline retry system enables automatic retry of failed or invalid pipeline steps through a simplified state machine architecture.
