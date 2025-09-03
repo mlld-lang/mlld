@@ -1,8 +1,5 @@
 >> Load entire codebase (could be megabytes)
 /var @allCode = <**/*.js>
 
->> This will error if @allCode > 128KB
-/run {wc -l "@allCode"}
-
->> This works with any size
+>> Previously, this could error if @allCode > 128KB. mlld now auto-falls back to shell when needed.
 /run sh (@allCode) { echo "$allCode" | wc -l }

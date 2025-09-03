@@ -1,13 +1,13 @@
 # Working with Large Variables
 
-mlld can handle large amounts of data like entire codebases. But Node.js has limits when passing large variables to shell commands - typically around 128KB.
+mlld can handle large amounts of data like entire codebases. Node.js has limits when passing large variables to commands (typically around ~128KB–200KB for args+env). mlld now automatically falls back to a safe shell mode for large payloads to avoid these limits.
 
 ## tldr
 
-Use shell mode for large data:
+Use shell mode for large data (mlld will auto-fallback when needed):
 ```mlld
->> This fails with large data
-/run {grep "TODO" "@largefile"}
+>> This usually works automatically now, but explicit shell mode is recommended for clarity when dealing with large data
+/run sh (@largefile) { echo "$largefile" | grep "TODO" }
 
 >> This works with any size  
 /run sh (@largefile) { echo "$largefile" | grep "TODO" }
@@ -21,10 +21,7 @@ Node.js can't pass variables larger than ~128KB to commands - it throws an `E2BI
 >> Load entire codebase (could be megabytes)
 /var @allCode = <**/*.js>
 
->> This will error if @allCode > 128KB
-/run {wc -l "@allCode"}
-
->> This works with any size
+>> Previously, this could error if @allCode > 128KB. mlld now auto-falls back to shell when needed.
 /run sh (@allCode) { echo "$allCode" | wc -l }
 ```
 
@@ -32,7 +29,9 @@ Node.js can't pass variables larger than ~128KB to commands - it throws an `E2BI
 
 ### Use Shell Mode
 
-Switch from simple `/run {...}` to shell mode `/run sh {...}`:
+Switch from simple `/run {...}` to shell mode `/run sh {...}` when writing workflows, even though mlld auto-fallbacks, because:
+ - It’s explicit about using `$var` syntax inside the block
+ - It avoids implicit fallback and makes intent clear in reviews
 
 ```mlld
 >> Simple run - limited to ~128KB, uses @var syntax
@@ -82,9 +81,11 @@ Pipe data to tools instead of passing as arguments:
 
 ## How It Works
 
-- Simple `/run {...}` passes variables through Node's environment (128KB limit)
-- Shell mode `/run sh {...}` injects large variables directly into the shell script instead of the environment, bypassing Node's limit
-- Your variables work the same - just use `$varname` in shell mode
+- Simple `/run {...}` now auto-falls back to bash when command/env payloads are large. The script is streamed via stdin to avoid args+env limits.
+- Shell mode `/run sh {...}` injects large variables directly into the shell script instead of the environment (via heredoc), bypassing Node's limit.
+- Your variables work the same - just use `$varname` in shell mode.
+
+To disable auto-fallback (for debugging/policy), set `MLLD_DISABLE_SH=1`. In that mode, `/run` is strict and will error with guidance when payloads are too large.
 
 ## When You'll Hit This
 
@@ -96,11 +97,4 @@ Common scenarios that exceed 128KB:
 
 ## Error Messages
 
-mlld gives helpful errors when you hit the limit:
-
-```
-Error: Variable '@data' is too large (215KB)
-Try using: /run sh { ... } or /exe ... = sh { ... }
-```
-
-Just follow the suggestion to switch to shell mode.
+With the default auto-fallback, you should rarely see size-related errors. If `MLLD_DISABLE_SH=1` is set, `/run` will be strict and show helpful guidance when payloads are too large.

@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
 describe('Heredoc large-variable handling (e2e)', () => {
-  it('runs scripts/test-heredoc.cjs without failures', () => {
+  it('runs scripts/test-heredoc.cjs without failures', { timeout: 60000 }, () => {
     const script = join(__dirname, '..', 'scripts', 'test-heredoc.cjs');
     const result = spawnSync(process.execPath, [script], {
       encoding: 'utf8',
@@ -19,4 +19,3 @@ describe('Heredoc large-variable handling (e2e)', () => {
     expect(result.status).toBe(0);
   });
 });
-

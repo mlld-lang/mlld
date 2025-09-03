@@ -1,6 +1,6 @@
 {
   "name": "mlldx",
-  "version": "2.0.0-fix404-3",
+  "version": "2.0.0-rc49",
   "description": "mlldx - ephemeral mlld for CI/CD and serverless environments",
   "bin": {
     "mlldx": "bin/mlldx.js"
@@ -9,7 +9,11 @@
     "bin/"
   ],
   "dependencies": {
+<<<<<<< HEAD
     "mlld": "^2.0.0-fix404-3"
+=======
+    "mlld": "^2.0.0-48"
+>>>>>>> origin/main
   },
   "keywords": [
     "mlld",

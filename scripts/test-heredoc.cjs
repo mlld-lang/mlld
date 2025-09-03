@@ -58,7 +58,9 @@ function runMlld(scriptPath, env = {}) {
     env: { 
       ...process.env, 
       MLLD_BASH_HEREDOC: process.env.MLLD_BASH_HEREDOC || '1',
-      MLLD_DEBUG_BASH_SCRIPT: process.env.MLLD_DEBUG_BASH_SCRIPT || '1',
+      // Default to not dumping full bash script to keep tests fast;
+      // individual tests can enable via env override when needed.
+      MLLD_DEBUG_BASH_SCRIPT: process.env.MLLD_DEBUG_BASH_SCRIPT || '0',
       ...env 
     },
     encoding: 'utf8',
@@ -163,7 +165,8 @@ tests.push({
   name: 'Debug output shows heredoc usage',
   env: { 
     MLLD_BASH_HEREDOC: '1',
-    MLLD_DEBUG: 'true',
+    // Use MLLD_DEBUG_BASH_SCRIPT to avoid CLI resetting MLLD_DEBUG
+    MLLD_DEBUG_BASH_SCRIPT: '1',
     MLLD_MAX_BASH_ENV_VAR_SIZE: '1000' // Very low threshold
   },
   script: `
@@ -239,6 +242,26 @@ tests.push({
     // Ensure a substantial slice of the payload is present and the trailing marker remains
     const bigSlice = 'n'.repeat(20000);
     return output.includes(bigSlice) && output.includes(' bar');
+  },
+  shouldPass: true
+});
+
+// Test 7.6: Ensure both /show and /run produce output with fallback for large payloads
+tests.push({
+  name: 'Show and Run consistent output for large var fallback',
+  env: {
+    MLLD_BASH_HEREDOC: '1'
+  },
+  script: `
+/var @huge = \`${'n'.repeat(200000)}\`
+/exe @echo_it2(big) = { echo @big bar }
+/show @echo_it2(@huge)
+/run @echo_it2(@huge)
+`,
+  expected: (output) => {
+    const bigSlice = 'n'.repeat(20000);
+    const countBars = (output.match(/ bar/g) || []).length;
+    return output.includes(bigSlice) && countBars >= 2;
   },
   shouldPass: true
 });

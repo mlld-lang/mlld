@@ -871,13 +871,20 @@ export async function evaluateExecInvocation(
     // passing oversized, unused values into the environment (E2BIG risk).
     const envVars: Record<string, string> = {};
     const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Cache compiled regex per parameter for performance on large templates
+    const paramRegexCache: Record<string, { simple: RegExp; braced: RegExp }> = {};
     const referencesParam = (cmd: string, name: string) => {
       // Prefer original template reference detection so interpolation doesn't hide usage
       if (referencedInTemplate.has(name)) return true;
       // Also check for $name (not followed by word char) or ${name}, avoiding escaped dollars (\$)
-      const n = escapeRegex(name);
-      const simple = new RegExp(`(^|[^\\\\])\\$${n}(?![A-Za-z0-9_])`);
-      const braced = new RegExp(`\\$\\{${n}\\}`);
+      if (!paramRegexCache[name]) {
+        const n = escapeRegex(name);
+        paramRegexCache[name] = {
+          simple: new RegExp(`(^|[^\\\\])\\$${n}(?![A-Za-z0-9_])`),
+          braced: new RegExp(`\\$\\{${n}\\}`)
+        };
+      }
+      const { simple, braced } = paramRegexCache[name];
       return simple.test(cmd) || braced.test(cmd);
     };
     for (let i = 0; i < params.length; i++) {
@@ -1463,9 +1470,56 @@ export async function evaluateExecInvocation(
       // Prepend synthetic source stage and attach builtin effects consistently
       let normalizedPipeline = [SOURCE_STAGE, ...node.withClause.pipeline];
       try {
-        const { attachBuiltinEffects } = await import('./pipeline/effects-attachment');
-        const { functionalPipeline } = attachBuiltinEffects(normalizedPipeline);
-        normalizedPipeline = functionalPipeline as any;
+        const { isBuiltinEffect } = await import('./pipeline/builtin-effects');
+        const functional: any[] = [];
+        const pending: any[] = [];
+        for (const s of normalizedPipeline) {
+          // Preserve parallel groups (arrays) as-is
+          if (Array.isArray(s)) {
+            // If we had pending effects before a group, attach them to a synthetic identity before the group
+            if (pending.length > 0) {
+              functional.push({
+                rawIdentifier: '__identity__',
+                identifier: [],
+                args: [],
+                fields: [],
+                rawArgs: [],
+                effects: [...pending]
+              });
+              pending.length = 0;
+            }
+            functional.push(s);
+            continue;
+          }
+          const name = s.rawIdentifier;
+          if (isBuiltinEffect(name)) {
+            if (functional.length > 0) {
+              const prev = functional[functional.length - 1];
+              if (!prev.effects) prev.effects = [];
+              prev.effects.push(s);
+            } else {
+              pending.push(s);
+            }
+          } else {
+            const stage = { ...s };
+            if (pending.length > 0) {
+              stage.effects = [...(stage.effects || []), ...pending];
+              pending.length = 0;
+            }
+            functional.push(stage);
+          }
+        }
+        if (functional.length === 0 && pending.length > 0) {
+          functional.push({
+            rawIdentifier: '__identity__',
+            identifier: [],
+            args: [],
+            fields: [],
+            rawArgs: [],
+            effects: [...pending]
+          });
+        }
+        normalizedPipeline = functional;
       } catch {
         // If helper import fails, proceed without effect attachment
       }

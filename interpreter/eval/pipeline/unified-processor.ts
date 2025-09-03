@@ -229,6 +229,73 @@ async function validatePipeline(
 }
 
 /**
+ * Walk a pipeline and attach builtin effect commands (e.g., @log) to the
+ * immediately preceding functional stage. Returns the functional-only
+ * pipeline with effects stored in the optional `effects` field of each
+ * PipelineCommand.
+ */
+function attachBuiltinEffects(pipeline: PipelineCommand[]): {
+  functionalPipeline: any[];
+  hadLeadingEffects: boolean;
+} {
+  const functional: any[] = [];
+  const pendingLeadingEffects: PipelineCommand[] = [];
+  let hadLeadingEffects = false;
+
+  for (const cmd of pipeline as any[]) {
+    // Preserve parallel groups (arrays) as-is; effects attach only to functional stages
+    if (Array.isArray(cmd)) {
+      functional.push(cmd);
+      continue;
+    }
+    const name = cmd.rawIdentifier;
+    if (process.env.MLLD_DEBUG === 'true') {
+      console.error('[attachBuiltinEffects] cmd', name, 'builtin?', isBuiltinEffect(name));
+    }
+    if (isBuiltinEffect(name)) {
+      // Attach to the last functional; if none yet, collect as pending
+      if (functional.length > 0) {
+        const prev = functional[functional.length - 1];
+        if (!prev.effects) prev.effects = [];
+        prev.effects.push(cmd);
+      } else {
+        pendingLeadingEffects.push(cmd);
+        hadLeadingEffects = true;
+      }
+      continue;
+    }
+
+    // Regular functional stage
+    const stage: PipelineCommand = { ...cmd };
+    // If we have pending leading effects, attach them to this first stage
+    if (pendingLeadingEffects.length > 0) {
+      stage.effects = [...(stage.effects || []), ...pendingLeadingEffects];
+      pendingLeadingEffects.length = 0;
+    }
+    functional.push(stage);
+  }
+
+  // If pipeline had only builtin effects, synthesize an identity stage to host them
+  if (functional.length === 0 && pendingLeadingEffects.length > 0) {
+    functional.push({
+      rawIdentifier: '__identity__',
+      identifier: [],
+      args: [],
+      fields: [],
+      rawArgs: [],
+      effects: [...pendingLeadingEffects]
+    } as any);
+    pendingLeadingEffects.length = 0;
+  }
+
+  if (process.env.MLLD_DEBUG === 'true') {
+    console.error('[attachBuiltinEffects] functional stages:', functional.map(f => f.rawIdentifier));
+    console.error('[attachBuiltinEffects] first effects:', functional[0]?.effects?.map((e: any) => e.rawIdentifier));
+  }
+  return { functionalPipeline: functional, hadLeadingEffects };
+}
+
+/**
  * Prepare input value for pipeline processing
  * 
  * Converts Variables and other types to strings as needed.
