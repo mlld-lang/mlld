@@ -1,9 +1,0 @@
-
-/import { imported_title } from "files/imports.mld"
-/var @lib_message = "Library says: {{imported_title}}"
-/var @lib_config = {
-  "name": "lib",
-  "version": "1.0.0",
-  "imported": @imported_title
-}
- Hi

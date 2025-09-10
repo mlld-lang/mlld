@@ -16,6 +16,7 @@ import { errorTestCommand } from '../commands/error-test';
 import { createDevCommand } from '../commands/dev';
 import { createModeCommand } from '../commands/mode';
 import { createCleanCommand } from '../commands/clean';
+import { createNvimSetupCommand } from '../commands/nvim-setup';
 import type { CLIOptions } from '../index';
 
 export class CommandDispatcher {
@@ -52,6 +53,8 @@ export class CommandDispatcher {
     this.commandMap.set('dev', createDevCommand());
     this.commandMap.set('mode', createModeCommand());
     this.commandMap.set('clean', createCleanCommand());
+    this.commandMap.set('nvim-setup', createNvimSetupCommand());
+    this.commandMap.set('nvim', createNvimSetupCommand()); // Alias
   }
 
   async executeCommand(
