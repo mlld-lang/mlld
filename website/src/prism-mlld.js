@@ -1,5 +1,5 @@
 // Auto-generated Prism.js language definition for Mlld
-// Generated from grammar at 2025-08-24T12:45:11.522Z
+// Generated from grammar at 2025-09-10T05:24:15.211Z
 
 const Prism = require('prismjs');
 
@@ -9,7 +9,7 @@ Prism.languages.mlld = {
     greedy: true
   },
   'directive': {
-    pattern: /(var|show|run|exe|path|import|when|output)\b/,
+    pattern: /(var|show|run|exe|path|import|when|output|for|log)\b/,
     alias: 'keyword'
   },
   'when-keyword': {
@@ -57,7 +57,7 @@ Prism.languages.mlld = {
     inside: {
       // Double-colon templates now use @var, not {{var}}
       'reserved-variable': {
-        pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\b/,
+        pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\b/,
         alias: 'builtin'
       },
       'variable': {
@@ -78,7 +78,7 @@ Prism.languages.mlld = {
     greedy: true,
     inside: {
       'reserved-variable': {
-        pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\b/,
+        pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\b/,
         alias: 'builtin'
       },
       'variable': {
@@ -100,7 +100,7 @@ Prism.languages.mlld = {
     greedy: true,
     inside: {
       'reserved-variable': {
-        pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\b/,
+        pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\b/,
         alias: 'builtin'
       },
       'variable': {
@@ -144,7 +144,7 @@ Prism.languages.mlld = {
     }
   },
   'reserved-variable': {
-    pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\b/,
+    pattern: /@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\b/,
     alias: 'builtin'
   },
   'variable': {
@@ -155,7 +155,7 @@ Prism.languages.mlld = {
     pattern: /\.(\w+|\d+)/,
     alias: 'property'
   },
-  'operator': /\b(from|as|foreach|with|to)\b/,
+  'operator': /\b(from|as|foreach|with|to|format|parallel)\b/,
   'pipe-operator': {
     pattern: /\|/,
     alias: 'operator'

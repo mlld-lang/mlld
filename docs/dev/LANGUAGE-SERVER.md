@@ -90,9 +90,9 @@ The server tracks:
 
 ### 6. Embedded Language Highlighting
 
-The language server provides syntax highlighting for embedded code blocks using web-tree-sitter:
+The language server highlights embedded code blocks via web‑tree‑sitter.
 
-#### Supported Syntax
+Current support:
 
 ```mlld
 # Multi-line blocks
@@ -103,19 +103,15 @@ The language server provides syntax highlighting for embedded code blocks using 
 
 # Inline code
 /var @result = js { return Math.random(); }
-/exe @deploy() = sh { npm test && npm run deploy }
-
-# Supported languages
-/run js { ... }     # JavaScript
-/run py { ... }     # Python  
-/run sh { ... }     # Bash/Shell
 ```
 
-#### Implementation
+- Available by default: `js` (and `node`)
+- Optional (when WASM bundles are present): `python`, `sh`
 
-- **EmbeddedLanguageService** manages tree-sitter parsers for each language
-- Converts tree-sitter ASTs to LSP semantic tokens
-- WASM parser files must be bundled in production builds
+Implementation notes:
+
+- **EmbeddedLanguageService** loads configured parsers and maps tokens to standard types
+- When a language WASM is unavailable, content falls back to mlld string/operator tokens
 
 ### 7. Semantic Tokens (Syntax Highlighting)
 
@@ -178,6 +174,7 @@ const TOKEN_TYPE_MAP = {
 - **Comments** - Both `>>` and `<<` comment styles → `comment`
 - **Data Structures** - Arrays and objects with mlld constructs properly highlighted
 - **Field Access** - Dot notation (`@user.name`) and array indexing (`@items[0]`)
+- **Pipelines** - Shorthand pipes (`|`) and parallel groups (`||`); with‑clause pipeline arrays `with { pipeline: [...] }` including nested groups `[ ... ]`
 
 #### Context-Aware Highlighting
 
@@ -333,7 +330,7 @@ To eliminate code duplication and ensure consistent tokenization, the semantic t
   - `tokenizeOperatorBetween()` - Find and tokenize operators between AST nodes
   - `tokenizeBinaryExpression()` - Handle comparison/logical operators (`==`, `&&`, etc.)
   - `tokenizePropertyAccess()` - Handle field access (`.property`, `[index]`)
-  - `tokenizePipelineOperators()` - Handle pipe operators (`|`)
+  - `tokenizePipelineOperators()` - Handle pipe operators (`|`) and parallel groups (`||`) where applicable
   - `tokenizeDelimiters()` - Handle braces, brackets, parentheses
   - `tokenizeTernaryOperators()` - Handle `?` and `:` in ternary expressions
 
@@ -524,4 +521,3 @@ If syntax highlighting isn't showing correctly:
    - **Operators not colored**: Check theme supports `operator` semantic token
    - **Comments not colored**: Ensure proper length calculation (offset-based)
    - **Templates look wrong**: Template delimiters map to `operator` for visibility
-

@@ -92,6 +92,14 @@ describe('Semantic Tokens Coverage Tests', () => {
         { tokenType: 'variable', text: '@name', modifiers: ['reference'] }
       ]);
     });
+
+    it('tokenizes /log with variable reference', async () => {
+      const code = '/log @name';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/log' },
+        { tokenType: 'variable', text: '@name', modifiers: ['reference'] }
+      ]);
+    });
     
     it('tokenizes /run with shell command', async () => {
       const code = '/run {echo "Hello"}';
@@ -271,6 +279,97 @@ describe('Semantic Tokens Coverage Tests', () => {
         { tokenType: 'string', text: '"Yes"' },
         { tokenType: 'operator', text: ':' },
         { tokenType: 'string', text: '"No"' }
+      ]);
+    });
+  });
+
+  describe('Pipelines And With-Clause', () => {
+    it('tokenizes parallel groups in shorthand pipelines', async () => {
+      const code = '/var @out = @x | @a || @b | @c';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@out', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'variable', text: '@x', modifiers: ['reference'] },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variable', text: '@a' },
+        { tokenType: 'operator', text: '||' },
+        { tokenType: 'variable', text: '@b' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'variable', text: '@c' }
+      ]);
+    });
+
+    it('tokenizes with.pipeline nested arrays', async () => {
+      const code = '/var @out = "x" with { pipeline: [ [@left, @right], @combine ] }';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@out', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'string', text: '"x"' },
+        { tokenType: 'operator', text: '[' },
+        { tokenType: 'operator', text: '[' },
+        { tokenType: 'variable', text: '@left' },
+        { tokenType: 'operator', text: ',' },
+        { tokenType: 'variable', text: '@right' },
+        { tokenType: 'operator', text: ']' },
+        { tokenType: 'operator', text: ',' },
+        { tokenType: 'variable', text: '@combine' },
+        { tokenType: 'operator', text: ']' }
+      ]);
+    });
+
+    it('tokenizes with { format: "json" }', async () => {
+      const code = '/var @out = @data with { format: "json", pipeline: [@id] }';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@out', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'variable', text: '@data', modifiers: ['reference'] },
+        { tokenType: 'keyword', text: 'format' },
+        { tokenType: 'string', text: '"json"' },
+        { tokenType: 'operator', text: '[' },
+        { tokenType: 'variable', text: '@id' },
+        { tokenType: 'operator', text: ']' }
+      ]);
+    });
+  });
+
+  describe('Iteration Parallel', () => {
+    it('tokenizes /for parallel with pacing', async () => {
+      const code = '/for (3, 1s) parallel @n in @names => /show @n';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/for' },
+        { tokenType: 'operator', text: '(' },
+        { tokenType: 'number', text: '3' },
+        { tokenType: 'operator', text: ',' },
+        { tokenType: 'number', text: '1' },
+        { tokenType: 'operator', text: ')' },
+        { tokenType: 'keyword', text: 'parallel' },
+        { tokenType: 'variable', text: '@n' },
+        { tokenType: 'keyword', text: 'in' },
+        { tokenType: 'variable', text: '@names' },
+        { tokenType: 'operator', text: '=>' },
+        { tokenType: 'keyword', text: '/show' },
+        { tokenType: 'variable', text: '@n' }
+      ]);
+    });
+
+    it('tokenizes /for parallel without pacing', async () => {
+      const code = '/for parallel @n in [1,2] => /show @n';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/for' },
+        { tokenType: 'keyword', text: 'parallel' },
+        { tokenType: 'variable', text: '@n' },
+        { tokenType: 'keyword', text: 'in' },
+        { tokenType: 'operator', text: '[' },
+        { tokenType: 'number', text: '1' },
+        { tokenType: 'operator', text: ',' },
+        { tokenType: 'number', text: '2' },
+        { tokenType: 'operator', text: ']' },
+        { tokenType: 'operator', text: '=>' },
+        { tokenType: 'keyword', text: '/show' },
+        { tokenType: 'variable', text: '@n' }
       ]);
     });
   });
