@@ -20,8 +20,9 @@ export function attachBuiltinEffects(pipeline: PipelineStage[]): {
       const { functionalPipeline: group, hadLeadingEffects: inner } = attachBuiltinEffects(stage);
       if (pendingLeadingEffects.length > 0 && group.length > 0) {
         for (const cmd of group as PipelineCommand[]) {
-          (cmd as PipelineCommand).effects = [
-            ...((cmd as PipelineCommand).effects || []),
+          const command = cmd as PipelineCommand;
+          command.effects = [
+            ...(command.effects || []),
             ...pendingLeadingEffects
           ];
         }
@@ -40,14 +41,16 @@ export function attachBuiltinEffects(pipeline: PipelineStage[]): {
         const prev = functional[functional.length - 1];
         if (Array.isArray(prev)) {
           for (const pcmd of prev as PipelineCommand[]) {
-            (pcmd as PipelineCommand).effects = [
-              ...((pcmd as PipelineCommand).effects || []),
+            const command = pcmd as PipelineCommand;
+            command.effects = [
+              ...(command.effects || []),
               stage
             ];
           }
         } else {
-          (prev as PipelineCommand).effects = [
-            ...((prev as PipelineCommand).effects || []),
+          const prevCmd = prev as PipelineCommand;
+          prevCmd.effects = [
+            ...(prevCmd.effects || []),
             stage
           ];
         }
@@ -80,4 +83,3 @@ export function attachBuiltinEffects(pipeline: PipelineStage[]): {
 
   return { functionalPipeline: functional, hadLeadingEffects };
 }
-

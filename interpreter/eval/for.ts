@@ -124,7 +124,7 @@ export async function evaluateForDirective(
           throw err;
         }
       }
-      return undefined as void;
+      return;
     };
 
     if (effective?.parallel) {

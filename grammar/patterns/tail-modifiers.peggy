@@ -41,10 +41,10 @@ TailValue
 
 // Support parallel groups with `||` inside pipeline shorthand
 // Example: | @a || @b || @c | @d  -> [[a,b,c], d]
+// If the shorthand immediately starts with '||', there is no preceding stage
+// to run in parallel with. Educate the user with a clear error.
 PipelineShorthand
-  = _ "||" { 
-      // If the shorthand immediately starts with '||', there is no preceding stage
-      // to run in parallel with. Educate the user with a clear error.
+  = _ "||" {
       helpers.throwParallelLeadingError(location());
     }
   / first:PipelineStageFirst rest:PipelineRest* {
