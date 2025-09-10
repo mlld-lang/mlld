@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cross-platform: uses `where` on Windows, `which` on Unix
   - Alias: `mlld nvim` for convenience
 
+### Fixed
+- #411: Nested for loops were returning {} instead of []
+
 ## [2.0.0-rc49]
 ### Added
 - **Pipeline parallel groups**: `A || B || C` executes commands concurrently as a single stage
