@@ -5,6 +5,13 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc50]
+### Added
+- **`mlld nvim-setup` command**: Auto-configure Neovim LSP support
+  - Detects Neovim setup (LazyVim, vanilla, etc.) and creates appropriate config
+  - Cross-platform: uses `where` on Windows, `which` on Unix
+  - Alias: `mlld nvim` for convenience
+
 ## [2.0.0-rc49]
 ### Added
 - **Pipeline parallel groups**: `A || B || C` executes commands concurrently as a single stage
