@@ -15,7 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **LSP/Editor updates**: Semantic tokens cover pipeline parallel groups (`||`), with.pipeline (incl. nested) and `with { format: ... }`, and `/for parallel`; directive/completion tweaks include `/log` and format values. VS Code extension runs semantic-only (legacy providers removed); fallback TextMate grammar highlights `parallel` and `format`.
 
 ### Fixed
-- #411: Nested for loops were returning {} instead of []
+- #411: Nested `/for` collection returns `[]` for empty arrays in both plain `/show` and when piped to `@json`. Removes accidental `{}` output.
+- `isLoadContentResultArray` does not match untagged empty arrays; prevents misclassification of generic empty arrays.
 
 ## [2.0.0-rc49]
 ### Added
@@ -1284,13 +1285,4 @@ Added:
 ## [1.0.0]
 
 Initial versioned release. 
-## [2.0.0-rc50]
-### Fixed
-- Nested `/for` collection returns `[]` for empty arrays in both plain `/show` and when piped to `@json`. Removes accidental `{}` output.
-- `isLoadContentResultArray` does not match untagged empty arrays; prevents misclassification of generic empty arrays.
 
-### Tests
-- Add fixtures for nested empty `/for` results:
-  - `tests/cases/valid/slash/for/for-nested-empty-array-json` (JSON formatted)
-  - `tests/cases/valid/slash/for/for-nested-empty-array-plain` (plain display)
-- Add unit test `interpreter/eval/for-nested-empty.test.ts` validating that a nested `/for` over empty arrays produces an empty ArrayVariable.
