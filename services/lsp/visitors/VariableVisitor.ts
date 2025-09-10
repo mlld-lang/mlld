@@ -225,28 +225,133 @@ export class VariableVisitor extends BaseVisitor {
             const transformStartOffset = node.location.start.offset + transformStart;
             const transformPosition = this.document.positionAt(transformStartOffset);
             const hasAt = pipe.hasAt !== false;
-            const transformLength = (pipe.transform?.length || 0) + (hasAt ? 1 : 0);
-            
-            const tokenInfo = {
-              line: transformPosition.line,
-              char: transformPosition.character,
-              length: transformLength,
-              tokenType: 'variable',
-              modifiers: []
-            };
-            
-            if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-final') || this.document.uri.includes('test-syntax')) {
-              console.log('[PIPE-TOKEN]', {
-                pipeIndex,
-                transform: pipe.transform,
-                token: tokenInfo
+
+            // Support inline effects in pipelines: show, log, output
+            const effectName = pipe.transform || '';
+            const isEffect = !hasAt && /^(show|log|output)\b/.test(effectName);
+
+            if (isEffect) {
+              // Add keyword token for the effect
+              this.tokenBuilder.addToken({
+                line: transformPosition.line,
+                char: transformPosition.character,
+                length: effectName.length,
+                tokenType: 'keyword',
+                modifiers: []
               });
+
+              // Heuristically tokenize common effect arguments
+              const afterEffectPos = transformStart + effectName.length;
+              // Slice until next pipe or end of node
+              const rest = nodeText.slice(afterEffectPos, nodeText.indexOf('|', afterEffectPos) === -1 ? nodeText.length : nodeText.indexOf('|', afterEffectPos));
+
+              // For `output`, expect: optional source var, 'to', then target
+              if (effectName === 'output') {
+                // Source variable immediately after 'output'
+                const varMatch = rest.match(/\s+(@[A-Za-z_][A-Za-z0-9_]*)/);
+                if (varMatch && varMatch.index !== undefined) {
+                  const varOffset = transformStartOffset + effectName.length + varMatch.index + varMatch[0].indexOf('@');
+                  const varPos = this.document.positionAt(varOffset);
+                  this.tokenBuilder.addToken({
+                    line: varPos.line,
+                    char: varPos.character,
+                    length: varMatch[1].length,
+                    tokenType: 'variable',
+                    modifiers: []
+                  });
+                }
+                // 'to' keyword
+                const toMatch = rest.match(/\s+to\s+/);
+                if (toMatch && toMatch.index !== undefined) {
+                  const toOffset = transformStartOffset + effectName.length + toMatch.index + toMatch[0].indexOf('to');
+                  const toPos = this.document.positionAt(toOffset);
+                  this.tokenBuilder.addToken({
+                    line: toPos.line,
+                    char: toPos.character,
+                    length: 2,
+                    tokenType: 'keyword',
+                    modifiers: []
+                  });
+                  // Target: stdout|stderr or @var or "string"
+                  const targetStart = toMatch.index + toMatch[0].length;
+                  const targetRest = rest.slice(targetStart);
+                  const streamMatch = targetRest.match(/^(stdout|stderr)\b/);
+                  if (streamMatch) {
+                    const streamOffset = transformStartOffset + effectName.length + targetStart;
+                    const streamPos = this.document.positionAt(streamOffset);
+                    this.tokenBuilder.addToken({
+                      line: streamPos.line,
+                      char: streamPos.character,
+                      length: streamMatch[1].length,
+                      tokenType: 'keyword',
+                      modifiers: []
+                    });
+                  } else {
+                    const targetVar = targetRest.match(/^(@[A-Za-z_][A-Za-z0-9_]*)/);
+                    if (targetVar) {
+                      const tOffset = transformStartOffset + effectName.length + targetStart;
+                      const tPos = this.document.positionAt(tOffset);
+                      this.tokenBuilder.addToken({
+                        line: tPos.line,
+                        char: tPos.character,
+                        length: targetVar[1].length,
+                        tokenType: 'variable',
+                        modifiers: []
+                      });
+                    } else if (/^"/.test(targetRest)) {
+                      // Quoted path: read until next unescaped quote
+                      const m = targetRest.match(/^"([^"\\]|\\.)*"/);
+                      if (m) {
+                        const qOffset = transformStartOffset + effectName.length + targetStart;
+                        const qPos = this.document.positionAt(qOffset);
+                        this.tokenBuilder.addToken({
+                          line: qPos.line,
+                          char: qPos.character,
+                          length: m[0].length,
+                          tokenType: 'string',
+                          modifiers: []
+                        });
+                      }
+                    }
+                  }
+                }
+              } else {
+                // show/log: optional immediate @var or quoted/backtick string
+                const simpleArg = rest.match(/\s+(@[A-Za-z_][A-Za-z0-9_]*|`[^`]*`|"([^"\\]|\\.)*"|\'([^'\\]|\\.)*\')/);
+                if (simpleArg && simpleArg.index !== undefined) {
+                  const argText = simpleArg[1] || simpleArg[0].trim();
+                  const argStartLocal = afterEffectPos + simpleArg.index + simpleArg[0].indexOf(argText);
+                  const argOffset = node.location.start.offset + argStartLocal;
+                  const argPos = this.document.positionAt(argOffset);
+                  const tokenType = argText.startsWith('@') ? 'variable' : 'string';
+                  this.tokenBuilder.addToken({
+                    line: argPos.line,
+                    char: argPos.character,
+                    length: argText.length,
+                    tokenType,
+                    modifiers: []
+                  });
+                }
+              }
+
+              // Advance currentPos conservatively to after the effect name
+              currentPos = transformStart + effectName.length;
+            } else {
+              // Regular @transform
+              const transformLength = (pipe.transform?.length || 0) + (hasAt ? 1 : 0);
+              const tokenInfo = {
+                line: transformPosition.line,
+                char: transformPosition.character,
+                length: transformLength,
+                tokenType: 'variable',
+                modifiers: []
+              };
+              if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('test-final') || this.document.uri.includes('test-syntax')) {
+                console.log('[PIPE-TOKEN]', { pipeIndex, transform: pipe.transform, token: tokenInfo });
+              }
+              this.tokenBuilder.addToken(tokenInfo);
+              currentPos = transformStart + transformLength;
             }
-            
-            this.tokenBuilder.addToken(tokenInfo);
-            
-            // Move past this transform for next search
-            currentPos = transformStart + transformLength;
             
             if (process.env.DEBUG_LSP === 'true' || this.document.uri.includes('simple-four')) {
               console.log('[PIPE-NEXT]', {

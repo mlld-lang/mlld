@@ -496,6 +496,7 @@ export class DirectiveVisitor extends BaseVisitor {
           const absoluteOpen = directive.location.start.offset + pipelineKeyIndex + firstBracketRel;
           // Scan forward to find matching brackets and emit tokens for each '[' and ']'
           let depth = 0;
+          let pipelineEndRel = -1;
           for (let i = pipelineKeyIndex + firstBracketRel; i < directiveText.length; i++) {
             const ch = directiveText[i];
             if (ch === '[') {
@@ -518,15 +519,56 @@ export class DirectiveVisitor extends BaseVisitor {
                 modifiers: []
               });
               depth--;
-              if (depth === 0) break; // Done with pipeline array
+              if (depth === 0) { pipelineEndRel = i; break; } // Done with pipeline array
             }
           }
           // Tokenize commas inside pipeline arrays for readability
-          const closeIdx = directiveText.indexOf(']', pipelineKeyIndex + firstBracketRel);
+          const closeIdx = pipelineEndRel !== -1 ? pipelineEndRel : directiveText.indexOf(']', pipelineKeyIndex + firstBracketRel);
           if (closeIdx !== -1) {
             const startOffset = directive.location.start.offset + pipelineKeyIndex + firstBracketRel;
             const endOffset = directive.location.start.offset + closeIdx;
             this.operatorHelper.tokenizeListSeparators(startOffset, endOffset, ',');
+          }
+
+          // Highlight effect keywords and syntax inside pipeline arrays
+          const segmentStartRel = pipelineKeyIndex + firstBracketRel;
+          const segmentEndRel = closeIdx !== -1 ? closeIdx : directiveText.length;
+          const segment = directiveText.substring(segmentStartRel, segmentEndRel);
+
+          // Effects: show, log, output (only when not prefixed by @)
+          const effectRegex = /(^|[^@A-Za-z0-9_])(show|log|output)\b/g;
+          let m: RegExpExecArray | null;
+          while ((m = effectRegex.exec(segment)) !== null) {
+            const effect = m[2];
+            const effRel = segmentStartRel + m.index + m[1].length;
+            const effPos = this.document.positionAt(directive.location.start.offset + effRel);
+            this.tokenBuilder.addToken({
+              line: effPos.line,
+              char: effPos.character,
+              length: effect.length,
+              tokenType: 'keyword',
+              modifiers: []
+            });
+
+            if (effect === 'output') {
+              // Find 'to' following the effect within the current stage (until next ']' or ',')
+              const stageRest = segment.substring(m.index + m[0].length);
+              const toMatch = stageRest.match(/\bto\b/);
+              if (toMatch && toMatch.index !== undefined) {
+                const toRel = effRel + (m[0].length) + toMatch.index;
+                const toPos = this.document.positionAt(directive.location.start.offset + toRel);
+                this.tokenBuilder.addToken({ line: toPos.line, char: toPos.character, length: 2, tokenType: 'keyword', modifiers: [] });
+
+                // Streams stdout/stderr right after 'to'
+                const afterTo = stageRest.substring(toMatch.index + toMatch[0].length);
+                const streamMatch = afterTo.match(/^\s*(stdout|stderr)\b/);
+                if (streamMatch) {
+                  const sRel = toRel + 2 + (afterTo.indexOf(streamMatch[1]));
+                  const sPos = this.document.positionAt(directive.location.start.offset + sRel);
+                  this.tokenBuilder.addToken({ line: sPos.line, char: sPos.character, length: streamMatch[1].length, tokenType: 'keyword', modifiers: [] });
+                }
+              }
+            }
           }
         }
       }
@@ -537,7 +579,10 @@ export class DirectiveVisitor extends BaseVisitor {
         if (Array.isArray(stage)) {
           // Parallel group: visit each command
           for (const cmd of stage) {
-            if (cmd?.identifier) {
+            // Skip visiting identifier for effect builtins to avoid double-tokenizing as variable
+            if (cmd?.rawIdentifier && /^(show|log|output)$/.test(cmd.rawIdentifier)) {
+              // no-op for identifier; args handled below
+            } else if (cmd?.identifier) {
               for (const id of cmd.identifier) this.mainVisitor.visitNode(id, context);
             }
             if (cmd?.args) {
@@ -545,8 +590,10 @@ export class DirectiveVisitor extends BaseVisitor {
             }
           }
         } else if (stage) {
-          if (stage.identifier) {
-            for (const id of stage.identifier) this.mainVisitor.visitNode(id, context);
+          if (!(stage.rawIdentifier && /^(show|log|output)$/.test(stage.rawIdentifier))) {
+            if (stage.identifier) {
+              for (const id of stage.identifier) this.mainVisitor.visitNode(id, context);
+            }
           }
           if (stage.args) {
             for (const a of stage.args) this.mainVisitor.visitNode(a, context);
