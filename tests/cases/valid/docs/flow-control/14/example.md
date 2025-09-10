@@ -1,2 +1,3 @@
-/var @data = run {echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}'} | @json
-/show @data.users[0].name
+/exe @wrap(x) = `[@x]`
+/exe @wrapAll(items) = foreach @wrap(@items)
+/show @wrapAll(["a","b"]) | @join(',')   # => [a],[b]

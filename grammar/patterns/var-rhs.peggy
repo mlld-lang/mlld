@@ -4,7 +4,7 @@
 
 VarRHSContent "var assignment value"
   = ExpressionWithOperator      // Try expressions FIRST but only if operators present
-  / VarWhenError                // Error recovery: when expressions not allowed in /var
+  / WhenExpression              // Allow value-returning when-expressions
   / ForExpression               // for @var in @collection => expression
   / ForeachCommandExpression    // foreach @command(@arrays)
   / ExecResultMethodCall        // @func(args).method(args) on exec result
@@ -408,20 +408,7 @@ CodeChar
       return char;
     }
 
-// VAR WHEN ERROR - Error recovery for when expressions in /var context
-// when expressions are not allowed in /var assignments - use /exe instead
-VarWhenError
-  = "when" _ ":" _ "[" {
-      helpers.mlldError(
-        "when expressions are not allowed in /var assignments.\n\n" +
-        "Instead of:\n" +
-        "  /var @result = when [@condition => value, ...]\n\n" +
-        "Use:\n" +
-        "  /exe @result() = when [@condition => value, ...]",
-        "/exe",
-        location()
-      );
-    }
+// Note: when-expressions are allowed in /var assignments
 
 // FOR EXPRESSION - for @var in @collection => expression
 // Used in /var and /exe assignments to collect results

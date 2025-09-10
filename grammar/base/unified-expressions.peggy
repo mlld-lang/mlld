@@ -55,7 +55,9 @@ UnifiedUnaryExpression
 
 // Atomic expressions - use unified patterns for proper variable/exec support
 UnifiedAtomicExpression
-  = UnifiedArrayOperation
+  = WhenExpression                 // Treat when as atomic expression
+  / ForeachCommandExpression       // Treat foreach as atomic expression
+  / UnifiedArrayOperation
   / ExecResultMethodCall   // Support @func(args).method(args) in expressions
   / UnifiedReferenceNoTail  // Handles @var, @var.field, @func(), @obj.method()
   / ExpressionString  // ExpressionString already returns a Literal node

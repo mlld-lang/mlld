@@ -19,7 +19,10 @@ export async function evaluateForeachCommand(
     logger.debug('evaluateForeachCommand called with:', { foreachExpr });
   }
   
-  const { execInvocation, arrays } = foreachExpr;
+  const node = (foreachExpr && typeof foreachExpr === 'object' && 'value' in foreachExpr)
+    ? (foreachExpr as any).value
+    : foreachExpr;
+  const { execInvocation, arrays } = node;
   
   // Extract command name and arguments from execInvocation
   let commandName: string;

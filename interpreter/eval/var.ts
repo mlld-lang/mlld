@@ -450,10 +450,16 @@ export async function evaluateVar(
     // Simple text content
     resolvedValue = valueNode.content;
     
-  } else if (valueNode && valueNode.type === 'foreach') {
+  } else if (valueNode && (valueNode.type === 'foreach' || valueNode.type === 'foreach-command')) {
     // Handle foreach expressions
     const { evaluateForeachCommand } = await import('./foreach');
     resolvedValue = await evaluateForeachCommand(valueNode, env);
+    
+  } else if (valueNode && valueNode.type === 'WhenExpression') {
+    // Handle when expressions
+    const { evaluateWhenExpression } = await import('./when-expression');
+    const whenResult = await evaluateWhenExpression(valueNode as any, env);
+    resolvedValue = whenResult.value;
     
   } else if (valueNode && valueNode.type === 'ExecInvocation') {
     // Handle exec function invocations: @getConfig(), @transform(@data)
@@ -746,7 +752,7 @@ export async function evaluateVar(
       variable = createSimpleTextVariable(identifier, String(resolvedValue), source, metadata);
     }
     
-  } else if (valueNode.type === 'foreach') {
+  } else if (valueNode.type === 'foreach' || valueNode.type === 'foreach-command') {
     // Foreach expressions always return arrays
     const isComplex = false; // foreach results are typically simple values
     variable = createArrayVariable(identifier, resolvedValue, isComplex, source, metadata);
@@ -1015,6 +1021,13 @@ async function evaluateArrayItem(item: any, env: Environment): Promise<any> {
   }
 
   switch (item.type) {
+    case 'WhenExpression':
+      // Evaluate when-expression inside arrays/objects
+      {
+        const { evaluateWhenExpression } = await import('./when-expression');
+        const res = await evaluateWhenExpression(item as any, env);
+        return res.value as any;
+      }
     case 'array':
       // Nested array
       const nestedItems = [];

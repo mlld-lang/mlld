@@ -1,5 +1,10 @@
-/var @canDeploy = @testsPass && @isApproved
-/when [
-  @canDeploy => run {npm run deploy}
-  !@canDeploy => show "Deployment blocked - check tests and approval"
-]
+/exe @left(input) = `L:@input`
+/exe @right(input) = `R:@input`
+/exe @combine(input) = js {
+  // Parallel stage returns a JSON array string
+  const [l, r] = JSON.parse(input);
+  return `${l} | ${r}`;
+}
+
+/var @out = "seed" with { pipeline: [ @left || @right, @combine ] }
+/show @out
