@@ -238,17 +238,18 @@ export class FileReferenceVisitor extends BaseVisitor {
         let currentPos = nodeText.indexOf('|');
         for (const pipe of node.pipes) {
           if (currentPos !== -1) {
-            // Token for "|"
+            // Token for '|' or '||' (parallel group)
+            const isParallel = nodeText[currentPos + 1] === '|';
             this.tokenBuilder.addToken({
               line: node.location.start.line - 1,
               char: nodeStartChar + currentPos,
-              length: 1,
+              length: isParallel ? 2 : 1,
               tokenType: 'operator',
               modifiers: []
             });
             
             // Token for "@" + pipe name as a single variable token (for FileReference nodes)
-            const atSymbolPos = nodeText.indexOf('@', currentPos);
+            const atSymbolPos = nodeText.indexOf('@', currentPos + (nodeText[currentPos + 1] === '|' ? 2 : 1));
             if (atSymbolPos !== -1) {
               const pipeTransform = pipe.transform || pipe.name; // Support both properties
               if (pipeTransform) {
@@ -451,17 +452,18 @@ export class FileReferenceVisitor extends BaseVisitor {
         let currentPos = nodeText.indexOf('|');
         for (const pipe of node.pipes) {
           if (currentPos !== -1) {
-            // Token for "|"
+            // Token for '|' or '||' (parallel group)
+            const isParallel = nodeText[currentPos + 1] === '|';
             this.tokenBuilder.addToken({
               line: node.location.start.line - 1,
               char: nodeStartChar + currentPos,
-              length: 1,
+              length: isParallel ? 2 : 1,
               tokenType: 'operator',
               modifiers: []
             });
             
             // Token for "@pipeName"
-            const atSymbolPos = nodeText.indexOf('@', currentPos);
+            const atSymbolPos = nodeText.indexOf('@', currentPos + (isParallel ? 2 : 1));
             if (atSymbolPos !== -1) {
               const pipeTransform = pipe.transform || pipe.name;
               if (pipeTransform) {
@@ -496,11 +498,16 @@ export class FileReferenceVisitor extends BaseVisitor {
         const pipeStartOffset = pipe.location.start.offset;
         const pipeStartChar = pipe.location.start.column - 1;
         
-        // Token for "|"
+        // Token for '|' or '||' if previous char is also '|'
+        const sourceText = this.document.getText();
+        const isParallel = sourceText[pipeStartOffset + 1] === '@' && sourceText[pipeStartOffset - 1] === '|';
+        const length = isParallel ? 2 : 1;
+        const charStart = isParallel ? pipeStartChar - 1 : pipeStartChar;
+        
         this.tokenBuilder.addToken({
           line: pipe.location.start.line - 1,
-          char: pipeStartChar,
-          length: 1,
+          char: charStart,
+          length,
           tokenType: 'operator',
           modifiers: []
         });
@@ -509,7 +516,7 @@ export class FileReferenceVisitor extends BaseVisitor {
         const pipeTransform = pipe.transform || pipe.name; // Support both properties
         this.tokenBuilder.addToken({
           line: pipe.location.start.line - 1,
-          char: pipeStartChar + 1,
+          char: (isParallel ? charStart + 2 : pipeStartChar + 1),
           length: pipeTransform.length + 1, // +1 for @
           tokenType: 'variable',
           modifiers: []

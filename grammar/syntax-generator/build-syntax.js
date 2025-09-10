@@ -17,7 +17,7 @@ class MlldSyntaxGenerator {
     this.patterns = {
       directive: `(${this.directives.join('|')})\\b`,
       variable: '@\\w+',
-      reservedVariable: '@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b',
+      reservedVariable: '@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b',
       projectPathShort: '@\\.',
       negationOperator: '!@',
       fieldAccess: '\\.(\\w+|\\d+)',
@@ -48,7 +48,10 @@ class MlldSyntaxGenerator {
       whenKeyword: 'when\\s*:',
       whenArrow: '=>',
       // Enhanced operators list
-      operators: '\\b(from|as|foreach|with|to)\\b',
+      operators: '\\b(from|as|foreach|with|to|format|parallel)\\b',
+      // Specific keywords
+      parallelKeyword: '\\bparallel\\b',
+      withFormatKey: '\\bformat\\b',
       // Pipe operator
       pipeOperator: '\\|',
       // Assignment operator
@@ -77,7 +80,8 @@ class MlldSyntaxGenerator {
         if (directiveMatches) {
           // Extract directive names without the / prefix
           const directives = directiveMatches.map(d => d.replace(/["\/]/g, ''));
-          
+          // Ensure newer directives are present even if grammar scan misses them
+          ['for', 'log'].forEach(name => { if (!directives.includes(name)) directives.push(name); });
           return directives;
         }
       }
@@ -87,7 +91,7 @@ class MlldSyntaxGenerator {
     }
     
     // Fallback to known list (v2 directives)
-    return ['var', 'show', 'run', 'exe', 'path', 'import', 'when', 'output'];
+    return ['var', 'show', 'run', 'exe', 'path', 'import', 'when', 'output', 'for', 'log'];
   }
 
   generatePrism() {
@@ -364,14 +368,14 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
           end: '$',
           patterns: [
             // First pattern in the line should be the directive
-            {
-              name: 'keyword.control.directive.mlld',
-              match: `\\G/(${this.directives.join('|')})\\b`
-            },
-            // Then all other mlld patterns
-            ...this.generateTextMatePatterns()
-          ]
+        {
+          name: 'keyword.control.directive.mlld',
+          match: `\\G/(${this.directives.join('|')})\\b`
         },
+        // Then all other mlld patterns
+        ...this.generateTextMatePatterns()
+      ]
+    },
         // Everything else is Markdown
         {
           include: 'text.html.markdown'
@@ -455,6 +459,16 @@ Prism.languages['mlld-run'] = Prism.languages.mlld;
         // When keyword (when:) - must come before colon operator
         name: 'keyword.control.when.mlld',
         match: this.patterns.whenKeyword
+      },
+      {
+        // Parallel keyword in /for contexts
+        name: 'keyword.control.parallel.mlld',
+        match: this.patterns.parallelKeyword
+      },
+      {
+        // with { format: "..." } key
+        name: 'keyword.other.with.format.mlld',
+        match: this.patterns.withFormatKey
       },
       {
         // Logical operators (high priority)

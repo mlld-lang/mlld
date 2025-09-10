@@ -52,10 +52,10 @@ Use mlld to create a daily standup update based on your recent activity:
 
 ### Syntax Highlighting
 
-Advanced semantic highlighting powered by the Language Server Protocol:
+Semantic highlighting powered by the Language Server Protocol:
 
 - **Context-aware highlighting**: Variables highlighted differently based on usage (declaration vs reference vs interpolation)
-- **Directives**: `/var`, `/show`, `/run`, `/exe`, `/import`, `/when`, `/output`, `/path`
+- **Directives**: `/var`, `/show`, `/run`, `/exe`, `/import`, `/when`, `/output`, `/path`, `/log`
 - **Variables**: `@variableName` with field access (`@user.name`) and array indexing (`@items[0]`)
 - **Operators**: `&&`, `||`, `==`, `!=`, `!`, `?:`, `>`, `<`, `>=`, `<=`
 - **Templates**: 
@@ -64,7 +64,7 @@ Advanced semantic highlighting powered by the Language Server Protocol:
   - Triple colons (`:::text {{var}}:::`) - {{var}} interpolation
 - **File references**: `<file.md>` with alligator syntax highlighting
 - **Comments**: `>> Comment text`
-- **Embedded code**: JavaScript, Python, Shell with proper syntax highlighting and region marking
+- **Embedded code**: JavaScript by default. Python and Shell highlight when WASM parsers are present.
 
 ### Intelligent Language Server
 
@@ -225,12 +225,15 @@ npm install --save-dev vscode-languageserver
 2. Ensure file is saved with `.mld` or `.mlld` extension
 3. Try reloading the window: Cmd/Ctrl+Shift+P → "Developer: Reload Window"
 
-### Syntax Highlighting Issues
+### Syntax Highlighting Notes
 
-The extension automatically updates syntax definitions from the mlld grammar. If highlighting seems incorrect:
-1. Update mlld CLI: `npm update -g mlld`
-2. Reload VSCode window
-3. Check for extension updates
+The extension relies on semantic tokens from the language server. A minimal TextMate grammar is included only as a fallback and is not auto-synced from the grammar generator.
+
+If highlighting seems incorrect:
+1. Ensure the language server starts (check Output → mlld Language Server)
+2. Reload the window
+3. Verify semantic highlighting is enabled (`editor.semanticHighlighting.enabled`)
+4. See `SEMANTIC-ONLY.md` for details about the semantic-first design and fallback behavior
 
 ## Learn More
 

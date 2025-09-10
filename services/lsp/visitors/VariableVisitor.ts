@@ -191,13 +191,14 @@ export class VariableVisitor extends BaseVisitor {
             });
           }
           
-          // Token for "|"
+          // Token for '|' or '||' (parallel group)
           const absolutePipePos = node.location.start.offset + pipePos;
+          const isParallel = nodeText[pipePos + 1] === '|';
           const pipePosition = this.document.positionAt(absolutePipePos);
           this.tokenBuilder.addToken({
             line: pipePosition.line,
             char: pipePosition.character,
-            length: 1,
+            length: isParallel ? 2 : 1,
             tokenType: 'operator',
             modifiers: []
           });
@@ -205,7 +206,7 @@ export class VariableVisitor extends BaseVisitor {
           const pipe = node.pipes[pipeIndex];
           if (pipe && pipe.transform) {
             // Skip whitespace after |
-            let transformStart = pipePos + 1;
+            let transformStart = pipePos + (isParallel ? 2 : 1);
             while (transformStart < nodeText.length && /\s/.test(nodeText[transformStart])) {
               transformStart++;
             }
@@ -257,8 +258,8 @@ export class VariableVisitor extends BaseVisitor {
               });
             }
           } else {
-            // No transform, just move past the pipe
-            currentPos = pipePos + 1;
+            // No transform, just move past the pipe(s)
+            currentPos = pipePos + (isParallel ? 2 : 1);
           }
           pipeIndex++;
         }

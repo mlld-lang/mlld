@@ -14,7 +14,7 @@ export class ArgumentParser {
     'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 
     'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 
     'setup', 'alias', 'env', 'dev', 'mode', 'test', 'run', 'error-test', 'clean',
-    'language-server', 'lsp'
+    'language-server', 'lsp', 'nvim-setup', 'nvim'
   ];
 
   parseArgs(args: string[]): CLIOptions {
