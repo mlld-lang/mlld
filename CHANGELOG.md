@@ -5,6 +5,16 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc50]
+### Added
+- **`mlld nvim-setup` command**: Auto-configure Neovim LSP support
+  - Detects Neovim setup (LazyVim, vanilla, etc.) and creates appropriate config
+  - Cross-platform: uses `where` on Windows, `which` on Unix
+  - Alias: `mlld nvim` for convenience
+
+### Fixed
+- #411: Nested for loops were returning {} instead of []
+
 ## [2.0.0-rc49]
 ### Added
 - **Pipeline parallel groups**: `A || B || C` executes commands concurrently as a single stage
@@ -1272,3 +1282,13 @@ Added:
 ## [1.0.0]
 
 Initial versioned release. 
+## [2.0.0-rc50]
+### Fixed
+- Nested `/for` collection returns `[]` for empty arrays in both plain `/show` and when piped to `@json`. Removes accidental `{}` output.
+- `isLoadContentResultArray` does not match untagged empty arrays; prevents misclassification of generic empty arrays.
+
+### Tests
+- Add fixtures for nested empty `/for` results:
+  - `tests/cases/valid/slash/for/for-nested-empty-array-json` (JSON formatted)
+  - `tests/cases/valid/slash/for/for-nested-empty-array-plain` (plain display)
+- Add unit test `interpreter/eval/for-nested-empty.test.ts` validating that a nested `/for` over empty arrays produces an empty ArrayVariable.
