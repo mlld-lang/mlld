@@ -51,7 +51,9 @@ export function isLoadContentResultArray(value: unknown): value is LoadContentRe
   }
   
   // Original check for actual LoadContentResult arrays
-  return Array.isArray(value) && value.every(isLoadContentResult);
+  // Do not treat empty arrays as LoadContentResult arrays to avoid
+  // misclassifying generic empty arrays (e.g., for-expression results).
+  return Array.isArray(value) && value.length > 0 && value.every(isLoadContentResult);
 }
 
 /**

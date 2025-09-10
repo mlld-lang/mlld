@@ -1272,3 +1272,13 @@ Added:
 ## [1.0.0]
 
 Initial versioned release. 
+## [2.0.0-rc50]
+### Fixed
+- Nested `/for` collection returns `[]` for empty arrays in both plain `/show` and when piped to `@json`. Removes accidental `{}` output.
+- `isLoadContentResultArray` does not match untagged empty arrays; prevents misclassification of generic empty arrays.
+
+### Tests
+- Add fixtures for nested empty `/for` results:
+  - `tests/cases/valid/slash/for/for-nested-empty-array-json` (JSON formatted)
+  - `tests/cases/valid/slash/for/for-nested-empty-array-plain` (plain display)
+- Add unit test `interpreter/eval/for-nested-empty.test.ts` validating that a nested `/for` over empty arrays produces an empty ArrayVariable.
