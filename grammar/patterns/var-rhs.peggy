@@ -426,14 +426,15 @@ VarWhenError
 // FOR EXPRESSION - for @var in @collection => expression
 // Used in /var and /exe assignments to collect results
 ForExpression "for expression"
-  = "for" _ pattern:ForIterationPattern _ "=>" _ expr:VarRHSContent {
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ expr:VarRHSContent {
       helpers.debug('ForExpression matched', { pattern, expr });
       
       return helpers.createForExpression(
         pattern.variable,
         pattern.source, 
         expr,
-        location()
+        location(),
+        opts || null
       );
     }
   // Error recovery

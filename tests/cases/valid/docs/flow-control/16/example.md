@@ -1,14 +1,12 @@
-/exe @randomQuality(input) = js {
-  const values = [0.3, 0.7, 0.95, 0.2, 0.85];
-  return values[ctx.try - 1] || 0.1;
-}
-
-/exe @validateQuality(score) = when first [
-  @score > 0.9 => `excellent: @score`
-  @score > 0.8 => `good: @score`
-  @ctx.try < 5 => retry
-  none => `failed: best was @score`
+/exe @source() = when first [
+  @ctx.try == 1 => "draft"
+  * => "final"
 ]
 
-/var @result = @randomQuality | @validateQuality
+/exe @validator() = when first [
+  @ctx.input == "draft" => retry "missing title"
+  * => `Used hint: @ctx.hint`
+]
+
+/var @result = @source() | @validator
 /show @result

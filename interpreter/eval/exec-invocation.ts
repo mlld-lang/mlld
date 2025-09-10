@@ -1438,7 +1438,7 @@ export async function evaluateExecInvocation(
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[exec-invocation] Handling pipeline:', {
           pipelineLength: node.withClause.pipeline.length,
-          stages: node.withClause.pipeline.map((p: any) => p.rawIdentifier || 'unknown')
+          stages: node.withClause.pipeline.map((p: any) => Array.isArray(p) ? '[parallel]' : (p.rawIdentifier || 'unknown'))
         });
       }
       
@@ -1467,60 +1467,12 @@ export async function evaluateExecInvocation(
         rawArgs: []
       };
       
-      // Prepend synthetic source stage and attach builtin effects
+      // Prepend synthetic source stage and attach builtin effects consistently
       let normalizedPipeline = [SOURCE_STAGE, ...node.withClause.pipeline];
-      // Attach inline builtin effects (log/show/output) to preceding stages
       try {
-        const { isBuiltinEffect } = await import('./pipeline/builtin-effects');
-        const functional: any[] = [];
-        const pending: any[] = [];
-        for (const s of normalizedPipeline) {
-          // Preserve parallel groups (arrays) as-is
-          if (Array.isArray(s)) {
-            // If we had pending effects before a group, attach them to a synthetic identity before the group
-            if (pending.length > 0) {
-              functional.push({
-                rawIdentifier: '__identity__',
-                identifier: [],
-                args: [],
-                fields: [],
-                rawArgs: [],
-                effects: [...pending]
-              });
-              pending.length = 0;
-            }
-            functional.push(s);
-            continue;
-          }
-          const name = s.rawIdentifier;
-          if (isBuiltinEffect(name)) {
-            if (functional.length > 0) {
-              const prev = functional[functional.length - 1];
-              if (!prev.effects) prev.effects = [];
-              prev.effects.push(s);
-            } else {
-              pending.push(s);
-            }
-          } else {
-            const stage = { ...s };
-            if (pending.length > 0) {
-              stage.effects = [...(stage.effects || []), ...pending];
-              pending.length = 0;
-            }
-            functional.push(stage);
-          }
-        }
-        if (functional.length === 0 && pending.length > 0) {
-          functional.push({
-            rawIdentifier: '__identity__',
-            identifier: [],
-            args: [],
-            fields: [],
-            rawArgs: [],
-            effects: [...pending]
-          });
-        }
-        normalizedPipeline = functional;
+        const { attachBuiltinEffects } = await import('./pipeline/effects-attachment');
+        const { functionalPipeline } = attachBuiltinEffects(normalizedPipeline as any);
+        normalizedPipeline = functionalPipeline as any;
       } catch {
         // If helper import fails, proceed without effect attachment
       }
@@ -1529,7 +1481,7 @@ export async function evaluateExecInvocation(
         console.error('[exec-invocation] Creating pipeline with synthetic source:', {
           originalLength: node.withClause.pipeline.length,
           normalizedLength: normalizedPipeline.length,
-          stages: normalizedPipeline.map((p: any) => p.rawIdentifier || 'unknown')
+          stages: normalizedPipeline.map((p: any) => Array.isArray(p) ? '[parallel]' : (p.rawIdentifier || 'unknown'))
         });
       }
       

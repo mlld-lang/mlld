@@ -5,6 +5,26 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc49]
+### Added
+- **Pipeline parallel groups**: `A || B || C` executes commands concurrently as a single stage
+  - With-clause parity: nested arrays represent a parallel group (e.g., `with { pipeline: [ [@left, @right], @combine ] }`)
+  - Concurrency capped by `MLLD_PARALLEL_LIMIT` (default `4`); results preserve declaration order and flow to the next stage as a JSON array string
+- **Rate-limit resilience in pipelines**: 429/"rate limit" errors trigger exponential backoff with bounded retries per stage
+- **Unified effect attachment**: Single helper attaches inline builtin effects (show/log/output) to preceding stages and to each branch of parallel groups
+- **/for parallel execution**: Parallel iteration with optional cap and pacing
+  - Default cap from `MLLD_PARALLEL_LIMIT`; override per loop: `/for 3 parallel @x in @items => ...`
+  - Optional pacing between starts: `/for (3, 1s) parallel @x in @items => ...` (units: ms, s, m, h)
+  - Directive form streams effects as iterations complete; collection form preserves input order in results
+
+### Fixed
+- **Retry in parallel groups**: Returning `retry` from within a parallel group rejects with a clear error (retry is unsupported inside the group)
+- **Parallel limit hardening**: `MLLD_PARALLEL_LIMIT` parsing clamps invalid/low values to defaults; limit is read per execution to respect environment overrides
+
+### Documentation
+- Updated developer docs for parallel execution: shorthand `||` rule (no leading `||`), with-clause nested group syntax, effect behavior on groups, and references to tests
+- Updated iterator docs to include `/for parallel` with cap overrides and pacing; clarified iterator vs pipeline parallelism and rate-limit behavior
+
 ## [2.0.0-rc48]
 ### Added
 - **Large variable support for bash/shell executors**: Automatic handling of variables exceeding Node.js environment limits

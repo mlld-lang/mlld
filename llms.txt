@@ -20,7 +20,7 @@
   <TEMPLATES> ...................... Backticks, ::…::, :::…:::; interpolation rules.
   <FILE_LOADING> ................... Angle brackets, metadata fields, globs, "as" templates, detection rules.
   <BUILTIN_METHODS> ................ Array and string methods: includes, indexOf, join, split, etc.
-  <PIPELINES> ...................... Operator |, transformers, @ctx/@p context, retry/hints, inline effects.
+  <PIPELINES> ...................... Operator |, transformers, @ctx/@p context, retry/hints, inline effects, parallel groups with ||.
   <COMMENTS> ....................... ">>" and "<<" comments (start/end-of-line).
   <RESERVED_VARIABLES> ............. @now, @input, @base, @debug.
 </SYNTAX>
@@ -268,6 +268,11 @@ Use `foreach` to transform collections; use `/for` to execute/collect. Full deta
 /exe @greet(name) = ::Hi @name!::
 /var @gs = foreach @greet(@names)
 /for @n in @names => show `Name: @n`
+
+# Optional parallel forms
+/for parallel @n in @names => show @n              # uses MLLD_PARALLEL_LIMIT (default 4)
+/var @caps = for 2 parallel @n in @names => @greet(@n)  # per-loop cap override
+/for (3, 1s) parallel @n in @names => show @n      # cap 3 with 1s pacing between starts
 ```
 
 </RULE_11_ITERATION_OVERVIEW>
@@ -419,6 +424,29 @@ Pipeline array (@p): `@p[0]` (input), `@p[-1]` (previous output), `@p.retries.al
 Inline effects: `@data | @transform | log` (stderr), `@data | output to "file.txt"` (inline write)
 
 Formats (`with { format: "json|csv|xml|text" }`): guide parsing for pipeline stages.
+
+Parallel groups (`||`): run multiple commands as one stage in parallel.
+
+```mlld
+# Two transforms run concurrently; outputs are collected in order
+/exe @left(input) = `L:@input`
+/exe @right(input) = `R:@input`
+/exe @combine(input) = js {
+  const arr = JSON.parse(input); // parallel stage returns a JSON array string
+  return arr.join(' + ');
+}
+
+/var @out = "x" with { pipeline: [ @left || @right, @combine ] }
+/show @out   # → "L:x + R:x"
+```
+
+Semantics:
+* Grouping: `A || B || C` forms a single stage executed concurrently with a global cap.
+* Ordering: Results preserve command order; next stage receives a JSON array string.
+* Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
+* Retries: Returning `retry` inside a parallel group is not supported and aborts the pipeline. If you need retries, run validation after the group and request a retry of the previous (non-parallel) stage.
+* Rate limits: 429/“rate limit” errors trigger per-command exponential backoff.
+* Inline effects: Effects attached to commands in the group run after each command succeeds.
 
 </PIPELINES>
 
@@ -629,6 +657,25 @@ Notes:
 ```
 
 Empty arrays are safe: `/for` emits nothing; `for … =>` returns `[]`. </ITERATION>
+
+Parallel /for (optional):
+
+```mlld
+# Default cap from env (MLLD_PARALLEL_LIMIT, default 4)
+/for parallel @x in @items => show @x
+
+# Cap override and pacing between starts (units: s, m, h, d, w)
+/for (2, 1s) parallel @x in @items => show @x
+
+# Collection form preserves input order
+/var @out = for 3 parallel @x in ["a","b","c"] => @upper(@x)
+```
+
+Notes:
+- Directive form streams results as iterations finish (order not guaranteed); expression form returns results in input order.
+- Concurrency capped by `MLLD_PARALLEL_LIMIT` unless overridden per loop.
+- Pacing: optional minimum delay between iteration starts via `/for (n, interval) parallel ...` (units: ms, s, m, h).
+- Rate limits: per‑iteration 429/"rate limit" errors use exponential backoff.
 
 <NO_EARLY_EXIT>
 mlld has no `return/exit`. Model outcomes with `/when` and flags.
