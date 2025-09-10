@@ -171,10 +171,12 @@ return {
         console.log(chalk.green(`Created: ${targetFile}\n`));
       }
       
-      // Check if mlld is installed globally
+      // Check if mlld is installed globally (cross-platform)
       let mlldInstalled = false;
       try {
-        execSync('which mlld', { stdio: 'ignore' });
+        // Use 'where' on Windows, 'which' on Unix-like systems
+        const checkCommand = process.platform === 'win32' ? 'where mlld' : 'which mlld';
+        execSync(checkCommand, { stdio: 'ignore' });
         mlldInstalled = true;
         console.log(chalk.green('mlld is installed globally'));
       } catch {
@@ -186,8 +188,8 @@ return {
       // Test if nvim has lspconfig
       let hasLspConfig = false;
       try {
-        const result = execSync('nvim --headless -c "lua print(pcall(require, \'lspconfig\'))" -c "q" 2>&1', 
-          { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const result = execSync('nvim --headless -c "lua print(pcall(require, \'lspconfig\'))" -c "q"', 
+          { encoding: 'utf-8' });
         if (result.includes('true')) {
           hasLspConfig = true;
           console.log(chalk.green('nvim-lspconfig is installed'));
