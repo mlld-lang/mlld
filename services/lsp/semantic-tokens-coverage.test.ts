@@ -333,7 +333,6 @@ describe('Semantic Tokens Coverage Tests', () => {
         { tokenType: 'operator', text: ']' }
       ]);
     });
-
     it('tokenizes inline show effect in pipeline', async () => {
       const code = '/var @a = "textA" | show';
       await expectTokens(code, [

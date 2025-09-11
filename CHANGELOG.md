@@ -19,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `when` allowed in `for` collection RHS; `none => skip` filters non-matches
   - `foreach` allowed in `/exe` RHS; executable foreach callable like any other function
   - `/show foreach @func(@arrays)` with `with { separator, template }` formatting options
-
 ### Fixed
 - #411: Nested `/for` collection returns `[]` for empty arrays in both plain `/show` and when piped to `@json`. Removes accidental `{}` output.
 - `isLoadContentResultArray` does not match untagged empty arrays; prevents misclassification of generic empty arrays.

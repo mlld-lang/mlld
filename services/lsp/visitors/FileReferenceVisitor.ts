@@ -581,6 +581,20 @@ export class FileReferenceVisitor extends BaseVisitor {
                 } else {
                   currentPos = nodeText.indexOf('|', currentPos + 1);
                 }
+            // Token for "@pipeName"
+            const atSymbolPos = nodeText.indexOf('@', currentPos + (isParallel ? 2 : 1));
+            if (atSymbolPos !== -1) {
+              const pipeTransform = pipe.transform || pipe.name;
+              if (pipeTransform) {
+                const pipeName = '@' + pipeTransform;
+                this.tokenBuilder.addToken({
+                  line: node.location.start.line - 1,
+                  char: nodeStartChar + atSymbolPos,
+                  length: pipeName.length,
+                  tokenType: 'variable',
+                  modifiers: []
+                });
+                currentPos = nodeText.indexOf('|', currentPos + 1 + pipeTransform.length);
               } else {
                 currentPos = nodeText.indexOf('|', currentPos + 1);
               }
@@ -749,30 +763,15 @@ export class FileReferenceVisitor extends BaseVisitor {
       }
     }
   }
-  
-  private getLineStartOffset(text: string, lineIndex: number): number {
-    if (lineIndex === 0) return 0;
-    
-    let offset = 0;
-    let currentLine = 0;
-    
-    for (let i = 0; i < text.length && currentLine < lineIndex; i++) {
-      if (text[i] === '\n') {
-        currentLine++;
-        if (currentLine === lineIndex) {
-          offset = i + 1;
-          break;
-        }
-      }
-    }
-    
-    return offset;
+
   }
-  
+
+  }
+
   private visitComment(node: any): void {
     this.commentHelper.tokenizeStandaloneComment(node);
   }
-  
+
   private visitParameter(node: any): void {
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
@@ -782,7 +781,7 @@ export class FileReferenceVisitor extends BaseVisitor {
       modifiers: []
     });
   }
-  
+
   private visitFrontmatter(node: any, context: VisitorContext): void {
     this.tokenBuilder.addToken({
       line: node.location.start.line - 1,
@@ -791,9 +790,7 @@ export class FileReferenceVisitor extends BaseVisitor {
       tokenType: 'comment',
       modifiers: []
     });
-    
     this.visitChildren(node, context, (child, ctx) => this.mainVisitor.visitNode(child, ctx));
-    
     if (node.closeLocation) {
       this.tokenBuilder.addToken({
         line: node.closeLocation.start.line - 1,
@@ -804,7 +801,7 @@ export class FileReferenceVisitor extends BaseVisitor {
       });
     }
   }
-  
+
   private visitCodeFence(node: any): void {
     if (node.language && node.languageLocation) {
       this.tokenBuilder.addToken({
@@ -815,7 +812,6 @@ export class FileReferenceVisitor extends BaseVisitor {
         modifiers: []
       });
     }
-    
     if (node.codeLocation && node.language) {
       this.tokenBuilder.addToken({
         line: node.codeLocation.start.line - 1,

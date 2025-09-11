@@ -529,7 +529,6 @@ export class DirectiveVisitor extends BaseVisitor {
             const endOffset = directive.location.start.offset + closeIdx;
             this.operatorHelper.tokenizeListSeparators(startOffset, endOffset, ',');
           }
-
           // Highlight effect keywords and syntax inside pipeline arrays
           const segmentStartRel = pipelineKeyIndex + firstBracketRel;
           const segmentEndRel = closeIdx !== -1 ? closeIdx : directiveText.length;
