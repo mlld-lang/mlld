@@ -5,6 +5,12 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc51]
+### Fixed
+- Language Server transport defaults to stdio when no explicit flag is provided
+  - Prevents Neovim startup error: "Connection input stream is not set"
+  - Preserves VS Code behavior when it passes `--stdio` (or other transports)
+
 ## [2.0.0-rc50]
 ### Added
 - **`mlld nvim-setup` command**: Auto-configure Neovim LSP support
