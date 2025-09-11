@@ -56,6 +56,7 @@ UnifiedUnaryExpression
 // Atomic expressions - use unified patterns for proper variable/exec support
 UnifiedAtomicExpression
   = UnifiedArrayOperation
+  / ExecResultMethodCall   // Support @func(args).method(args) in expressions
   / UnifiedReferenceNoTail  // Handles @var, @var.field, @func(), @obj.method()
   / ExpressionString  // ExpressionString already returns a Literal node
   / value:NumberLiteral {
@@ -91,6 +92,36 @@ UnifiedAtomicExpression
       });
     }
   / NoneLiteral  // NoneLiteral already returns a properly formatted Literal node
+
+// Method call on the result of an exec invocation
+// Example: @helper(@input).includes("APPROVE")
+// Note: We intentionally keep this here (base) so WhenConditionAdapter (UnifiedExpression)
+// can parse it in simple /when forms.
+ExecResultMethodCall
+  = "@" func:BaseIdentifier "(" args:CommandArgumentList? _ ")" _ "." method:BaseIdentifier "(" margs:CommandArgumentList? _ ")" post:AnyFieldAccess* {
+      // Build the base exec invocation: @func(args)
+      const baseRef = {
+        name: func,
+        identifier: [helpers.createVariableReferenceNode('varIdentifier', {
+          identifier: func
+        }, location())],
+        args: args || [],
+        isCommandReference: true
+      };
+      const baseInvocation = helpers.createExecInvocation(baseRef, null, location());
+
+      // Build the method invocation with the base as objectSource
+      const methodRef = {
+        name: method,
+        identifier: [helpers.createNode(NodeType.Text, { content: method, location: location() })],
+        args: margs || [],
+        isCommandReference: true,
+        objectSource: baseInvocation // Non-standard: handled by evaluator
+      };
+
+      const exec = helpers.createExecInvocation(methodRef, null, location());
+      return (post && post.length > 0) ? { ...exec, fields: post } : exec;
+    }
 
 // Array operations for advanced filtering and manipulation
 UnifiedArrayOperation

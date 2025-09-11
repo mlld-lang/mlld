@@ -1,9 +1,0 @@
-{
-  "output": {
-    "showProgress": false,
-    "maxOutputLines": 10,
-    "errorBehavior": "continue",
-    "collectErrors": true,
-    "showCommandContext": true
-  }
-}

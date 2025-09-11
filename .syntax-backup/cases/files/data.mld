@@ -1,8 +1,0 @@
-@data data = {
-  "items": ["item1", "item2", "item3"],
-  "total": 3,
-  "metadata": {
-    "created": "2024-01-01",
-    "updated": "2024-01-15"
-  }
-}

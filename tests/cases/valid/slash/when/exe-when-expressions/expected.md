@@ -22,10 +22,10 @@ Messages:
 ¡Adiós!
 Unknown message type
 ## Exe with bare when (evaluates all, returns last match)
-not a number
-not a number
-not a number
-not a number
+small positive
+medium positive
+negative
+large positive
 ## Exe with code execution based on conditions
 
 Define arithmetic operations as separate functions:

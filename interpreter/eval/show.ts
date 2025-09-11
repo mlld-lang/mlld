@@ -54,13 +54,26 @@ export async function evaluateShow(
     let varName: string;
     
     if (directive.values?.invocation) {
-      // New unified AST structure
-      const invocationNode = directive.values.invocation;
-      if (!invocationNode || invocationNode.type !== 'VariableReference') {
+      // New unified AST structure: support VariableReference and VariableReferenceWithTail
+      const invocationNode = directive.values.invocation as any;
+      const allowedTypes = ['VariableReference', 'VariableReferenceWithTail', 'TemplateVariable'] as const;
+      if (!invocationNode || !allowedTypes.includes(invocationNode.type)) {
         throw new Error('Show variable directive missing variable reference');
       }
       variableNode = invocationNode;
-      varName = invocationNode.identifier;
+      if (invocationNode.type === 'VariableReference') {
+        varName = invocationNode.identifier;
+      } else if (invocationNode.type === 'VariableReferenceWithTail') {
+        // Extract inner variable identifier for lookup; pipeline handled later
+        const innerVar = invocationNode.variable;
+        if (innerVar.type === 'TemplateVariable') {
+          varName = innerVar.identifier; // __template__
+        } else {
+          varName = innerVar.identifier;
+        }
+      } else if (invocationNode.type === 'TemplateVariable') {
+        varName = invocationNode.identifier; // __template__
+      }
     } else if (directive.values?.variable) {
       // Legacy structure (for backwards compatibility during transition)
       const legacyVariable = directive.values.variable;
@@ -103,7 +116,12 @@ export async function evaluateShow(
     } else {
       throw new Error('Show variable directive missing variable reference');
     }
-    
+
+    // NOTE: Do not pre-process pipelines here. For show-invocation, we rely on
+    // evaluateExecInvocation(invocation, env) to execute any attached withClause
+    // (including parallel groups) correctly. Pre-processing here can interfere
+    // with retry/source wiring and produce partial outputs.
+
     // Get variable from environment or handle template literals
     let variable: any;
     let value: any;
@@ -153,7 +171,7 @@ export async function evaluateShow(
       
       // For template variables (like ::{{var}}::), we need to interpolate the template content
       if (isTemplate(variable)) {
-        // For double-bracket templates, the value is the AST array
+          // For double-bracket templates, the value is the AST array
         if (Array.isArray(value)) {
           if (process.env.MLLD_DEBUG === 'true') {
             logger.debug('Template interpolation in show', {
@@ -166,7 +184,7 @@ export async function evaluateShow(
             logger.debug('Interpolation result:', { value });
           }
         } else if (variable.metadata?.templateAst && Array.isArray(variable.metadata.templateAst)) {
-          // Fallback - check metadata (shouldn't be needed with new code)
+          // GOTCHA: Some legacy paths store template AST in metadata
           value = await interpolate(variable.metadata.templateAst, env);
         }
       }
@@ -246,6 +264,14 @@ export async function evaluateShow(
       value = variable.value;
     } else {
       throw new Error(`Unknown variable type in show evaluator: ${variable.type}`);
+    }
+
+    // Legacy compatibility: only apply this path when not using unified invocation tail
+    if (!(directive as any)?.values?.invocation) {
+      if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
+        const { executePipeline } = await import('./pipeline');
+        content = await executePipeline(typeof value === 'string' ? value : String(value ?? ''), variableNode.withClause.pipeline, env);
+      }
     }
     } // Close the if (value === undefined && variable) block
     
@@ -378,10 +404,33 @@ export async function evaluateShow(
       content = '';
     }
     
-    // Handle pipeline from VariableReferenceWithTail if present
-    if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
-      const { executePipeline } = await import('./pipeline');
-      content = await executePipeline(content, variableNode.withClause.pipeline, env);
+    // Legacy path: only run when invocation is not present (avoid double-processing)
+    if (!(directive as any)?.values?.invocation) {
+      if (variableNode?.type === 'VariableReferenceWithTail' && variableNode.withClause?.pipeline) {
+        const { executePipeline } = await import('./pipeline');
+        content = await executePipeline(content, variableNode.withClause.pipeline, env);
+      }
+    }
+    
+    // Unified pipeline processing for showVariable: detect pipeline from invocation or directive
+    try {
+      const { hasPipeline } = await import('./pipeline/detector');
+      const invocationNode = (directive as any)?.values?.invocation;
+      if (hasPipeline(invocationNode, directive)) {
+        const { processPipeline } = await import('./pipeline/unified-processor');
+        // Use direct value; do not inject synthetic source here — avoids stage-0 retry confusion
+        const processed = await processPipeline({
+          value: content,
+          env,
+          node: invocationNode,
+          directive,
+          identifier: varName || 'show',
+          location: directive.location
+        });
+        content = typeof processed === 'string' ? processed : JSONFormatter.stringify(processed);
+      }
+    } catch {
+      // If no pipeline detected or processing fails, leave content as-is
     }
     
     
@@ -546,22 +595,10 @@ export async function evaluateShow(
       throw new Error('Show invocation directive missing invocation');
     }
     
-    // Get the invocation name
-    const commandRef = invocation.commandRef;
-    const name = commandRef.name || commandRef.identifier[0]?.content;
-    if (!name) {
-      throw new Error('Add invocation missing name');
-    }
-    
-    // Look up what this invocation refers to
-    const variable = env.getVariable(name);
-    if (!variable) {
-      throw new Error(`Variable not found: ${name}`);
-    }
-    
-    // Handle based on variable type
-    if (isExecutableVar(variable)) {
-      // This is an executable invocation - use exec-invocation handler
+    // Check if this is a method call on an object or on an exec result
+    const commandRef = invocation.commandRef as any;
+    if (commandRef && (commandRef.objectReference || commandRef.objectSource)) {
+      // This is a method call like @list.includes() - evaluate directly
       const { evaluateExecInvocation } = await import('./exec-invocation');
       const result = await evaluateExecInvocation(invocation, env);
       
@@ -577,7 +614,38 @@ export async function evaluateShow(
         content = String(result.value);
       }
     } else {
-      throw new Error(`Variable ${name} is not executable (type: ${variable.type})`);
+      // Normal invocation - look up the variable
+      const name = commandRef.name || commandRef.identifier?.[0]?.content;
+      if (!name) {
+        throw new Error('Add invocation missing name');
+      }
+      
+      // Look up what this invocation refers to
+      const variable = env.getVariable(name);
+      if (!variable) {
+        throw new Error(`Variable not found: ${name}`);
+      }
+      
+      // Handle based on variable type
+      if (isExecutableVar(variable)) {
+        // This is an executable invocation - use exec-invocation handler
+        const { evaluateExecInvocation } = await import('./exec-invocation');
+        const result = await evaluateExecInvocation(invocation, env);
+        
+        // Convert result to string appropriately
+        if (typeof result.value === 'string') {
+          content = result.value;
+        } else if (result.value === null || result.value === undefined) {
+          content = '';
+        } else if (typeof result.value === 'object') {
+          // For objects and arrays, use JSON.stringify
+          content = JSON.stringify(result.value);
+        } else {
+          content = String(result.value);
+        }
+      } else {
+        throw new Error(`Variable ${name} is not executable (type: ${variable.type})`);
+      }
     }
     
   } else if (directive.subtype === 'addTemplateInvocation') {
@@ -931,8 +999,12 @@ export async function evaluateShow(
     content += '\n';
   }
   
-  // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
-  env.emitEffect('both', content, { source: directive.location });
+  // Only emit the effect if we're not in an expression context
+  // In expression contexts (like when expressions), we only return the value
+  if (!context?.isExpression) {
+    // Emit effect with type 'both' - shows on stdout (if streaming) AND adds to document
+    env.emitEffect('both', content, { source: directive.location });
+  }
   
   // Return the content
   return { value: content, env };

@@ -125,6 +125,16 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - Use directive trace: `enableTrace` option (on by default) to inspect directive flow.
 - Inspect pipeline context via ambient `@ctx` (stages, attempts, hint).
 
+### Hint Scoping in Pipelines
+
+`@ctx` is ambient and amnesiac: it reflects only the current stage. As part of retry semantics, `@ctx.hint` (the retry payload) is:
+
+- Visible only inside the body of the retried stage while it executes.
+- Cleared before inline effects on that stage and before re-executing the requesting stage.
+- Null in downstream stages and inline effects.
+
+This keeps `@ctx.hint` tightly scoped to the location where it is meaningful, while leaving aggregate history visible via `@p.retries.all`.
+
 ## Quick Map
 
 - /var: `interpreter/eval/var.ts` — unified variable creation (text/data/primitive/path/section)

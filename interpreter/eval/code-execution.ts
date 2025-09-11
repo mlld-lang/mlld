@@ -22,5 +22,13 @@ export async function evaluateCodeExecution(
   // This ensures we use VM for Node.js, AsyncFunction for JS, etc.
   const result = await env.executeCode(code, language);
   
+  // Apply automatic JSON parsing for shell commands that return JSON
+  // (JavaScript/Node/Python executors handle their own return types)
+  if (!language || language === 'sh' || language === 'bash' || language === 'shell') {
+    const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
+    const processed = processCommandOutput(result);
+    return { value: processed, env };
+  }
+  
   return { value: result, env };
 }

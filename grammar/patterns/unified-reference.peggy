@@ -1,7 +1,5 @@
 // UNIFIED REFERENCE PATTERNS
 // Purpose: Consolidated, battle-tested patterns for all @variable and @exec() usage
-// Replaces: 20+ duplicate patterns across the grammar
-// Source: Best implementations from var-rhs.peggy and variables.peggy
 
 // =============================================================================
 // CORE UNIFIED PATTERNS (choose the right one based on syntax)
@@ -9,7 +7,8 @@
 
 // Meta-pattern that chooses the right implementation based on syntax
 UnifiedReference "unified variable or exec reference"
-  = FieldAccessExec          // @obj.method(args) - must come first (most specific)
+  = ExecResultMethodCall     // @func(args).method(args) on exec result
+  / FieldAccessExec          // @obj.method(args) - most specific object form
   / SimpleExec               // @func(args) 
   / VariableWithTail         // @var.field with tail modifiers
 
@@ -18,14 +17,16 @@ UnifiedReferenceWithTail "unified reference with tail support"
   = UnifiedReference         // All patterns already support tail modifiers
 
 UnifiedReferenceNoTail "unified reference without tail support"  
-  = FieldAccessExecNoTail    // @obj.method(args) - no tail
+  = ExecResultMethodCall     // @func(args).method(args) - no tail captured
+  / FieldAccessExecNoTail    // @obj.method(args) - no tail
   / SimpleExecNoTail         // @func(args) - no tail
   / VariableNoTail           // @var.field - no tail
 
 // Special pattern for use inside pipeline contexts
 // This allows function arguments but prevents capturing tail modifiers
 UnifiedReferenceForPipeline "unified reference for pipeline commands"
-  = FieldAccessExecForPipeline    // @obj.method(args) - no tail capture
+  = ExecResultMethodCall          // @func(args).method(args) - no tail capture
+  / FieldAccessExecForPipeline    // @obj.method(args) - no tail capture
   / SimpleExecForPipeline         // @func(args) - no tail capture
   / VariableForPipeline           // @var.field - no tail capture
 
@@ -36,7 +37,7 @@ UnifiedReferenceForPipeline "unified reference for pipeline commands"
 // Handles: @obj.field.method(args) with optional tail modifiers
 
 FieldAccessExec "field access exec invocation"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" tail:TailModifiers? {
+  = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" post:AnyFieldAccess* tail:TailModifiers? {
       helpers.debug('FieldAccessExec matched', { id, fields });
       
       // Extract the last field as the method name
@@ -65,11 +66,12 @@ FieldAccessExec "field access exec invocation"
         objectReference: objectRef
       };
       
-      return helpers.createExecInvocation(ref, tail || null, location());
+      const exec = helpers.createExecInvocation(ref, tail || null, location());
+      return (post && post.length > 0) ? { ...exec, fields: post } : exec;
     }
 
 FieldAccessExecNoTail "field access exec invocation without tail"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" !TailModifiers {
+  = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" post:AnyFieldAccess* !TailModifiers {
       helpers.debug('FieldAccessExecNoTail matched', { id, fields });
       
       // Same logic as FieldAccessExec but no tail modifiers
@@ -96,11 +98,12 @@ FieldAccessExecNoTail "field access exec invocation without tail"
         objectReference: objectRef
       };
       
-      return {
+      const exec = {
         type: 'ExecInvocation',
         commandRef: ref,
         withClause: null
       };
+      return (post && post.length > 0) ? { ...exec, fields: post } : exec;
     }
 
 // =============================================================================
@@ -110,7 +113,7 @@ FieldAccessExecNoTail "field access exec invocation without tail"
 // Handles: @func(args) with optional tail modifiers
 
 SimpleExec "simple exec invocation"
-  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" tail:TailModifiers? {
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" post:AnyFieldAccess* tail:TailModifiers? {
       // Create command reference with arguments
       const ref = {
         name,
@@ -121,11 +124,12 @@ SimpleExec "simple exec invocation"
         isCommandReference: true
       };
       
-      return helpers.createExecInvocation(ref, tail || null, location());
+      const exec = helpers.createExecInvocation(ref, tail || null, location());
+      return (post && post.length > 0) ? { ...exec, fields: post } : exec;
     }
 
 SimpleExecNoTail "simple exec invocation without tail"
-  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" !TailModifiers {
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" post:AnyFieldAccess* !TailModifiers {
       const ref = {
         name,
         identifier: [helpers.createVariableReferenceNode('varIdentifier', {
@@ -135,11 +139,12 @@ SimpleExecNoTail "simple exec invocation without tail"
         isCommandReference: true
       };
       
-      return {
+      const exec = {
         type: 'ExecInvocation',
         commandRef: ref,
         withClause: null
       };
+      return (post && post.length > 0) ? { ...exec, fields: post } : exec;
     }
 
 // =============================================================================
@@ -147,7 +152,7 @@ SimpleExecNoTail "simple exec invocation without tail"
 // =============================================================================
 
 FieldAccessExecForPipeline "field access exec for pipeline"
-  = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" {
+  = "@" id:BaseIdentifier fields:AnyFieldAccess+ "(" args:CommandArgumentList? _ ")" post:AnyFieldAccess* {
       // Same as FieldAccessExecNoTail but without the negative lookahead
       const lastField = fields[fields.length - 1];
       const methodName = lastField.value;
@@ -171,15 +176,16 @@ FieldAccessExecForPipeline "field access exec for pipeline"
         objectReference: objectRef
       };
       
-      return {
+      const exec = {
         type: 'ExecInvocation',
         commandRef: ref,
         withClause: null
       };
+      return (post && post.length > 0) ? { ...exec, fields: post } : exec;
     }
 
 SimpleExecForPipeline "simple exec for pipeline"
-  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" {
+  = "@" name:BaseIdentifier "(" args:CommandArgumentList? _ ")" post:AnyFieldAccess* {
       // Same as SimpleExecNoTail but without the negative lookahead
       const ref = {
         name,
@@ -190,11 +196,15 @@ SimpleExecForPipeline "simple exec for pipeline"
         isCommandReference: true
       };
       
-      return {
+      const exec = {
         type: 'ExecInvocation',
         commandRef: ref,
         withClause: null
       };
+      if (post && post.length > 0) {
+        exec.fields = post;
+      }
+      return exec;
     }
 
 VariableForPipeline "variable reference for pipeline"

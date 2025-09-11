@@ -1,5 +1,0 @@
-@data constants = {
-  "version": "v1.0.0",
-  "name": "Constants Module",
-  "maxRetries": 3
-}

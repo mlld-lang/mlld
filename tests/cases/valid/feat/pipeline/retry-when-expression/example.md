@@ -7,10 +7,10 @@
   * => "invalid-score"
 ]
 
-/exe @scoreGenerator(input, attempt) = js {
-  // Simulate generating different scores based on attempt
-  if (attempt == 1) return 0.1; // Too low, should retry
-  if (attempt == 2) return 0.3; // Low quality
+/exe @scoreGenerator(input) = js {
+  // Simulate generating different scores based on attempt - @ctx.try is ambient
+  if (ctx.try == 1) return 0.1; // Too low, should retry
+  if (ctx.try == 2) return 0.3; // Low quality
   return 0.9; // High quality
 }
 
@@ -25,6 +25,6 @@
 /exe @getTestData() = "test-data"
 
 # Test retry mechanism in when expressions
-/var @result = @getTestData() with { pipeline: [@scoreGenerator(@p.try), @validateScore, @qualityControl] }
+/var @result = @getTestData() with { pipeline: [@scoreGenerator, @validateScore, @qualityControl] }
 
 /show @result

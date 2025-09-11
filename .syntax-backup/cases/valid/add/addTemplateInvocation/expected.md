@@ -1,1 +1,0 @@
-Bob logged in successfully!

@@ -750,6 +750,14 @@ export async function startLanguageServer(): Promise<void> {
     } else if (line.match(/with\s*\{\s*$/)) {
       // After 'with {' - suggest with clause options
       completions.push(...getWithClauseCompletions());
+    } else if (line.match(/\|\s*@?$/)) {
+      // After a pipe - suggest common transformers
+      const transforms = ['@json', '@JSON', '@csv', '@CSV', '@xml', '@XML', '@md', '@MD'];
+      transforms.forEach(t => completions.push({ label: t, kind: CompletionItemKind.Function, detail: 'Pipeline transformer', insertText: t }));
+    } else if (line.match(/with\s*\{[^}]*pipeline\s*:\s*\[[^\]]*$/)) {
+      // Inside with { pipeline: [ ... } - suggest transformers
+      const transforms = ['@json', '@JSON', '@csv', '@CSV', '@xml', '@XML', '@md', '@MD'];
+      transforms.forEach(t => completions.push({ label: t, kind: CompletionItemKind.Function, detail: 'Pipeline transformer', insertText: t }));
     } else if (line.match(/foreach\s+@\w*$/)) {
       // After 'foreach @' - suggest parameterized exec/text commands
       completions.push(...await getParameterizedDefinitions(document));
@@ -803,7 +811,8 @@ export async function startLanguageServer(): Promise<void> {
       { name: '/exe', desc: 'Define a reusable command (replaces @exec)' },
       { name: '/import', desc: 'Import from files or modules' },
       { name: '/when', desc: 'Conditional execution' },
-      { name: '/output', desc: 'Define output target' }
+      { name: '/output', desc: 'Define output target' },
+      { name: '/log', desc: 'Log to stdout; alias of output to stdout' }
     ];
 
     return directives.map(d => ({
@@ -849,8 +858,14 @@ export async function startLanguageServer(): Promise<void> {
     const reservedVars = [
       { name: 'PROJECTPATH', desc: 'Project root directory path' },
       { name: '.', desc: 'Shorthand for @PROJECTPATH' },
-      // Lowercase variants
-      { name: 'projectpath', desc: 'Project root (lowercase variant)' }
+      // Lowercase/context variables
+      { name: 'projectpath', desc: 'Project root (lowercase variant)' },
+      { name: 'ctx', desc: 'Stage-local context' },
+      { name: 'pipeline', desc: 'Pipeline history and I/O' },
+      { name: 'p', desc: 'Pipeline history and I/O (alias)' },
+      { name: 'now', desc: 'Current timestamp' },
+      { name: 'debug', desc: 'Debug information' },
+      { name: 'input', desc: 'Input from host (stdin/env when allowed)' }
     ];
 
     if (includeAt) {
@@ -1038,7 +1053,18 @@ export async function startLanguageServer(): Promise<void> {
         kind: CompletionItemKind.Property,
         detail: 'Validate dependencies',
         insertText: 'needs: { $1 }'
-      }
+      },
+      {
+        label: 'format',
+        kind: CompletionItemKind.Property,
+        detail: 'Guide parsing for pipeline stages',
+        insertText: 'format: "$1"',
+        insertTextFormat: 2
+      },
+      { label: 'json', kind: CompletionItemKind.Enum, detail: 'format value', insertText: 'json' },
+      { label: 'csv', kind: CompletionItemKind.Enum, detail: 'format value', insertText: 'csv' },
+      { label: 'xml', kind: CompletionItemKind.Enum, detail: 'format value', insertText: 'xml' },
+      { label: 'text', kind: CompletionItemKind.Enum, detail: 'format value', insertText: 'text' }
     ];
   }
   
@@ -1144,6 +1170,27 @@ export async function startLanguageServer(): Promise<void> {
           contents: {
             kind: 'markdown',
             value: `**${variable.kind} variable**: \`@${varName}\`\n\nSource: ${variable.source}`
+          }
+        };
+      }
+
+      // Reserved/context variables hover
+      const reservedInfo: Record<string, string> = {
+        PROJECTPATH: 'Project root directory path',
+        projectpath: 'Project root directory path',
+        '.': 'Shorthand for @PROJECTPATH',
+        ctx: 'Stage-local context with execution metadata',
+        pipeline: 'Pipeline history and I/O array for stages',
+        p: 'Alias of @pipeline',
+        now: 'Current timestamp (string)',
+        debug: 'Debug information snapshot',
+        input: 'Input from host (stdin/env) when allowed'
+      };
+      if (reservedInfo[varName] !== undefined) {
+        return {
+          contents: {
+            kind: 'markdown',
+            value: `**reserved variable**: \`@${varName}\`\n\n${reservedInfo[varName]}`
           }
         };
       }

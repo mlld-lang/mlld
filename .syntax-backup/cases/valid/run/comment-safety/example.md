@@ -1,1 +1,0 @@
-@run [(echo "this >> should not be a comment")]

@@ -1,4 +1,0 @@
-@text greeting = "Hello, World!"
-@text name = "Project"
-@data settings = { "debug": true, "port": 3000 }
-@run [(echo "Configuration loaded")]

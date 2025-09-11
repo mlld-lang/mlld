@@ -1,1 +1,0 @@
-The config is /mock/project/config

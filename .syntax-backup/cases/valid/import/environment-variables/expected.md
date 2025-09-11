@@ -1,3 +1,0 @@
-
-
-MYVAR: hello, OTHERVAR: world

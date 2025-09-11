@@ -230,13 +230,6 @@ export class ImportDirectiveEvaluator {
       }
       
       // Process the content through our content processor
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log(`[DEBUG] About to process resolver content for ${ref}`);
-        console.log(`[DEBUG] Content length: ${resolverContent.content.length}`);
-        console.log(`[DEBUG] Content type: ${resolverContent.contentType}`);
-        console.log(`[DEBUG] Content first 100 chars:`, resolverContent.content.substring(0, 100));
-        console.log(`[DEBUG] Full content for ${ref}:`, JSON.stringify(resolverContent.content));
-      }
       
       const processingResult = await this.contentProcessor.processResolverContent(
         resolverContent.content,
@@ -244,12 +237,6 @@ export class ImportDirectiveEvaluator {
         directive
       );
       
-      if (process.env.MLLD_DEBUG === 'true') {
-        console.log(`[DEBUG] Processing result for ${ref}:`, {
-          moduleObjectKeys: Object.keys(processingResult.moduleObject),
-          hasFrontmatter: processingResult.frontmatter !== null
-        });
-      }
 
       if (process.env.MLLD_DEBUG === 'true') {
         console.log(`[ImportDirectiveEvaluator] Processing result for ${ref}:`, {

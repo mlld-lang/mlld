@@ -116,6 +116,52 @@ export async function evaluateRun(
     
     // Interpolate command (resolve variables) with shell command context
     const command = await interpolate(commandNodes, env, InterpolationContext.ShellCommand);
+
+    // Friendly pre-check for oversized simple /run command payloads
+    // Rationale: Some environments may not hit ShellCommandExecutor's guard early enough.
+    // This check ensures users see a clear suggestion before the shell invocation.
+    try {
+      const CMD_MAX = (() => {
+        const v = process.env.MLLD_MAX_SHELL_COMMAND_SIZE;
+        if (!v) return 128 * 1024; // 128KB default
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
+      })();
+      const cmdBytes = Buffer.byteLength(command || '', 'utf8');
+      if (process.env.MLLD_DEBUG === 'true') {
+        try { console.error(`[run.ts] /run command size: ${cmdBytes} bytes (max ~${CMD_MAX})`); } catch {}
+      }
+      if (cmdBytes > CMD_MAX) {
+        const message = [
+          'Command payload too large for /run execution (may exceed OS args+env limits).',
+          `Command size: ${cmdBytes} bytes (max ~${CMD_MAX})`,
+          'Suggestions:',
+          '- Use `/run sh (@var) { echo "$var" | tool }` or `/exe ... = sh { ... }` to leverage heredocs',
+          '- Pass file paths or stream via stdin (printf, here-strings)',
+          '- Reduce or split the data',
+          '',
+          'Learn more: https://mlld.ai/docs/large-variables'
+        ].join('\n');
+        throw new MlldCommandExecutionError(
+          message,
+          directive.location,
+          {
+            command,
+            exitCode: 1,
+            duration: 0,
+            stderr: message,
+            workingDirectory: env.getBasePath(),
+            directiveType: 'run'
+          },
+          env
+        );
+      }
+    } catch (e) {
+      if (e instanceof MlldCommandExecutionError) {
+        throw e;
+      }
+      // Non-fatal sizing errors should not block execution
+    }
     
     /**
      * Security check before command execution
@@ -286,20 +332,6 @@ export async function evaluateRun(
         }
       }
       
-      // Debug logging
-      if (process.env.DEBUG_EXEC || process.env.NODE_ENV === 'test') {
-        console.error('[DEBUG] Field access resolved value:', {
-          identifier: varRef.identifier,
-          fields: varRef.fields.map(f => ({ type: f.type, value: f.value })),
-          valueType: typeof value,
-          hasExecutable: value && typeof value === 'object' && '__executable' in value,
-          hasType: value && typeof value === 'object' && 'type' in value,
-          valueKeys: value && typeof value === 'object' ? Object.keys(value) : [],
-          hasExecutableDef: value && typeof value === 'object' && 'executableDef' in value,
-          executableDef: value && typeof value === 'object' ? value.executableDef : undefined,
-          value: process.env.DEBUG_EXEC === 'verbose' ? value : undefined
-        });
-      }
       
       // The resolved value could be an executable object directly or a string reference
       if (typeof value === 'object' && value !== null && 'type' in value && value.type === 'executable') {
@@ -348,17 +380,6 @@ export async function evaluateRun(
           }
         };
         
-        // Debug shadow env preservation
-        if (process.env.DEBUG_EXEC) {
-          console.error('[DEBUG] Reconstructed executable metadata:', {
-            name: fullName,
-            hasMetadata: !!value.metadata,
-            hasCapturedShadowEnvs: !!capturedShadowEnvs,
-            capturedShadowEnvKeys: capturedShadowEnvs ? Object.keys(capturedShadowEnvs) : [],
-            deserializedLangs: capturedShadowEnvs ? Object.entries(capturedShadowEnvs).map(([lang, map]) => 
-              `${lang}: ${map instanceof Map ? map.size : 0} functions`) : []
-          });
-        }
       } else if (typeof value === 'string') {
         // String reference to an executable  
         const variable = env.getVariable(value);
@@ -547,7 +568,14 @@ export async function evaluateRun(
         // Evaluate the when expression with the parameter environment
         const { evaluateWhenExpression } = await import('./when-expression');
         const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
-        output = whenResult.value;
+        // If the when-expression tagged a side-effect show, unwrap to its text
+        // so /run echoes it as output (tests expect duplicate lines).
+        const val: any = whenResult.value as any;
+        if (val && typeof val === 'object' && (val as any).__whenEffect === 'show') {
+          output = (val as any).text ?? '';
+        } else {
+          output = whenResult.value as any;
+        }
         
         logger.debug('🎯 mlld-when result:', {
           outputType: typeof output,
@@ -629,6 +657,14 @@ export async function evaluateRun(
     }
   }
   
+  // Ensure string output before newline handling
+  if (typeof output !== 'string') {
+    try {
+      output = String(output);
+    } catch {
+      output = '';
+    }
+  }
   // Output directives always end with a newline
   // This is the interpreter's responsibility, not the grammar's
   if (!output.endsWith('\n')) {

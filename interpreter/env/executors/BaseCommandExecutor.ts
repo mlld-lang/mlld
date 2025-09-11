@@ -37,7 +37,6 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
     showProgress: true,
     maxOutputLines: undefined,
     errorBehavior: 'halt',
-    timeout: 30000,
     collectErrors: false
   };
 
@@ -58,9 +57,9 @@ export abstract class BaseCommandExecutor implements ICommandExecutor {
   /**
    * Common execution wrapper that handles timing, progress, and error collection
    * WHY: All command executors need consistent error handling, output processing,
-   * and timeout enforcement to ensure predictable behavior across execution types.
+   * and progress reporting to ensure predictable behavior across execution types.
    * SECURITY: Provides centralized output sanitization and error message filtering
-   * to prevent information leakage. Enforces timeouts to prevent DoS attacks.
+   * to prevent information leakage.
    * GOTCHA: Error behavior can be 'halt' (throw) or 'continue' (collect) - this
    * affects how errors propagate and whether execution continues after failures.
    */

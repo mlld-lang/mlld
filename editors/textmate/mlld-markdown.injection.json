@@ -22,7 +22,7 @@
       "contentName": "source.mlld.embedded",
       "patterns": [
         {
-          "begin": "^(/(var|show|run|exe|path|import|when|output)\\b)",
+          "begin": "^((var|show|run|exe|path|import|when|output|for|log)\\b)",
           "end": "$",
           "name": "meta.embedded.line.mlld",
           "beginCaptures": {
@@ -38,6 +38,14 @@
             {
               "name": "keyword.control.when.mlld",
               "match": "when\\s*:"
+            },
+            {
+              "name": "keyword.control.parallel.mlld",
+              "match": "\\bparallel\\b"
+            },
+            {
+              "name": "keyword.other.with.format.mlld",
+              "match": "\\bformat\\b"
             },
             {
               "name": "keyword.operator.logical.mlld",
@@ -57,7 +65,7 @@
             },
             {
               "name": "variable.language.reserved.mlld",
-              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
             },
             {
               "name": "variable.language.reserved.mlld",
@@ -126,7 +134,7 @@
               "patterns": [
                 {
                   "name": "variable.language.reserved.mlld",
-                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
                 },
                 {
                   "name": "variable.other.mlld",
@@ -176,7 +184,7 @@
                 },
                 {
                   "name": "variable.language.reserved.mlld",
-                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
                 },
                 {
                   "name": "variable.other.mlld",
@@ -257,7 +265,7 @@
               "patterns": [
                 {
                   "name": "variable.language.reserved.mlld",
-                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
                 },
                 {
                   "name": "variable.other.mlld",
@@ -363,7 +371,7 @@
                 },
                 {
                   "name": "variable.language.reserved.mlld",
-                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
                 },
                 {
                   "name": "variable.other.mlld",
@@ -392,7 +400,7 @@
               "patterns": [
                 {
                   "name": "variable.language.reserved.mlld",
-                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+                  "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
                 },
                 {
                   "name": "variable.other.mlld",
@@ -418,7 +426,7 @@
             },
             {
               "name": "keyword.operator.mlld",
-              "match": "\\b(from|as|foreach|with|to)\\b"
+              "match": "\\b(from|as|foreach|with|to|format|parallel)\\b"
             },
             {
               "name": "keyword.operator.pipe.mlld",
@@ -453,7 +461,7 @@
       ]
     },
     {
-      "begin": "^(/(var|show|run|exe|path|import|when|output)\\b)",
+      "begin": "^((var|show|run|exe|path|import|when|output|for|log)\\b)",
       "end": "$",
       "name": "meta.embedded.block.mlld",
       "beginCaptures": {
@@ -469,6 +477,14 @@
         {
           "name": "keyword.control.when.mlld",
           "match": "when\\s*:"
+        },
+        {
+          "name": "keyword.control.parallel.mlld",
+          "match": "\\bparallel\\b"
+        },
+        {
+          "name": "keyword.other.with.format.mlld",
+          "match": "\\bformat\\b"
         },
         {
           "name": "keyword.operator.logical.mlld",
@@ -488,7 +504,7 @@
         },
         {
           "name": "variable.language.reserved.mlld",
-          "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+          "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
         },
         {
           "name": "variable.language.reserved.mlld",
@@ -557,7 +573,7 @@
           "patterns": [
             {
               "name": "variable.language.reserved.mlld",
-              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
             },
             {
               "name": "variable.other.mlld",
@@ -607,7 +623,7 @@
             },
             {
               "name": "variable.language.reserved.mlld",
-              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
             },
             {
               "name": "variable.other.mlld",
@@ -688,7 +704,7 @@
           "patterns": [
             {
               "name": "variable.language.reserved.mlld",
-              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
             },
             {
               "name": "variable.other.mlld",
@@ -794,7 +810,7 @@
             },
             {
               "name": "variable.language.reserved.mlld",
-              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
             },
             {
               "name": "variable.other.mlld",
@@ -823,7 +839,7 @@
           "patterns": [
             {
               "name": "variable.language.reserved.mlld",
-              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|input|time|projectpath|debug|Input|Time|ProjectPath|Debug|STDIN|stdin|Stdin|now|NOW|base)\\b"
+              "match": "@(INPUT|TIME|PROJECTPATH|DEBUG|LOCAL|HTTP|GITHUB|REGISTRY|input|time|projectpath|debug|stdin|now)\\b"
             },
             {
               "name": "variable.other.mlld",
@@ -849,7 +865,7 @@
         },
         {
           "name": "keyword.operator.mlld",
-          "match": "\\b(from|as|foreach|with|to)\\b"
+          "match": "\\b(from|as|foreach|with|to|format|parallel)\\b"
         },
         {
           "name": "keyword.operator.pipe.mlld",

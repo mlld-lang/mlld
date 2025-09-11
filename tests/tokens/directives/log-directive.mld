@@ -1,0 +1,5 @@
+/log "Simple log message"
+/log @variable
+/log `Template: @value`
+/for @item in @items => log @item
+/when @condition => log "Condition met"

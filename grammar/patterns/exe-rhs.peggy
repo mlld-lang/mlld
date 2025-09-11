@@ -9,7 +9,8 @@ ExeRHSContent "exe assignment value"
   / ExeCodePattern              // js {code} - language-specific code blocks
   / ExeEnvironmentDeclaration   // { helper1, helper2 } - environment setup (must come before command)
   / ExeCommandPattern           // {command} - shell commands with interpolation
-  / ExeTemplatePattern          // [[...]] and `...` - template executables
+  / ExeTemplateFromFilePattern  // template "path" - external template file
+  / ExeTemplatePattern          // [[...]] and `...` - inline template executables
   / ExeSectionPattern           // [@file # section] - section extraction
   / ExeResolverPattern          // @resolver/path - resolver patterns
   / ExeUnifiedReference         // @func(args) and @otherCmd - unified reference with pipeline support
@@ -168,6 +169,24 @@ ExeTemplatePattern "exe template pattern"
           template: template.raw.content
         },
         meta: template.meta
+      };
+    }
+
+// Template-from-file pattern for exe context - handles: template "path/to/file.att"
+ExeTemplateFromFilePattern "exe template-from-file pattern"
+  = "template" _ path:QuotedStringPath {
+      return {
+        subtype: 'exeTemplateFile',
+        source: 'templateFile',
+        values: {
+          path: path.values.path
+        },
+        raw: {
+          path: path.raw.path
+        },
+        meta: {
+          pathMeta: path.meta
+        }
       };
     }
 
@@ -349,14 +368,15 @@ WhenExpressionAction
 // Used by: ExeRHSContent
 // Purpose: Allow for @var in @collection => action where action can be a directive
 ForExpressionExe "for expression with actions"
-  = "for" _ pattern:ForIterationPattern _ "=>" _ action:WhenRHSAction {
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ action:WhenRHSAction {
       helpers.debug('ForExpressionExe matched', { pattern, action });
       
       return helpers.createForExpression(
         pattern.variable,
         pattern.source, 
         action,  // Note: accepts WhenRHSAction instead of VarRHSContent
-        location()
+        location(),
+        opts || null
       );
     }
   // Error recovery

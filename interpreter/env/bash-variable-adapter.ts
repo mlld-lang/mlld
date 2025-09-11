@@ -4,8 +4,12 @@
  */
 
 import type { Variable } from '@core/types/variable';
+import { isLoadContentResult, isLoadContentResultArray } from '@core/types/load-content';
 import { resolveValue, ResolutionContext } from '@interpreter/utils/variable-resolution';
 import type { Environment } from './Environment';
+import * as fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 /**
  * Convert Variables to string values suitable for bash environment variables
@@ -15,16 +19,19 @@ import type { Environment } from './Environment';
 export async function adaptVariablesForBash(
   params: Record<string, any>,
   env: Environment
-): Promise<Record<string, string>> {
+): Promise<{ envVars: Record<string, string>; tempFiles: string[] }> {
   const bashVars: Record<string, string> = {};
-  
+  const tempFiles: string[] = [];
+
+  // Always return actual string values. Oversized values are handled by
+  // BashExecutor via heredoc injection, not via temp files here.
   for (const [key, value] of Object.entries(params)) {
-    // Resolve the value - will extract if it's a Variable, pass through if not
     const resolved = await resolveValue(value, env, ResolutionContext.CommandExecution);
-    bashVars[key] = convertToString(resolved);
+    const strValue = convertToString(resolved);
+    bashVars[key] = strValue;
   }
-  
-  return bashVars;
+
+  return { envVars: bashVars, tempFiles };
 }
 
 /**
@@ -44,11 +51,26 @@ function convertToString(value: any): string {
   }
   
   if (Array.isArray(value)) {
-    // For arrays, join with newlines (common bash pattern)
+    // Handle arrays of LoadContentResult specially
+    if (isLoadContentResultArray(value)) {
+      try {
+        return value.map(v => v.content).join('\n\n');
+      } catch {
+        // Fallback: generic conversion
+        return value.map(item => convertToString(item)).join('\n');
+      }
+    }
+    // For generic arrays, join with newlines (common bash pattern)
     return value.map(item => convertToString(item)).join('\n');
   }
   
   if (typeof value === 'object') {
+    // Auto-unwrap LoadContentResult objects to their content string
+    try {
+      if (isLoadContentResult(value)) {
+        return value.content ?? '';
+      }
+    } catch {}
     // For objects, use JSON representation
     try {
       return JSON.stringify(value);

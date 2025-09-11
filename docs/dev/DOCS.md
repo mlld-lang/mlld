@@ -12,7 +12,7 @@ Use this guide to writing both developer-facing and user-facing docs for mlld
 
 ## Principles
 
-- Dev-facing docs in ALL CAPS. User-facing docs in lowercase (except README.md files which are always capitalized)
+- Dev-facing doc filenames are ALL CAPS. User-facing docs filenames are lowercase (except README.md files which are always capitalized)
 - Use unix `man` pages voice.
 - In user-facing docs: show, don't tell: focus on examples. In dev-facing docs, skip examples: they're just hidden code to maintain.
 - Be terse and extremely pragmatic about what is included based on what will be useful and relevant for the specific audience. 

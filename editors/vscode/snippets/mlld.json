@@ -156,5 +156,12 @@
       ":::${1:Hey @user, check out {{link}}!}:::"
     ],
     "description": "Triple-colon template for {{var}} interpolation"
+  },
+  "Exec Template From File": {
+    "prefix": "exetemplate",
+    "body": [
+      "exe @${1:name}(${2:param1, param2}) = template \"${3:path/to/template.att}\""
+    ],
+    "description": "Define an executable template from a .att or .mtt file"
   }
 }

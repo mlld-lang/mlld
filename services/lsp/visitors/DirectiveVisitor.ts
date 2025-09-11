@@ -455,7 +455,106 @@ export class DirectiveVisitor extends BaseVisitor {
         modifiers: []
       });
     }
-    
+
+    // Tokenize with.format: "json|csv|xml|text"
+    if (withClause?.format) {
+      const formatMatch = directiveText.match(/\bformat\s*:\s*("[^"]+")/);
+      if (formatMatch && formatMatch.index !== undefined) {
+        // Token for 'format' key
+        const keyOffset = directive.location.start.offset + formatMatch.index + formatMatch[0].indexOf('format');
+        const keyPos = this.document.positionAt(keyOffset);
+        this.tokenBuilder.addToken({
+          line: keyPos.line,
+          char: keyPos.character,
+          length: 'format'.length,
+          tokenType: 'keyword',
+          modifiers: []
+        });
+        // Token for value string (including quotes)
+        const valueText = formatMatch[1];
+        const valueStartInMatch = formatMatch[0].indexOf(valueText);
+        const valueOffset = directive.location.start.offset + formatMatch.index + valueStartInMatch;
+        const valuePos = this.document.positionAt(valueOffset);
+        this.tokenBuilder.addToken({
+          line: valuePos.line,
+          char: valuePos.character,
+          length: valueText.length,
+          tokenType: 'string',
+          modifiers: []
+        });
+      }
+    }
+
+    // Tokenize with.pipeline arrays including nested parallel groups
+    if (withClause?.pipeline) {
+      // Try to find the 'pipeline' section and its brackets
+      const pipelineKeyIndex = directiveText.indexOf('pipeline');
+      if (pipelineKeyIndex !== -1) {
+        const afterKey = directiveText.substring(pipelineKeyIndex);
+        const firstBracketRel = afterKey.indexOf('[');
+        if (firstBracketRel !== -1) {
+          const absoluteOpen = directive.location.start.offset + pipelineKeyIndex + firstBracketRel;
+          // Scan forward to find matching brackets and emit tokens for each '[' and ']'
+          let depth = 0;
+          for (let i = pipelineKeyIndex + firstBracketRel; i < directiveText.length; i++) {
+            const ch = directiveText[i];
+            if (ch === '[') {
+              depth++;
+              const pos = this.document.positionAt(directive.location.start.offset + i);
+              this.tokenBuilder.addToken({
+                line: pos.line,
+                char: pos.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+            } else if (ch === ']') {
+              const pos = this.document.positionAt(directive.location.start.offset + i);
+              this.tokenBuilder.addToken({
+                line: pos.line,
+                char: pos.character,
+                length: 1,
+                tokenType: 'operator',
+                modifiers: []
+              });
+              depth--;
+              if (depth === 0) break; // Done with pipeline array
+            }
+          }
+          // Tokenize commas inside pipeline arrays for readability
+          const closeIdx = directiveText.indexOf(']', pipelineKeyIndex + firstBracketRel);
+          if (closeIdx !== -1) {
+            const startOffset = directive.location.start.offset + pipelineKeyIndex + firstBracketRel;
+            const endOffset = directive.location.start.offset + closeIdx;
+            this.operatorHelper.tokenizeListSeparators(startOffset, endOffset, ',');
+          }
+        }
+      }
+
+      // Visit identifiers and args inside pipeline AST for proper variable tokenization
+      const stages = Array.isArray(withClause.pipeline) ? withClause.pipeline : [];
+      for (const stage of stages) {
+        if (Array.isArray(stage)) {
+          // Parallel group: visit each command
+          for (const cmd of stage) {
+            if (cmd?.identifier) {
+              for (const id of cmd.identifier) this.mainVisitor.visitNode(id, context);
+            }
+            if (cmd?.args) {
+              for (const a of cmd.args) this.mainVisitor.visitNode(a, context);
+            }
+          }
+        } else if (stage) {
+          if (stage.identifier) {
+            for (const id of stage.identifier) this.mainVisitor.visitNode(id, context);
+          }
+          if (stage.args) {
+            for (const a of stage.args) this.mainVisitor.visitNode(a, context);
+          }
+        }
+      }
+    }
+
     // Handle the template after "as"
     if (withClause.asSection && Array.isArray(withClause.asSection)) {
       // Find the opening quote position - it comes after "as "
@@ -1750,6 +1849,54 @@ export class DirectiveVisitor extends BaseVisitor {
     
     const sourceText = this.document.getText();
     const directiveText = sourceText.substring(directive.location.start.offset, directive.location.end.offset);
+    
+    // Tokenize optional parallel keyword and pacing tuple
+    const parallelMatch = directiveText.match(/\bparallel\b/);
+    if (parallelMatch && parallelMatch.index !== undefined) {
+      const parOffset = directive.location.start.offset + parallelMatch.index;
+      const parPos = this.document.positionAt(parOffset);
+      this.tokenBuilder.addToken({
+        line: parPos.line,
+        char: parPos.character,
+        length: 'parallel'.length,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+    // Pacing tuple: (n, interval)
+    const pacingMatch = directiveText.match(/\(([\s\d,smhd]+)\)\s*parallel/);
+    if (pacingMatch && pacingMatch.index !== undefined) {
+      const openOffset = directive.location.start.offset + pacingMatch.index;
+      const closeOffset = openOffset + pacingMatch[0].indexOf(')');
+      // '('
+      this.operatorHelper.addOperatorToken(openOffset, 1);
+      // numbers inside
+      const inner = pacingMatch[1];
+      const innerStart = openOffset + 1;
+      // crude scan for numbers and comma
+      for (let i = 0; i < inner.length; i++) {
+        const ch = inner[i];
+        if (/\d/.test(ch)) {
+          let j = i;
+          while (j < inner.length && /\d/.test(inner[j])) j++;
+          const numPos = this.document.positionAt(innerStart + i);
+          this.tokenBuilder.addToken({
+            line: numPos.line,
+            char: numPos.character,
+            length: j - i,
+            tokenType: 'number',
+            modifiers: []
+          });
+          i = j - 1;
+          continue;
+        }
+        if (ch === ',') {
+          this.operatorHelper.addOperatorToken(innerStart + i, 1);
+        }
+      }
+      // ')'
+      if (closeOffset >= openOffset) this.operatorHelper.addOperatorToken(closeOffset, 1);
+    }
     
     // Process variable
     if (values.variable && Array.isArray(values.variable)) {

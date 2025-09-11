@@ -49,18 +49,6 @@ export async function evaluateOutput(
   // Removed: isLegacy flag - bracket syntax no longer supported
   
   
-  // Debug logging
-  const debugEnabled = process.env.DEBUG_OUTPUT === '1' || process.env.MLLD_DEBUG === 'true';
-  if (debugEnabled) {
-    console.error('[DEBUG_OUTPUT] Evaluating output directive', { 
-      directive: directive.subtype,
-      source: sourceType,
-      hasSource: hasSource,
-      targetType: targetType,
-      format: format,
-      values: directive.values
-    });
-  }
   
   try {
     // Get the content to output
@@ -68,23 +56,29 @@ export async function evaluateOutput(
     
     if (!hasSource) {
       // @output [file.md] or @output to target - output full document
-      // Get the full document content by formatting all nodes
-      try {
-        const nodes = env.getNodes();
-        const { formatOutput } = await import('../output/formatter');
-        content = await formatOutput(nodes, {
-          format: format || 'markdown',
-          variables: env.getAllVariables()
-        });
-      } catch (formatError) {
-        // If there's an error, log it in debug mode
-        if (env.hasVariable('DEBUG')) {
-          const debug = env.getVariable('DEBUG');
-          if (debug && debug.value) {
-            logger.error('Output format error', { error: formatError.message });
+      // Get the accumulated document from effect handler (includes both markdown and directive outputs)
+      const effectHandler = env.getEffectHandler();
+      if (effectHandler && typeof effectHandler.getDocument === 'function') {
+        content = effectHandler.getDocument();
+      } else {
+        // Fallback to node formatting if no effect handler
+        try {
+          const nodes = env.getNodes();
+          const { formatOutput } = await import('../output/formatter');
+          content = await formatOutput(nodes, {
+            format: format || 'markdown',
+            variables: env.getAllVariables()
+          });
+        } catch (formatError) {
+          // If there's an error, log it in debug mode
+          if (env.hasVariable('DEBUG')) {
+            const debug = env.getVariable('DEBUG');
+            if (debug && debug.value) {
+              logger.error('Output format error', { error: formatError.message });
+            }
           }
+          throw formatError;
         }
-        throw formatError;
       }
     } else {
       // Evaluate source content
@@ -542,27 +536,11 @@ async function outputToFile(
   directive: DirectiveNode
 ): Promise<void> {
   
-  // Debug logging
-  const debugEnabled = process.env.DEBUG_OUTPUT === '1' || process.env.MLLD_DEBUG === 'true';
-  if (debugEnabled) {
-    console.error('[DEBUG_OUTPUT] outputToFile', { 
-      path: target.path,
-      raw: target.raw,
-      contentLength: content.length,
-      contentPreview: content.substring(0, 50)
-    });
-  }
   
   // Evaluate the file path
   const pathResult = await interpolate(target.path, env);
   let targetPath = String(pathResult);
   
-  if (debugEnabled) {
-    console.error('[DEBUG_OUTPUT] Interpolated path:', { 
-      originalPath: target.raw,
-      interpolatedPath: targetPath
-    });
-  }
   
   // TODO: This is a hack to handle @base in quoted output paths
   // The proper fix requires rethinking how @identifier resolution works

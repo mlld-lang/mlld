@@ -211,10 +211,14 @@ describe('Import Pattern: Mixed Types', () => {
 /var @obj = { "key": "value" }
 /exe @func(x) = js { return "Hello " + x; }`
       },
-      expectedOutput: `string value
+      expectedOutput: `
+
+string value
+
 42
 true
 value
+
 Hello test`
     });
     

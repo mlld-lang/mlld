@@ -12,6 +12,7 @@ build/
 
 # Website built files
 website/_site/
+website/src/docs/
 
 # Dev docs
 /_dev
@@ -22,6 +23,7 @@ website/_site/
 # Generated files
 core/version.ts
 core/errors/patterns/parse-errors.generated.js
+core/errors/patterns/js-errors.generated.js
 
 # IDE-generated JavaScript files in core/types
 core/types/*.js
@@ -39,6 +41,7 @@ grammar/generated/*
 # Test fixtures (generated from test cases)
 tests/fixtures/**/*.generated-fixture.json
 tests/fixtures/**/index.ts
+tests/cases/EXAMPLES.md
 
 # Logs
 logs/
@@ -63,7 +66,6 @@ pids
 .env.development.local
 .env.test.local
 .env.production.local
-.env.test
 
 # Mistakenly created directories
 Support/ 

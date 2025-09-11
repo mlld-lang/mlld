@@ -14,7 +14,7 @@ export class ArgumentParser {
     'auth', 'registry', 'install', 'i', 'ls', 'list', 'info', 'show', 
     'publish', 'init', 'init-module', 'add-needs', 'needs', 'deps', 
     'setup', 'alias', 'env', 'dev', 'mode', 'test', 'run', 'error-test', 'clean',
-    'language-server', 'lsp'
+    'language-server', 'lsp', 'nvim-setup', 'nvim'
   ];
 
   parseArgs(args: string[]): CLIOptions {
@@ -200,6 +200,10 @@ export class ArgumentParser {
         // Environment file path
         case '--env':
           options.env = args[++i];
+          break;
+        // Allow absolute paths outside project root
+        case '--allow-absolute':
+          options.allowAbsolute = true;
           break;
         // Transformation is always enabled by default
         // No transform flags needed

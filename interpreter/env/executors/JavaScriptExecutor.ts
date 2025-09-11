@@ -66,15 +66,6 @@ export class JavaScriptExecutor extends BaseCommandExecutor {
         delete params.__capturedShadowEnvs;
       }
       
-      if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
-        console.error('[DEBUG] JavaScriptExecutor.executeJavaScript:', {
-          hasCapturedEnvs: !!capturedEnvs,
-          capturedEnvs,
-          hasCurrentShadowEnv: !!this.shadowEnvironment,
-          currentShadowEnvSize: this.shadowEnvironment.getShadowEnv ? 
-            (this.shadowEnvironment.getShadowEnv('js')?.size || 0) : 0
-        });
-      }
       
       // OLD CODE TO REPLACE:
       // const shadowEnv = this.shadowEnvironment.getShadowEnv('js') || 

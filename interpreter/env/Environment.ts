@@ -124,9 +124,11 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Directive trace for debugging
   private directiveTrace: DirectiveTrace[] = [];
   private traceEnabled: boolean = true; // Default to enabled
-  
+
   // Fuzzy matching for local files
   private localFileFuzzyMatch: FuzzyMatchConfig | boolean = true; // Default enabled
+  // Allow absolute paths outside project root
+  private allowAbsolutePaths: boolean = false;
   // Note: pathMatcher is now handled by ImportResolver
   
   // Default URL validation options (used if no config provided)
@@ -210,6 +212,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
         // Create lock file instance - it will load lazily when accessed
         const lockFilePath = path.join(this.getProjectRoot(), 'mlld.lock.json');
         lockFile = new LockFile(lockFilePath);
+        this.allowAbsolutePaths = lockFile.getAllowAbsolutePaths();
         
         // Initialize URL cache manager with a simple cache adapter and lock file
         if (moduleCache && lockFile) {
@@ -343,7 +346,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getApproveAllImports: () => this.approveAllImports,
       getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
       getURLConfig: () => this.urlConfig,
-      getDefaultUrlOptions: () => this.defaultUrlOptions
+      getDefaultUrlOptions: () => this.defaultUrlOptions,
+      getAllowAbsolutePaths: () => this.allowAbsolutePaths
     };
     this.importResolver = new ImportResolver(importResolverDependencies);
     
@@ -938,6 +942,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.effectHandler = handler;
   }
   
+  /**
+   * Get the parent environment (if this is a child environment).
+   */
+  getParent(): Environment | undefined {
+    return this.parent;
+  }
+  
   // --- Shadow Environment Management ---
   
   /**
@@ -1384,11 +1395,12 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this,
       this.effectHandler  // Share the same effect handler
     );
+    child.allowAbsolutePaths = this.allowAbsolutePaths;
     // Track the current node count so we know which nodes are new in the child
     child.initialNodeCount = this.nodes.length;
-    
+
     // Create child import resolver
-    child.importResolver = this.importResolver.createChildResolver(newBasePath);
+    child.importResolver = this.importResolver.createChildResolver(newBasePath, () => child.allowAbsolutePaths);
     
     // Track child environment for cleanup
     this.childEnvironments.add(child);
@@ -1482,7 +1494,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     this.urlConfig = config;
     this.cacheManager.setURLConfig(config);
   }
-  
+
+  /**
+   * Configure allowance of absolute paths outside project root
+   */
+  setAllowAbsolutePaths(allow: boolean): void {
+    this.allowAbsolutePaths = allow;
+  }
+
+  getAllowAbsolutePaths(): boolean {
+    return this.allowAbsolutePaths;
+  }
+
   // --- Output Management Methods ---
   
   setOutputOptions(options: Partial<CommandExecutionOptions>): void {
@@ -1633,7 +1656,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getApproveAllImports: () => this.approveAllImports,
       getLocalFileFuzzyMatch: () => this.localFileFuzzyMatch,
       getURLConfig: () => this.urlConfig,
-      getDefaultUrlOptions: () => this.defaultUrlOptions
+      getDefaultUrlOptions: () => this.defaultUrlOptions,
+      getAllowAbsolutePaths: () => this.allowAbsolutePaths
     };
     
     // Create new ImportResolver with ephemeral configuration
@@ -1775,8 +1799,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       this,
       this.effectHandler  // Share the same effect handler
     );
+    child.allowAbsolutePaths = this.allowAbsolutePaths;
     // Share import stack with parent via ImportResolver
-    child.importResolver = this.importResolver.createChildResolver();
+    child.importResolver = this.importResolver.createChildResolver(undefined, () => child.allowAbsolutePaths);
     // Inherit trace settings
     child.traceEnabled = this.traceEnabled;
     child.directiveTrace = this.directiveTrace; // Share trace with parent

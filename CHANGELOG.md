@@ -5,6 +5,140 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc50]
+### Added
+- **`mlld nvim-setup` command**: Auto-configure Neovim LSP support
+  - Detects Neovim setup (LazyVim, vanilla, etc.) and creates appropriate config
+  - Cross-platform: uses `where` on Windows, `which` on Unix
+  - Alias: `mlld nvim` for convenience
+
+- **LSP/Editor updates**: Semantic tokens cover pipeline parallel groups (`||`), with.pipeline (incl. nested) and `with { format: ... }`, and `/for parallel`; directive/completion tweaks include `/log` and format values. VS Code extension runs semantic-only (legacy providers removed); fallback TextMate grammar highlights `parallel` and `format`.
+
+### Fixed
+- #411: Nested `/for` collection returns `[]` for empty arrays in both plain `/show` and when piped to `@json`. Removes accidental `{}` output.
+- `isLoadContentResultArray` does not match untagged empty arrays; prevents misclassification of generic empty arrays.
+
+## [2.0.0-rc49]
+### Added
+- **Pipeline parallel groups**: `A || B || C` executes commands concurrently as a single stage
+  - With-clause parity: nested arrays represent a parallel group (e.g., `with { pipeline: [ [@left, @right], @combine ] }`)
+  - Concurrency capped by `MLLD_PARALLEL_LIMIT` (default `4`); results preserve declaration order and flow to the next stage as a JSON array string
+- **Rate-limit resilience in pipelines**: 429/"rate limit" errors trigger exponential backoff with bounded retries per stage
+- **Unified effect attachment**: Single helper attaches inline builtin effects (show/log/output) to preceding stages and to each branch of parallel groups
+- **/for parallel execution**: Parallel iteration with optional cap and pacing
+  - Default cap from `MLLD_PARALLEL_LIMIT`; override per loop: `/for 3 parallel @x in @items => ...`
+  - Optional pacing between starts: `/for (3, 1s) parallel @x in @items => ...` (units: ms, s, m, h)
+  - Directive form streams effects as iterations complete; collection form preserves input order in results
+
+### Fixed
+- **Retry in parallel groups**: Returning `retry` from within a parallel group rejects with a clear error (retry is unsupported inside the group)
+- **Parallel limit hardening**: `MLLD_PARALLEL_LIMIT` parsing clamps invalid/low values to defaults; limit is read per execution to respect environment overrides
+
+### Documentation
+- Updated developer docs for parallel execution: shorthand `||` rule (no leading `||`), with-clause nested group syntax, effect behavior on groups, and references to tests
+- Updated iterator docs to include `/for parallel` with cap overrides and pacing; clarified iterator vs pipeline parallelism and rate-limit behavior
+
+## [2.0.0-rc48]
+### Added
+- **Large variable support for bash/shell executors**: Automatic handling of variables exceeding Node.js environment limits
+  - Shell mode (`/run sh {...}`) automatically injects large variables directly into scripts, bypassing Node's ~128KB limit
+  - Works transparently - use `$varname` as usual, mlld handles the injection method based on size
+  - Enabled by default via `MLLD_BASH_HEREDOC` (can be disabled if needed)
+  - Configurable threshold via `MLLD_MAX_BASH_ENV_VAR_SIZE` (default: 131072 bytes)
+
+### Fixed
+- **E2BIG errors with large data**: Fixed Node.js throwing errors when passing large variables to shell commands
+  - Common when loading entire codebases: `<**/*.js>`, `<**/*.sol>`, etc.
+  - Affects audit workflows processing multiple files simultaneously
+  - Simple `/run {...}` commands now provide helpful error messages suggesting shell mode
+
+### Documentation
+- Updated large variables documentation with clearer, more accessible language
+- Removed unnecessary configuration details since feature is enabled by default
+- Added explanation of why shell mode works (direct script injection vs environment passing)
+
+## [2.0.0-rc47]
+### Added
+- e2e tests for method chaining and templates
+- Deprecation tracker and DeprecationError
+- Deprecation notice for array dot notation
+
+### Changed
+- Interpolation precedence for quotes/templates
+
+### Fixed
+- Post-field/index on execs across contexts
+- Tail pipeline on builtin methods
+- Template method calls
+
+## [2.0.0-rc46]
+### Fixed
+- **Method calls in when conditions**: Fixed grammar bug preventing method calls on function results in `/when` and `/exe...when` conditions
+- **CommendRef interpolation issue**: Fixed grammar bug preventing full interpolation of values inside quotes/templates inside executables
+
+## [2.0.0-rc45]
+### Added
+- **Builtin methods for arrays and strings**: Common JavaScript methods available on variables
+  - Array methods: `.includes(value)`, `.indexOf(value)`, `.length()`, `.join(separator)`
+  - String methods: `.includes(substring)`, `.indexOf(substring)`, `.length()`, `.toLowerCase()`, `.toUpperCase()`, `.trim()`, `.startsWith(prefix)`, `.endsWith(suffix)`, `.split(separator)`
+  - Methods work with both literal and variable arguments: `@list.includes("item")` or `@list.includes(@search)`
+  - Implemented as field access exec patterns, treated as ExecInvocations internally
+  - Example: `/show @fruits.includes("banana")` returns `true` if the array contains "banana"
+  - Eliminates need for JavaScript wrappers for common operations
+- **External template file support**: `.att` and `.mtt`
+  - `.att` (at template): interpolates `@vars` and `<file.md>` references
+  - `.mtt` (mustache template): interpolates `{{vars}}` (simple mustache‑style)
+  - Define as executables: `/exe @name(params) = template "path/to/file.att|.mtt"`
+  - Invoke with arguments: `/show @name("val1", "val2")`
+- **Testing improvements**: 
+  - Basic documentation tests to ensure published docs have valid syntax
+  - Performance test suite
+
+### Changed
+- `/import` no longer accepts `.att`/`.mtt`. Importing these files emits an educational error with the proper usage example (use `/exe ... = template "path"`).
+
+### Fixed
+- **Incorrect docs:** Corrected errant syntax in docs, added testing infrastructure for ensuring published docs' syntax is always valid.
+- **when-expression `none` condition evaluation**: Fixed bug where variable assignments prevented `none` conditions from executing
+  - Variable assignments (`@var = value`) in when expressions are now correctly treated as side effects, not return values, enabling the `none` condition to execute when no value-producing actions match (e.g., `show`, function calls, `retry`). Most importantly, conditions that only assign variables no longer prevent `none` from executing when later conditions don't match
+- **Triple-colon template interpolation in executables (#379)**: Fixed bug where triple-colon templates with `{{var}}` syntax weren't being interpolated when passed as arguments to executable functions
+- **Undefined variable syntax preservation**: Fixed bug where undefined variables in triple-colon templates incorrectly displayed as `@varname` instead of preserving the original `{{varname}}` syntax
+- **Parser incorrectly matching variables in plain text**: Fixed 3+ month old bug where `{{var}}` syntax was being parsed as variable references in plain text/markdown content
+
+## [2.0.0-rc44]
+### Fixed
+- when-expression in `/exe`: local assignments now visible to subsequent actions; conditions evaluate against accumulated env.
+- Effect streaming restored for when-actions; `show` tagged and handled pipeline-aware to avoid unintended echoes at stage end.
+- Pipeline retries with `show` in stage: preserve attempt output and continue by forwarding prior input; final stage suppresses echo.
+- `/run` output handling hardened: always stringified before newline; mlld-when returns unwrap tagged `show` for expected echo.
+
+### Tests
+- Add fixture verifying local assignment visibility within `/exe` when-expressions.
+
+## [2.0.0-rc43]
+### Added
+- **`--allow-absolute` flag**: Override project root restrictions for file access
+  - Permits loading files from absolute paths outside project directory
+  - Applies to `<file>` syntax, `/path` directives, and `/import` statements
+  - Security opt-in: default behavior maintains project root isolation
+  - Persists in `mlld.lock.json` under `security.allowAbsolutePaths` when configured
+
+## [2.0.0-rc42]
+### Fixed
+- **Removed command timeout restrictions for LLM workflows**: Completely removed 30-second timeout limits from all command executors
+  - LLM commands can now run as long as needed without timing out
+  - Previously, commands would silently fail after 30 seconds, causing issues with large prompts or complex reasoning tasks
+  - Affects all shell commands, JavaScript execution, and Node.js subprocess execution
+
+## [2.0.0-rc41]
+### Fixed
+- **CLI markdown streaming and document output**: Fixed effects system to properly handle markdown content in CLI output (#342)
+  - CLI now displays markdown content progressively during execution (streaming mode)
+  - `/output "file.md"` directive correctly outputs complete document including both markdown and directive results
+  - Markdown content from mlld files is now included in CLI output alongside directive results
+  - Updated test expectations to reflect correct behavior with preserved newlines from markdown content
+  - Added basic architectural docs for effects system
+
 ## [2.0.0-rc40]
 ### Added
 - **`/log` directive support in action contexts**: Extended `/log` to work in for loops and when blocks
@@ -26,6 +160,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Retry hints**: The `retry` action can now carry hints to the next attempt
   - String hints: `retry "need more detail"`
   - Object hints: `retry { temperature: 0.8 }`
+  - Function hints: `retry @somefunc(@input)`
   - Access via `@ctx.hint` in the retried stage
 
 - **Effect architecture**: Complete overhaul of how side effects (show, output, log directives) are handled
@@ -33,6 +168,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Immediate effect execution in for loops and when blocks
   - Effects in exe+when blocks called from for expressions now execute immediately
   - Progress messages appear in real-time during long-running operations
+
+- **Automatic JSON parsing**: Shell commands returning JSON are now automatically parsed into objects/arrays
+  - Eliminates need for manual `JSON.parse()` calls when working with APIs and JSON-returning commands
+  - Configurable via `MLLD_AUTO_PARSE_JSON` environment variable (defaults to enabled)
+
+- **Shell alias resolution**: Automatic resolution of shell aliases in command execution
+  - Commands like `claude`, `ll`, `la` now work in mlld scripts when defined as shell aliases
+  - Configurable via `MLLD_RESOLVE_ALIASES` environment variable (defaults to enabled)
+  - Debug output available with `MLLD_DEBUG_ALIASES=true` to see alias resolution in action
+
+- **Fixed `none` keyword in when expressions**: Corrected bug where `none` was always executing
+  - The `none` keyword now properly executes only when no other conditions match
+  - Affects when expressions used in `/exe` functions (e.g., `/exe @func() = when [...]`)
+  - Side effects in when expressions now work correctly without duplication
 
 ### Fixed
 - **Grammar ordering for `/when` bare blocks**: Fixed PEG parser ordering issue preventing bare `/when [...]` blocks from working
@@ -1136,3 +1285,4 @@ Added:
 ## [1.0.0]
 
 Initial versioned release. 
+

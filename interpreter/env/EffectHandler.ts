@@ -42,7 +42,11 @@ export class DefaultEffectHandler implements EffectHandler {
   handleEffect(effect: Effect): void {
     switch (effect.type) {
       case 'doc':
-        // Only append to document
+        // Write to stdout if streaming (for real-time display)
+        if (this.streamingEnabled) {
+          process.stdout.write(effect.content);
+        }
+        // Always append to document
         this.documentBuffer.push(effect.content);
         break;
         

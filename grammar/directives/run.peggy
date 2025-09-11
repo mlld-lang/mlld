@@ -153,10 +153,20 @@ SlashRun
       let values, raw, meta;
       
       if (commandRef.type === 'ExecInvocation') {
-        values = {
-          identifier: commandRef.commandRef.identifier,
-          args: commandRef.commandRef.args || []
-        };
+        const isExecResultMethod = commandRef.commandRef && commandRef.commandRef.objectSource;
+        if (isExecResultMethod) {
+          // For method calls on exec results, emit a specialized subtype so the evaluator
+          // runs the invocation directly without resolving an env executable by name.
+          values = {
+            execInvocation: commandRef
+          };
+        } else {
+          // Preserve legacy structure for simple exec calls: identifier + args
+          values = {
+            identifier: commandRef.commandRef.identifier,
+            args: commandRef.commandRef.args || []
+          };
+        }
         
         // Construct the full identifier path for raw
         let rawIdentifier = commandRef.commandRef.name;
@@ -227,9 +237,13 @@ SlashRun
         };
       }
       
+      // Choose subtype based on whether we have a direct ExecInvocation
+      const subtype = (commandRef.type === 'ExecInvocation' && (commandRef.commandRef && commandRef.commandRef.objectSource))
+        ? 'runExecInvocation'
+        : 'runExec';
       return helpers.createStructuredDirective(
         'run',
-        'runExec',
+        subtype,
         values,
         raw,
         meta,
@@ -420,4 +434,3 @@ RunDirectiveRef
 
 
 // Legacy patterns removed - use UnifiedArgumentList directly where needed
-

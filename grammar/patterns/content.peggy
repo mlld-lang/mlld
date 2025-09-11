@@ -237,9 +237,12 @@ DoubleColonContent "Content with @var interpolation"
 
 // NEW: Interpolation pattern for :: syntax (now @var interpolation)
 DoubleColonInterpolation
-  = BacktickExecInvocation      // @func(args)
+  = ExecResultMethodCall         // @func(args).method(args)
+  / FieldAccessExec              // @obj.method(args)
+  / UnifiedExecInvocation        // @func(args)
   / FileReferenceInterpolation   // <file.md>
-  / TemplateVariableReference   // @var - NO tail modifier constraints
+  / TemplateVariableReference    // @var (with template pipes and fields)
+  / UnifiedReferenceNoTail       // Fallback for @var.field without pipes
   / "@" !BaseIdentifier char:. { // @ followed by non-identifier
       return helpers.createNode(NodeType.Text, { content: '@' + char, location: location() });
     }

@@ -1,5 +1,0 @@
-@text tests = @run [(npm test)]
-
-@text res = @run [(llm "What's broken here? @tests")]
-
-@run [(llm "Make a plan to fix @res")]

@@ -21,6 +21,16 @@ This document provides a comprehensive overview of mlld's import system, includi
 
 The mlld import system provides a flexible, secure way to share code between modules. It supports multiple import sources (local files, registry modules, URLs) and various import patterns (selected imports, namespace imports).
 
+> Design note: Template files are not modules
+>
+> `.att` (at‑template) and `.mtt` (mustache‑template) are external template formats and are intentionally excluded from the module import graph. Architecturally:
+>
+> - Import layer: `ModuleContentProcessor` rejects `/import` of `.att`/`.mtt` and returns an educational error, keeping imports strictly module‑oriented.
+> - Grammar layer: `/exe @name(params) = template "path"` routes to an `exeTemplateFile` RHS that binds parameters and loads the file.
+> - Evaluation layer: `evaluateExe` loads the template by extension and normalizes interpolation (`.att` → `@var`, `.mtt` → `{{var}}` → `@var`).
+>
+> This separation eliminates intent guessing during imports, simplifies evaluation, and allows future engine mapping by extension.
+
 ### Key Features
 - **Module isolation**: Each module evaluates in its own environment
 - **Automatic exports**: All top-level variables are exported by default

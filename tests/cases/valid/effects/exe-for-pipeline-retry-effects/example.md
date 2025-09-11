@@ -13,8 +13,8 @@ for loops are combined with pipeline retry logic.
 ]
 
 /exe @check_response(response, name, p) = when [
-  @len(@response) < 5 && @p.try < 2 => show "Response too short for @name, retrying (attempt @p.try)..."
-  @len(@response) < 5 && @p.try < 2 => retry
+  @len(@response) < 5 && @ctx.try < 2 => show "Response too short for @name, retrying (attempt @ctx.try)..."
+  @len(@response) < 5 && @ctx.try < 2 => retry
   * => show "Success for @name"
   * => @response
 ]

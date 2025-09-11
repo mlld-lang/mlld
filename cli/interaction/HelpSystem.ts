@@ -66,6 +66,11 @@ export class HelpSystem {
       this.displayModeHelp();
       return;
     }
+    
+    if (command === 'nvim-setup' || command === 'nvim') {
+      this.displayNvimSetupHelp();
+      return;
+    }
 
     this.displayMainHelp(command, context);
   }
@@ -448,6 +453,7 @@ Commands:
   setup                   Configure mlld project with interactive wizard
   test                    Run mlld tests
   language-server, lsp    Start the mlld language server for editor integration
+  nvim-setup, nvim        Set up mlld Language Server for Neovim
   debug-resolution        Debug variable resolution in a mlld file
   debug-transform         Debug node transformations through the pipeline
 
@@ -490,6 +496,9 @@ Import Approval Options:
 Output Formatting Options:
   --no-normalize-blank-lines  Disable blank line normalization in output
   --no-format                 Disable prettier markdown formatting (preserve original spacing)
+
+Security Options:
+  --allow-absolute            Allow absolute paths outside project root (use with caution!)
 
 Examples:
   mlld script.mld                     # Run a local file
@@ -547,6 +556,53 @@ Configuration:
   formatHelpContent(content: string, context?: HelpContext): string {
     // Future enhancement: format help content based on context
     return content;
+  }
+
+  private displayNvimSetupHelp(): void {
+    console.log(`
+Usage: mlld nvim-setup [options]
+
+Set up mlld Language Server for Neovim.
+
+This command automatically configures Neovim to use the mlld Language Server,
+providing syntax highlighting, autocomplete, and error checking for .mld files.
+
+Works with:
+  - Vanilla Neovim
+  - LazyVim
+  - AstroNvim
+  - LunarVim
+  - Any Neovim distribution with nvim-lspconfig
+
+Options:
+  --force              Overwrite existing configuration
+  --show-config        Display the configuration without installing
+
+What it does:
+  1. Detects your Neovim setup (LazyVim, vanilla, etc.)
+  2. Creates the appropriate config file in the right location
+  3. Checks for required dependencies (nvim-lspconfig)
+  4. Verifies mlld is installed (or will use npx fallback)
+
+After running:
+  1. Restart Neovim
+  2. Open a .mld file
+  3. Run :LspInfo to verify mlld_ls is attached
+  4. Run :MlldLspInfo to check mlld-specific status
+
+Examples:
+  mlld nvim-setup              # Auto-configure Neovim
+  mlld nvim                    # Short alias
+  mlld nvim-setup --force      # Overwrite existing config
+  mlld nvim-setup --show-config # Just show the config
+
+Manual Setup:
+  If you prefer manual configuration, add this to your Neovim config:
+  
+  require('lspconfig').mlld_ls.setup{
+    cmd = { 'mlld', 'lsp' }
+  }
+    `);
   }
 
   generateExamples(command: string): string[] {

@@ -4,15 +4,6 @@ import { parse } from '@grammar/parser';
 import { importFixtures } from './fixtures/import';
 import { parseDirective } from './utils/test-helpers';
 
-describe('Import Directive Debug', () => {
-  it('should log the import directive structure', async () => {
-    const input = '/import "path/to/file.mlld"';
-    const result = (await parse(input)).ast[0];
-    
-    // Log the structure so we can see what it looks like
-    console.log('Import structure debug:', JSON.stringify(result, null, 2));
-  });
-});
 
 describe('Import Directive Syntax Tests', () => {
   describe('Import Namespace (Shorthand)', () => {
@@ -195,8 +186,6 @@ describe('Import Directive AST Structure', () => {
         it(`should include metadata for ${fixture.name}`, async () => {
           const node = await parseDirective(fixture.input);
           
-          // Log the actual metadata for debugging
-          console.log(`Metadata for ${fixture.name}:`, JSON.stringify(node.meta, null, 2));
           
           // Verify meta property exists
           expect(node.meta).toBeDefined();

@@ -132,7 +132,7 @@ This pattern is defined in `grammar/patterns/variables.peggy` and used by both `
 
 ## Built-in Transformers
 
-As of version 1.4.2, mlld includes built-in transformers that integrate seamlessly with the pipeline system.
+mlld includes built-in transformers that integrate seamlessly with the pipeline system.
 
 ### Architecture
 
@@ -194,7 +194,30 @@ Pipeline stages automatically preserve LoadContentResult metadata through JavaSc
 
 **Implementation**: Pipeline execution wraps JS functions with `AutoUnwrapManager.executeWithPreservation()` - arrays use exact content matching, single files get metadata auto-reattached to transformed content.
 
-## Pipeline Retry Architecture (v2.0.0+)
+### Parallel Execution
+
+Pipeline stages run in parallel when grouped with `||`.
+
+- Grouping: `A || B || C` forms one stage that executes `A`, `B`, and `C` concurrently; results preserve command order.
+- With-clause parity: Nested arrays in `with { pipeline: [...] }` represent a parallel stage. Example: `with { pipeline: [ [@left, @right], @combine ] }` is equivalent to `| @left || @right | @combine`.
+- Shorthand rule: Shorthand pipelines cannot start with `||`. The parser returns an error explaining that `||` runs in parallel with the previous stage, which the source stage does not have.
+- Output: The next stage receives a JSON array string of the group’s outputs.
+- Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
+- Effects: Inline effects attached before a parallel group run once per branch after that branch succeeds; effect failures abort the pipeline.
+- Rate limits: 429/“rate limit” errors in a branch use exponential backoff.
+
+See tests in `tests/pipeline/parallel-runtime.test.ts` for ordering, concurrency caps, failure behavior, and effects.
+
+#### Related: /for Parallel
+- Iterator parallelism uses the same concurrency utility as pipelines but has different semantics.
+- `/for parallel` (see `docs/dev/ITERATORS.md`) streams directive outputs as iterations complete (order not guaranteed), while the collection form preserves input order.
+- Pipeline groups always deliver a JSON array string to the next stage, maintain declaration order, and do not support `retry` from inside the group.
+
+#### Nested Groups
+- Nested parallel groups are not supported semantically. While AST arrays can nest syntactically, execution treats each array as a single stage boundary and does not introduce multi-level parallel orchestration.
+- If you need multiple parallel phases, model them as separate stages with validation between them (e.g., parallel → combine/validate → parallel).
+
+## Pipeline Retry Architecture
 
 The pipeline retry system enables automatic retry of failed or invalid pipeline steps through a simplified state machine architecture.
 
@@ -235,38 +258,38 @@ interface RetryContext {
 
 ### @pipeline Context Variable
 
-The `@pipeline` variable provides access to pipeline execution state:
+The `@p` (`@pipeline`) variable provides access to pipeline execution state:
 
 ```mlld
 # Array indexing for stage outputs
-@pipeline[0]      # Input to the pipeline
-@pipeline[1]      # Output of first stage
-@pipeline[-1]     # Output of previous stage
-@pipeline[-2]     # Output two stages back
+@p[0]      # Input to the pipeline
+@p[1]      # Output of first stage
+@p[-1]     # Output of previous stage
+@p[-2]     # Output two stages back
 
 # Retry and attempt tracking (context-local)
-@pipeline.try     # Current attempt within active retry context (1, 2, 3...)
-@pipeline.tries   # Array of previous attempts within active retry context
+@p.try     # Current attempt within active retry context (1, 2, 3...)
+@p.tries   # Array of previous attempts within active retry context
 
 # Global retry history
-@pipeline.retries.all  # All attempts from ALL retry contexts
+@p.retries.all  # All attempts from ALL retry contexts
 
 # Stage information
-@pipeline.stage   # Current stage number (1-based)
-@pipeline.length  # Number of completed stages
+@p.stage   # Current stage number (1-based)
+@p.length  # Number of completed stages
 ```
 
 **Critical**: `try` and `tries` are **local to the retry context**. Stages outside the active retry context see `try: 1` and `tries: []`. This is by design - each stage starts fresh unless part of an active retry.
 
-#### Syntactic Sugar: @p Alias
+#### Input Semantics
 
-In pipeline contexts, `@p` is available as a shorter alias for `@pipeline`:
+- `@p[0]` (and alias `@p[0]`) is the original/base input to the pipeline.
+- The stage execution context exposes the current stage input via `@ctx.input` (user-facing) and as the first bound parameter for executables where applicable.
+- There is no `@pipeline.input` field; references to "pipeline input" in code refer to `@ctx.input` for the current stage or `@p[0]` for the original/base input.
+
+These semantics ensure that validators can reason about the current stage's input (`@ctx.input`) while selection/aggregation patterns can reach back to the original input using `@p[0]`.
 
 ```mlld
-# These are equivalent:
-/var @result = "data"|@validator(@pipeline)
-/var @result = "data"|@validator(@p)
-
 # Especially useful for accessing specific fields:
 /exe @checker(input, try) = when: [
   @try < 3 => retry
@@ -595,7 +618,7 @@ Test coverage includes:
 - Backwards compatibility
 - Multi-stage pipelines with format specified
 
-## Variable Type System Integration (v2.0.0+)
+## Variable Type System Integration
 
 The pipeline system integrates with mlld's Variable type system, which wraps all values with metadata about their source, type, and context.
 
@@ -865,7 +888,7 @@ export interface FieldAccess {
 }
 ```
 
-## Primitive Types Support (v2.0.0+)
+## Primitive Types Support
 
 mlld now supports primitive types (numbers, booleans, null) as first-class values:
 
@@ -941,6 +964,46 @@ Each feature introduces variables into child scopes:
 run [cmd] with { pipeline: [@transform(@input)] }
 # '@input' available in transform scope
 ```
+
+### Inline Effects in Pipelines (log/show/output)
+
+Inline builtin effects are observability tools that attach to the preceding functional stage in a pipeline. They do not create stages themselves and therefore do not affect retry targeting or stage indexing.
+
+Key points:
+
+- Attachment: `@log`, `@show`, and `@output` in a pipeline are attached to the nearest preceding functional stage (including the synthetic `__source__` stage for retryable sources).
+- Emission semantics: Effects are emitted immediately after their owning stage runs, for every attempt. If a downstream stage requests a retry, the previously emitted effects remain (they are not rolled back). This preserves progress visibility across attempts.
+- Stage-neutral: Effects are not counted as stages. The state machine only sees functional stages, so retry requests (e.g., from `@validator`) continue to target upstream stages correctly.
+
+Examples:
+
+Shorthand pipe syntax:
+
+```mlld
+/exe @source() = js { return "v" + ctx.try }
+/exe @validator(input) = js { if (ctx.try < 3) return "retry"; return input }
+
+# Emits v1, v2, v3 (one per attempt), then final value
+/show @source() | show | @validator
+```
+
+Longhand with-clause syntax (identical behavior):
+
+```mlld
+/show @source() with { pipeline: [ show, @validator ] }
+```
+
+Implementation:
+
+- Grammar collects both pipe (`|`) and `with { pipeline: [...] }` formats into a unified pipeline structure (see `helpers.processPipelineEnding` and `detectPipeline`).
+- `attachBuiltinEffects` groups effect commands with their preceding functional stage.
+- `PipelineExecutor` emits effects immediately after stage execution, on every attempt, and never counts them as discrete stages.
+
+Implications:
+
+- Observability is consistent and immediate across retries.
+- Effects on the synthetic `__source__` stage (e.g., directly after a retryable invocation) replay per attempt as expected.
+- Document output reflects effects emission order; stderr `log` output is still not included in document content.
 
 ## Implementation Components
 
@@ -1131,3 +1194,21 @@ mlld's pipeline architecture provides a cohesive system for data processing thro
 - **Validation** with dependency checking
 
 These features share common patterns while maintaining distinct responsibilities, creating a powerful yet understandable system for building complex data pipelines in a declarative way.
+### Hint Scoping (@ctx.hint)
+
+mlld treats `@ctx` as ambient and amnesiac — it reflects only the truth about “this stage right now.” To keep retry payloads contained and to avoid leaking cross-stage state, hint visibility is precisely scoped:
+
+- Visible only inside the retried stage body during its execution.
+- Cleared before inline pipeline effects attached to the retried stage (e.g., `with { pipeline: [ show ... ] }`). Those effects see `@ctx.hint == null`.
+- Cleared before re-executing the requesting stage. The requester sees `@ctx.hint == null`.
+- Downstream stages and effects after the retried stage also see `@ctx.hint == null`.
+
+Examples:
+
+```
+/show @retriedStage() with { pipeline: [ show `hint in effect: @ctx.hint` ] } | @requester
+```
+
+- Inside `@retriedStage` body: `@ctx.hint` is available.
+- In the inline `show` effect: `@ctx.hint == null`.
+- In `@requester`: `@ctx.hint == null`.

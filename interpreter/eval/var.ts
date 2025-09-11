@@ -146,25 +146,11 @@ export async function evaluateVar(
   // Check for primitive values first (numbers, booleans, null)
   if (typeof valueNode === 'number' || typeof valueNode === 'boolean' || valueNode === null) {
     // Direct primitive values from the grammar
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] var.ts: Primitive value:', {
-        identifier,
-        valueNode,
-        type: typeof valueNode
-      });
-    }
     resolvedValue = valueNode;
     
   } else if (valueNode.type === 'Literal') {
     // Handle literal nodes (booleans, numbers, strings)
     resolvedValue = valueNode.value;
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] var.ts: Literal node:', {
-        identifier,
-        value: valueNode.value,
-        valueType: valueNode.valueType
-      });
-    }
     
   } else if (valueNode.type === 'array') {
     // Array literal: [1, 2, 3] or [,]
@@ -344,6 +330,10 @@ export async function evaluateVar(
       // Legacy: command is a raw string (for backward compatibility)
       resolvedValue = await env.executeCommand(valueNode.command);
     }
+    
+    // Apply automatic JSON parsing for shell command output
+    const { processCommandOutput } = await import('@interpreter/utils/json-auto-parser');
+    resolvedValue = processCommandOutput(resolvedValue);
     
   } else if (valueNode.type === 'VariableReference') {
     // Variable reference: @otherVar
@@ -534,32 +524,12 @@ export async function evaluateVar(
     
   } else if (valueNode && (valueNode.type === 'BinaryExpression' || valueNode.type === 'TernaryExpression' || valueNode.type === 'UnaryExpression')) {
     // Handle expression nodes
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] var.ts: Evaluating unified expression node:', {
-        type: valueNode.type,
-        operator: (valueNode as any).operator
-      });
-    }
     const { evaluateUnifiedExpression } = await import('./expressions');
     const result = await evaluateUnifiedExpression(valueNode, env);
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] var.ts: Unified expression result:', {
-        value: result,
-        type: typeof result
-      });
-    }
     resolvedValue = result;
     
   } else if (valueNode && valueNode.type === 'ForExpression') {
     // Handle for expressions: for @item in @collection => expression
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.log('[DEBUG] var.ts: Processing ForExpression:', {
-        identifier,
-        variable: valueNode.variable?.identifier,
-        hasSource: !!valueNode.source,
-        hasExpression: !!valueNode.expression
-      });
-    }
     
     // Import and evaluate the for expression
     const { evaluateForExpression } = await import('./for');

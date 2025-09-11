@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% if title %}{{ title }} - mlld{% else %}mlld - modular prompt scripting{% endif %}</title>
+  <title>{% if title %}{{ title }} - mlld{% else %}mlld - modular llm scripting{% endif %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Tektur:wght@800&family=Cousine:wght@400;700&display=swap" rel="stylesheet">
@@ -12,17 +12,19 @@
   <script src="/js/theme.js" defer></script>
   <script src="/js/terminal.js" defer></script>
   <script src="/js/animation.js" defer></script>
+  <script src="/js/copy-code.js" defer></script>
 </head>
 <body>
   <header>
     <div class="container">
       <div class="logo-container">
         <a href="/" class="logo">mlld</a>
-        <span class="logo-tagline">modular prompt scripting</span>
+        <span class="logo-tagline">pre-release</span>
       </div>
       <nav>
         <ul>
-          <li><a href="/docs/" {{ "/docs/" | isActive(page.url) }}>Docs</a></li>
+          <li><a href="/docs/" {{ "/docs/" | isActive(page.url) }}>⚠️ Docs</a></li>
+          <li><a href="https://discord.gg/mlld">Discord</a></li>
           <li><a href="https://github.com/mlld-lang/mlld">GitHub</a></li>
         </ul>
       </nav>

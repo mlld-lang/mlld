@@ -1,1706 +1,979 @@
->> mlld syntax reference
+<MLLD_GUIDE version="2.0.0-rc43">
+<TOC>
+<OVERVIEW> ......................... Purpose, two execution modes, "What mlld IS/ISN'T," mental model shift.
+<CORE_RULES>
+  <RULE_1_SLASHES_START_LINES> ..... Only lines beginning with `/` are mlld; everything else is text.
+  <RULE_2_VARIABLE_SYNTAX> ......... Create with /var @x = … ; reference with @x in templates/commands.
+  <RULE_3_COMMANDS_NEED_BRACES> .... All commands use braces; language specifiers; /exe shortcuts.
+  <RULE_4_OUTPUT_SOURCES> .......... Only /show, /run, /output emit output.
+  <RULE_5_INTERPOLATION_CONTEXTS> .. Backticks/double-colon/triple-colon, quotes, and command contexts.
+  <RULE_6_FIELD_ACCESS> ............ Dot + index access for objects/arrays; array slicing [start:end].
+  <RULE_7_PARAMETERIZED_CONTENT> ... Reusable templates and functions via /exe.
+  <RULE_8_FILE_LOADING> ............ Angle brackets load file contents; globs; metadata fields; safety.
+  <RULE_9_IMPORTS> ................. Modules, paths, registries; "as namespace."
+  <RULE_10_WHEN_OVERVIEW> .......... When forms (bare, first, simple) – full detail in CONTROL_FLOW.
+  <RULE_11_ITERATION_OVERVIEW> ..... foreach and /for – full detail in CONTROL_FLOW.
+  <RULE_12_OPERATORS> .............. Logical, comparison, ternary operators for expressions.
+</CORE_RULES>
+<SYNTAX>
+  <VARIABLES> ...................... Types, primitives, command results, code execution.
+  <TEMPLATES> ...................... Backticks, ::…::, :::…:::; interpolation rules.
+  <FILE_LOADING> ................... Angle brackets, metadata fields, globs, "as" templates, detection rules.
+  <BUILTIN_METHODS> ................ Array and string methods: includes, indexOf, join, split, etc.
+  <PIPELINES> ...................... Operator |, transformers, @ctx/@p context, retry/hints, inline effects, parallel groups with ||.
+  <COMMENTS> ....................... ">>" and "<<" comments (start/end-of-line).
+  <RESERVED_VARIABLES> ............. @now, @input, @base, @debug.
+</SYNTAX>
+<COMMANDS>
+  <RUN_VS_RUN_SH> .................. Decision tree, security & syntax differences, param passing.
+  <EXE_EXECUTABLES> ................ Defining shell/js/node/template/section executables; shadow env intro.
+  <OUTPUT_DIRECTIVE> ............... Write to files/stdout/stderr with optional formats.
+  <LOG_DIRECTIVE> .................. Syntactic sugar for /output to stdout; works in action contexts.
+</COMMANDS>
+<CONTROL_FLOW>
+  <WHEN_DECISIONS> ................. Bare/first/simple forms, /exe...when patterns, wildcard (*), none keyword.
+  <ITERATION> ...................... foreach vs /for; nested loops; objects with _key; collection form.
+  <NO_EARLY_EXIT> .................. Design flows instead of exits; patterns.
+</CONTROL_FLOW>
+<MODULES> .......................... Module-first philosophy; imports; helpers; shadow environments; isolation.
+<PATTERNS> ......................... Tool orchestration; data pipelines; conditional workflows; guarded/step-by-step.
+<CONFIGURATION>
+  <ENVIRONMENT_VARIABLES> .......... Allow-list, @input import.
+  <FRONTMATTER> .................... Document metadata block.
+  <PATHS_AND_URLS> ................. Quoted/unquoted paths, dynamic paths, URL loading.
+  <RESOLVERS> ...................... Prefixes, LOCAL/HTTP/GITHUB/REGISTRY; quick CLI setup.
+  <PUBLISHING_PRIVATE_MODULES> ..... Auth, repo layout, commands.
+</CONFIGURATION>
+<COMMON_MISTAKES>
+  <MISTAKE_MISSING_AT> ............. Create variables with @; directives use /.
+  <MISTAKE_USING_AT_FOR> ........... @run is invalid; use /run on LHS and run / implicit RHS.
+  <MISTAKE_INTERPOLATION> .......... Interpolation only in directive/template contexts.
+  <MISTAKE_NOT_TEMPLATE_LANG> ...... mlld ≠ template engine; use /show or /exe.
+  <MISTAKE_FILE_VS_STRING> ......... Angle brackets load content; quotes hold literal filenames.
+  <MISTAKE_XML_VS_FILE_TAGS> ....... <thinking> is plain text; <file.txt> is a file ref (has ./*/@).
+  <MISTAKE_NESTED_FUNC_CALLS> ...... Don't shell-call @func inside commands; assign then use.
+  <MISTAKE_STRING_CONCAT> .......... Prefer templates over procedural concatenation.
+  <MISTAKE_COMPLEX_LOGIC> .......... Move algorithms into helpers/modules.
+  <MISTAKE_IMPORT_BRACKETS> ........ Know when to use angle brackets for path resolvers.
+  <MISTAKE_NO_EARLY_EXIT> .......... Model flows via /when rather than exits.
+</COMMON_MISTAKES>
+<REFERENCE> ........................ Execution context table, syntax summary, quick transforms list.
+<SEE_ALSO> ......................... Documentation, examples repository, source code.
+</TOC>
 
-mlld is a modular prompt scripting language for dynamically assemble context and orchestrating LLMs. Think of it as Make + npm for the LLM era or a unix pipe for chaining discrete LLM tasks. mlld is made to be written directly in markdown files. It has its own public/private/local module system and can treat markdown sections as modules.
+<OVERVIEW>
+mlld is a modular prompt scripting language for dynamically assembling context and orchestrating LLMs—think Make + npm for the LLM era, or a Unix pipe for chaining discrete AI/tool steps. It's designed to be written directly in Markdown: readable as docs, executable as workflows.
 
-## What mlld IS and ISN'T
+Two modes:
 
-### mlld IS:
-- 📋 A workflow orchestrator (like Make + npm for the AI era)
-- 🎭 A conductor's baton (you conduct, tools play)
-- 📝 Executable documentation (reads like a guide, runs like a script)
-- 🚦 A logical router (route data and actions based on conditions)
+1. Markdown mode (default): any line not starting with `/`
+2. mlld mode: lines starting with `/` (directives)
 
-### mlld ISN'T:
-- ❌ A template engine (it's not Jinja or Handlebars)
-- ❌ A shell script replacement (it orchestrates shells, doesn't replace them)
+What mlld IS:
 
-If you find yourself wanting programming features, you're thinking about the problem wrong. Step back and ask: "What tool or module could handle this complexity for me?"
+* 📋 A workflow orchestrator (like Make + npm for the AI era)
+* 🎭 A conductor's baton (you conduct, tools play)
+* 📝 Executable documentation (reads like a guide, runs like a script)
+* 🚦 A logical router (route data and actions based on conditions)
 
-### Mental Model Shift
+What mlld ISN'T:
 
-Coming from programming? Think like a conductor, not a coder:
-- ❌ "How do I implement this?" → ✅ "What tool handles this best?"
-- ❌ "I need an if-statement" → ✅ "I need a decision point"
-- ❌ "Let me concatenate strings" → ✅ "Let me create a template"
+* ❌ A template engine (not Jinja/Handlebars)
+* ❌ A shell script replacement (it orchestrates shells; doesn't replace them)
 
-Think of mlld like Docker Compose or GitHub Actions - you're declaring what should happen, not programming how it happens.
+Mental model shift:
 
-## Core Mental Model
+* ❌ "How do I implement this?" → ✅ "What tool/module handles this?"
+* ❌ "I need an if-statement" → ✅ "I need a decision point"
+* ❌ "Let me concatenate strings" → ✅ "Let me create a template"
 
-Think of mlld as having two distinct modes:
-1. **Markdown mode** (default): Any line not starting with `/` is plain Markdown
-2. **mlld mode**: Lines starting with `/` are interpreted as mlld commands
+Think Docker Compose or GitHub Actions: declare what happens, don't program how. </OVERVIEW>
 
-This design keeps documents readable as regular Markdown while enabling programmatic capabilities where needed.
+<CORE_RULES>
+<RULE_1_DIRECTIVES_START_LINES>
+Only directives on lines beginning with `/` are executed.
 
-## The 11 Commandments of mlld
-
-### 1. Directives Must Start Lines
 ```mlld
-❌ WRONG: Hello @name! Let me /show some text.
-✅ RIGHT: 
+❌ Hello @name! Let me /show something.
+✅
 /var @greeting = `Hello @name!`
 /show @greeting
 ```
 
-### 2. Variable Creation vs Reference
+</RULE_1_DIRECTIVES_START_LINES>
+
+<RULE_2_VARIABLE_SYNTAX>
+Create with `/var @name = "Alice"`. Reference with `@name` in templates/commands.
+
 ```mlld
-/var @name = "Alice"                            << Create with @name
-/show `Hello @name!`                << Reference with @ in templates
-/run {echo "@name"}                  << Reference with @ in commands
-/run js (@name) {console.log("Hi", name)}  << Pass vars to native JS
+/var @name = "Alice"
+/show `Hello @name!`
+/run {echo "User: @name"}
+/run js (@name) { console.log("Hi", name) }
 ```
 
-### 3. Commands Require Braces or Quotes
-```mlld
-❌ WRONG: /run echo "hello"
-❌ WRONG: /run [echo "hello"]
-✅ RIGHT: /run {echo "hello"}
-✅ RIGHT: /run "echo hello"
+</RULE_2_VARIABLE_SYNTAX>
 
->> CRITICAL: 'run' vs 'sh' for shell commands
-✅ /run "echo hello"            << Single-line, pipes only (|)
-✅ /run {echo "hello" | cat}    << Single-line with pipe
-❌ /run {cmd1 && cmd2}          << WRONG - && not allowed with 'run'
-✅ /sh {cmd1 && cmd2}           << RIGHT - use 'sh' for && or ||
-✅ /sh {                        << Use 'sh' for multi-line scripts
-  if [ -f "file.txt" ]; then
-    cat file.txt
-  fi
+<RULE_3_COMMANDS_NEED_BRACES>
+Every command needs braces. Use language specifiers when needed. Define executables with `/exe`.
+
+```mlld
+❌ /run echo "hello"
+✅ /run {echo "hello"}
+
+# Language specifiers.
+/run js {console.log("hi")}
+# Executables
+/exe @hi() = run {echo hi}
+/exe @block() = run sh {
+  echo "multi"; ls -la
 }
-
->> Language specifiers
-✅ /run js {console.log("hi")}  << JavaScript execution
-✅ /exe @fn = run "echo hi"     << Single-line shell executable
-✅ /exe @fn = sh {echo hi}      << Multi-line shell executable
-✅ /exe @fn = js {return 42}    << JavaScript executable (no 'run')
+/exe @calc(x) = js { return @x * 2 }
 ```
 
-### 4. Only /show, /run, and /output Produce Output
+</RULE_3_COMMANDS_NEED_BRACES>
+
+<RULE_4_OUTPUT_SOURCES>
+Only these produce output: `/show`, `/run`, `/output`. Everything else mutates state.
+
 ```mlld
-/var @secret = "hidden"     << No output
-/var @config = {"x": 1}     << No output
-/show `Visible text`        << This appears!
-/run {echo "Also visible"}  << This appears!
+/var @secret = "hidden"      # no output
+/show `Visible`
+/run {echo "Also visible"}
 ```
 
-### 5. Context-Specific Variable Syntax
-**Primary template syntax**: Use single backtick templates with @ interpolation
-- Backtick templates: `` `Hello @name!` `` - @name IS interpolated (PREFERRED)
-- String literals: `/var @msg = "Hello @name"` - @name is NOT interpolated (literal text)
-- Command context: `{echo "Hello @name"}` - @name IS interpolated (variable value)
-- Double-colon escape: `::Hello @name!::` - For text with backticks (uses @var interpolation)
-- Triple-colon escape: `:::Hello {{name}}!:::` - For social media with many @ symbols
+</RULE_4_OUTPUT_SOURCES>
 
-### 6. Field Access Rules
+<RULE_5_INTERPOLATION_CONTEXTS>
+Prefer backticks for templates; use `::…::` to escape backticks; use `:::…:::` when many `@` appear (e.g., social).
+
+* Backticks interpolate `@var`
+* Double quotes interpolate `@var`
+* Single quotes are literal (no interpolation)
+* Braced commands `{…}` interpolate `@var`
+
 ```mlld
-/var @user = { "name": "Alice", "scores": [10, 20, 30] }
-
->> In directives:
-/show @user.name           << "Alice"
-/show @user.scores.1       << 20 (array access with dot notation)
-
->> In templates:
-/show ::{{user.name}} scored {{user.scores.0}}::
+/var @msg = `Hello @user!`
+/var @note = ::Run `npm test` before deploy::
+/var @tweet = :::Hey @{{handle}}—ship it!:::
 ```
 
-### 7. Parameterized Content
+</RULE_5_INTERPOLATION_CONTEXTS>
+
+<RULE_6_FIELD_ACCESS>
+Objects/arrays use dot+index in directives and `{{ }}` in ::: templates only. Arrays support slicing with `[start:end]` and builtin methods.
+
 ```mlld
->> For commands, use /exe:
+/var @user = {"name":"Alice","scores":[10,20,30]}
+# Directives:
+/show @user.name            # Alice
+/show @user.scores.1        # 20
+
+# Array slicing:
+/var @arr = [1,2,3,4,5]
+/show @arr[0:3]             # [1,2,3]
+/show @arr[-2:]             # [4,5] - last 2
+/show @arr[:-1]             # [1,2,3,4] - all except last
+/show @arr[2:]              # [3,4,5] - from index 2
+
+# Builtin methods on arrays/strings:
+/var @list = ["apple", "banana", "cherry"]
+/var @text = "Hello World"
+/show @list.includes("banana")      # true
+/show @list.indexOf("cherry")       # 2
+/show @list.join(", ")              # "apple, banana, cherry"
+/show @text.toLowerCase()           # "hello world"
+/show @text.split(" ")              # ["Hello", "World"]
+/show @text.includes("World")       # true
+
+# Double-colon templates:
+/show ::@user.name has @user.scores.0::
+```
+
+</RULE_6_FIELD_ACCESS>
+
+<RULE_7_PARAMETERIZED_CONTENT>
+Use `/exe` for parameterized templates or commands.
+
+```mlld
 /exe @greet(name) = run {echo "Hello @name"}
-/run @greet("Alice")
+/run @greet("Bob")
 
->> For templates, use /exe:
-/exe @welcome(name, role) = ::Welcome {{name}}, our new {{role}}!::
-/show @welcome("Bob", "developer")
+/exe @welcome(name, role) = ::Welcome @name, our new @role!::
+/show @welcome("Rae","developer")
 ```
 
-### 8. File Loading with Angle Brackets (Alligators)
+</RULE_7_PARAMETERIZED_CONTENT>
 
-**Key Concept**: Angle brackets `<...>` mean "give me the contents of this file", not the filename itself.
-
-```mlld
-/var @content = <README.md>      << Loads file contents into @content
-/var @path = "README.md"         << Stores the string "README.md" in @path
-
-/show <config.json>              << Shows contents of config.json
-/show "config.json"              << Shows the text "config.json"
-
->> Same principle applies everywhere:
-/import { data } from <local/data.json>    << Imports from file contents
-/exe @docs = <./documentation.md>          << Loads documentation content
-
->> Arrays vs File Loading - Crystal Clear Distinction:
-/var @array = [1, 2, 3]          << Square brackets = array literal
-/var @files = ["a.md", "b.md"]   << Array of strings (filenames)
-/var @content = <README.md>      << Angle brackets = load file contents
-/var @contents = [<a.md>, <b.md>]  << Array of loaded file contents!
-```
-
-### 8.1 File Reference Interpolation
-
-**Note**: File references can now be interpolated directly in strings and templates.
-
-**Detection**: Only `<...>` containing `.`, `/`, `*`, or `@` are treated as file references. This means XML tags like `<thinking>` or `<answer>` work normally.
+<RULE_8_FILE_LOADING>
+Angle brackets load file contents (not filenames). Works in variables, templates, commands, and with globs. Only `<…>` containing `.`, `/`, `*`, or `@` are treated as file references—so pseudo-XML tags like `<OVERVIEW>` are safe, plain text.
 
 ```mlld
->> Basic interpolation in templates:
-/var @greeting = `Welcome! Here's our readme: <README.md>`
-/var @docs = "Documentation: <docs/guide.md>"
+/var @content = <README.md>                 # file contents
+/show <config.json>                         # prints file contents
+/var @filesTxt = ["a.md","b.md"]            # literal names
+/var @contents = [<a.md>, <b.md>]           # loaded contents
 
->> Field access on loaded files:
-/var @pkgName = `Project: <package.json>.name`
-/var @author = `Author: <package.json>.author.email`
-/var @firstUser = `Admin: <users.json>[0].name`
+# Field access on loaded JSON
+/var @authorEmail = <package.json>.author.email
 
->> With glob patterns:
-/var @titles = `<docs/*.md>.fm.title`     << Gets all markdown titles
-/var @files = `Found: <src/**/*.js>.filename`  << All JS filenames
-
->> Special <> placeholder in 'as' templates:
+# Globs + "as" templates
 /var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
-/var @modules = <*.mld.md> as "## <>.fm.name by <>.fm.author"
-
->> XML tags work normally (no special chars):
-/var @prompt = `<thinking>Consider the options</thinking>`
-/var @xml = "<user>Alice</user> sent <message>Hello</message>"
 ```
 
-### 8.2 Pipe Transformations
-
-**Condensed Pipe Syntax**: Transform data inline with `|@transform` (no spaces!).
+Inline transforms (pipes):
 
 ```mlld
->> File reference pipes:
-/var @formatted = `<data.json>|@json`         << Pretty-print JSON
-/var @xmlData = `<data.json>|@json|@xml`     << JSON to XML
-/var @upper = `<readme.md>|@upper`           << Uppercase content
-
->> Variable pipes in templates:
-/var @name = "alice"
-/var @greeting = `Hello @name|@upper!`       << "Hello ALICE!"
-/var @data = {"user": "bob", "role": "admin"}
-/var @output = `User data: @data|@json`      << Pretty JSON
-
->> Pipes with field access:
-/var @title = `<package.json>.name|@upper`
-/var @sorted = `<data.json>.items|@sort|@json`
-
->> Available transforms:
->> @json - Pretty-print JSON
->> @xml - Convert to XML format  
->> @upper/@lower - Case conversion
->> @trim - Remove whitespace
->> Plus any transforms from imported modules
+/var @pretty = <data.json> | @json
+/var @summary = `User data: @data|@json`
 ```
 
-### 9. Import Patterns
+Security: By default, restricts to project root. Use `--allow-absolute` flag to permit absolute paths outside project.
 
-**CRITICAL DISTINCTION**: mlld has two different import syntaxes - one for modules and one for paths.
+</RULE_8_FILE_LOADING>
+
+<RULE_9_IMPORTS>
+Module imports and path imports.
 
 ```mlld
->> MODULE imports (no brackets, @ prefix):
+# Modules (no quotes)
 /import { parallel, retry } from @mlld/core
-/import { utils } from @company/utils
+/import @corp/utils as corp
 
->> PATH imports (WITH ANGLE BRACKETS for resolver paths):
-/import { readme } from <@base/README.md>
-/import { config } from <@base/config.mld>
-/import { shared } from <@local/utils.mld>
-
->> Regular path imports (quotes, no @ prefix):
-/import { helper, config } from "./utils.mld"
+# Paths (quote & resolver via <> when needed)
+/import { readme } from "@base/README.md"
+/import { helper } from "./utils.mld"
 ```
 
-**Why angle brackets matter:**
-- `<@base/file.md>` - Angle brackets tell mlld "resolve this path and read the file"
-- `@author/module` - No angle brackets means "resolve this as a module reference"
+</RULE_9_IMPORTS>
 
-Without angle brackets, `@base/file` would be treated as trying to import from a user named "base" - which is why you might see errors like "User 'base' not found in registry".
-
-### 9.1 'As' Template Syntax for Globs
-
-Process multiple files with templates using `as`:
+<RULE_10_WHEN_OVERVIEW>
+/when drives decisions (bare, first, simple). Full details in <CONTROL_FLOW>.
 
 ```mlld
->> The <> placeholder represents the current file:
-/var @docs = <*.md> as "# <>.filename"
-/var @toc = <docs/*.md> as "- [<>.fm.title](<>.relative)"
-
->> With section extraction:
-/var @summaries = <posts/*.md # summary> as "## <>.fm.title\n<>.content"
-
->> Complex templates:
-/var @modules = <modules/*.mld> as `
-### <>.fm.name (<>.fm.version)
-Author: <>.fm.author
-Path: <>.relative
-`
-
->> Note: <> only works in 'as' templates, not elsewhere
-```
-
-### 10. Conditional Logic with /when
-
-/when is mlld's decision-making directive with operator support. It evaluates conditions and executes actions.
-
-**Forms:**
-- **`/when [...]`** - Bare form: evaluates ALL matching conditions, executes each action
-- **`/when first [...]`** - Switch form: stops at first matching condition  
-- **`/when @condition => action`** - Simple form: single condition check
-
-**Block Syntax:**
-```mlld
->> Bare form - ALL matching conditions execute
-/when [
-  @score > 90 => show "Excellent!"
-  @score > 70 => show "Good job!"
-  @isBonus => show "Bonus earned!"
-]
-
->> Switch form - stops at first match
+/when @isProd => show "Prod"
 /when first [
-  @role == "admin" => show "Admin panel"
-  @role == "user" => show "User dashboard"
-  * => show "Guest access"
-]
-
->> One action per line - repeat conditions for multiple actions
-/when [
-  @isProduction && @hasChanges => show "Deploying to production..."
-  @isProduction && @hasChanges => @backupDatabase()
-  @isProduction && @hasChanges => @deploy()
-  @isProduction && @hasChanges => @notifyTeam()
+  @role=="admin" => show "Admin"
+  * => show "Guest"
 ]
 ```
 
-**Simple Form with Operators:**
-```mlld
->> Single conditions
-/when @score > 90 => show "Excellent!"
-/when @isAdmin && @isActive => show "Admin panel"
-/when !@isLocked => show "Resource available"
+</RULE_10_WHEN_OVERVIEW>
 
->> Complex expressions with parentheses
-/when (@role == "admin" || @role == "mod") && @active => show "Privileged user"
+<RULE_11_ITERATION_OVERVIEW>
+Use `foreach` to transform collections; use `/for` to execute/collect. Full details in <CONTROL_FLOW>.
+
+```mlld
+/var @names = ["Alice","Bob"]
+/exe @greet(name) = ::Hi @name!::
+/var @gs = foreach @greet(@names)
+/for @n in @names => show `Name: @n`
+
+# Optional parallel forms
+/for parallel @n in @names => show @n              # uses MLLD_PARALLEL_LIMIT (default 4)
+/var @caps = for 2 parallel @n in @names => @greet(@n)  # per-loop cap override
+/for (3, 1s) parallel @n in @names => show @n      # cap 3 with 1s pacing between starts
 ```
 
-**Special Conditions:**
-- **`*`** - Wildcard that always matches (catch-all)
-- **`none`** - Matches when no other conditions have matched (must be last)
+</RULE_11_ITERATION_OVERVIEW>
+
+<RULE_12_OPERATORS>
+Logical, comparison, and ternary operators for expressions and conditions.
+
+Comparison: `<`, `>`, `<=`, `>=`, `==`, `!=`
+Logical: `&&`, `||`, `!`
+Ternary: `condition ? trueVal : falseVal`
 
 ```mlld
-/when first [
-  @status == "active" => show "Active"
-  @status == "pending" => show "Pending"
-  * => show "Unknown status"
-]
-
-/when [
-  @hasFeatureA => @enableA()
-  @hasFeatureB => @enableB()
-  none => show "No features enabled"
-]
-
->> Multiple actions for wildcard or none - repeat them
-/when [
-  @hasData => @processData()
-  * => show "No data to process"
-  * => @logEmpty()
-  * => @useDefaults()
-]
-
-/when [
-  @isValid => @process()
-  none => show "Invalid input"
-  none => @logError()
-]
-```
-
-**Important Notes:**
-- No RHS slashes: use `show` not `/show`, `@func()` not `/run @func()`
-- Implicit variable assignment: `@condition => @var = "value"` (no `/var` needed)
-- Only one action per line (repeat conditions for multiple actions - this is encouraged for clarity)
-- Multiple `*` or `none` conditions are allowed and encouraged for multiple fallback actions
-- `none` cannot appear after `*` (would be unreachable - causes error)
-- Conditions in blocks must be on separate lines (no comma separation)
-
-### 11. Iteration with foreach and for
-
-#### foreach - Transform collections
-```mlld
-/var @names = ["Alice", "Bob", "Charlie"]
-/exe @greetTemplate(name) = ::Hello, {{name}}!::
-/var @greetings = foreach @greetTemplate(@names)
->> greetings = ["Hello, Alice!", "Hello, Bob!", "Hello, Charlie!"]
-```
-
-#### /for - Iterate and execute
-```mlld
->> Output form - executes action for each item
-/var @items = ["apple", "banana", "cherry"]
-/for @item in @items => show `Fruit: @item`
->> Outputs:
->> Fruit: apple
->> Fruit: banana
->> Fruit: cherry
-
->> Collection form - returns array of results
-/var @numbers = [1, 2, 3]
-/var @doubled = for @n in @numbers => js { return @n * 2 }
->> doubled = [2, 4, 6]
-
->> Object iteration
-/var @config = {"host": "localhost", "port": 3000}
-/for @value in @config => show `Value: @value`
-
->> Object key access with underscore pattern
-/for @value in @config => show `@value_key: @value`
->> Outputs:
->> host: localhost
->> port: 3000
-
->> Works with file globs
-/for @file in <*.md> => show `Processing @file.filename`
-
->> Empty arrays handled gracefully
-/var @empty = []
-/for @x in @empty => show @x  >> No output
-/var @results = for @x in @empty => @x  >> results = []
-```
-
-## Basic Examples
-
-```mlld
->> Simple variable assignment
-/var @author = "Alice"
-/var @greeting = "Hello, world!"
-
->> Using operators in variables
+# Expressions
 /var @isValid = @score > 80 && @submitted
 /var @status = @isPro ? "premium" : "basic"
 /var @canEdit = @isOwner || (@role == "editor" && !@isLocked)
+/var @opposite = !@condition
 
->> Comments go at start or end of lines only
->> Output content
-/show @greeting
-/show "Welcome to mlld!"  >> Inline comments too!
+# Parentheses for precedence
+/var @complex = (@a || @b) && (@c != @d)
 
->> Run commands (quotes for single lines)
-/run "echo System info:"
-/run "date"
+# In /when conditions
+/when @tokens > 1000 && @mode == "production" => show "High usage"
+/when (@role == "admin" || @role == "mod") && @active => show "Privileged"
+```
 
->> IMPORTANT: Single-line commands with 'run' can only use pipes (|)
->> For multi-line shell scripts or commands with && or ||, use 'sh'
-/run "echo Hello | tr '[:lower:]' '[:upper:]'"  >> Pipes allowed
+Type coercion: `"true" == true`, `"false" == false`, `null == undefined`
+Precedence: `!` → comparison → `&&` → `||` → `?:`
+</RULE_12_OPERATORS>
+</CORE_RULES>
 
->> Use 'sh' for multi-line shell scripts
-/sh {
-  echo "Multiple commands"
-  ls -la
+<SYNTAX>
+<VARIABLES>
+Create primitives, arrays, objects, or assign from command/code results. Primitives preserve JS types in `/exe js`.
+
+```mlld
+/var @n = 42
+/var @price = 19.99
+/var @ok = true
+/var @arr = [1,2,3]
+/var @obj = {"key":"value"}
+
+/exe @add(a,b) = js { return a + b }
+/var @sum = @add(@n, 8)         # 50 (number)
+
+/var @date = run "date"         # result of command
+/var @readme = <README.md>      # file contents
+```
+
+</VARIABLES>
+
+<TEMPLATES>
+Prefer backticks; use :: for backticks-in-text; ::: when many @mentions.
+
+```mlld
+/var @message = `Hello @name, welcome!`
+/var @doc = ::Use `mlld` to orchestrate::
+/var @tweet = :::Hey @{{handle}}—{{msg}}:::
+```
+
+</TEMPLATES>
+
+<FILE_LOADING>
+Angle brackets load, quotes store literal paths. Field access and globs are supported.
+
+```mlld
+/var @author = <package.json>.author
+/var @firstEmail = <data.json>.users[0].email
+/var @md = <docs/*.md> as "# <>.filename"
+```
+
+Detection rule: only `<…>` with `.`, `/`, `*`, or `@` are treated as file refs. XML-like `<TAG>` is plain text.
+
+File metadata fields: `content` (default), `filename`, `relative`, `absolute`, `tokens`, `tokest`, `fm` (frontmatter), `json` (for .json files)
+
+URL metadata fields: All file fields plus: `url`, `domain`, `title`, `description`, `html`, `text`, `md`, `headers`, `status`, `contentType`
+</FILE_LOADING>
+
+<BUILTIN_METHODS>
+Variables support builtin methods for common operations. Methods are called with parentheses and can accept arguments.
+
+**Array Methods:**
+- `@array.includes(value)` - Returns true if array contains value
+- `@array.indexOf(value)` - Returns index of value, or -1 if not found
+- `@array.length()` - Returns array length
+- `@array.join(separator)` - Joins array elements into string
+
+**String Methods:**
+- `@string.includes(substring)` - Returns true if string contains substring
+- `@string.indexOf(substring)` - Returns index of substring, or -1
+- `@string.length()` - Returns string length
+- `@string.toLowerCase()` - Converts to lowercase
+- `@string.toUpperCase()` - Converts to uppercase
+- `@string.trim()` - Removes leading/trailing whitespace
+- `@string.startsWith(prefix)` - Returns true if starts with prefix
+- `@string.endsWith(suffix)` - Returns true if ends with suffix
+- `@string.split(separator)` - Splits into array
+
+```mlld
+/var @fruits = ["apple", "banana", "cherry"]
+/var @message = "Hello World"
+
+# Array operations
+/show @fruits.includes("banana")    # true
+/show @fruits.indexOf("cherry")     # 2
+/show @fruits.join(" and ")         # "apple and banana and cherry"
+
+# String operations
+/show @message.toLowerCase()        # "hello world"
+/show @message.split(" ")          # ["Hello", "World"]
+/show @message.includes("World")    # true
+
+# With variable arguments
+/var @search = "banana"
+/show @fruits.includes(@search)     # true
+```
+
+Note: Methods are parsed as field access exec patterns (`@obj.method(args)`) and executed as ExecInvocations internally.
+</BUILTIN_METHODS>
+
+<PIPELINES>
+Chain stages with `|`. Built-ins: @json, @xml, @csv, @md (upper/lower accepted). Stages access context via `@ctx` and pipeline history via `@p`.
+
+```mlld
+/var @users = run {cat users.json} | @json | @csv
+/exe @double(n) = js {(@n*2)}
+/var @x = run {echo "5"} | @double
+
+# Retry with hints
+/exe @validator(input) = when [
+  @input.valid => @input
+  @ctx.try < 3 => retry "need more detail"
+  * => "fallback"
+]
+/var @res = @raw | @validator
+
+# Best-of-N pattern
+/exe @selectBest(response) = when [
+  @response.score > 8 => @response
+  @ctx.try < 5 => retry { temperature: 0.9 }
+  * => @selectHighestScore(@p.retries.all)
+]
+```
+
+Context object (@ctx): `try` (attempt #), `tries` (array), `stage`, `input`, `hint` (from retry), `lastOutput`, `isPipeline`
+
+Pipeline array (@p): `@p[0]` (input), `@p[-1]` (previous output), `@p.retries.all` (full history)
+
+Inline effects: `@data | @transform | log` (stderr), `@data | output to "file.txt"` (inline write)
+
+Formats (`with { format: "json|csv|xml|text" }`): guide parsing for pipeline stages.
+
+Parallel groups (`||`): run multiple commands as one stage in parallel.
+
+```mlld
+# Two transforms run concurrently; outputs are collected in order
+/exe @left(input) = `L:@input`
+/exe @right(input) = `R:@input`
+/exe @combine(input) = js {
+  const arr = JSON.parse(input); // parallel stage returns a JSON array string
+  return arr.join(' + ');
 }
 
->> Use 'sh' for conditional execution (|| and &&)
-/exe @safeDeploy(@env) = sh {
-  npm test && npm run deploy:$env || echo "Deployment failed"
+/var @out = "x" with { pipeline: [ @left || @right, @combine ] }
+/show @out   # → "L:x + R:x"
+```
+
+Semantics:
+* Grouping: `A || B || C` forms a single stage executed concurrently with a global cap.
+* Ordering: Results preserve command order; next stage receives a JSON array string.
+* Concurrency: Limited by `MLLD_PARALLEL_LIMIT` (default `4`).
+* Retries: Returning `retry` inside a parallel group is not supported and aborts the pipeline. If you need retries, run validation after the group and request a retry of the previous (non-parallel) stage.
+* Rate limits: 429/“rate limit” errors trigger per-command exponential backoff.
+* Inline effects: Effects attached to commands in the group run after each command succeeds.
+
+</PIPELINES>
+
+<COMMENTS>
+Use `>>` or `<<` for comments at start or end of lines.
+
+```mlld
+>> start-of-line
+/show "Hello"  >> end-of-line
+/var @x = 5    << end-of-line
+```
+
+</COMMENTS>
+
+<RESERVED_VARIABLES>
+
+* `@now` – current timestamp
+* `@input` – stdin/env (must be allowed)
+* `@base` – project root
+* `@debug` – environment info
+  </RESERVED_VARIABLES>
+
+  </SYNTAX>
+
+<COMMANDS>
+<RUN_VS_RUN_SH>
+Decision tree:
+
+* Single line + pipes only (`|`) → `run { … }`
+* Needs `&&`, `||`, control flow, or multi-line → `run sh { … }`
+* JavaScript (no shell) → `js { … }` (or `/exe … = js { … }`)
+
+Parameter syntax:
+
+* `run` / commands: interpolate with `@param`
+* `run sh`: shell variables as `$param`
+
+```mlld
+# run (pipes only)
+/run {echo Hello | tr '[:lower:]' '[:upper:]'}
+
+# run sh (multi-line/conditionals)
+/run sh {
+  npm test && npm run build || echo "Build failed"
 }
 
->> Data structures
-/var @config = {
-  "name": "my-app",
-  "version": "1.0.0",
-  "debug": true
+# Executable wrappers
+/exe @safeDeploy(env) = run sh {
+  npm test && npm run deploy:$env
+}
+```
+
+Security: `run` forbids `&&`/`||` to reduce injection risk; escalate to `run sh` when necessary.
+
+Large variables: For bash/sh executables, variables >128KB are automatically handled via heredocs (when `MLLD_BASH_HEREDOC=1`). For `/run` commands exceeding limits, use `/exe` with bash/sh instead.
+</RUN_VS_RUN_SH>
+
+<EXE_EXECUTABLES>
+Define reusable commands/code/templates/sections.
+
+```mlld
+# Shell (single vs multi)
+/exe @list(dir) = run {ls -la @dir | head -5}
+/exe @script() = run sh {
+  echo "Start"; ls -la
 }
 
->> Access nested data
-/show "App: {{config.name}} v{{config.version}}"
-```
+# JavaScript
+/exe @add(a,b) = js { return a + b }
 
-## Variables (/var)
-
-The unified `/var` directive creates variables with types inferred from syntax:
-
-```mlld
->> Text variables
-/var @simple = 'Single quotes = no interpolation'
-/var @interpolated = "Hello @name!"
-/var @template = `Hello @user, welcome!`
-
->> Data structures
-/var @array = [1, 2, 3]
-/var @object = {"key": "value"}
-
->> Primitive values (mlld 2.0+)
-/var @count = 42                    << Number
-/var @price = 19.99                 << Decimal
-/var @active = true                 << Boolean
-/var @disabled = false              << Boolean
-/var @empty = null                  << Null
-
->> Type preservation - primitives keep their JavaScript types
-/var @num = 42
-/var @bool = true
-/exe @add(a, b) = js { return a + b; }
-/var @result = @add(@num, 8)        << Result is 50 (number)
-/var @concat = @add("text", 5)      << Result is "text5" (JS coercion)
-
->> Command results (no @ before run!)
-/var @date = run "date"
-/var @files = run {ls -la | head -5}
-
->> File content - angle brackets dereference (load file contents)
-/var @readme = <README.md>              << Gets file contents
-/var @section = <docs.md # Installation>  << Gets specific section
-/var @filename = "README.md"            << Gets literal string "README.md"
-
->> Code execution
-/var @result = js { return Math.random() * 100; }
-```
-
-## Templates and Interpolation
-
-### Backtick templates (PRIMARY - use this!)
-```mlld
-/var @message = `Hello @name, welcome to @place!`
-/var @link = `[@title](@url)`
-/var @result = `The answer is @calculate(42)`  << Can call executables!
-
->> Backticks support:
->> - @ variable interpolation
->> - @ executable calls
->> - Clean, simple syntax
-
->> Important: All values become strings in templates
-/var @count = 42
-/show `Count: @count`  << Shows "Count: 42" (number → string)
-```
-
-### Double-colon templates (ESCAPE for backticks)
-```mlld
->> Use ::...:: when you need backticks in your template
-/var @docs = ::The `getData()` function returns @dataType::
-/var @example = ::To use this feature, run `npm install` and then call `init(@name)`::
-
->> Double colon uses @var interpolation (same as backticks)
-```
-
-### Triple-colon templates (ESCAPE for @ symbols)  
-```mlld
->> Use :::...::: when you have many @ symbols to escape (social media)
-/var @tweet = :::Hey @alice, check out @bob's post about {{topic}}!:::
-/var @mention = :::@{{handle}} just posted: "{{message}}":::
-
->> Triple colon uses {{var}} interpolation to avoid @ conflicts
-```
-
-### @ interpolation in double quotes
-```mlld
-/var @greeting = "Hello @name!"    >> @ variables work in double quotes
-/run "echo User: @username"         >> Works in quoted commands
-/run {echo "Welcome @user.name"}    >> And in brace commands
-```
-
-### File References in Templates
-```mlld
->> Include file content in any interpolation context
-/var @readme = `<README.md>`                    >> Load entire file
-/var @author = `<package.json>.author`         >> JSON field access
-/var @email = `<data.json>.users[0].email`     >> Array access
-/var @formatted = `<data.json>|@json`          >> With transformation
-
->> Works in all interpolation contexts:
-/show `Documentation: <docs/api.md>`            >> In backticks
-/run "cat <config.txt>"                         >> In quoted strings
-/run {echo "<version.txt>"}                     >> In command braces
-/var @content = ::<changelog.md>::             >> In double-colon templates
-
->> Variable substitution in paths
-/var @dir = "docs"
-/var @file = "readme"
-/var @content = `<@dir/@file.md>`              >> Dynamic paths
-
->> Glob patterns
-/var @allDocs = `<*.md>`                        >> All markdown files
-/var @tests = `<tests/*.txt>`                   >> Pattern matching
-
->> Circular reference protection
->> If file A includes <B.txt> and B includes <A.txt>, returns empty
-```
-
-### Variable Pipes
-```mlld
->> Transform variables with pipe syntax
-/var @data = {"name": "alice", "age": 30}
-/var @dataXml = @data|@json|@xml               >> Convert to XML
-
->> Works with field access
-/var @config = {"format": "yaml"}
-/var @formatted = @config|@json                 >> Pretty print JSON
-
->> Available transforms:
->> @json, @xml, @csv, @md                    >> Format conversions
-```
-
-## Exe - Defining Reusable Commands
-
-```mlld
->> Command executable
-/exe @deploy(@env) = run "deploy.sh $env"      >> Single line with quotes
-/exe @build(@type) = sh {                      >> Multi-line requires 'sh'
-  npm run build:$type
-  npm test
-}
-/exe @checkFile(@path) = sh {                  >> 'sh' for if/then/else
-  if [ -f "$path" ]; then
-    echo "File exists"
-  else
-    echo "File not found"
-  fi
-}
-
->> Code executable (js/node without 'run' prefix)
-/exe @calculate(x) = js {return @x * 2}
-
->> Type preservation in code executables
-/exe @add(a, b) = js { return a + b; }
-/var @result = @add(42, 8)          << Result is 50 (number) 
-/var @concat = @add("text", 5)      << Result is "text5" (JS coercion)
-/exe @isActive(val) = js { return val === true; }
-/var @check = @isActive(true)       << Result is true (boolean preserved)
-
->> Template executable
+# Templates
 /exe @greet(name) = `Hello @name!`
 
->> Section executable
-/exe @getIntro(file) = <@file # Introduction>
+# Section extractor
+/exe @intro(file) = <@file # Introduction>
 ```
 
-## Conditional Logic (/when)
+Shadow environments (JS/Node):
+Expose JS helpers across `js {}` blocks in the same module:
 
 ```mlld
->> Simple condition
-/when @isProduction => @deploy()
+/exe @double(n) = js { return n*2 }
+/exe @cap(s) = js { return s[0].toUpperCase()+s.slice(1) }
+/exe js = { double, cap }  # expose
 
->> Multiple conditions with switch semantics
-/when first [
-  @env == "prod" => show "⚠️ Production Environment"
-  @env == "dev" => show "🔧 Development Environment"
-  * => show "Unknown environment"
-]
-
->> Bare form - all matching conditions execute
-/when [
-  @needsBackup => @backupData()
-  @needsCleanup => @cleanTempFiles()
-  @needsReport => @generateReport()
-]
+/var @out = js { cap("hello") + ": " + double(5) }  # "Hello: 10"
 ```
 
-## Import System
+</EXE_EXECUTABLES>
+
+<OUTPUT_DIRECTIVE>
+Write data to files or streams, with optional format.
 
 ```mlld
->> Namespace imports (NEW - prevents variable collisions)
-/import "shared.mld"              << Creates @shared namespace
-/import "./config.mld"            << Creates @config namespace
-/import "data/users.mld" as db    << Creates @db namespace
-
->> Selected imports (when you know what you need)
-/import { greeting, config } from "shared.mld"
-
->> Module imports (no quotes)
-/import { fetchData, parseJSON } from @corp/utils
-/import @corp/utils               << Creates @utils namespace
-/import @corp/utils as corpUtils  << Custom namespace
-
->> Environment variables (must be in mlld.lock.json)
-/import { API_KEY, NODE_ENV } from @input
-```
-
-## Paths
-
-```mlld
->> Simple paths (quoted strings)
-/path @docs = "./documentation"
-/path @output = "results/output.txt"
-
->> Paths with interpolation (double quotes)
-/path @userFile = "data/@username/profile.json"
-
->> Literal paths (single quotes - no interpolation)
-/path @template = 'templates/@var-template.html'  // @var is literal text
-
->> Bare resolvers (no quotes)
-/import { utils } from @corp/shared-lib
-
->> URLs with caching
-/path @api = https://api.example.com/data (5m)
-```
-
-## Output Directive
-
-```mlld
->> Output to files
-/output @content to "output.txt"
+/output @content to "out.txt"
 /output @data to "config.json"
 /output @html to "page.html" as html
-
->> Output to stdout/stderr
 /output @message to stdout
 /output @error to stderr
-
->> With format specification
 /output @config to "settings.yaml" as yaml
 ```
 
-## Shell Commands: run vs sh
+</OUTPUT_DIRECTIVE>
 
-Understanding when to use `run` vs `sh` is critical for shell commands:
-
-### Use 'run' for:
-- **Single-line commands** that only use pipes (`|`)
-- **Simple command execution** without conditionals
-- **Security**: `run` is restricted to prevent command injection
+<LOG_DIRECTIVE>
+Syntactic sugar for `/output to stdout`. Works in action contexts.
 
 ```mlld
-/run "echo Hello World"                    >> Simple command
-/run {cat file.txt | grep "pattern"}      >> Pipes are allowed
-/run "ls -la | head -10"                   >> Single line with pipe
+/log @message                        # same as /output @message to stdout
+/log `Processing: @item`
 
->> These will FAIL with 'run':
-❌ /run {cmd1 && cmd2}                     >> && not allowed
-❌ /run {cmd1 || cmd2}                     >> || not allowed
-❌ /run {if [ -f "file" ]; then ...; fi}   >> Multi-line not allowed
+# In action contexts
+/for @item in @items => log @item
+/when @debug => log "Debug info"
+/when [
+  @valid => log "Success"
+  none => log "Failed validation"
+]
 ```
 
-### Use 'sh' for:
-- **Multi-line shell scripts**
-- **Conditional execution** with `&&` or `||`
-- **Control structures** like if/then/else, loops
-- **Complex shell operations**
+</LOG_DIRECTIVE> </COMMANDS>
+
+<CONTROL_FLOW>
+<WHEN_DECISIONS>
+Forms:
+
+* Simple: `/when @cond => action`
+* Bare (evaluate all matches):
+
+  ```mlld
+  /when [
+    @score > 90 => show "Excellent!"
+    @isBonus => show "Bonus!"
+    none => show "No matches"
+  ]
+  ```
+* Switch (`first` stops at first match):
+
+  ```mlld
+  /when first [
+    @role=="admin" => show "Admin"
+    @role=="user"  => show "User"
+    * => show "Guest"
+  ]
+  ```
+
+`/exe...when` patterns (value-returning):
 
 ```mlld
-/sh {
-  echo "Starting deployment"
-  npm test && npm build && npm deploy
-}
+# Basic handler with fallback
+/exe @handler(input) = when [
+  @input.valid => @input.value
+  @ctx.try < 3 => retry "validation failed"
+  none => "default"
+]
 
-/exe @safeDelete(@file) = sh {
-  if [ -f "$file" ]; then
-    rm "$file"
-    echo "Deleted $file"
-  else
-    echo "File not found: $file"
-  fi
-}
+# Switch-style with first
+/exe @parser(type, data) = when first [
+  @type == "json" => @parseJSON(@data)
+  @type == "xml" => @parseXML(@data)
+  @type == "csv" => @parseCSV(@data)
+  * => @data
+]
 
-/exe @tryCommand(@cmd) = sh {
-  $cmd || echo "Command failed with exit code $?"
-}
+# Conditional transformer
+/exe @process(item) = when [
+  @item.priority > 5 => @urgent(@item)
+  @item.archived => null
+  * => @standard(@item)
+]
 ```
 
-### Parameter Syntax Differences:
-- In `run`: Use `@param` for mlld interpolation
-- In `sh`: Use `$param` for shell variable interpolation
+Notes:
+
+* RHS uses action words (no `/show` slash): `show`, `@func()`, `@var = "x"`
+* `*` wildcard matches anything (catch-all)
+* `none` executes only if no conditions matched (must appear after all regular conditions, incompatible with `*`)
+* One action per line (repeat condition for multiple actions)
+* Parentheses & `&&`/`||` supported in conditions
+  </WHEN_DECISIONS>
+
+<ITERATION>
+`foreach` returns a transformed array; `/for` executes an action per item or collects results.
 
 ```mlld
-/exe @greet(@name) = run "echo Hello @name"     >> @name in run
-/exe @greet(@name) = sh { echo "Hello $name" }  >> $name in sh
+# foreach (transform)
+/var @names = ["alice","bob","charlie"]
+/exe @greet(name) = ::Hi @name!::
+/var @greetings = foreach @greet(@names)
+
+# /for (execute)
+/for @n in @names => show `Name: @n`
+
+# collection form
+/var @nums = [1,2,3]
+/var @doubled = for @x in @nums => js { return @x * 2 }  # [2,4,6]
+
+# objects and keys
+/var @cfg = {"host":"localhost","port":3000}
+/for @v in @cfg => show `@v_key: @v`
+
+# nested for loops
+/for @x in ["A","B"] => for @y in [1,2] => show `@x-@y`
+# Output: A-1, A-2, B-1, B-2
+
+# triple nesting
+/for @x in @outer => for @y in @middle => for @z in @inner => show `@x/@y/@z`
 ```
 
-## Common Patterns
+Empty arrays are safe: `/for` emits nothing; `for … =>` returns `[]`. </ITERATION>
 
-### Running scripts with parameters
-```mlld
-/exe @test(suite) = run {npm test -- @suite}
-/run @test("integration")
-```
-
-### Template with many @ symbols
-```mlld
->> Use :::...::: when you have many @ symbols to escape
-/var @twitterTemplate = :::
-  Hey @{{handle}}, love your work!
-  @{{otherHandle}} you should check this out.
-  Reply to this tweet @{{originalAuthor}}
-:::
-```
-
-### Field access
-```mlld
-/var @user = { "name": "Alice", "scores": [95, 87, 92] }
-/show "Name: @user.name"
-/show "First score: @user.scores.0"
-```
-
-## Common Mistakes
-
-### ❌ Forgetting braces or quotes in commands
-```mlld
-/run echo "hello"     << WRONG - needs braces or quotes
-/run {echo "hello"}   << CORRECT - braces
-/run "echo hello"     << CORRECT - quotes for single line
-```
-
-### ❌ Missing @ when creating variables
-```mlld
-/var greeting = "Hello"  << WRONG - missing @
-/var @greeting = "Hello"  << CORRECT
-```
-
-### ❌ Using @ for directives
-```mlld
-@var @greeting = "Hello"  << WRONG - directives use /
-/var @greeting = "Hello"  << CORRECT
-```
-
-### ❌ Trying to interpolate everywhere
-```mlld
-Hello @name!  << WRONG - plain text, not interpreted
-/show "Hello @name!"  << CORRECT - in directive
-/var @msg = `Hello @name!`  << CORRECT - in template
-```
-
-## Module-First Philosophy
-
-For complex operations, create modules instead of inline scripts:
-
-### ❌ Overly complex inline mlld
-```mlld
-/var @results = foreach @processData(@items) | @validate @transform
-/when @results.length > 0 => @filtered = foreach @filter(@results)
-```
-
-### ✅ Better: Use a module
-```mlld
-/import { processItems } from @myteam/data-utils
-/var @results = @processItems(@items)
-```
-
-## Common Mistakes with New Syntax
-
-### ❌ Using @run instead of run
-```mlld
-/var @result = @run {echo "hello"}  << WRONG - no @ before run
-/var @result = run {echo "hello"}   << CORRECT
-```
-
-### ❌ Using old directive names
-```mlld
-/text @name = "Alice"     << WRONG - old syntax
-/data @config = {}        << WRONG - old syntax
-/add @content            << WRONG - old syntax
-/exec @cmd = run {ls}    << WRONG - old syntax
-
-/var @name = "Alice"      << CORRECT - unified /var
-/var @config = {}         << CORRECT - unified /var
-/show @content           << CORRECT - new name
-/exe @cmd = run {ls}     << CORRECT - shortened name
-```
-
-### ❌ Confusing file references with HTML
-```mlld
->> File references require . * or @ to be recognized
-<div>content</div>        << Plain text (no . * or @)
-<file.txt>                << File reference (has .)
-<*.md>                    << File reference (has *)
-<@dir/file>               << File reference (has @)
-
->> In interpolation contexts only! Outside templates, < is literal
-This <file.txt> is literal text    << Not in directive line
-/show `Content: <file.txt>`         << File reference in template
-```
-
-## Creating Helper Functions
-
-When you need utility functions, create them with /exe instead of trying to work around mlld's constraints:
+Parallel /for (optional):
 
 ```mlld
->> String manipulation helpers (using js, not run js)
-/exe @join(array, separator) = js {(@array.join(@separator))}
-/exe @capitalize(text) = js {(@text.charAt(0).toUpperCase() + @text.slice(1))}
-/exe @fileList(paths) = js {(@paths.map(p => `${p}/**/*.md`).join(' '))}
+# Default cap from env (MLLD_PARALLEL_LIMIT, default 4)
+/for parallel @x in @items => show @x
 
->> Using the helpers
-/var @names = ["alice", "bob", "charlie"]
-/var @formatted = @join(@names, ", ")
-/show `Team members: @formatted`
+# Cap override and pacing between starts (units: s, m, h, d, w)
+/for (2, 1s) parallel @x in @items => show @x
 
->> For bash operations
-/exe @countFiles(dir) = run {find @dir -type f | wc -l}
-/var @fileCount = @countFiles("./src")
+# Collection form preserves input order
+/var @out = for 3 parallel @x in ["a","b","c"] => @upper(@x)
 ```
 
-### Shadow Environments: Making JavaScript Functions Available to Each Other
+Notes:
+- Directive form streams results as iterations finish (order not guaranteed); expression form returns results in input order.
+- Concurrency capped by `MLLD_PARALLEL_LIMIT` unless overridden per loop.
+- Pacing: optional minimum delay between iteration starts via `/for (n, interval) parallel ...` (units: ms, s, m, h).
+- Rate limits: per‑iteration 429/"rate limit" errors use exponential backoff.
 
-Shadow environments let JavaScript functions and variables defined in `/exe` blocks become available inside other `js {}` blocks. This solves the common need for utility functions to work together.
+<NO_EARLY_EXIT>
+mlld has no `return/exit`. Model outcomes with `/when` and flags.
 
-**Key Concepts:**
-- Each language (`js` and `node`) has its own separate shadow environment
-- Each module has its own isolated shadow environment (no cross-module pollution)
-- You explicitly declare which functions/variables to expose using `/exe js = { ... }`
-
-**Basic Example:**
 ```mlld
->> Step 1: Define your functions
-/exe @double(n) = js { return n * 2; }
-/exe @triple(n) = js { return n * 3; }
-/exe @capitalize(s) = js { return s.charAt(0).toUpperCase() + s.slice(1); }
-
->> Step 2: Add them to the shadow environment
-/exe js = { double, triple, capitalize }
-
->> Step 3: Now they're available in all js blocks in this module!
-/var @result = js {
-  // All three functions are available here
-  const doubled = double(5);        // 10
-  const tripled = triple(doubled);  // 30
-  const text = capitalize("hello"); // "Hello"
-  return `${text}: ${tripled}`;    // "Hello: 30"
-}
+/var @check = @validate(@input)
+/when [
+  @check.valid => @process(@input)
+  !@check.valid => show `Error: @check.message`
+]
 ```
 
-**Pattern - Functions Calling Each Other:**
+</NO_EARLY_EXIT>
+</CONTROL_FLOW>
+
+<MODULES>
+Module-first philosophy: keep `.mld` files readable; move complexity into focused modules that expose capabilities (like microservices). Avoid "kitchen sink" modules or side effects on import.
+
+* Use `/import` to compose capabilities
+* Create helpers via `/exe`, expose with shadow envs (per language, per module)
+* JS and Node have separate shadow environments; no cross-pollution
+* Prefer clear namespaces: `/import @corp/utils as utils`
+
 ```mlld
->> Define interdependent functions
-/exe @formatName(first, last) = js { return `${first} ${last}`; }
-/exe @greetUser(first, last) = js { 
-  // This will only work after we add formatName to shadow env
-  return `Hello, ${formatName(first, last)}!`; 
-}
+---
+module: @myorg/github-utils
+description: GitHub operations
+---
 
->> Add both to shadow environment
-/exe js = { formatName, greetUser }
-
->> Now greetUser can call formatName
-/var @greeting = js { greetUser("Jane", "Doe") }  // "Hello, Jane Doe!"
+/exe @getPR(number, repo) = run {gh pr view ...}
+/exe @listIssues(repo) = run {gh issue list ...}
+/exe @createRelease(tag, notes) = run {gh release create ...}
+/exe js = {}  # expose JS helpers if any
 ```
 
-**Module Isolation Example:**
+</MODULES>
+
+<PATTERNS>
+Tool orchestration:
+
 ```mlld
->> In module A
-/exe @secretHelper() = js { return "Module A secret"; }
-/exe js = { secretHelper }
-
->> In module B  
-/exe @secretHelper() = js { return "Module B secret"; }
-/exe js = { secretHelper }
-
->> Each module's js blocks see their own secretHelper - no conflicts!
+/var @areas = [
+  {"name":"auth","files":["auth/*.ts"],"tests":["test/auth/*"]},
+  {"name":"api","files":["api/*.ts"],"tests":["test/api/*"]}
+]
+/exe @runQA(area) = run {echo "Testing @area.name" | cat}
+/var @results = foreach @runQA(@areas)
 ```
 
-**Node.js Has Its Own Environment:**
+Data pipeline:
+
 ```mlld
->> JavaScript environment
-/exe @parseData(json) = js { return JSON.parse(json); }
-/exe js = { parseData }
-
->> Node.js environment (completely separate)
-/exe @readConfig() = node { 
-  const fs = require('fs');
-  return fs.readFileSync('config.json', 'utf8');
-}
-/exe node = { readConfig }
-
->> js blocks can't see node functions and vice versa
+/import { fetchData, validate, transform } from @data/pipeline
+/var @raw = @fetchData("https://api.example.com/users")
+/var @valid = @validate(@raw, { schema: "user" })
+/var @report = @transform(@valid, { format: "report" })
+/show `Processed @report.count users`
 ```
 
-Remember: If you're wishing mlld had a feature, you can probably create it as a helper function and add it to the shadow environment!
+Conditional workflows:
 
-## Additional Essential Features
-
-### Comments
 ```mlld
->> Comments can use >> or << at the start of a line
-<< You can also start comments with <<
-/show "Hello!"  >> End-of-line comments work with >>
-/var @x = 5     << End-of-line comments also work with <<
->> Mix and match as you prefer - both >> and << work in both positions
-<< No other comment syntax is supported (no # or //)
+/import { getPR, commentOnPR } from @company/github
+/var @pr = @getPR(@MLLD_PR_NUMBER)
+/when first [
+  @pr.mergeable => @status = "ready"
+  * => @status = "blocked"
+]
+/when [
+  @status=="ready"   => @commentOnPR(@MLLD_PR_NUMBER,"Ready to merge")
+  @status=="blocked" => show "Needs attention"
+]
 ```
 
-### Reserved Variables
+Step-by-step & guarded execution:
+
 ```mlld
-/show `Current time: @now`         # Current timestamp
-/show `Input data: @input.config`  # Access stdin/env vars  
-/show `Project root: @base`        # Project directory
-/show @debug                       # Show extensive debug info
+/var @processed = @data | @validate | @normalize | @analyze
+/when [
+  @processed.ok => @emitReport(@processed)
+  !@processed.ok => show "❌ Validation failed"
+]
 ```
 
-### Environment Variables
-Environment variables require explicit permission in `mlld.lock.json`:
+</PATTERNS>
+
+<CONFIGURATION>
+<ENVIRONMENT_VARIABLES>
+Allow environment variables in `mlld.lock.json` (prefix `MLLD_`), then import via `@input`.
+
 ```json
 {
   "security": {
-    "allowedEnv": ["NODE_ENV", "API_KEY", "GITHUB_TOKEN"]
+    "allowedEnv": ["MLLD_NODE_ENV","MLLD_API_KEY","MLLD_GITHUB_TOKEN"]
   }
 }
 ```
 
-Then access them via @input:
 ```mlld
-/import { NODE_ENV, API_KEY } from @input
-/show `Running in @NODE_ENV mode with API access`
+/import { MLLD_NODE_ENV, MLLD_API_KEY } from @input
+/show `Running in @MLLD_NODE_ENV`
 ```
 
-### Frontmatter Metadata
-```mlld
+</ENVIRONMENT_VARIABLES>
+
+<FRONTMATTER>
+Use frontmatter to describe the pipeline:
+
+```yaml
 ---
 description: Pipeline description
 version: 1.0.0
 author: Your Name
 ---
-
->> Your mlld Document
 ```
 
-### URL Support
-```mlld
->> Add content from URLs directly:
-/show <https://raw.githubusercontent.com/example/repo/main/README.md>
+</FRONTMATTER>
 
->> Assign URL content to variables:
-/path @docs = "https://example.com/api-docs.md"
-/var @readme = <https://example.com/README.md>
-```
-
-## Pipelines and Transformers
-
-### Pipeline Operator |
-
-mlld supports Unix-style pipelines for chaining commands:
+<PATHS_AND_URLS>
+Paths may be literal (single quotes), interpolated (double), or bare resolver names; URLs are supported as sources.
 
 ```mlld
->> Basic pipeline
-/var @result = run {echo "hello world"} | @uppercase
-/show @result  # HELLO WORLD
+/var @dir = "./docs"
+/var @userFile = "data/@username/profile.json"
+/var @template = 'templates/@var.html'  # literal '@'
 
->> Multi-step pipeline  
-/var @data = run {cat data.json} | @json | @uppercase | @csv
+/show <https://raw.githubusercontent.com/org/repo/main/README.md>
+/var @remote = <https://example.com/README.md>
 ```
 
-### How Pipelines Work
-- Output flows left to right (stdin)
-- Each step gets an @input variable with the piped data
-- Functions without arguments get smart parameter handling
-- Each step runs in a child environment
-- Use `with { format: "json|csv|xml|text" }` to specify parsing
-- Functions can access @pipeline context variable during execution
+</PATHS_AND_URLS>
 
-### Smart Parameter Handling
+<RESOLVERS>
+Configure prefixes that map to resolvers (LOCAL/HTTP/GITHUB/REGISTRY). Add via CLI or `mlld.lock.json`.
 
-Single parameter functions automatically receive @input:
-```mlld
-/exe @double(n) = js {(@n * 2)}
-/var @result = run {echo "5"} | @double  # n = "5"
-```
-
-Multi-parameter functions with JSON get automatic destructuring:
-```mlld
-/exe @greet(name, age) = ::{{name}} is {{age}} years old::
-/var @result = run {echo '{"name":"Alice","age":30}'} | @greet
->> name = "Alice", age = 30
-```
-
-### Built-in Transformers
-
-mlld includes transformers for common formats (both UPPERCASE and lowercase):
-
-- **@XML / @xml** - Convert to SCREAMING_SNAKE_CASE XML (using llmxml)
-- **@JSON / @json** - Format/validate JSON with proper indentation  
-- **@CSV / @csv** - Convert JSON arrays to CSV format
-- **@MD / @md** - Format markdown using prettier
-
-```mlld
->> API to CSV pipeline
-/var @users = run {curl api.com/users} | @json | @csv
-
->> Chain with custom functions
-/exe @addTotal(data) = ::Total: {{data.length}} items\n{{input}}::
-/var @report = run {cat data.json} | @json | @addTotal | @md
-```
-
-### Pipeline Whitespace and Stacked Syntax
-
-mlld supports both condensed and whitespace-separated pipelines, plus a stacked multi-line form.
-
-- Condensed (no spaces): attach pipes adjacent to the value
-  ```mlld
-  /var @greet = `Hi @name|@upper!`
-  /var @data = `<data.json>|@json|@xml`
-  ```
-
-- Spaced (single line, outside templates/quotes):
-  ```mlld
-  /var @out = @value | @upper | @trim
-  /var @data = <data.json> | @json | @md
-  ```
-
-- Stacked (multi-line, outside templates/quotes):
-  ```mlld
-  /var @myvar = @value
-    | @function
-    | @transform
-    | @format
-  ```
-
-Context rules:
-- Inside templates/quotes/interpolation (backticks, double-colon, triple-colon, and double quotes): condensed-only pipes are supported next to the variable or file reference (e.g., `@var|@json`, `<file>|@json`).
-- Outside templates/quotes (e.g., `/var` RHS): spaced and stacked pipelines are allowed for variables and `<file>` values.
-- All forms are equivalent to `with { pipeline: [...] }` in behavior.
-
-### Pipeline Format Feature
-
-Specify how data should be parsed in pipelines using `format`:
-
-```mlld
-/exe @processJSON(input) = js {(
-  // input.text - raw text
-  // input.type - format type
-  // input.data - parsed JSON (lazy)
-  // input.csv - parsed CSV array (lazy)
-  // input.xml - XML string (lazy)
-  return @input.data.users.map(u => u.name);
-)}
-
-/var @names = @getData() with { format: "json", pipeline: [@processJSON] }
-```
-
-Formats: `json` (default), `csv`, `xml`, `text`
-
-### Pipeline Context and Retry
-
-Functions in pipelines can access @pipeline context and use retry mechanism:
-
-```mlld
->> @pipeline context variable provides execution state
-@pipeline[0]      # Input to the pipeline
-@pipeline[1]      # Output of first stage
-@pipeline[-1]     # Output of previous stage
-@pipeline.try     # Current attempt number (1, 2, 3...)
-@pipeline.tries   # Array of all attempt outputs
-@pipeline.stage   # Current stage number
-@pipeline.length  # Number of completed stages
-
->> Functions can return 'retry' to re-execute current stage
-/exe @validator(input) = when [
-  @isValid(@input) => @input
-  @pipeline.try < 3 => retry      # Re-execute if less than 3 attempts
-  * => "fallback"
-]
-
->> Best-of-N selection pattern
-/exe @selectBest(response) = when [
-  @response.score > 8 => @response
-  @pipeline.try < 3 => retry
-  * => @selectHighestScore(@pipeline.tries)  # Select from all attempts
-]
-
-/var @result = @prompt | @generate | @selectBest
-
->> Variation generation pattern
-/exe @variations(input) = when [
-  @pipeline.try < 5 => retry
-  * => @pipeline.tries      # Return all 5 variations
-]
-
-/var @results = @prompt | @model | @variations
-```
-
-**Important:** `retry` only works in pipeline context, max 10 retries per stage
-
-### Syntactic Sugar: @p Alias
-
-In pipeline contexts, `@p` is a shorter alias for `@pipeline`:
-
-```mlld
->> Pass pipeline context to functions explicitly
-/exe @validator(input, ctx) = when [
-  @ctx.try < 3 => retry
-  * => @input
-]
-/var @result = @data | @validator(@p)  >> @p = @pipeline
-
->> Access specific fields concisely
-/exe @checker(input, attempt) = js {
-  return attempt < 3 ? "retry" : input;
-}
-/var @result = @data | @checker(@p.try)  >> Just the try count
-
->> Pass entire context to JavaScript
-/exe @analyzer(input, pipeline) = js {
-  return `Stage ${pipeline.stage}: ${input}`;
-}
-/var @result = @data | @analyzer(@p)  >> Entire context object
-```
-
-## Philosophy: Simplicity in Files, Complexity in Modules
-
-mlld's design philosophy centers on keeping `.mld` files simple and readable while abstracting complexity into reusable modules. Instead of adding language features, we encourage using modules:
-
-```mlld
->> Don't try to implement complex logic in mlld
->> Instead, import capabilities from modules:
-
-/import { parallel, retry, cache, pipeline } from @mlld/core
-/import { validateSchema, transform } from @myorg/data-utils
-
->> Simple, readable mlld:
-/var @results = @parallel(@tasks, { concurrency: 5 })
-/var @validated = @validateSchema(@results, @schema)
-```
-
-## Common Pitfalls to Avoid
-
-### 1. Treating mlld as a Template Language
-```mlld
-❌ This is {{name}}'s document     # Won't work - no / directive
-✅ /show ::This is {{name}}'s document::
-```
-
-### 2. Forgetting Command Braces
-```mlld
-❌ /run npm install
-✅ /run {npm install}
-❌ /run echo "hello"           # Missing braces
-✅ /run {echo "hello"}         # Shell command
-❌ js console.log("hello")     # Missing braces  
-✅ js {console.log("hello")}   # JavaScript code
-```
-
-### 3. Using @ When Creating Variables
-```mlld
-❌ /var greeting = "value"
-✅ /var @greeting = "value"
-```
-
-### 4. Mixing Variable Syntaxes
-```mlld
-❌ /show :::Hello @name:::         # Wrong syntax in triple-colon template
-❌ /run {echo "{{message}}"}       # Wrong syntax in command
-✅ /show ::Hello @name::           # Correct double-colon syntax
-✅ /show :::Hello {{name}}:::      # Correct triple-colon syntax
-✅ /run {echo "@message"}          # Correct command syntax
-
->> String literal vs command context example:
-/var @name = "Alice"
-/var @literal = "Hello @name"     # Result: "Hello @name" (literal)
-/run {echo "Hello @name"}         # Result: "Hello Alice" (interpolated)
-```
-
-### 5. Trying to Nest Function Calls
-```mlld
-❌ WRONG: Trying to call mlld functions inside commands
-/exe @helper(x) = run {echo "@x"}
-/run {
-  RESULT=$(@helper("test"))  # This doesn't work!
-  echo $RESULT
-}
-
-✅ RIGHT: Call functions at directive level
-/var @result = @helper("test")
-/run {echo "@result"}
-
-✅ BETTER: Use foreach for multiple operations
-/var @results = foreach @helper(@items)
-```
-
-### 6. String Concatenation Instead of Templates
-```mlld
-❌ WRONG: Trying to concatenate procedurally
->> Attempting to build strings piece by piece
-
-✅ RIGHT: Use templates
-/exe @greeting(name, time) = ::Good {{time}}, {{name}}!::
-/show @greeting("Alice", "morning")
-```
-
-### 7. Complex Logic in mlld
-```mlld
-❌ WRONG: Implementing algorithms in mlld
->> Don't try to write sorting algorithms or complex data manipulation
-
-✅ RIGHT: Use helper functions or modules
-/exe @sortData(data) = js {(@data.sort((a, b) => a.name.localeCompare(b.name)))}
-/var @sorted = @sortData(@users)
-```
-
-### 8. Import Bracket Confusion
-```mlld
-❌ WRONG: Forgetting brackets for path imports
-/import { readme } from @base/README.md      # Error: "User 'base' not found in registry"
-/import { config } from @local/config.mld    # Error: "User 'local' not found"
-
-✅ RIGHT: Use angle brackets for resolver paths
-/import { readme } from <@base/README.md>        # Path import needs angle brackets
-/import { config } from <@local/config.mld>      # Resolver path needs angle brackets
-/import { utils } from @company/utils            # Module import - NO angle brackets
-```
-
-### 9. JavaScript Confusion
-While you CAN write JavaScript in mlld, it's best kept simple:
-```mlld
->> Okay for simple cases:
-js {console.log("Debug: " + @count)}
-
->> For complex logic - create a helper:
-/exe @processData(data) = js {(
-  // Your complex logic here
-  return @data.map(d => ({...d, processed: true}))
-)}
-
->> Or better yet - create a module:
-/import { processData } from @myorg/utils
-/var @result = @processData(@rawData)
-```
-
-### 10. No Early Exit
-mlld doesn't have `return` or `exit` - design your flow instead:
-
-```mlld
->> ❌ WRONG: Trying to exit early
-/when @error => run {exit 1}  # This won't work!
-
->> ✅ RIGHT: Use conditional flow
-/when [
-  @isValid => @continue = true
-  !@isValid => show `❌ Validation failed`
-]
-
-/when @continue => @runMainProcess()
-
->> ✅ BETTER: Let the workflow complete naturally
-/var @validation = @validate(@input)
-/when [
-  @validation.valid => @processData(@input)
-  !@validation.valid => show `Error: @validation.message`
-]
->> Workflow ends naturally - no forced exit needed
-```
-
-## Key Concepts
-
-1. **mlld is NOT a template language** - It's a scripting language that only processes lines starting with directives
-2. **Everything is explicit** - No magic, no hidden behavior
-3. **Markdown-first** - The document should be readable without executing mlld
-4. **Module-first for complexity** - Use modules for complex logic
-5. **Clear visual distinction** - `/` for commands (directives), `@` for data (variables)
-6. **Comments use >>** - Double angle brackets, visually distinct from directives
-
-## Orchestration Patterns
-
-mlld shines when orchestrating external tools and data. Here are patterns that showcase its strengths:
-
-### Pattern 1: Tool Orchestration
-```mlld
->> Orchestrating multiple Claude sessions for QA
-/var @testAreas = [
-  { "name": "auth", "files": ["auth/*.ts"], "tests": ["test/auth/*"] },
-  { "name": "api", "files": ["api/*.ts"], "tests": ["test/api/*"] }
-]
-
-/exe @runQA(area) = run {(
-  echo "Testing @area.name module"
-  claude -p "Test the @area.name functionality" \
-    --allowedTools "Bash,Read,Write"
-)}
-
-/var @results = foreach @runQA(@testAreas)
-```
-
-### Pattern 2: Data Pipeline
-```mlld
->> Processing data through multiple stages
-/import { fetchData, validate, transform } from @data/pipeline
-
-/var @raw = @fetchData("https://api.example.com/users")
-/var @valid = @validate(@raw, { schema: "user" })
-/var @transformed = @transform(@valid, { format: "report" })
-
-/show `Processed @transformed.count records successfully`
-```
-
-### Pattern 3: Conditional Workflows
-```mlld
->> Environment variables via @input (requires mlld.lock.json allowedEnv)
-/import { NODE_ENV, API_KEY } from @input
-
-/exe @loadConfig(env) = run {cat "./config/@env.json"}
-/var @config = @loadConfig(@NODE_ENV)
-
-/when @config.debug => show `Debug mode enabled`
-```
-
-## Workflow Patterns
-
-### Pattern: Step-by-Step Processing
-```mlld
->> Each step produces data for the next
-/var @raw = @fetchData(@source)
-/var @validated = @validateData(@raw)
-/var @processed = @processData(@validated)
-/var @report = @generateReport(@processed)
-/show @report
-```
-
-### Pattern: Guarded Execution
-```mlld
->> Only proceed if previous steps succeed
-/var @envCheck = @validateEnvironment(["API_KEY", "DB_URL"])
-
-/when [
-  @envCheck.valid => @canProceed = true
-  !@envCheck.valid => show `❌ @envCheck.summary`
-]
-
-/when @canProceed => @results = @runMainProcess()
-```
-
-### Pattern: Module-First Design
-```mlld
->> Don't implement logic - import it
-/import { validateEmail, sanitizeInput } from @company/validators
-/import { sendNotification } from @company/notifications
-
->> Your workflow just orchestrates
-/var @cleanEmail = @sanitizeInput(@userEmail)
-/when @validateEmail(@cleanEmail) => @sendNotification(@cleanEmail, @message)
-```
-
-## The Module Philosophy
-
-mlld modules aren't libraries - they're capability providers. Design them like microservices:
-
-### Good Module Design
-```mlld
----
-module: @myorg/github-utils
-description: GitHub API operations
----
-
->> Single responsibility: GitHub operations
-/exe @getPR(number, repo) = run {gh pr view...}
-/exe @listIssues(repo) = run {gh issue list...}
-/exe @createRelease(tag, notes) = run {gh release create...}
-
-/var @module = {
-  "getPR": @getPR,
-  "listIssues": @listIssues,
-  "createRelease": @createRelease
-}
-```
-
-### Module Anti-Patterns
-```mlld
->> ❌ Kitchen sink module with unrelated functions
->> ❌ Modules that try to be frameworks
->> ❌ Modules with side effects on import
->> ✅ Focused modules that do one thing well
-```
-
-## Reading mlld Code
-
-When reading mlld, look for these patterns:
-
-1. **Section Headers** = Major workflow phases
-   ```
-   ## 📊 Data Collection
-   ## 🔍 Validation  
-   ## 📤 Output Generation
-   ```
-
-2. **/when chains** = Decision trees
-   - Read them like a flowchart
-   - Each branch is a possible path
-
-3. **/var flow** = Follow the data
-   - Each /var assignment transforms or enriches
-   - Variable names tell the story
-
-4. **Module imports** = Available capabilities
-   - Like looking at package.json
-   - Tells you what the workflow can do
-
-Example workflow reading:
-```mlld
->> Looking at imports tells you: "This workflow works with GitHub and sends emails"
-/import { getPR, commentOnPR } from @company/github
-/import { sendAlert } from @company/notifications
-
->> Section headers show the flow: Check → Validate → Notify
-## 🔍 Check PR Status
-/var @pr = @getPR(@PR_NUMBER)
-
-## ✅ Validate Changes  
-
-/when [
-  @pr.mergeable => @status = "ready"
-  !@pr.mergeable => @status = "blocked"
-]
-
-## 📧 Send Notifications
-/when [
-  @status == "ready"   => @commentOnPR(@PR_NUMBER, "Ready to merge!")
-  @status == "blocked" => @sendAlert("PR @PR_NUMBER needs attention")
-]
-```
-
-## Configuring Prefixes and Resolvers
-
-mlld 1.4+ introduces a resolver system with customizable prefixes that "open doors" to different data sources.
-
-### Key Concepts
-- **Prefix**: An @ symbol that opens access to data (e.g., `@lib/`, `@company/`)
-- **Resolver**: The data provider that handles requests for a prefix (e.g., LOCAL, GITHUB, REGISTRY)
-- **Built-in Resolvers**: Special resolvers like @now, @debug that don't need prefixes
-- **Registry**: The REGISTRY resolver that ONLY provides validated modules from registries
-
-### Quick Setup with CLI Commands
-
-The easiest way to configure resolvers is using mlld's setup commands:
+CLI quick setup:
 
 ```bash
->> Complete interactive setup wizard
 mlld setup
-
->> Set up GitHub private modules only
 mlld setup --github
-
->> Set up path aliases only  
-mlld setup --local
-
->> Create a specific path alias
 mlld alias --name shared --path ../shared-modules
-
->> Create a global alias (available to all projects)
 mlld alias --name desktop --path ~/Desktop --global
 ```
 
-### Manual Prefix Configuration
-
-You can configure custom prefixes manually in your `mlld.lock.json`:
+Manual config:
 
 ```json
-// mlld.lock.json
 {
   "version": "1.0",
   "config": {
     "resolvers": {
-      "prefixes": [          // Maps prefixes to resolvers
-        {
-          "prefix": "@lib/",      // The door to open
-          "resolver": "LOCAL",     // The provider behind the door
-          "config": {
-            "basePath": "./src/lib"
-          }
-        },
-        {
-          "prefix": "@shared/",
-          "resolver": "LOCAL",    // Same resolver, different prefix
-          "config": {
-            "basePath": "../shared-modules"
-          }
-        }
+      "prefixes": [
+        {"prefix":"@lib/","resolver":"LOCAL","config":{"basePath":"./src/lib"}},
+        {"prefix":"@shared/","resolver":"LOCAL","config":{"basePath":"../shared-modules"}}
       ]
     }
   },
-  "modules": {},
-  "cache": {}
+  "modules": {}
 }
 ```
 
-Now you can import using these prefixes:
-```mlld
-/import { utils } from @lib/string-utils
-/import { validate } from @shared/validators
-```
-
-### Private GitHub Module Configuration
-
-Set up private modules using GitHub repositories. First authenticate:
-
-```bash
->> Authenticate with GitHub (uses OAuth device flow)
-mlld auth login
-
->> Check authentication status
-mlld auth status
-```
-
-Then configure your private repository:
+GitHub (private):
 
 ```json
-// mlld.lock.json
 {
   "version": "1.0",
   "config": {
     "resolvers": {
       "prefixes": [
         {
-          "prefix": "@myorg/",    // Your organization's prefix
-          "resolver": "GITHUB",   // Uses GitHub resolver for this prefix
-          "config": {
-            "repository": "myorg/private-mlld-modules",
-            "branch": "main",
-            "basePath": "modules"
-          }
+          "prefix":"@myorg/",
+          "resolver":"GITHUB",
+          "config":{"repository":"myorg/private-mlld-modules","branch":"main","basePath":"modules"}
         }
       ]
     }
-  },
-  "modules": {},
-  "cache": {}
+  }
 }
 ```
 
-Usage:
-```mlld
->> This resolves to: https://github.com/myorg/private-mlld-modules/blob/main/modules/auth/login.mld
-/import { authenticate } from @myorg/auth/login
+</RESOLVERS>
 
->> Import from specific paths
-/import { helper } from @myorg/utils/strings
-```
-
-### Resolver Types
-
-**Configurable with prefixes**:
-- **LOCAL**: File system paths (used for "path aliases")
-- **HTTP**: Remote URLs (with caching support)
-- **GITHUB**: GitHub repositories (public or private)
-- **REGISTRY**: Special - ONLY provides validated modules from registries
-
-**Built-in resolvers (no prefix needed)**:
-- **now**: Dynamic timestamps (`@now`, not `@now/`)
-- **debug**: Environment info (`@debug`, not `@debug/`)
-- **input**: Stdin/env data (`@input`, not `@input/`)
-- **base**: Project root (`@base`, not `@base/`)
-
-### Configuration Files
-
-- **Project config**: `mlld.lock.json` in project root
-- **Global config**: `~/.config/mlld/mlld.lock.json` (for global aliases and settings)
-- **Old location**: `~/.config/mlld.json` (deprecated)
-
-### Publishing Private Modules
-
-When working with private repositories:
+<PUBLISHING_PRIVATE_MODULES>
+Authenticate and publish to your private repo.
 
 ```bash
->> Publish to private repository (interactive prompt)
-mlld publish my-module.mld.md
-
->> Skip prompt, publish directly to private repo
-mlld publish my-module.mld.md --private
-
->> Publish to custom directory in repo
-mlld publish my-module.mld.md --private --path lib/modules
-
->> Also create registry PR for future public release
-mlld publish my-module.mld.md --private --pr
+mlld auth login
+mlld auth status
+mlld publish my-module.mld.md --private --path lib/modules --pr
 ```
 
-Private modules are stored in your repository and accessed via file paths or GitHub resolver configuration.
+</PUBLISHING_PRIVATE_MODULES> </CONFIGURATION>
 
-## Best Practices
-
-1. **Keep .mld files readable**: They should make sense as Markdown documents
-2. **Use modules for complexity**: Don't try to implement algorithms in mlld
-3. **Explicit over implicit**: Always be clear about what produces output
-4. **Test incrementally**: Use `/show` to verify variable values during development
-5. **Think orchestration**: mlld excels at coordinating tools and data flows
-6. **Create helpers liberally**: If you need it twice, make it a helper function
-7. **Embrace constraints**: Working with mlld's design leads to cleaner solutions
-8. **Configure resolvers for teams**: Use custom resolvers for shared private modules
-
-## Example: Well-Structured mlld File
+<COMMON_MISTAKES>
+<MISTAKE_MISSING_AT>
 
 ```mlld
----
-description: Data processing pipeline for user analytics
-version: 1.0.0
----
-
->> User Analytics Pipeline
-
-This document processes user data and generates insights.
-
-/import { fetchData, validateUsers } from @analytics/core
-/import { generateReport } from @company/reporting
-
-## Configuration
-
-/var @config = {
-  "apiEndpoint": "https://api.example.com",
-  "batchSize": 100,
-  "outputFormat": "markdown"
-}
-
-## Data Processing
-
-/exe @status(phase) = `✓ Completed: @phase`
-
-### 1. Fetch User Data
-/var @users = @fetchData(@config.apiEndpoint)
-/show @status("Data fetching")
-
-### 2. Validate and Clean
-/var @validUsers = @validateUsers(@users)
-/show @status("Validation")
-
-### 3. Generate Report
-/var @report = @generateReport(@validUsers, @config)
-/show @report
-
-### 4. You can use /output to target specific locations and to handle conditional output:
-/output @mydefinedcommand(@var, @othervar) to "@path/to/file.md"
-/when @contains(@variable, "hi") => output "Hello" to "@path/to/file.md"
-Read more about output in docs/output.md
-
-## Summary
-
-/show `Processed @validUsers.length valid users out of @users.length total.`
+❌ /var greeting = "Hello"
+✅ /var @greeting = "Hello"
 ```
 
-## Execution Context Reference
+</MISTAKE_MISSING_AT>
 
-Understanding where different variable syntaxes work is crucial:
+<MISTAKE_USING_AT>
 
-| Context | Syntax | Example | Notes |
-|---------|--------|---------|-------|
-| Double-colon `::...::` | `@variable` | `::Hello @name!::` | When you need backticks |
-| Triple-colon `:::...:::` | `{{variable}}` | `:::Hello {{name}}!:::` | When you have many @ symbols |
-| Backtick templates | `@variable` | `` `Hello @name!` `` | Primary template syntax |
-| Commands `{...}` | `@variable` | `{echo "@message"}` | @ prefix for interpolation |
-| JavaScript | Plain names | `{(@array.join(@sep))}` | Parameters are JS variables |
-| String literals | No interpolation | `"Hello @name"` | @name is literal text |
-| Directive level | `@variable` | `/show @greeting` | Direct variable reference |
+```mlld
+❌ /var @result = @run {echo "hello"}
+✅ /var @result = run {echo "hello"}
+```
 
-### Key Rules:
-- **In backtick templates**: Use `@variable` or `@object.field` (primary syntax)
-- **In double-colon templates**: Use `@variable` or `@object.field` (for text with backticks)
-- **In triple-colon templates**: Use `{{variable}}` or `{{object.field}}` (for text with @ symbols)
-- **In commands**: Always use `@variable` or `@object.field`
-- **In JavaScript**: Parameters become plain JavaScript variables
-- **String assignments**: Variables are NOT interpolated (they're literals)
+</MISTAKE_USING_AT>
 
-## Remember
+<MISTAKE_INTERPOLATION>
 
-mlld empowers everyone to create versionable, collaborative "pipelines of thought." It achieves this by being an orchestration language that looks and reads like a document.
+```mlld
+❌ Hello @name!             # plain Markdown, no interp
+✅ /show "Hello @name!"
+```
 
-When writing mlld:
-- Think in terms of discrete processing steps, not text interpolation
-- Embrace the constraints - they lead to cleaner solutions
-- Use helpers and modules for complexity
-- Keep your .mld files simple and readable
+</MISTAKE_INTERPOLATION>
 
-The value comes from composition: simple directives in your files, complex capabilities in your modules.
+<MISTAKE_NOT_TEMPLATE_LANG>
 
-## Summary of New Syntax
+```mlld
+❌ This is {{name}}'s doc
+✅ /show ::This is @name's doc::
+```
 
-| Old Syntax | New Syntax | Purpose |
-|------------|------------|---------|
-| `/text @x = "..."` | `/var @x = "..."` | Create any variable |
-| `/data @x = {...}` | `/var @x = {...}` | Type inferred from value |
-| `/add @content` | `/show @content` | Display content |
-| `/exec @cmd(p) = ...` | `/exe @cmd(p) = ...` | Define executable |
-| `@run {cmd}` | `run {cmd}` | Run command (no @ in RHS) |
+</MISTAKE_NOT_TEMPLATE_LANG>
+
+<MISTAKE_FILE_VS_STRING>
+
+```mlld
+/var @content = <README.md>     # loads contents
+/var @path = "README.md"        # literal string
+```
+
+</MISTAKE_FILE_VS_STRING>
+
+<MISTAKE_XML_VS_FILE_TAGS>
+`<thinking>` is plain text; `<file.txt>` (has `.`) is a file ref.
+</MISTAKE_XML_VS_FILE_TAGS>
+
+<MISTAKE_NESTED_FUNC_CALLS>
+
+```mlld
+❌ # inside shell trying to call @func
+/run {
+  RESULT=$(@helper("x"))   # won't work
+  echo $RESULT
+}
+
+✅ /var @r = @helper("x")
+/run {echo "@r"}
+```
+
+</MISTAKE_NESTED_FUNC_CALLS>
+
+<MISTAKE_STRING_CONCAT>
+Prefer templates over manual concatenation.
+</MISTAKE_STRING_CONCAT>
+
+<MISTAKE_COMPLEX_LOGIC>
+Move heavy logic to `/exe` helpers or modules; keep `.mld` orchestration simple.
+</MISTAKE_COMPLEX_LOGIC>
+
+<MISTAKE_IMPORT_BRACKETS>
+Know when to use angle brackets for resolver paths; modules don’t use them.
+</MISTAKE_IMPORT_BRACKETS>
+
+<MISTAKE_NO_EARLY_EXIT>
+Model alternative outcomes with `/when` and flags rather than aborting.
+</MISTAKE_NO_EARLY_EXIT>
+</COMMON_MISTAKES>
+
+<REFERENCE>
+Execution Context – where interpolation applies:
+
+| Context                | Syntax    | Example                  | Notes              |
+| ---------------------- | --------- | ------------------------ | ------------------ |
+| Backticks              | `@var`    | `` `Hello @name` ``      | Primary template   |
+| Double-colon `::…::`   | `@var`    | `::Use \`cmd\` @name::\` | Escape backticks   |
+| Triple-colon `:::…:::` | `{{var}}` | `:::Hi @{{handle}}:::`   | Escape lots of `@` |
+| Commands `{…}`         | `@var`    | `{echo "@msg"}`          | Interpolates       |
+| Double quotes          | `@var`    | `"Hi @name"`             | Interpolates       |
+| Single quotes          | '@var'    | `'Hi @name'`             | Literal            |
+| Directive level        | `@var`    | `/show @greeting`        | Direct reference   |
+
+Transforms (built-in): `@json`, `@xml`, `@csv`, `@md`
+Aliases: `@p` ≡ `@pipeline` inside pipeline stages
+Globs: use `<path/*.ext>` and `as "template"` with `<>` placeholder for each matched file 
+</REFERENCE>
+
+<SEE_ALSO>
+Documentation: https://mlld.ai/docs
+
+Examples: https://github.com/mlld-lang/mlld/tree/main/tests/cases/valid/feat (comprehensive test cases demonstrating features)
+
+Source: https://github.com/mlld-lang/mlld
+</SEE_ALSO>
+</MLLD_GUIDE>

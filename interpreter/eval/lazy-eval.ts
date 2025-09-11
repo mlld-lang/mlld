@@ -21,10 +21,6 @@ export async function evaluateDataValue(
     return value;
   }
   
-  // Debug logging
-  if (process.env.DEBUG_LAZY_EVAL) {
-    logger.debug('evaluateDataValue called with:', { value: JSON.stringify(value, null, 2).substring(0, 200) });
-  }
   
   // Handle wrapped string values FIRST (with content array and wrapperType)
   // This needs to be before other object checks because these objects don't have a type field

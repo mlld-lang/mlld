@@ -1,5 +1,0 @@
-@text localGreeting = "Hello from local file!"
-@data localConfig = {
-  "version": "1.0.0",
-  "environment": "test"
-}

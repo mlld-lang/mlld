@@ -283,6 +283,45 @@ export class ExpressionVisitor extends BaseVisitor {
         modifiers: []
       });
     }
+
+    // Tokenize optional parallel keyword and pacing tuple in expression form
+    const parallelMatch = nodeText.match(/\bparallel\b/);
+    if (parallelMatch && parallelMatch.index !== undefined) {
+      const parPos = this.document.positionAt(node.location.start.offset + parallelMatch.index);
+      this.tokenBuilder.addToken({
+        line: parPos.line,
+        char: parPos.character,
+        length: 'parallel'.length,
+        tokenType: 'keyword',
+        modifiers: []
+      });
+    }
+    const pacingMatch = nodeText.match(/\(([\s\d,smhd]+)\)\s*parallel/);
+    if (pacingMatch && pacingMatch.index !== undefined) {
+      const openOffset = node.location.start.offset + pacingMatch.index;
+      const closeOffset = openOffset + pacingMatch[0].indexOf(')');
+      // '('
+      this.operatorHelper.addOperatorToken(openOffset, 1);
+      const inner = pacingMatch[1];
+      const innerStart = openOffset + 1;
+      for (let i = 0; i < inner.length; i++) {
+        const ch = inner[i];
+        if (/\d/.test(ch)) {
+          let j = i; while (j < inner.length && /\d/.test(inner[j])) j++;
+          const numPos = this.document.positionAt(innerStart + i);
+          this.tokenBuilder.addToken({
+            line: numPos.line,
+            char: numPos.character,
+            length: j - i,
+            tokenType: 'number',
+            modifiers: []
+          });
+          i = j - 1; continue;
+        }
+        if (ch === ',') this.operatorHelper.addOperatorToken(innerStart + i, 1);
+      }
+      if (closeOffset >= openOffset) this.operatorHelper.addOperatorToken(closeOffset, 1);
+    }
     
     // Process variable
     if (node.variable) {

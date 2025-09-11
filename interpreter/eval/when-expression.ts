@@ -31,9 +31,9 @@ function validateNonePlacement(conditions: WhenConditionPair[]): void {
   for (let i = 0; i < conditions.length; i++) {
     const condition = conditions[i].condition;
     
-    if (isNoneCondition(condition)) {
+    if (condition.length === 1 && isNoneCondition(condition[0])) {
       foundNone = true;
-    } else if (condition?.type === 'Literal' && condition?.valueType === 'wildcard') {
+    } else if (condition.length === 1 && condition[0]?.type === 'Literal' && condition[0]?.valueType === 'wildcard') {
       foundWildcard = true;
       if (foundNone) {
         // * after none is technically valid but makes none unreachable
@@ -42,14 +42,14 @@ function validateNonePlacement(conditions: WhenConditionPair[]): void {
     } else if (foundNone) {
       throw new MlldWhenExpressionError(
         'The "none" keyword can only appear as the last condition(s) in a when block',
-        condition.location
+        condition[0]?.location
       );
     }
     
-    if (foundWildcard && isNoneCondition(condition)) {
+    if (foundWildcard && condition.length === 1 && isNoneCondition(condition[0])) {
       throw new MlldWhenExpressionError(
         'The "none" keyword cannot appear after "*" (wildcard) as it would never be reached',
-        condition.location
+        condition[0].location
       );
     }
   }
@@ -83,6 +83,7 @@ export async function evaluateWhenExpression(
   let lastMatchValue: any = null;
   let hasMatch = false;
   let hasNonNoneMatch = false;
+  let hasValueProducingMatch = false;  // Track if any condition produced an actual return value (not just side effects)
   let lastNoneValue: any = null;
   let accumulatedEnv = env;
   
@@ -125,14 +126,14 @@ export async function evaluateWhenExpression(
     const pair = node.conditions[i];
     
     // Check if this is a none condition
-    if (isNoneCondition(pair.condition)) {
+    if (pair.condition.length === 1 && isNoneCondition(pair.condition[0])) {
       // Skip none conditions in first pass
       continue;
     }
     
     try {
       // Evaluate the condition
-      const conditionResult = await evaluateCondition(pair.condition, env);
+      const conditionResult = await evaluateCondition(pair.condition, accumulatedEnv);
       
       if (process.env.DEBUG_WHEN) {
         logger.debug('WhenExpression condition result:', { 
@@ -201,6 +202,7 @@ export async function evaluateWhenExpression(
               }
               lastMatchValue = value;
               hasMatch = true;
+              hasValueProducingMatch = true;  // action produces a value
               // Merge nodes from accumulatedEnv childless (no child changes here)
               continue;
             }
@@ -220,10 +222,17 @@ export async function evaluateWhenExpression(
           // IMPORTANT SCOPING RULE:
           // - /when (directive) uses global scope semantics (handled elsewhere)
           // - when: [...] in /exe uses LOCAL scope – evaluate actions in a child env
+          //
+          // Also: Local variable assignments inside earlier actions must be
+          // visible to later actions in the same when-expression. We therefore
+          // evaluate each action in a child env and merge resulting variable
+          // bindings back into the accumulatedEnv after evaluation.
           const actionEnv = accumulatedEnv.createChild();
-          // FIXED: Removed isExpression: true to allow effects (like /show) to propagate
-          // Effects should work the same everywhere - no special suppression in when expressions
-          const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
+          // FIXED: Suppress side effects in when expressions used in /exe functions
+          // Side effects should be handled by the calling context (e.g., /show @func())
+          // Evaluate the action in normal directive context so effects stream.
+          // We avoid forcing isExpression here to preserve effect emission.
+          const actionResult = await evaluate(pair.action, actionEnv, context);
           
           let value = actionResult.value;
           
@@ -285,16 +294,15 @@ export async function evaluateWhenExpression(
               const directiveKind = singleAction.kind;
               // For side-effect directives, handle appropriately for expression context
               if (directiveKind === 'show') {
-                // Show actions in when expressions should display their output (the return value IS the side effect)
-                // Don't suppress show output - it's the main requirement of Issue #341
-                // Keep the original value which contains the show content
+                // Tag as side-effect so pipeline layer can suppress echo
+                value = { __whenEffect: 'show', text: value } as any;
               } else if (directiveKind === 'output') {
                 // Output actions should return empty string (file write is the side effect)
                 value = '';
               } else if (directiveKind === 'var') {
-                // Variable assignments should return the assigned value in when expressions
-                // The variable evaluator returns empty string, but we need the assigned value
-                // Extract the variable identifier and get its value from the result environment
+                // Variable assignments in when expressions are side effects
+                // They should not count as value-producing matches for 'none' evaluation
+                // But we do need to extract the value for chaining purposes
                 const identifier = singleAction.values?.identifier;
                 if (identifier && Array.isArray(identifier) && identifier[0]) {
                   const varName = identifier[0].identifier;
@@ -313,6 +321,8 @@ export async function evaluateWhenExpression(
                     }
                   }
                 }
+                // Don't count this as a value-producing match
+                // Variable assignments are side effects, not return values
               }
             }
           }
@@ -322,18 +332,32 @@ export async function evaluateWhenExpression(
             value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
           }
           
+          // Merge variable assignments from this action back into the
+          // accumulated environment so subsequent actions can see them.
+          // We use mergeChild to merge variables; since actions are evaluated
+          // with isExpression=true, no user-facing nodes are produced.
+          accumulatedEnv.mergeChild(actionEnv);
+
           // In "first" mode, return immediately after first match
           if (isFirstMode) {
-            return { value, env: actionEnv };
+            return { value, env: accumulatedEnv };
           }
-          
+
           // For bare when, save the value and continue evaluating
           lastMatchValue = value;
           
-          // Merge nodes from the action environment into accumulated environment
-          const childNodes = actionEnv.getNodes();
-          for (const node of childNodes) {
-            accumulatedEnv.addNode(node);
+          // Check if this is a variable assignment (which shouldn't count as value-producing)
+          if (Array.isArray(pair.action) && pair.action.length === 1) {
+            const singleAction = pair.action[0];
+            if (singleAction && typeof singleAction === 'object' && 
+                singleAction.type === 'Directive' && singleAction.kind === 'var') {
+              // Variable assignment - don't mark as value-producing
+              // The value is just for internal chaining, not a return value
+            } else {
+              hasValueProducingMatch = true;  // This action produced a real value
+            }
+          } else {
+            hasValueProducingMatch = true;  // Multi-action or non-directive action produced a value
           }
           
           // Continue to evaluate other matching conditions
@@ -346,12 +370,7 @@ export async function evaluateWhenExpression(
         }
       }
     } catch (conditionError) {
-      // DEBUG: Show what error occurred
-      console.error('❌ CONDITION ERROR:', {
-        index: i,
-        error: conditionError.message,
-        stack: conditionError.stack
-      });
+      // Let the error propagate - it's expected in retry scenarios
       
       // Collect condition errors but continue evaluating
       errors.push(new MlldWhenExpressionError(
@@ -362,13 +381,13 @@ export async function evaluateWhenExpression(
     }
   }
   
-  // Second pass: Evaluate none conditions if no non-none conditions matched
-  if (!hasNonNoneMatch) {
+  // Second pass: Evaluate none conditions if no value-producing conditions matched
+  if (!hasValueProducingMatch) {
     for (let i = 0; i < node.conditions.length; i++) {
       const pair = node.conditions[i];
       
       // Only process none conditions in second pass
-      if (!isNoneCondition(pair.condition)) {
+      if (!(pair.condition.length === 1 && isNoneCondition(pair.condition[0]))) {
         continue;
       }
       
@@ -380,8 +399,9 @@ export async function evaluateWhenExpression(
       try {
         // Evaluate the action for none condition
         const actionEnv = accumulatedEnv.createChild();
-        // FIXED: Removed isExpression: true to allow effects (like /show) to propagate
-        const actionResult = await evaluate(pair.action, actionEnv, { ...(context || {}), isExpression: true });
+        // FIXED: Suppress side effects in when expressions used in /exe functions
+        // Side effects should be handled by the calling context (e.g., /show @func())
+        const actionResult = await evaluate(pair.action, actionEnv, context);
         
         let value = actionResult.value;
         
@@ -390,20 +410,17 @@ export async function evaluateWhenExpression(
           value = await applyTailModifiers(value, node.withClause.pipes, actionResult.env);
         }
         
+        // Merge variable assignments from this none-action into accumulator
+        accumulatedEnv.mergeChild(actionEnv);
+
         // In "first" mode, return immediately after first none match
         if (isFirstMode) {
-          return { value, env: actionEnv };
+          return { value, env: accumulatedEnv };
         }
-        
+
         // For bare when, save the none value and continue
         lastNoneValue = value;
         hasMatch = true;
-        
-        // Merge nodes from the action environment into accumulated environment
-        const childNodes = actionEnv.getNodes();
-        for (const node of childNodes) {
-          accumulatedEnv.addNode(node);
-        }
       } catch (actionError) {
         throw new MlldWhenExpressionError(
           `Error evaluating none action for condition ${i + 1}: ${actionError.message}`,

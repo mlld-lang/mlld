@@ -29,7 +29,7 @@ export class CommandExecutor {
     context?: CommandExecutionContext
   ): Promise<string> {
     const startTime = Date.now();
-    const { workingDirectory, timeout = 30000, showProgress = false } = options;
+    const { workingDirectory, showProgress = false } = options;
     
     if (showProgress) {
       console.log(`⚡ Running: ${command}`);
@@ -40,8 +40,7 @@ export class CommandExecutor {
         encoding: 'utf8',
         cwd: workingDirectory,
         env: { ...process.env, ...options.env },
-        maxBuffer: 10 * 1024 * 1024, // 10MB
-        timeout
+        maxBuffer: 10 * 1024 * 1024 // 10MB
       });
       
       const duration = Date.now() - startTime;

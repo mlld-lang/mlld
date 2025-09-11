@@ -1,1 +1,0 @@
-The absolute path is /absolute/path/to/file.ext

@@ -1,3 +1,0 @@
-## Greeting
-
-Hello, Alice! Welcome to mlld.

@@ -1,0 +1,8 @@
+{
+  "description": "Test that heredocs prevent E2BIG with multiple large variables",
+  "env": {
+    "MLLD_BASH_HEREDOC": "1",
+    "MLLD_MAX_BASH_ENV_VAR_SIZE": "65536"
+  },
+  "comment": "Lower threshold to ensure heredocs are used"
+}

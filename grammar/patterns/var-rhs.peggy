@@ -7,6 +7,8 @@ VarRHSContent "var assignment value"
   / VarWhenError                // Error recovery: when expressions not allowed in /var
   / ForExpression               // for @var in @collection => expression
   / ForeachCommandExpression    // foreach @command(@arrays)
+  / ExecResultMethodCall        // @func(args).method(args) on exec result
+  / ExecInvocationWithFields    // Exec invocations followed by field/index access (must come before FieldAccessExecPattern)
   / FieldAccessExecPattern      // Field access exec invocations @obj.method()
   / ExecInvocationPattern       // Exec invocations @func() - handle @ internally
   / CodeExecution               // Language + code patterns (run keyword and shortcuts)
@@ -35,6 +37,23 @@ ExpressionWithOperator
     }
     expr:Expression {
       return expr;
+    }
+
+// EXEC INVOCATION FOLLOWED BY FIELDS - e.g., @func()[1] or @obj.method().2
+ExecInvocationWithFields "exec invocation with post fields"
+  = base:FieldAccessExecPattern post:AnyFieldAccess+ {
+      // Allow chaining fields after a method call on an object
+      return {
+        ...base,
+        fields: post
+      };
+    }
+  / base:ExecInvocationPattern post:AnyFieldAccess+ {
+      // Allow chaining fields after a plain function call
+      return {
+        ...base,
+        fields: post
+      };
     }
 
 // Note: AlligatorWithTransform was removed because AlligatorExpression 
@@ -407,14 +426,15 @@ VarWhenError
 // FOR EXPRESSION - for @var in @collection => expression
 // Used in /var and /exe assignments to collect results
 ForExpression "for expression"
-  = "for" _ pattern:ForIterationPattern _ "=>" _ expr:VarRHSContent {
+  = "for" opts:ForParallelSpec? _ pattern:ForIterationPattern _ "=>" _ expr:VarRHSContent {
       helpers.debug('ForExpression matched', { pattern, expr });
       
       return helpers.createForExpression(
         pattern.variable,
         pattern.source, 
         expr,
-        location()
+        location(),
+        opts || null
       );
     }
   // Error recovery

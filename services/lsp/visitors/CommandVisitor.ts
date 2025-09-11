@@ -429,7 +429,7 @@ export class CommandVisitor extends BaseVisitor {
         // The pipes are in a different structure for ExecInvocation
         // They're in withClause.pipeline as an array of command-like objects
         for (const pipeCommand of node.withClause.pipeline) {
-          // Find and tokenize the pipe operator
+          // Find and tokenize the pipe operator ('|' or '||')
           const sourceText = this.document.getText();
           
           // The pipe should be between the previous element and this command
@@ -443,12 +443,14 @@ export class CommandVisitor extends BaseVisitor {
               
               if (pipeIndex !== -1) {
                 const pipeOffset = searchStart + pipeIndex;
-                const pipePos = this.document.positionAt(pipeOffset);
+                const isParallel = pipeIndex > 0 && searchText[pipeIndex - 1] === '|';
+                const pipePos = this.document.positionAt(isParallel ? pipeOffset - 1 : pipeOffset);
+                const length = isParallel ? 2 : 1;
                 
                 this.tokenBuilder.addToken({
                   line: pipePos.line,
                   char: pipePos.character,
-                  length: 1,
+                  length,
                   tokenType: 'operator',
                   modifiers: []
                 });

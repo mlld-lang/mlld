@@ -1,0 +1,1 @@
+/exe @function(var) = js {console.log(var)}

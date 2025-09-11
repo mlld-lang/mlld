@@ -1,0 +1,2 @@
+/for @x in @outer => for @y in @inner => show "@x-@y"
+/for @a in ["A", "B"] => for @b in [1, 2] => for @c in @data => log "@a-@b-@c"

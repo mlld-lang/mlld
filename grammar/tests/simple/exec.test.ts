@@ -9,7 +9,6 @@ describe('Exec Directive Basic Test', () => {
     const content = '/exe @greeting() = {echo "Hello World"}';
     
     const result = await parse(content);
-    console.log('Parse Result:', JSON.stringify(result.ast, null, 2));
     
     expect(result.ast.length).toBeGreaterThan(0);
     expect(result.ast[0].type).toBe('Directive');
@@ -20,7 +19,6 @@ describe('Exec Directive Basic Test', () => {
     const content = '/exe @list() = {ls -la}';
     
     const result = await parse(content);
-    console.log('Parse Result:', JSON.stringify(result.ast, null, 2));
     
     expect(result.ast.length).toBeGreaterThan(0);
     expect(result.ast[0].type).toBe('Directive');

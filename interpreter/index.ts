@@ -53,6 +53,7 @@ export interface InterpretOptions {
     dest?: 'stdout' | 'stderr' | 'auto';
     noTty?: boolean;
   };
+  allowAbsolutePaths?: boolean; // Allow absolute paths outside project root
 }
 
 /**
@@ -216,6 +217,10 @@ export async function interpret(
     undefined,
     options.effectHandler
   );
+
+  if (options.allowAbsolutePaths !== undefined) {
+    env.setAllowAbsolutePaths(options.allowAbsolutePaths);
+  }
   
   // Register built-in resolvers (async initialization)
   await env.registerBuiltinResolvers();

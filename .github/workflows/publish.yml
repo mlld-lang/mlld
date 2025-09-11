@@ -1,0 +1,107 @@
+name: Publish
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/**'
+      - '!.github/workflows/publish.yml'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install dependencies
+        run: npm ci
+      - name: Build project (required before tests)
+        run: npm run build
+      - name: Run tests
+        run: npm test
+      - name: Build EXAMPLES.md
+        run: npm run build:fixtures
+      - name: Commit generated EXAMPLES.md (force add)
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- tests/cases/EXAMPLES.md; then
+            git add -f tests/cases/EXAMPLES.md
+            git commit -m "chore: update generated EXAMPLES.md [skip ci]"
+            git push
+          fi
+      - name: Ensure CHANGELOG was updated
+        run: |
+          if ! git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q '^CHANGELOG.md$'; then
+            echo 'CHANGELOG.md must be updated for releases'
+            exit 1
+          fi
+      - name: Determine version
+        id: version
+        run: |
+          set -e
+          CHANGELOG_VERSION=$(grep -m1 '^## \[' CHANGELOG.md | sed -E 's/^## \[([^]]+)\].*/\1/')
+          if [ -z "$CHANGELOG_VERSION" ]; then
+            echo 'Could not determine version from CHANGELOG.md'
+            exit 1
+          fi
+          if ! echo "$CHANGELOG_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
+            echo "Invalid changelog version format: $CHANGELOG_VERSION"
+            exit 1
+          fi
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PACKAGE_VERSION" != "$CHANGELOG_VERSION" ]; then
+            echo "package.json version ($PACKAGE_VERSION) does not match changelog version ($CHANGELOG_VERSION)"
+            exit 1
+          fi
+          echo "version=$CHANGELOG_VERSION" >> "$GITHUB_OUTPUT"
+      - name: Generate release notes
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {flag=1;next} /^## \[/{flag=0} flag' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "Release notes not found for version $VERSION"
+            exit 1
+          fi
+          cat RELEASE_NOTES.md
+      - name: Tag release
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          git tag v$VERSION
+          git push origin v$VERSION
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          body_path: RELEASE_NOTES.md
+      - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RC_LATEST: ${{ vars.RC_LATEST }}
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          if [[ "$VERSION" == *-rc* ]]; then
+            if [ "$RC_LATEST" = "true" ]; then
+              TAG=latest
+            else
+              TAG=rc
+            fi
+          else
+            TAG=latest
+          fi
+          npm run publish:all -- --tag $TAG

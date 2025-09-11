@@ -9,14 +9,19 @@ import type { Environment } from '@interpreter/env/Environment';
 import type { Variable } from '@core/types/variable';
 import { MlldDirectiveError } from '@core/errors';
 import { detectPipeline, debugPipelineDetection, type DetectedPipeline } from './detector';
-import type { PipelineCommand } from '@core/types';
+import type { PipelineStage, PipelineCommand } from '@core/types';
 import { executePipeline } from './index';
 import { isBuiltinTransformer, getBuiltinTransformers } from './builtin-transformers';
 import { logger } from '@core/utils/logger';
-import { isBuiltinEffect } from './builtin-effects';
+import { attachBuiltinEffects } from './effects-attachment';
 
 /**
  * Context for pipeline processing
+ */
+/**
+ * Unified pipeline processing input
+ * WHY: Provide a single entry that handles detection, validation, and execution across evaluators.
+ * CONTEXT: Supports explicit pipeline arrays and auto-detected tails; can mark inputs as retryable.
  */
 export interface UnifiedPipelineContext {
   // Required
@@ -28,7 +33,7 @@ export interface UnifiedPipelineContext {
   directive?: any;               // Directive that might have pipeline
   
   // Manual pipeline (if not auto-detected)
-  pipeline?: PipelineCommand[];  // Explicit pipeline to execute
+  pipeline?: PipelineStage[];  // Explicit pipeline to execute
   format?: string;               // Data format hint
   isRetryable?: boolean;         // Override retryability
   
@@ -42,6 +47,11 @@ export interface UnifiedPipelineContext {
  * 
  * This is the main entry point that should be used by all evaluators.
  * It handles detection, validation, execution, and type preservation.
+ */
+/**
+ * Process a value through its pipeline (if any)
+ * WHY: Normalize detection across AST/directive sources and handle synthetic source stage injection.
+ * GOTCHA: A synthetic __source__ stage is prepended when the base input is retryable (function source).
  */
 export async function processPipeline(
   context: UnifiedPipelineContext
@@ -72,7 +82,7 @@ export async function processPipeline(
       detected.isRetryable = context.isRetryable;
     }
     if (process.env.MLLD_DEBUG === 'true' && identifier) {
-      console.log('[processPipeline] Detection result:', {
+      logger.debug('[processPipeline] Detection result:', {
         identifier,
         nodeType: node?.type,
         hasDetected: !!detected,
@@ -98,7 +108,7 @@ export async function processPipeline(
   };
   
   if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[processPipeline] Checking for synthetic source:', {
+    logger.debug('[processPipeline] Checking for synthetic source:', {
       isRetryable: detected.isRetryable,
       hasValue: !!value,
       hasMetadata: !!(value && typeof value === 'object' && 'metadata' in value && value.metadata),
@@ -184,12 +194,16 @@ export async function processPipeline(
  * Validate that all pipeline functions exist
  */
 async function validatePipeline(
-  pipeline: PipelineCommand[],
+  pipeline: PipelineStage[],
   env: Environment,
   identifier?: string
 ): Promise<void> {
-  for (const cmd of pipeline) {
-    const funcName = cmd.rawIdentifier;
+  for (const stage of pipeline) {
+    if (Array.isArray(stage)) {
+      await validatePipeline(stage, env, identifier);
+      continue;
+    }
+    const funcName = stage.rawIdentifier;
     
     // Check if it's a built-in transformer
     if (isBuiltinTransformer(funcName)) {
@@ -214,67 +228,7 @@ async function validatePipeline(
   }
 }
 
-/**
- * Walk a pipeline and attach builtin effect commands (e.g., @log) to the
- * immediately preceding functional stage. Returns the functional-only
- * pipeline with effects stored in the optional `effects` field of each
- * PipelineCommand.
- */
-function attachBuiltinEffects(pipeline: PipelineCommand[]): {
-  functionalPipeline: PipelineCommand[];
-  hadLeadingEffects: boolean;
-} {
-  const functional: PipelineCommand[] = [];
-  const pendingLeadingEffects: PipelineCommand[] = [];
-  let hadLeadingEffects = false;
-
-  for (const cmd of pipeline) {
-    const name = cmd.rawIdentifier;
-    if (process.env.MLLD_DEBUG === 'true') {
-      console.error('[attachBuiltinEffects] cmd', name, 'builtin?', isBuiltinEffect(name));
-    }
-    if (isBuiltinEffect(name)) {
-      // Attach to the last functional; if none yet, collect as pending
-      if (functional.length > 0) {
-        const prev = functional[functional.length - 1];
-        if (!prev.effects) prev.effects = [];
-        prev.effects.push(cmd);
-      } else {
-        pendingLeadingEffects.push(cmd);
-        hadLeadingEffects = true;
-      }
-      continue;
-    }
-
-    // Regular functional stage
-    const stage: PipelineCommand = { ...cmd };
-    // If we have pending leading effects, attach them to this first stage
-    if (pendingLeadingEffects.length > 0) {
-      stage.effects = [...(stage.effects || []), ...pendingLeadingEffects];
-      pendingLeadingEffects.length = 0;
-    }
-    functional.push(stage);
-  }
-
-  // If pipeline had only builtin effects, synthesize an identity stage to host them
-  if (functional.length === 0 && pendingLeadingEffects.length > 0) {
-    functional.push({
-      rawIdentifier: '__identity__',
-      identifier: [],
-      args: [],
-      fields: [],
-      rawArgs: [],
-      effects: [...pendingLeadingEffects]
-    } as any);
-    pendingLeadingEffects.length = 0;
-  }
-
-  if (process.env.MLLD_DEBUG === 'true') {
-    console.error('[attachBuiltinEffects] functional stages:', functional.map(f => f.rawIdentifier));
-    console.error('[attachBuiltinEffects] first effects:', functional[0]?.effects?.map((e: any) => e.rawIdentifier));
-  }
-  return { functionalPipeline: functional, hadLeadingEffects };
-}
+// Note: attachBuiltinEffects is imported from './effects-attachment' above.
 
 /**
  * Prepare input value for pipeline processing

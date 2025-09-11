@@ -1,10 +1,11 @@
-# mlld (pre-release)
+# mlld (pre-release -- beware dragons!)
 
-mlld is a modular prompt scripting language, bringing software engineering to LLM workflows: modularity, versioning, and reproducibility.
+mlld is a modular llm scripting language, bringing software engineering to LLM workflows: modularity, versioning, and reproducibility.
 
-I still consider it 'early', but this isn't a slapped together idea. I've been working on it nearly every single day for 7 months straight. It has tools for writing tests and a public/private module system.
+I still consider it 'early', but this isn't a slapped together idea. I've been working on it nearly every single day for 8 months straight.
 
 [Give this to your LLM](https://mlld.ai/llms.txt)
+[Syntax highlighting / LSP](https://marketplace.visualstudio.com/items?itemName=andyet.mlld-vscode)
 
 ## Installation
 
@@ -134,7 +135,7 @@ PR: @currentPR
 /var @results = foreach @query(@models, @prompts)  << 9 results
 ```
 
-## Modules
+## Modules ⚠️ registry is not live yet
 
 ### Using Modules
 

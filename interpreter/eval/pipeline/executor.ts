@@ -1,5 +1,5 @@
 import type { Environment } from '../../env/Environment';
-import type { PipelineCommand } from '@core/types';
+import type { PipelineCommand, PipelineStage } from '@core/types';
 
 // Import pipeline implementation
 import { PipelineStateMachine, type StageContext, type StageResult } from './state-machine';
@@ -7,24 +7,33 @@ import { createStageEnvironment } from './context-builder';
 import { MlldCommandExecutionError } from '@core/errors';
 import { runBuiltinEffect, isBuiltinEffect } from './builtin-effects';
 import { getStreamBus } from './stream-bus';
+import { RateLimitRetry, isRateLimitError } from './rate-limit-retry';
+import { logger } from '@core/utils/logger';
+import { getParallelLimit, runWithConcurrency } from '@interpreter/utils/parallel';
 
 /**
  * Pipeline Executor - Handles actual execution using state machine
+ */
+/**
+ * Pipeline Executor
+ * WHY: Drive stage execution using the state machine and construct proper stage environments.
+ * CONTEXT: Re-runs inline effects per retry; empty output is treated as early termination.
  */
 export class PipelineExecutor {
   private stateMachine: PipelineStateMachine;
   private env: Environment;
   private format?: string;
-  private pipeline: PipelineCommand[];
+  private pipeline: PipelineStage[];
   private isRetryable: boolean;
   private sourceFunction?: () => Promise<string>; // Store source function for retries
   private hasSyntheticSource: boolean;
   private sourceExecutedOnce: boolean = false; // Track if source has been executed once
   private initialInput: string = ''; // Store initial input for synthetic source
   private allRetryHistory: Map<string, string[]> = new Map();
+  private rateLimiter = new RateLimitRetry();
 
   constructor(
-    pipeline: PipelineCommand[],
+    pipeline: PipelineStage[],
     env: Environment,
     format?: string,
     isRetryable: boolean = false,
@@ -34,7 +43,7 @@ export class PipelineExecutor {
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Constructor:', {
         pipelineLength: pipeline.length,
-        pipelineStages: pipeline.map(p => p.rawIdentifier || 'unknown'),
+        pipelineStages: pipeline.map(p => Array.isArray(p) ? '[parallel]' : p.rawIdentifier || 'unknown'),
         isRetryable,
         hasSourceFunction: !!sourceFunction,
         hasSyntheticSource
@@ -54,6 +63,10 @@ export class PipelineExecutor {
   /**
    * Execute the pipeline
    */
+  /**
+   * Execute the pipeline until completion or error.
+   * WHY: Convert state-machine steps into actual command execution and effect emission.
+   */
   async execute(initialInput: string): Promise<string> {
     // Store initial input for synthetic source stage
     this.initialInput = initialInput;
@@ -62,7 +75,7 @@ export class PipelineExecutor {
     
     if (process.env.MLLD_DEBUG === 'true') {
       console.error('[PipelineExecutor] Pipeline start:', {
-        stages: this.pipeline.map(p => p.rawIdentifier),
+        stages: this.pipeline.map(p => Array.isArray(p) ? '[parallel]' : p.rawIdentifier),
         hasSyntheticSource: this.hasSyntheticSource,
         isRetryable: this.isRetryable
       });
@@ -94,21 +107,19 @@ export class PipelineExecutor {
         });
       }
       
-      const command = this.pipeline[nextStep.stage];
+      const stageEntry = this.pipeline[nextStep.stage];
       // Publish stage start
       try {
         getStreamBus().publish({
           type: 'STAGE_START',
           stage: nextStep.stage,
           attempt: nextStep.context.contextAttempt,
-          commandId: command?.rawIdentifier
+          commandId: Array.isArray(stageEntry) ? '[parallel]' : stageEntry?.rawIdentifier
         });
       } catch {}
-      const result = await this.executeStage(
-        command,
-        nextStep.input,
-        nextStep.context
-      );
+      const result = Array.isArray(stageEntry)
+        ? await this.executeParallelStage(stageEntry, nextStep.input, nextStep.context)
+        : await this.executeStage(stageEntry, nextStep.input, nextStep.context);
       
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[PipelineExecutor] Stage result:', {
@@ -179,26 +190,76 @@ export class PipelineExecutor {
   /**
    * Execute a single stage
    */
+  /**
+   * Execute a single pipeline stage with the constructed stage environment.
+   * GOTCHA: Inline effects are run after successful stage execution and re-run on retries.
+   */
   private async executeStage(
-    command: PipelineCommand,
+    command: PipelineCommand | PipelineCommand[],
     input: string,
     context: StageContext
   ): Promise<StageResult> {
     try {
-      // Set up execution environment
+      // Effects, if any, are attached to functional stages and executed after success
+      // Parallel group support: if the stage is an array of commands, execute all in parallel
+      if (Array.isArray(command)) {
+        const outputs: (string | { value: 'retry'; hint?: any; from?: number })[] = [];
+        // Execute each sub-command with its own stage environment
+        for (const sub of command) {
+          const subEnv = await createStageEnvironment(
+            sub,
+            input,
+            context,
+            this.env,
+            this.format,
+            this.stateMachine.getEvents(),
+            this.hasSyntheticSource,
+            this.allRetryHistory
+          );
+          const out = await this.executeCommand(sub, input, subEnv);
+          outputs.push(out);
+        }
+        // If any branch requested a retry, propagate a retry signal
+        const retry = outputs.find(o => typeof o === 'object' && o && 'value' in o && (o as any).value === 'retry');
+        if (retry) {
+          const r = retry as any;
+          return { type: 'retry', reason: r.hint || 'Parallel stage requested retry', from: r.from, hint: r.hint };
+        }
+        // Normalize outputs to strings and pass JSON array to next stage
+        const normalized = outputs.map(o => String(o ?? ''));
+        const jsonArray = JSON.stringify(normalized);
+        return { type: 'success', output: jsonArray };
+      }
+
+      // Set up execution environment for a single command stage
       const stageEnv = await createStageEnvironment(
-        command, 
-        input, 
-        context, 
-        this.env, 
+        command,
+        input,
+        context,
+        this.env,
         this.format,
         this.stateMachine.getEvents(),
         this.hasSyntheticSource,
         this.allRetryHistory
       );
       
-      // Execute the command
-      const output = await this.executeCommand(command, input, stageEnv);
+      let output: any;
+      while (true) {
+        try {
+          output = await this.executeCommand(command, input, stageEnv);
+          this.rateLimiter.reset();
+          break;
+        } catch (err: any) {
+          if (isRateLimitError(err)) {
+            if (process.env.MLLD_DEBUG === 'true') {
+              logger.warn('Rate limit detected, retrying with backoff');
+            }
+            const retry = await this.rateLimiter.wait();
+            if (retry) continue;
+          }
+          throw err;
+        }
+      }
       
       // No need to transfer nodes - effects are emitted immediately to the shared handler
       
@@ -238,6 +299,25 @@ export class PipelineExecutor {
       }
 
       const normalized = this.normalizeOutput(output);
+      // Clear hint for inline effects: @ctx.hint is only visible inside the retried stage body
+      // May be worth revisiting this based on user feedback
+      try {
+        const pctx = this.env.getPipelineContext?.();
+        if (pctx) {
+          this.env.setPipelineContext({
+            stage: pctx.stage,
+            totalStages: pctx.totalStages,
+            currentCommand: pctx.currentCommand,
+            input: pctx.input,
+            previousOutputs: pctx.previousOutputs,
+            format: pctx.format,
+            attemptCount: (pctx as any).attemptCount,
+            attemptHistory: (pctx as any).attemptHistory,
+            hint: null,
+            hintHistory: (pctx as any).hintHistory || []
+          } as any);
+        }
+      } catch {}
       // Run inline effects attached to this functional stage (non-stage effects)
       await this.runInlineEffects(command, normalized, stageEnv);
       // Publish stage success with basic metrics
@@ -266,6 +346,10 @@ export class PipelineExecutor {
   /**
    * Execute a pipeline command
    */
+  /**
+   * Execute a pipeline command (function or synthetic __source__).
+   * CONTEXT: __source__ uses the initial input the first time, and a source function on retries.
+   */
   private async executeCommand(
     command: PipelineCommand,
     input: string,
@@ -291,7 +375,7 @@ export class PipelineExecutor {
       
       // Retry execution - need to call source function
       if (!this.sourceFunction) {
-        throw new Error('Cannot retry stage 0: Input is not a function and cannot be retried');
+        throw new Error('Cannot retry stage 0: input is not a function. Make the source a function to enable retries.');
       }
       
       // Re-execute the source function to get fresh input
@@ -495,6 +579,30 @@ export class PipelineExecutor {
       return (output as any).hint;
     }
     return undefined;
+  }
+
+  private async executeParallelStage(
+    commands: PipelineCommand[],
+    input: string,
+    context: StageContext
+  ): Promise<StageResult> {
+    try {
+      const results = await runWithConcurrency(
+        commands,
+        Math.min(getParallelLimit(), commands.length),
+        async (cmd, i) => {
+          const res = await this.executeStage(cmd, input, context);
+          if (res.type !== 'success') {
+            throw res.type === 'error' ? res.error : new Error('retry not supported in parallel stage');
+          }
+          return res.output;
+        },
+        { ordered: true }
+      );
+      return { type: 'success', output: JSON.stringify(results) };
+    } catch (err) {
+      return { type: 'error', error: err as Error };
+    }
   }
 
   private normalizeOutput(output: any): string {

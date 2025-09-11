@@ -1,1 +1,0 @@
-@run javascript [(console.log("Hello from code"))]

@@ -1,0 +1,1 @@
+/when @active => show "User is active"

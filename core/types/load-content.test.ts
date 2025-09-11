@@ -113,10 +113,10 @@ describe('Load Content Type Guards', () => {
       expect(isLoadContentResultArray(results)).toBe(true);
     });
     
-    it('should identify empty arrays as LoadContentResultArray', () => {
-      // Note: Array.every() returns true for empty arrays by definition
-      // This might be intentional behavior to allow empty glob results
-      expect(isLoadContentResultArray([])).toBe(true);
+    it('should not identify empty arrays as LoadContentResultArray', () => {
+      // Empty arrays are not treated as LoadContentResult arrays to avoid
+      // misclassifying generic empty arrays (e.g., for-expression results).
+      expect(isLoadContentResultArray([])).toBe(false);
     });
     
     it('should not identify arrays with non-LoadContentResult items', () => {

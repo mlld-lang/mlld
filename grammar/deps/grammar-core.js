@@ -1016,7 +1016,7 @@ export const helpers = {
     /**
      * Creates a ForExpression node for for...in expressions in /var assignments
      */
-    createForExpression(variable, source, expression, location) {
+    createForExpression(variable, source, expression, location, opts) {
         return {
             type: 'ForExpression',
             nodeId: randomUUID(),
@@ -1025,15 +1025,50 @@ export const helpers = {
             expression: Array.isArray(expression) ? expression : [expression],
             location: location,
             meta: {
-                isForExpression: true
+                isForExpression: true,
+                forOptions: opts || undefined
             }
         };
     },
     /**
      * Creates an action node for /for directive actions
      */
-    createForActionNode(directive, content, location) {
+    createForActionNode(directive, content, location, endingTail) {
         const kind = directive;
+        // Special-case: support show actions with either templates/quotes or unified references
+        if (kind === 'show' && content) {
+            // Detect UnifiedQuote/Template structures (have { content, wrapperType })
+            if (content && typeof content === 'object' && 'content' in content && 'wrapperType' in content) {
+                const values = { content: content.content };
+                // For templates/quotes, attach pipeline to values.pipeline (showTemplate branch consumes it)
+                if (endingTail && endingTail.pipeline) {
+                    values.pipeline = endingTail.pipeline;
+                }
+                return [this.createNode(NodeType.Directive, {
+                        kind,
+                        subtype: 'showTemplate',
+                        values,
+                        raw: { content: this.reconstructRawString(content.content) },
+                        meta: { implicit: false, isTemplateContent: true },
+                        location
+                    })];
+            }
+            // Otherwise assume a unified reference (VariableReference/ExecInvocation/etc.)
+            const isExec = content && typeof content === 'object' && content.type === 'ExecInvocation';
+            const values = { invocation: content };
+            // Attach directive-level withClause so unified pipeline detector can find it
+            if (endingTail && endingTail.pipeline) {
+                values.withClause = { pipeline: endingTail.pipeline };
+            }
+            return [this.createNode(NodeType.Directive, {
+                    kind,
+                    subtype: isExec ? 'showInvocation' : 'showVariable',
+                    values,
+                    raw: { content: this.reconstructRawString(content) },
+                    meta: { implicit: false },
+                    location
+                })];
+        }
         return [this.createNode(NodeType.Directive, {
                 kind,
                 subtype: kind,
@@ -1082,5 +1117,15 @@ export const helpers = {
         if (ending.comment) {
             meta.comment = ending.comment;
         }
+    },
+    /**
+     * Throw a clear error when a parallel group appears as the first pipeline stage.
+     * '||' runs a stage in parallel with the previous stage; the source stage has no previous stage.
+     */
+    throwParallelLeadingError(location) {
+        const msg = "Parallel group cannot be the first pipeline stage. '||' runs a stage in parallel with the previous stage, which is not possible for the source stage. Start with a single '|' stage, then add '||' peers.";
+        const err = new Error(msg);
+        err.location = location;
+        throw err;
     }
 };

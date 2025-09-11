@@ -7,7 +7,8 @@ import { interpolate } from '../core/interpreter';
 import { InterpolationContext } from '../core/interpolation-context';
 import { isExecutableVariable, createSimpleTextVariable, createObjectVariable, createArrayVariable, createPrimitiveVariable } from '@core/types/variable';
 import { applyWithClause } from './with-clause';
-import { MlldInterpreterError } from '@core/errors';
+import { MlldInterpreterError, MlldCommandExecutionError } from '@core/errors';
+import { CommandUtils } from '../env/CommandUtils';
 import { logger } from '@core/utils/logger';
 import { extractSection } from './show';
 import { prepareValueForShadow } from '../env/variable-proxy';
@@ -120,10 +121,180 @@ export async function evaluateExecInvocation(
     throw new MlldInterpreterError('ExecInvocation has no command identifier');
   }
   
-  // Check if this is a field access exec invocation (e.g., @demo.valueCmd())
+  // Check if this is a field access exec invocation (e.g., @obj.method())
+  // or a method call on an exec result (e.g., @func(args).method())
   let variable;
-  const commandRefWithObject = node.commandRef as any & { objectReference?: any }; // Type assertion to handle objectReference
-  if (node.commandRef && commandRefWithObject.objectReference) {
+  const commandRefWithObject = node.commandRef as any & { objectReference?: any; objectSource?: ExecInvocation };
+  if (node.commandRef && (commandRefWithObject.objectReference || commandRefWithObject.objectSource)) {
+    // Check if this is a builtin method call (e.g., @list.includes())
+    const builtinMethods = ['includes', 'length', 'indexOf', 'join', 'split', 'toLowerCase', 'toUpperCase', 'trim', 'startsWith', 'endsWith'];
+    if (builtinMethods.includes(commandName)) {
+      // Handle builtin methods on objects/arrays/strings
+      let objectValue: any;
+
+      if (commandRefWithObject.objectReference) {
+        const objectRef = commandRefWithObject.objectReference;
+        const objectVar = env.getVariable(objectRef.identifier);
+        if (!objectVar) {
+          throw new MlldInterpreterError(`Object not found: ${objectRef.identifier}`);
+        }
+        // Extract the value from the variable reference
+        const { extractVariableValue } = await import('../utils/variable-resolution');
+        objectValue = await extractVariableValue(objectVar, env);
+
+        // Navigate through fields if present
+        if (objectRef.fields && objectRef.fields.length > 0) {
+          for (const field of objectRef.fields) {
+            if (typeof objectValue === 'object' && objectValue !== null) {
+              objectValue = (objectValue as any)[field.value];
+            } else {
+              throw new MlldInterpreterError(`Cannot access field ${field.value} on non-object`);
+            }
+          }
+        }
+      } else if (commandRefWithObject.objectSource) {
+        // Evaluate the source ExecInvocation to obtain a value, then apply builtin method
+        const srcResult = await evaluateExecInvocation(commandRefWithObject.objectSource, env);
+        if (srcResult && typeof srcResult === 'object') {
+          if (srcResult.value !== undefined) {
+            const { resolveValue, ResolutionContext } = await import('../utils/variable-resolution');
+            objectValue = await resolveValue(srcResult.value, env, ResolutionContext.Default);
+          } else if (typeof srcResult.stdout === 'string') {
+            objectValue = srcResult.stdout;
+          }
+        }
+      }
+
+      // Fallback if we still don't have an object value
+      if (typeof objectValue === 'undefined') {
+        throw new MlldInterpreterError('Unable to resolve object value for builtin method invocation');
+      }
+      
+      // Evaluate arguments
+      const evaluatedArgs: any[] = [];
+      for (const arg of args) {
+        const { evaluateDataValue } = await import('./data-value-evaluator');
+        const evaluatedArg = await evaluateDataValue(arg, env);
+        evaluatedArgs.push(evaluatedArg);
+      }
+      
+      // Apply the builtin method
+      let result: any;
+      switch (commandName) {
+        case 'includes':
+          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
+            result = objectValue.includes(evaluatedArgs[0]);
+          } else {
+            throw new MlldInterpreterError(`Cannot call .includes() on ${typeof objectValue}`);
+          }
+          break;
+        case 'length':
+          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
+            result = objectValue.length;
+          } else {
+            throw new MlldInterpreterError(`Cannot call .length() on ${typeof objectValue}`);
+          }
+          break;
+        case 'indexOf':
+          if (Array.isArray(objectValue) || typeof objectValue === 'string') {
+            result = objectValue.indexOf(evaluatedArgs[0]);
+          } else {
+            throw new MlldInterpreterError(`Cannot call .indexOf() on ${typeof objectValue}`);
+          }
+          break;
+        case 'join':
+          if (Array.isArray(objectValue)) {
+            result = objectValue.join(evaluatedArgs[0] || ',');
+          } else {
+            throw new MlldInterpreterError(`Cannot call .join() on ${typeof objectValue}`);
+          }
+          break;
+        case 'split':
+          if (typeof objectValue === 'string') {
+            result = objectValue.split(evaluatedArgs[0] || '');
+          } else {
+            throw new MlldInterpreterError(`Cannot call .split() on ${typeof objectValue}`);
+          }
+          break;
+        case 'toLowerCase':
+          if (typeof objectValue === 'string') {
+            result = objectValue.toLowerCase();
+          } else {
+            throw new MlldInterpreterError(`Cannot call .toLowerCase() on ${typeof objectValue}`);
+          }
+          break;
+        case 'toUpperCase':
+          if (typeof objectValue === 'string') {
+            result = objectValue.toUpperCase();
+          } else {
+            throw new MlldInterpreterError(`Cannot call .toUpperCase() on ${typeof objectValue}`);
+          }
+          break;
+        case 'trim':
+          if (typeof objectValue === 'string') {
+            result = objectValue.trim();
+          } else {
+            throw new MlldInterpreterError(`Cannot call .trim() on ${typeof objectValue}`);
+          }
+          break;
+        case 'startsWith':
+          if (typeof objectValue === 'string') {
+            result = objectValue.startsWith(evaluatedArgs[0]);
+          } else {
+            throw new MlldInterpreterError(`Cannot call .startsWith() on ${typeof objectValue}`);
+          }
+          break;
+        case 'endsWith':
+          if (typeof objectValue === 'string') {
+            result = objectValue.endsWith(evaluatedArgs[0]);
+          } else {
+            throw new MlldInterpreterError(`Cannot call .endsWith() on ${typeof objectValue}`);
+          }
+          break;
+        default:
+          throw new MlldInterpreterError(`Unknown builtin method: ${commandName}`);
+      }
+      
+      // Apply post-invocation fields if present (e.g., @str.split(',')[1])
+      const postFieldsBuiltin: any[] = (node as any).fields || [];
+      if (postFieldsBuiltin && postFieldsBuiltin.length > 0) {
+        const { accessField } = await import('../utils/field-access');
+        for (const f of postFieldsBuiltin) {
+          result = await accessField(result, f, { env });
+        }
+      }
+      
+      // If a withClause (e.g., pipeline) is attached to this builtin invocation, apply it
+      if (node.withClause) {
+        if (node.withClause.pipeline) {
+          const { processPipeline } = await import('./pipeline/unified-processor');
+          const pipelineResult = await processPipeline({
+            value: String(result),
+            env,
+            node,
+            identifier: node.identifier
+          });
+          // Still need to handle other withClause features (trust, needs)
+          return applyWithClause(pipelineResult, { ...node.withClause, pipeline: undefined }, env);
+        } else {
+          return applyWithClause(String(result), node.withClause, env);
+        }
+      }
+
+      // Return the result wrapped appropriately when no withClause is present
+      return {
+        value: result,
+        env,
+        stdout: typeof result === 'string' ? result : (Array.isArray(result) ? JSON.stringify(result, null, 2) : String(result)),
+        stderr: '',
+        exitCode: 0
+      };
+    }
+    // If this is a non-builtin method with objectSource, we do not (yet) support it
+    if (commandRefWithObject.objectSource && !commandRefWithObject.objectReference) {
+      throw new MlldInterpreterError(`Only builtin methods are supported on exec results (got: ${commandName})`);
+    }
+    
     // Get the object first
     const objectRef = commandRefWithObject.objectReference;
     const objectVar = env.getVariable(objectRef.identifier);
@@ -135,18 +306,6 @@ export async function evaluateExecInvocation(
     const { extractVariableValue } = await import('../utils/variable-resolution');
     const objectValue = await extractVariableValue(objectVar, env);
     
-    if (process.env.DEBUG_EXEC) {
-      logger.debug('Object reference in exec invocation', {
-        objectRef: objectRef.identifier,
-        objectVarType: objectVar.type,
-        objectVarValue: typeof objectVar.value,
-        objectVarIsComplex: (objectVar as any).isComplex,
-        objectValueType: typeof objectValue,
-        isString: typeof objectValue === 'string',
-        objectKeys: typeof objectValue === 'object' && objectValue !== null ? Object.keys(objectValue) : 'not-object',
-        objectValue: typeof objectValue === 'object' && objectValue !== null ? JSON.stringify(objectValue, null, 2).substring(0, 500) : objectValue
-      });
-    }
     
     // Access the field
     if (objectRef.fields && objectRef.fields.length > 0) {
@@ -216,14 +375,6 @@ export async function evaluateExecInvocation(
         }
       }
       
-      // if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
-      //   console.error('[DEBUG] Converting __executable object to ExecutableVariable:', {
-      //     commandName,
-      //     hasMetadata: !!metadata,
-      //     hasCapturedEnvs: !!(metadata.capturedShadowEnvs),
-      //     metadata
-      //   });
-      // }
       // Convert the __executable object to a proper ExecutableVariable
       const { createExecutableVariable } = await import('@core/types/variable/VariableFactories');
       variable = createExecutableVariable(
@@ -437,6 +588,17 @@ export async function evaluateExecInvocation(
             // Get the actual value from the variable
             let value = variable.value;
             
+            // WHY: Template variables store AST arrays for lazy evaluation,
+            //      must interpolate before passing to executables
+            const { isTemplate } = await import('@core/types/variable');
+            if (isTemplate(variable)) {
+              if (Array.isArray(value)) {
+                value = await interpolate(value, env);
+              } else if (variable.metadata?.templateAst && Array.isArray(variable.metadata.templateAst)) {
+                value = await interpolate(variable.metadata.templateAst, env);
+              }
+            }
+            
             // Handle field access (e.g., @user.name)
             if (varRef.fields && varRef.fields.length > 0) {
               for (const field of varRef.fields) {
@@ -519,8 +681,14 @@ export async function evaluateExecInvocation(
       const varName = varRef.identifier;
       const variable = env.getVariable(varName);
       if (variable && !varRef.fields) {
-        // Only preserve if no field access
-        originalVariables[i] = variable;
+        // GOTCHA: Don't preserve template variables after interpolation,
+        //         use the interpolated string value instead
+        const { isTemplate } = await import('@core/types/variable');
+        if (isTemplate(variable) && typeof evaluatedArgs[i] === 'string') {
+          originalVariables[i] = undefined;
+        } else {
+          originalVariables[i] = variable;
+        }
         
         if (process.env.MLLD_DEBUG === 'true') {
           const subtype = variable.type === 'primitive' && 'primitiveType' in variable 
@@ -658,8 +826,38 @@ export async function evaluateExecInvocation(
   }
   // Handle command executables
   else if (isCommandExecutable(definition)) {
+    // First, detect which parameters are referenced in the template BEFORE interpolation
+    // This is crucial for deciding when to use bash fallback for large variables
+    const referencedInTemplate = new Set<string>();
+    try {
+      const nodes = definition.commandTemplate as any[];
+      if (Array.isArray(nodes)) {
+        for (const n of nodes) {
+          if (n && typeof n === 'object' && n.type === 'VariableReference' && typeof n.identifier === 'string') {
+            referencedInTemplate.add(n.identifier);
+          } else if (n && typeof n === 'object' && n.type === 'Text' && typeof (n as any).content === 'string') {
+            // Also detect literal @name patterns in text segments
+            for (const pname of params) {
+              const re = new RegExp(`@${pname}(?![A-Za-z0-9_])`);
+              if (re.test((n as any).content)) {
+                referencedInTemplate.add(pname);
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+    
     // Interpolate the command template with parameters using ShellCommand context
-    const command = await interpolate(definition.commandTemplate, execEnv, InterpolationContext.ShellCommand);
+    let command = await interpolate(definition.commandTemplate, execEnv, InterpolationContext.ShellCommand);
+    // Normalize common escaped sequences for usability in oneliners
+    // Only handle simple \n, \t, \r, \0 to their literal counterparts
+    // Leave quotes/backslashes intact for shell correctness
+    command = command
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\0/g, '\0');
     
     if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
       logger.debug('Executing command', {
@@ -669,45 +867,151 @@ export async function evaluateExecInvocation(
     }
     
     // Build environment variables from parameters for shell execution
+    // Only include parameters that are referenced in the command string to avoid
+    // passing oversized, unused values into the environment (E2BIG risk).
     const envVars: Record<string, string> = {};
+    const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Cache compiled regex per parameter for performance on large templates
+    const paramRegexCache: Record<string, { simple: RegExp; braced: RegExp }> = {};
+    const referencesParam = (cmd: string, name: string) => {
+      // Prefer original template reference detection so interpolation doesn't hide usage
+      if (referencedInTemplate.has(name)) return true;
+      // Also check for $name (not followed by word char) or ${name}, avoiding escaped dollars (\$)
+      if (!paramRegexCache[name]) {
+        const n = escapeRegex(name);
+        paramRegexCache[name] = {
+          simple: new RegExp(`(^|[^\\\\])\\$${n}(?![A-Za-z0-9_])`),
+          braced: new RegExp(`\\$\\{${n}\\}`)
+        };
+      }
+      const { simple, braced } = paramRegexCache[name];
+      return simple.test(cmd) || braced.test(cmd);
+    };
     for (let i = 0; i < params.length; i++) {
       const paramName = params[i];
+      if (!referencesParam(command, paramName)) continue; // skip unused params
       
       // Properly serialize proxy objects for execution
       const paramVar = execEnv.getVariable(paramName);
       if (paramVar && typeof paramVar.value === 'object' && paramVar.value !== null) {
-        // For objects and arrays, use JSON serialization
         try {
           envVars[paramName] = JSON.stringify(paramVar.value);
-        } catch (e) {
-          // Fallback to string version if JSON serialization fails
+        } catch {
           envVars[paramName] = evaluatedArgStrings[i];
         }
       } else {
-        // For primitives and other types, use the string version
         envVars[paramName] = evaluatedArgStrings[i];
       }
     }
     
-    // Execute the command with environment variables
-    const commandOutput = await execEnv.executeCommand(command, { env: envVars });
+    // Check if any referenced env var is oversized; if so, optionally fallback to bash heredoc
+    const perVarMax = (() => {
+      const v = process.env.MLLD_MAX_SHELL_ENV_VAR_SIZE;
+      if (!v) return 128 * 1024; // 128KB default
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
+    })();
+    const needsBashFallback = Object.values(envVars).some(v => Buffer.byteLength(v || '', 'utf8') > perVarMax);
+    const fallbackDisabled = (() => {
+      const v = (process.env.MLLD_DISABLE_COMMAND_BASH_FALLBACK || '').toLowerCase();
+      return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+    })();
     
-    // Try to parse as JSON if it looks like JSON
-    if (typeof commandOutput === 'string' && commandOutput.trim()) {
-      const trimmed = commandOutput.trim();
-      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
-          (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-        try {
-          result = JSON.parse(trimmed);
-        } catch {
-          // Not valid JSON, use as-is
+    if (needsBashFallback && !fallbackDisabled) {
+      // Build a bash-friendly command string where param refs stay as "$name"
+      // so BashExecutor can inject them via heredoc.
+      let fallbackCommand = '';
+      try {
+        const nodes = definition.commandTemplate as any[];
+        if (Array.isArray(nodes)) {
+          for (const n of nodes) {
+            if (n && typeof n === 'object' && n.type === 'VariableReference' && typeof n.identifier === 'string' && params.includes(n.identifier)) {
+              fallbackCommand += `"$${n.identifier}"`;
+            } else if (n && typeof n === 'object' && 'content' in n) {
+              fallbackCommand += String((n as any).content || '');
+            } else if (typeof n === 'string') {
+              fallbackCommand += n;
+            } else {
+              // Fallback: interpolate conservatively for unexpected nodes
+              fallbackCommand += await interpolate([n as any], execEnv, InterpolationContext.ShellCommand);
+            }
+          }
+        } else {
+          fallbackCommand = command;
+        }
+      } catch {
+        fallbackCommand = command;
+      }
+
+      // Validate base command semantics (keep same security posture)
+      try {
+        CommandUtils.validateAndParseCommand(fallbackCommand);
+      } catch (error) {
+        throw new MlldCommandExecutionError(
+          error instanceof Error ? error.message : String(error),
+          context?.sourceLocation,
+          {
+            command: fallbackCommand,
+            exitCode: 1,
+            duration: 0,
+            stderr: error instanceof Error ? error.message : String(error),
+            workingDirectory: (execEnv as any).getProjectRoot?.() || '',
+            directiveType: context?.directiveType || 'run'
+          }
+        );
+      }
+
+      // Build params for bash execution using evaluated argument values, but only those referenced
+      const codeParams: Record<string, any> = {};
+      for (let i = 0; i < params.length; i++) {
+        const paramName = params[i];
+        if (!referencesParam(command, paramName)) continue;
+        codeParams[paramName] = evaluatedArgs[i];
+      }
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.error('[exec-invocation] Falling back to bash heredoc for oversized command params', {
+          fallbackSnippet: fallbackCommand.slice(0, 120),
+          paramCount: Object.keys(codeParams).length
+        });
+      }
+      const commandOutput = await execEnv.executeCode(fallbackCommand, 'sh', codeParams);
+      // Try to parse as JSON if it looks like JSON
+      if (typeof commandOutput === 'string' && commandOutput.trim()) {
+        const trimmed = commandOutput.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          try {
+            result = JSON.parse(trimmed);
+          } catch {
+            result = commandOutput;
+          }
+        } else {
           result = commandOutput;
         }
       } else {
         result = commandOutput;
       }
     } else {
-      result = commandOutput;
+      // Execute the command with environment variables
+      const commandOutput = await execEnv.executeCommand(command, { env: envVars });
+      
+      // Try to parse as JSON if it looks like JSON
+      if (typeof commandOutput === 'string' && commandOutput.trim()) {
+        const trimmed = commandOutput.trim();
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          try {
+            result = JSON.parse(trimmed);
+          } catch {
+            // Not valid JSON, use as-is
+            result = commandOutput;
+          }
+        } else {
+          result = commandOutput;
+        }
+      } else {
+        result = commandOutput;
+      }
     }
   }
   // Handle code executables
@@ -725,7 +1029,12 @@ export async function evaluateExecInvocation(
       // Evaluate the when expression with the parameter environment
       const { evaluateWhenExpression } = await import('./when-expression');
       const whenResult = await evaluateWhenExpression(whenExprNode, execEnv);
-      result = whenResult.value;
+      let value: any = whenResult.value;
+      // Unwrap tagged show effects for non-pipeline exec-invocation (so /run echoes value)
+      if (value && typeof value === 'object' && (value as any).__whenEffect === 'show') {
+        value = (value as any).text ?? '';
+      }
+      result = value;
       // Update execEnv to the result which contains merged nodes
       execEnv = whenResult.env;
     } else if (definition.language === 'mlld-for') {
@@ -878,14 +1187,6 @@ export async function evaluateExecInvocation(
                          definition.language === 'node' || definition.language === 'nodejs')) {
       (codeParams as any).__capturedShadowEnvs = capturedEnvs;
       
-      // if (process.env.DEBUG_MODULE_EXPORT || process.env.DEBUG_EXEC) {
-      //   console.error('[DEBUG] exec-invocation passing shadow envs:', {
-      //     commandName,
-      //     hasCapturedEnvs: !!capturedEnvs,
-      //     capturedEnvs,
-      //     language: definition.language
-      //   });
-      // }
     }
     
     // Execute the code with parameters and metadata
@@ -938,17 +1239,29 @@ export async function evaluateExecInvocation(
     // The commandArgs contains the original AST nodes for how to call the referenced command
     // We need to evaluate these nodes with the current invocation's parameters bound
     if (definition.commandArgs && definition.commandArgs.length > 0) {
-      // Evaluate each arg individually since they are VariableReference nodes
+      if (process.env.MLLD_DEBUG === 'true') {
+        try {
+          console.error('[EXEC INVOC] commandRef args shape:', (definition.commandArgs as any[]).map((a: any) => Array.isArray(a) ? 'array' : (a && typeof a === 'object' && a.type) || typeof a));
+        } catch {}
+      }
+      // Evaluate each arg; handle interpolated string args that are arrays of parts
       let refArgs: any[] = [];
-      const { evaluate } = await import('../core/interpreter');
+      const { evaluate, interpolate } = await import('../core/interpreter');
+      const { InterpolationContext } = await import('../core/interpolation-context');
       
       for (const argNode of definition.commandArgs) {
-        // Evaluate the individual argument node
-        const argResult = await evaluate(argNode, execEnv, { isExpression: true });
-        
-        // Extract the actual value
-        if (argResult && argResult.value !== undefined) {
-          refArgs.push(argResult.value);
+        let value: any;
+        // If this arg is an array of parts (from DataString with interpolation),
+        // interpolate the whole array into a single string argument
+        if (Array.isArray(argNode)) {
+          value = await interpolate(argNode as any[], execEnv, InterpolationContext.Default);
+        } else {
+          // Evaluate the individual argument node
+          const argResult = await evaluate(argNode as any, execEnv, { isExpression: true });
+          value = argResult?.value;
+        }
+        if (value !== undefined) {
+          refArgs.push(value);
         }
       }
       
@@ -1103,13 +1416,29 @@ export async function evaluateExecInvocation(
     throw new MlldInterpreterError(`Unknown executable type: ${(definition as any).type}`);
   }
   
+  // Apply post-invocation field/index access if present (e.g., @func()[1], @obj.method().2)
+  const postFields: any[] = (node as any).fields || [];
+  if (postFields && postFields.length > 0) {
+    try {
+      const { accessField } = await import('../utils/field-access');
+      let current: any = result;
+      for (const f of postFields) {
+        current = await accessField(current, f, { env });
+      }
+      result = current;
+    } catch (e) {
+      // Preserve existing behavior: if field access fails, surface error as interpreter error
+      throw e;
+    }
+  }
+
   // Apply withClause transformations if present
   if (node.withClause) {
     if (node.withClause.pipeline) {
       if (process.env.MLLD_DEBUG === 'true') {
         console.error('[exec-invocation] Handling pipeline:', {
           pipelineLength: node.withClause.pipeline.length,
-          stages: node.withClause.pipeline.map((p: any) => p.rawIdentifier || 'unknown')
+          stages: node.withClause.pipeline.map((p: any) => Array.isArray(p) ? '[parallel]' : (p.rawIdentifier || 'unknown'))
         });
       }
       
@@ -1138,43 +1467,12 @@ export async function evaluateExecInvocation(
         rawArgs: []
       };
       
-      // Prepend synthetic source stage and attach builtin effects
+      // Prepend synthetic source stage and attach builtin effects consistently
       let normalizedPipeline = [SOURCE_STAGE, ...node.withClause.pipeline];
-      // Attach inline builtin effects (log/show/output) to preceding stages
       try {
-        const { isBuiltinEffect } = await import('./pipeline/builtin-effects');
-        const functional: any[] = [];
-        const pending: any[] = [];
-        for (const s of normalizedPipeline) {
-          const name = s.rawIdentifier;
-          if (isBuiltinEffect(name)) {
-            if (functional.length > 0) {
-              const prev = functional[functional.length - 1];
-              if (!prev.effects) prev.effects = [];
-              prev.effects.push(s);
-            } else {
-              pending.push(s);
-            }
-          } else {
-            const stage = { ...s };
-            if (pending.length > 0) {
-              stage.effects = [...(stage.effects || []), ...pending];
-              pending.length = 0;
-            }
-            functional.push(stage);
-          }
-        }
-        if (functional.length === 0 && pending.length > 0) {
-          functional.push({
-            rawIdentifier: '__identity__',
-            identifier: [],
-            args: [],
-            fields: [],
-            rawArgs: [],
-            effects: [...pending]
-          });
-        }
-        normalizedPipeline = functional;
+        const { attachBuiltinEffects } = await import('./pipeline/effects-attachment');
+        const { functionalPipeline } = attachBuiltinEffects(normalizedPipeline as any);
+        normalizedPipeline = functionalPipeline as any;
       } catch {
         // If helper import fails, proceed without effect attachment
       }
@@ -1183,7 +1481,7 @@ export async function evaluateExecInvocation(
         console.error('[exec-invocation] Creating pipeline with synthetic source:', {
           originalLength: node.withClause.pipeline.length,
           normalizedLength: normalizedPipeline.length,
-          stages: normalizedPipeline.map((p: any) => p.rawIdentifier || 'unknown')
+          stages: normalizedPipeline.map((p: any) => Array.isArray(p) ? '[parallel]' : (p.rawIdentifier || 'unknown'))
         });
       }
       

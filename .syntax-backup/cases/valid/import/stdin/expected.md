@@ -1,1 +1,0 @@
-Project test-project v1.0.0

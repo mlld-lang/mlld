@@ -1,1 +1,0 @@
-@run [(echo "hello world")] >> this is an inline comment

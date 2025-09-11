@@ -25,6 +25,8 @@ export default defineConfig({
       '**/lib/**', 
       '**/tests/ast-perf.test.ts', 
       '**/tests/ephemeral-mode.test.ts',
+      // Exclude performance benchmarks from default test run
+      'tests/performance/**',
       // Exclude token edge case tests - run with npm run test:tokens
       'tests/tokens/**/*.test.ts',
       'services/lsp/semantic-tokens*.test.ts',

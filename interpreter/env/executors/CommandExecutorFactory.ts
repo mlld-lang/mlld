@@ -44,6 +44,106 @@ export class CommandExecutorFactory {
     options?: CommandExecutionOptions,
     context?: CommandExecutionContext
   ): Promise<string> {
+    // If shell mode is explicitly disabled, use strict simple executor
+    const disableSh = (() => {
+      const v = (process.env.MLLD_DISABLE_SH || '').toLowerCase();
+      return v === '1' || v === 'true' || v === 'on' || v === 'yes';
+    })();
+
+    // Proactively detect oversized payloads and fall back to BashExecutor
+    // Rationale: Node's exec/spawn environment+argv limits (~200KB) can be hit
+    // for large interpolated values in simple /run commands or env overrides.
+    // BashExecutor streams code via stdin and supports heredoc injection for
+    // large variables, avoiding E2BIG.
+    if (!disableSh) {
+      try {
+        const envOverrides = (options?.env || {}) as Record<string, unknown>;
+
+        // Thresholds match ShellCommandExecutor defaults so behavior is consistent
+        const MAX_ENV_VAR = (() => {
+          const v = process.env.MLLD_MAX_SHELL_ENV_VAR_SIZE;
+          if (!v) return 128 * 1024; // 128KB default
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
+        })();
+        const MAX_ENV_TOTAL = (() => {
+          const v = process.env.MLLD_MAX_SHELL_ENV_TOTAL_SIZE;
+          if (!v) return 200 * 1024; // ~200KB default
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? Math.floor(n) : 200 * 1024;
+        })();
+        const MAX_CMD = (() => {
+          const v = process.env.MLLD_MAX_SHELL_COMMAND_SIZE;
+          if (!v) return 128 * 1024; // 128KB default
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? Math.floor(n) : 128 * 1024;
+        })();
+        const MAX_ARGS_ENV = (() => {
+          const v = process.env.MLLD_MAX_SHELL_ARGS_ENV_TOTAL;
+          if (!v) return 256 * 1024; // ~256KB default
+          const n = Number(v);
+          return Number.isFinite(n) && n > 0 ? Math.floor(n) : 256 * 1024;
+        })();
+
+        // Compute sizes
+        let envTotalBytes = 0;
+        let hasLargeEnvVar = false;
+        for (const [, v] of Object.entries(envOverrides)) {
+          const s = typeof v === 'string' ? v : JSON.stringify(v);
+          const size = Buffer.byteLength(s || '', 'utf8');
+          envTotalBytes += size;
+          if (size > MAX_ENV_VAR) hasLargeEnvVar = true;
+        }
+
+        const cmdBytes = Buffer.byteLength(command || '', 'utf8');
+        const combined = cmdBytes + envTotalBytes;
+
+        const shouldFallback = (
+          hasLargeEnvVar ||
+          envTotalBytes > MAX_ENV_TOTAL ||
+          cmdBytes > MAX_CMD ||
+          combined > MAX_ARGS_ENV
+        );
+
+        if (shouldFallback) {
+          // Validate the simple command (ensure no dangerous shell operators)
+          const safe = (() => {
+            try {
+              return require('../CommandUtils').CommandUtils.validateAndParseCommand(command);
+            } catch (e) {
+              // If validation fails, rethrow to be handled by ShellCommandExecutor as before
+              throw e;
+            }
+          })();
+
+          // Route via BashExecutor with minimal params so we don't inject
+          // all ambient variables. If caller provided env overrides, pass
+          // those as params to leverage heredoc injection when needed.
+          const params = options?.env && Object.keys(options.env).length > 0
+            ? (options.env as Record<string, any>)
+            : {};
+
+          if (process.env.MLLD_DEBUG === 'true') {
+            try {
+              console.error('[CommandExecutorFactory] Falling back to BashExecutor due to size limits:', {
+                cmdBytes,
+                envTotalBytes,
+                MAX_ENV_VAR,
+                MAX_ENV_TOTAL,
+                MAX_CMD,
+                MAX_ARGS_ENV,
+              });
+            } catch {}
+          }
+
+          return this.bashExecutor.execute(safe, options, context, params);
+        }
+      } catch (precheckError) {
+        // If any error occurs during pre-check, proceed with normal execution
+      }
+    }
+
+    // Normal path: strict simple executor
     return this.shellExecutor.execute(command, options, context);
   }
 

@@ -47,6 +47,7 @@ export interface ImportResolverDependencies {
     maxResponseSize: number;
     timeout: number;
   };
+  getAllowAbsolutePaths: () => boolean;
 }
 
 /**
@@ -97,7 +98,7 @@ export interface IImportResolver {
   endImport(path: string): void;
   
   // Child creation
-  createChildResolver(newBasePath?: string): IImportResolver;
+  createChildResolver(newBasePath?: string, getAllowAbsolutePaths?: () => boolean): IImportResolver;
 }
 
 /**
@@ -147,7 +148,6 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     
     // Check the structure of result.content
     if (!result.content.content || !result.content.contentType) {
-      console.error('Resolver result structure:', JSON.stringify(result, null, 2));
       throw new Error(`Resolver returned invalid content structure for '${reference}': missing content or contentType`);
     }
     
@@ -202,13 +202,14 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     }
     
     // Use the path module that's already imported
-    // Absolute paths are allowed only within the project root
     if (path.isAbsolute(inputPath)) {
       const absolutePath = path.resolve(inputPath);
-      const projectRoot = path.resolve(this.dependencies.pathContext.projectRoot);
-      const rootWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
-      if (!absolutePath.startsWith(rootWithSep)) {
-        throw new Error(`Access denied: path is outside project root (${inputPath})`);
+      if (!this.dependencies.getAllowAbsolutePaths()) {
+        const projectRoot = path.resolve(this.dependencies.pathContext.projectRoot);
+        const rootWithSep = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
+        if (!absolutePath.startsWith(rootWithSep)) {
+          throw new Error(`Access denied: path is outside project root (${inputPath})`);
+        }
       }
       return absolutePath;
     }
@@ -594,7 +595,7 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
   
   // --- Child Creation ---
   
-  createChildResolver(newFileDirectory?: string): IImportResolver {
+  createChildResolver(newFileDirectory?: string, getAllowAbsolutePaths?: () => boolean): IImportResolver {
     const childDependencies: ImportResolverDependencies = {
       ...this.dependencies,
       pathContext: newFileDirectory ? {
@@ -602,7 +603,8 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
         fileDirectory: newFileDirectory,
         executionDirectory: newFileDirectory
       } : this.dependencies.pathContext,
-      getParent: () => this
+      getParent: () => this,
+      getAllowAbsolutePaths: getAllowAbsolutePaths || this.dependencies.getAllowAbsolutePaths
     };
     
     const child = new ImportResolver(childDependencies);

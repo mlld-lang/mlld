@@ -75,7 +75,6 @@ Start
     / MlldRunFence               /* <— Special mlld-run blocks that are interpreted */
     / CodeFence                  /* <— Regular code blocks that are NOT interpreted */
     / Directive                  /* <— Directives come after comments */
-    / Variable                   /* <— Then try to match variables */
     / TextBlock                  /* <— Finally, plain text */
     )* {
     helpers.debug('Start: Entered');
@@ -182,9 +181,7 @@ TextPart
       
       return false; // Continue parsing text
     } !(
-       "{{"           /* still block the opening of a text-var */
-     / "}}"           /* …and its closing */
-     / "::"           /* block multiline-template opening */
+       "::"           /* block multiline-template opening */
      / BacktickSequence  /* keep blocking fence openers (``, ``` etc.) */
     ) &{
       const pos = offset();

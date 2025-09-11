@@ -119,13 +119,30 @@ export class VariableVisitor extends BaseVisitor {
         ? node.location.start.column - 1   // Already includes @, just convert to 0-based
         : node.location.start.column - 2;  // Doesn't include @, go back one more
       
+      // Determine token type based on special variables
+      let tokenType = 'variableRef';
+      const modifiers: string[] = ['reference'];
+      
+      // Check for special built-in variables
+      if (identifier === 'pipeline' || identifier === 'p' || identifier === 'ctx' || 
+          identifier === 'now' || identifier === 'debug' || identifier === 'input' || 
+          identifier === 'base') {
+        tokenType = 'keyword';
+        modifiers.length = 0; // Clear reference modifier for keywords
+      }
+      
+      // Check for _key pattern (used in for loops for array indices)
+      if (identifier.endsWith('_key')) {
+        // Still treat as variable but could add special modifier if needed
+        modifiers.push('key');
+      }
       
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
         char: charPos,
         length: baseLength,
-        tokenType: 'variableRef',
-        modifiers: ['reference']
+        tokenType,
+        modifiers
       });
       
       // Use OperatorTokenHelper for property access tokenization
@@ -174,13 +191,14 @@ export class VariableVisitor extends BaseVisitor {
             });
           }
           
-          // Token for "|"
+          // Token for '|' or '||' (parallel group)
           const absolutePipePos = node.location.start.offset + pipePos;
+          const isParallel = nodeText[pipePos + 1] === '|';
           const pipePosition = this.document.positionAt(absolutePipePos);
           this.tokenBuilder.addToken({
             line: pipePosition.line,
             char: pipePosition.character,
-            length: 1,
+            length: isParallel ? 2 : 1,
             tokenType: 'operator',
             modifiers: []
           });
@@ -188,7 +206,7 @@ export class VariableVisitor extends BaseVisitor {
           const pipe = node.pipes[pipeIndex];
           if (pipe && pipe.transform) {
             // Skip whitespace after |
-            let transformStart = pipePos + 1;
+            let transformStart = pipePos + (isParallel ? 2 : 1);
             while (transformStart < nodeText.length && /\s/.test(nodeText[transformStart])) {
               transformStart++;
             }
@@ -240,8 +258,8 @@ export class VariableVisitor extends BaseVisitor {
               });
             }
           } else {
-            // No transform, just move past the pipe
-            currentPos = pipePos + 1;
+            // No transform, just move past the pipe(s)
+            currentPos = pipePos + (isParallel ? 2 : 1);
           }
           pipeIndex++;
         }

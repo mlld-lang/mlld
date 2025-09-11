@@ -1,3 +1,3 @@
 # Retry Hint Reception Test
 
-Used hint: missing title
+Used hint: null
