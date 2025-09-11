@@ -541,14 +541,16 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           const fieldResult = await accessField(resolvedValue, resolvedField, { 
             preserveContext: true,
             returnUndefinedForMissing: context?.isCondition,
-            env
+            env,
+            sourceLocation: node.location
           });
           resolvedValue = (fieldResult as any).value;
         } else {
           const fieldResult = await accessField(resolvedValue, field, { 
             preserveContext: true,
             returnUndefinedForMissing: context?.isCondition,
-            env
+            env,
+            sourceLocation: node.location
           });
           resolvedValue = (fieldResult as any).value;
         }

@@ -348,7 +348,12 @@ export async function evaluateVar(
     
     const sourceVar = env.getVariable(valueNode.identifier);
     if (!sourceVar) {
-      throw new Error(`Variable not found: ${valueNode.identifier}`);
+      const { MlldDirectiveError } = await import('@core/errors');
+      throw new MlldDirectiveError(
+        `Variable not found: ${valueNode.identifier}`,
+        'var',
+        { location: directive.location, env }
+      );
     }
     
     // Copy the variable type from source - preserve Variables!
@@ -370,7 +375,8 @@ export async function evaluateVar(
       // Use enhanced field access to preserve context
       const fieldResult = await accessField(resolvedVar, valueNode.fields[0], { 
         preserveContext: true,
-        env 
+        env,
+        sourceLocation: directive.location
       });
       let currentResult = fieldResult as any;
       
@@ -379,7 +385,8 @@ export async function evaluateVar(
         currentResult = await accessField(currentResult.value, valueNode.fields[i], { 
           preserveContext: true, 
           parentPath: currentResult.accessPath,
-          env 
+          env,
+          sourceLocation: directive.location
         });
       }
       
@@ -483,7 +490,12 @@ export async function evaluateVar(
     const varWithTail = valueNode;
     const sourceVar = env.getVariable(varWithTail.variable.identifier);
     if (!sourceVar) {
-      throw new Error(`Variable not found: ${varWithTail.variable.identifier}`);
+      const { MlldDirectiveError } = await import('@core/errors');
+      throw new MlldDirectiveError(
+        `Variable not found: ${varWithTail.variable.identifier}`,
+        'var',
+        { location: directive.location, env }
+      );
     }
     
     // Get the base value - preserve Variable for field access
@@ -507,7 +519,8 @@ export async function evaluateVar(
       // Use enhanced field access to track context
       const fieldResult = await accessFields(resolvedVar, varWithTail.variable.fields, { 
         preserveContext: true,
-        env 
+        env,
+        sourceLocation: directive.location
       });
       result = (fieldResult as any).value;
     }

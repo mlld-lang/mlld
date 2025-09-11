@@ -36,6 +36,8 @@ export interface FieldAccessOptions {
   returnUndefinedForMissing?: boolean;
   /** Environment for async operations like filters */
   env?: Environment;
+  /** Optional source location for better error reporting */
+  sourceLocation?: SourceLocation;
 }
 
 /**
@@ -111,7 +113,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           fieldAccessChain: [],
           failedAtIndex: Math.max(0, chain.length - 1),
           failedKey: name
-        });
+        }, { sourceLocation: options?.sourceLocation, env: options?.env });
       }
       
       // Handle LoadContentResult objects - access metadata properties
@@ -142,7 +144,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             fieldAccessChain: [],
             failedAtIndex: Math.max(0, chain.length - 1),
             failedKey: name
-          });
+          }, { sourceLocation: options?.sourceLocation, env: options?.env });
         }
       }
       
@@ -167,7 +169,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
             fieldAccessChain: [],
             failedAtIndex: Math.max(0, chain.length - 1),
             failedKey: name
-          });
+          }, { sourceLocation: options?.sourceLocation, env: options?.env });
         }
       }
       
@@ -188,7 +190,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
               fieldAccessChain: [],
               failedAtIndex: Math.max(0, chain.length - 1),
               failedKey: name
-            });
+            }, { sourceLocation: options?.sourceLocation, env: options?.env });
           }
         }
         accessedValue = actualValue[name];
@@ -206,12 +208,12 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           {
             const chain = [...(options?.parentPath || []), name];
             const msg = `Field "${name}" not found in object`;
-            throw new FieldAccessError(msg, {
-              baseValue: rawValue,
-              fieldAccessChain: [],
-              failedAtIndex: Math.max(0, chain.length - 1),
-              failedKey: name
-            });
+          throw new FieldAccessError(msg, {
+            baseValue: rawValue,
+            fieldAccessChain: [],
+            failedAtIndex: Math.max(0, chain.length - 1),
+            failedKey: name
+          }, { sourceLocation: options?.sourceLocation, env: options?.env });
           }
         }
         accessedValue = rawValue.properties[name];
@@ -244,7 +246,7 @@ export async function accessField(value: any, field: FieldAccessNode, options?: 
           failedKey: name,
           accessPath: chain,
           availableKeys
-        });
+        }, { sourceLocation: options?.sourceLocation, env: options?.env });
       }
       
       accessedValue = rawValue[name];
@@ -478,7 +480,8 @@ export async function accessFields(
       preserveContext: shouldPreserveContext,
       parentPath: path,
       returnUndefinedForMissing: options?.returnUndefinedForMissing,
-      env: options?.env
+      env: options?.env,
+      sourceLocation: options?.sourceLocation
     });
     
     if (shouldPreserveContext) {

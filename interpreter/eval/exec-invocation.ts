@@ -260,7 +260,7 @@ export async function evaluateExecInvocation(
       if (postFieldsBuiltin && postFieldsBuiltin.length > 0) {
         const { accessField } = await import('../utils/field-access');
         for (const f of postFieldsBuiltin) {
-          result = await accessField(result, f, { env });
+          result = await accessField(result, f, { env, sourceLocation: node.location });
         }
       }
       
@@ -1452,7 +1452,7 @@ export async function evaluateExecInvocation(
       const { accessField } = await import('../utils/field-access');
       let current: any = result;
       for (const f of postFields) {
-        current = await accessField(current, f, { env });
+        current = await accessField(current, f, { env, sourceLocation: node.location });
       }
       result = current;
     } catch (e) {

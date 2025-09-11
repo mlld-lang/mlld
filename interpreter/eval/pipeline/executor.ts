@@ -428,7 +428,7 @@ export class PipelineExecutor {
       // Apply field access if present
       if (arg.fields && arg.fields.length > 0) {
         const { accessFields } = await import('../../utils/field-access');
-        const fieldResult = await accessFields(value, arg.fields, { preserveContext: false });
+        const fieldResult = await accessFields(value, arg.fields, { preserveContext: false, sourceLocation: (arg as any)?.location, env });
         value = fieldResult;
       }
 
