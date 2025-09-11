@@ -179,7 +179,16 @@ export async function startLanguageServer(): Promise<void> {
   await initializePatterns();
   
   // Create a connection for the server
-  const connection = createConnection(ProposedFeatures.all);
+  // Many LSP clients (including Neovim's lspconfig) default to stdio transport
+  // without passing '--stdio'. Default to stdio when no explicit transport flag
+  // is present, otherwise defer to vscode-languageserver's CLI parsing.
+  const argv = (process?.argv ?? []);
+  const hasExplicitTransport = argv.includes('--stdio')
+    || argv.includes('--node-ipc')
+    || argv.some(a => a.startsWith('--socket='));
+  const connection = hasExplicitTransport
+    ? createConnection(ProposedFeatures.all)
+    : createConnection(ProposedFeatures.all, process.stdin, process.stdout);
 
   // Create a simple text document manager
   const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
