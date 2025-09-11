@@ -8,12 +8,10 @@
 /output @content to stdout
 /output @data to "settings.yaml" as yaml
 
-=== START TOKENS ===
-/var --> keyword
+=== START PARTIAL TOKENS ===
 @content --> variable[declaration]
 = --> operator
 "Hello World" --> string
-/var --> keyword
 @data --> variable[declaration]
 = --> operator
 { --> operator
@@ -21,30 +19,24 @@ test --> property
 : --> operator
 123 --> number
 } --> operator
-/var --> keyword
 @path --> variable[declaration]
 = --> operator
 "output.txt" --> string
-/output --> keyword
 @content --> variable
 to --> keyword
 "output.txt" --> string
-/output --> keyword
 @data --> variable
 to --> keyword
 "config.json" --> string
-/output --> keyword
 @content --> variable
 to --> keyword
 @path --> variable
-/output --> keyword
 @content --> variable
 to --> keyword
 stdout --> keyword
-/output --> keyword
 @data --> variable
 to --> keyword
 "settings.yaml" --> string
 as --> keyword
 yaml --> keyword
-=== END TOKENS ===
+=== END PARTIAL TOKENS ===

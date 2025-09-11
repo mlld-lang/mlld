@@ -183,29 +183,30 @@ export class ExpressionVisitor extends BaseVisitor {
         
         // Find and tokenize '=>' between condition and action
         if (conditionPair.condition && conditionPair.action) {
-          const lastCondition = Array.isArray(conditionPair.condition) 
-            ? conditionPair.condition[conditionPair.condition.length - 1] 
+          const lastCondition = Array.isArray(conditionPair.condition)
+            ? conditionPair.condition[conditionPair.condition.length - 1]
             : conditionPair.condition;
-          let firstAction = Array.isArray(conditionPair.action) 
-            ? conditionPair.action[0] 
+          let firstAction = Array.isArray(conditionPair.action)
+            ? conditionPair.action[0]
             : conditionPair.action;
-            
-          // For string literal actions, get the location from the content
+
+          // For string literal actions, get a representative inner node for location
           if (firstAction?.content && firstAction?.wrapperType && firstAction.content[0]) {
             firstAction = firstAction.content[0];
           }
-          
-          // Always try to find and tokenize the => operator
-          if (lastCondition?.location) {
-            const sourceText = this.document.getText();
+
+          // Find and tokenize the => operator between lastCondition and firstAction (narrow range)
+          if (lastCondition?.location && firstAction?.location) {
             const searchStart = lastCondition.location.end.offset;
-            const searchEnd = node.location.end.offset;
-            const searchText = sourceText.substring(searchStart, searchEnd);
-            
-            // Search for => and tokenize it
+            const searchEnd = firstAction.location.start.offset;
+            this.operatorHelper.tokenizeOperatorBetween(searchStart, searchEnd, '=>');
+          } else if (lastCondition?.location) {
+            // Fallback: search until end of when block
+            const sourceText = this.document.getText();
+            const searchText = sourceText.substring(lastCondition.location.end.offset, node.location.end.offset);
             const arrowIndex = searchText.indexOf('=>');
             if (arrowIndex !== -1) {
-              this.operatorHelper.addOperatorToken(searchStart + arrowIndex, 2);
+              this.operatorHelper.addOperatorToken(lastCondition.location.end.offset + arrowIndex, 2);
             }
           }
         }

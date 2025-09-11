@@ -49,16 +49,8 @@ export class VariableVisitor extends BaseVisitor {
     valueType: string,
     baseLength: number
   ): void {
-    if (context.templateType === 'tripleColon' && valueType === 'varIdentifier') {
-      const actualLength = node.location.end.column - node.location.start.column;
-      this.tokenBuilder.addToken({
-        line: node.location.start.line - 1,
-        char: node.location.start.column - 1,
-        length: actualLength,
-        tokenType: 'interpolation',
-        modifiers: []
-      });
-    } else if (context.variableStyle === '@var' && valueType === 'varIdentifier') {
+    // In triple-colon templates, only {{var}} form interpolates; '@var' is plain text
+    if (context.variableStyle === '@var' && valueType === 'varIdentifier') {
       this.tokenBuilder.addToken({
         line: node.location.start.line - 1,
         char: node.location.start.column - 1,

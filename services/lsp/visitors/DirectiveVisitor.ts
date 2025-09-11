@@ -692,6 +692,21 @@ export class DirectiveVisitor extends BaseVisitor {
           tokenType: 'string',
           modifiers: []
         });
+
+        // Highlight @var interpolations inside command content for shell-style runs
+        // This is a simple heuristic that finds @identifiers within the braces
+        const varRegex = /@[A-Za-z_][A-Za-z0-9_]*/g;
+        let match: RegExpExecArray | null;
+        while ((match = varRegex.exec(commandContent)) !== null) {
+          const varRel = match.index; // relative to contentStart
+          this.tokenBuilder.addToken({
+            line: directive.location.start.line - 1,
+            char: directive.location.start.column - 1 + contentStart + varRel,
+            length: match[0].length,
+            tokenType: 'variable',
+            modifiers: []
+          });
+        }
         
         // Token for closing brace
         const closeBraceOffset = directiveText.lastIndexOf('}');
@@ -720,6 +735,21 @@ export class DirectiveVisitor extends BaseVisitor {
           tokenType: 'string',
           modifiers: []
         });
+
+        // Highlight @var occurrences inside the quoted command
+        const inner = directiveText.substring(quoteStart + 1, quoteEnd);
+        const varRegex = /@[A-Za-z_][A-Za-z0-9_]*/g;
+        let match: RegExpExecArray | null;
+        while ((match = varRegex.exec(inner)) !== null) {
+          const varOffset = directive.location.start.column - 1 + quoteStart + 1 + match.index;
+          this.tokenBuilder.addToken({
+            line: directive.location.start.line - 1,
+            char: varOffset,
+            length: match[0].length,
+            tokenType: 'variable',
+            modifiers: []
+          });
+        }
         return;
       }
     }
@@ -818,43 +848,19 @@ export class DirectiveVisitor extends BaseVisitor {
     // Process target
     if (values.target) {
       if (values.target.type === 'file' && values.target.path) {
-        // File path - tokenize as string with proper interpolation handling
+        // File path - tokenize as a single string when quoted; allow interpolation via separate tokens elsewhere
         if (values.target.meta?.quoted && values.target.path) {
-          // For quoted paths, we need to handle interpolation
-          // First, add opening quote token
           const firstPart = values.target.path[0];
-          if (firstPart && firstPart.location) {
-            this.tokenBuilder.addToken({
-              line: firstPart.location.start.line - 1,
-              char: firstPart.location.start.column - 2, // -2 for opening quote
-              length: 1,
-              tokenType: 'string',
-              modifiers: []
-            });
-          }
-          
-          // Process each path part (text and variables)
-          for (const pathPart of values.target.path) {
-            if (pathPart.type === 'Text' && pathPart.location) {
-              this.tokenBuilder.addToken({
-                line: pathPart.location.start.line - 1,
-                char: pathPart.location.start.column - 1,
-                length: pathPart.content.length,
-                tokenType: 'string',
-                modifiers: []
-              });
-            } else if (pathPart.type === 'VariableReference') {
-              this.mainVisitor.visitNode(pathPart, context);
-            }
-          }
-          
-          // Add closing quote token
           const lastPart = values.target.path[values.target.path.length - 1];
-          if (lastPart && lastPart.location) {
+          if (firstPart?.location && lastPart?.location) {
+            const openQuoteOffset = firstPart.location.start.offset - 1; // include opening quote
+            const closeQuoteOffset = lastPart.location.end.offset + 1;   // include closing quote
+            const length = Math.max(0, closeQuoteOffset - openQuoteOffset);
+            const pos = this.document.positionAt(openQuoteOffset);
             this.tokenBuilder.addToken({
-              line: lastPart.location.end.line - 1,
-              char: lastPart.location.end.column - 1,
-              length: 1,
+              line: pos.line,
+              char: pos.character,
+              length,
               tokenType: 'string',
               modifiers: []
             });

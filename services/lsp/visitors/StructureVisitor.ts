@@ -90,6 +90,18 @@ export class StructureVisitor extends BaseVisitor {
           // Process the value
           if (typeof value === 'object' && value !== null) {
             if (value.type) {
+              // Special-case: inline run inside object (e.g., "dynamic": run "echo test")
+              if (value.type === 'command' && (value.hasRunKeyword || value.hasRun)) {
+                const colonIndex = objectText.indexOf(':', keyMatch?.index !== undefined ? keyMatch.index + (keyMatch[0]?.length || 0) : 0);
+                if (colonIndex !== -1) {
+                  const absAfterColon = node.location.start.offset + colonIndex + 1;
+                  const scannedLen = this.scanAndTokenizePrimitive(objectText, colonIndex + 1, node.location.start.offset);
+                  if (scannedLen > 0) {
+                    lastPropertyEndOffset = absAfterColon + scannedLen;
+                    continue; // Skip normal visit for this value to avoid duplicate tokens
+                  }
+                }
+              }
               // Regular AST node
               this.mainVisitor.visitNode(value, context);
               if (value.location) {
@@ -106,6 +118,26 @@ export class StructureVisitor extends BaseVisitor {
               const lastContent = value.content[value.content.length - 1];
               if (lastContent?.location) {
                 lastPropertyEndOffset = lastContent.location.end.offset;
+              }
+            } else {
+              // Non-AST object value (unlikely). Fall back to textual scan below
+              const colonIndex = objectText.indexOf(':', keyMatch?.index !== undefined ? keyMatch.index + (keyMatch[0]?.length || 0) : 0);
+              if (colonIndex !== -1) {
+                const absAfterColon = node.location.start.offset + colonIndex + 1;
+                const scannedLen = this.scanAndTokenizePrimitive(objectText, colonIndex + 1, node.location.start.offset);
+                if (scannedLen > 0) {
+                  lastPropertyEndOffset = absAfterColon + scannedLen;
+                }
+              }
+            }
+          } else {
+            // Primitive value (string/number/boolean/null) – scan text to tokenize
+            const colonIndex = objectText.indexOf(':', keyMatch?.index !== undefined ? keyMatch.index + (keyMatch[0]?.length || 0) : 0);
+            if (colonIndex !== -1) {
+              const absAfterColon = node.location.start.offset + colonIndex + 1;
+              const scannedLen = this.scanAndTokenizePrimitive(objectText, colonIndex + 1, node.location.start.offset);
+              if (scannedLen > 0) {
+                lastPropertyEndOffset = absAfterColon + scannedLen;
               }
             }
           }
@@ -127,6 +159,68 @@ export class StructureVisitor extends BaseVisitor {
     
     // Add closing brace
     this.operatorHelper.addOperatorToken(node.location.end.offset - 1, 1);
+  }
+
+  // Scan from a relative index after ':' and emit a primitive token found.
+  // Returns the length of the scanned token (in characters) or 0 if none.
+  private scanAndTokenizePrimitive(containerText: string, relStart: number, baseOffset: number): number {
+    // Skip whitespace
+    let i = relStart;
+    while (i < containerText.length && /\s/.test(containerText[i])) i++;
+    if (i >= containerText.length) return 0;
+
+    // Detect inline 'run' keyword and a quoted argument
+    const runMatch = containerText.substring(i).match(/^run\b/);
+    if (runMatch) {
+      // 'run'
+      let consumed = runMatch[0].length;
+      const runPos = this.document.positionAt(baseOffset + i);
+      this.tokenBuilder.addToken({ line: runPos.line, char: runPos.character, length: consumed, tokenType: 'keyword', modifiers: [] });
+      // Skip whitespace after run
+      let j = i + consumed;
+      while (j < containerText.length && /\s/.test(containerText[j])) j++;
+      // Quoted string after run
+      if (containerText[j] === '"') {
+        let k = j + 1;
+        while (k < containerText.length) {
+          if (containerText[k] === '"' && containerText[k - 1] !== '\\') break;
+          k++;
+        }
+        const len = (k < containerText.length ? k - j + 1 : 1);
+        const strPos = this.document.positionAt(baseOffset + j);
+        this.tokenBuilder.addToken({ line: strPos.line, char: strPos.character, length: len, tokenType: 'string', modifiers: [] });
+        consumed += (j - (i + runMatch[0].length)) + len;
+      }
+      return (i - relStart) + consumed;
+    }
+    const ch = containerText[i];
+    // String literal
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < containerText.length) {
+        if (containerText[j] === '"' && containerText[j - 1] !== '\\') break;
+        j++;
+      }
+      const length = (j < containerText.length ? j - i + 1 : 1);
+      const pos = this.document.positionAt(baseOffset + i);
+      this.tokenBuilder.addToken({ line: pos.line, char: pos.character, length, tokenType: 'string', modifiers: [] });
+      return length + (i - relStart);
+    }
+    // Boolean/null
+    const kwMatch = containerText.substring(i).match(/^(true|false|null)/);
+    if (kwMatch) {
+      const pos = this.document.positionAt(baseOffset + i);
+      this.tokenBuilder.addToken({ line: pos.line, char: pos.character, length: kwMatch[0].length, tokenType: 'keyword', modifiers: [] });
+      return (i - relStart) + kwMatch[0].length;
+    }
+    // Number
+    const numMatch = containerText.substring(i).match(/^-?\d+(?:\.\d+)?/);
+    if (numMatch) {
+      const pos = this.document.positionAt(baseOffset + i);
+      this.tokenBuilder.addToken({ line: pos.line, char: pos.character, length: numMatch[0].length, tokenType: 'number', modifiers: [] });
+      return (i - relStart) + numMatch[0].length;
+    }
+    return 0;
   }
   
   private tokenizePlainObject(node: any, objectText: string): void {
