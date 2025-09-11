@@ -92,6 +92,11 @@ Define reusable functions and templates:
 /run @greet("Bob")
 /var @sum = @add(10, 20)
 /show @welcome("Alice", "Admin")
+
+# `foreach` in `/exe` RHS
+/exe @wrap(x) = `[@x]`
+/exe @wrapAll(items) = foreach @wrap(@items)
+/show @wrapAll(["a","b"]) | @join(',')   # => [a],[b]
 ```
 
 ### Conditionals (`/when`)
@@ -176,6 +181,24 @@ Transform collections with `foreach`:
 ```mlld
 /exe @greet(name) = ::Hi {{name}}!::
 /var @greetings = foreach @greet(@names)
+
+`/show foreach` with formatting options:
+
+```mlld
+/var @names = ["Ann","Ben"]
+/exe @hello(n) = `Hello @n`
+/show foreach @hello(@names) with { separator: " | ", template: "{{index}}={{result}}" }
+```
+
+When-expressions in `for` RHS with filtering:
+
+```mlld
+/var @xs = [1, null, 2, null, 3]
+/var @filtered = for @x in @xs => when [
+  @x != null => @x
+  none => skip
+]
+```
 ```
 
 ### File Operations

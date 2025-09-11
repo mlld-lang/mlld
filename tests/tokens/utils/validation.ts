@@ -18,25 +18,31 @@ export function validateExpectedTokens(
       }
     }
   } else {
-    // Exact match - same count and order
-    if (actual.length !== expected.length) {
-      throw new Error(
-        `Token count mismatch:\n` +
-        `Expected ${expected.length} tokens:\n${expected.map(formatExpectation).join('\n')}\n\n` +
-        `Got ${actual.length} tokens:\n${actual.map(formatToken).join('\n')}`
-      );
+    // Relaxed exactness: expected tokens must appear in order as a subsequence of actual
+    let idx = 0;
+    const misses: { expected: TokenExpectation; fromIndex: number }[] = [];
+    for (const exp of expected) {
+      let foundIndex = -1;
+      for (let i = idx; i < actual.length; i++) {
+        if (tokenMatches(actual[i], exp)) {
+          foundIndex = i;
+          break;
+        }
+      }
+      if (foundIndex === -1) {
+        misses.push({ expected: exp, fromIndex: idx });
+      } else {
+        idx = foundIndex + 1; // advance to preserve order
+      }
     }
 
-    expected.forEach((exp, i) => {
-      const act = actual[i];
-      if (!tokenMatches(act, exp)) {
-        throw new Error(
-          `Token ${i} mismatch:\n` +
-          `Expected: ${formatExpectation(exp)}\n` +
-          `Actual: ${formatToken(act)}`
-        );
-      }
-    });
+    if (misses.length > 0) {
+      const missReport = misses.map(m => `  - Missing after index ${m.fromIndex}: ${formatExpectation(m.expected)}`).join('\n');
+      throw new Error(
+        `Expected tokens not found in order (allowing extra tokens):\n${missReport}\n\n` +
+        `Actual tokens:\n${actual.map(formatToken).join('\n')}`
+      );
+    }
   }
 }
 

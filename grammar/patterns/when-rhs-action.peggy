@@ -11,6 +11,7 @@ WhenRHSAction "when RHS action"
   / WhenRHSOutputAction  
   / WhenRHSVarAssignment
   / WhenRHSFunctionCall
+  / WhenRHSSkipAction
   / WhenRHSRetryAction
   / VarRHSContent  // Pure values (fallback)
 
@@ -44,6 +45,16 @@ WhenRHSRetryAction
 // Prevents hint parsing from crossing line boundaries
 SingleLineVarRHSContent
   = ![\n\r] content:VarRHSContent { return content; }
+
+// Skip action - returns a special literal used by for-expressions to filter
+WhenRHSSkipAction
+  = "skip" {
+      return helpers.createNode(NodeType.Literal, {
+        value: 'skip',
+        valueType: 'skip',
+        location: location()
+      });
+    }
 
 // Show action - creates regular show directive node
 WhenRHSShowAction

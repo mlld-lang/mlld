@@ -1,2 +1,5 @@
-/var @access = @score > 80 && @verified ? "granted" : "denied"
-/var @status = @isAdmin || (@isMod && @active) ? "privileged" : "standard"
+/exe @validator(input) = when [
+  @input.valid => @input
+  @ctx.try < 3 => retry "need more validation"
+  * => "fallback"
+]

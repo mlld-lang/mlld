@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **LSP/Editor updates**: Semantic tokens cover pipeline parallel groups (`||`), with.pipeline (incl. nested) and `with { format: ... }`, and `/for parallel`; directive/completion tweaks include `/log` and format values. VS Code extension runs semantic-only (legacy providers removed); fallback TextMate grammar highlights `parallel` and `format`.
 
+- Expression system completeness:
+  - when-expressions usable in `/var` assignments, array literals, and function arguments
+  - `when` allowed in `for` collection RHS; `none => skip` filters non-matches
+  - `foreach` allowed in `/exe` RHS; executable foreach callable like any other function
+  - `/show foreach @func(@arrays)` with `with { separator, template }` formatting options
 ### Fixed
 - #411: Nested `/for` collection returns `[]` for empty arrays in both plain `/show` and when piped to `@json`. Removes accidental `{}` output.
 - `isLoadContentResultArray` does not match untagged empty arrays; prevents misclassification of generic empty arrays.
@@ -1285,4 +1290,3 @@ Added:
 ## [1.0.0]
 
 Initial versioned release. 
-

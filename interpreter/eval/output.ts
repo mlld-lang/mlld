@@ -107,7 +107,7 @@ export async function evaluateOutput(
       throw new MlldOutputError(
         'No target specified for output directive',
         'unknown',
-        { location: directive.location }
+        { sourceLocation: directive.location, env }
       );
     }
     
@@ -153,7 +153,7 @@ export async function evaluateOutput(
       throw new MlldOutputError(
         `Failed to process output: ${error.message}`,
         format || 'unknown',
-        { location: directive.location, cause: error }
+        { sourceLocation: directive.location, env, cause: error }
       );
     }
     throw error;
@@ -197,7 +197,8 @@ async function evaluateOutputSource(
     default:
       throw new MlldOutputError(
         `Unknown source type: ${sourceType}`,
-        directive.location
+        'unknown',
+        { sourceLocation: directive.location, env }
       );
   }
 }
@@ -235,7 +236,7 @@ async function evaluateInvocationSource(
     : undefined;
   
   if (!varName) {
-    throw new MlldOutputError(`Invalid variable reference in output directive`, 'unknown', { location: directive.location });
+    throw new MlldOutputError(`Invalid variable reference in output directive`, 'unknown', { sourceLocation: directive.location, env });
   }
   const args = directive.values.source.args || [];
   
@@ -245,7 +246,8 @@ async function evaluateInvocationSource(
   if (!variable) {
     throw new MlldOutputError(
       `Variable ${varName} not found`,
-      directive.location
+      'unknown',
+      { sourceLocation: directive.location, env }
     );
   }
   
@@ -324,7 +326,8 @@ async function evaluateInvocationSource(
     } else {
       throw new MlldOutputError(
         `Unsupported executable type: ${definition.type}`,
-        directive.location
+        'unknown',
+        { sourceLocation: directive.location, env }
       );
     }
     
@@ -333,7 +336,8 @@ async function evaluateInvocationSource(
   } else {
     throw new MlldOutputError(
       `Variable ${varName} is not a template or executable`,
-      directive.location
+      'unknown',
+      { sourceLocation: directive.location, env }
     );
   }
 }
@@ -366,7 +370,8 @@ async function evaluateSimpleVariableSource(
   } else {
     throw new MlldOutputError(
       'Invalid source structure for variable output',
-      directive.location
+      'unknown',
+      { sourceLocation: directive.location, env }
     );
   }
   
@@ -375,7 +380,8 @@ async function evaluateSimpleVariableSource(
   if (!variable) {
     throw new MlldOutputError(
       `Variable ${varName} not found`,
-      directive.location
+      'unknown',
+      { sourceLocation: directive.location, env }
     );
   }
   
@@ -391,7 +397,8 @@ async function evaluateSimpleVariableSource(
   } else {
     throw new MlldOutputError(
       `Cannot output variable ${varName} - unknown variable type`,
-      directive.location
+      'unknown',
+      { sourceLocation: directive.location, env }
     );
   }
   
@@ -521,7 +528,8 @@ async function evaluateExecSource(
   } else {
     throw new MlldOutputError(
       `Invalid exec invocation source`,
-      directive.location
+      'unknown',
+      { sourceLocation: directive.location, env }
     );
   }
 }
@@ -560,7 +568,8 @@ async function outputToFile(
   if (!fileSystem) {
     throw new MlldOutputError(
       'File system not available',
-      directive.location
+      'unknown',
+      { sourceLocation: directive.location, env }
     );
   }
   
@@ -644,18 +653,32 @@ async function outputToResolver(
   if (!resolverManager) {
     throw new MlldOutputError(
       'Resolver manager not available',
-      directive.location
+      'unknown',
+      { sourceLocation: directive.location, env }
     );
   }
   
   // Construct the resolver path
   const resolverPath = `@${target.resolver}/${target.path.map(p => p.content).join('/')}`;
   
-  // Use the resolver to write content
-  // Note: This is a placeholder - actual resolver write support would need to be implemented
+  // Heuristic: if resolver name matches a defined variable, user likely meant a variable in the path (needs quotes)
+  const looksLikeVariable = !!env.getVariable(target.resolver);
+  if (looksLikeVariable) {
+    const hintQuoted = `/output @<source> to "@${target.resolver}/${target.path.map(p => p.content).join('/')}"`;
+    const hintExplain = `The target '@${target.resolver}/...' is interpreted as a resolver name, not a variable. Quote the path to interpolate variables.`;
+    throw new MlldOutputError(
+      `Unquoted variable in /output target: '@${target.resolver}' is interpreted as a resolver name` +
+        `\nHint: ${hintExplain}\nExample: ${hintQuoted}`,
+      'unknown',
+      { sourceLocation: directive.location, env, context: { resolverPath } }
+    );
+  }
+
+  // Placeholder until resolver write support exists
   throw new MlldOutputError(
     `Resolver output not yet implemented for ${resolverPath}`,
-    directive.location
+    'unknown',
+    { sourceLocation: directive.location, env }
   );
 }
 

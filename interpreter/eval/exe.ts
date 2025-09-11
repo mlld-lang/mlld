@@ -456,6 +456,39 @@ export async function evaluateExe(
       sourceDirective: 'exec'
     } satisfies CodeExecutable;
     
+  } else if (directive.subtype === 'exeForeach') {
+    // Handle foreach expression executable: @exe name(params) = foreach @cmd(@arrays)
+    const contentNodes = directive.values?.content;
+    if (!contentNodes || !Array.isArray(contentNodes) || contentNodes.length === 0) {
+      throw new Error('Exec foreach directive missing foreach expression');
+    }
+    
+    const foreachNode = contentNodes[0];
+    // Basic shape check
+    if (!foreachNode || (foreachNode.type !== 'foreach-command' && (foreachNode.value?.type !== 'foreach'))) {
+      throw new Error('Exec foreach directive content must be a ForeachCommandExpression');
+    }
+    
+    // Get parameter names if any
+    const params = directive.values?.params || [];
+    const paramNames = extractParamNames(params);
+    
+    if (process.env.DEBUG_EXEC) {
+      logger.debug('Creating exe foreach expression:', { 
+        identifier,
+        paramNames
+      });
+    }
+    
+    // Create a special executable that evaluates the foreach expression
+    executableDef = {
+      type: 'code',
+      codeTemplate: contentNodes, // Store the Foreach AST node
+      language: 'mlld-foreach', // Special language marker
+      paramNames,
+      sourceDirective: 'exec'
+    } satisfies CodeExecutable;
+  
   } else if (directive.subtype === 'exeFor') {
     // Handle for expression executable: @exe name(params) = for @var in @collection => expression
     const contentNodes = directive.values?.content;

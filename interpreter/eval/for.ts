@@ -70,10 +70,17 @@ export async function evaluateForDirective(
     const iterable = toIterable(sourceValue);
 
     if (!iterable) {
+      const receivedType = typeof sourceValue;
+      const preview = (() => {
+        try {
+          if (receivedType === 'object') return JSON.stringify(sourceValue)?.slice(0, 120);
+          return String(sourceValue)?.slice(0, 120);
+        } catch { return String(sourceValue); }
+      })();
       throw new MlldDirectiveError(
+        `Type mismatch: /for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
         'for',
-        `Cannot iterate over ${typeof sourceValue}`,
-        directive
+        { location: directive.location, context: { expected: 'array', receivedType } }
       );
     }
 
@@ -156,10 +163,17 @@ export async function evaluateForExpression(
   const iterable = toIterable(sourceValue);
 
   if (!iterable) {
+    const receivedType = typeof sourceValue;
+    const preview = (() => {
+      try {
+        if (receivedType === 'object') return JSON.stringify(sourceValue)?.slice(0, 120);
+        return String(sourceValue)?.slice(0, 120);
+      } catch { return String(sourceValue); }
+    })();
     throw new MlldDirectiveError(
+      `Type mismatch: /for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
       'for',
-      `Cannot iterate over ${typeof sourceValue}`,
-      expr
+      { location: expr.location, context: { expected: 'array', receivedType } }
     );
   }
 
@@ -172,6 +186,7 @@ export async function evaluateForExpression(
 
   const iterableArray = Array.from(iterable);
 
+  const SKIP = Symbol('skip');
   const runOne = async (entry: [any, any], idx: number) => {
     const [key, value] = entry;
     let childEnv = env.createChildEnvironment();
@@ -196,6 +211,9 @@ export async function evaluateForExpression(
         }
         const result = await evaluate(nodesToEvaluate, childEnv, { isExpression: true });
         if (result.env) childEnv = result.env;
+        if (result && (result as any).value === 'skip') {
+          return SKIP as any;
+        }
         if (isVariable(result.value)) {
           exprResult = await extractVariableValue(result.value, childEnv);
         } else {
@@ -212,11 +230,11 @@ export async function evaluateForExpression(
   if (effective?.parallel) {
     const cap = Math.min(effective.cap ?? getParallelLimit(), iterableArray.length);
     const orderedResults = await runWithConcurrency(iterableArray, cap, runOne, { ordered: true, paceMs: effective.rateMs });
-    for (const r of orderedResults) results.push(r);
+    for (const r of orderedResults) if (r !== SKIP) results.push(r);
   } else {
     for (let i = 0; i < iterableArray.length; i++) {
       const r = await runOne(iterableArray[i], i);
-      results.push(r);
+      if (r !== SKIP) results.push(r);
     }
   }
 

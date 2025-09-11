@@ -23,3 +23,8 @@
 /run @greet("Bob")
 /var @sum = @add(10, 20)
 /show @welcome("Alice", "Admin")
+
+# `foreach` in `/exe` RHS
+/exe @wrap(x) = `[@x]`
+/exe @wrapAll(items) = foreach @wrap(@items)
+/show @wrapAll(["a","b"]) | @join(',')   # => [a],[b]

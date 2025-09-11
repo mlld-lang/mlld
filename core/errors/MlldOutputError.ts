@@ -1,9 +1,13 @@
 import { MlldError, ErrorSeverity } from '@core/errors/MlldError';
+import type { SourceLocation } from '@core/types';
+import type { Environment } from '@interpreter/env/Environment';
 
 export interface MlldOutputErrorOptions {
   cause?: Error;
   severity?: ErrorSeverity;
   context?: any;
+  sourceLocation?: SourceLocation;
+  env?: Environment;
 }
 
 /**
@@ -24,6 +28,8 @@ export class MlldOutputError extends MlldError {
       code: 'OUTPUT_GENERATION_FAILED',
       cause: options.cause,
       severity,
+      sourceLocation: options.sourceLocation,
+      env: options.env,
       details: {
         ...options.context,
         format

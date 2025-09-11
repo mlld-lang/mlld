@@ -1,8 +1,4 @@
-/exe @validator(input) = when first [
-  @input.valid => @input.value
-  @ctx.try < 3 => retry "validation failed"
-  none => "fallback value"
-]
-
-/var @result = "invalid" | @validator
-/show @result
+/var @names = ["Ann","Ben"]
+/exe @greet(n) = `Hello @n`
+/show foreach @greet(@names) with { separator: " | ", template: "{{index}}={{result}}" }
+# Output: 0=Hello Ann | 1=Hello Ben

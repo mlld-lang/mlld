@@ -281,6 +281,17 @@ The `@p` (`@pipeline`) variable provides access to pipeline execution state:
 
 **Critical**: `try` and `tries` are **local to the retry context**. Stages outside the active retry context see `try: 1` and `tries: []`. This is by design - each stage starts fresh unless part of an active retry.
 
+#### History Structure
+
+Pipeline history is attempt‑grouped. The history records attempts as an outer array, and each attempt contains a sequential list of stage entries for that attempt.
+
+- Shape: `history: Attempt[]` where `Attempt` is `StageEntry[]`.
+- Empty attempt group: `history: [[]]` represents a retry context that exists but has no recorded stage entries yet.
+- No attempts: `history: []` represents no retry contexts.
+- Parallel groups: a parallel stage contributes a single stage entry that encapsulates the group output (a JSON array string) to preserve ordering and avoid ambiguity across retries.
+
+This grouping aligns with shorthand `||` and with‑clause nested array syntax: `| @left || @right |` is equivalent to `with { pipeline: [[@left, @right], ...] }`, and history preserves attempt boundaries independently of intra‑stage parallelism.
+
 #### Input Semantics
 
 - `@p[0]` (and alias `@p[0]`) is the original/base input to the pipeline.

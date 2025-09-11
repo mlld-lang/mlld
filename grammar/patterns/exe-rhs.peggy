@@ -5,6 +5,7 @@
 ExeRHSContent "exe assignment value"
   = WhenExpression              // when: [...] expressions for conditional execution
   / ForExpressionExe            // for @var in @collection => action (exe-specific with directive support)
+  / ExeForeachPattern           // foreach @command(@arrays) as executable body
   / ExeRunCommandPattern        // run {command} - explicit run command syntax
   / ExeCodePattern              // js {code} - language-specific code blocks
   / ExeEnvironmentDeclaration   // { helper1, helper2 } - environment setup (must come before command)
@@ -231,6 +232,24 @@ ExeResolverPattern "exe resolver pattern"
         },
         subtype: 'exeResolver',
         source: 'resolver'
+      };
+    }
+
+// Foreach pattern for exe context - wraps ForeachCommandExpression
+ExeForeachPattern "exe foreach pattern"
+  = foreach:ForeachCommandExpression {
+      return {
+        subtype: 'exeForeach',
+        source: 'foreach',
+        values: {
+          content: [foreach]
+        },
+        raw: {
+          foreach: foreach.rawText || 'foreach ...'
+        },
+        meta: {
+          isForeach: true
+        }
       };
     }
 
