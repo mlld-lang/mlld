@@ -70,10 +70,17 @@ export async function evaluateForDirective(
     const iterable = toIterable(sourceValue);
 
     if (!iterable) {
+      const receivedType = typeof sourceValue;
+      const preview = (() => {
+        try {
+          if (receivedType === 'object') return JSON.stringify(sourceValue)?.slice(0, 120);
+          return String(sourceValue)?.slice(0, 120);
+        } catch { return String(sourceValue); }
+      })();
       throw new MlldDirectiveError(
+        `Type mismatch: /for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
         'for',
-        `Cannot iterate over ${typeof sourceValue}`,
-        directive
+        { location: directive.location, context: { expected: 'array', receivedType } }
       );
     }
 
@@ -156,10 +163,17 @@ export async function evaluateForExpression(
   const iterable = toIterable(sourceValue);
 
   if (!iterable) {
+    const receivedType = typeof sourceValue;
+    const preview = (() => {
+      try {
+        if (receivedType === 'object') return JSON.stringify(sourceValue)?.slice(0, 120);
+        return String(sourceValue)?.slice(0, 120);
+      } catch { return String(sourceValue); }
+    })();
     throw new MlldDirectiveError(
+      `Type mismatch: /for expects an array. Received: ${receivedType}${preview ? ` (${preview})` : ''}`,
       'for',
-      `Cannot iterate over ${typeof sourceValue}`,
-      expr
+      { location: expr.location, context: { expected: 'array', receivedType } }
     );
   }
 
