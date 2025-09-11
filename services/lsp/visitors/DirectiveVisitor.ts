@@ -1,5 +1,6 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
+import { EffectTokenHelper } from '@services/lsp/utils/EffectTokenHelper';
 import { LocationHelpers } from '@services/lsp/utils/LocationHelpers';
 import { TextExtractor } from '@services/lsp/utils/TextExtractor';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
@@ -530,6 +531,7 @@ export class DirectiveVisitor extends BaseVisitor {
             this.operatorHelper.tokenizeListSeparators(startOffset, endOffset, ',');
           }
           // Highlight effect keywords and syntax inside pipeline arrays
+          const effectHelper = new EffectTokenHelper(this.document, this.tokenBuilder);
           const segmentStartRel = pipelineKeyIndex + firstBracketRel;
           const segmentEndRel = closeIdx !== -1 ? closeIdx : directiveText.length;
           const segment = directiveText.substring(segmentStartRel, segmentEndRel);
@@ -539,34 +541,16 @@ export class DirectiveVisitor extends BaseVisitor {
           let m: RegExpExecArray | null;
           while ((m = effectRegex.exec(segment)) !== null) {
             const effect = m[2];
-            const effRel = segmentStartRel + m.index + m[1].length;
-            const effPos = this.document.positionAt(directive.location.start.offset + effRel);
-            this.tokenBuilder.addToken({
-              line: effPos.line,
-              char: effPos.character,
-              length: effect.length,
-              tokenType: 'keyword',
-              modifiers: []
-            });
+          // effRel is relative to directive start; absEff converts to absolute document offset
+          const effRel = segmentStartRel + m.index + m[1].length;
+          const absEff = directive.location.start.offset + effRel;
+            effectHelper.tokenizeEffectKeyword(effect, absEff);
 
+            const stageRest = segment.substring(m.index + m[0].length);
             if (effect === 'output') {
-              // Find 'to' following the effect within the current stage (until next ']' or ',')
-              const stageRest = segment.substring(m.index + m[0].length);
-              const toMatch = stageRest.match(/\bto\b/);
-              if (toMatch && toMatch.index !== undefined) {
-                const toRel = effRel + (m[0].length) + toMatch.index;
-                const toPos = this.document.positionAt(directive.location.start.offset + toRel);
-                this.tokenBuilder.addToken({ line: toPos.line, char: toPos.character, length: 2, tokenType: 'keyword', modifiers: [] });
-
-                // Streams stdout/stderr right after 'to'
-                const afterTo = stageRest.substring(toMatch.index + toMatch[0].length);
-                const streamMatch = afterTo.match(/^\s*(stdout|stderr)\b/);
-                if (streamMatch) {
-                  const sRel = toRel + 2 + (afterTo.indexOf(streamMatch[1]));
-                  const sPos = this.document.positionAt(directive.location.start.offset + sRel);
-                  this.tokenBuilder.addToken({ line: sPos.line, char: sPos.character, length: streamMatch[1].length, tokenType: 'keyword', modifiers: [] });
-                }
-              }
+              effectHelper.tokenizeOutputArgs(absEff + effect.length, stageRest);
+            } else {
+              effectHelper.tokenizeSimpleArg(absEff + effect.length, stageRest);
             }
           }
         }

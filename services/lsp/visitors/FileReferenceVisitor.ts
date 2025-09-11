@@ -2,6 +2,7 @@ import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
 import { TextExtractor } from '@services/lsp/utils/TextExtractor';
 import { CommentTokenHelper } from '@services/lsp/utils/CommentTokenHelper';
+import { EffectTokenHelper } from '@services/lsp/utils/EffectTokenHelper';
 
 export class FileReferenceVisitor extends BaseVisitor {
   private mainVisitor: any;
@@ -641,66 +642,21 @@ export class FileReferenceVisitor extends BaseVisitor {
         while (/\s/.test(sourceText[contentOffset])) contentOffset++;
         const contentPos = this.document.positionAt(contentOffset);
 
+        // contentOffset is an absolute offset; pass it to helper to emit tokens at correct positions
         const effectName = (pipeTransform || '').toString();
         const isEffect = sourceText[contentOffset] !== '@' && /^(show|log|output)\b/.test(effectName);
         if (isEffect) {
-          // Effect keyword
-          this.tokenBuilder.addToken({
-            line: contentPos.line,
-            char: contentPos.character,
-            length: effectName.length,
-            tokenType: 'keyword',
-            modifiers: []
-          });
-          // Heuristic argument tokenization similar to VariableVisitor
+          const helper = new EffectTokenHelper(this.document, this.tokenBuilder);
+          helper.tokenizeEffectKeyword(effectName, contentOffset);
           const endOfSegment = (() => {
             const idx = sourceText.indexOf('|', contentOffset);
             return idx === -1 ? sourceText.length : idx;
           })();
           const rest = sourceText.slice(contentOffset + effectName.length, endOfSegment);
           if (effectName === 'output') {
-            const varMatch = rest.match(/\s+(@[A-Za-z_][A-Za-z0-9_]*)/);
-            if (varMatch && varMatch.index !== undefined) {
-              const vOffset = contentOffset + effectName.length + varMatch.index + varMatch[0].indexOf('@');
-              const vPos = this.document.positionAt(vOffset);
-              this.tokenBuilder.addToken({ line: vPos.line, char: vPos.character, length: varMatch[1].length, tokenType: 'variable', modifiers: [] });
-            }
-            const toMatch = rest.match(/\s+to\s+/);
-            if (toMatch && toMatch.index !== undefined) {
-              const toOffset = contentOffset + effectName.length + toMatch.index + toMatch[0].indexOf('to');
-              const toPos = this.document.positionAt(toOffset);
-              this.tokenBuilder.addToken({ line: toPos.line, char: toPos.character, length: 2, tokenType: 'keyword', modifiers: [] });
-              const targetStart = toMatch.index + toMatch[0].length;
-              const targetRest = rest.slice(targetStart);
-              const stream = targetRest.match(/^(stdout|stderr)\b/);
-              if (stream) {
-                const sOffset = contentOffset + effectName.length + targetStart;
-                const sPos = this.document.positionAt(sOffset);
-                this.tokenBuilder.addToken({ line: sPos.line, char: sPos.character, length: stream[1].length, tokenType: 'keyword', modifiers: [] });
-              } else {
-                const tVar = targetRest.match(/^(@[A-Za-z_][A-Za-z0-9_]*)/);
-                if (tVar) {
-                  const tOffset = contentOffset + effectName.length + targetStart;
-                  const tPos = this.document.positionAt(tOffset);
-                  this.tokenBuilder.addToken({ line: tPos.line, char: tPos.character, length: tVar[1].length, tokenType: 'variable', modifiers: [] });
-                } else if (/^"/.test(targetRest)) {
-                  const m = targetRest.match(/^"([^"\\]|\\.)*"/);
-                  if (m) {
-                    const qOffset = contentOffset + effectName.length + targetStart;
-                    const qPos = this.document.positionAt(qOffset);
-                    this.tokenBuilder.addToken({ line: qPos.line, char: qPos.character, length: m[0].length, tokenType: 'string', modifiers: [] });
-                  }
-                }
-              }
-            }
+            helper.tokenizeOutputArgs(contentOffset + effectName.length, rest);
           } else {
-            const simpleArg = rest.match(/\s+(@[A-Za-z_][A-Za-z0-9_]*|`[^`]*`|"([^"\\]|\\.)*"|\'([^'\\]|\\.)*\')/);
-            if (simpleArg && simpleArg.index !== undefined) {
-              const argText = simpleArg[1] || simpleArg[0].trim();
-              const aOffset = contentOffset + effectName.length + simpleArg.index + simpleArg[0].indexOf(argText);
-              const aPos = this.document.positionAt(aOffset);
-              this.tokenBuilder.addToken({ line: aPos.line, char: aPos.character, length: argText.length, tokenType: argText.startsWith('@') ? 'variable' : 'string', modifiers: [] });
-            }
+            helper.tokenizeSimpleArg(contentOffset + effectName.length, rest);
           }
         } else {
           // Regular @transform token
