@@ -1,3 +1,3 @@
-/var @filename = <package.json>.filename
-/var @tokens = <large-file.md>.tokens
-/var @frontmatter = <doc.md>.fm.title
+/var @readme = <README.md>
+/var @config = <package.json>
+/show <documentation.md>

@@ -5,7 +5,7 @@
 /import @corp/utils as corpUtils
 /import { API_KEY, NODE_ENV } from @input
 
-=== START TOKENS ===
+=== START PARTIAL TOKENS ===
 { --> operator
 greeting --> variable
 , --> operator
@@ -24,15 +24,9 @@ fetchData --> variable
 parseJSON --> variable
 } --> operator
 from --> keyword
-@corp --> namespace
-/ --> operator
-utils --> type
-@corp --> namespace
-/ --> operator
-utils --> type
-@corp --> namespace
-/ --> operator
-utils --> type
+@corp/utils --> variable[defaultLibrary]
+@corp/utils --> variable[defaultLibrary]
+@corp/utils --> variable[defaultLibrary]
 as --> keyword
 corpUtils --> variable
 { --> operator
@@ -42,4 +36,4 @@ NODE_ENV --> variable
 } --> operator
 from --> keyword
 @input --> keyword
-=== END TOKENS ===
+=== END PARTIAL TOKENS ===

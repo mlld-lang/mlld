@@ -260,7 +260,7 @@ export async function evaluateExecInvocation(
       if (postFieldsBuiltin && postFieldsBuiltin.length > 0) {
         const { accessField } = await import('../utils/field-access');
         for (const f of postFieldsBuiltin) {
-          result = await accessField(result, f, { env });
+          result = await accessField(result, f, { env, sourceLocation: node.location });
         }
       }
       
@@ -564,6 +564,29 @@ export async function evaluateExecInvocation(
     } else if (arg && typeof arg === 'object' && 'type' in arg) {
       // AST nodes: evaluate based on type
       switch (arg.type) {
+        case 'WhenExpression': {
+          // Evaluate when-expression argument
+          const { evaluateWhenExpression } = await import('./when-expression');
+          const whenRes = await evaluateWhenExpression(arg as any, env);
+          argValueAny = whenRes.value;
+          // Stringify for argValue if object/array
+          if (argValueAny === undefined) {
+            argValue = 'undefined';
+          } else if (typeof argValueAny === 'object') {
+            try { argValue = JSON.stringify(argValueAny); } catch { argValue = String(argValueAny); }
+          } else {
+            argValue = String(argValueAny);
+          }
+          break;
+        }
+        case 'foreach':
+        case 'foreach-command': {
+          const { evaluateForeachCommand } = await import('./foreach');
+          const arr = await evaluateForeachCommand(arg as any, env);
+          argValueAny = arr;
+          argValue = JSON.stringify(arr);
+          break;
+        }
         case 'object':
           // Object literals: recursively evaluate properties (may contain exec invocations, etc.)
           const { evaluateDataValue } = await import('./data-value-evaluator');
@@ -1037,6 +1060,12 @@ export async function evaluateExecInvocation(
       result = value;
       // Update execEnv to the result which contains merged nodes
       execEnv = whenResult.env;
+    } else if (definition.language === 'mlld-foreach') {
+      // Special handling for mlld-foreach expressions
+      const foreachNode = definition.codeTemplate[0];
+      // Evaluate the foreach expression with the parameter environment
+      const { evaluateForeachCommand } = await import('./foreach');
+      result = await evaluateForeachCommand(foreachNode, execEnv);
     } else if (definition.language === 'mlld-for') {
       // Special handling for mlld-for expressions
       const forExprNode = definition.codeTemplate[0];
@@ -1423,7 +1452,7 @@ export async function evaluateExecInvocation(
       const { accessField } = await import('../utils/field-access');
       let current: any = result;
       for (const f of postFields) {
-        current = await accessField(current, f, { env });
+        current = await accessField(current, f, { env, sourceLocation: node.location });
       }
       result = current;
     } catch (e) {

@@ -1,4 +1,6 @@
 import { MlldError, ErrorSeverity } from './MlldError';
+import type { SourceLocation } from '@core/types';
+import type { Environment } from '@interpreter/env/Environment';
 import { ResolutionErrorCode } from './index';
 import type { Field as AstField } from '@core/types/common';
 
@@ -26,12 +28,18 @@ export interface FieldAccessErrorDetails {
 export class FieldAccessError extends MlldError {
   public details: FieldAccessErrorDetails;
 
-  constructor(message: string, details: FieldAccessErrorDetails, cause?: unknown) {
+  constructor(
+    message: string,
+    details: FieldAccessErrorDetails,
+    options?: { cause?: unknown; sourceLocation?: SourceLocation; env?: Environment }
+  ) {
     super(message, {
-        code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
-        severity: ErrorSeverity.Recoverable,
-        details: details,
-        cause: cause
+      code: ResolutionErrorCode.FIELD_ACCESS_ERROR,
+      severity: ErrorSeverity.Recoverable,
+      details: details,
+      cause: options?.cause,
+      sourceLocation: options?.sourceLocation,
+      env: options?.env
     });
     this.name = 'FieldAccessError';
     this.details = details;

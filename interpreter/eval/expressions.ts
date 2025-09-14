@@ -52,9 +52,14 @@ export async function evaluateUnifiedExpression(node: any, env: Environment): Pr
     }
   } catch (error) {
     throw new MlldDirectiveError(
-      `Expression evaluation failed: ${error.message}`,
-      'UnifiedExpression',
-      { nodeType: node.type, operator: node.operator }
+      `Expression evaluation failed: ${error instanceof Error ? error.message : String(error)}`,
+      'expression',
+      {
+        location: (node as any)?.location,
+        cause: error as Error,
+        context: { nodeType: (node as any)?.type, operator: (node as any)?.operator },
+        env
+      }
     );
   }
 }

@@ -171,13 +171,15 @@ export class VariableReferenceEvaluator {
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
           const fieldResult = await accessField(result, resolvedField, { 
             preserveContext: true,
-            env 
+            env,
+            sourceLocation: (value as any)?.location 
           });
           result = (fieldResult as any).value;
         } else {
           const fieldResult = await accessField(result, field, { 
             preserveContext: true,
-            env 
+            env,
+            sourceLocation: (value as any)?.location 
           });
           result = (fieldResult as any).value;
         }
@@ -332,13 +334,15 @@ export class VariableReferenceEvaluator {
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
           const fieldResult = await accessField(result, resolvedField, { 
             preserveContext: true,
-            env 
+            env,
+            sourceLocation: (value as any)?.location 
           });
           result = (fieldResult as any).value;
         } else {
           const fieldResult = await accessField(result, field, { 
             preserveContext: true,
-            env 
+            env,
+            sourceLocation: (value as any)?.location 
           });
           result = (fieldResult as any).value;
         }

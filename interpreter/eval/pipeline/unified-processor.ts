@@ -183,7 +183,8 @@ export async function processPipeline(
       const funcName = detected.pipeline[0]?.rawIdentifier || 'unknown';
       throw new MlldDirectiveError(
         `Pipeline execution failed at '@${funcName}': ${error.message}`,
-        context.location
+        'pipeline',
+        { location: context.location }
       );
     }
     throw error;
@@ -215,14 +216,16 @@ async function validatePipeline(
     if (!variable) {
       throw new MlldDirectiveError(
         `Pipeline function '@${funcName}' is not defined${identifier ? ` (in @${identifier})` : ''}. ` +
-        `Available functions: ${getAvailableFunctions(env).join(', ')}`
+        `Available functions: ${getAvailableFunctions(env).join(', ')}`,
+        'pipeline'
       );
     }
     
     // Check if it's actually executable
     if (variable.type !== 'executable' && variable.type !== 'computed') {
       throw new MlldDirectiveError(
-        `'@${funcName}' is not a function, it's a ${variable.type} variable${identifier ? ` (in @${identifier})` : ''}`
+        `'@${funcName}' is not a function, it's a ${variable.type} variable${identifier ? ` (in @${identifier})` : ''}`,
+        'pipeline'
       );
     }
   }

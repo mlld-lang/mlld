@@ -1,5 +1,6 @@
 import { BaseVisitor } from '@services/lsp/visitors/base/BaseVisitor';
 import { VisitorContext } from '@services/lsp/context/VisitorContext';
+import { EffectTokenHelper } from '@services/lsp/utils/EffectTokenHelper';
 import { LocationHelpers } from '@services/lsp/utils/LocationHelpers';
 import { TextExtractor } from '@services/lsp/utils/TextExtractor';
 import { OperatorTokenHelper } from '@services/lsp/utils/OperatorTokenHelper';
@@ -496,6 +497,7 @@ export class DirectiveVisitor extends BaseVisitor {
           const absoluteOpen = directive.location.start.offset + pipelineKeyIndex + firstBracketRel;
           // Scan forward to find matching brackets and emit tokens for each '[' and ']'
           let depth = 0;
+          let pipelineEndRel = -1;
           for (let i = pipelineKeyIndex + firstBracketRel; i < directiveText.length; i++) {
             const ch = directiveText[i];
             if (ch === '[') {
@@ -518,15 +520,38 @@ export class DirectiveVisitor extends BaseVisitor {
                 modifiers: []
               });
               depth--;
-              if (depth === 0) break; // Done with pipeline array
+              if (depth === 0) { pipelineEndRel = i; break; } // Done with pipeline array
             }
           }
           // Tokenize commas inside pipeline arrays for readability
-          const closeIdx = directiveText.indexOf(']', pipelineKeyIndex + firstBracketRel);
+          const closeIdx = pipelineEndRel !== -1 ? pipelineEndRel : directiveText.indexOf(']', pipelineKeyIndex + firstBracketRel);
           if (closeIdx !== -1) {
             const startOffset = directive.location.start.offset + pipelineKeyIndex + firstBracketRel;
             const endOffset = directive.location.start.offset + closeIdx;
             this.operatorHelper.tokenizeListSeparators(startOffset, endOffset, ',');
+          }
+          // Highlight effect keywords and syntax inside pipeline arrays
+          const effectHelper = new EffectTokenHelper(this.document, this.tokenBuilder);
+          const segmentStartRel = pipelineKeyIndex + firstBracketRel;
+          const segmentEndRel = closeIdx !== -1 ? closeIdx : directiveText.length;
+          const segment = directiveText.substring(segmentStartRel, segmentEndRel);
+
+          // Effects: show, log, output (only when not prefixed by @)
+          const effectRegex = /(^|[^@A-Za-z0-9_])(show|log|output)\b/g;
+          let m: RegExpExecArray | null;
+          while ((m = effectRegex.exec(segment)) !== null) {
+            const effect = m[2];
+          // effRel is relative to directive start; absEff converts to absolute document offset
+          const effRel = segmentStartRel + m.index + m[1].length;
+          const absEff = directive.location.start.offset + effRel;
+            effectHelper.tokenizeEffectKeyword(effect, absEff);
+
+            const stageRest = segment.substring(m.index + m[0].length);
+            if (effect === 'output') {
+              effectHelper.tokenizeOutputArgs(absEff + effect.length, stageRest);
+            } else {
+              effectHelper.tokenizeSimpleArg(absEff + effect.length, stageRest);
+            }
           }
         }
       }
@@ -537,7 +562,10 @@ export class DirectiveVisitor extends BaseVisitor {
         if (Array.isArray(stage)) {
           // Parallel group: visit each command
           for (const cmd of stage) {
-            if (cmd?.identifier) {
+            // Skip visiting identifier for effect builtins to avoid double-tokenizing as variable
+            if (cmd?.rawIdentifier && /^(show|log|output)$/.test(cmd.rawIdentifier)) {
+              // no-op for identifier; args handled below
+            } else if (cmd?.identifier) {
               for (const id of cmd.identifier) this.mainVisitor.visitNode(id, context);
             }
             if (cmd?.args) {
@@ -545,8 +573,10 @@ export class DirectiveVisitor extends BaseVisitor {
             }
           }
         } else if (stage) {
-          if (stage.identifier) {
-            for (const id of stage.identifier) this.mainVisitor.visitNode(id, context);
+          if (!(stage.rawIdentifier && /^(show|log|output)$/.test(stage.rawIdentifier))) {
+            if (stage.identifier) {
+              for (const id of stage.identifier) this.mainVisitor.visitNode(id, context);
+            }
           }
           if (stage.args) {
             for (const a of stage.args) this.mainVisitor.visitNode(a, context);
@@ -645,6 +675,21 @@ export class DirectiveVisitor extends BaseVisitor {
           tokenType: 'string',
           modifiers: []
         });
+
+        // Highlight @var interpolations inside command content for shell-style runs
+        // This is a simple heuristic that finds @identifiers within the braces
+        const varRegex = /@[A-Za-z_][A-Za-z0-9_]*/g;
+        let match: RegExpExecArray | null;
+        while ((match = varRegex.exec(commandContent)) !== null) {
+          const varRel = match.index; // relative to contentStart
+          this.tokenBuilder.addToken({
+            line: directive.location.start.line - 1,
+            char: directive.location.start.column - 1 + contentStart + varRel,
+            length: match[0].length,
+            tokenType: 'variable',
+            modifiers: []
+          });
+        }
         
         // Token for closing brace
         const closeBraceOffset = directiveText.lastIndexOf('}');
@@ -673,6 +718,21 @@ export class DirectiveVisitor extends BaseVisitor {
           tokenType: 'string',
           modifiers: []
         });
+
+        // Highlight @var occurrences inside the quoted command
+        const inner = directiveText.substring(quoteStart + 1, quoteEnd);
+        const varRegex = /@[A-Za-z_][A-Za-z0-9_]*/g;
+        let match: RegExpExecArray | null;
+        while ((match = varRegex.exec(inner)) !== null) {
+          const varOffset = directive.location.start.column - 1 + quoteStart + 1 + match.index;
+          this.tokenBuilder.addToken({
+            line: directive.location.start.line - 1,
+            char: varOffset,
+            length: match[0].length,
+            tokenType: 'variable',
+            modifiers: []
+          });
+        }
         return;
       }
     }
@@ -771,43 +831,19 @@ export class DirectiveVisitor extends BaseVisitor {
     // Process target
     if (values.target) {
       if (values.target.type === 'file' && values.target.path) {
-        // File path - tokenize as string with proper interpolation handling
+        // File path - tokenize as a single string when quoted; allow interpolation via separate tokens elsewhere
         if (values.target.meta?.quoted && values.target.path) {
-          // For quoted paths, we need to handle interpolation
-          // First, add opening quote token
           const firstPart = values.target.path[0];
-          if (firstPart && firstPart.location) {
-            this.tokenBuilder.addToken({
-              line: firstPart.location.start.line - 1,
-              char: firstPart.location.start.column - 2, // -2 for opening quote
-              length: 1,
-              tokenType: 'string',
-              modifiers: []
-            });
-          }
-          
-          // Process each path part (text and variables)
-          for (const pathPart of values.target.path) {
-            if (pathPart.type === 'Text' && pathPart.location) {
-              this.tokenBuilder.addToken({
-                line: pathPart.location.start.line - 1,
-                char: pathPart.location.start.column - 1,
-                length: pathPart.content.length,
-                tokenType: 'string',
-                modifiers: []
-              });
-            } else if (pathPart.type === 'VariableReference') {
-              this.mainVisitor.visitNode(pathPart, context);
-            }
-          }
-          
-          // Add closing quote token
           const lastPart = values.target.path[values.target.path.length - 1];
-          if (lastPart && lastPart.location) {
+          if (firstPart?.location && lastPart?.location) {
+            const openQuoteOffset = firstPart.location.start.offset - 1; // include opening quote
+            const closeQuoteOffset = lastPart.location.end.offset + 1;   // include closing quote
+            const length = Math.max(0, closeQuoteOffset - openQuoteOffset);
+            const pos = this.document.positionAt(openQuoteOffset);
             this.tokenBuilder.addToken({
-              line: lastPart.location.end.line - 1,
-              char: lastPart.location.end.column - 1,
-              length: 1,
+              line: pos.line,
+              char: pos.character,
+              length,
               tokenType: 'string',
               modifiers: []
             });

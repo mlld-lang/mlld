@@ -54,7 +54,9 @@ UnifiedArgumentListItems
 
 // Use existing proven patterns from CommandArgument - handles all edge cases
 UnifiedArgument "unified argument"
-  = CommandTemplateArgument     // Template arguments ::...:: 
+  = WhenExpression              // Allow when-expressions as arguments
+  / ForeachCommandExpression    // Allow foreach as argument (returns array)
+  / CommandTemplateArgument     // Template arguments ::...:: 
   / BacktickTemplateArgument    // Backtick templates `...`
   / NestedExecInvocation       // Nested function calls @func(args)
   / DataObjectLiteral           // Object literals: {"key": "value"}

@@ -5,6 +5,12 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc51]
+### Fixed
+- Language Server transport defaults to stdio when no explicit flag is provided
+  - Prevents Neovim startup error: "Connection input stream is not set"
+  - Preserves VS Code behavior when it passes `--stdio` (or other transports)
+
 ## [2.0.0-rc50]
 ### Added
 - **`mlld nvim-setup` command**: Auto-configure Neovim LSP support
@@ -14,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **LSP/Editor updates**: Semantic tokens cover pipeline parallel groups (`||`), with.pipeline (incl. nested) and `with { format: ... }`, and `/for parallel`; directive/completion tweaks include `/log` and format values. VS Code extension runs semantic-only (legacy providers removed); fallback TextMate grammar highlights `parallel` and `format`.
 
+- Expression system completeness:
+  - when-expressions usable in `/var` assignments, array literals, and function arguments
+  - `when` allowed in `for` collection RHS; `none => skip` filters non-matches
+  - `foreach` allowed in `/exe` RHS; executable foreach callable like any other function
+  - `/show foreach @func(@arrays)` with `with { separator, template }` formatting options
 ### Fixed
 - #411: Nested `/for` collection returns `[]` for empty arrays in both plain `/show` and when piped to `@json`. Removes accidental `{}` output.
 - `isLoadContentResultArray` does not match untagged empty arrays; prevents misclassification of generic empty arrays.
@@ -1285,4 +1296,3 @@ Added:
 ## [1.0.0]
 
 Initial versioned release. 
-

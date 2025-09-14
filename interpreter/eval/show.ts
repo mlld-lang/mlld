@@ -294,7 +294,11 @@ export async function evaluateShow(
         if (field.type === 'variableIndex') {
           const indexVar = env.getVariable(field.value);
           if (!indexVar) {
-            throw new Error(`Variable not found for index: ${field.value}`);
+            const { FieldAccessError } = await import('@core/errors');
+            throw new FieldAccessError(`Variable not found for index: ${field.value}`,
+              { baseValue: value, fieldAccessChain: [], failedAtIndex: 0, failedKey: String(field.value) },
+              { sourceLocation: directive.location, env }
+            );
           }
           // Get the actual value to use as index
           let indexValue = indexVar.value;
@@ -305,13 +309,15 @@ export async function evaluateShow(
           const resolvedField = { type: 'bracketAccess' as const, value: indexValue };
           const fieldResult = await accessField(value, resolvedField, { 
             preserveContext: true,
-            env 
+            env,
+            sourceLocation: directive.location
           });
           value = (fieldResult as any).value;
         } else {
           const fieldResult = await accessField(value, field, { 
             preserveContext: true,
-            env 
+            env,
+            sourceLocation: directive.location
           });
           value = (fieldResult as any).value;
         }

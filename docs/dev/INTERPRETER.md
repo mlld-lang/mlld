@@ -145,7 +145,8 @@ This keeps `@ctx.hint` tightly scoped to the location where it is meaningful, wh
 - /log: inline effect via pipelines; shorthand for output-to-stdout in actions
 - /when: `interpreter/eval/when.ts`, `interpreter/eval/when-expression.ts` — conditionals
 - /for: `interpreter/eval/for.ts` — iteration over arrays/objects
-- foreach (operator): `interpreter/eval/data-value-evaluator.ts` — cartesian execution
+- foreach (operator): `interpreter/eval/data-value-evaluator.ts` and `interpreter/eval/foreach.ts` — cartesian execution
+- Executable foreach: code executable with language `mlld-foreach` handled in `interpreter/eval/exec-invocation.ts`
 - /import: `interpreter/eval/import/*` — path/module/function resolvers, namespace/selected
 - /output: `interpreter/eval/output.ts` — file and stream outputs
 - Expressions: `interpreter/eval/expression.ts` — binary/unary/ternary

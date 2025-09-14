@@ -331,6 +331,20 @@ Prefer backticks; use :: for backticks-in-text; ::: when many @mentions.
 /var @message = `Hello @name, welcome!`
 /var @doc = ::Use `mlld` to orchestrate::
 /var @tweet = :::Hey @{{handle}}—{{msg}}:::
+
+When-expressions are first-class:
+
+```mlld
+# Direct assignment
+/var @status = when [ @score > 90 => "A" * => "F" ]
+
+# In array literals
+/var @arr = [ 1, when [ @flag => 2 ], 3 ]
+
+# As function arguments
+/exe @fmt(x) = `val:@x`
+/show @fmt(when [ @cond => "yes" * => "no" ])
+```
 ```
 
 </TEMPLATES>
@@ -654,6 +668,36 @@ Notes:
 
 # triple nesting
 /for @x in @outer => for @y in @middle => for @z in @inner => show `@x/@y/@z`
+```
+
+When-expressions in for RHS:
+
+```mlld
+/var @xs = [1, null, 2, null, 3]
+# Keep only non-null values
+/var @filtered = for @x in @xs => when [
+  @x != null => @x
+  none => skip
+]
+# @filtered => ["1","2","3"]
+```
+
+Define foreach in /exe RHS and invoke:
+
+```mlld
+/exe @wrap(x) = `[@x]`
+/exe @wrapAll(items) = foreach @wrap(@items)
+/show @wrapAll(["a","b"]) | @join(',')
+# => [a],[b]
+```
+
+Use /show foreach with options:
+
+```mlld
+/var @names = ["Ann","Ben"]
+/exe @greet(n) = `Hello @n`
+/show foreach @greet(@names) with { separator: " | ", template: "{{index}}={{result}}" }
+# => 0=Hello Ann | 1=Hello Ben
 ```
 
 Empty arrays are safe: `/for` emits nothing; `for … =>` returns `[]`. </ITERATION>

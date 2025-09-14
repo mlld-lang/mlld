@@ -1,0 +1,11 @@
+/var @status = when [
+  @score > 90 => "A"
+  * => "F"
+]
+
+/var @out = for @x in [1,2,null,3] => when [
+  @x != null => @x
+]
+
+/exe @processAll(items) = foreach @echo(@items)
+/show @processAll(["a","b"]) | @join(',')

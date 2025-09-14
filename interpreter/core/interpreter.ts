@@ -541,14 +541,16 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
           const fieldResult = await accessField(resolvedValue, resolvedField, { 
             preserveContext: true,
             returnUndefinedForMissing: context?.isCondition,
-            env
+            env,
+            sourceLocation: node.location
           });
           resolvedValue = (fieldResult as any).value;
         } else {
           const fieldResult = await accessField(resolvedValue, field, { 
             preserveContext: true,
             returnUndefinedForMissing: context?.isCondition,
-            env
+            env,
+            sourceLocation: node.location
           });
           resolvedValue = (fieldResult as any).value;
         }
@@ -601,6 +603,13 @@ export async function evaluate(node: MlldNode | MlldNode[], env: Environment, co
   if (node.type === 'WhenExpression') {
     const { evaluateWhenExpression } = await import('../eval/when-expression');
     return evaluateWhenExpression(node as any, env, context);
+  }
+  
+  // Handle foreach expressions as first-class expressions
+  if (node.type === 'foreach' || node.type === 'foreach-command') {
+    const { evaluateForeachCommand } = await import('../eval/foreach');
+    const result = await evaluateForeachCommand(node as any, env);
+    return { value: result, env };
   }
   
   // Note: WhenRHSAction nodes have been replaced with regular Directive nodes

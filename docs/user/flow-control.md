@@ -209,6 +209,36 @@ Multiple parameters:
 /show @messages
 ```
 
+Define `foreach` in `/exe` and invoke it:
+
+```mlld
+/exe @wrap(x) = `[@x]`
+/exe @wrapAll(items) = foreach @wrap(@items)
+/show @wrapAll(["a","b"]) | @join(',')   # => [a],[b]
+```
+
+Use `/show foreach` with options:
+
+```mlld
+/var @names = ["Ann","Ben"]
+/exe @greet(n) = `Hello @n`
+/show foreach @greet(@names) with { separator: " | ", template: "{{index}}={{result}}" }
+# Output: 0=Hello Ann | 1=Hello Ben
+```
+
+### When-Expressions in `for` RHS
+
+Use a `when [...]` expression as the right-hand side in collection form. Combine with `none => skip` to filter non-matches:
+
+```mlld
+/var @xs = [1, null, 2, null, 3]
+/var @filtered = for @x in @xs => when [
+  @x != null => @x
+  none => skip
+]
+/show @filtered   # => ["1","2","3"]
+```
+
 ## Pipelines
 
 ### Basic Pipelines

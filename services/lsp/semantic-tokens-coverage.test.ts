@@ -333,6 +333,114 @@ describe('Semantic Tokens Coverage Tests', () => {
         { tokenType: 'operator', text: ']' }
       ]);
     });
+    it('tokenizes inline show effect in pipeline', async () => {
+      const code = '/var @a = "textA" | show';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@a', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'string', text: '"textA"' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'keyword', text: 'show' }
+      ]);
+    });
+
+    it('tokenizes inline log effect with string arg', async () => {
+      const code = '/var @a = "x" | log "msg"';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@a', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'string', text: '"x"' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'keyword', text: 'log' },
+        { tokenType: 'string', text: '"msg"' }
+      ]);
+    });
+
+    it('tokenizes inline log effect with variable arg', async () => {
+      const code = '/var @a = @x | log @a';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@a', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'variable', text: '@x', modifiers: ['reference'] },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'keyword', text: 'log' },
+        { tokenType: 'variable', text: '@a' }
+      ]);
+    });
+
+    it('tokenizes inline output to stdout', async () => {
+      const code = '/var @x = "hello" | output @input to stdout';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@x', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'string', text: '"hello"' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'keyword', text: 'output' },
+        { tokenType: 'variable', text: '@input' },
+        { tokenType: 'keyword', text: 'to' },
+        { tokenType: 'keyword', text: 'stdout' }
+      ]);
+    });
+
+    it('tokenizes inline output to quoted file', async () => {
+      const code = '/var @w = "c" | output @input to "x-inline.txt"';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@w', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'string', text: '"c"' },
+        { tokenType: 'operator', text: '|' },
+        { tokenType: 'keyword', text: 'output' },
+        { tokenType: 'variable', text: '@input' },
+        { tokenType: 'keyword', text: 'to' },
+        { tokenType: 'string', text: '"x-inline.txt"' }
+      ]);
+    });
+
+    it('tokenizes with.pipeline effects: show/log', async () => {
+      const code = '/var @x = "seed" with { pipeline: [ show, log "msg" ] }';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@x', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'string', text: '"seed"' },
+        { tokenType: 'keyword', text: 'show' },
+        { tokenType: 'keyword', text: 'log' },
+        { tokenType: 'string', text: '"msg"' }
+      ]);
+    });
+
+    it('tokenizes with.pipeline effect: output to stdout', async () => {
+      const code = '/var @x = "hello" with { pipeline: [ output @input to stdout ] }';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@x', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'string', text: '"hello"' },
+        { tokenType: 'keyword', text: 'output' },
+        { tokenType: 'variable', text: '@input' },
+        { tokenType: 'keyword', text: 'to' },
+        { tokenType: 'keyword', text: 'stdout' }
+      ]);
+    });
+
+    it('tokenizes with.pipeline effect: output to quoted file', async () => {
+      const code = '/var @x = "hi" with { pipeline: [ output @input to "out.txt" ] }';
+      await expectTokens(code, [
+        { tokenType: 'keyword', text: '/var' },
+        { tokenType: 'variable', text: '@x', modifiers: ['declaration'] },
+        { tokenType: 'operator', text: '=' },
+        { tokenType: 'string', text: '"hi"' },
+        { tokenType: 'keyword', text: 'output' },
+        { tokenType: 'variable', text: '@input' },
+        { tokenType: 'keyword', text: 'to' },
+        { tokenType: 'string', text: '"out.txt"' }
+      ]);
+    });
   });
 
   describe('Iteration Parallel', () => {
