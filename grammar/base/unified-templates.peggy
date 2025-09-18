@@ -146,7 +146,7 @@ UnifiedAtInterpolation "At-sign interpolation"
 // TEXT SEGMENTS
 // -------------------------------------------------------------
 
-// Text for triple colon templates (excludes :::, {{, }}, and <)
+// Text for triple colon templates (excludes :::, {{, }})
 UnifiedTemplateTextSegment "Template text segment"
   = chars:UnifiedTemplateChar+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
@@ -155,7 +155,7 @@ UnifiedTemplateTextSegment "Template text segment"
 UnifiedTemplateChar
   = StringEscapeSequence
   / EscapeSequence
-  / !((":::" / "{{" / "}}" / "<")) char:. { return char; }
+  / !((":::" / "{{" / "}}")) char:. { return char; }
 
 // Text for double colon templates (excludes ::, @, and <)
 UnifiedDoubleColonTextSegment "Double colon text segment"
