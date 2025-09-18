@@ -77,6 +77,7 @@ export async function evaluateExecInvocation(
       pipelineLength: node.withClause?.pipeline?.length
     });
   }
+
   
   if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
     logger.debug('evaluateExecInvocation called with:', { commandRef: node.commandRef });
@@ -674,6 +675,11 @@ export async function evaluateExecInvocation(
           
         case 'ExecInvocation':
         case 'Text':
+          // Plain text nodes should remain strings; avoid JSON coercion that can
+          // truncate large numeric identifiers (e.g., Discord snowflakes)
+          argValue = await interpolate([arg], env, InterpolationContext.Default);
+          argValueAny = argValue;
+          break;
         default:
           // Other nodes: interpolate normally
           argValue = await interpolate([arg], env, InterpolationContext.Default);
