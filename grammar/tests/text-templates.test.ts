@@ -27,6 +27,22 @@ describe('Parameterized Text Templates', () => {
       expect(result[0].meta.hasVariables).toBe(true);
     });
 
+    it('should allow literal less-than sequences around interpolations', async () => {
+      const input = '/exe @mentionBullet(discordId, name, role) = :::- <@{{discordId}}> ({{name}}): {{role}}:::';
+      const { ast } = await parse(input);
+      const directive = ast[0];
+
+      expect(directive.subtype).toBe('exeTemplate');
+      const parts = directive.values.template;
+
+      expect(parts[0]).toMatchObject({ type: 'Text', content: '- <@' });
+      expect(parts[1]).toMatchObject({ type: 'VariableReference', identifier: 'discordId' });
+      expect(parts[2]).toMatchObject({ type: 'Text', content: '> (' });
+      expect(parts[3]).toMatchObject({ type: 'VariableReference', identifier: 'name' });
+      expect(parts[4]).toMatchObject({ type: 'Text', content: '): ' });
+      expect(parts[5]).toMatchObject({ type: 'VariableReference', identifier: 'role' });
+    });
+
     it('should handle template with no parameters', async () => {
       const input = '/exe @staticTemplate() = ::Static content here::';
       const parseResult = await parse(input);
