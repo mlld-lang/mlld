@@ -72,7 +72,16 @@ export class LockFile {
     try {
       if (fs.existsSync(this.filePath)) {
         const content = fs.readFileSync(this.filePath, 'utf8');
-        this.data = JSON.parse(content);
+        const parsed = JSON.parse(content);
+        this.data = {
+          version: parsed.version || '1.0.0',
+          imports: parsed.imports || {},
+          modules: parsed.modules || {},
+          cache: parsed.cache || {},
+          metadata: parsed.metadata,
+          config: parsed.config,
+          security: parsed.security
+        };
       } else {
         // Initialize with empty lock file
         this.data = {

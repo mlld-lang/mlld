@@ -167,23 +167,42 @@ export class ImportDirectiveEvaluator {
     directive: DirectiveNode,
     env: Environment
   ): Promise<EvalResult> {
-    try {
-      // ResolverManager will handle all @prefix/ patterns including @user/module
-      const resolverContent = await env.resolveModule(resolution.resolvedPath, 'import');
-      
-      // Validate content type for imports
-      if (resolverContent.contentType !== 'module') {
-        throw new Error(
-          `Import target is not a module: ${resolution.resolvedPath} (content type: ${resolverContent.contentType})`
-        );
+    const candidates = this.buildModuleCandidates(resolution);
+    let lastError: unknown = undefined;
+
+    for (const candidate of candidates) {
+      try {
+        const resolverContent = await env.resolveModule(candidate, 'import');
+
+    const treatAsModule = resolverContent.contentType === 'module' 
+      || candidate.endsWith('.mld')
+      || candidate.endsWith('.mlld')
+      || candidate.endsWith('.mld.md')
+      || candidate.endsWith('.mlld.md')
+      || candidate.endsWith('.md');
+
+        if (!treatAsModule) {
+          lastError = new Error(
+            `Import target is not a module: ${candidate} (content type: ${resolverContent.contentType})`
+          );
+          continue;
+        }
+
+        return this.importFromResolverContent(directive, candidate, resolverContent, env);
+      } catch (error) {
+        if ((error as any)?.code === 'IMPORT_NO_EXPORTS') {
+          lastError = error;
+          break;
+        }
+        lastError = error;
       }
-      
-      // Process module content directly from resolver
-      return this.importFromResolverContent(directive, resolution.resolvedPath, resolverContent, env);
-    } catch (error) {
-      // If resolver fails, let the original error bubble up so dev mode can handle it
-      throw error;
     }
+
+    if (lastError) {
+      throw lastError;
+    }
+
+    throw new Error(`Unable to resolve module import: ${resolution.resolvedPath}`);
   }
 
   /**
@@ -231,10 +250,15 @@ export class ImportDirectiveEvaluator {
       
       // Process the content through our content processor
       
+      const processingRef = typeof resolverContent.metadata?.source === 'string'
+        ? resolverContent.metadata.source
+        : ref;
+
       const processingResult = await this.contentProcessor.processResolverContent(
         resolverContent.content,
-        ref,
-        directive
+        processingRef,
+        directive,
+        resolverContent.contentType
       );
       
 
@@ -352,6 +376,28 @@ export class ImportDirectiveEvaluator {
     }
   }
 
+  private buildModuleCandidates(resolution: ImportResolution): string[] {
+    const baseRef = resolution.resolvedPath;
+    const extension = resolution.moduleExtension;
+    const candidates: string[] = [];
+
+    if (extension) {
+      candidates.push(`${baseRef}${extension}`);
+      candidates.push(baseRef);
+      return candidates;
+    }
+
+    for (const ext of ['.mld', '.mlld', '.mld.md', '.mlld.md', '.md']) {
+      const candidate = `${baseRef}${ext}`;
+      if (!candidates.includes(candidate)) {
+        candidates.push(candidate);
+      }
+    }
+
+    candidates.push(baseRef);
+
+    return candidates;
+  }
   /**
    * Extract section content from markdown (copied from original)
    */

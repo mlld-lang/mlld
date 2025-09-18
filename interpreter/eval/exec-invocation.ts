@@ -556,7 +556,7 @@ export async function evaluateExecInvocation(
   for (const arg of args) {
     let argValue: string;
     let argValueAny: any;
-    
+
     if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean') {
       // Primitives: pass through directly
       argValue = String(arg);
@@ -673,7 +673,29 @@ export async function evaluateExecInvocation(
           }
           break;
           
-        case 'ExecInvocation':
+        case 'ExecInvocation': {
+          const nestedResult = await evaluateExecInvocation(arg as ExecInvocation, env);
+          if (nestedResult && nestedResult.value !== undefined) {
+            argValueAny = nestedResult.value;
+          } else if (nestedResult && nestedResult.stdout !== undefined) {
+            argValueAny = nestedResult.stdout;
+          } else {
+            argValueAny = undefined;
+          }
+
+          if (argValueAny === undefined) {
+            argValue = 'undefined';
+          } else if (typeof argValueAny === 'object') {
+            try {
+              argValue = JSON.stringify(argValueAny);
+            } catch {
+              argValue = String(argValueAny);
+            }
+          } else {
+            argValue = String(argValueAny);
+          }
+          break;
+        }
         case 'Text':
           // Plain text nodes should remain strings; avoid JSON coercion that can
           // truncate large numeric identifiers (e.g., Discord snowflakes)
@@ -771,47 +793,59 @@ export async function evaluateExecInvocation(
         }
       }
       // Create appropriate variable type based on actual data
-      else if (typeof argValue === 'object' && argValue !== null && !Array.isArray(argValue)) {
-        // Object type - preserve structure
-        paramVar = createObjectVariable(
-          paramName,
-          argValue,
-          true, // isComplex = true for objects from parameters
-          {
-            directive: 'var',
-            syntax: 'object',
-            hasInterpolation: false,
-            isMultiLine: false
-          },
-          {
-            isSystem: true,
-            isParameter: true
-          }
-        );
-      } else if (Array.isArray(argValue)) {
-        // Array type - preserve structure
-        paramVar = createArrayVariable(
-          paramName,
-          argValue,
-          true, // isComplex = true for arrays from parameters
-          {
-            directive: 'var',
-            syntax: 'array',
-            hasInterpolation: false,
-            isMultiLine: false
-          },
-          {
-            isSystem: true,
-            isParameter: true
-          }
-        );
-      } else {
-        // Primitive types - create appropriate Variable type
-        if (typeof argValue === 'number' || typeof argValue === 'boolean' || argValue === null) {
-          // Create PrimitiveVariable for number, boolean, null
+      else {
+        const preservedValue = argValue !== undefined ? argValue : argStringValue;
+
+        if (process.env.MLLD_DEBUG === 'true') {
+          try {
+            console.error('[exec-invocation] preservedValue', {
+              paramName,
+              typeofPreserved: typeof preservedValue,
+              isArray: Array.isArray(preservedValue),
+              preservedValue
+            });
+          } catch {}
+        }
+
+        if (preservedValue !== undefined && preservedValue !== null && typeof preservedValue === 'object' && !Array.isArray(preservedValue)) {
+          // Object type - preserve structure
+          paramVar = createObjectVariable(
+            paramName,
+            preservedValue,
+            true,
+            {
+              directive: 'var',
+              syntax: 'object',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            {
+              isSystem: true,
+              isParameter: true
+            }
+          );
+        } else if (Array.isArray(preservedValue)) {
+          // Array type - preserve structure
+          paramVar = createArrayVariable(
+            paramName,
+            preservedValue,
+            true,
+            {
+              directive: 'var',
+              syntax: 'array',
+              hasInterpolation: false,
+              isMultiLine: false
+            },
+            {
+              isSystem: true,
+              isParameter: true
+            }
+          );
+        } else if (typeof preservedValue === 'number' || typeof preservedValue === 'boolean' || preservedValue === null) {
+          // Primitive types - create appropriate Variable type
           paramVar = createPrimitiveVariable(
             paramName,
-            argValue,
+            preservedValue,
             {
               directive: 'var',
               syntax: 'literal',
@@ -824,9 +858,9 @@ export async function evaluateExecInvocation(
             }
           );
         } else {
-          // String or other types - use SimpleTextVariable
+          // String or undefined - use SimpleTextVariable
           paramVar = createSimpleTextVariable(
-            paramName, 
+            paramName,
             argStringValue,
             {
               directive: 'var',
@@ -1250,7 +1284,7 @@ export async function evaluateExecInvocation(
     } else {
       processedResult = codeResult;
     }
-    
+
     // Attempt to restore metadata from shelf
     result = metadataShelf.restoreMetadata(processedResult);
     
@@ -1466,7 +1500,7 @@ export async function evaluateExecInvocation(
       throw e;
     }
   }
-
+  
   // Apply withClause transformations if present
   if (node.withClause) {
     if (node.withClause.pipeline) {
@@ -1542,6 +1576,16 @@ export async function evaluateExecInvocation(
     }
   }
   
+  if (process.env.MLLD_DEBUG === 'true') {
+    try {
+      console.log('[exec-invocation] returning result', {
+        commandName,
+        typeofResult: typeof result,
+        isArrayResult: Array.isArray(result)
+      });
+    } catch {}
+  }
+
   return {
     value: result,
     env: execEnv,  // Return execEnv which contains merged nodes from when expressions
