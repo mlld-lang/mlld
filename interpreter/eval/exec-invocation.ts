@@ -1339,10 +1339,7 @@ export async function evaluateExecInvocation(
         type: 'ExecInvocation',
         commandRef: {
           identifier: refName,
-          args: refArgs.map(arg => ({
-            type: 'Text',
-            content: typeof arg === 'string' ? arg : JSON.stringify(arg)
-          }))
+          args: refArgs  // Pass values directly like foreach does
         },
         // Pass along the pipeline if present
         ...(definition.withClause ? { withClause: definition.withClause } : {})
@@ -1357,10 +1354,7 @@ export async function evaluateExecInvocation(
         type: 'ExecInvocation',
         commandRef: {
           identifier: refName,
-          args: evaluatedArgs.map(arg => ({
-            type: 'Text',
-            content: arg
-          }))
+          args: evaluatedArgs  // Pass values directly like foreach does
         },
         // Pass along the pipeline if present
         ...(definition.withClause ? { withClause: definition.withClause } : {})
