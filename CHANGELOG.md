@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0-rc54]
 ### Fixed
 - Foreach templates now keep long numeric strings intact during interpolation
+- Command-reference executables now preserve array and object types when passing arguments to nested functions (previously JSON.stringify'd them)
 
 ## [2.0.0-rc53]
 ### Fixed
