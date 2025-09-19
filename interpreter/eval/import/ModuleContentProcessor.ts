@@ -3,6 +3,7 @@ import type { Environment } from '../../env/Environment';
 import { ImportResolution } from './ImportSecurityValidator';
 import { ImportSecurityValidator } from './ImportSecurityValidator';
 import { VariableImporter } from './VariableImporter';
+import { ExportManifest } from './ExportManifest';
 import { parse } from '@grammar/parser';
 import { interpolate, evaluate } from '../../core/interpreter';
 import { MlldError } from '@core/errors';
@@ -370,6 +371,12 @@ export class ModuleContentProcessor {
     // Create child environment for evaluation
     const childEnv = this.createChildEnvironment(resolvedPath, isURL);
 
+    if (this.containsExportDirective(ast)) {
+      childEnv.setExportManifest(new ExportManifest());
+    } else {
+      childEnv.setExportManifest(null);
+    }
+
     // Evaluate AST in child environment
     const evalResult = await this.evaluateInChildEnvironment(ast, childEnv, resolvedPath);
 
@@ -547,6 +554,10 @@ export class ModuleContentProcessor {
     childEnv.setCurrentFilePath(resolvedPath);
     
     return childEnv;
+  }
+
+  private containsExportDirective(ast: any[]): boolean {
+    return ast.some((node) => node?.type === 'Directive' && node.kind === 'export');
   }
 
   /**

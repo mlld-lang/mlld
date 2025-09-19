@@ -39,6 +39,7 @@ import type { PathContext } from '@core/services/PathContextService';
 import { PathContextBuilder } from '@core/services/PathContextService';
 import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/ShadowEnvironmentCapture';
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
+import { ExportManifest } from '../eval/import/ExportManifest';
 
 
 /**
@@ -147,6 +148,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   // Captured module environment used during imported executable invocation
   private capturedModuleEnv?: Map<string, Variable>;
+
+  // Export manifest populated by /export directives within this environment
+  private exportManifest?: ExportManifest;
 
   // Constructor overloads
   constructor(
@@ -583,6 +587,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   setCapturedModuleEnv(env: Map<string, Variable> | undefined): void {
     this.capturedModuleEnv = env;
+  }
+
+  setExportManifest(manifest: ExportManifest | null | undefined): void {
+    this.exportManifest = manifest ?? undefined;
+  }
+
+  getExportManifest(): ExportManifest | null {
+    return this.exportManifest ?? null;
+  }
+
+  hasExplicitExports(): boolean {
+    return Boolean(this.exportManifest?.hasEntries());
   }
 
   getSecurityManager(): SecurityManager | undefined {
