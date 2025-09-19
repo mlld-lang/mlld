@@ -251,7 +251,6 @@ export class VariableImporter {
       if (variable.type === 'executable') {
         const execVar = variable as ExecutableVariable;
 
-
         // Serialize shadow environments if present (Maps don't serialize to JSON)
         let serializedMetadata = { ...execVar.metadata };
         if (serializedMetadata.capturedShadowEnvs) {
