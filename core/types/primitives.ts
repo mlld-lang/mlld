@@ -175,9 +175,10 @@ export interface FormattingMetadata {
 }
 
 // Directive types
-export type DirectiveKind = 
+export type DirectiveKind =
   | 'run'
   | 'import'
+  | 'export'
   | 'var'
   | 'show'
   | 'exe'
@@ -185,12 +186,14 @@ export type DirectiveKind =
   | 'output'
   | 'when';
 
-export type DirectiveSubtype = 
+export type DirectiveSubtype =
   // Import subtypes
-  | 'importAll' | 'importSelected'
+  | 'importAll' | 'importSelected' | 'importNamespace'
+  // Export subtype
+  | 'exportSelected'
   // Unified var subtype
   | 'var'
-  // Unified show subtypes  
+  // Unified show subtypes
   | 'show' | 'showInvocation' | 'showPath' | 'showVariable' | 'showTemplate'
   // Unified exe subtype
   | 'exe'

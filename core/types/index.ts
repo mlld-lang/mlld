@@ -20,6 +20,7 @@ export * from './errors';
 
 // Re-export directive types
 export * from './import';
+export * from './export';
 export * from './show';
 export * from './exe';
 export * from './path';
