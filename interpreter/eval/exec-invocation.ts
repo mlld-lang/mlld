@@ -78,7 +78,6 @@ export async function evaluateExecInvocation(
     });
   }
 
-  
   if (process.env.DEBUG_WHEN || process.env.DEBUG_EXEC) {
     logger.debug('evaluateExecInvocation called with:', { commandRef: node.commandRef });
   }
