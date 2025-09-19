@@ -174,7 +174,7 @@ export class ImportDirectiveEvaluator {
       try {
         const resolverContent = await env.resolveModule(candidate, 'import');
 
-    const treatAsModule = resolverContent.contentType === 'module' 
+    const treatAsModule = resolverContent.contentType === 'module'
       || candidate.endsWith('.mld')
       || candidate.endsWith('.mlld')
       || candidate.endsWith('.mld.md')
@@ -187,6 +187,9 @@ export class ImportDirectiveEvaluator {
           );
           continue;
         }
+
+        // Validate version against lock file for registry modules
+        await this.validateLockFileVersion(candidate, resolverContent, env);
 
         return this.importFromResolverContent(directive, candidate, resolverContent, env);
       } catch (error) {
@@ -427,6 +430,63 @@ export class ImportDirectiveEvaluator {
     }
     
     return sectionLines.join('\n').trim();
+  }
+
+  /**
+   * Validate resolved version against lock file version
+   */
+  private async validateLockFileVersion(
+    candidate: string,
+    resolverContent: { content: string; contentType: 'module' | 'data' | 'text'; metadata?: any },
+    env: Environment
+  ): Promise<void> {
+    // Only validate registry modules (those with version metadata)
+    if (!resolverContent.metadata?.version || !resolverContent.metadata?.source?.startsWith('registry://')) {
+      return;
+    }
+
+    // Extract the module reference from the source
+    const registrySource = resolverContent.metadata.source as string;
+    const moduleMatch = registrySource.match(/^registry:\/\/(@[^@]+)@(.+)$/);
+    if (!moduleMatch) {
+      return; // Not a registry module format
+    }
+
+    const [, moduleRef, resolvedVersion] = moduleMatch;
+
+    // Get registry manager to access lock file
+    const registryManager = env.getRegistryManager();
+    if (!registryManager) {
+      return; // No registry manager available
+    }
+
+    const lockFile = registryManager.getLockFile();
+    const lockEntry = lockFile.getImport(moduleRef);
+
+    if (!lockEntry) {
+      // No lock entry found - this is acceptable for new modules
+      // Future enhancement: could warn about unlocked modules
+      return;
+    }
+
+    // Compare versions if lock entry has registryVersion
+    if (lockEntry.registryVersion) {
+      if (lockEntry.registryVersion !== resolvedVersion) {
+        throw new Error(
+          `Locked version mismatch for ${moduleRef}: ` +
+          `lock file has version ${lockEntry.registryVersion}, ` +
+          `but resolved to version ${resolvedVersion}. ` +
+          `Run 'mlld install' to update the lock file or specify the locked version explicitly.`
+        );
+      }
+    } else {
+      // Legacy lock entry without version - handle gracefully
+      if (process.env.MLLD_DEBUG === 'true') {
+        console.warn(`[LockFileValidation] No version field in lock entry for ${moduleRef}. Resolved to ${resolvedVersion}.`);
+      }
+      // Don't fail for legacy entries, but could update the lock entry with the resolved version
+      // This provides a migration path for existing lock files
+    }
   }
 
   /**

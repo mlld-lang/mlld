@@ -549,6 +549,35 @@ const result = await evaluate(ast, childEnv);
 - Explicit export/import creates controlled sharing
 - Shadow environments use lexical + dynamic scoping hybrid
 
+### Lock File Version Enforcement
+
+**Overview**: Registry imports are validated against the lock file to ensure reproducible builds.
+
+**Implementation**: In `ImportDirectiveEvaluator.evaluateModuleImport()`, after module resolution but before content processing:
+
+```typescript
+// Validate version against lock file for registry modules
+await this.validateLockFileVersion(candidate, resolverContent, env);
+```
+
+**Validation Logic**:
+- **Registry modules only**: Only validates modules with `metadata.source` starting with `registry://`
+- **Version comparison**: Compares `registryVersion` from lock file with resolved version
+- **Legacy support**: Gracefully handles lock entries without `registryVersion` field
+- **New modules**: Allows imports when no lock entry exists
+
+**Error Handling**:
+```
+Locked version mismatch for @user/module:
+lock file has version 1.1.0, but resolved to version 1.2.0.
+Run 'mlld install' to update the lock file or specify the locked version explicitly.
+```
+
+**Interaction with Hash Validation**:
+- Version enforcement runs **before** hash validation
+- Both checks must pass for successful import
+- Version enforcement is an additional layer on top of existing integrity checks
+
 ### Performance Considerations
 
 1. **Module Caching**: Resolved modules are cached by path

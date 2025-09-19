@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [2.0.0-rc54]
+### Added
+- Directive execution guard suppresses `/run`, `/output`, and `/show` while modules import, eliminating unintended side effects.
+- Imported executables and templates now capture their module environment so command references resolve sibling functions consistently.
+- Registry module imports now enforce `mlld.lock` versions, failing fast on mismatches while remaining backward-compatible with legacy lock entries.
+
 ### Fixed
 - Foreach templates now keep long numeric strings intact during interpolation
 - Command-reference executables now preserve array and object types when passing arguments to nested functions (previously JSON.stringify'd them)
