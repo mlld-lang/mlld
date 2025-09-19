@@ -553,10 +553,13 @@ export class ModuleContentProcessor {
    * Evaluate AST in child environment with error handling
    */
   private async evaluateInChildEnvironment(
-    ast: any[], 
-    childEnv: Environment, 
+    ast: any[],
+    childEnv: Environment,
     resolvedPath: string
   ): Promise<any> {
+    // Set the importing flag to prevent directive side effects
+    childEnv.setImporting(true);
+
     try {
       // Pass isExpression: true to prevent markdown content from being emitted as effects
       // Imports should only process directives and create variables, not emit document content
@@ -565,6 +568,9 @@ export class ModuleContentProcessor {
       throw new Error(
         `Error evaluating imported file '${resolvedPath}': ${error instanceof Error ? error.message : String(error)}`
       );
+    } finally {
+      // Always clear the importing flag, even if evaluation fails
+      childEnv.setImporting(false);
     }
   }
 }

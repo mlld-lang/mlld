@@ -1,0 +1,8 @@
+# Module with side effects that should be blocked during import
+/run js { console.log("Module side effect!"); }
+/output "This should not be written!" to "guard-test-output.txt"
+/show "This should not be shown during import!"
+
+# Variables and executables should still be defined
+/var @message = "Hello from module"
+/exe @greet(name) = `Hello, @name!`

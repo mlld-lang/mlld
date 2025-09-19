@@ -53,12 +53,12 @@ export class VariableImporter {
   }
   
   /**
-   * Deserialize shadow environments after import (objects to Maps)  
+   * Deserialize shadow environments after import (objects to Maps)
    * WHY: Shadow environments are expected as Maps internally
    */
   private deserializeShadowEnvs(envs: any): ShadowEnvironmentCapture {
     const result: ShadowEnvironmentCapture = {};
-    
+
     for (const [lang, shadowObj] of Object.entries(envs)) {
       if (shadowObj && typeof shadowObj === 'object') {
         // Convert object to Map
@@ -69,7 +69,40 @@ export class VariableImporter {
         result[lang as keyof ShadowEnvironmentCapture] = map;
       }
     }
-    
+
+    return result;
+  }
+
+  /**
+   * Serialize module environment for export (Map to object)
+   * WHY: Maps don't serialize to JSON, so we need to convert to exportable format
+   * IMPORTANT: Use the exact same serialization as processModuleExports to ensure compatibility
+   */
+  private serializeModuleEnv(moduleEnv: Map<string, Variable>): any {
+    // Create a temporary childVars map and reuse processModuleExports logic
+    // Skip module env serialization to prevent infinite recursion
+    const tempResult = this.processModuleExports(moduleEnv, {}, true);
+    return tempResult.moduleObject;
+  }
+
+  /**
+   * Deserialize module environment after import (object to Map)
+   * IMPORTANT: Reuse createVariableFromValue to ensure proper Variable reconstruction
+   */
+  deserializeModuleEnv(moduleEnv: any): Map<string, Variable> {
+    const result = new Map<string, Variable>();
+    if (moduleEnv && typeof moduleEnv === 'object') {
+      for (const [name, varData] of Object.entries(moduleEnv)) {
+        // Reuse the existing variable creation logic
+        const variable = this.createVariableFromValue(
+          name,
+          varData,
+          'module-env', // Use a special import path to indicate this is from module env
+          name
+        );
+        result.set(name, variable);
+      }
+    }
     return result;
   }
 
@@ -92,13 +125,22 @@ export class VariableImporter {
    */
   processModuleExports(
     childVars: Map<string, Variable>,
-    parseResult: any
+    parseResult: any,
+    skipModuleEnvSerialization?: boolean
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
     
     // Always start with auto-export of all top-level variables
     const moduleObject: Record<string, any> = {};
+    const shouldSerializeModuleEnv = !skipModuleEnvSerialization;
+    let moduleEnvSnapshot: Map<string, Variable> | null = null;
+    const getModuleEnvSnapshot = () => {
+      if (!moduleEnvSnapshot) {
+        moduleEnvSnapshot = new Map(childVars);
+      }
+      return moduleEnvSnapshot;
+    };
     
     // Export all top-level variables directly (except system variables)
     if (process.env.MLLD_DEBUG === 'true') {
@@ -118,7 +160,8 @@ export class VariableImporter {
       // For executable variables, we need to preserve the full structure
       if (variable.type === 'executable') {
         const execVar = variable as ExecutableVariable;
-        
+
+
         // Serialize shadow environments if present (Maps don't serialize to JSON)
         let serializedMetadata = { ...execVar.metadata };
         if (serializedMetadata.capturedShadowEnvs) {
@@ -126,6 +169,19 @@ export class VariableImporter {
             ...serializedMetadata,
             capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
           };
+        }
+        // Serialize module environment if present
+        if (shouldSerializeModuleEnv) {
+          const capturedEnv = serializedMetadata.capturedModuleEnv instanceof Map
+            ? serializedMetadata.capturedModuleEnv
+            : getModuleEnvSnapshot();
+          serializedMetadata = {
+            ...serializedMetadata,
+            capturedModuleEnv: this.serializeModuleEnv(capturedEnv)
+          };
+        } else {
+          // Remove capturedModuleEnv to avoid recursion
+          delete serializedMetadata.capturedModuleEnv;
         }
         
         // Export executable with all necessary metadata
@@ -435,6 +491,25 @@ export class VariableImporter {
       originalMetadata = {
         ...originalMetadata,
         capturedShadowEnvs: this.deserializeShadowEnvs(originalMetadata.capturedShadowEnvs)
+      };
+    }
+
+    // Deserialize module environment if present
+    if (originalMetadata.capturedModuleEnv) {
+      const deserializedEnv = this.deserializeModuleEnv(originalMetadata.capturedModuleEnv);
+
+      // IMPORTANT: Each executable in the module env needs to have access to the full env
+      // This allows command-refs to find their siblings
+      for (const [_, variable] of deserializedEnv) {
+        if (variable.type === 'executable' && variable.metadata) {
+          // Give each executable in the module env access to all siblings
+          variable.metadata.capturedModuleEnv = deserializedEnv;
+        }
+      }
+
+      originalMetadata = {
+        ...originalMetadata,
+        capturedModuleEnv: deserializedEnv
       };
     }
     

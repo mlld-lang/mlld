@@ -42,14 +42,22 @@ export async function evaluateOutput(
   directive: DirectiveNode,
   env: Environment
 ): Promise<EvalResult> {
+  // Check if we're importing - skip execution if so
+  if (env.getIsImporting()) {
+    return {
+      type: 'directive',
+      value: null
+    };
+  }
+
   const hasSource = directive.meta?.hasSource;
   const sourceType = directive.meta?.sourceType;
   const targetType = directive.meta?.targetType || 'file'; // Default to file
   const format = directive.meta?.format;
   // Removed: isLegacy flag - bracket syntax no longer supported
-  
-  
-  
+
+
+
   try {
     // Get the content to output
     let content: string;

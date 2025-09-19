@@ -562,6 +562,20 @@ export async function evaluateExe(
   
     // CONTEXT: Shadow environments may be present; capture them for later execution
   
+  const metadata: Record<string, any> = {
+    definedAt: location,
+    executableDef
+  };
+
+  if (env.hasShadowEnvs()) {
+    metadata.capturedShadowEnvs = env.captureAllShadowEnvs();
+  }
+
+  // Only capture module environment when we're evaluating a module for import
+  if (env.getIsImporting()) {
+    metadata.capturedModuleEnv = env.captureModuleEnvironment();
+  }
+
   const variable = createExecutableVariable(
     identifier,
     executableDef.type,
@@ -569,14 +583,7 @@ export async function evaluateExe(
     executableDef.paramNames || [],
     language,
     source,
-    {
-      definedAt: location,
-      executableDef, // Store the full definition in metadata
-      // CONTEXT: preserve captured shadow environments for this executable
-      ...(env.hasShadowEnvs() ? { 
-        capturedShadowEnvs: env.captureAllShadowEnvs() 
-      } : {})
-    }
+    metadata
   );
   
   // Set the actual template/command content

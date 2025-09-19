@@ -141,7 +141,13 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   
   // Effect handler for immediate output
   private effectHandler: EffectHandler;
-  
+
+  // Import evaluation guard - prevents directive execution during import
+  private isImportingContent: boolean = false;
+
+  // Captured module environment used during imported executable invocation
+  private capturedModuleEnv?: Map<string, Variable>;
+
   // Constructor overloads
   constructor(
     fileSystem: IFileSystemService,
@@ -301,6 +307,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
       getCurrentFilePath: () => this.getCurrentFilePath(),
       getReservedNames: () => this.reservedNames,
       getParent: () => this.parent,
+      getCapturedModuleEnv: () => this.capturedModuleEnv,
       getResolverManager: () => this.getResolverManager(),
       createDebugObject: (format: number) => this.createDebugObject(format),
       getEnvironmentVariables: () => this.getEnvironmentVariables(),
@@ -562,7 +569,22 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   setCurrentFilePath(filePath: string | undefined): void {
     this.currentFilePath = filePath;
   }
-  
+
+  // Import evaluation guard methods
+  setImporting(value: boolean): void {
+    this.isImportingContent = value;
+  }
+
+  getIsImporting(): boolean {
+    // Only return true for this specific environment, don't inherit from parent
+    // This prevents the import guard from leaking into child environments during normal execution
+    return this.isImportingContent;
+  }
+
+  setCapturedModuleEnv(env: Map<string, Variable> | undefined): void {
+    this.capturedModuleEnv = env;
+  }
+
   getSecurityManager(): SecurityManager | undefined {
     // Get from this environment or parent
     if (this.securityManager) return this.securityManager;
@@ -661,7 +683,18 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
   
   getVariable(name: string): Variable | undefined {
-    return this.variableManager.getVariable(name);
+    // First check local variables
+    const localVar = this.variableManager.getVariable(name);
+    if (localVar) {
+      return localVar;
+    }
+
+    // Fall back to captured module environment if available
+    if (this.capturedModuleEnv) {
+      return this.capturedModuleEnv.get(name);
+    }
+
+    return undefined;
   }
 
   /**
@@ -1097,7 +1130,15 @@ export class Environment implements VariableManagerContext, ImportResolverContex
     // Check Node.js shadow environment
     return this.nodeShadowEnv !== undefined;
   }
-  
+
+  /**
+   * Capture the current module environment (variables) for executables
+   * This allows imported executables to access their sibling functions
+   */
+  captureModuleEnvironment(): Map<string, Variable> {
+    return new Map(this.variableManager.getVariables());
+  }
+
   // --- Capabilities ---
   
   async readFile(pathOrUrl: string): Promise<string> {

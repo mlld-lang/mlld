@@ -106,6 +106,13 @@ export class ObjectReferenceResolver {
           capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
         };
       }
+      // Serialize module environment if present
+      if (serializedMetadata?.capturedModuleEnv) {
+        serializedMetadata = {
+          ...serializedMetadata,
+          capturedModuleEnv: this.serializeModuleEnv(serializedMetadata.capturedModuleEnv)
+        };
+      }
       
       const result = {
         __executable: true,
@@ -139,6 +146,42 @@ export class ObjectReferenceResolver {
       }
     }
     
+    return result;
+  }
+
+  /**
+   * Serialize module environment for export (Map to object)
+   * WHY: Maps don't serialize to JSON, so we need to convert to exportable format
+   * IMPORTANT: Delegate to VariableImporter to ensure consistent serialization
+   */
+  private serializeModuleEnv(moduleEnv: Map<string, Variable>): any {
+    // Use a simpler approach: serialize each variable individually using the same logic as resolveExecutableReference
+    const result: Record<string, any> = {};
+    for (const [name, variable] of moduleEnv) {
+      if (variable.type === 'executable') {
+        const execVar = variable as ExecutableVariable;
+        let serializedMetadata = { ...execVar.metadata };
+        if (serializedMetadata.capturedShadowEnvs) {
+          serializedMetadata = {
+            ...serializedMetadata,
+            capturedShadowEnvs: this.serializeShadowEnvs(serializedMetadata.capturedShadowEnvs)
+          };
+        }
+        // Skip capturedModuleEnv only for items IN the module env to avoid recursion
+        delete serializedMetadata.capturedModuleEnv;
+
+        result[name] = {
+          __executable: true,
+          value: execVar.value,
+          paramNames: execVar.paramNames,
+          executableDef: execVar.metadata?.executableDef,
+          metadata: serializedMetadata
+        };
+      } else {
+        // For other variables, export the value directly
+        result[name] = variable.value;
+      }
+    }
     return result;
   }
 

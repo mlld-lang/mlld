@@ -42,10 +42,17 @@ export async function evaluateShow(
   env: Environment,
   context?: any
 ): Promise<EvalResult> {
-  
+  // Check if we're importing - skip execution if so
+  if (env.getIsImporting()) {
+    return {
+      type: 'directive',
+      value: null
+    };
+  }
+
   if (process.env.MLLD_DEBUG === 'true') {
   }
-  
+
   let content = '';
   
   if (directive.subtype === 'showVariable') {
