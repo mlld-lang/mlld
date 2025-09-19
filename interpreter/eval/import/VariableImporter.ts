@@ -18,6 +18,8 @@ import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import { MlldImportError } from '@core/errors';
 import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironmentCapture';
 import { ExportManifest } from './ExportManifest';
+import { astLocationToSourceLocation } from '@core/types';
+import type { SourceLocation } from '@core/types';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -72,6 +74,38 @@ export class VariableImporter {
     }
 
     return result;
+  }
+
+  private ensureImportBindingAvailable(
+    targetEnv: Environment,
+    name: string,
+    importPath: string,
+    location?: SourceLocation
+  ): void {
+    if (!name) return;
+    const existingBinding = targetEnv.getImportBinding(name);
+    if (!existingBinding) {
+      return;
+    }
+
+    throw new MlldImportError(
+      `Import collision - '${name}' already imported from ${existingBinding.sourcePath}. Alias one of the imports.`,
+      {
+        code: 'IMPORT_NAME_CONFLICT',
+        context: {
+          name,
+          existingSource: existingBinding.sourcePath,
+          attemptedSource: importPath,
+          existingLocation: existingBinding.location,
+          newLocation: location,
+          suggestion: "Use 'as' to alias one of the imports"
+        },
+        details: {
+          filePath: location?.filePath || existingBinding.location?.filePath,
+          variableName: name
+        }
+      }
+    );
   }
 
   /**
@@ -398,11 +432,19 @@ export class VariableImporter {
     const alias = (namespaceNodes && Array.isArray(namespaceNodes) && namespaceNodes[0]?.content) 
       ? namespaceNodes[0].content 
       : directive.values?.imports?.[0]?.alias;
-    
+
     if (!alias) {
       throw new Error('Namespace import missing alias');
     }
-    
+
+    const importerFilePath = targetEnv.getCurrentFilePath();
+    const aliasLocationNode = namespaceNodes && Array.isArray(namespaceNodes) ? namespaceNodes[0] : undefined;
+    const aliasLocation = aliasLocationNode?.location
+      ? astLocationToSourceLocation(aliasLocationNode.location, importerFilePath)
+      : astLocationToSourceLocation(directive.location, importerFilePath);
+
+    this.ensureImportBindingAvailable(targetEnv, alias, importPath, aliasLocation);
+
     // Smart namespace unwrapping: If the module exports a single main object
     // with a conventional name, unwrap it for better ergonomics
     let namespaceObject = moduleObject;
@@ -442,6 +484,7 @@ export class VariableImporter {
     if (namespaceObject && typeof namespaceObject === 'object' && (namespaceObject as any).__template) {
       const templateVar = this.createVariableFromValue(alias, namespaceObject, importPath);
       targetEnv.setVariable(alias, templateVar);
+      targetEnv.setImportBinding(alias, { sourcePath: importPath, location: aliasLocation });
       return;
     }
 
@@ -452,6 +495,7 @@ export class VariableImporter {
       importPath
     );
     targetEnv.setVariable(alias, namespaceVar);
+    targetEnv.setImportBinding(alias, { sourcePath: importPath, location: aliasLocation });
   }
 
   /**
@@ -465,20 +509,28 @@ export class VariableImporter {
   ): Promise<void> {
     const imports = directive.values?.imports || [];
     const importPath = childEnv.getCurrentFilePath() || 'unknown';
-    
+    const importerFilePath = targetEnv.getCurrentFilePath();
+
     for (const importItem of imports) {
       const importName = importItem.identifier;
       const alias = importItem.alias || importName;
-      
+
       if (!(importName in moduleObject)) {
         throw new Error(`Import '${importName}' not found in module`);
       }
-      
+
+      const bindingLocation = importItem?.location
+        ? astLocationToSourceLocation(importItem.location, importerFilePath)
+        : astLocationToSourceLocation(directive.location, importerFilePath);
+
+      this.ensureImportBindingAvailable(targetEnv, alias, importPath, bindingLocation);
+
       const importedValue = moduleObject[importName];
       const variable = this.createVariableFromValue(alias, importedValue, importPath, importName);
-      
-      
+
+
       targetEnv.setVariable(alias, variable);
+      targetEnv.setImportBinding(alias, { sourcePath: importPath, location: bindingLocation });
     }
   }
 

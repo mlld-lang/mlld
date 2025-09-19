@@ -41,6 +41,11 @@ import { ShadowEnvironmentCapture, ShadowEnvironmentProvider } from './types/Sha
 import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { ExportManifest } from '../eval/import/ExportManifest';
 
+interface ImportBindingInfo {
+  sourcePath: string;
+  location?: SourceLocation;
+}
+
 
 /**
  * Environment holds all state and provides capabilities for evaluation.
@@ -151,6 +156,9 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   // Export manifest populated by /export directives within this environment
   private exportManifest?: ExportManifest;
+
+  // Track imported bindings to surface collisions across directives
+  private importBindings: Map<string, ImportBindingInfo> = new Map();
 
   // Constructor overloads
   constructor(
@@ -599,6 +607,14 @@ export class Environment implements VariableManagerContext, ImportResolverContex
 
   hasExplicitExports(): boolean {
     return Boolean(this.exportManifest?.hasEntries());
+  }
+
+  getImportBinding(name: string): ImportBindingInfo | undefined {
+    return this.importBindings.get(name);
+  }
+
+  setImportBinding(name: string, info: ImportBindingInfo): void {
+    this.importBindings.set(name, info);
   }
 
   getSecurityManager(): SecurityManager | undefined {
