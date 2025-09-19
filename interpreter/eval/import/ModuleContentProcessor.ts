@@ -390,9 +390,12 @@ export class ModuleContentProcessor {
         evalResult: evalResult?.value ? 'has value' : 'no value'
       });
     }
+    const exportManifest = childEnv.getExportManifest();
     const { moduleObject, frontmatter } = this.variableImporter.processModuleExports(
-      childVars, 
-      { frontmatter: frontmatterData }
+      childVars,
+      { frontmatter: frontmatterData },
+      undefined,
+      exportManifest
     );
 
     // Add __meta__ property with frontmatter if available

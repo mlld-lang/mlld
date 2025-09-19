@@ -17,6 +17,7 @@ import type { Environment } from '../../env/Environment';
 import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 import { MlldImportError } from '@core/errors';
 import type { ShadowEnvironmentCapture } from '../../env/types/ShadowEnvironmentCapture';
+import { ExportManifest } from './ExportManifest';
 
 export interface ModuleProcessingResult {
   moduleObject: Record<string, any>;
@@ -126,7 +127,8 @@ export class VariableImporter {
   processModuleExports(
     childVars: Map<string, Variable>,
     parseResult: any,
-    skipModuleEnvSerialization?: boolean
+    skipModuleEnvSerialization?: boolean,
+    _manifest?: ExportManifest | null
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
