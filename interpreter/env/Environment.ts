@@ -42,7 +42,7 @@ import { EffectHandler, DefaultEffectHandler } from './EffectHandler';
 import { ExportManifest } from '../eval/import/ExportManifest';
 
 interface ImportBindingInfo {
-  sourcePath: string;
+  source: string;
   location?: SourceLocation;
 }
 

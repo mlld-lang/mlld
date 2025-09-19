@@ -252,11 +252,16 @@ export async function evaluateShow(
       const security = variable.value.security;
       
       try {
-        if (isURL && security) {
-          // Use URL cache with security options
-          value = await env.fetchURLWithSecurity(pathValue, security, varName);
+        if (isURL) {
+          if (security) {
+            // Use URL cache with security options when available
+            value = await env.fetchURLWithSecurity(pathValue, security, varName);
+          } else {
+            // Fetch URL content directly when no additional security metadata is provided
+            value = await env.fetchURL(pathValue);
+          }
         } else {
-          // Regular file or URL without security options
+          // Regular file path
           value = await env.readFile(pathValue);
         }
       } catch (error) {

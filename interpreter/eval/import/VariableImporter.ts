@@ -79,7 +79,7 @@ export class VariableImporter {
   private ensureImportBindingAvailable(
     targetEnv: Environment,
     name: string,
-    importPath: string,
+    importSource: string,
     location?: SourceLocation
   ): void {
     if (!name) return;
@@ -89,13 +89,13 @@ export class VariableImporter {
     }
 
     throw new MlldImportError(
-      `Import collision - '${name}' already imported from ${existingBinding.sourcePath}. Alias one of the imports.`,
+      `Import collision - '${name}' already imported from ${existingBinding.source}. Alias one of the imports.`,
       {
         code: 'IMPORT_NAME_CONFLICT',
         context: {
           name,
-          existingSource: existingBinding.sourcePath,
-          attemptedSource: importPath,
+          existingSource: existingBinding.source,
+          attemptedSource: importSource,
           existingLocation: existingBinding.location,
           newLocation: location,
           suggestion: "Use 'as' to alias one of the imports"
@@ -106,6 +106,23 @@ export class VariableImporter {
         }
       }
     );
+  }
+
+  private setVariableWithImportBinding(
+    targetEnv: Environment,
+    alias: string,
+    variable: Variable,
+    binding: { source: string; location?: SourceLocation }
+  ): void {
+    let shouldPersistBinding = false;
+    try {
+      targetEnv.setVariable(alias, variable);
+      shouldPersistBinding = true;
+    } finally {
+      if (shouldPersistBinding) {
+        targetEnv.setImportBinding(alias, binding);
+      }
+    }
   }
 
   /**
@@ -443,8 +460,6 @@ export class VariableImporter {
       ? astLocationToSourceLocation(aliasLocationNode.location, importerFilePath)
       : astLocationToSourceLocation(directive.location, importerFilePath);
 
-    this.ensureImportBindingAvailable(targetEnv, alias, importPath, aliasLocation);
-
     // Smart namespace unwrapping: If the module exports a single main object
     // with a conventional name, unwrap it for better ergonomics
     let namespaceObject = moduleObject;
@@ -479,12 +494,15 @@ export class VariableImporter {
     }
     
     const importPath = childEnv.getCurrentFilePath() || 'unknown';
+    const importDisplay = this.getImportDisplayPath(directive, importPath);
+    const bindingInfo = { source: importDisplay, location: aliasLocation };
+
+    this.ensureImportBindingAvailable(targetEnv, alias, importDisplay, aliasLocation);
 
     // If the unwrapped object is a template export, create a template variable instead
     if (namespaceObject && typeof namespaceObject === 'object' && (namespaceObject as any).__template) {
       const templateVar = this.createVariableFromValue(alias, namespaceObject, importPath);
-      targetEnv.setVariable(alias, templateVar);
-      targetEnv.setImportBinding(alias, { sourcePath: importPath, location: aliasLocation });
+      this.setVariableWithImportBinding(targetEnv, alias, templateVar, bindingInfo);
       return;
     }
 
@@ -494,8 +512,7 @@ export class VariableImporter {
       namespaceObject,
       importPath
     );
-    targetEnv.setVariable(alias, namespaceVar);
-    targetEnv.setImportBinding(alias, { sourcePath: importPath, location: aliasLocation });
+    this.setVariableWithImportBinding(targetEnv, alias, namespaceVar, bindingInfo);
   }
 
   /**
@@ -509,6 +526,7 @@ export class VariableImporter {
   ): Promise<void> {
     const imports = directive.values?.imports || [];
     const importPath = childEnv.getCurrentFilePath() || 'unknown';
+    const importDisplay = this.getImportDisplayPath(directive, importPath);
     const importerFilePath = targetEnv.getCurrentFilePath();
 
     for (const importItem of imports) {
@@ -522,16 +540,24 @@ export class VariableImporter {
       const bindingLocation = importItem?.location
         ? astLocationToSourceLocation(importItem.location, importerFilePath)
         : astLocationToSourceLocation(directive.location, importerFilePath);
+      const bindingInfo = { source: importDisplay, location: bindingLocation };
 
-      this.ensureImportBindingAvailable(targetEnv, alias, importPath, bindingLocation);
+      this.ensureImportBindingAvailable(targetEnv, alias, importDisplay, bindingLocation);
 
       const importedValue = moduleObject[importName];
       const variable = this.createVariableFromValue(alias, importedValue, importPath, importName);
 
-
-      targetEnv.setVariable(alias, variable);
-      targetEnv.setImportBinding(alias, { sourcePath: importPath, location: bindingLocation });
+      this.setVariableWithImportBinding(targetEnv, alias, variable, bindingInfo);
     }
+  }
+
+  private getImportDisplayPath(directive: DirectiveNode, fallback: string): string {
+    const raw = (directive as any)?.raw;
+    if (raw && typeof raw.path === 'string' && raw.path.trim().length > 0) {
+      const trimmed = raw.path.trim();
+      return trimmed.replace(/^['"]|['"]$/g, '');
+    }
+    return fallback;
   }
 
   /**
