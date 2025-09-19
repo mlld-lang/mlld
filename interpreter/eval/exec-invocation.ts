@@ -1347,7 +1347,6 @@ export async function evaluateExecInvocation(
       throw new MlldInterpreterError(`Referenced command not found: ${refName}`);
     }
 
-    
     // The commandArgs contains the original AST nodes for how to call the referenced command
     // We need to evaluate these nodes with the current invocation's parameters bound
     if (definition.commandArgs && definition.commandArgs.length > 0) {
