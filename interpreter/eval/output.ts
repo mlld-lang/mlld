@@ -44,10 +44,7 @@ export async function evaluateOutput(
 ): Promise<EvalResult> {
   // Check if we're importing - skip execution if so
   if (env.getIsImporting()) {
-    return {
-      type: 'directive',
-      value: null
-    };
+    return { value: null, env };
   }
 
   const hasSource = directive.meta?.hasSource;
