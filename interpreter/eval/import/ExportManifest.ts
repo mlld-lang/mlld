@@ -1,5 +1,9 @@
 import type { SourceLocation } from '@core/types';
 
+/**
+ * Collects `/export` declarations encountered while a module evaluates so later
+ * import processing can validate and filter the exported variables.
+ */
 export interface ExportManifestEntry {
   name: string;
   location?: SourceLocation;

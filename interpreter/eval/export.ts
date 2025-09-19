@@ -28,6 +28,7 @@ export async function evaluateExport(
   }
 
   if (hasWildcard) {
+    // Reset the manifest so downstream logic falls back to the auto-export path.
     env.setExportManifest(null);
     return { value: undefined, env };
   }
@@ -38,6 +39,7 @@ export async function evaluateExport(
 
   let manifest = env.getExportManifest();
   if (!manifest) {
+    // Lazily create the manifest the first time /export appears in the module.
     manifest = new ExportManifest();
     env.setExportManifest(manifest);
   }

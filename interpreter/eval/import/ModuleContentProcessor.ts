@@ -372,8 +372,11 @@ export class ModuleContentProcessor {
     const childEnv = this.createChildEnvironment(resolvedPath, isURL);
 
     if (this.containsExportDirective(ast)) {
+      // Seed the child environment with an empty manifest so subsequent
+      // /export directives can accumulate entries during evaluation.
       childEnv.setExportManifest(new ExportManifest());
     } else {
+      // Use `null` to signal the auto-export fallback (no explicit manifest).
       childEnv.setExportManifest(null);
     }
 

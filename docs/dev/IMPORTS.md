@@ -33,7 +33,7 @@ The mlld import system provides a flexible, secure way to share code between mod
 
 ### Key Features
 - **Module isolation**: Each module evaluates in its own environment
-- **Automatic exports**: All top-level variables are exported by default
+- **Explicit export manifests**: Modules declare public bindings with `/export { ... }`; files that have not been updated yet still auto-export as a temporary compatibility fallback.
 - **Shadow environment preservation**: Functions maintain access to their original context
 - **Type preservation**: Variable types are maintained through import/export
 - **Flexible resolution**: Support for local files, registry modules, and URLs
@@ -144,11 +144,19 @@ Import Directive → Path Resolution → Content Fetching → Module Evaluation 
    // Create isolated environment
    const childEnv = env.createChild(importDir);
    
-   // Evaluate module AST
+   // Evaluate module AST (directives run with importing guard enabled)
    const result = await evaluate(ast, childEnv);
-   
-   // Extract exports
-   const exports = processModuleExports(childEnv.getCurrentVariables());
+   const frontmatterData = extractFrontmatter(ast);
+
+   // Capture manifest declared via /export; fallback to auto-export otherwise
+   const manifest = childEnv.getExportManifest();
+   const parseResult = { frontmatter: frontmatterData };
+   const exports = processModuleExports(
+     childEnv.getCurrentVariables(),
+     parseResult,
+     false,
+     manifest
+   );
    ```
 
 5. **Variable Import**
@@ -348,21 +356,42 @@ The registry provides metadata including:
 
 ## Variable Import and Export
 
-### Automatic Export
+### Explicit Export Manifest
 
-All top-level variables are exported except:
-- System variables (marked with `isSystem: true`)
-- Variables starting with underscore (future convention)
+- Modules declare their public API with `/export { name, other }`.
+- `evaluateExport` records identifiers and directive locations in `ExportManifest` stored on the module child environment.
+- `/export { * }` clears the manifest to retain the compatibility auto-export semantics.
+- After evaluation, `processModuleExports` receives the manifest and filters `childVars` to the declared names.
+- Missing names raise `MlldImportError (EXPORTED_NAME_NOT_FOUND)` with the original `/export` location for debugging.
 
 ```typescript
-function isLegitimateVariableForExport(variable: Variable): boolean {
-  // System variables (like @fm) should not be exported
-  if (variable.metadata?.isSystem) {
-    return false;
+const manifest = childEnv.getExportManifest();
+const explicitNames = manifest?.getNames();
+if (explicitNames) {
+  for (const name of explicitNames) {
+    if (!childVars.has(name)) {
+      throw new MlldImportError(
+        `Exported name '${name}' is not defined in this module`,
+        {
+          code: 'EXPORTED_NAME_NOT_FOUND',
+          context: { exportName: name, location: manifest?.getLocation(name) }
+        }
+      );
+    }
   }
-  return true;
 }
 ```
+
+### Auto-Export Fallback
+
+- Legacy modules without a manifest continue to export every top-level variable that passes `isLegitimateVariableForExport` (system variables remain hidden).
+- The fallback path allows gradual migration; new docs and samples should always include `/export`.
+
+### Import Alias Collision Protection
+
+- `Environment` tracks imported binding names per file.
+- `ensureImportBindingAvailable` raises `IMPORT_NAME_CONFLICT` before setting the variable if another import already claimed the alias, reporting both source paths and locations.
+- `setVariableWithImportBinding` persists the binding only after `setVariable` succeeds so failed imports never leave stale reservations behind.
 
 ### Type Preservation
 
@@ -543,11 +572,23 @@ childEnv.setCurrentFilePath(resolvedPath);
 const result = await evaluate(ast, childEnv);
 ```
 
+### Import Directive Guard
+
+- `ModuleContentProcessor` sets `childEnv.setImporting(true)` before invoking `evaluate` and clears the flag in a `finally` block.
+- `/run`, `/output`, and `/show` check `env.getIsImporting()` and become no-ops during import evaluation, preventing module-level side effects.
+- Cached module loads reuse the guard so long-running imports do not leak the flag into normal execution.
+
+### Captured Module Scope
+
+- Executables and templates defined during import capture the module's variable map and shadow environments in their metadata.
+- `VariableImporter.processModuleExports()` serializes those captures, and `exec-invocation` rehydrates them so imported command references resolve siblings exactly as they did in the source module.
+- Shadow environments follow the same capture → serialize → rehydrate workflow, ensuring helpers remain callable across module boundaries.
+
 ### Variable Scoping
 
-- Child environment variables don't pollute parent
-- Explicit export/import creates controlled sharing
-- Shadow environments use lexical + dynamic scoping hybrid
+- Child environment variables do not pollute the parent.
+- Explicit export/import creates controlled sharing.
+- Shadow environments use a lexical + dynamic hybrid (captured first, then current environment).
 
 ### Lock File Version Enforcement
 

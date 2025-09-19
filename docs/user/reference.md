@@ -228,7 +228,7 @@ Glob patterns:
 
 ### Imports (`/import`)
 
-Import from modules:
+Import from modules (modules should declare `/export { ... }` to list public bindings; the auto-export fallback for modules without manifests is still supported for now):
 
 ```mlld
 /import { parallel, retry } from @mlld/core

@@ -95,6 +95,9 @@ related-types: core/types { MlldNode, DirectiveNode, ExecInvocation, VariableRef
 - Imports: `eval/import/*` delegates to `Environment.importResolver`:
   - Module imports: `@user/module` via registry/HTTP/GitHub resolvers.
   - Path imports: quoted/local paths and resolver-prefixed angle brackets (e.g., `<@base/file.mld>`); angle brackets denote "load contents" semantics.
+- Import directive guard: module child environments set `isImporting` so `/run`, `/output`, and `/show` skip execution while the import evaluates, preventing module-level side effects.
+- Export manifests: `eval/export.ts` records `/export` declarations on the child environment; `VariableImporter.processModuleExports` enforces the manifest and surfaces `EXPORTED_NAME_NOT_FOUND` while `/export { * }` defers to the temporary auto-export fallback.
+- Import collisions: `Environment.setImportBinding` stores successful bindings per directive and `ensureImportBindingAvailable` throws `IMPORT_NAME_CONFLICT` before a duplicate alias reaches `setVariable`.
 - Name protection: resolver names reserved (cannot create variables shadowing them); prefixes registered into env as path variables when configured.
 
 ### Shadow Environments
@@ -139,6 +142,7 @@ This keeps `@ctx.hint` tightly scoped to the location where it is meaningful, wh
 
 - /var: `interpreter/eval/var.ts` — unified variable creation (text/data/primitive/path/section)
 - /run, /sh: `interpreter/eval/run.ts` — command and shell execution, with-clause plumbing
+- /export: `interpreter/eval/export.ts` — accumulate manifest entries, reset fallback on wildcard
 - /exe: `interpreter/eval/exe.ts` — define executables (command/code/template/section/ref)
 - @fn(...): `interpreter/eval/exec-invocation.ts` — unified invocation with `with { ... }`
 - /show: `interpreter/eval/show.ts` — display content, header transforms

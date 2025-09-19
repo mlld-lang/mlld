@@ -76,6 +76,10 @@ export class VariableImporter {
     return result;
   }
 
+  /**
+   * Checks whether the requested alias has already been claimed during the
+   * current import pass and throws a detailed error when a collision exists.
+   */
   private ensureImportBindingAvailable(
     targetEnv: Environment,
     name: string,
@@ -108,6 +112,11 @@ export class VariableImporter {
     );
   }
 
+  /**
+   * Writes the variable and persists the associated binding only after the
+   * assignment succeeds, preventing partially-applied imports from polluting
+   * the collision tracking map.
+   */
   private setVariableWithImportBinding(
     targetEnv: Environment,
     alias: string,
@@ -189,6 +198,8 @@ export class VariableImporter {
     const explicitNames = manifest?.hasEntries() ? manifest.getNames() : null;
     const explicitExports = explicitNames ? new Set(explicitNames) : null;
     if (explicitNames && explicitNames.length > 0) {
+      // Fail fast if the manifest references names that never materialised in
+      // the child environment so authors receive a precise directive pointer.
       for (const name of explicitNames) {
         if (!childVars.has(name)) {
           const location = manifest?.getLocation(name);
@@ -551,6 +562,10 @@ export class VariableImporter {
     }
   }
 
+  /**
+   * Produces a human-readable source string for error messages, stripping any
+   * quotes that appeared in the original directive.
+   */
   private getImportDisplayPath(directive: DirectiveNode, fallback: string): string {
     const raw = (directive as any)?.raw;
     if (raw && typeof raw.path === 'string' && raw.path.trim().length > 0) {

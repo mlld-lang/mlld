@@ -157,7 +157,7 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   // Export manifest populated by /export directives within this environment
   private exportManifest?: ExportManifest;
 
-  // Track imported bindings to surface collisions across directives
+  // Tracks imported bindings to surface collisions across directives.
   private importBindings: Map<string, ImportBindingInfo> = new Map();
 
   // Constructor overloads
@@ -610,6 +610,8 @@ export class Environment implements VariableManagerContext, ImportResolverContex
   }
 
   getImportBinding(name: string): ImportBindingInfo | undefined {
+    // Bindings are per environment, so this only reports collisions for the
+    // current file rather than traversing the parent chain.
     return this.importBindings.get(name);
   }
 

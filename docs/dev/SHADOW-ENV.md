@@ -360,6 +360,7 @@ As of rc20, shadow environments are captured at function definition time and pre
 - `ShadowEnvironmentCapture` interface - stores captured shadow environments
 - `shadowEnvResolver.ts` - resolves shadow environments with lexical/dynamic fallback
 - Metadata preservation through import/export system
+- `VariableImporter.processModuleExports` serializes captured shadow environments alongside exported executables so imported functions retain access to their original helpers.
 
 **Key Changes**:
 1. **Capture at Definition**: When an executable is created, shadow environments are captured
