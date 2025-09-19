@@ -1,7 +1,8 @@
 import type { ExportDirectiveNode } from '@core/types';
 import type { Environment } from '../env/Environment';
 import type { EvalResult } from '../core/interpreter';
-import { ExportManifest } from './import/ExportManifest';
+import { ExportManifest, type ExportManifestEntry } from './import/ExportManifest';
+import { astLocationToSourceLocation } from '@core/types';
 
 export async function evaluateExport(
   directive: ExportDirectiveNode,
@@ -9,18 +10,29 @@ export async function evaluateExport(
 ): Promise<EvalResult> {
   const exportNodes = directive.values?.exports ?? [];
 
-  const names = exportNodes
-    .map((node) => node?.identifier)
-    .filter((identifier): identifier is string => typeof identifier === 'string' && identifier.length > 0);
+  const filePath = env.getCurrentFilePath();
+  const entries: ExportManifestEntry[] = [];
+  let hasWildcard = false;
 
-  if (names.length === 0) {
-    return { value: undefined, env };
+  for (const node of exportNodes) {
+    const identifier = typeof node?.identifier === 'string' ? node.identifier : '';
+    if (!identifier) continue;
+
+    if (identifier === '*') {
+      hasWildcard = true;
+      continue;
+    }
+
+    const location = astLocationToSourceLocation(node?.location, filePath);
+    entries.push({ name: identifier, location });
   }
-
-  const hasWildcard = names.includes('*');
 
   if (hasWildcard) {
     env.setExportManifest(null);
+    return { value: undefined, env };
+  }
+
+  if (entries.length === 0) {
     return { value: undefined, env };
   }
 
@@ -30,7 +42,7 @@ export async function evaluateExport(
     env.setExportManifest(manifest);
   }
 
-  manifest.add(names);
+  manifest.add(entries);
 
   return { value: undefined, env };
 }

@@ -128,13 +128,36 @@ export class VariableImporter {
     childVars: Map<string, Variable>,
     parseResult: any,
     skipModuleEnvSerialization?: boolean,
-    _manifest?: ExportManifest | null
+    manifest?: ExportManifest | null
   ): { moduleObject: Record<string, any>, frontmatter: Record<string, any> | null } {
     // Extract frontmatter if present
     const frontmatter = parseResult.frontmatter || null;
-    
+
     // Always start with auto-export of all top-level variables
     const moduleObject: Record<string, any> = {};
+    const explicitNames = manifest?.hasEntries() ? manifest.getNames() : null;
+    const explicitExports = explicitNames ? new Set(explicitNames) : null;
+    if (explicitNames && explicitNames.length > 0) {
+      for (const name of explicitNames) {
+        if (!childVars.has(name)) {
+          const location = manifest?.getLocation(name);
+          throw new MlldImportError(
+            `Exported name '${name}' is not defined in this module`,
+            {
+              code: 'EXPORTED_NAME_NOT_FOUND',
+              context: {
+                exportName: name,
+                location
+              },
+              details: {
+                filePath: location?.filePath,
+                variableName: name
+              }
+            }
+          );
+        }
+      }
+    }
     const shouldSerializeModuleEnv = !skipModuleEnvSerialization;
     let moduleEnvSnapshot: Map<string, Variable> | null = null;
     const getModuleEnvSnapshot = () => {
@@ -151,6 +174,9 @@ export class VariableImporter {
     }
     
     for (const [name, variable] of childVars) {
+      if (explicitExports && !explicitExports.has(name)) {
+        continue;
+      }
       // Only export legitimate mlld variables - this automatically excludes
       // system variables like frontmatter (@fm) that don't have valid mlld types
       if (!this.isLegitimateVariableForExport(variable)) {
