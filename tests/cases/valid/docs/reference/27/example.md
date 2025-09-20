@@ -1,9 +1,8 @@
-/var @text = "Hello World"
-/show @text.includes("World")          # true
-/show @text.indexOf("W")               # 6
-/show @text.toLowerCase()              # "hello world"
-/show @text.toUpperCase()              # "HELLO WORLD"
-/show @text.trim()                     # removes whitespace
-/show @text.startsWith("Hello")        # true
-/show @text.endsWith("World")          # true
-/show @text.split(" ")                 # ["Hello", "World"]
+# Backticks (primary)
+/var @msg = `Hello @name, welcome!`
+
+# Double-colon (escape backticks)
+/var @doc = ::Use `npm install` to get started, @name::
+
+# Triple-colon (many @ symbols)
+/var @social = :::Hey @{{handle}}, check this out!:::

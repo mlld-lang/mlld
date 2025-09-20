@@ -1,5 +1,5 @@
 import type { DirectiveNode } from '@core/types';
-import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable } from '@core/types/variable';
+import type { Variable, VariableSource, VariableTypeDiscriminator, ExecutableVariable, TemplateVariable } from '@core/types/variable';
 import { 
   createImportedVariable, 
   createObjectVariable,
@@ -281,6 +281,16 @@ export class VariableImporter {
           executableDef: execVar.metadata?.executableDef,
           metadata: serializedMetadata
         };
+      } else if (variable.type === 'template') {
+        const templateVar = variable as TemplateVariable;
+
+        moduleObject[name] = {
+          __template: true,
+          content: templateVar.value,
+          templateSyntax: templateVar.templateSyntax,
+          parameters: templateVar.parameters,
+          templateAst: templateVar.metadata?.templateAst || (Array.isArray(templateVar.value) ? templateVar.value : undefined)
+        };
       } else if (variable.type === 'object' && typeof variable.value === 'object' && variable.value !== null) {
         // For objects, resolve any variable references within the object
         const resolvedObject = this.objectResolver.resolveObjectReferences(variable.value, childVars);
@@ -338,30 +348,49 @@ export class VariableImporter {
       return createTemplateVariable(
         name,
         (value as any).content,
-        undefined,
+        (value as any).parameters,
         (value as any).templateSyntax === 'tripleColon' ? 'tripleColon' : 'doubleColon',
         templateSource,
         tmplMetadata
       );
     }
-    
+
     // Infer the variable type from the value
     const originalType = this.inferVariableType(value);
-    
+
     // Convert non-string primitives to strings
     let processedValue = value;
     if (typeof value === 'number' || typeof value === 'boolean') {
       processedValue = String(value);
     }
     
+    // For array types, create an ArrayVariable to preserve array behaviors
+    if (originalType === 'array' && Array.isArray(processedValue)) {
+      const isComplexArray = this.hasComplexContent(processedValue);
+
+      return createArrayVariable(
+        name,
+        processedValue,
+        isComplexArray,
+        source,
+        {
+          ...metadata,
+          isImported: true,
+          importPath,
+          originalName: originalName !== name ? originalName : undefined
+        }
+      );
+    }
+
     // For object types, create an ObjectVariable to preserve field access capability
     if (originalType === 'object') {
+      const normalizedObject = this.unwrapArraySnapshots(processedValue, importPath);
       // Check if the object contains complex AST nodes that need evaluation
-      const isComplex = this.hasComplexContent(processedValue);
+      const isComplex = this.hasComplexContent(normalizedObject);
       
       return createObjectVariable(
         name,
-        processedValue,
+        normalizedObject,
         isComplex, // Mark as complex if it contains AST nodes
         source,
         {
@@ -384,6 +413,43 @@ export class VariableImporter {
       source,
       metadata
     );
+  }
+
+  private unwrapArraySnapshots(value: any, importPath: string): any {
+    if (Array.isArray(value)) {
+      return value.map(item => this.unwrapArraySnapshots(item, importPath));
+    }
+
+    if (value && typeof value === 'object') {
+      if ((value as any).__arraySnapshot) {
+        const snapshot = value as { value: any[]; metadata?: Record<string, any>; isComplex?: boolean; name?: string };
+        const source: VariableSource = {
+          directive: 'var',
+          syntax: 'array',
+          hasInterpolation: false,
+          isMultiLine: false
+        };
+        const arrayMetadata = {
+          ...(snapshot.metadata || {}),
+          isImported: true,
+          importPath,
+          originalName: snapshot.name
+        };
+        const normalizedElements = Array.isArray(snapshot.value)
+          ? snapshot.value.map(item => this.unwrapArraySnapshots(item, importPath))
+          : [];
+        const arrayName = snapshot.name || 'imported_array';
+        return createArrayVariable(arrayName, normalizedElements, snapshot.isComplex === true, source, arrayMetadata);
+      }
+
+      const result: Record<string, any> = {};
+      for (const [key, entry] of Object.entries(value)) {
+        result[key] = this.unwrapArraySnapshots(entry, importPath);
+      }
+      return result;
+    }
+
+    return value;
   }
 
   /**
@@ -661,7 +727,12 @@ export class VariableImporter {
     if (value === null || typeof value !== 'object') {
       return false;
     }
-    
+
+    // Imported variables already hold evaluated content; do not treat them as complex
+    if (this.isVariableLike(value)) {
+      return false;
+    }
+
     // Check if this is an AST node with a type
     if (value.type) {
       return true;
@@ -685,6 +756,17 @@ export class VariableImporter {
     }
     
     return false;
+  }
+
+  private isVariableLike(value: any): boolean {
+    return value &&
+      typeof value === 'object' &&
+      typeof value.type === 'string' &&
+      'name' in value &&
+      'value' in value &&
+      'source' in value &&
+      'createdAt' in value &&
+      'modifiedAt' in value;
   }
 
   /**

@@ -1,5 +1,5 @@
-/var @fruits = ["apple", "banana", "cherry"]
-/show @fruits.includes("banana")        # true
-/show @fruits.indexOf("cherry")         # 2
-/show @fruits.length()                  # 3
-/show @fruits.join(", ")               # "apple, banana, cherry"
+/output @content to "output.txt"
+/output @data to "config.json"
+/output @message to stdout
+/output @error to stderr
+/output @config to "settings.yaml" as yaml

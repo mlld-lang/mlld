@@ -77,10 +77,10 @@ export class ObjectReferenceResolver {
       const result = this.resolveExecutableReference(referencedVar);
       
       // If the result is an object that might contain more AST nodes, recursively resolve it
-      if (result && typeof result === 'object' && !result.__executable && !Array.isArray(result)) {
+      if (result && typeof result === 'object' && !result.__executable && !Array.isArray(result) && !(result as any).__arraySnapshot) {
         return this.resolveObjectReferences(result, variableMap);
       }
-      
+
       return result;
     } else {
       if (process.env.DEBUG_EXEC) {
@@ -123,6 +123,15 @@ export class ObjectReferenceResolver {
       };
       return result;
     } else {
+      if (referencedVar.type === 'array') {
+        return {
+          __arraySnapshot: true,
+          value: referencedVar.value,
+          metadata: referencedVar.metadata,
+          isComplex: (referencedVar as any).isComplex === true,
+          name: referencedVar.name
+        };
+      }
       // For other variable types, return the value directly
       return referencedVar.value;
     }

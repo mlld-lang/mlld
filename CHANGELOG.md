@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Foreach templates now keep long numeric strings intact during interpolation
 - Command-reference executables now preserve array and object types when passing arguments to nested functions (previously JSON.stringify'd them)
+- Imported arrays preserve array behaviour after module import, so `.length` and `/for` iteration no longer fail after crossing module boundaries
+- Triple-colon template exports keep their template metadata, rendering `{{ }}` placeholders and leaving `<@...>` markers unaltered when imported
+- JavaScript `@` syntax misuse surfaces the educational guidance even when V8 reports "Unexpected token", keeping the fix-it copy visible
+- Regression fixtures cover imported arrays, triple-colon imports, triple alligator literals, and JS `@` misuse to prevent regressions
 
 ## [2.0.0-rc53]
 ### Fixed

@@ -1,2 +1,2 @@
-/var @access = @score > 80 && @verified ? "granted" : "denied"
-/var @status = @isAdmin || (@isMod && @active) ? "privileged" : "standard"
+/var @result = run {cat data.json} | @json | @csv
+/var @processed = @data | @validate | @transform
