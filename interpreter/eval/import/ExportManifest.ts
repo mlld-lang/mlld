@@ -9,7 +9,7 @@ export interface ExportManifestEntry {
   location?: SourceLocation;
 }
 
-export class ExportManifest implements Iterable<string> {
+export class ExportManifest implements Iterable<ExportManifestEntry> {
   private readonly entries = new Map<string, ExportManifestEntry>();
 
   add(entries: ExportManifestEntry[]): void {
@@ -36,15 +36,19 @@ export class ExportManifest implements Iterable<string> {
     return Array.from(this.entries.keys());
   }
 
+  getEntries(): ExportManifestEntry[] {
+    return Array.from(this.entries.values());
+  }
+
   getLocation(name: string): SourceLocation | undefined {
     return this.entries.get(name)?.location;
   }
 
-  [Symbol.iterator](): IterableIterator<string> {
-    return this.entries.keys();
+  [Symbol.iterator](): IterableIterator<ExportManifestEntry> {
+    return this.entries.values();
   }
 
-  toArray(): string[] {
-    return this.getNames();
+  toArray(): ExportManifestEntry[] {
+    return this.getEntries();
   }
 }

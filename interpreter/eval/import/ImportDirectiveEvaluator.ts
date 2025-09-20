@@ -9,6 +9,12 @@ import { ObjectReferenceResolver } from './ObjectReferenceResolver';
 // createVariableFromValue is now part of VariableImporter
 import { interpolate } from '../../core/interpreter';
 
+const MODULE_SOURCE_EXTENSIONS = ['.mld', '.mlld', '.mld.md', '.mlld.md', '.md'] as const;
+
+function matchesModuleExtension(candidate: string): boolean {
+  return MODULE_SOURCE_EXTENSIONS.some(ext => candidate.endsWith(ext));
+}
+
 /**
  * Main coordinator for import directive evaluation
  * Orchestrates all import processing components
@@ -174,12 +180,8 @@ export class ImportDirectiveEvaluator {
       try {
         const resolverContent = await env.resolveModule(candidate, 'import');
 
-    const treatAsModule = resolverContent.contentType === 'module'
-      || candidate.endsWith('.mld')
-      || candidate.endsWith('.mlld')
-      || candidate.endsWith('.mld.md')
-      || candidate.endsWith('.mlld.md')
-      || candidate.endsWith('.md');
+        const treatAsModule = resolverContent.contentType === 'module'
+          || matchesModuleExtension(candidate);
 
         if (!treatAsModule) {
           lastError = new Error(
@@ -390,14 +392,19 @@ export class ImportDirectiveEvaluator {
       return candidates;
     }
 
-    for (const ext of ['.mld', '.mlld', '.mld.md', '.mlld.md', '.md']) {
+    const seen = new Set<string>();
+
+    for (const ext of MODULE_SOURCE_EXTENSIONS) {
       const candidate = `${baseRef}${ext}`;
-      if (!candidates.includes(candidate)) {
+      if (!seen.has(candidate)) {
+        seen.add(candidate);
         candidates.push(candidate);
       }
     }
 
-    candidates.push(baseRef);
+    if (!seen.has(baseRef)) {
+      candidates.push(baseRef);
+    }
 
     return candidates;
   }

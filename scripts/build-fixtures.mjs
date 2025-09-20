@@ -34,6 +34,14 @@ const FIXTURES_DIR = path.join(PROJECT_ROOT, 'tests', 'fixtures');
 const EXAMPLES_DIR = path.join(PROJECT_ROOT, 'examples');
 const EXAMPLES_MD = path.join(CASES_DIR, 'EXAMPLES.md');
 
+const CASE_DIRECTORY_HELPERS = new Set(['files']);
+
+function isHelperCaseDirectory(name) {
+  if (!name) return false;
+  if (CASE_DIRECTORY_HELPERS.has(name)) return true;
+  return name.startsWith('.') || name.startsWith('_');
+}
+
 /**
  * Normalize nodeIds in AST for stable fixture generation
  * Replaces random UUIDs with predictable IDs based on content
@@ -375,7 +383,7 @@ async function processAllCases() {
   const allDirs = entries
     .filter(d => d.isDirectory())
     .map(d => d.name)
-    .filter(name => !['files'].includes(name)); // Exclude helper directories
+    .filter(name => !isHelperCaseDirectory(name)); // Skip helper directories
 
   // Process each directory
   for (const dirName of allDirs) {
