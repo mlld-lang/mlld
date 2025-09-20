@@ -5,6 +5,46 @@ All notable changes to the mlld project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc61]
+### Added
+- C and C++ files supported in curly-brace AST selector
+
+## [2.0.0-rc60]
+### Added
+- Solidity files supported in curly-brace AST selector
+
+## [2.0.0-rc59]
+### Added
+- C# files supported in curly-brace AST selector
+
+## [2.0.0-rc58]
+### Added
+- Java files supported in curly-brace AST selector
+
+## [2.0.0-rc57]
+### Added
+- Rust files supported in curly-brace AST selector
+
+## [2.0.0-rc56]
+### Added
+- Go files supported in curly-brace AST selector
+
+## [2.0.0-rc55]
+### Added
+- Document AST code selection spec and checklist
+
+## [2.0.0-rc54]
+### Changed
+- AST extraction only attaches file metadata when using glob patterns
+
+## [2.0.0-rc53]
+### Added
+- Python files supported in curly-brace AST selector with smart deduplication
+
+## [2.0.0-rc52]
+### Added
+- Curly-brace AST selector in alligator expressions loads top-level code units with metadata
+
 ## [2.0.0-rc51]
 ### Fixed
 - Language Server transport defaults to stdio when no explicit flag is provided

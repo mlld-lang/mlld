@@ -5,6 +5,7 @@ import type { LoadContentResult } from '@core/types/load-content';
 import { LoadContentResultImpl, LoadContentResultURLImpl, LoadContentResultHTMLImpl } from './load-content';
 import { glob } from 'tinyglobby';
 import * as path from 'path';
+import { extractAst } from './ast-extractor';
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import { JSDOM } from 'jsdom';
@@ -32,7 +33,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
     });
   }
 
-  const { source, options, pipes } = node;
+  const { source, options, pipes, ast } = node;
 
   if (!source) {
     throw new MlldError('Content loader expression missing source', {
@@ -67,6 +68,35 @@ export async function processContentLoader(node: any, env: Environment): Promise
 
   // Detect glob pattern from the path
   const isGlob = isGlobPattern(pathOrUrl);
+
+  // AST extraction takes precedence for local files
+  if (ast && actualSource.type === 'path') {
+    if (isGlob) {
+      const baseDir = env.getBasePath();
+      const matches = await glob(pathOrUrl, {
+        cwd: baseDir,
+        absolute: true,
+        followSymlinks: true,
+        ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
+      });
+      const results: any[] = [];
+      for (const filePath of matches) {
+        try {
+          const content = await env.readFile(filePath);
+          const extracted = extractAst(content, filePath, ast);
+          for (const item of extracted) {
+            results.push({ ...item, file: filePath });
+          }
+        } catch {
+          // skip unreadable files
+        }
+      }
+      return results;
+    } else {
+      const content = await env.readFile(pathOrUrl);
+      return extractAst(content, pathOrUrl, ast);
+    }
+  }
 
   try {
     // URLs can't be globs

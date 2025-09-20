@@ -25,15 +25,35 @@ No ambiguity with arrays or strings.
 
 // Main alligator expression
 AlligatorExpression "alligator expression"
-  = "<" !"!" _ source:AlligatorSource options:AlligatorOptions? _ ">" pipes:SpacedOrCondensedPipeChain? {
-      helpers.debug('AlligatorExpression matched', { source, options, pipes });
+  = "<" !"!" _ source:AlligatorSource ast:AlligatorAstPatterns? options:AlligatorOptions? _ ">" pipes:SpacedOrCondensedPipeChain? {
+      helpers.debug('AlligatorExpression matched', { source, ast, options, pipes });
       return {
         type: 'load-content',
         source: source,
+        ...(ast ? { ast } : {}),
         ...(options ? { options } : {}),
         ...(pipes && pipes.length > 0 ? { pipes } : {}),
         location: location()
       };
+    }
+
+// Optional AST pattern clause
+AlligatorAstPatterns "AST pattern list"
+  = _ "{" _ first:AlligatorAstPattern rest:(_ "," _ AlligatorAstPattern)* _ "}" {
+      return [first, ...rest.map(r => r[3])];
+    }
+
+AlligatorAstPattern "AST pattern"
+  = "(" _ id:AlligatorAstIdentifier _ ")" {
+      return { type: 'usage', name: id };
+    }
+  / id:AlligatorAstIdentifier {
+      return { type: 'definition', name: id };
+    }
+
+AlligatorAstIdentifier "AST identifier"
+  = $(BaseIdentifier ("." BaseIdentifier)*) {
+      return text();
     }
 
 // Source types - what we're loading from
