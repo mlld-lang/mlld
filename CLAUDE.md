@@ -47,12 +47,13 @@ mlld run <script>    # Run mlld script from script directory (default: llm/run/)
 - **Formatting**: 2-space indentation, single quotes, semicolons
 - **Types**: Strict type checking enabled, always provide explicit return types
 - **Naming**: PascalCase for classes/interfaces, camelCase for methods/variables
-- **Test Structure**: 
-  - **Directories**: `tests/cases/{valid,invalid,exceptions,warnings}/` → fixtures generated to `tests/fixtures/`
+- **Test Structure**:
+  - **Directories**: `tests/cases/` root for valid tests, subdirs `{invalid,exceptions,warnings}/` for special cases → fixtures to `tests/fixtures/`
   - **Files**: `example.md` (input), `expected.md` (output for valid), `error.md` (error pattern for invalid/exceptions)
-  - **Support files**: Auto-copied from test dir to VFS root. Manual setup in `interpreter.fixture.test.ts:760+` for complex cases
+  - **Support files**: Auto-copied from test dir to VFS root. Manual setup in `interpreter.fixture.test.ts:870+` for complex cases
   - **Naming**: CRITICAL - Unique names across ALL tests. Prefix with context: `import-all-config.mld` not `config.mld`
   - **Build**: `npm run build:fixtures` → generates `.generated-fixture.json` files with AST + expected output
+  - **Skip system**: Place `skip.md` or `skip-*.md` files in test dirs to skip during fixture generation
 - **Error Handling**: Use specialized MlldError classes (MlldDirectiveError, MlldParseError, etc.) Many error conditions use the same method as tests to test our effectiveness at capturing error conditions and delivering consistent error messages. tests/cases/invalid (syntax errors), tests/cases/exceptions (runtime errors), tests/cases/warnings (plausibly valid syntax but common mistakes new mlld learners make), tests/cases/deprecated (deprecated examples - empty currently) 
 - **Grammar:** Our peggy.js grammar uses an abstraction-focused modular design for DRY code that makes peggy's hierarchical traversal clear. Look for patterns to consolidate and abstract where possible. Key grammar docs: grammar/docs/README.md grammar/docs/DEBUG.md Refer to grammar/docs/NAMING-CONVENTIONS.md for naming patterns.
 

@@ -13,6 +13,7 @@ import { evaluateVar } from './var';
 import { evaluateShow } from './show';
 import { evaluateExe } from './exe';
 import { evaluateForDirective } from './for';
+import { evaluateExport } from './export';
 
 /**
  * Extract trace information from a directive
@@ -79,6 +80,14 @@ function extractTraceInfo(directive: DirectiveNode): {
         info.varName = pathContent.split('/').pop()?.replace(/\.mld$/, '');
       }
       break;
+
+    case 'export':
+      // /export { name, other }
+      const firstExport = directive.values?.exports?.[0];
+      if (firstExport && typeof firstExport.identifier === 'string') {
+        info.varName = firstExport.identifier;
+      }
+      break;
   }
   
   return info;
@@ -131,6 +140,9 @@ export async function evaluateDirective(
       
     case 'for':
       return await evaluateForDirective(directive as any, env);
+
+    case 'export':
+      return await evaluateExport(directive as any, env);
       
     default:
       throw new Error(`Unknown directive kind: ${directive.kind}`);

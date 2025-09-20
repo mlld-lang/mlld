@@ -347,6 +347,36 @@ When-expressions are first-class:
 ```
 ```
 
+Inline template control:
+
+- `/for … /end` is available in backticks and `::…::` templates.
+- `:::…:::` templates do not support loops; they support `{{var}}` interpolation and inline `/show` only.
+
+Examples:
+
+```mlld
+# Backtick wrapper
+/var @tpl = `
+/for @x in ["A","B"]
+- @x
+/end
+`
+/show @tpl
+
+# Double-colon wrapper
+/var @items = ["A","B"]
+/var @msg = ::
+/for @x in @items
+- @x
+/end
+::
+/show @msg
+```
+
+Notes:
+- Line-start only: `/for` and `/end` must begin at a line start inside the template body.
+- No loops in `[[...]]` or `:::...:::` templates.
+
 </TEMPLATES>
 
 <FILE_LOADING>
@@ -742,6 +772,7 @@ Module-first philosophy: keep `.mld` files readable; move complexity into focuse
 * Create helpers via `/exe`, expose with shadow envs (per language, per module)
 * JS and Node have separate shadow environments; no cross-pollution
 * Prefer clear namespaces: `/import @corp/utils as utils`
+* Declare module APIs explicitly: `/export { publicFn, helper }`; auto-export sticks around only as a compatibility fallback for modules that have not been updated yet
 
 ```mlld
 ---
@@ -749,6 +780,7 @@ module: @myorg/github-utils
 description: GitHub operations
 ---
 
+/export { getPR, listIssues, createRelease }
 /exe @getPR(number, repo) = run {gh pr view ...}
 /exe @listIssues(repo) = run {gh issue list ...}
 /exe @createRelease(tag, notes) = run {gh release create ...}

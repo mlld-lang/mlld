@@ -20,6 +20,7 @@ export * from './errors';
 
 // Re-export directive types
 export * from './import';
+export * from './export';
 export * from './show';
 export * from './exe';
 export * from './path';
@@ -51,7 +52,9 @@ import {
   FileReferenceNode,
   BinaryExpression,
   TernaryExpression,
-  UnaryExpression
+  UnaryExpression,
+  TemplateForBlockNode,
+  TemplateInlineShowNode
 } from './nodes';
 
 // Import WhenExpressionNode
@@ -87,6 +90,8 @@ export type MlldNode =
   | BinaryExpression
   | TernaryExpression
   | UnaryExpression
+  | TemplateForBlockNode
+  | TemplateInlineShowNode
   | WhenExpressionNode
   | ForExpression;
 

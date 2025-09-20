@@ -64,6 +64,11 @@ export class DirectiveVisitor extends BaseVisitor {
       return;
     }
     
+    if (node.kind === 'export') {
+      this.visitExportDirective(node, context);
+      return;
+    }
+    
     // Handle implicit exe directives (e.g., @transform() = @applyFilter(@data))
     if (node.kind === 'exe' && node.meta?.implicit && node.values?.commandRef) {
       // Token for @commandName
@@ -231,6 +236,24 @@ export class DirectiveVisitor extends BaseVisitor {
     // Handle end-of-line comments
     if (node.meta?.comment) {
       this.visitEndOfLineComment(node.meta.comment);
+    }
+  }
+
+  private visitExportDirective(directive: any, context: VisitorContext): void {
+    // Tokenize exported symbols within braces
+    const exports = directive.values?.exports;
+    if (Array.isArray(exports)) {
+      for (const exp of exports) {
+        if (exp && exp.location) {
+          this.tokenBuilder.addToken({
+            line: exp.location.start.line - 1,
+            char: exp.location.start.column - 1,
+            length: (exp.identifier?.length || 0),
+            tokenType: 'variable',
+            modifiers: ['declaration']
+          });
+        }
+      }
     }
   }
   

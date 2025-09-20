@@ -66,6 +66,8 @@ export class ASTSemanticVisitor {
     this.registerVisitor('VariableReference', variableVisitor);
     this.registerVisitor('StringLiteral', templateVisitor);
     this.registerVisitor('Template', templateVisitor);
+    this.registerVisitor('TemplateForBlock', templateVisitor);
+    this.registerVisitor('TemplateInlineShow', templateVisitor);
     this.registerVisitor('CommandBase', commandVisitor);
     this.registerVisitor('command', commandVisitor);
     this.registerVisitor('ExecInvocation', commandVisitor);

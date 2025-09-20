@@ -6,44 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [2.0.0-rc61]
-### Added
-- C and C++ files supported in curly-brace AST selector
-
-## [2.0.0-rc60]
-### Added
-- Solidity files supported in curly-brace AST selector
-
-## [2.0.0-rc59]
-### Added
-- C# files supported in curly-brace AST selector
-
-## [2.0.0-rc58]
-### Added
-- Java files supported in curly-brace AST selector
-
-## [2.0.0-rc57]
-### Added
-- Rust files supported in curly-brace AST selector
-
-## [2.0.0-rc56]
-### Added
-- Go files supported in curly-brace AST selector
-
-## [2.0.0-rc55]
-### Added
-- Document AST code selection spec and checklist
-
 ## [2.0.0-rc54]
-### Changed
-- AST extraction only attaches file metadata when using glob patterns
+### Added
+- Directive execution guard suppresses `/run`, `/output`, and `/show` while modules import, eliminating unintended side effects.
+- Imported executables and templates now capture their module environment so command references resolve sibling functions consistently.
+- Registry module imports now enforce `mlld.lock` versions, failing fast on mismatches while remaining backward-compatible with legacy lock entries.
+- Explicit `/export { ... }` manifests for modules: grammar, AST, evaluation, and import pipeline honour declared bindings while falling back to auto-export for manifest-less files.
+- Import collision protection surfaces `IMPORT_NAME_CONFLICT` with precise locations when multiple directives bind the same name, covering both namespace and selective imports.
+- End-to-end fixture ensures exported shadow-environment helpers retain access to nested helpers and mlld functions across module boundaries.
+- Inline template loops: `/for … /end` inside templates
+  - Supported in backticks and `::…::` templates; line-start only for both `/for` and `/end` within the template body
+  - Not supported in `:::…:::` or `[[…]]` templates
+  - Interpreter uses existing TemplateForBlock evaluation; no changes to runtime semantics outside template contexts
+- Add ast-grep selectors to alligators `<file.ext { methodName (variable) }>` - supports JavaScript, Python, Rust, Go, Solidity, Java, C#, C, C++
+
+### Fixed
+- Foreach templates now keep long numeric strings intact during interpolation
+- Command-reference executables now preserve array and object types when passing arguments to nested functions (previously JSON.stringify'd them)
+- Imported arrays preserve array behaviour after module import, so `.length` and `/for` iteration no longer fail after crossing module boundaries
+- Triple-colon template exports keep their template metadata, rendering `{{ }}` placeholders and leaving `<@...>` markers unaltered when imported
+- JavaScript `@` syntax misuse surfaces the educational guidance even when V8 reports "Unexpected token", keeping the fix-it copy visible
+- Regression fixtures cover imported arrays, triple-colon imports, triple alligator literals, and JS `@` misuse to prevent regressions
 
 ## [2.0.0-rc53]
-### Added
-- Python files supported in curly-brace AST selector with smart deduplication
+### Fixed
+- Large integers were getting wrongly rounded by js auto-parsing
 
 ## [2.0.0-rc52]
-### Added
-- Curly-brace AST selector in alligator expressions loads top-level code units with metadata
+### Fixed
+- `::: {{var}} :::` template syntax had issues with <alligators>. 
+>>>>>>> modules
 
 ## [2.0.0-rc51]
 ### Fixed

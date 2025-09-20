@@ -13,46 +13,11 @@ vi.mock('tinyglobby', () => ({
   glob: vi.fn()
 }));
 
-// Define skip tests outside describe block for export
+// Skip tests are now handled by skip.md files in test directories
+// Tests with skip.md or skip-*.md files will be automatically skipped during fixture generation
 export const skipTests: Record<string, string> = {
-  'modules-hash': 'Newline handling issue - hash validation is implemented',
-  'security-ttl-durations': 'Issue #99: TTL/trust security features not implemented',
-  'output-quoted-path': 'Issue #312: Test infrastructure needed for new output syntax variations',
-  'security-ttl-special': 'Issue #99: TTL/trust security features not implemented',
-  'security-ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
-  'alligator-glob-pattern': 'Glob patterns require real filesystem - tinyglobby is well-tested',
-  'alligator-glob-rename': 'Glob patterns require real filesystem - tinyglobby is well-tested',
-  'alligator-glob-concat': 'Glob patterns require real filesystem - tinyglobby is well-tested',
-  'file-reference-glob': 'Glob patterns require real filesystem - tinyglobby mock issues',
-  'alligator-url-markdown-conversion': 'Issue #315: Getter properties (text, md, html) not accessible in mlld',
-  'security-trust-levels': 'Issue #99: TTL/trust security features not implemented',
-  'security-all-directives': 'Issue #99: TTL/trust security features not implemented',
-  'var-text-url-section': 'Issue #82: URL section support not implemented',
-  'exe-exe-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
-  'reserved-input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
-  'modules-stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
-  'output-exec-invocation': 'Exec invocation in @output not yet supported - future enhancement',
-  'output-run-exec-reference': 'Exec invocation in @output not yet supported - future enhancement',
-  'import-namespace': 'Requires real registry/resolver infrastructure for testing',
-  'modules-namespace-import': 'Requires real registry/resolver infrastructure for testing',
-  'when-variable-binding': 'Issue #263: Variable binding in when actions',
-  'modules-mixed': 'Mixes unimplemented security syntax with modules',
-  'modules-auto-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
-  'modules-explicit-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
-  'modules-metadata': 'Issue #264: Namespace imports ({ * as name }) not implemented',
-  'var-assignment-pipeline': 'Needs investigation - newline normalization issue',
-  'pipeline-array-data': 'Needs investigation - whitespace in output',
-  'run-run-code-bracket-nesting': 'Python/sh not supported yet - only JS/Node/Bash',
-  // Module import tests that need published modules
-  'var-data-object-strings-array-functions': 'Issue #254: Registry tests need isolation - @mlld/array not published yet',
-  // Bracket notation tests - skipped until grammar issue resolved
-  // Tests that require @time module
-  'now-lowercase-basic': 'Requires @time module to be installed',
-  'var-now-lowercase-basic': 'Requires @time module to be installed',
-  'now-enhanced-formats': 'Requires @time module to be installed',
-  'import-now-enhanced-formats': 'Requires @time module to be installed',
-  // Keep this one skipped until its grammar is aligned
-  'pipeline-retry-hint-object-functions': 'Pending grammar alignment for object-functions hint fixture'
+  // Keeping this empty object for backward compatibility
+  // All skip logic is now file-based - tests with skip.md files are skipped during fixture generation
 };
 
 // Validate semantic token coverage for AST
@@ -532,16 +497,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       console.log(`  parts=${parts.join(', ')}`);
     }
     
-    if (parts.length < 2) {
-      return null;
-    }
-    
-    const category = parts[0]; // 'valid', 'invalid', etc.
-    
-    // For the new structure, fixtures mirror the test case structure exactly
-    // e.g., fixtures/valid/directives/import/import-all/import-all.generated-fixture.json
-    //   -> cases/valid/directives/import/import-all/
-    
+    // With the flattened structure, we don't need to check for minimum parts
+    // The fixtures directory mirrors tests/cases/ exactly
+
     // Build the test case path by mirroring the fixture path structure
     const testCasePath = path.join(__dirname, '../tests/cases', relativePath);
     
@@ -643,10 +601,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       return; // Skip categorization for known issues
     }
     
-    // Check for fixtures in wrong directories or with parsing issues
-    const isInValidDir = fixtureFile.includes('/valid/') || fixtureFile.startsWith('valid/');
+    // Check for fixtures in special directories
     const isInInvalidDir = fixtureFile.includes('/invalid/') || fixtureFile.startsWith('invalid/');
     const isInExceptionsDir = fixtureFile.includes('/exceptions/') || fixtureFile.startsWith('exceptions/');
+    const isInWarningsDir = fixtureFile.includes('/warnings/') || fixtureFile.startsWith('warnings/');
+    const isInValidDir = !isInInvalidDir && !isInExceptionsDir && !isInWarningsDir;
     const hasParseError = fixture.parseError !== null && fixture.parseError !== undefined;
     const hasNullAST = fixture.ast === null;
     const hasExpectedError = !!fixture.expectedError;
@@ -654,7 +613,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     // Detect fixtures that are in the wrong place or have issues
     if (isInValidDir && (hasParseError || hasNullAST)) {
       // Debug specific examples
-      if (fixture.name === 'llm-interface') {
+      if (fixture.name.endsWith('/llm-interface') || fixture.name === 'examples/llm-interface') {
         console.log('llm-interface debug:', {
           hasParseError,
           hasNullAST,
@@ -752,12 +711,18 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     const isErrorFixture = !!fixture.expectedError || !!fixture.parseError;
     const isWarningFixture = !!fixture.expectedWarning;
     const isValidFixture = !isErrorFixture && !isWarningFixture;
-    
+
+    // Check for fixtures in special directories
+    const isInInvalidDir = fixtureFile.includes('/invalid/') || fixtureFile.startsWith('invalid/');
+    const isInExceptionsDir = fixtureFile.includes('/exceptions/') || fixtureFile.startsWith('exceptions/');
+    const isInWarningsDir = fixtureFile.includes('/warnings/') || fixtureFile.startsWith('warnings/');
+    const isInValidDir = !isInInvalidDir && !isInExceptionsDir && !isInWarningsDir;
+
     // Check if this is a valid fixture that has a parse error (shouldn't happen)
-    const isValidWithParseError = fixtureFile.includes('/valid/') && !!fixture.parseError;
+    const isValidWithParseError = isInValidDir && !!fixture.parseError;
     
     // Check if this is a documentation test (syntax-only validation)
-    const isDocumentationTest = fixtureFile.includes('valid/docs/');
+    const isDocumentationTest = fixtureFile.includes('/docs/') || fixtureFile.startsWith('docs/');
     
     // Skip intentional partial/educational examples in docs
     const docSkipList = [
@@ -852,7 +817,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       }
       
       // Set up package.json for project path resolution
-      if (fixture.name.includes('path-assignment-project') || fixture.name.includes('path-assignment-special')) {
+      if (fixture.name.includes('path/assignment-project') || fixture.name.includes('path/assignment-special')) {
         // Create the expected mock project structure
         await fileSystem.mkdir('/mock/project');
         await fileSystem.writeFile('/mock/project/package.json', JSON.stringify({
@@ -861,21 +826,29 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         }));
         await fileSystem.mkdir('/mock/project/src');
       }
+
+      // For absolute path test, create the expected file
+      if (fixture.name.endsWith('/assignment-absolute')) {
+        await fileSystem.mkdir('/absolute');
+        await fileSystem.mkdir('/absolute/path');
+        await fileSystem.mkdir('/absolute/path/to');
+        await fileSystem.writeFile('/absolute/path/to/file.ext', 'File content at absolute path');
+      }
       
       // Set up specific test files that aren't in the examples directory
-      if (fixture.name === 'comments-inline') {
+      if (fixture.name.endsWith('/comments-inline')) {
         // Set up files for comments-inline test
         await fileSystem.writeFile('/inline-test-utils.mld', '/var @x = "Value X"\n/var @y = "Value Y"');
         await fileSystem.writeFile('/inline-test-README.md', '# Example Project\n\nThis is the main README content.');
       } else if (fixture.name.startsWith('import-')) {
         // Set up files for import alias tests
-        if (fixture.name === 'import-alias') {
+        if (fixture.name.endsWith('/alias')) {
           await fileSystem.writeFile('/config.mld', '/var @author = "Config Author"\n/var @title = "My Project"');
           await fileSystem.writeFile('/utils.mld', '/var @author = "Utils Author"');
         }
         
         // Set up files for import namespace tests
-        else if (fixture.name === 'import-namespace') {
+        else if (fixture.name.endsWith('/namespace') || fixture.name.endsWith('/import-namespace')) {
           await fileSystem.writeFile('/settings.mld', '/var @author = "Settings Author"\n/var @apiUrl = "https://api.example.com"');
         }
         
@@ -884,7 +857,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           await fileSystem.writeFile('/config.mld', '/var @greeting = "Hello, world!"\n/var @count = "42"\n/var @author = "Mlld Test Suite"');
           await fileSystem.writeFile('/utils.mld', '/var @greeting = "Hello, world!"\n/var @count = "42"\n/var @version = "1.0.0"\n/path @docs = "./docs"');
         }
-      } else if (fixture.name === 'var-data-directive') {
+      } else if (fixture.name.endsWith('/var-data-directive')) {
         // This fixture seems to be missing context - create the expected variable
         // TODO: This fixture may be incorrectly named or incomplete
         const env = (fileSystem as any).environment || {};
@@ -895,38 +868,38 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           hasInterpolation: false,
           isMultiLine: false
         });
-      } else if (fixture.name === 'var-data-array-path-disambiguation' || fixture.name === 'var-data-object-literals-in-arrays') {
+      } else if (fixture.name.endsWith('/data-array-path-disambiguation') || fixture.name.endsWith('/data-object-literals-in-arrays')) {
         // Mock /etc/hosts for tests that reference it
         await fileSystem.mkdir('/etc');
         await fileSystem.writeFile('/etc/hosts', '##\n# Host Database\n#\n# localhost is used to configure the loopback interface\n# when the system is booting.  Do not change this entry.\n##\n127.0.0.1\tlocalhost\n255.255.255.255\tbroadcasthost\n::1             localhost');
-      } else if (fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
+      } else if (fixture.name.includes('bash-array-at-syntax') || fixture.name.includes('run-bash') || fixture.name.includes('bracket-nesting')) {
         // Enable bash mocking for bash tests and bracket nesting tests that use bash
         process.env.MOCK_BASH = 'true';
-      } else if (fixture.name === 'with-combined' || fixture.name === 'with-needs-node') {
+      } else if (fixture.name.endsWith('/with-combined') || fixture.name.endsWith('/with-needs-node')) {
         // Enable command mocking for npm/sed test
         process.env.MLLD_TEST_MODE = 'true';
-      } else if (fixture.name === 'reserved-now-variable') {
+      } else if (fixture.name.endsWith('/now-variable') && !fixture.name.includes('lowercase')) {
         // Mock time for the NOW reserved variable test
         process.env.MLLD_MOCK_TIME = '1234567890';
-      } else if (fixture.name === 'reserved-now-variable-lowercase') {
+      } else if (fixture.name.endsWith('/now-variable-lowercase')) {
         // Mock time for the lowercase now variable test
         process.env.MLLD_MOCK_TIME = '2024-05-30T14:30:00.000Z';
-      } else if (fixture.name === 'now-basic-compat' || fixture.name === 'var-now-basic-compat') {
+      } else if (fixture.name.endsWith('/now-basic-compat') || fixture.name.endsWith('/var-now-basic-compat')) {
         // Mock time for the NOW compatibility test
         process.env.MLLD_MOCK_TIME = '2024-01-15T10:30:00.000Z';
-      } else if (fixture.name === 'reserved-debug-variable') {
+      } else if (fixture.name.endsWith('/debug-variable')) {
         // Mock time for consistent debug output
         process.env.MLLD_MOCK_TIME = '2024-05-30T14:30:00.000Z';
         // TODO: Debug output contains dynamic paths and environment-specific data
         // This test would need special handling to work across different environments
-      } else if (fixture.name === 'resolver-contexts') {
+      } else if (fixture.name.endsWith('/resolver-contexts')) {
         // Mock time for resolver context tests
         process.env.MLLD_MOCK_TIME = '2024-01-01T00:00:00.000Z';
-      } else if (fixture.name === 'text-template') {
+      } else if (fixture.name.endsWith('/text-template')) {
         // This test expects a 'variable' to exist with value 'value'
         // But the fixture doesn't define it - skip for now
         // TODO: File issue for incomplete fixture
-      } else if (fixture.name === 'modules-stdlib-basic') {
+      } else if (fixture.name.endsWith('/stdlib-basic')) {
         // Mock fetch for module resolution
         global.fetch = async (url: string) => {
           if (url === 'https://raw.githubusercontent.com/mlld-lang/registry/main/modules/mlld/registry.json') {
@@ -952,7 +925,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           }
           throw new Error(`Unexpected URL in test: ${url}`);
         };
-      } else if (fixture.name === 'modules-hash') {
+      } else if (fixture.name.endsWith('/hash')) {
         // Enable test mode to skip actual hash validation
         process.env.MLLD_SKIP_HASH_VALIDATION = 'true';
         
@@ -1044,14 +1017,14 @@ describe('Mlld Interpreter - Fixture Tests', () => {
           }
           throw new Error(`Unexpected URL in test: ${url}`);
         };
-      } else if (fixture.name === 'env-vars-allowed') {
+      } else if (fixture.name.endsWith('/env-vars-allowed')) {
         // For this test, we'll simulate the environment variables being passed through stdin
         // This avoids the complexity of trying to get the lock file to work with the virtual filesystem
         // In real usage, the lock file would control which env vars are included in @INPUT
-      } else if (fixture.name === 'file-reference-interpolation') {
+      } else if (fixture.name.endsWith('/file-reference-interpolation')) {
         // Set up test-data.json in /tmp for file reference interpolation test
         await fileSystem.mkdir('/tmp');
-        const testDataPath = path.join(__dirname, '../tests/cases/valid/file-reference-interpolation/test-data.json');
+        const testDataPath = path.join(__dirname, '../tests/cases/feat/file-reference-interpolation/test-data.json');
         if (fs.existsSync(testDataPath)) {
           const content = fs.readFileSync(testDataPath, 'utf8');
           await fileSystem.writeFile('/tmp/test-data.json', content);
@@ -1068,20 +1041,22 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         // For path assignment tests, we need to set the correct basePath
         let basePath = fixture.basePath || '/';
         
-        if (fixture.name === 'path-assignment-project' || fixture.name === 'path-assignment-special') {
+        if (fixture.name.endsWith('/assignment-project') || fixture.name.endsWith('/assignment-special')) {
           basePath = '/mock/project';
         }
         // For npm run tests, we need to be in the project directory
-        if (fixture.name.includes('run-command-bases-npm-run')) {
+        if (fixture.name.includes('command-bases')) {
           basePath = process.cwd(); // Use current working directory which has package.json
+          // Enable npm command mocking
+          process.env.MLLD_TEST_MODE = 'true';
         }
         // For projectpath test, set basePath to the test case directory to match expected output
-        if (fixture.name === 'reserved-projectpath-variable') {
-          basePath = '/Users/adam/dev/mlld/tests/cases/valid/reserved/projectpath-variable';
+        if (fixture.name.endsWith('/projectpath-variable')) {
+          basePath = '/Users/adam/dev/mlld/tests/cases/feat/reserved/projectpath-variable';
         }
         
         // Enable URL support for URL tests and module resolution
-        const urlConfig = (fixture.name === 'var-text-url' || fixture.name === 'var-text-url-section' || fixture.name === 'show-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed' || fixture.name === 'modules-stdlib-basic') ? {
+        const urlConfig = (fixture.name.endsWith('/text-url') || fixture.name.endsWith('/text-url-section') || fixture.name.endsWith('/show-url') || fixture.name.endsWith('/url') || fixture.name.endsWith('/mixed') || fixture.name.endsWith('/stdlib-basic')) ? {
           enabled: true,
           allowedProtocols: ['https'],
           allowedDomains: [],
@@ -1097,7 +1072,7 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         } : undefined;
         
         // Set up fetch mock for URL tests (but not for modules-stdlib-basic which has its own mock)
-        if ((fixture.name === 'var-text-url' || fixture.name === 'var-text-url-section' || fixture.name === 'show-url' || fixture.name === 'import-url' || fixture.name === 'import-mixed' || fixture.name.includes('alligator') && fixture.name.includes('url')) && fixture.name !== 'modules-stdlib-basic') {
+        if ((fixture.name.endsWith('/text-url') || fixture.name.endsWith('/text-url-section') || fixture.name.endsWith('/show-url') || fixture.name.endsWith('/url') || fixture.name.endsWith('/mixed') || fixture.name.includes('alligator') && fixture.name.includes('url')) && fixture.name !== 'modules-stdlib-basic') {
           global.fetch = async (url: string) => {
             if (url === 'https://raw.githubusercontent.com/example/repo/main/README.md') {
               return {
@@ -1187,24 +1162,24 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         if (isErrorFixture) {
           // Prepare stdin content for stdin import tests
           let stdinContent: string | undefined;
-          if (fixture.name.includes('import-stdin')) {
-            if (fixture.name.includes('text')) {
+          if (fixture.name.includes('import/stdin')) {
+            if (fixture.name.endsWith('stdin-text')) {
               // Plain text stdin content
               stdinContent = 'Hello from stdin!';
             } else {
               // JSON stdin content (default for all other stdin tests)
               stdinContent = '{"name": "test-project", "version": "1.0.0"}';
             }
-          } else if (fixture.name.includes('input-stdin-compatibility') || fixture.name.includes('input-input-new-syntax') || fixture.name === 'input-new-syntax') {
+          } else if (fixture.name.includes('input-stdin-compatibility') || fixture.name.includes('input-input-new-syntax') || fixture.name.endsWith('/input-new-syntax')) {
             // These tests expect JSON with config and data fields
             stdinContent = '{"config": {"greeting": "Hello from stdin!"}, "data": {"message": "Input data loaded"}}';
-          } else if (fixture.name === 'import-stdin-deprecated') {
+          } else if (fixture.name.endsWith('/stdin-deprecated')) {
             // This test expects JSON with name and version fields
             stdinContent = '{"name": "test-project", "version": "1.0.0"}';
-          } else if (fixture.name === 'reserved-input-variable') {
+          } else if (fixture.name.endsWith('/input-variable')) {
             // This test expects JSON input for @INPUT testing
             stdinContent = '{"config": "test-value", "data": "sample-data"}';
-          } else if (fixture.name === 'import-environment-variables') {
+          } else if (fixture.name.endsWith('/environment-variables')) {
             // This test expects JSON with MYVAR and OTHERVAR
             stdinContent = '{"MYVAR": "hello", "OTHERVAR": "world"}';
           }
@@ -1222,7 +1197,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
               // Avoid real filesystem writes and locks
               ephemeral: true,
               effectHandler: new TestRedirectEffectHandler('/tmp-tests', fileSystem),
-              useMarkdownFormatter: false // Disable prettier for tests
+              useMarkdownFormatter: false, // Disable prettier for tests
+              // Allow absolute paths for absolute path test
+              allowAbsolutePaths: fixture.name.endsWith('/assignment-absolute')
             });
             // If we get here, the test should fail because we expected an error
             expect.fail('Expected interpretation to throw an error, but it succeeded');
@@ -1347,27 +1324,27 @@ describe('Mlld Interpreter - Fixture Tests', () => {
         } else {
           // Prepare stdin content for stdin import tests
           let stdinContent: string | undefined;
-          if (fixture.name.includes('import-stdin')) {
-            if (fixture.name.includes('text')) {
+          if (fixture.name.includes('import/stdin')) {
+            if (fixture.name.endsWith('stdin-text')) {
               // Plain text stdin content
               stdinContent = 'Hello from stdin!';
             } else {
               // JSON stdin content (default for all other stdin tests)
               stdinContent = '{"name": "test-project", "version": "1.0.0"}';
             }
-          } else if (fixture.name.includes('input-stdin-compatibility') || fixture.name.includes('input-input-new-syntax') || fixture.name === 'input-new-syntax') {
+          } else if (fixture.name.includes('input-stdin-compatibility') || fixture.name.includes('input-input-new-syntax') || fixture.name.endsWith('/input-new-syntax')) {
             // These tests expect JSON with config and data fields
             stdinContent = '{"config": {"greeting": "Hello from stdin!"}, "data": {"message": "Input data loaded"}}';
-          } else if (fixture.name === 'import-stdin-deprecated') {
+          } else if (fixture.name.endsWith('/stdin-deprecated')) {
             // This test expects JSON with name and version fields
             stdinContent = '{"name": "test-project", "version": "1.0.0"}';
-          } else if (fixture.name === 'reserved-input-variable') {
+          } else if (fixture.name.endsWith('/input-variable')) {
             // This test expects JSON input for @INPUT testing
             stdinContent = '{"config": "test-value", "data": "sample-data"}';
-          } else if (fixture.name === 'import-environment-variables') {
+          } else if (fixture.name.endsWith('/environment-variables')) {
             // This test expects JSON with MYVAR and OTHERVAR
             stdinContent = '{"MYVAR": "hello", "OTHERVAR": "world"}';
-          } else if (fixture.name === 'env-vars-allowed' || fixture.name === 'input-env-vars-allowed') {
+          } else if (fixture.name.endsWith('/env-vars-allowed') || fixture.name.endsWith('/input-env-vars-allowed')) {
             // This test expects JSON with allowed environment variables
             stdinContent = '{"MY_ALLOWED_VAR": "test-value-1", "ANOTHER_ALLOWED": "test-value-2"}';
           }
@@ -1393,7 +1370,9 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             },
             // Avoid real filesystem writes and locks
             ephemeral: true,
-            effectHandler: new TestRedirectEffectHandler('/tmp-tests', fileSystem)
+            effectHandler: new TestRedirectEffectHandler('/tmp-tests', fileSystem),
+            // Allow absolute paths for absolute path test
+            allowAbsolutePaths: fixture.name.endsWith('/assignment-absolute')
           });
           
           if (isValidFixture && !isSmokeTest) {

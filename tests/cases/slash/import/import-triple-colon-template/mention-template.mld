@@ -1,0 +1,5 @@
+/var @mention_prompt = :::## Mentions
+{{mention_markdown}}
+:::
+
+/export { mention_prompt }

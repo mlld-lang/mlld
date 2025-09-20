@@ -147,7 +147,7 @@ async function processDocFile(docPath, outputDir) {
  */
 export async function extractDocumentationTests() {
   const DOCS_DIR = path.join(PROJECT_ROOT, 'docs', 'user');
-  const OUTPUT_DIR = path.join(PROJECT_ROOT, 'tests', 'cases', 'valid', 'docs');
+  const OUTPUT_DIR = path.join(PROJECT_ROOT, 'tests', 'cases', 'docs');
   
   console.log('📖 Extracting documentation code blocks...');
   
