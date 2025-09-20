@@ -533,10 +533,25 @@ async function processTestCategory(categoryPath, validCategory, categoryType, st
  */
 async function processExampleDirectory(dirPath, category, name, directive = null) {
   const stats = { total: 0, fixtures: 0, skipped: 0 };
-  
+
   // Look for example*.md files (or copied .mld files in examples directory)
   const files = await fs.readdir(dirPath);
-  const exampleFiles = name === 'examples' ? 
+
+  // Check for skip files
+  const skipFiles = files.filter(f => f === 'skip.md' || f.startsWith('skip-') && f.endsWith('.md'));
+  if (skipFiles.length > 0) {
+    // Read the skip reason from the first skip file
+    const skipFile = skipFiles[0];
+    const skipReason = await fs.readFile(path.join(dirPath, skipFile), 'utf-8');
+    console.log(`  ⏭️  Skipping ${path.relative(CASES_DIR, dirPath)}: ${skipFile}`);
+    if (process.env.VERBOSE) {
+      console.log(`     Reason: ${skipReason.split('\n')[0]}`);
+    }
+    stats.skipped++;
+    return stats;
+  }
+
+  const exampleFiles = name === 'examples' ?
     files.filter(f => f.endsWith('.md') && !f.startsWith('invalid-') && !f.includes('-output') && !f.includes('.o.')) :
     files.filter(f => f.startsWith('example') && f.endsWith('.md'));
   

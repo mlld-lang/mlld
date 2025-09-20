@@ -4,6 +4,15 @@ This document describes the comprehensive testing approach for the Mlld project,
 
 ## Test Organization
 
+### Recent Reorganization (December 2024)
+
+The test structure was flattened to make valid tests the default case. Previously, valid tests were nested under `tests/cases/valid/`. Now they live at the root level of `tests/cases/`, with only special cases (exceptions, warnings, invalid) in subdirectories.
+
+**Key changes:**
+- Valid tests moved from `tests/cases/valid/*` → `tests/cases/*`
+- Test fixture names now include variants (e.g., `slash/import/stdin-text` vs all being `slash/import/stdin`)
+- Skip system changed from hardcoded list to file-based `skip.md` files
+
 ### Fixture System
 
 The project uses an organized fixture system that automatically generates test fixtures from markdown examples. This approach ensures tests are maintainable and closely match real-world usage.
@@ -13,23 +22,22 @@ The project uses an organized fixture system that automatically generates test f
 ```
 tests/
 ├── cases/                    # Source test cases (markdown files)
-│   ├── valid/               # Tests that should parse and execute successfully
-│   │   ├── slash/     # Organized by directive type
-│   │   │   ├── exe/       # /exe directive tests
-│   │   │   ├── var/       # /var directive tests
-│   │   │   ├── import/    # /import directive tests
-│   │   │   └── ...        # Other directives
-│   │   ├── feat/          # Feature-specific tests
-│   │   │   └── ...        # Feature collections
-│   │   │       └── ...    # Actual feature tests
-│   │   ├── integration/    # Cross-feature integration tests
-│   │   └── examples/       # Auto-copied from examples/ directory
+│   ├── slash/               # Organized by directive type (valid tests)
+│   │   ├── exe/            # /exe directive tests
+│   │   ├── var/            # /var directive tests
+│   │   ├── import/         # /import directive tests
+│   │   └── ...             # Other directives
+│   ├── feat/                # Feature-specific tests (valid tests)
+│   │   └── ...             # Feature collections
+│   ├── integration/         # Cross-feature integration tests
+│   ├── docs/                # Auto-extracted documentation examples
+│   ├── examples/            # Auto-copied from examples/ directory
 │   ├── exceptions/          # Tests that should fail at runtime
-│   ├── warnings/           # Tests that should produce warnings
-│   └── invalid/            # Tests that should fail to parse
-├── fixtures/                # Generated test fixtures (JSON)
-│   └── [mirrors cases/]    # Same structure as cases/
-└── tokens/                  # Precision semantic token tests
+│   ├── warnings/            # Tests that should produce warnings
+│   └── invalid/             # Tests that should fail to parse
+├── fixtures/                 # Generated test fixtures (JSON)
+│   └── [mirrors cases/]     # Same structure as cases/
+└── tokens/                   # Precision semantic token tests
 ```
 
 #### Test Case Format
@@ -47,8 +55,8 @@ For tests with variants, use naming like:
 
 #### File Placement
 ```bash
-# Valid test that should succeed
-tests/cases/valid/directives/var/my-test/
+# Valid test that should succeed (default case, at root level)
+tests/cases/slash/var/my-test/
   example.md      # Input mlld code
   expected.md     # Expected output
   data.json       # Support file (auto-copied)
@@ -58,7 +66,7 @@ tests/cases/invalid/my-error/
   example.md      # Input that fails to parse
   error.md        # Expected error pattern
 
-# Test that should fail at runtime  
+# Test that should fail at runtime
 tests/cases/exceptions/my-exception/
   example.md      # Input that throws
   error.md        # Expected error pattern
@@ -70,7 +78,7 @@ Support files in test directories are automatically copied to the virtual filesy
 
 ```typescript
 // Auto-discovery: Files in test case directory are copied automatically
-tests/cases/valid/import/alias/
+tests/cases/slash/import/alias/
   example.md
   expected.md
   alias-test-config.mld  # Auto-copied to /alias-test-config.mld
@@ -95,17 +103,66 @@ tests/cases/slash/import/all/import-all-config.mld
 tests/cases/slash/import/namespace/namespace-config.mld
 ```
 
+### Skipping Tests
+
+Tests can be skipped by placing a `skip.md` or `skip-*.md` file in the test directory. This is useful for:
+- Tests requiring infrastructure not yet available
+- Known issues being tracked
+- Documentation examples that intentionally show invalid syntax
+- Tests requiring manual verification
+
+#### Skip File Naming Conventions
+
+- `skip.md` - Generic skip file
+- `skip-known-issue-NNN.md` - For tracked issues (e.g., `skip-known-issue-99.md`)
+- `skip-manual.md` - Tests requiring manual verification or real filesystem
+- `skip-doc-example.md` - Documentation examples with intentional errors
+- `skip-future-enhancement.md` - Planned features not yet implemented
+- `skip-needs-investigation.md` - Tests with unclear failures needing debugging
+
+#### Skip File Format
+
+The skip file should contain a brief explanation on the first line, followed by optional details:
+
+```markdown
+Brief description of why this test is skipped.
+
+Additional details about the issue, tracking information,
+or conditions under which this test could be re-enabled.
+```
+
+#### Example Skip Files
+
+```bash
+# For a known issue
+tests/cases/integration/security/ttl-durations/skip-known-issue-99.md:
+  "TTL/trust security features not yet implemented.
+
+  Issue #99 tracks the implementation of these security features."
+
+# For tests needing real filesystem
+tests/cases/feat/alligator/glob-pattern/skip-manual.md:
+  "Glob patterns require real filesystem access.
+
+  These tests cannot run in the virtual filesystem environment."
+```
+
+When fixtures are built with `npm run build:fixtures`, skipped tests will show:
+```
+⏭️  Skipping integration/security/ttl-durations: skip-known-issue-99.md
+```
+
 ### Test Types
 
 #### 1. Valid Tests
-Located in `tests/cases/valid/`. These tests:
+Located in `tests/cases/` (at root level, organized in subdirectories like `slash/`, `feat/`, `integration/`). These tests:
 - Should parse successfully
 - Should execute without runtime errors
 - Compare actual output against expected output
 - Fail if output doesn't match exactly
 
 #### 2. Documentation Tests
-Located in `tests/cases/valid/docs/`. Automatically extracted from `docs/user/*.md`:
+Located in `tests/cases/docs/`. Automatically extracted from `docs/user/*.md`:
 - **Syntax-only validation** - Parse but don't execute
 - Extract via `scripts/extract-doc-tests.mjs` during `npm run build:fixtures`
 - 140+ code blocks from documentation become test cases
@@ -236,7 +293,7 @@ The `examples/` directory serves dual purposes:
 
 ### Example Processing
 
-- Examples are automatically copied to `tests/cases/valid/examples/`
+- Examples are automatically copied to `tests/cases/examples/`
 - Each `.mld` file becomes a test case
 - Examples without `expected.md` files become smoke tests
 - Actual output is generated to `*-output.md` files for review

@@ -13,49 +13,11 @@ vi.mock('tinyglobby', () => ({
   glob: vi.fn()
 }));
 
-// Define skip tests outside describe block for export
+// Skip tests are now handled by skip.md files in test directories
+// Tests with skip.md or skip-*.md files will be automatically skipped during fixture generation
 export const skipTests: Record<string, string> = {
-  'integration/modules/hash': 'Newline handling issue - hash validation is implemented',
-  'integration/security/ttl-durations': 'Issue #99: TTL/trust security features not implemented',
-  'slash/output/quoted-path': 'Issue #312: Test infrastructure needed for new output syntax variations',
-  'integration/security/ttl-special': 'Issue #99: TTL/trust security features not implemented',
-  'integration/security/ttl-trust-combined': 'Issue #99: TTL/trust security features not implemented',
-  'feat/alligator/glob-pattern': 'Glob patterns require real filesystem - tinyglobby is well-tested',
-  'feat/alligator/alligator-glob-rename': 'Glob patterns require real filesystem - tinyglobby is well-tested',
-  'feat/alligator/alligator-glob-concat': 'Glob patterns require real filesystem - tinyglobby is well-tested',
-  'feat/file-reference-glob': 'Glob patterns require real filesystem - tinyglobby mock issues',
-  'feat/alligator/url-markdown-conversion': 'Issue #315: Getter properties (text, md, html) not accessible in mlld',
-  'docs/introduction/04': 'Documentation example showing invalid syntax intentionally',
-  'docs/introduction/19': 'Documentation example showing invalid syntax intentionally',
-  'docs/security/03': 'Documentation example showing blocked shell operators intentionally',
-  'integration/security/trust-levels': 'Issue #99: TTL/trust security features not implemented',
-  'integration/security/all-directives': 'Issue #99: TTL/trust security features not implemented',
-  'slash/var/text-url-section': 'Issue #82: URL section support not implemented',
-  'slash/exe/exe-code-bracket-nesting': 'Parser bug: exec function arguments not parsed correctly',
-  'feat/reserved/input-variable': 'Issue #237: @INPUT import resolver treats stdin JSON as file path',
-  'integration/modules/stdlib-basic': 'Issue #254: Registry tests need isolation - @mlld/http not published yet',
-  'slash/output/exe-invocation': 'Exec invocation in @output not yet supported - future enhancement',
-  'slash/output/run-exec-reference': 'Exec invocation in @output not yet supported - future enhancement',
-  'slash/import/namespace': 'Requires real registry/resolver infrastructure for testing',
-  'integration/modules/namespace-import': 'Requires real registry/resolver infrastructure for testing',
-  'slash/when/variable-binding': 'Issue #263: Variable binding in when actions',
-  'integration/modules/mixed': 'Mixes unimplemented security syntax with modules',
-  'integration/modules/auto-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
-  'integration/modules/explicit-export': 'Issue #264: Namespace imports ({ * as name }) not implemented',
-  'integration/modules/metadata': 'Issue #264: Namespace imports ({ * as name }) not implemented',
-  'slash/var/assignment-pipeline': 'Needs investigation - newline normalization issue',
-  'integration/pipeline/array-data': 'Needs investigation - whitespace in output',
-  'slash/run/run-code-bracket-nesting': 'Python/sh not supported yet - only JS/Node/Bash',
-  // Module import tests that need published modules
-  'slash/var/data-object-strings-array-functions': 'Issue #254: Registry tests need isolation - @mlld/array not published yet',
-  // Bracket notation tests - skipped until grammar issue resolved
-  // Tests that require @time module
-  'slash/var/now-lowercase-basic': 'Requires @time module to be installed',
-  'slash/var/var-now-lowercase-basic': 'Requires @time module to be installed',
-  'slash/import/now-enhanced-formats': 'Requires @time module to be installed',
-  'slash/import/import-now-enhanced-formats': 'Requires @time module to be installed',
-  // Keep this one skipped until its grammar is aligned
-  'feat/pipeline/retry-hint-object-functions': 'Pending grammar alignment for object-functions hint fixture'
+  // Keeping this empty object for backward compatibility
+  // All skip logic is now file-based - tests with skip.md files are skipped during fixture generation
 };
 
 // Validate semantic token coverage for AST
