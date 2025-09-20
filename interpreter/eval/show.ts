@@ -245,7 +245,7 @@ export async function evaluateShow(
     } else if (isPath(variable)) {
       // Path variables contain file path info - read the file
       const pathValue = variable.value.resolvedPath;
-      const isURL = variable.value.isURL;
+      const isURL = variable.value.isURL || /^https?:\/\//.test(pathValue);
       const security = variable.value.security;
       
       try {
@@ -262,8 +262,27 @@ export async function evaluateShow(
           value = await env.readFile(pathValue);
         }
       } catch (error) {
-        // If it's not a file or can't be read, use the path itself
-        value = pathValue;
+        // Try test hook override if available
+        try {
+          if (isURL) {
+            const override = (globalThis as any).__mlldFetchOverride as (u: string) => Promise<any> | undefined;
+            if (override) {
+              const resp = await override(pathValue);
+              if (resp && typeof resp.text === 'function') {
+                value = await resp.text();
+              } else {
+                value = String(resp);
+              }
+            } else {
+              value = pathValue;
+            }
+          } else {
+            value = pathValue;
+          }
+        } catch {
+          // Fallback to the path itself on any unexpected errors
+          value = pathValue;
+        }
       }
     } else if (isExecutable(variable)) {
       // Show a representation of the executable
@@ -973,6 +992,13 @@ export async function evaluateShow(
     
   } else {
     throw new Error(`Unsupported show subtype: ${directive.subtype}`);
+  }
+
+  // Apply tail pipeline when requested (used by inline /show in templates)
+  if ((directive as any).values?.withClause?.pipeline && (directive as any).meta?.applyTailPipeline) {
+    const { executePipeline } = await import('./pipeline');
+    const pipeline = (directive as any).values.withClause.pipeline;
+    content = await executePipeline(typeof content === 'string' ? content : String(content ?? ''), pipeline, env);
   }
   
   // Output directives always end with a newline

@@ -371,16 +371,26 @@ export async function evaluateExe(
       throw new Error(`Unsupported template file extension for ${filePath}. Use .att (@var) or .mtt ({{var}}).`);
     }
     
-    // Read file content relative to current env
+    // Read file content relative to current env and parse with template body rules
     const fileContent = await env.readFile(filePath);
-    
-    // Convert mustache to @var if needed
-    let normalized = fileContent;
-    if (ext === '.mtt') {
-      normalized = normalized.replace(/{{\s*([\w\.]+)\s*}}/g, '@$1');
+    const { parseSync } = await import('@grammar/parser');
+    const startRule = ext === '.mtt' ? 'TemplateBodyMtt' : 'TemplateBodyAtt';
+    let templateNodes: any[];
+    try {
+      templateNodes = parseSync(fileContent, { startRule });
+    } catch (err: any) {
+      // Fallback to legacy parsing when start rules are unavailable in the bundled parser
+      try {
+        let normalized = fileContent;
+        if (ext === '.mtt') {
+          // Preserve mustache-style placeholders for YAML and content; normalize simple {{var}} to @var
+          normalized = normalized.replace(/{{\s*([A-Za-z_][\w\.]*)\s*}}/g, '@$1');
+        }
+        templateNodes = buildTemplateAstFromContent(normalized);
+      } catch (fallbackErr: any) {
+        throw new Error(`Failed to parse template file ${filePath}: ${err.message}`);
+      }
     }
-    // Build minimal template AST from normalized content
-    const templateNodes = buildTemplateAstFromContent(normalized);
     
     // Get parameter names if any
     const params = directive.values?.params || [];

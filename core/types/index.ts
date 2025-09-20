@@ -52,7 +52,9 @@ import {
   FileReferenceNode,
   BinaryExpression,
   TernaryExpression,
-  UnaryExpression
+  UnaryExpression,
+  TemplateForBlockNode,
+  TemplateInlineShowNode
 } from './nodes';
 
 // Import WhenExpressionNode
@@ -88,6 +90,8 @@ export type MlldNode =
   | BinaryExpression
   | TernaryExpression
   | UnaryExpression
+  | TemplateForBlockNode
+  | TemplateInlineShowNode
   | WhenExpressionNode
   | ForExpression;
 

@@ -163,6 +163,30 @@ export interface ParameterNode extends BaseMlldNode {
   name: string;
 }
 
+// Template for-block node used inside template interpolation contexts
+export interface TemplateForBlockNode extends BaseMlldNode {
+  type: 'TemplateForBlock';
+  variable: VariableReferenceNode;
+  source: BaseMlldNode[];
+  body: BaseMlldNode[];
+  style: 'slash' | 'mustache';
+}
+
+// Inline /show node used inside template interpolation contexts
+export interface TemplateInlineShowNode extends BaseMlldNode {
+  type: 'TemplateInlineShow';
+  showKind: 'command' | 'code' | 'template' | 'load' | 'reference';
+  // Payloads for different kinds
+  content?: any;           // UnifiedCommandBrackets result for command
+  lang?: BaseMlldNode[];   // Language for code
+  code?: BaseMlldNode[];   // Code nodes for code
+  template?: BaseMlldNode; // TemplateCore node for template variant
+  loadContent?: BaseMlldNode; // AlligatorExpression node
+  reference?: BaseMlldNode;   // UnifiedReferenceWithTail node
+  tail?: any | null;       // Optional TailModifiers
+  meta?: { [key: string]: unknown };
+}
+
 
 // Formatting metadata for text nodes
 export interface FormattingMetadata {

@@ -347,6 +347,36 @@ When-expressions are first-class:
 ```
 ```
 
+Inline template control:
+
+- `/for … /end` is available in backticks and `::…::` templates.
+- `:::…:::` templates do not support loops; they support `{{var}}` interpolation and inline `/show` only.
+
+Examples:
+
+```mlld
+# Backtick wrapper
+/var @tpl = `
+/for @x in ["A","B"]
+- @x
+/end
+`
+/show @tpl
+
+# Double-colon wrapper
+/var @items = ["A","B"]
+/var @msg = ::
+/for @x in @items
+- @x
+/end
+::
+/show @msg
+```
+
+Notes:
+- Line-start only: `/for` and `/end` must begin at a line start inside the template body.
+- No loops in `[[...]]` or `:::...:::` templates.
+
 </TEMPLATES>
 
 <FILE_LOADING>

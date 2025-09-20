@@ -414,7 +414,9 @@ export class ImportResolver implements IImportResolver, ImportResolverContext {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
     
     try {
-      const response = await fetch(url, { signal: controller.signal });
+      // Test hook: allow override of fetch for unit tests
+      const override = (globalThis as any).__mlldFetchOverride as (u: string) => Promise<any> | undefined;
+      const response = override ? await override(url) : await fetch(url, { signal: controller.signal });
       clearTimeout(timeoutId);
       
       if (!response.ok) {

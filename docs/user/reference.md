@@ -201,6 +201,37 @@ When-expressions in `for` RHS with filtering:
 ```
 ```
 
+### Template loops (backticks and ::)
+
+Render loops inline inside templates. The `/for` header and `/end` must start at line begins inside the template body.
+
+Backticks:
+
+```mlld
+/var @tpl = `
+/for @v in ["x","y"]
+- @v
+/end
+`
+/show @tpl
+```
+
+Double-colon:
+
+```mlld
+/var @items = ["A","B"]
+/var @msg = ::
+/for @x in @items
+- @x
+/end
+::
+/show @msg
+```
+
+Limits:
+- Supported in backticks and `::…::` templates.
+- Not supported in `:::…:::` or `[[…]]` templates.
+
 ### File Operations
 
 Load file contents with angle brackets:

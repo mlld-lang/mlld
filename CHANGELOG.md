@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Explicit `/export { ... }` manifests for modules: grammar, AST, evaluation, and import pipeline honour declared bindings while falling back to auto-export for manifest-less files.
 - Import collision protection surfaces `IMPORT_NAME_CONFLICT` with precise locations when multiple directives bind the same name, covering both namespace and selective imports.
 - End-to-end fixture ensures exported shadow-environment helpers retain access to nested helpers and mlld functions across module boundaries.
+- Inline template loops: `/for … /end` inside templates
+  - Supported in backticks and `::…::` templates; line-start only for both `/for` and `/end` within the template body
+  - Not supported in `:::…:::` or `[[…]]` templates
+  - Interpreter uses existing TemplateForBlock evaluation; no changes to runtime semantics outside template contexts
 
 ### Fixed
 - Foreach templates now keep long numeric strings intact during interpolation
