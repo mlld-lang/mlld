@@ -91,8 +91,8 @@ tests/cases/valid/import/all/config.mld
 tests/cases/valid/import/namespace/config.mld
 
 # GOOD - Unique names
-tests/cases/valid/import/all/import-all-config.mld  
-tests/cases/valid/import/namespace/namespace-config.mld
+tests/cases/slash/import/all/import-all-config.mld
+tests/cases/slash/import/namespace/namespace-config.mld
 ```
 
 ### Test Types
@@ -336,16 +336,16 @@ The test file can contain any combination of:
 
 **❌ BAD - Generic names that cause collisions:**
 ```
-tests/cases/valid/import/all/config.mld
-tests/cases/valid/import/namespace/config.mld
-tests/cases/valid/modules/config.mld
+tests/cases/slash/import/all/config.mld
+tests/cases/slash/import/namespace/config.mld
+tests/cases/integration/modules/config.mld
 ```
 
 **✅ GOOD - Unique names prefixed with test context:**
 ```
-tests/cases/valid/import/all/import-all-config.mld
-tests/cases/valid/import/namespace/namespace-test-config.mld
-tests/cases/valid/modules/modules-test-config.mld
+tests/cases/slash/import/all/import-all-config.mld
+tests/cases/slash/import/namespace/namespace-test-config.mld
+tests/cases/integration/modules/modules-test-config.mld
 ```
 
 **Why this matters**: When tests run, files from different test directories are copied to the same virtual filesystem. If multiple tests use `config.mld`, they will overwrite each other, causing tests to import the wrong files and fail with confusing errors.

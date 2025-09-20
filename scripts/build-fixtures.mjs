@@ -177,11 +177,11 @@ async function cleanOrphanedFixtures() {
 }
 
 /**
- * Copy valid examples from examples/ to tests/cases/valid/examples/
+ * Copy valid examples from examples/ to tests/cases/examples/
  * Cleans up old example files but preserves test files (expected.md, error.md, etc.)
  */
 async function copyExamplesToTests() {
-  const targetDir = path.join(CASES_DIR, 'valid', 'examples');
+  const targetDir = path.join(CASES_DIR, 'examples');
   await fs.mkdir(targetDir, { recursive: true });
   
   try {
@@ -319,17 +319,23 @@ async function generateSubdirIndex(subDirPath, subDirName, fixtureFiles) {
  * Generate top-level index file
  */
 async function generateTopLevelIndex() {
-  const categories = ['valid', 'exceptions', 'warnings', 'invalid'];
+  // Get all directories in fixtures/
+  const entries = await fs.readdir(FIXTURES_DIR, { withFileTypes: true });
+  const dirs = entries
+    .filter(d => d.isDirectory())
+    .map(d => d.name);
+
   const exports = [];
-  
-  for (const category of categories) {
-    const categoryDir = path.join(FIXTURES_DIR, category);
-    
+
+  for (const dir of dirs) {
+    const categoryDir = path.join(FIXTURES_DIR, dir);
+
     try {
       await fs.access(categoryDir);
-      exports.push(`export * as ${category} from './${category}';`);
+      const safeName = dir.replace(/-/g, '_');
+      exports.push(`export * as ${safeName} from './${dir}';`);
     } catch {
-      // Category doesn't exist, skip
+      // Directory doesn't exist, skip
     }
   }
   
@@ -362,76 +368,77 @@ function toCamelCase(str) {
  */
 async function processAllCases() {
   const stats = { total: 0, fixtures: 0, skipped: 0 };
-  
-  // Process each category
-  const categories = ['valid', 'exceptions', 'warnings', 'invalid'];
-  
-  for (const category of categories) {
-    const categoryPath = path.join(CASES_DIR, category);
-    
+
+  // Get all directories in tests/cases/
+  const entries = await fs.readdir(CASES_DIR, { withFileTypes: true });
+  const specialCategories = ['exceptions', 'warnings', 'invalid'];
+  const allDirs = entries
+    .filter(d => d.isDirectory())
+    .map(d => d.name)
+    .filter(name => !['files'].includes(name)); // Exclude helper directories
+
+  // Process each directory
+  for (const dirName of allDirs) {
+    const dirPath = path.join(CASES_DIR, dirName);
+    const isSpecialCategory = specialCategories.includes(dirName);
+
     try {
-      await fs.access(categoryPath);
-      console.log(`\nProcessing ${category}/`);
-      
-      const categoryStats = await processCategoryDirectory(categoryPath, category);
+      await fs.access(dirPath);
+      console.log(`\nProcessing ${dirName}/`);
+
+      // Determine category: special categories keep their name, others are 'valid'
+      const category = isSpecialCategory ? dirName : 'valid';
+
+      const categoryStats = await processCategoryDirectory(dirPath, category, dirName);
       stats.total += categoryStats.total;
       stats.fixtures += categoryStats.fixtures;
       stats.skipped += categoryStats.skipped;
     } catch {
-      console.log(`\nSkipping ${category}/ (doesn't exist)`);
+      console.log(`\nSkipping ${dirName}/ (doesn't exist)`);
     }
   }
-  
+
   return stats;
 }
 
 /**
- * Process a category directory (valid, exceptions, warnings, invalid)
+ * Process a category directory
+ * @param {string} dirPath - The path to the directory
+ * @param {string} categoryName - The category ('valid', 'exceptions', 'warnings', 'invalid')
+ * @param {string} dirName - The actual directory name
  */
-async function processCategoryDirectory(categoryPath, categoryName) {
+async function processCategoryDirectory(dirPath, categoryName, dirName) {
   const stats = { total: 0, fixtures: 0, skipped: 0 };
-  
+
   if (categoryName === 'valid') {
-    // Process all directories under valid/
-    const topLevelEntries = await fs.readdir(categoryPath, { withFileTypes: true });
-    const topLevelDirs = topLevelEntries.filter(d => d.isDirectory()).map(d => d.name);
-    
-    for (const topLevelDir of topLevelDirs) {
-      const topLevelPath = path.join(categoryPath, topLevelDir);
-      
+    // For valid tests (regular directories at root level)
+    // Check if this directory contains example.md files directly
+    const entries = await fs.readdir(dirPath);
+    const hasDirectMdFiles = entries.some(f => f.startsWith('example') && f.endsWith('.md'));
+
+    if (hasDirectMdFiles) {
+      // This directory contains test files directly
+      const processed = await processExampleDirectory(dirPath, categoryName, dirName);
+      stats.total += processed.total;
+      stats.fixtures += processed.fixtures;
+      stats.skipped += processed.skipped;
+    } else if (dirName === 'examples') {
       // Special handling for examples directory - process .md files directly
-      if (topLevelDir === 'examples') {
-        const processed = await processExampleDirectory(topLevelPath, categoryName, 'examples');
-        stats.total += processed.total;
-        stats.fixtures += processed.fixtures;
-        stats.skipped += processed.skipped;
-        continue;
-      }
-      
-      // Check if this directory contains test subdirectories
-      const entries = await fs.readdir(topLevelPath, { withFileTypes: true });
-      const hasSubDirs = entries.some(e => e.isDirectory());
-      const hasDirectMdFiles = entries.some(f => f.name.startsWith('example') && f.name.endsWith('.md'));
-      
-      if (hasSubDirs) {
-        // This is a category directory (like directives, features, etc)
-        // Process all subdirectories within it
-        await processTestCategory(topLevelPath, categoryName, topLevelDir, stats);
-      } else if (hasDirectMdFiles) {
-        // This directory contains test files directly
-        const processed = await processExampleDirectory(topLevelPath, categoryName, topLevelDir);
-        stats.total += processed.total;
-        stats.fixtures += processed.fixtures;
-        stats.skipped += processed.skipped;
-      }
+      const processed = await processExampleDirectory(dirPath, categoryName, 'examples');
+      stats.total += processed.total;
+      stats.fixtures += processed.fixtures;
+      stats.skipped += processed.skipped;
+    } else {
+      // This directory contains subdirectories - process them
+      await processTestCategory(dirPath, categoryName, dirName, stats);
     }
   } else {
     // For other categories (exceptions, warnings, invalid), process recursively
-    const entries = await fs.readdir(categoryPath, { withFileTypes: true });
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
     const subDirs = entries.filter(d => d.isDirectory()).map(d => d.name);
     
     for (const subDir of subDirs) {
-      const subDirPath = path.join(categoryPath, subDir);
+      const subDirPath = path.join(dirPath, subDir);
       
       // Check if this subdirectory contains example.md files directly
       const subEntries = await fs.readdir(subDirPath);
@@ -533,22 +540,9 @@ async function processExampleDirectory(dirPath, category, name, directive = null
     files.filter(f => f.endsWith('.md') && !f.startsWith('invalid-') && !f.includes('-output') && !f.includes('.o.')) :
     files.filter(f => f.startsWith('example') && f.endsWith('.md'));
   
-  // Determine output directory based on the new test structure
-  let outputDir;
-  
-  if (category === 'valid') {
-    // For valid tests, we need to preserve the category structure
-    const testPath = path.relative(path.join(PROJECT_ROOT, 'tests', 'cases'), dirPath);
-    const pathParts = testPath.split(path.sep);
-    
-    // Always preserve the full path structure for all valid tests
-    outputDir = path.join(FIXTURES_DIR, testPath);
-  } else {
-    // For other categories (exceptions, warnings, invalid), keep existing logic
-    outputDir = directive ? 
-      path.join(FIXTURES_DIR, category, directive) : 
-      path.join(FIXTURES_DIR, category, name);
-  }
+  // Determine output directory - mirrors the structure under tests/cases/
+  const testPath = path.relative(CASES_DIR, dirPath);
+  const outputDir = path.join(FIXTURES_DIR, testPath);
   
   await fs.mkdir(outputDir, { recursive: true });
   
@@ -592,17 +586,19 @@ async function processExampleDirectory(dirPath, category, name, directive = null
       }
     }
     
-    // Generate fixture name
-    let fixtureName = `${name}`;
+    // Generate fixture filename (just for the file, not the full name)
+    let fixtureFileName;
     if (name === 'examples') {
       // For examples directory, use the filename as the fixture name
-      fixtureName = file.replace('.md', '');
+      fixtureFileName = file.replace('.md', '') + '.generated-fixture.json';
     } else if (file !== 'example.md') {
       // Handle variants like example-multiline.md
       const variant = file.replace('example-', '').replace('.md', '');
-      fixtureName += `-${variant}`;
+      fixtureFileName = `${name}-${variant}.generated-fixture.json`;
+    } else {
+      // For standard example.md files, use the directory name
+      fixtureFileName = `${name}.generated-fixture.json`;
     }
-    fixtureName += '.generated-fixture.json';
     
     try {
       // Parse the content (may fail for invalid/exceptions, which is expected)
@@ -638,10 +634,20 @@ async function processExampleDirectory(dirPath, category, name, directive = null
       // Note: Actual output generation will be handled by separate post-build script
       const actualOutput = null;
       
-      // Create fixture
+      // Create fixture with full path as name
+      const fullPath = path.relative(CASES_DIR, dirPath);
+
+      // For variant files, include the variant in the name
+      let fixtureName = fullPath;
+      if (file !== 'example.md' && file.startsWith('example-')) {
+        const variant = file.replace('example-', '').replace('.md', '');
+        fixtureName = `${fullPath}-${variant}`;
+      }
+
+      // The fixture name should be unique for each test
       const fixture = {
-        name: fixtureName.replace('.generated-fixture.json', ''),
-        description: `Test fixture for ${category}/${name}`,
+        name: fixtureName,
+        description: `Test fixture for ${fixtureName}`,
         category,
         subcategory: name,
         input: content,
@@ -654,13 +660,13 @@ async function processExampleDirectory(dirPath, category, name, directive = null
       };
       
       // Write fixture only if content changed
-      const fixturePath = path.join(outputDir, fixtureName);
+      const fixturePath = path.join(outputDir, fixtureFileName);
       const wasUpdated = await writeFixtureIfChanged(fixturePath, fixture);
-      
+
       if (wasUpdated) {
-        console.log(`  ✓ ${fixtureName} (updated)`);
+        console.log(`  ✓ ${fixtureFileName} (updated)`);
       } else {
-        console.log(`  ✓ ${fixtureName} (unchanged)`);
+        console.log(`  ✓ ${fixtureFileName} (unchanged)`);
       }
       stats.fixtures++;
     } catch (error) {
@@ -721,6 +727,10 @@ async function buildExamplesMarkdown() {
     // Recursively process subdirectories
     const subDirs = entries.filter(e => e.isDirectory());
     for (const subDir of subDirs) {
+      // Skip special categories at root level
+      if (basePath === '' && ['exceptions', 'warnings', 'invalid', 'files'].includes(subDir.name)) {
+        continue;
+      }
       const subPath = basePath ? `${basePath}/${subDir.name}` : subDir.name;
       const subResults = await findExampleFiles(path.join(dir, subDir.name), subPath);
       results.push(...subResults);
@@ -870,8 +880,8 @@ async function buildExamplesMarkdown() {
   }
   
   // Process only valid examples
-  const validPath = path.join(CASES_DIR, 'valid');
-  const examples = await findExampleFiles(validPath);
+  // Find all example files in tests/cases/ (excluding special categories)
+  const examples = await findExampleFiles(CASES_DIR);
   
   if (examples.length === 0) {
     console.log('No valid examples found');
