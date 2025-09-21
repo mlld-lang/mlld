@@ -14,11 +14,13 @@ Verify AST braces across TypeScript, Python, glob metadata, and template transfo
 
 /exe @fileSummary(json) = js {
   const data = JSON.parse(json);
-  return data.map(item => {
-    if (!item) return 'null';
-    const file = item.file ? item.file.split('/').pop() : 'none';
-    return `${file}:${item.name}`;
-  }).join('\n');
+  return data
+    .filter(item => Boolean(item))
+    .map(item => {
+      const file = item.file ? item.file.split('/').pop() : 'none';
+      return `${file}:${item.name}`;
+    })
+    .join('\n');
 }
 
 ## TypeScript definitions and usage

@@ -73,7 +73,7 @@ export async function processContentLoader(node: any, env: Environment): Promise
   if (ast && actualSource.type === 'path') {
     const loadAstResults = async (): Promise<Array<AstResult | null>> => {
       if (isGlob) {
-        const baseDir = env.getBasePath();
+        const baseDir = env.getFileDirectory();
         const matches = await glob(pathOrUrl, {
           cwd: baseDir,
           absolute: true,
@@ -395,7 +395,7 @@ async function loadSingleFile(filePath: string, options: any, env: Environment):
  */
 async function loadGlobPattern(pattern: string, options: any, env: Environment): Promise<LoadContentResult[] | string[]> {
   // Resolve the pattern relative to current directory
-  const baseDir = env.getBasePath();
+  const baseDir = env.getFileDirectory();
   
   
   // Use tinyglobby to find matching files

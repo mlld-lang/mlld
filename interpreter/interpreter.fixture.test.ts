@@ -5,7 +5,6 @@ import { MemoryFileSystem } from '@tests/utils/MemoryFileSystem';
 import { PathService } from '@services/fs/PathService';
 import * as fs from 'fs';
 import * as path from 'path';
-import { minimatch } from 'minimatch';
 import { glob } from 'tinyglobby';
 
 // Mock tinyglobby for fixture tests
@@ -389,11 +388,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
     return { matches: true, variables, regex };
   }
   
-  beforeEach(() => {
+  beforeEach(async () => {
     fileSystem = new MemoryFileSystem();
     pathService = new PathService();
     // Ensure tmp output root exists in VFS
-    return fileSystem.mkdir('/tmp-tests', { recursive: true });
+    await fileSystem.mkdir('/tmp-tests', { recursive: true });
     
     // Set up tinyglobby mock to work with our virtual file system
     vi.mocked(glob).mockImplementation(async (pattern: string, options: any) => {
@@ -421,11 +420,11 @@ describe('Mlld Interpreter - Fixture Tests', () => {
       await walkDir(cwd);
       
       // Filter files by pattern
+      const mmModule = require('minimatch');
+      const matcher = typeof mmModule === 'function' ? mmModule : mmModule.minimatch;
       const matches = allFiles.filter(file => {
         const relativePath = path.relative(cwd, file);
-        // Import minimatch inside the mock to avoid import issues
-        const { minimatch } = require('minimatch');
-        return minimatch(relativePath, pattern);
+        return typeof matcher === 'function' ? matcher(relativePath, pattern) : false;
       });
       
       // Return absolute or relative paths based on options
@@ -1379,7 +1378,6 @@ describe('Mlld Interpreter - Fixture Tests', () => {
             // Normalize output (trim trailing whitespace/newlines)
             const normalizedResult = result.trim();
             const normalizedExpected = fixture.expected.trim();
-            
             expect(normalizedResult).toBe(normalizedExpected);
           } else if (isSmokeTest) {
             // For smoke tests, just verify it doesn't crash and produces output
