@@ -81,7 +81,8 @@ export async function processContentLoader(node: any, env: Environment): Promise
           ignore: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/build/**']
         });
         const aggregated: Array<AstResult | null> = [];
-        for (const filePath of matches) {
+        const fileList = Array.isArray(matches) ? matches : [];
+        for (const filePath of fileList) {
           try {
             const content = await env.readFile(filePath);
             const extracted = extractAst(content, filePath, ast);
@@ -106,7 +107,8 @@ export async function processContentLoader(node: any, env: Environment): Promise
     const astResults = await loadAstResults();
 
     if (hasTransform && options?.transform) {
-      return await applyTemplateToAstResults(astResults, options.transform, env);
+      const transformed = await applyTemplateToAstResults(astResults, options.transform, env);
+      return isGlob ? transformed : transformed[0] ?? '';
     }
 
     if (hasPipes) {

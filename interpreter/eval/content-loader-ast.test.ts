@@ -518,10 +518,8 @@ describe('Content Loader AST patterns', () => {
     };
 
     const results = await processContentLoader(node as any, env);
-    expect(Array.isArray(results)).toBe(true);
-    expect(results).toEqual([
-      'Name: createUser\nCode:\nexport function createUser() {\n  return 1;\n}'
-    ]);
+    expect(typeof results).toBe('string');
+    expect(results).toBe('Name: createUser\nCode:\nexport function createUser() {\n  return 1;\n}');
   });
 
   it('runs pipelines against AST results', async () => {

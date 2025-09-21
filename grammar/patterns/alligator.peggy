@@ -139,7 +139,7 @@ AlligatorPathSegment "alligator path segment"
 
 // Valid characters in path segments (inside alligators)
 AlligatorPathChar
-  = !">" !"#" !"@" !" as " !PathSeparator char:. { return char; }
+  = !">" !"#" !"@" !" as " !"{" !PathSeparator char:. { return char; }
 
 // Options for alligator expressions
 AlligatorOptions
