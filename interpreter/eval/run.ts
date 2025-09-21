@@ -95,10 +95,15 @@ export async function evaluateRun(
   env: Environment,
   callStack: string[] = []
 ): Promise<EvalResult> {
+  // Check if we're importing - skip execution if so
+  if (env.getIsImporting()) {
+    return { value: null, env };
+  }
+
   let output = '';
   // Track source node to optionally enable stage-0 retry
   let sourceNodeForPipeline: any | undefined;
-  
+
   // Create execution context with source information
   const executionContext = {
     sourceLocation: directive.location,

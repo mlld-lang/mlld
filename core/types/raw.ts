@@ -11,6 +11,13 @@ export interface ImportRaw {
 }
 
 /**
+ * Export directive raw values
+ */
+export interface ExportRaw {
+  exports: string;
+}
+
+/**
  * Text directive raw values
  */
 export interface TextRaw {

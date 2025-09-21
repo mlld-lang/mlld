@@ -1,0 +1,27 @@
+# Module with shadow functions and explicit exports
+/export { api }
+
+# JS helper that produces a prefix (synchronous)
+/exe @formatPrefix(subject) = js { 'I am ' + subject }
+
+# Shadow helper that uses the mlld helper
+/exe @shadowHelper(subject) = js {
+  return formatPrefix(subject) + ' via shadow';
+}
+
+# JS helper that depends on the shadow env shadowHelper
+/exe @helper() = js {
+  return shadowHelper('helper');
+}
+
+# Declare JS shadow environment with all helpers so wrappers are captured together
+/exe @js = { formatPrefix, shadowHelper, helper }
+
+# Exported function that uses the JS helper
+/exe @user() = js {
+  const message = helper();
+  return message + ' and I work';
+}
+
+# Export an API object
+/var @api = { callUser: @user }

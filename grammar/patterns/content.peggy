@@ -250,7 +250,7 @@ DoubleColonInterpolation
 
 // NEW: Triple colon content with {{var}} interpolation
 TripleColonContent "Content with {{var}} interpolation"
-  = ':::' parts:(InterpolationVar / FileReferenceInterpolation / TemplateTextSegment)* ':::' {
+  = ':::' parts:(InterpolationVar / TripleColonTextSegment)* ':::' {
       helpers.debug('TripleColonContent matched :::...:::', { parts });
       
       // Strip formatting newlines (same as current DoubleColonContent)
@@ -295,6 +295,16 @@ TripleColonContent "Content with {{var}} interpolation"
       
       return [parts];
     }
+
+TripleColonTextSegment
+  = chars:TripleColonChar+ {
+      return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
+    }
+
+TripleColonChar
+  = StringEscapeSequence
+  / EscapeSequence
+  / !((":::" / "{{" / "}}")) char:. { return char; }
 
 // Unquoted path with @var interpolation (no delimiters)
 UnquotedPath "Unquoted path with @var interpolation"

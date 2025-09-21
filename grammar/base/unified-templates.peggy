@@ -25,7 +25,7 @@ UnifiedTemplate "Unified template pattern"
 
 // Triple colons with {{var}} interpolation
 UnifiedTripleColon "Triple colon template"
-  = ':::' parts:(UnifiedBraceInterpolation / FileReferenceInterpolation / UnifiedTemplateTextSegment)* ':::' {
+  = ':::' parts:TemplateBodyMtt ':::' {
       helpers.debug('UnifiedTripleColon matched :::...:::', { parts });
       
       // Strip formatting newlines (same as current implementation)
@@ -68,7 +68,11 @@ UnifiedTripleColon "Triple colon template"
 
 // Double colons with @var interpolation
 UnifiedDoubleColon "Double colon template"
-  = '::' parts:(UnifiedAtInterpolation)* '::' {
+  = '::' !":" parts:(
+      TemplateSlashForBlockDouble
+      / TemplateInlineShow
+      / UnifiedAtInterpolation
+    )* '::' {
       helpers.debug('UnifiedDoubleColon matched ::...::', { parts });
       
       // Strip formatting newlines (same as triple colon)
@@ -111,7 +115,12 @@ UnifiedDoubleColon "Double colon template"
 
 // Double brackets with {{var}} interpolation
 UnifiedDoubleBracket "Double bracket template"
-  = '[[' parts:(UnifiedBraceInterpolation / FileReferenceInterpolation / UnifiedBracketTextSegment)* ']]' {
+  = '[[' parts:(
+      TemplateInlineShow
+      / UnifiedBraceInterpolation
+      / FileReferenceInterpolation
+      / UnifiedBracketTextSegment
+    )* ']]' {
       helpers.debug('UnifiedDoubleBracket matched [[...]]', { parts });
       
       return {
@@ -159,7 +168,7 @@ UnifiedTemplateChar
 
 // Text for double colon templates (excludes ::, @, and <)
 UnifiedDoubleColonTextSegment "Double colon text segment"
-  = chars:(!("::" / "@" / "<") char:. { return char; })+ {
+  = chars:(!("::" / "/for" / "/end" / "@" / "<") char:. { return char; })+ {
       return helpers.createNode(NodeType.Text, { content: chars.join(''), location: location() });
     }
 
@@ -173,6 +182,110 @@ UnifiedBracketChar
   = StringEscapeSequence
   / EscapeSequence
   / !("]]" / "{{" / "}}" / "<") char:. { return char; }
+
+// -------------------------------------------------------------
+// TEMPLATE BLOCKS AND INLINE SHOW (template context only)
+// -------------------------------------------------------------
+
+// Slash-style for block inside double-colon templates
+TemplateSlashForBlockDouble "slash for-block (double-colon)"
+  = &{
+      const pos = offset();
+      if (pos === 0) return true;
+      const prev = input[pos - 1];
+      return prev === '\n' || prev === '\r';
+    }
+    "/for" _ pattern:ForIterationPattern _ parts:(
+      TemplateSlashForBlockDouble
+      / TemplateInlineShow
+      / UnifiedAtInterpolation
+      / FileReferenceInterpolation
+      / UnifiedDoubleColonTextSegment
+    )* _ &{
+      const pos = offset();
+      if (pos === 0) return true;
+      const prev = input[pos - 1];
+      return prev === '\n' || prev === '\r';
+    } "/end" {
+      return {
+        type: 'TemplateForBlock',
+        variable: pattern.variable,
+        source: pattern.source,
+        body: parts,
+        style: 'slash'
+      };
+    }
+
+// No for-blocks in triple-colon (::: … :::) or double-bracket ([[ … ]]) templates
+
+// Inline /show inside template contexts
+TemplateInlineShow "inline show (template)"
+  = "/show" _ content:UnifiedCommandBrackets tail:TailModifiers? {
+      return {
+        type: 'TemplateInlineShow',
+        showKind: 'command',
+        content,
+        tail: tail || null
+      };
+    }
+  / "/show" _ lang:RunCodeLanguage _ code:UnifiedCodeBrackets tail:TailModifiers? {
+      const langNode = helpers.createNode(NodeType.Text, { content: lang, location: location() });
+      const codeNode = helpers.createNode(NodeType.Text, { content: code.content, location: location() });
+      return {
+        type: 'TemplateInlineShow',
+        showKind: 'code',
+        lang: [langNode],
+        code: [codeNode],
+        meta: { isMultiLine: code.isMultiLine, language: lang },
+        tail: tail || null
+      };
+    }
+  / "/show" _ template:TemplateCore tail:TailModifiers? {
+      return {
+        type: 'TemplateInlineShow',
+        showKind: 'template',
+        template,
+        tail: tail || null
+      };
+    }
+  / "/show" _ loader:AlligatorExpression tail:TailModifiers? {
+      return {
+        type: 'TemplateInlineShow',
+        showKind: 'load',
+        loadContent: loader,
+        tail: tail || null
+      };
+    }
+  / "/show" _ ref:UnifiedReferenceWithTail {
+      return {
+        type: 'TemplateInlineShow',
+        showKind: 'reference',
+        reference: ref
+      };
+    }
+
+// -------------------------------------------------------------
+// TEMPLATE BODY START RULES (for .att/.mtt files)
+// -------------------------------------------------------------
+
+// ATT-style templates (@var interpolation, slash blocks, inline show)
+TemplateBodyAtt "template body for .att files"
+  = parts:(
+      TemplateSlashForBlockDouble
+      / TemplateInlineShow
+      / UnifiedAtInterpolation
+      / FileReferenceInterpolation
+      / UnifiedDoubleColonTextSegment
+    )* { return parts; }
+
+// MTT-style templates ({{var}} interpolation, inline show)
+TemplateBodyMtt "template body for .mtt files"
+  = parts:(
+      TemplateInlineShow
+      / UnifiedBraceInterpolation
+      / FileReferenceInterpolation
+      / UnifiedTemplateTextSegment
+    )* { return parts; }
 
 // -------------------------------------------------------------
 // DEPENDENCIES (defined elsewhere but referenced here)

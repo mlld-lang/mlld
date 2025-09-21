@@ -228,6 +228,21 @@ describe('Semantic Tokens - Unit Tests', () => {
       expect(directives[1].text).toBe('/show');
       expect(directives[2].text).toBe('/exe');
     });
+
+    it('highlights /export directive and members', async () => {
+      const code = '/export { name, other as alias }';
+      const tokens = await getSemanticTokens(code);
+
+      // Directive token
+      expectToken(tokens, {
+        text: '/export',
+        tokenType: 'directive'
+      });
+
+      // At least one exported symbol marked as variable declaration
+      const decl = tokens.find(t => t.tokenType === 'variable' && t.modifiers.includes('declaration'));
+      expect(decl).toBeDefined();
+    });
   });
   
   describe('Template Contexts', () => {
@@ -283,6 +298,30 @@ describe('Semantic Tokens - Unit Tests', () => {
       // Should NOT have interpolations
       const interpolations = tokens.filter(t => t.tokenType === 'interpolation');
       expect(interpolations).toHaveLength(0);
+    });
+
+    it('highlights inline /for and /end keywords inside templates', async () => {
+      const code = `/var @arr = ["a","b"]
+/var @msg = ::
+/for @x in @arr
+@x
+/end
+::`;
+      const tokens = await getSemanticTokens(code);
+
+      // Expect keyword tokens for 'for' and 'end'
+      expectToken(tokens, { tokenType: 'keyword', text: 'for' });
+      expectToken(tokens, { tokenType: 'keyword', text: 'end' });
+    });
+
+    it('highlights inline /show inside templates', async () => {
+      const code = `/var @msg = \`
+/show {echo "ok"}
+\``;
+      const tokens = await getSemanticTokens(code);
+      // Should contain a directive token for '/show' inside template
+      const inlineShow = tokens.find(t => t.tokenType === 'directive' && (t.text === '/show' || t.text === 'show'));
+      expect(inlineShow).toBeDefined();
     });
   });
   

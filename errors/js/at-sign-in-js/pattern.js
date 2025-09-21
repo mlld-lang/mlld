@@ -3,10 +3,12 @@ export const pattern = {
   
   test(error, ctx) {
     // Check if this is a JS syntax error with @ symbol
-    if (!error.message || !error.message.includes('Invalid or unexpected token')) {
+    const message = error.message || '';
+    const isUnexpectedToken = message.includes('Invalid or unexpected token') || message.includes('Unexpected token');
+    if (!isUnexpectedToken) {
       return false;
     }
-    
+
     // Check if the code contains @ symbol (mlld variable syntax)
     if (!ctx.code || !ctx.code.includes('@')) {
       return false;

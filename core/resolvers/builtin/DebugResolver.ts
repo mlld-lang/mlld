@@ -151,6 +151,20 @@ export class DebugResolver implements Resolver {
 
     const version = await this.getMlldVersion();
     
+    const userInfo = this.safeCall(() => os.userInfo(), {
+      username: 'unknown',
+      uid: -1,
+      gid: -1,
+      shell: '',
+      homedir: ''
+    } as os.UserInfo<string>);
+
+    const loadAvg = this.safeCall(() => os.loadavg(), [0, 0, 0] as [number, number, number]);
+    const uptime = this.safeCall(() => os.uptime(), 0);
+    const cpuCount = this.safeCall(() => os.cpus().length, 0);
+    const totalMem = this.safeCall(() => os.totalmem(), 0);
+    const freeMem = this.safeCall(() => os.freemem(), 0);
+
     return {
       timestamp: time.toISOString(),
       version, // Top-level for backward compatibility
@@ -168,18 +182,18 @@ export class DebugResolver implements Resolver {
         nodeVersion: (process as any).version || 'unknown',
         platform: (process as any).platform || 'unknown',
         arch: (process as any).arch || 'unknown',
-        user: os.userInfo().username,
-        hostname: os.hostname()
+        user: userInfo.username,
+        hostname: this.safeCall(() => os.hostname(), 'unknown')
       },
       system: {
-        cpus: os.cpus().length,
+        cpus: cpuCount,
         memory: {
-          total: os.totalmem(),
-          free: os.freemem(),
-          used: os.totalmem() - os.freemem()
+          total: totalMem,
+          free: freeMem,
+          used: Math.max(totalMem - freeMem, 0)
         },
-        uptime: os.uptime(),
-        loadAvg: os.loadavg()
+        uptime,
+        loadAvg
       },
       process: {
         pid: (process as any).pid || 0,
@@ -190,6 +204,14 @@ export class DebugResolver implements Resolver {
       },
       env: this.getFilteredEnv()
     };
+  }
+
+  private safeCall<T>(fn: () => T, fallback: T): T {
+    try {
+      return fn();
+    } catch {
+      return fallback;
+    }
   }
 
   /**

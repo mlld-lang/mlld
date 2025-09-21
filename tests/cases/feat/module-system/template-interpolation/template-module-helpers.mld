@@ -1,0 +1,17 @@
+# Module with template variables that reference module scope
+/var @name = "Module User"
+/var @version = "2.0"
+
+# Backtick template that should preserve module variable access
+/exe @greetTemplate() = `Hello @name, welcome to version @version!`
+
+# Template variable for testing
+/var @simpleGreeting = `Welcome @name!`
+
+# Export templates for testing
+/var @exports = {
+  greetTemplate: @greetTemplate,
+  simpleGreeting: @simpleGreeting,
+  name: @name,
+  version: @version
+}
