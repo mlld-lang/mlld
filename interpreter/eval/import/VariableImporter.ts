@@ -86,7 +86,7 @@ export class VariableImporter {
     importSource: string,
     location?: SourceLocation
   ): void {
-    if (!name) return;
+    if (!name || name.trim().length === 0) return;
     const existingBinding = targetEnv.getImportBinding(name);
     if (!existingBinding) {
       return;
